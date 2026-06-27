@@ -9,6 +9,7 @@ import { InstallPrompt } from '@/offline/InstallPrompt';
 // Auth pages
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
+import { CreateBusinessPage } from '@/pages/CreateBusinessPage';
 
 // App pages
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -42,15 +43,22 @@ function App() {
   useAuthListener();
 
   return (
-    <ErrorBoundary> 
+    <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
-
           <Routes>
             {/* Public-only — redirect to /dashboard if already authenticated */}
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+            </Route>
+
+            {/*
+              Protected but outside AppLayout — user is authenticated but
+              has no business yet, so the normal shell shouldn't render.
+            */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/create-business" element={<CreateBusinessPage />} />
             </Route>
 
             {/* Protected — redirect to /login if not authenticated */}

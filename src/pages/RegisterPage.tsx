@@ -35,7 +35,7 @@ export function RegisterPage() {
 
     // If email confirmation is required, there's no active session yet.
     if (data.session) {
-      navigate('/dashboard', { replace: true });
+      navigate('/create-business', { replace: true });
     } else {
       setSuccess(true);
     }
