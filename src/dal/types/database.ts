@@ -614,6 +614,49 @@ export interface Database {
         Update: Partial<Database['public']['Tables']['stock_movements']['Row']>;
       };
 
+      stock_transfers: {
+        Row: {
+          id: string;
+          business_id: string;
+          transfer_number: string;
+          from_location_id: string;
+          to_location_id: string;
+          status: string;
+          requested_by: string | null;
+          approved_by: string | null;
+          approved_at: string | null;
+          dispatched_at: string | null;
+          received_at: string | null;
+          received_by: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['stock_transfers']['Row']> &
+          Pick<Database['public']['Tables']['stock_transfers']['Row'],
+            'business_id' | 'transfer_number' | 'from_location_id' | 'to_location_id' | 'status'>;
+        Update: Partial<Database['public']['Tables']['stock_transfers']['Row']>;
+      };
+
+      stock_transfer_lines: {
+        Row: {
+          id: string;
+          transfer_id: string;
+          business_id: string;
+          product_id: string;
+          quantity_requested: number;
+          quantity_dispatched: number | null;
+          quantity_received: number | null;
+          unit_cost: number;
+          notes: string | null;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['stock_transfer_lines']['Row']> &
+          Pick<Database['public']['Tables']['stock_transfer_lines']['Row'],
+            'transfer_id' | 'business_id' | 'product_id' | 'quantity_requested' | 'unit_cost'>;
+        Update: Partial<Database['public']['Tables']['stock_transfer_lines']['Row']>;
+      };
+
       payroll_runs: {
         Row: {
           id: string;

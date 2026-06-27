@@ -11,19 +11,23 @@ import { AssetRepository } from '@/dal/repositories/AssetRepository';
 import { InventoryRepository } from '@/dal/repositories/InventoryRepository';
 import { IncomeRepository } from '@/dal/repositories/IncomeRepository';
 import { ContactRepository } from '@/dal/repositories/ContactRepository';
+import { BranchRepository } from '@/dal/repositories/BranchRepository';
+import { TransferRepository } from '@/dal/repositories/TransferRepository';
 
 export const repos = {
-  business: new BusinessRepository(supabase),
-  journal: new JournalRepository(supabase),
-  invoice: new InvoiceRepository(supabase),
-  expense: new ExpenseRepository(supabase),
-  payroll: new PayrollRepository(supabase),
-  tax: new TaxRepository(supabase),
-  account: new AccountRepository(supabase),
-  asset: new AssetRepository(supabase),
+  business:  new BusinessRepository(supabase),
+  journal:   new JournalRepository(supabase),
+  invoice:   new InvoiceRepository(supabase),
+  expense:   new ExpenseRepository(supabase),
+  payroll:   new PayrollRepository(supabase),
+  tax:       new TaxRepository(supabase),
+  account:   new AccountRepository(supabase),
+  asset:     new AssetRepository(supabase),
   inventory: new InventoryRepository(supabase),
-  income: new IncomeRepository(supabase),
-  contact:    new ContactRepository(supabase),
+  income:    new IncomeRepository(supabase),
+  contact:   new ContactRepository(supabase),
+  branch:    new BranchRepository(supabase),
+  transfer:  new TransferRepository(supabase),
 };
 
 export type Repositories = typeof repos;
