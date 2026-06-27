@@ -220,9 +220,9 @@ function MessageBubble({ message, onAction }: { message: Message; onAction: (pat
   );
 }
 
-// ── Main Chat Page ────────────────────────────────────────────────────────────
+// ── Main AiInsight Page────────────────────────────────────────────────────
 
-export function ChatPage() {
+export function AiInsightsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name ?? 'your business';

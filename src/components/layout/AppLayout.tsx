@@ -3,14 +3,18 @@ import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { OfflineBanner } from '@/offline/OfflineBanner';
 
 export function AppLayout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sticky so the offline/sync banner stays visible while scrolling */}
+      {/* Offline / sync status banner — sticky so it stays visible on scroll */}
+      <div className="sticky top-0 z-40">
+        <OfflineBanner />
+      </div>
 
       <Sidebar />
 
