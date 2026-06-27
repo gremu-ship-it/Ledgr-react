@@ -13,6 +13,8 @@ import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { QuickActions } from '@/components/dashboard/QuickActions';
 import { CashFlowIndicator } from '@/components/dashboard/CashFlowIndicator';
 import { formatMwk } from '@/lib/formatters';
+import { TaxRemittancePanel } from '@/components/dashboard/TaxRemittancePanel';
+import { TaxReminderModal } from '@/components/dashboard/TaxReminderModal';
 
 export function DashboardPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
@@ -32,7 +34,6 @@ export function DashboardPage() {
   const netProfitIsLoading = income.isLoading || expenses.isLoading;
   const netProfitIsError = income.isError || expenses.isError;
 
-  // No business selected at all (e.g. brand-new user with no memberships yet)
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
@@ -50,6 +51,12 @@ export function DashboardPage() {
 
   return (
     <div>
+      {/* Tax reminder popup on login */}
+      <TaxReminderModal />
+
+      {/* Tax remittance panel — top priority */}
+      <TaxRemittancePanel businessId={businessId} />
+
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -104,7 +111,6 @@ export function DashboardPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Income vs Expenses chart */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-soft lg:col-span-2">
           <h2 className="text-base font-semibold text-gray-900">Income vs Expenses</h2>
           <p className="mt-0.5 text-sm text-gray-500">Last 6 months</p>
@@ -117,7 +123,6 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Cash flow indicator */}
         <CashFlowIndicator
           income={income.data?.totalAmount}
           expenses={expenses.data}
@@ -126,7 +131,6 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Recent transactions */}
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-soft">
         <h2 className="text-base font-semibold text-gray-900">Recent Transactions</h2>
         <p className="mt-0.5 text-sm text-gray-500">Last 10 journal entries</p>

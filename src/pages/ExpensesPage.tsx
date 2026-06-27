@@ -24,6 +24,7 @@ interface QuickExpenseForm {
   payment_method: string;
   reference: string;
   notes: string;
+  include_vat: boolean;
 }
 
 interface ExpenseLine {
@@ -102,15 +103,19 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<QuickExpenseForm>({
-    expense_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '',
+    expense_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '', include_vat: false,
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const mutation = useMutation({
     mutationFn: async (values: QuickExpenseForm) => {
-      const amount = parseFloat(values.amount);
-      if (isNaN(amount) || amount <= 0) throw new Error('Enter a valid amount');
+      const rawAmount = parseFloat(values.amount);
+      if (isNaN(rawAmount) || rawAmount <= 0) throw new Error('Enter a valid amount');
       if (!values.description.trim()) throw new Error('Description is required');
+
+      const netAmount = values.include_vat ? rawAmount / 1.175 : rawAmount;
+      const vatAmount = values.include_vat ? rawAmount - netAmount : 0;
+      const totalAmount = rawAmount;
 
       const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
 
@@ -123,11 +128,11 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           expense_date: values.expense_date,
           currency: 'MWK',
           exchange_rate: 1,
-          subtotal: amount,
-          vat_amount: 0,
+          subtotal: netAmount,
+          vat_amount: vatAmount,
           wht_amount: 0,
-          total_amount: amount,
-          amount_paid: amount,
+          total_amount: totalAmount,
+          amount_paid: totalAmount,
           reference: values.reference || null,
           notes: values.notes || null,
           created_by: null,
@@ -136,11 +141,11 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           line_number: 1,
           description: values.description,
           quantity: 1,
-          unit_price: amount,
-          tax_code: 'none',
-          tax_rate: 0,
-          tax_amount: 0,
-          line_total: amount,
+          unit_price: netAmount,
+          tax_code: values.include_vat ? 'vat_standard' : 'none',
+          tax_rate: values.include_vat ? VAT_RATE : 0,
+          tax_amount: vatAmount,
+          line_total: totalAmount,
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
       );
 
@@ -153,9 +158,9 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
             businessId,
             expenseNumber,
             values.expense_date,
-            amount,
-            amount,
-            0,
+            totalAmount,
+            netAmount,
+            vatAmount,
             'receipt',
             created.id,
           );
@@ -166,14 +171,14 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Expense recorded successfully.' });
-      setForm({ expense_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '' });
+      setForm({ expense_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '', include_vat: false });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
   });
 
-  function set(field: keyof QuickExpenseForm, value: string) {
+  function set(field: keyof QuickExpenseForm, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
@@ -200,6 +205,26 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
+
+          <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
+            <input
+              type="checkbox"
+              id="include_vat"
+              checked={form.include_vat}
+              onChange={(e) => set('include_vat', e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-brand-500"
+            />
+            <label htmlFor="include_vat" className="text-sm text-gray-700">
+              Amount includes VAT (17.5%) — split automatically
+            </label>
+          </div>
+
+          {form.include_vat && form.amount && (
+            <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+              Net: MK {(parseFloat(form.amount) / 1.175).toFixed(2)} ·
+              VAT: MK {(parseFloat(form.amount) - parseFloat(form.amount) / 1.175).toFixed(2)}
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
@@ -325,7 +350,6 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         }),
       );
 
-      // Create journal entry
       const allExpenses = await repos.expense.findByBusiness(businessId);
       const created = allExpenses.find((e) => e.expense_number === form.expense_number);
       if (created) {
