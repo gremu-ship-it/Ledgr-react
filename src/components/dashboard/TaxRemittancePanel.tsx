@@ -19,8 +19,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
 
   const overdueDates = dueDates.filter((d) => d.isOverdue);
   const dueSoonDates = dueDates.filter((d) => !d.isOverdue && d.isDueSoon);
-  const _upcomingDates = dueDates.filter((d) => !d.isOverdue && !d.isDueSoon);
-
+  
   const hasUrgent = overdueDates.length > 0 || dueSoonDates.length > 0;
 
   return (

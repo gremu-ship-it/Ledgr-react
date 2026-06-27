@@ -49,12 +49,6 @@ export function getMraDueDates(): TaxDueDate[] {
     year: 'numeric',
   });
 
-  // Current month label
-  const _currMonthLabel = now.toLocaleDateString('en-MW', {
-    month: 'long',
-    year: 'numeric',
-  });
-
   const dueDates: TaxDueDate[] = [];
 
   // PAYE — 14th of current month (for previous month's payroll)
