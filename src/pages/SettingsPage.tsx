@@ -85,18 +85,6 @@ function Input({
   );
 }
 
-function SaveButton({ isPending, label = 'Save Changes' }: { isPending: boolean; label?: string }) {
-  return (
-    <button
-      type="submit"
-      disabled={isPending}
-      className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
-    >
-      {isPending ? 'Saving…' : label}
-    </button>
-  );
-}
-
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
 type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team';
@@ -221,7 +209,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       </div>
 
       <div className="flex justify-end border-t border-gray-100 pt-4">
-        <SaveButton isPending={mutation.isPending} />
+        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
       </div>
     </div>
   );
@@ -372,7 +360,7 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
       </div>
 
       <div className="flex justify-end border-t border-gray-100 pt-4">
-        <SaveButton isPending={mutation.isPending} />
+        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
       </div>
     </div>
   );
@@ -398,7 +386,7 @@ function UserProfileTab() {
 
       const { error } = await supabase
         .from('user_profiles')
-        .update({ full_name: form.full_name })
+        .update({ full_name: form.full_name } as never)
         .eq('id', currentUser.id);
 
       if (error) throw new Error(error.message);
@@ -672,7 +660,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     mutationFn: async (userId: string) => {
       const { error } = await supabase
         .from('business_users')
-        .update({ is_active: false })
+        .update({ is_active: false } as never)
         .eq('business_id', businessId)
         .eq('user_id', userId);
       if (error) throw new Error(error.message);
@@ -689,7 +677,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
       const { error } = await supabase
         .from('business_users')
-        .update({ role })
+        .update({ role } as never)
         .eq('business_id', businessId)
         .eq('user_id', userId);
       if (error) throw new Error(error.message);

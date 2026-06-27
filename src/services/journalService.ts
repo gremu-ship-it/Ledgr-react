@@ -27,7 +27,7 @@ async function getAccountByCode(
   return acc;
 }
 
-async function nextEntryNumber(businessId: string): Promise<string> {
+async function nextEntryNumber(_businessId: string): Promise<string> {
   // Use a timestamp-based entry number since BusinessRepository may not have a journal counter
   const now = new Date();
   const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
