@@ -365,11 +365,11 @@ function ProductsTab({ businessId }: { businessId: string }) {
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-left">Type</th>
-                <th className="px-4 py-3 text-left">SKU</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left">SKU</th>
                 <th className="px-4 py-3 text-right">Sale Price</th>
-                <th className="px-4 py-3 text-right">Purchase Price</th>
-                <th className="px-4 py-3 text-center">Inventory</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-right">Purchase Price</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-center">Inventory</th>
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
@@ -380,17 +380,17 @@ function ProductsTab({ businessId }: { businessId: string }) {
                     <div className="font-medium text-gray-900">{p.name}</div>
                     {p.description && <div className="text-xs text-gray-400 truncate max-w-xs">{p.description}</div>}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="hidden sm:table-cell px-4 py-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
                       p.product_type === 'service' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
                     }`}>
                       {p.product_type === 'service' ? 'Service' : 'Product'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{p.sku ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{p.sku ?? '—'}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatMwk(p.sale_price)}</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{formatMwk(p.purchase_price)}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(p.purchase_price)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-center">
                     {p.track_inventory
                       ? <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Tracked</span>
                       : <span className="text-xs text-gray-400">—</span>}
@@ -512,7 +512,7 @@ function StockTab({ businessId }: { businessId: string }) {
               <th key={loc.id} className="px-4 py-3 text-right">{loc.name}</th>
             ))}
             <th className="px-4 py-3 text-right">Total On Hand</th>
-            <th className="px-4 py-3 text-right">Avg Cost</th>
+            <th className="hidden sm:table-cell px-4 py-3 text-right">Avg Cost</th>
             <th className="px-4 py-3 text-center">Status</th>
           </tr>
         </thead>
@@ -539,7 +539,7 @@ function StockTab({ businessId }: { businessId: string }) {
                   );
                 })}
                 <td className="px-4 py-3 text-right font-semibold text-gray-900">{totalOnHand.toFixed(2)}</td>
-                <td className="px-4 py-3 text-right text-gray-500">{formatMwk(Number(avgCost))}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(Number(avgCost))}</td>
                 <td className="px-4 py-3 text-center">
                   {low
                     ? <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">Low Stock</span>
@@ -747,10 +747,10 @@ function MovementsTab({ businessId }: { businessId: string }) {
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Location</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-left">Location</th>
                   <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="px-4 py-3 text-right">Unit Cost</th>
-                  <th className="px-4 py-3 text-left">Reference</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-right">Unit Cost</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-left">Reference</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -766,10 +766,10 @@ function MovementsTab({ businessId }: { businessId: string }) {
                         {m.movement_type.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{locationMap[m.location_id] ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-gray-600">{locationMap[m.location_id] ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-medium">{Number(m.quantity).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{formatMwk(Number(m.unit_cost))}</td>
-                    <td className="px-4 py-3 text-gray-500">{m.reference ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(Number(m.unit_cost))}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{m.reference ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>

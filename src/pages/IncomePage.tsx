@@ -546,22 +546,22 @@ function IncomeList({ businessId }: { businessId: string }) {
           <thead className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Invoice #</th>
-              <th className="px-4 py-3 text-left">Date</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Description / Contact</th>
               <th className="px-4 py-3 text-right">Amount</th>
-              <th className="px-4 py-3 text-right">Paid</th>
-              <th className="px-4 py-3 text-center">Status</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {incomeInvoices.map((inv) => (
               <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 font-medium text-brand-700">{inv.invoice_number}</td>
-                <td className="px-4 py-3 text-gray-500">{inv.issue_date}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{inv.issue_date}</td>
                 <td className="px-4 py-3 text-gray-700">{inv.notes ?? '—'}</td>
                 <td className="px-4 py-3 text-right font-medium">{formatMwk(inv.total_amount)}</td>
-                <td className="px-4 py-3 text-right text-gray-500">{formatMwk(inv.amount_paid)}</td>
-                <td className="px-4 py-3 text-center"><StatusBadge status={inv.status} /></td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(inv.amount_paid)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={inv.status} /></td>
               </tr>
             ))}
           </tbody>
@@ -591,12 +591,12 @@ export function IncomePage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Income</h1>
           <p className="mt-1 text-sm text-gray-500">Record income and manage invoices for {currentBusiness.business.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setTab('quick')} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Zap className="h-4 w-4 text-brand-500" />Quick Entry
           </button>

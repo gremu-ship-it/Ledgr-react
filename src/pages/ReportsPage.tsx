@@ -379,26 +379,26 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Code</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left">Code</th>
               <th className="px-4 py-3 text-left">Account</th>
-              <th className="px-4 py-3 text-left">Type</th>
-              <th className="px-4 py-3 text-right">Debits</th>
-              <th className="px-4 py-3 text-right">Credits</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right">Debits</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right">Credits</th>
               <th className="px-4 py-3 text-right">Balance</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {rows.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{row.code}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 font-mono text-xs text-gray-400">{row.code}</td>
                 <td className="px-4 py-2.5 font-medium text-gray-900">{row.name}</td>
-                <td className="px-4 py-2.5">
+                <td className="hidden sm:table-cell px-4 py-2.5">
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-600">
                     {row.account_type}
                   </span>
                 </td>
-                <td className="px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_debits ?? 0))}</td>
-                <td className="px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_credits ?? 0))}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_debits ?? 0))}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_credits ?? 0))}</td>
                 <td className={`px-4 py-2.5 text-right font-medium ${Number(row.balance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                   {formatMwk(Number(row.balance ?? 0))}
                 </td>
@@ -407,9 +407,10 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
           </tbody>
           <tfoot className="bg-gray-50 font-semibold text-sm">
             <tr className="border-t-2 border-gray-300">
-              <td colSpan={3} className="px-4 py-3 text-gray-900">Totals</td>
-              <td className="px-4 py-3 text-right text-gray-900">{formatMwk(totalDebits)}</td>
-              <td className="px-4 py-3 text-right text-gray-900">{formatMwk(totalCredits)}</td>
+              <td colSpan={2} className="px-4 py-3 text-gray-900">Totals</td>
+              <td className="hidden sm:table-cell px-4 py-3 text-gray-900"></td>
+              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwk(totalDebits)}</td>
+              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwk(totalCredits)}</td>
               <td className={`px-4 py-3 text-right ${Math.abs(totalDebits - totalCredits) > 0.01 ? 'text-red-600' : 'text-brand-700'}`}>
                 {Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwk(totalDebits - totalCredits)}
               </td>
@@ -447,7 +448,7 @@ export function ReportsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 w-fit">
         <button onClick={() => setTab('pl')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <TrendingUp className="h-4 w-4" />P&L
