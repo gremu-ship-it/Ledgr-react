@@ -699,11 +699,10 @@ function InvoiceList({
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 text-left">Invoice #</th>
-                  <th className="px-4 py-3 text-left">Issue Date</th>
-                  <th className="px-4 py-3 text-left">Due Date</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-left">Issue Date</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-left">Due Date</th>
                   <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3 text-right">Outstanding</th>
+                  <th className="hidden sm:table-cell px-4 py-3 text-right">Outstanding</th>
                   <th className="px-4 py-3 text-center">Status</th>
                   <th className="w-8" />
                 </tr>
@@ -723,17 +722,17 @@ function InvoiceList({
                       <td className="px-4 py-3 font-medium text-brand-700">
                         {inv.invoice_number}
                       </td>
-                      <td className="px-4 py-3 text-gray-500">
+                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
                         {formatDate(inv.issue_date)}
                       </td>
-                      <td className="px-4 py-3 text-gray-500">
+                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
                         {inv.due_date ? formatDate(inv.due_date) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
                         {formatMwk(Number(inv.total_amount))}
                       </td>
                       <td
-                        className={`px-4 py-3 text-right ${
+                        className={`hidden sm:table-cell px-4 py-3 text-right ${
                           amountDue > 0
                             ? 'font-medium text-red-600'
                             : 'text-gray-400'

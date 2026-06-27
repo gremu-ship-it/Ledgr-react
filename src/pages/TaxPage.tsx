@@ -455,9 +455,9 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
                 <th className="px-4 py-3 text-left">Tax Code</th>
                 <th className="px-4 py-3 text-left">Name</th>
                 <th className="px-4 py-3 text-right">Rate</th>
-                <th className="px-4 py-3 text-left">MRA Reference</th>
-                <th className="px-4 py-3 text-left">Effective From</th>
-                <th className="px-4 py-3 text-left">Effective To</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left">MRA Reference</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left">Effective To</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
@@ -472,9 +472,9 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-900">{cfg.name}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">{Number(cfg.rate).toFixed(2)}%</td>
-                  <td className="px-4 py-3 text-gray-500">{cfg.mra_reference ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-500">{cfg.effective_from}</td>
-                  <td className="px-4 py-3 text-gray-500">{cfg.effective_to ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.mra_reference ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_from}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_to ?? '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                       cfg.is_active ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-500'
@@ -589,7 +589,7 @@ function PayeBandsTab({ businessId }: { businessId: string }) {
                 <th className="px-4 py-3 text-right">From (MWK)</th>
                 <th className="px-4 py-3 text-right">To (MWK)</th>
                 <th className="px-4 py-3 text-right">Rate</th>
-                <th className="px-4 py-3 text-left">Effective From</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
@@ -602,7 +602,7 @@ function PayeBandsTab({ businessId }: { businessId: string }) {
                     {band.band_to != null ? formatMwk(Number(band.band_to)) : 'No limit'}
                   </td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">{Number(band.rate).toFixed(1)}%</td>
-                  <td className="px-4 py-3 text-gray-500">{band.effective_from}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{band.effective_from}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => { setEditing(band); setShowModal(true); }}
