@@ -34,6 +34,8 @@ const SIDEBAR_STORAGE_KEY = 'ledgr-sidebar-open';
 
 function getInitialSidebarOpen(): boolean {
   if (typeof window === 'undefined') return true;
+  // On mobile, always start closed regardless of stored preference
+  if (window.innerWidth < 1024) return false;
   const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
   if (stored === null) return true;
   return stored === 'true';
@@ -68,11 +70,16 @@ export const useAppStore = create<AppState>()(
       toggleSidebar: () =>
         set((state) => {
           const next = !state.sidebarOpen;
-          window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+          // Only persist sidebar state on desktop
+          if (window.innerWidth >= 1024) {
+            window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
+          }
           return { sidebarOpen: next };
         }),
       setSidebarOpen: (open) => {
-        window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(open));
+        if (window.innerWidth >= 1024) {
+          window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(open));
+        }
         set({ sidebarOpen: open });
       },
 
@@ -98,20 +105,12 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'ledgr-app-store',
-      // Only persist business context and theme — never persist currentUser
-      // (derived fresh from Supabase session on every load) and never persist
-      // isAuthLoading (must always start true on a fresh load).
-      // Persisting businesses/currentBusiness lets a user reopen the installed
-      // PWA while offline and still see their last-selected business.
       partialize: (state) => ({
         currentBusiness: state.currentBusiness,
         businesses: state.businesses,
         theme: state.theme,
       }),
       onRehydrateStorage: () => (state) => {
-        // Re-apply the persisted theme class on load, since setTheme's
-        // side effect (toggling the <html> class) doesn't run during
-        // hydration — only the state value is restored.
         if (state?.theme) {
           document.documentElement.classList.toggle('dark', state.theme === 'dark');
         }
