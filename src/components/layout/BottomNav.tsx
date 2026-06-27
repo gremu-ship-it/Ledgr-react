@@ -47,7 +47,7 @@ export function BottomNav() {
                 onClick={() => setMoreOpen(false)}
                 className={({ isActive }) =>
                   clsx(
-                    'rounded-xl px-3 py-2.5 text-center text-sm font-medium transition-colors',
+                    'rounded-xl px-2 py-2.5 text-center text-sm font-medium transition-colors',
                     isActive
                       ? 'bg-brand-50 text-brand-700'
                       : 'text-gray-600 hover:bg-gray-100',
@@ -71,7 +71,7 @@ export function BottomNav() {
               to={item.path}
               className={({ isActive }) =>
                 clsx(
-                  'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
+                  'flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-xs font-medium transition-colors',
                   isActive
                     ? 'text-brand-600'
                     : 'text-gray-500 hover:text-gray-700',
@@ -92,7 +92,7 @@ export function BottomNav() {
         <button
           onClick={() => setMoreOpen((v) => !v)}
           className={clsx(
-            'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
+            'flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-xs font-medium transition-colors',
             moreOpen ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700',
           )}
         >
