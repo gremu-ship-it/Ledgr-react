@@ -28,6 +28,7 @@ import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { WarehousePage } from './pages/WarehousePage';
 import { TransfersPage } from './pages/TransfersPage';
+import { BranchesPage } from './pages/BranchesPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +81,7 @@ function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />
+                <Route path="/branches" element={<BranchesPage />} />
               </Route>
             </Route>
 
