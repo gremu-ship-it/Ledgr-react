@@ -62,7 +62,7 @@ export function BottomNav() {
       )}
 
       {/* Bottom nav bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center justify-around border-t border-gray-200 bg-white px-2 lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center justify-between border-t border-gray-200 bg-white px-1 lg:hidden">
         {BOTTOM_NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           return (
@@ -71,7 +71,7 @@ export function BottomNav() {
               to={item.path}
               className={({ isActive }) =>
                 clsx(
-                  'flex flex-col items-center gap-1 rounded-xl px-4 py-2 text-xs font-medium transition-colors',
+                  'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
                   isActive
                     ? 'text-brand-600'
                     : 'text-gray-500 hover:text-gray-700',
@@ -92,7 +92,7 @@ export function BottomNav() {
         <button
           onClick={() => setMoreOpen((v) => !v)}
           className={clsx(
-            'flex flex-col items-center gap-1 rounded-xl px-4 py-2 text-xs font-medium transition-colors',
+            'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
             moreOpen ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700',
           )}
         >
