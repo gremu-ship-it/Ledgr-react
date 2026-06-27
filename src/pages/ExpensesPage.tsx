@@ -492,22 +492,22 @@ function ExpenseList({ businessId }: { businessId: string }) {
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-4 py-3 text-left">Expense #</th>
-              <th className="px-4 py-3 text-left">Date</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Description / Notes</th>
               <th className="px-4 py-3 text-right">Amount</th>
-              <th className="px-4 py-3 text-right">Paid</th>
-              <th className="px-4 py-3 text-center">Status</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
+              <th className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {expenses.map((exp) => (
               <tr key={exp.id} className="transition-colors hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-brand-700">{exp.expense_number}</td>
-                <td className="px-4 py-3 text-gray-500">{exp.expense_date}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{exp.expense_date}</td>
                 <td className="px-4 py-3 text-gray-700">{exp.notes ?? exp.reference ?? '—'}</td>
                 <td className="px-4 py-3 text-right font-medium">{formatMwk(exp.total_amount)}</td>
-                <td className="px-4 py-3 text-right text-gray-500">{formatMwk(exp.amount_paid)}</td>
-                <td className="px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(exp.amount_paid)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>
               </tr>
             ))}
           </tbody>
@@ -542,12 +542,12 @@ export function ExpensesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Expenses</h1>
           <p className="mt-1 text-sm text-gray-500">Track and manage expenses for {currentBusiness.business.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => setTab('quick')} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Zap className="h-4 w-4 text-brand-500" />Quick Entry
           </button>
