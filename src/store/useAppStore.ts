@@ -29,12 +29,11 @@ interface AppState {
   reset: () => void;
 }
 
-const THEME_STORAGE_KEY = 'ledgr-theme';
+const THEME_STORAGE_KEY   = 'ledgr-theme';
 const SIDEBAR_STORAGE_KEY = 'ledgr-sidebar-open';
 
 function getInitialSidebarOpen(): boolean {
   if (typeof window === 'undefined') return true;
-  // On mobile, always start closed regardless of stored preference
   if (window.innerWidth < 1024) return false;
   const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
   if (stored === null) return true;
@@ -43,7 +42,6 @@ function getInitialSidebarOpen(): boolean {
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'light';
-  // Respect an explicitly stored preference first, then fall back to system.
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
   if (stored === 'dark' || stored === 'light') return stored;
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -70,7 +68,6 @@ export const useAppStore = create<AppState>()(
       toggleSidebar: () =>
         set((state) => {
           const next = !state.sidebarOpen;
-          // Only persist sidebar state on desktop
           if (window.innerWidth >= 1024) {
             window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next));
           }
@@ -85,8 +82,6 @@ export const useAppStore = create<AppState>()(
 
       theme: getInitialTheme(),
       setTheme: (theme) => {
-        // Write to both the manual key and Zustand persist so theme
-        // survives both a hard refresh and a PWA cold start.
         window.localStorage.setItem(THEME_STORAGE_KEY, theme);
         document.documentElement.classList.toggle('dark', theme === 'dark');
         set({ theme });
@@ -105,9 +100,11 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'ledgr-app-store',
+      // Only persist theme — businesses and currentBusiness are fetched
+      // fresh on every login via useAuthListener. Persisting them caused
+      // unauthenticated users to be redirected to /create-business because
+      // the store rehydrated with stale business data before auth completed.
       partialize: (state) => ({
-        currentBusiness: state.currentBusiness,
-        businesses: state.businesses,
         theme: state.theme,
       }),
       onRehydrateStorage: () => (state) => {
