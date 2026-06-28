@@ -4,16 +4,22 @@ import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 
 export function useAuthListener() {
-  const setCurrentUser    = useAppStore((s) => s.setCurrentUser);
-  const setAuthLoading    = useAppStore((s) => s.setAuthLoading);
-  const setBusinesses     = useAppStore((s) => s.setBusinesses);
+  const setCurrentUser     = useAppStore((s) => s.setCurrentUser);
+  const setAuthLoading     = useAppStore((s) => s.setAuthLoading);
+  const setBusinesses      = useAppStore((s) => s.setBusinesses);
   const setCurrentBusiness = useAppStore((s) => s.setCurrentBusiness);
-  const reset             = useAppStore((s) => s.reset);
+  const reset              = useAppStore((s) => s.reset);
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted     = true;
+    let isHydrating   = false; // prevent concurrent hydration calls
 
     async function hydrateUser(userId: string, email: string | null) {
+      // If already hydrating, skip — avoids race condition where
+      // getSession() and onAuthStateChange fire simultaneously on load.
+      if (isHydrating) return;
+      isHydrating = true;
+
       try {
         const profile = await repos.business
           .findUserProfile(userId)
@@ -23,10 +29,8 @@ export function useAuthListener() {
 
         setCurrentUser({ id: userId, email, profile });
 
-        // ── Fetch memberships ──────────────────────────────────────────
-        // Do NOT clear businesses before the fetch completes.
-        // Clearing them causes ProtectedRoute to briefly see length === 0
-        // and redirect to /create-business even for existing users.
+        // Keep existing cached businesses while fetching —
+        // prevents ProtectedRoute seeing length === 0 mid-fetch.
         let memberships = useAppStore.getState().businesses;
 
         try {
@@ -43,7 +47,6 @@ export function useAuthListener() {
           (m) => m && m.business && m.business.id,
         );
 
-        // Only update the store once we have the final result
         setBusinesses(validMemberships);
 
         const current = useAppStore.getState().currentBusiness;
@@ -58,6 +61,8 @@ export function useAuthListener() {
         }
       } catch (err) {
         console.error('Failed to hydrate user:', err);
+      } finally {
+        isHydrating = false;
       }
     }
 
@@ -83,8 +88,7 @@ export function useAuthListener() {
         return;
       }
 
-      // TOKEN_REFRESHED: session is still valid, no need to re-hydrate
-      // memberships — just refresh the user identity quietly.
+      // TOKEN_REFRESHED: don't re-fetch memberships, just update identity quietly
       if (event === 'TOKEN_REFRESHED') {
         setCurrentUser({
           id: session.user.id,
