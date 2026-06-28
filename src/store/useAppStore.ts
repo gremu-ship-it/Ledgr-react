@@ -12,8 +12,10 @@ interface AppState {
   // ── Business switching ──────────────────────────────────────────
   currentBusiness: BusinessMembership | null;
   businesses: BusinessMembership[];
+  isBusinessesLoading: boolean;
   setCurrentBusiness: (membership: BusinessMembership | null) => void;
   setBusinesses: (memberships: BusinessMembership[]) => void;
+  setBusinessesLoading: (loading: boolean) => void;
   switchBusiness: (businessId: string) => void;
 
   // ── UI state ─────────────────────────────────────────────────────
@@ -57,8 +59,10 @@ export const useAppStore = create<AppState>()(
 
       currentBusiness: null,
       businesses: [],
+      isBusinessesLoading: true,
       setCurrentBusiness: (membership) => set({ currentBusiness: membership }),
       setBusinesses: (memberships) => set({ businesses: memberships }),
+      setBusinessesLoading: (loading) => set({ isBusinessesLoading: loading }),
       switchBusiness: (businessId) => {
         const found = get().businesses.find((m) => m.business.id === businessId);
         if (found) set({ currentBusiness: found });
@@ -96,14 +100,11 @@ export const useAppStore = create<AppState>()(
           currentUser: null,
           currentBusiness: null,
           businesses: [],
+          isBusinessesLoading: true,
         }),
     }),
     {
       name: 'ledgr-app-store',
-      // Only persist theme — businesses and currentBusiness are fetched
-      // fresh on every login via useAuthListener. Persisting them caused
-      // unauthenticated users to be redirected to /create-business because
-      // the store rehydrated with stale business data before auth completed.
       partialize: (state) => ({
         theme: state.theme,
       }),
