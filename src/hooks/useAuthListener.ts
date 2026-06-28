@@ -4,21 +4,21 @@ import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 
 export function useAuthListener() {
-  const setCurrentUser     = useAppStore((s) => s.setCurrentUser);
-  const setAuthLoading     = useAppStore((s) => s.setAuthLoading);
-  const setBusinesses      = useAppStore((s) => s.setBusinesses);
-  const setCurrentBusiness = useAppStore((s) => s.setCurrentBusiness);
-  const reset              = useAppStore((s) => s.reset);
+  const setCurrentUser      = useAppStore((s) => s.setCurrentUser);
+  const setAuthLoading      = useAppStore((s) => s.setAuthLoading);
+  const setBusinesses       = useAppStore((s) => s.setBusinesses);
+  const setCurrentBusiness  = useAppStore((s) => s.setCurrentBusiness);
+  const setBusinessesLoading = useAppStore((s) => s.setBusinessesLoading);
+  const reset               = useAppStore((s) => s.reset);
 
   useEffect(() => {
-    let isMounted     = true;
-    let isHydrating   = false; // prevent concurrent hydration calls
+    let isMounted   = true;
+    let isHydrating = false;
 
     async function hydrateUser(userId: string, email: string | null) {
-      // If already hydrating, skip — avoids race condition where
-      // getSession() and onAuthStateChange fire simultaneously on load.
       if (isHydrating) return;
       isHydrating = true;
+      setBusinessesLoading(true);
 
       try {
         const profile = await repos.business
@@ -26,13 +26,9 @@ export function useAuthListener() {
           .catch(() => null);
 
         if (!isMounted) return;
-
         setCurrentUser({ id: userId, email, profile });
 
-        // Keep existing cached businesses while fetching —
-        // prevents ProtectedRoute seeing length === 0 mid-fetch.
         let memberships = useAppStore.getState().businesses;
-
         try {
           const fetched = await repos.business.findMembershipsWithRole(userId);
           console.log('findMembershipsWithRole result:', fetched);
@@ -63,6 +59,7 @@ export function useAuthListener() {
         console.error('Failed to hydrate user:', err);
       } finally {
         isHydrating = false;
+        if (isMounted) setBusinessesLoading(false);
       }
     }
 
@@ -74,6 +71,7 @@ export function useAuthListener() {
           if (isMounted) setAuthLoading(false);
         });
       } else {
+        setBusinessesLoading(false);
         setAuthLoading(false);
       }
     });
@@ -88,7 +86,6 @@ export function useAuthListener() {
         return;
       }
 
-      // TOKEN_REFRESHED: don't re-fetch memberships, just update identity quietly
       if (event === 'TOKEN_REFRESHED') {
         setCurrentUser({
           id: session.user.id,
@@ -110,5 +107,5 @@ export function useAuthListener() {
       isMounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [setCurrentUser, setAuthLoading, setBusinesses, setCurrentBusiness, reset]);
+  }, [setCurrentUser, setAuthLoading, setBusinesses, setCurrentBusiness, setBusinessesLoading, reset]);
 }
