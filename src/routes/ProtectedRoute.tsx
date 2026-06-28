@@ -10,11 +10,12 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
  * renders the matched child route via <Outlet />.
  */
 export function ProtectedRoute() {
-  const currentUser  = useAppStore((s) => s.currentUser);
+  const currentUser   = useAppStore((s) => s.currentUser);
   const isAuthLoading = useAppStore((s) => s.isAuthLoading);
-  const businesses   = useAppStore((s) => s.businesses);
-  const location     = useLocation();
+  const businesses    = useAppStore((s) => s.businesses);
+  const location      = useLocation();
 
+  // Still checking session — don't make any routing decisions yet
   if (isAuthLoading) {
     return <LoadingSpinner fullScreen label="Checking your session…" />;
   }
@@ -23,10 +24,15 @@ export function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Authenticated but no business yet — send to onboarding.
-  // Skip this check when already on /create-business to avoid an
-  // infinite redirect loop while the page is being rendered.
-  if (businesses.length === 0 && location.pathname !== '/create-business') {
+  // Only redirect to /create-business when:
+  // 1. Auth has finished loading (isAuthLoading = false)
+  // 2. We have a confirmed user
+  // 3. Businesses array is definitively empty
+  // 4. We're not already on /create-business (prevents infinite loop)
+  if (
+    businesses.length === 0 &&
+    location.pathname !== '/create-business'
+  ) {
     return <Navigate to="/create-business" replace />;
   }
 
