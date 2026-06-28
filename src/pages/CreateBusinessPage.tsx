@@ -211,7 +211,9 @@ export function CreateBusinessPage() {
       if (productName.trim() && businessId) {
         setLoading(true);
         try {
-          await repos.inventory.createProduct({
+          const { error: productError } = await repos.inventory['client']
+          .from('products')
+          .insert({
             business_id: businessId,
             name: productName.trim(),
             product_type: productType,
@@ -220,6 +222,7 @@ export function CreateBusinessPage() {
             track_inventory: productType === 'product',
             is_active: true,
           } as never);
+          if (productError) throw new Error(productError.message);
         } catch (err) {
           console.warn('Product creation failed (non-critical):', err);
         } finally {

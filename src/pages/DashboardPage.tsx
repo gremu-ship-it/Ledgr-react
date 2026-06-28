@@ -14,6 +14,8 @@ import { CashFlowIndicator } from '@/components/dashboard/CashFlowIndicator';
 import { TaxRemittancePanel } from '@/components/dashboard/TaxRemittancePanel';
 import { TaxReminderModal } from '@/components/dashboard/TaxReminderModal';
 import { formatMwk } from '@/lib/formatters';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 
 // ── Metric Card ───────────────────────────────────────────────────────────────
 
@@ -80,10 +82,10 @@ function QuickActions() {
   const navigate = useNavigate();
 
   const actions = [
-    { label: 'New Invoice',     icon: Plus,     onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-500 hover:bg-brand-600 text-white' },
-    { label: 'Record Income',   icon: DollarSign, onClick: () => navigate('/income?action=record'), color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200' },
-    { label: 'Record Expense',  icon: Receipt,  onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200' },
-    { label: 'Run Payroll',     icon: Users,    onClick: () => navigate('/payroll?action=run'),     color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200' },
+    { label: 'New Invoice',    icon: Plus,       onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-500 hover:bg-brand-600 text-white' },
+    { label: 'Record Income',  icon: DollarSign, onClick: () => navigate('/income?action=record'),   color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200' },
+    { label: 'Record Expense', icon: Receipt,    onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200' },
+    { label: 'Run Payroll',    icon: Users,      onClick: () => navigate('/payroll?action=run'),     color: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200' },
   ];
 
   return (
@@ -111,11 +113,12 @@ export function DashboardPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business.id;
   const businessName = currentBusiness?.business.name;
+  const isMobile = useIsMobile();
 
-  const income    = useMonthlyIncome(businessId);
-  const expenses  = useMonthlyExpenses(businessId);
-  const outstanding = useOutstandingInvoices(businessId);
-  const trend     = useIncomeExpenseTrend(businessId, 6);
+  const income        = useMonthlyIncome(businessId);
+  const expenses      = useMonthlyExpenses(businessId);
+  const outstanding   = useOutstandingInvoices(businessId);
+  const trend         = useIncomeExpenseTrend(businessId, 6);
   const recentEntries = useRecentJournalEntries(businessId, 10);
 
   const netProfit =
@@ -144,98 +147,104 @@ export function DashboardPage() {
       {/* Tax reminder popup — fires once per session when tax is due */}
       <TaxReminderModal />
 
-      {/* ── TAX REMITTANCE PANEL — top priority ── */}
-      <TaxRemittancePanel businessId={businessId} />
+      {/* Mobile dashboard — full replacement on small screens */}
+      {isMobile ? (
+        <MobileDashboard />
+      ) : (
+        <>
+          {/* Tax remittance panel — desktop only */}
+          <TaxRemittancePanel businessId={businessId} />
 
-      {/* ── Page header + Quick Actions ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            {businessName ? `Overview for ${businessName}` : 'Overview of your business'}
-          </p>
-        </div>
-        <QuickActions />
-      </div>
-
-      {/* ── KPI Metric Cards ── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard
-          label="Revenue This Month"
-          value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
-          subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
-          icon={TrendingUp}
-          isLoading={income.isLoading}
-          isError={income.isError}
-          tone="positive"
-        />
-        <MetricCard
-          label="Expenses This Month"
-          value={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
-          icon={TrendingDown}
-          isLoading={expenses.isLoading}
-          isError={expenses.isError}
-          tone="negative"
-        />
-        <MetricCard
-          label="Net Profit This Month"
-          value={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
-          icon={netProfit !== undefined && netProfit < 0 ? TrendingDown : TrendingUp}
-          isLoading={netProfitIsLoading}
-          isError={netProfitIsError}
-          tone={netProfit !== undefined && netProfit < 0 ? 'negative' : 'positive'}
-        />
-        <MetricCard
-          label="Accounts Receivable"
-          value={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
-          subtext={outstanding.data ? `${outstanding.data.count} unpaid or partially paid` : undefined}
-          icon={FileText}
-          isLoading={outstanding.isLoading}
-          isError={outstanding.isError}
-          tone={outstanding.data && outstanding.data.count > 0 ? 'warning' : 'neutral'}
-        />
-      </div>
-
-      {/* ── Chart + Cash Flow ── */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
-          <div className="mb-1 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-900">Income vs Expenses</h2>
-            <span className="text-xs text-slate-400">Last 6 months</span>
+          {/* Page header + Quick Actions */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Dashboard</h1>
+              <p className="mt-0.5 text-sm text-slate-500">
+                {businessName ? `Overview for ${businessName}` : 'Overview of your business'}
+              </p>
+            </div>
+            <QuickActions />
           </div>
-          <div className="mt-4">
-            <IncomeExpenseChart
-              data={trend.data}
-              isLoading={trend.isLoading}
-              isError={trend.isError}
+
+          {/* KPI Metric Cards */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard
+              label="Revenue This Month"
+              value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
+              subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
+              icon={TrendingUp}
+              isLoading={income.isLoading}
+              isError={income.isError}
+              tone="positive"
+            />
+            <MetricCard
+              label="Expenses This Month"
+              value={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
+              icon={TrendingDown}
+              isLoading={expenses.isLoading}
+              isError={expenses.isError}
+              tone="negative"
+            />
+            <MetricCard
+              label="Net Profit This Month"
+              value={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
+              icon={netProfit !== undefined && netProfit < 0 ? TrendingDown : TrendingUp}
+              isLoading={netProfitIsLoading}
+              isError={netProfitIsError}
+              tone={netProfit !== undefined && netProfit < 0 ? 'negative' : 'positive'}
+            />
+            <MetricCard
+              label="Accounts Receivable"
+              value={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
+              subtext={outstanding.data ? `${outstanding.data.count} unpaid or partially paid` : undefined}
+              icon={FileText}
+              isLoading={outstanding.isLoading}
+              isError={outstanding.isError}
+              tone={outstanding.data && outstanding.data.count > 0 ? 'warning' : 'neutral'}
             />
           </div>
-        </div>
 
-        <div className="flex flex-col gap-4">
-          <CashFlowIndicator
-            income={income.data?.totalAmount}
-            expenses={expenses.data}
-            isLoading={income.isLoading || expenses.isLoading}
-            isError={income.isError || expenses.isError}
-          />
-        </div>
-      </div>
-
-      {/* ── Recent Transactions ── */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-900">Recent Transactions</h2>
-            <p className="mt-0.5 text-xs text-slate-400">Last 10 journal entries</p>
+          {/* Chart + Cash Flow */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-slate-900">Income vs Expenses</h2>
+                <span className="text-xs text-slate-400">Last 6 months</span>
+              </div>
+              <div className="mt-4">
+                <IncomeExpenseChart
+                  data={trend.data}
+                  isLoading={trend.isLoading}
+                  isError={trend.isError}
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-4">
+              <CashFlowIndicator
+                income={income.data?.totalAmount}
+                expenses={expenses.data}
+                isLoading={income.isLoading || expenses.isLoading}
+                isError={income.isError || expenses.isError}
+              />
+            </div>
           </div>
-        </div>
-        <RecentTransactions
-          entries={recentEntries.data}
-          isLoading={recentEntries.isLoading}
-          isError={recentEntries.isError}
-        />
-      </div>
+
+          {/* Recent Transactions */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">Recent Transactions</h2>
+                <p className="mt-0.5 text-xs text-slate-400">Last 10 journal entries</p>
+              </div>
+            </div>
+            <RecentTransactions
+              entries={recentEntries.data}
+              isLoading={recentEntries.isLoading}
+              isError={recentEntries.isError}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
