@@ -2,21 +2,15 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 
-/**
- * Wraps protected routes. Renders a full-screen loading state while the
- * initial auth check is in flight, redirects to /login (preserving the
- * intended destination) if there's no authenticated user, redirects to
- * /create-business if the user has no businesses yet, and otherwise
- * renders the matched child route via <Outlet />.
- */
 export function ProtectedRoute() {
-  const currentUser   = useAppStore((s) => s.currentUser);
-  const isAuthLoading = useAppStore((s) => s.isAuthLoading);
-  const businesses    = useAppStore((s) => s.businesses);
-  const location      = useLocation();
+  const currentUser        = useAppStore((s) => s.currentUser);
+  const isAuthLoading      = useAppStore((s) => s.isAuthLoading);
+  const businesses         = useAppStore((s) => s.businesses);
+  const isBusinessesLoading = useAppStore((s) => s.isBusinessesLoading);
+  const location           = useLocation();
 
-  // Still checking session — don't make any routing decisions yet
-  if (isAuthLoading) {
+  // Wait for both auth and businesses to finish loading
+  if (isAuthLoading || isBusinessesLoading) {
     return <LoadingSpinner fullScreen label="Checking your session…" />;
   }
 
@@ -24,11 +18,8 @@ export function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Only redirect to /create-business when:
-  // 1. Auth has finished loading (isAuthLoading = false)
-  // 2. We have a confirmed user
-  // 3. Businesses array is definitively empty
-  // 4. We're not already on /create-business (prevents infinite loop)
+  // Only redirect to /create-business when auth AND businesses have both
+  // finished loading and businesses is definitively empty
   if (
     businesses.length === 0 &&
     location.pathname !== '/create-business'
@@ -39,11 +30,6 @@ export function ProtectedRoute() {
   return <Outlet />;
 }
 
-/**
- * Wraps public-only routes (login, register). If the user is already
- * authenticated, redirects them straight to the dashboard instead of
- * showing the login form again.
- */
 export function PublicOnlyRoute() {
   const currentUser   = useAppStore((s) => s.currentUser);
   const isAuthLoading = useAppStore((s) => s.isAuthLoading);
