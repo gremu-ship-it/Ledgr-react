@@ -1,32 +1,30 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 
+// Module-level flag — survives re-renders and effect re-runs
+let isHydrating = false;
+
 export function useAuthListener() {
-  const setCurrentUser      = useAppStore((s) => s.setCurrentUser);
-  const setAuthLoading      = useAppStore((s) => s.setAuthLoading);
-  const setBusinesses       = useAppStore((s) => s.setBusinesses);
-  const setCurrentBusiness  = useAppStore((s) => s.setCurrentBusiness);
-  const setBusinessesLoading = useAppStore((s) => s.setBusinessesLoading);
-  const reset               = useAppStore((s) => s.reset);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    let isMounted   = true;
-    let isHydrating = false;
+    isMountedRef.current = true;
 
     async function hydrateUser(userId: string, email: string | null) {
       if (isHydrating) return;
       isHydrating = true;
-      setBusinessesLoading(true);
+      useAppStore.getState().setBusinessesLoading(true);
 
       try {
         const profile = await repos.business
           .findUserProfile(userId)
           .catch(() => null);
 
-        if (!isMounted) return;
-        setCurrentUser({ id: userId, email, profile });
+        if (!isMountedRef.current) return;
+
+        useAppStore.getState().setCurrentUser({ id: userId, email, profile });
 
         let memberships = useAppStore.getState().businesses;
         try {
@@ -37,13 +35,13 @@ export function useAuthListener() {
           console.warn('Failed to load memberships, using cached values.', err);
         }
 
-        if (!isMounted) return;
+        if (!isMountedRef.current) return;
 
         const validMemberships = memberships.filter(
           (m) => m && m.business && m.business.id,
         );
 
-        setBusinesses(validMemberships);
+        useAppStore.getState().setBusinesses(validMemberships);
 
         const current = useAppStore.getState().currentBusiness;
         const stillValid = current?.business?.id
@@ -53,59 +51,62 @@ export function useAuthListener() {
         if (!stillValid) {
           const firstValid = validMemberships[0] ?? null;
           console.log('Setting current business:', firstValid);
-          setCurrentBusiness(firstValid);
+          useAppStore.getState().setCurrentBusiness(firstValid);
         }
       } catch (err) {
         console.error('Failed to hydrate user:', err);
       } finally {
         isHydrating = false;
-        if (isMounted) setBusinessesLoading(false);
+        if (isMountedRef.current) {
+          useAppStore.getState().setBusinessesLoading(false);
+        }
       }
     }
 
-    // ── Initial session check ──────────────────────────────────────────
+    // ── Initial session check ────────────────────────────────────────
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
       if (session?.user) {
         hydrateUser(session.user.id, session.user.email ?? null).finally(() => {
-          if (isMounted) setAuthLoading(false);
+          if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
         });
       } else {
-        setBusinessesLoading(false);
-        setAuthLoading(false);
+        useAppStore.getState().setBusinessesLoading(false);
+        useAppStore.getState().setAuthLoading(false);
       }
     });
 
-    // ── Auth state changes ─────────────────────────────────────────────
+    // ── Auth state changes ───────────────────────────────────────────
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isMounted) return;
+      if (!isMountedRef.current) return;
 
       if (event === 'SIGNED_OUT' || !session?.user) {
-        reset();
-        setAuthLoading(false);
+        isHydrating = false;
+        useAppStore.getState().reset();
+        useAppStore.getState().setAuthLoading(false);
         return;
       }
 
       if (event === 'TOKEN_REFRESHED') {
-        setCurrentUser({
+        useAppStore.getState().setCurrentUser({
           id: session.user.id,
           email: session.user.email ?? null,
           profile: useAppStore.getState().currentUser?.profile ?? null,
         });
-        setAuthLoading(false);
+        useAppStore.getState().setAuthLoading(false);
         return;
       }
 
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         hydrateUser(session.user.id, session.user.email ?? null).finally(() => {
-          if (isMounted) setAuthLoading(false);
+          if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
         });
       }
     });
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       listener.subscription.unsubscribe();
     };
-  }, [setCurrentUser, setAuthLoading, setBusinesses, setCurrentBusiness, setBusinessesLoading, reset]);
+  }, []); // Empty dependency array — runs once on mount only
 }
