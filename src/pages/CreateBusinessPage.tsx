@@ -81,7 +81,8 @@ export function CreateBusinessPage() {
 
     try {
       // Use SECURITY DEFINER RPC to bypass RLS
-      const { data: businessId, error: rpcErr } = await supabase.rpc(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: businessId, error: rpcErr } = await (supabase.rpc as any)(
         'create_business_for_user',
         {
           p_name:           name.trim(),
