@@ -1,3 +1,4 @@
+// cache bust
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/dal/types/database';
 
