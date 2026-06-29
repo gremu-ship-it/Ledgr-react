@@ -4,7 +4,6 @@ import { Loader2, AlertCircle, Building2, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
-import type { Currency } from '@/dal/types/database';
 
 // ── Field / Input helpers (self-contained so no external dependency) ──────────
 
@@ -107,48 +106,31 @@ export function CreateBusinessPage() {
     setLoading(true);
 
     try {
-      // 1. Insert business
-      const { data: newBusiness, error: bErr } = await supabase
-        .from('businesses')
-        .insert({
-          name: name.trim(),
-          trading_name: tradingName.trim() || null,
-          phone: phone.trim() || null,
-          email: email.trim() || null,
-          city: city.trim() || null,
-          country: country.trim() || null,
-          base_currency: currency as Currency,
-          financial_year_start: fyStart,
-          vat_registered: vatRegistered,
-          timezone,
-          is_active: true,
-          invoice_next_number: 1,
-          expense_next_number: 1,
-          payroll_next_number: 1,
-        } as never)
-        .select('id')
-        .single();
+      // Call SECURITY DEFINER function — bypasses RLS safely
+      const { data: businessId, error: rpcErr } = await supabase.rpc(
+        'create_business_for_user',
+        {
+          p_name:           name.trim(),
+          p_trading_name:   tradingName.trim() || null,
+          p_phone:          phone.trim() || null,
+          p_email:          email.trim() || null,
+          p_city:           city.trim() || null,
+          p_country:        country.trim() || null,
+          p_currency:       currency,
+          p_fy_start:       fyStart,
+          p_vat_registered: vatRegistered,
+          p_timezone:       timezone,
+        },
+      );
 
-      if (bErr) throw new Error(bErr.message);
-      if (!newBusiness) throw new Error('Failed to create business.');
+      if (rpcErr) throw new Error(rpcErr.message);
+      if (!businessId) throw new Error('Failed to create business.');
 
-      // 2. Add the current user as owner
-      const { error: buError } = await supabase
-        .from('business_users')
-        .insert({
-          business_id: (newBusiness as { id: string }).id,
-          user_id: currentUser.id,
-          role: 'owner',
-          is_active: true,
-        } as never);
-
-      if (buError) throw new Error(buError.message);
-
-      // 3. Reload memberships into store so AppLayout has the business
+      // Reload memberships into store
       const memberships = await repos.business.findMembershipsWithRole(currentUser.id);
       setBusinesses(memberships);
 
-      const created = memberships.find((m) => m.business.id === (newBusiness as { id: string }).id);
+      const created = memberships.find((m) => m.business.id === businessId);
       if (created) setCurrentBusiness(created);
 
       navigate('/dashboard', { replace: true });
