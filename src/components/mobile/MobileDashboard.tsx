@@ -12,6 +12,7 @@ import {
   Percent,
   BookUser,
   ClipboardList,
+  type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
@@ -27,6 +28,80 @@ import { formatMwk } from '@/lib/formatters';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
 import { QuickIncomeMobile } from './QuickIncomeMobile';
 
+// ── Icon Badge (neumorphic) ─────────────────────────────────────────────
+// Shared soft-UI icon container used across stat cards, quick actions,
+// shortcuts, and transaction rows for a consistent "app" feel.
+
+type IconTone = 'brand' | 'negative' | 'neutral' | 'warning' | 'info';
+type IconSize = 'sm' | 'md' | 'lg';
+
+interface ToneStyle {
+  icon: string;
+  raised: string;
+  pressedActive: string;
+}
+
+const TONE_STYLES: Record<IconTone, ToneStyle> = {
+  brand: {
+    icon: 'text-brand-600',
+    raised: 'shadow-[4px_4px_10px_rgba(15,118,110,0.18),-4px_-4px_10px_rgba(255,255,255,0.9)]',
+    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(15,118,110,0.20),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
+  },
+  negative: {
+    icon: 'text-red-500',
+    raised: 'shadow-[4px_4px_10px_rgba(244,63,94,0.16),-4px_-4px_10px_rgba(255,255,255,0.9)]',
+    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(244,63,94,0.18),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
+  },
+  neutral: {
+    icon: 'text-slate-500',
+    raised: 'shadow-[4px_4px_10px_rgba(100,116,139,0.15),-4px_-4px_10px_rgba(255,255,255,0.9)]',
+    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(100,116,139,0.17),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
+  },
+  warning: {
+    icon: 'text-amber-500',
+    raised: 'shadow-[4px_4px_10px_rgba(245,158,11,0.18),-4px_-4px_10px_rgba(255,255,255,0.9)]',
+    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(245,158,11,0.20),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
+  },
+  info: {
+    icon: 'text-indigo-500',
+    raised: 'shadow-[4px_4px_10px_rgba(99,102,241,0.16),-4px_-4px_10px_rgba(255,255,255,0.9)]',
+    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(99,102,241,0.18),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
+  },
+};
+
+const SIZE_STYLES: Record<IconSize, { box: string; icon: string }> = {
+  sm: { box: 'h-9 w-9', icon: 'h-4 w-4' },
+  md: { box: 'h-11 w-11', icon: 'h-5 w-5' },
+  lg: { box: 'h-14 w-14', icon: 'h-6 w-6' },
+};
+
+function IconBadge({
+  icon: Icon,
+  tone = 'neutral',
+  size = 'md',
+  interactive = false,
+}: {
+  icon: LucideIcon;
+  tone?: IconTone;
+  size?: IconSize;
+  interactive?: boolean;
+}) {
+  const t = TONE_STYLES[tone];
+  const s = SIZE_STYLES[size];
+  return (
+    <span
+      className={clsx(
+        'flex shrink-0 items-center justify-center rounded-2xl bg-white transition-shadow duration-150',
+        s.box,
+        t.raised,
+        interactive && t.pressedActive,
+      )}
+    >
+      <Icon className={clsx(s.icon, t.icon)} />
+    </span>
+  );
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function monthOverMonthChange(
@@ -38,7 +113,6 @@ function monthOverMonthChange(
   const curr = data[data.length - 1][key];
   if (!prev) return null;
   const pct = ((curr - prev) / prev) * 100;
-  // For expenses, a decrease is "positive" news; for income, an increase is.
   const positive = key === 'expenses' ? pct <= 0 : pct >= 0;
   return { pct: Math.abs(pct), positive };
 }
@@ -50,6 +124,7 @@ function StatCard({
   value,
   subtext,
   tone = 'neutral',
+  icon,
   isLoading,
   trend,
   onClick,
@@ -57,21 +132,27 @@ function StatCard({
   label: string;
   value: string;
   subtext?: string;
-  tone?: 'positive' | 'negative' | 'neutral';
+  tone?: IconTone;
+  icon: LucideIcon;
   isLoading?: boolean;
   trend?: { pct: number; positive: boolean } | null;
   onClick?: () => void;
 }) {
-  const colors = {
-    positive: { value: 'text-brand-700', bg: 'bg-brand-50', border: 'border-brand-100' },
-    negative: { value: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
-    neutral:  { value: 'text-gray-900', bg: 'bg-white',    border: 'border-gray-200' },
+  const valueColor = {
+    brand: 'text-brand-700',
+    negative: 'text-red-600',
+    neutral: 'text-gray-900',
+    warning: 'text-amber-600',
+    info: 'text-indigo-600',
   }[tone];
 
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-4 animate-pulse">
-        <div className="h-3 w-20 rounded bg-gray-100 mb-3" />
+        <div className="flex items-center justify-between mb-3">
+          <div className="h-3 w-20 rounded bg-gray-100" />
+          <div className="h-9 w-9 rounded-2xl bg-gray-100" />
+        </div>
         <div className="h-6 w-28 rounded bg-gray-100 mb-2" />
         <div className="h-2.5 w-16 rounded bg-gray-100" />
       </div>
@@ -84,17 +165,15 @@ function StatCard({
     <Wrapper
       onClick={onClick}
       className={clsx(
-        'rounded-2xl border p-4 text-left transition-transform',
-        colors.border,
-        colors.bg,
+        'group w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-transform',
         onClick && 'active:scale-[0.98]',
       )}
     >
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
-        {onClick && <ChevronRight className="h-3.5 w-3.5 text-gray-300" />}
+        <IconBadge icon={icon} tone={tone} size="sm" interactive={!!onClick} />
       </div>
-      <p className={`text-xl font-bold ${colors.value}`}>{value}</p>
+      <p className={`text-xl font-bold ${valueColor}`}>{value}</p>
       <div className="mt-1 flex items-center gap-1.5">
         {subtext && <p className="text-xs text-gray-400">{subtext}</p>}
         {trend && (
@@ -112,6 +191,9 @@ function StatCard({
             {trend.pct.toFixed(1)}%
           </span>
         )}
+        {onClick && !trend && (
+          <ChevronRight className="h-3 w-3 text-gray-300 ml-auto" />
+        )}
       </div>
     </Wrapper>
   );
@@ -120,48 +202,24 @@ function StatCard({
 // ── Quick Action Button ─────────────────────────────────────────────────
 
 function QuickActionButton({
-  icon: Icon,
+  icon,
+  tone,
   label,
   onClick,
 }: {
-  icon: React.ElementType;
+  icon: LucideIcon;
+  tone: IconTone;
   label: string;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-2 rounded-2xl border border-gray-200 bg-white p-4 transition-all active:scale-95 hover:border-brand-200 hover:bg-brand-50"
+      className="group flex flex-col items-center gap-2 rounded-2xl border border-gray-200 bg-white p-4 transition-transform active:scale-95"
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-        <Icon className="h-4 w-4" />
-      </span>
+      <IconBadge icon={icon} tone={tone} size="lg" interactive />
       <span className="text-xs font-medium text-gray-700">{label}</span>
     </button>
-  );
-}
-
-// ── Transaction Row Icon ────────────────────────────────────────────────
-
-function TransactionIcon({ sourceType }: { sourceType?: string | null }) {
-  if (sourceType === 'invoice') {
-    return (
-      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-        <DollarSign className="h-4 w-4" />
-      </span>
-    );
-  }
-  if (sourceType === 'expense') {
-    return (
-      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-red-500">
-        <Receipt className="h-4 w-4" />
-      </span>
-    );
-  }
-  return (
-    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 text-gray-500">
-      <ClipboardList className="h-4 w-4" />
-    </span>
   );
 }
 
@@ -256,13 +314,14 @@ export function MobileDashboard() {
         )}
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards — single column */}
       <div className="grid grid-cols-1 gap-3">
         <StatCard
           label="Income"
           value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
           subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
-          tone="positive"
+          tone="brand"
+          icon={TrendingUp}
           isLoading={income.isLoading}
           trend={incomeTrend}
         />
@@ -270,6 +329,7 @@ export function MobileDashboard() {
           label="Expenses"
           value={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
           tone="negative"
+          icon={Receipt}
           isLoading={expenses.isLoading}
           trend={expensesTrend}
         />
@@ -277,7 +337,8 @@ export function MobileDashboard() {
           label="Outstanding"
           value={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
           subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined}
-          tone="neutral"
+          tone="info"
+          icon={FileText}
           isLoading={outstanding.isLoading}
           onClick={() => navigate('/invoices')}
         />
@@ -286,6 +347,7 @@ export function MobileDashboard() {
           value={new Date().toLocaleDateString('en-MW', { month: 'short', year: 'numeric' })}
           subtext="Tap for reports"
           tone="neutral"
+          icon={BarChart2}
           isLoading={false}
           onClick={() => navigate('/reports')}
         />
@@ -312,21 +374,25 @@ export function MobileDashboard() {
         <div className="grid grid-cols-4 gap-2">
           <QuickActionButton
             icon={DollarSign}
+            tone="brand"
             label="Income"
             onClick={() => setShowIncome(true)}
           />
           <QuickActionButton
             icon={Receipt}
+            tone="negative"
             label="Expense"
             onClick={() => setShowExpense(true)}
           />
           <QuickActionButton
             icon={FileText}
+            tone="info"
             label="Invoice"
             onClick={() => navigate('/income?action=invoice')}
           />
           <QuickActionButton
             icon={Users}
+            tone="neutral"
             label="Payroll"
             onClick={() => navigate('/payroll?action=run')}
           />
@@ -361,25 +427,36 @@ export function MobileDashboard() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
-            {recentEntries.data.map((entry, i) => (
-              <div key={i} className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <TransactionIcon sourceType={entry.source_type} />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate max-w-[140px]">
-                      {entry.description ?? entry.source_type ?? 'Transaction'}
-                    </p>
-                    <p className="text-xs text-gray-400">{entry.entry_date}</p>
+            {recentEntries.data.map((entry, i) => {
+              const t: IconTone =
+                entry.source_type === 'invoice' ? 'brand'
+                : entry.source_type === 'expense' ? 'negative'
+                : 'neutral';
+              const Icon: LucideIcon =
+                entry.source_type === 'invoice' ? DollarSign
+                : entry.source_type === 'expense' ? Receipt
+                : ClipboardList;
+
+              return (
+                <div key={i} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <IconBadge icon={Icon} tone={t} size="sm" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate max-w-[140px]">
+                        {entry.description ?? entry.source_type ?? 'Transaction'}
+                      </p>
+                      <p className="text-xs text-gray-400">{entry.entry_date}</p>
+                    </div>
                   </div>
+                  <p className={clsx(
+                    'text-xs font-medium px-2 py-0.5 rounded-full shrink-0',
+                    entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700',
+                  )}>
+                    {entry.source_type ?? 'journal'}
+                  </p>
                 </div>
-                <p className={clsx(
-                  'text-xs font-medium px-2 py-0.5 rounded-full shrink-0',
-                  entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700',
-                )}>
-                  {entry.source_type ?? 'journal'}
-                </p>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -391,20 +468,18 @@ export function MobileDashboard() {
         </p>
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
           {[
-            { label: 'View Invoices', icon: FileText, path: '/invoices' },
-            { label: 'Tax & Compliance', icon: Percent, path: '/tax' },
-            { label: 'Reports', icon: BarChart2, path: '/reports' },
-            { label: 'Contacts', icon: BookUser, path: '/contacts' },
+            { label: 'View Invoices', icon: FileText, tone: 'info' as IconTone, path: '/invoices' },
+            { label: 'Tax & Compliance', icon: Percent, tone: 'warning' as IconTone, path: '/tax' },
+            { label: 'Reports', icon: BarChart2, tone: 'brand' as IconTone, path: '/reports' },
+            { label: 'Contacts', icon: BookUser, tone: 'neutral' as IconTone, path: '/contacts' },
           ].map((item) => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="flex w-full items-center justify-between px-4 py-3 transition-colors hover:bg-gray-50 active:bg-gray-100"
+              className="group flex w-full items-center justify-between px-4 py-3 transition-colors active:bg-gray-50"
             >
               <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-50 text-gray-500">
-                  <item.icon className="h-4 w-4" />
-                </span>
+                <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
                 <span className="text-sm font-medium text-gray-700">{item.label}</span>
               </div>
               <ChevronRight className="h-4 w-4 text-gray-400" />

@@ -1,11 +1,8 @@
-// cache bust
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/dal/types/database';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-console.log('SUPABASE URL:', supabaseUrl);
-console.log('SUPABASE KEY EXISTS:', !!supabaseAnonKey);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
@@ -24,4 +21,3 @@ export const supabase = createClient<Database>(
     },
   },
 );
-console.log('Supabase client:', supabase);
