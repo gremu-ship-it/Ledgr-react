@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, DollarSign, Package, BarChart2, MoreHorizontal, Plus } from 'lucide-react';
+import { LayoutDashboard, DollarSign, Warehouse, BarChart2, MoreHorizontal, Plus } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
@@ -9,7 +9,7 @@ import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 const BOTTOM_NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Finance', path: '/income', icon: DollarSign },
-  { label: 'Inventory', path: '/products', icon: Package },
+  { label: 'Inventory', path: '/warehouse', icon: Warehouse },
   { label: 'Reports', path: '/reports', icon: BarChart2 },
 ];
 
@@ -40,6 +40,8 @@ export function BottomNav() {
               { label: 'Expenses', path: '/expenses' },
               { label: 'Invoices', path: '/invoices' },
               { label: 'Payroll', path: '/payroll' },
+              { label: 'Products', path: '/products' },
+              { label: 'Transfers', path: '/transfers' },
               { label: 'Accounts', path: '/accounts' },
               { label: 'Tax', path: '/tax' },
               { label: 'Assets', path: '/assets' },

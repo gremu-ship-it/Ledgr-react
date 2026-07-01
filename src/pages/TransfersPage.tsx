@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
 import type { TransferWithLines, TransferStatus } from '@/dal/repositories/TransferRepository';
 
@@ -99,6 +100,8 @@ ${transfer.notes ? `<p style="background:#f9fafb;padding:10px 14px;border-radius
 }
 
 // ── Create transfer modal ─────────────────────────────────────────────────────
+// 1-column stacked layout on mobile (below sm), original 12-column grid on
+// larger screens — same fields, same submit logic.
 
 interface TransferLineForm {
   productId: string;
@@ -146,13 +149,13 @@ function CreateTransferModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">New Stock Transfer</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">From Location</label>
             <select value={fromId} onChange={(e) => setFromId(e.target.value)}
@@ -171,33 +174,35 @@ function CreateTransferModal({
           </div>
         </div>
 
-        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+        <div className="max-h-56 space-y-3 overflow-y-auto pr-1">
           {lines.map((line, i) => (
-            <div key={i} className="grid grid-cols-12 items-end gap-2">
-              <div className="col-span-6">
-                {i === 0 && <label className="mb-1 block text-xs font-medium text-gray-500">Product</label>}
+            <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
+              <div className="sm:col-span-6">
+                <label className="mb-1 block text-xs font-medium text-gray-500">Product</label>
                 <select value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
                   <option value="">Select product…</option>
                   {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
-              <div className="col-span-3">
-                {i === 0 && <label className="mb-1 block text-xs font-medium text-gray-500">Qty</label>}
-                <input type="number" min={1} value={line.quantityRequested}
-                  onChange={(e) => updateLine(i, 'quantityRequested', Number(e.target.value))}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
-              </div>
-              <div className="col-span-2">
-                {i === 0 && <label className="mb-1 block text-xs font-medium text-gray-500">Cost</label>}
-                <input type="number" min={0} value={line.unitCost}
-                  onChange={(e) => updateLine(i, 'unitCost', Number(e.target.value))}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
-              </div>
-              <div className="col-span-1 flex justify-center pb-0.5">
-                {lines.length > 1 && (
-                  <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-400"><X size={15} /></button>
-                )}
+              <div className="grid grid-cols-2 gap-2 sm:col-span-6 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Qty</label>
+                  <input type="number" min={1} value={line.quantityRequested}
+                    onChange={(e) => updateLine(i, 'quantityRequested', Number(e.target.value))}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Cost</label>
+                  <input type="number" min={0} value={line.unitCost}
+                    onChange={(e) => updateLine(i, 'unitCost', Number(e.target.value))}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+                </div>
+                <div className="flex items-end justify-end pb-0.5">
+                  {lines.length > 1 && (
+                    <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-400"><X size={15} /></button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -214,10 +219,10 @@ function CreateTransferModal({
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
           <button onClick={() => onSubmit(fromId, toId, lines, notes)} disabled={!valid || isLoading}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+            className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
             {isLoading && <Loader2 size={14} className="animate-spin" />}
             Create Transfer
           </button>
@@ -228,6 +233,8 @@ function CreateTransferModal({
 }
 
 // ── Transfer detail drawer ────────────────────────────────────────────────────
+// Already renders full-width on small screens (max-w-lg only kicks in above
+// that breakpoint), so no structural change needed here — left as-is.
 
 function TransferDrawer({
   data, locations, products, businessName, isOwner,
@@ -393,6 +400,43 @@ function TransferDrawer({
   );
 }
 
+// ── Mobile transfer card ────────────────────────────────────────────────────
+
+function TransferCard({
+  transfer,
+  fromName,
+  toName,
+  onClick,
+}: {
+  transfer: Row<'stock_transfers'>;
+  fromName: string;
+  toName: string;
+  onClick: () => void;
+}) {
+  const status = STATUS[transfer.status as TransferStatus] ?? STATUS.draft;
+  return (
+    <button
+      onClick={onClick}
+      className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-sm font-semibold text-gray-900">{transfer.transfer_number}</p>
+        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.text}`}>
+          {status.label}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        <span className="truncate">{fromName}</span>
+        <ArrowRight size={12} className="shrink-0 text-gray-300" />
+        <span className="truncate">{toName}</span>
+      </div>
+      <p className="mt-2 text-[11px] text-gray-400">
+        {new Date(transfer.created_at).toLocaleDateString('en-GB')}
+      </p>
+    </button>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function TransfersPage() {
@@ -401,6 +445,7 @@ export function TransfersPage() {
   const businesses   = useAppStore((s) => s.businesses);
   const businessName = useAppStore((s) => s.currentBusiness?.business.name ?? 'Business');
   const queryClient  = useQueryClient();
+  const isMobile     = useIsMobile();
 
   const membership = businesses.find((m) => m.business.id === businessId);
   const isOwner    = membership?.role === 'owner';
@@ -516,15 +561,15 @@ export function TransfersPage() {
   if (!businessId) return null;
 
   return (
-    <div>
+    <div className={isMobile ? 'pb-4' : undefined}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Stock Transfers</h1>
-          <p className="mt-1 text-sm text-gray-500">Dispatch stock between warehouse and branches</p>
+          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>Stock Transfers</h1>
+          {!isMobile && <p className="mt-1 text-sm text-gray-500">Dispatch stock between warehouse and branches</p>}
         </div>
         <button onClick={() => setCreateOpen(true)}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600">
-          <Plus size={16} /> New Transfer
+          <Plus size={16} /> {isMobile ? 'New' : 'New Transfer'}
         </button>
       </div>
 
@@ -535,67 +580,97 @@ export function TransfersPage() {
             placeholder="Search by transfer number…"
             className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none" />
         </div>
-        <div className="flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white p-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1">
           {(['all', 'pending_approval', 'approved', 'dispatched', 'received'] as const).map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-brand-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-brand-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
               {s === 'all' ? 'All' : STATUS[s]?.label}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-soft">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              {['Transfer #', 'From', 'To', 'Date', 'Status', ''].map((h) => (
-                <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${h === 'Status' ? 'text-center' : 'text-left'}`}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-gray-100" /></td>
-                  ))}
-                </tr>
-              ))
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-16 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <Truck size={28} className="text-gray-200" />
-                    <p className="text-sm text-gray-400">No transfers yet</p>
-                    <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
-                  </div>
-                </td>
+      {isMobile ? (
+        // ── Mobile: card list ──────────────────────────────────────────────
+        isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-gray-100" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-12 text-center">
+            <Truck size={28} className="mb-2 text-gray-200" />
+            <p className="text-sm text-gray-400">No transfers yet</p>
+            <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((t: Row<'stock_transfers'>) => (
+              <TransferCard
+                key={t.id}
+                transfer={t}
+                fromName={locMap.get(t.from_location_id) ?? '—'}
+                toName={locMap.get(t.to_location_id) ?? '—'}
+                onClick={() => setSelectedTransferId(t.id)}
+              />
+            ))}
+          </div>
+        )
+      ) : (
+        // ── Desktop: table ─────────────────────────────────────────────────
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-soft">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {['Transfer #', 'From', 'To', 'Date', 'Status', ''].map((h) => (
+                  <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${h === 'Status' ? 'text-center' : 'text-left'}`}>{h}</th>
+                ))}
               </tr>
-            ) : (
-              filtered.map((t: Row<'stock_transfers'>) => {
-                const status = STATUS[t.status as TransferStatus] ?? STATUS.draft;
-                return (
-                  <tr key={t.id} onClick={() => setSelectedTransferId(t.id)}
-                    className="cursor-pointer transition-colors hover:bg-gray-50/50">
-                    <td className="px-5 py-3.5 font-semibold text-gray-800">{t.transfer_number}</td>
-                    <td className="px-5 py-3.5 text-gray-600">{locMap.get(t.from_location_id) ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-gray-600">{locMap.get(t.to_location_id) ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-gray-500">{new Date(t.created_at).toLocaleDateString('en-GB')}</td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.text}`}>
-                        {status.label}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3.5 text-right"><ArrowRight size={14} className="text-gray-300" /></td>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 6 }).map((_, j) => (
+                      <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-gray-100" /></td>
+                    ))}
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ))
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <Truck size={28} className="text-gray-200" />
+                      <p className="text-sm text-gray-400">No transfers yet</p>
+                      <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((t: Row<'stock_transfers'>) => {
+                  const status = STATUS[t.status as TransferStatus] ?? STATUS.draft;
+                  return (
+                    <tr key={t.id} onClick={() => setSelectedTransferId(t.id)}
+                      className="cursor-pointer transition-colors hover:bg-gray-50/50">
+                      <td className="px-5 py-3.5 font-semibold text-gray-800">{t.transfer_number}</td>
+                      <td className="px-5 py-3.5 text-gray-600">{locMap.get(t.from_location_id) ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-gray-600">{locMap.get(t.to_location_id) ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-gray-500">{new Date(t.created_at).toLocaleDateString('en-GB')}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.text}`}>
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3.5 text-right"><ArrowRight size={14} className="text-gray-300" /></td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <CreateTransferModal
         open={createOpen}

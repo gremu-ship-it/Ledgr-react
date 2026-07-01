@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -12,10 +13,14 @@ import {
   Percent,
   BookUser,
   ClipboardList,
+  AlertTriangle,
+  Package,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
+import { repos } from '@/lib/repositories';
 import {
   useMonthlyIncome,
   useMonthlyExpenses,
@@ -150,11 +155,11 @@ function StatCard({
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-4 animate-pulse">
         <div className="flex items-center justify-between mb-3">
-          <div className="h-3 w-20 rounded bg-gray-100" />
+          <div className="h-3 w-16 rounded bg-gray-100" />
           <div className="h-9 w-9 rounded-2xl bg-gray-100" />
         </div>
-        <div className="h-6 w-28 rounded bg-gray-100 mb-2" />
-        <div className="h-2.5 w-16 rounded bg-gray-100" />
+        <div className="h-5 w-20 rounded bg-gray-100 mb-2" />
+        <div className="h-2.5 w-14 rounded bg-gray-100" />
       </div>
     );
   }
@@ -170,16 +175,16 @@ function StatCard({
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 truncate">{label}</p>
         <IconBadge icon={icon} tone={tone} size="sm" interactive={!!onClick} />
       </div>
-      <p className={`text-xl font-bold ${valueColor}`}>{value}</p>
+      <p className={`text-lg font-bold ${valueColor} truncate`}>{value}</p>
       <div className="mt-1 flex items-center gap-1.5">
-        {subtext && <p className="text-xs text-gray-400">{subtext}</p>}
+        {subtext && <p className="text-[11px] text-gray-400 truncate">{subtext}</p>}
         {trend && (
           <span
             className={clsx(
-              'inline-flex items-center gap-0.5 text-xs font-medium',
+              'inline-flex items-center gap-0.5 text-[11px] font-medium shrink-0',
               trend.positive ? 'text-brand-600' : 'text-red-500',
             )}
           >
@@ -192,7 +197,7 @@ function StatCard({
           </span>
         )}
         {onClick && !trend && (
-          <ChevronRight className="h-3 w-3 text-gray-300 ml-auto" />
+          <ChevronRight className="h-3 w-3 text-gray-300 ml-auto shrink-0" />
         )}
       </div>
     </Wrapper>
@@ -241,6 +246,13 @@ export function MobileDashboard() {
   const trend = useIncomeExpenseTrend(businessId, 6);
   const recentEntries = useRecentJournalEntries(businessId, 5);
 
+  const lowStock = useQuery({
+    queryKey: ['reorder_alerts', businessId],
+    queryFn: () => repos.inventory.findReorderAlerts(businessId!),
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 5,
+  });
+
   const netProfit =
     income.data !== undefined && expenses.data !== undefined
       ? income.data.totalAmount - expenses.data
@@ -279,14 +291,14 @@ export function MobileDashboard() {
         </button>
       </div>
 
-      {/* Net Profit Hero Card */}
+      {/* Net Profit Hero Card — flat fill, no gradient */}
       <div className={clsx(
-        'rounded-2xl p-5 shadow-sm',
+        'rounded-2xl p-5',
         netProfit === undefined
           ? 'bg-gray-100'
           : netProfit >= 0
-          ? 'bg-gradient-to-br from-brand-500 to-brand-600'
-          : 'bg-gradient-to-br from-red-500 to-red-600',
+          ? 'bg-brand-500'
+          : 'bg-red-600',
       )}>
         {income.isLoading || expenses.isLoading ? (
           <div className="animate-pulse space-y-3">
@@ -314,8 +326,8 @@ export function MobileDashboard() {
         )}
       </div>
 
-      {/* Stat Cards — single column */}
-      <div className="grid grid-cols-1 gap-3">
+      {/* Stat Cards — 2-column grid */}
+      <div className="grid grid-cols-2 gap-3">
         <StatCard
           label="Income"
           value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
@@ -396,6 +408,55 @@ export function MobileDashboard() {
             label="Payroll"
             onClick={() => navigate('/payroll?action=run')}
           />
+        </div>
+      </div>
+
+      {/* Inventory + Mobile Money — real low-stock data, mobile money teaser */}
+      <div className="grid grid-cols-1 gap-3">
+        <button
+          onClick={() => navigate('/warehouse')}
+          className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-transform active:scale-[0.98]"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
+              <span className="text-sm font-semibold text-gray-900">Inventory</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-gray-300" />
+          </div>
+
+          {lowStock.isLoading ? (
+            <div className="h-8 animate-pulse rounded bg-gray-100" />
+          ) : lowStock.data && lowStock.data.length > 0 ? (
+            <>
+              <div className="mb-2 flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                <p className="text-xs text-amber-600">
+                  <span className="font-semibold">{lowStock.data.length}</span> product{lowStock.data.length > 1 ? 's' : ''} at or below reorder level
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                {lowStock.data.slice(0, 3).map((alert) => (
+                  <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between text-xs">
+                    <span className="truncate text-gray-600">{alert.product_name}</span>
+                    <span className="shrink-0 font-medium text-gray-800">
+                      {Number(alert.quantity_available)} left
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400">All products are well stocked</p>
+          )}
+        </button>
+
+        <div className="w-full rounded-2xl border border-dashed border-gray-200 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <IconBadge icon={Smartphone} tone="neutral" size="sm" />
+            <span className="text-sm font-semibold text-gray-700">Mobile Money</span>
+          </div>
+          <p className="mt-2 text-xs text-gray-400">Airtel Money and Mpamba integration coming soon</p>
         </div>
       </div>
 

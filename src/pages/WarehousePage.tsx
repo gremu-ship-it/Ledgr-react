@@ -6,9 +6,12 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { formatMwk } from '@/lib/formatters';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
 
 // ── Receive stock modal ───────────────────────────────────────────────────────
+// Uses a 1-column stacked layout on mobile (below sm breakpoint) and the
+// original 12-column grid on larger screens — same fields, same submit logic.
 
 interface ReceiveLineForm {
   productId: string;
@@ -58,7 +61,7 @@ function ReceiveStockModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-900">Receive Stock</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -68,9 +71,9 @@ function ReceiveStockModal({
 
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
           {lines.map((line, i) => (
-            <div key={i} className="grid grid-cols-12 items-end gap-2">
-              <div className="col-span-5">
-                {i === 0 && <label className="mb-1 block text-xs font-medium text-gray-500">Product</label>}
+            <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
+              <div className="sm:col-span-5">
+                <label className="mb-1 block text-xs font-medium text-gray-500">Product</label>
                 <select
                   value={line.productId}
                   onChange={(e) => updateLine(i, 'productId', e.target.value)}
@@ -82,28 +85,30 @@ function ReceiveStockModal({
                   ))}
                 </select>
               </div>
-              <div className="col-span-3">
-                {i === 0 && <label className="mb-1 block text-xs font-medium text-gray-500">Quantity</label>}
-                <input
-                  type="number" min={1} value={line.quantity}
-                  onChange={(e) => updateLine(i, 'quantity', Number(e.target.value))}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none"
-                />
-              </div>
-              <div className="col-span-3">
-                {i === 0 && <label className="mb-1 block text-xs font-medium text-gray-500">Unit Cost</label>}
-                <input
-                  type="number" min={0} value={line.unitCost}
-                  onChange={(e) => updateLine(i, 'unitCost', Number(e.target.value))}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none"
-                />
-              </div>
-              <div className="col-span-1 flex justify-center pb-0.5">
-                {lines.length > 1 && (
-                  <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-400">
-                    <X size={15} />
-                  </button>
-                )}
+              <div className="grid grid-cols-2 gap-2 sm:col-span-6 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Quantity</label>
+                  <input
+                    type="number" min={1} value={line.quantity}
+                    onChange={(e) => updateLine(i, 'quantity', Number(e.target.value))}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-500">Unit Cost</label>
+                  <input
+                    type="number" min={0} value={line.unitCost}
+                    onChange={(e) => updateLine(i, 'unitCost', Number(e.target.value))}
+                    className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div className="flex items-end justify-end pb-0.5">
+                  {lines.length > 1 && (
+                    <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-400">
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -125,18 +130,61 @@ function ReceiveStockModal({
           />
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
             Cancel
           </button>
           <button
             onClick={() => onSubmit(lines, notes)}
             disabled={!valid || isLoading}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+            className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
           >
             {isLoading && <Loader2 size={14} className="animate-spin" />}
             Receive Stock
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Shared row type ─────────────────────────────────────────────────────────
+
+type BalanceRow = Awaited<ReturnType<typeof repos.inventory.findAllWithDetails>>[number];
+
+// ── Mobile stock card ────────────────────────────────────────────────────────
+
+function StockCard({ balance }: { balance: BalanceRow }) {
+  const reorderLevel = balance.products?.reorder_level;
+  const available = Number(balance.quantity_available ?? 0);
+  const isLow = reorderLevel != null && available <= Number(reorderLevel);
+  const stockValue = available * Number(balance.average_cost);
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-gray-900">{balance.products?.name ?? '—'}</p>
+          <p className="text-xs text-gray-400">
+            {balance.products?.sku ?? '—'} · {balance.inventory_locations?.name ?? '—'}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${isLow ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-brand-600'}`}>
+          {isLow ? 'Low Stock' : 'OK'}
+        </span>
+      </div>
+      <div className="mt-3 grid grid-cols-3 gap-2 border-t border-gray-100 pt-3 text-center">
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">On Hand</p>
+          <p className="text-sm font-semibold text-gray-800">{Number(balance.quantity_on_hand).toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Available</p>
+          <p className="text-sm font-semibold text-gray-800">{available.toLocaleString()}</p>
+        </div>
+        <div>
+          <p className="text-[10px] uppercase tracking-wide text-gray-400">Value</p>
+          <p className="text-sm font-semibold text-gray-800">{formatMwk(stockValue)}</p>
         </div>
       </div>
     </div>
@@ -149,6 +197,7 @@ export function WarehousePage() {
   const businessId  = useAppStore((s) => s.currentBusiness?.business.id);
   const currentUser = useAppStore((s) => s.currentUser);
   const queryClient = useQueryClient();
+  const isMobile    = useIsMobile();
 
   const [search, setSearch] = useState('');
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -218,23 +267,23 @@ export function WarehousePage() {
   if (!businessId) return null;
 
   return (
-    <div>
+    <div className={isMobile ? 'pb-4' : undefined}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Warehouse</h1>
-          <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>
+          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>Warehouse</h1>
+          {!isMobile && <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>}
         </div>
         <button
           onClick={() => setReceiveOpen(true)}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
         >
-          <Plus size={16} /> Receive Stock
+          <Plus size={16} /> {isMobile ? 'Receive' : 'Receive Stock'}
         </button>
       </div>
 
       {lowStock.length > 0 && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-          <AlertTriangle size={16} className="text-amber-500" />
+          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
           <p className="text-sm text-amber-700">
             <span className="font-semibold">{lowStock.length} product{lowStock.length > 1 ? 's' : ''}</span>{' '}
             at or below reorder level
@@ -266,67 +315,89 @@ export function WarehousePage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-soft">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              {['Product', 'Location', 'On Hand', 'Reserved', 'Available', 'Avg Cost', 'Stock Value', 'Status'].map((h, i) => (
-                <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${i >= 2 && i <= 6 ? 'text-right' : i === 7 ? 'text-center' : 'text-left'}`}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {balancesLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
-                  {Array.from({ length: 8 }).map((_, j) => (
-                    <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-gray-100" /></td>
-                  ))}
-                </tr>
-              ))
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="py-16 text-center">
-                  <div className="flex flex-col items-center gap-2">
-                    <Warehouse size={28} className="text-gray-200" />
-                    <p className="text-sm text-gray-400">No stock records found</p>
-                    <p className="text-xs text-gray-300">Receive stock to start tracking inventory</p>
-                  </div>
-                </td>
+      {isMobile ? (
+        // ── Mobile: card list ──────────────────────────────────────────────
+        balancesLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-gray-100" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-12 text-center">
+            <Warehouse size={28} className="mb-2 text-gray-200" />
+            <p className="text-sm text-gray-400">No stock records found</p>
+            <p className="text-xs text-gray-300">Receive stock to start tracking inventory</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((b) => <StockCard key={b.id} balance={b} />)}
+          </div>
+        )
+      ) : (
+        // ── Desktop: table ─────────────────────────────────────────────────
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-soft">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                {['Product', 'Location', 'On Hand', 'Reserved', 'Available', 'Avg Cost', 'Stock Value', 'Status'].map((h, i) => (
+                  <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${i >= 2 && i <= 6 ? 'text-right' : i === 7 ? 'text-center' : 'text-left'}`}>
+                    {h}
+                  </th>
+                ))}
               </tr>
-            ) : (
-              filtered.map((b) => {
-                const reorderLevel = b.products?.reorder_level;
-                const available   = Number(b.quantity_available ?? 0);
-                const isLow       = reorderLevel != null && available <= Number(reorderLevel);
-                const stockValue  = available * Number(b.average_cost);
-
-                return (
-                  <tr key={b.id} className="transition-colors hover:bg-gray-50/50">
-                    <td className="px-5 py-3.5">
-                      <p className="font-medium text-gray-800">{b.products?.name ?? '—'}</p>
-                      {b.products?.sku && <p className="text-xs text-gray-400">{b.products.sku}</p>}
-                    </td>
-                    <td className="px-5 py-3.5 text-gray-500">{b.inventory_locations?.name ?? '—'}</td>
-                    <td className="px-5 py-3.5 text-right font-medium text-gray-800">{Number(b.quantity_on_hand).toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-right text-gray-500">{Number(b.quantity_reserved).toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-gray-800">{available.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-right text-gray-500">{formatMwk(Number(b.average_cost))}</td>
-                    <td className="px-5 py-3.5 text-right font-semibold text-gray-800">{formatMwk(stockValue)}</td>
-                    <td className="px-5 py-3.5 text-center">
-                      <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${isLow ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-brand-600'}`}>
-                        {isLow ? 'Low Stock' : 'OK'}
-                      </span>
-                    </td>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {balancesLoading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {Array.from({ length: 8 }).map((_, j) => (
+                      <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-gray-100" /></td>
+                    ))}
                   </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+                ))
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <Warehouse size={28} className="text-gray-200" />
+                      <p className="text-sm text-gray-400">No stock records found</p>
+                      <p className="text-xs text-gray-300">Receive stock to start tracking inventory</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((b) => {
+                  const reorderLevel = b.products?.reorder_level;
+                  const available   = Number(b.quantity_available ?? 0);
+                  const isLow       = reorderLevel != null && available <= Number(reorderLevel);
+                  const stockValue  = available * Number(b.average_cost);
+
+                  return (
+                    <tr key={b.id} className="transition-colors hover:bg-gray-50/50">
+                      <td className="px-5 py-3.5">
+                        <p className="font-medium text-gray-800">{b.products?.name ?? '—'}</p>
+                        {b.products?.sku && <p className="text-xs text-gray-400">{b.products.sku}</p>}
+                      </td>
+                      <td className="px-5 py-3.5 text-gray-500">{b.inventory_locations?.name ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-right font-medium text-gray-800">{Number(b.quantity_on_hand).toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-right text-gray-500">{Number(b.quantity_reserved).toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-right font-semibold text-gray-800">{available.toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-right text-gray-500">{formatMwk(Number(b.average_cost))}</td>
+                      <td className="px-5 py-3.5 text-right font-semibold text-gray-800">{formatMwk(stockValue)}</td>
+                      <td className="px-5 py-3.5 text-center">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${isLow ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-brand-600'}`}>
+                          {isLow ? 'Low Stock' : 'OK'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <ReceiveStockModal
         open={receiveOpen}
