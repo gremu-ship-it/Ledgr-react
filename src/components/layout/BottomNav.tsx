@@ -1,16 +1,46 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, DollarSign, Warehouse, BarChart2, MoreHorizontal, Plus } from 'lucide-react';
+import {
+  LayoutDashboard,
+  DollarSign,
+  Package,
+  BarChart2,
+  MoreHorizontal,
+  Plus,
+  Wallet,
+  Receipt,
+  FileText,
+  Users,
+  BookOpen,
+  Percent,
+  Landmark,
+  BookUser,
+  Sparkles,
+  Settings,
+} from 'lucide-react';
 import { clsx } from 'clsx';
 import { useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
+import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 
 const BOTTOM_NAV_ITEMS = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Finance', path: '/income', icon: DollarSign },
-  { label: 'Inventory', path: '/warehouse', icon: Warehouse },
+  { label: 'Inventory', path: '/products', icon: Package },
   { label: 'Reports', path: '/reports', icon: BarChart2 },
+];
+
+const MORE_MENU_ITEMS: { label: string; path: string; icon: typeof Receipt; tone: IconTone }[] = [
+  { label: 'Expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
+  { label: 'Invoices', path: '/invoices', icon: FileText, tone: 'info' },
+  { label: 'Payroll', path: '/payroll', icon: Users, tone: 'neutral' },
+  { label: 'Accounts', path: '/accounts', icon: BookOpen, tone: 'brand' },
+  { label: 'Tax', path: '/tax', icon: Percent, tone: 'warning' },
+  { label: 'Assets', path: '/assets', icon: Landmark, tone: 'info' },
+  { label: 'Contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
+  { label: 'AI', path: '/ai', icon: Sparkles, tone: 'brand' },
+  { label: 'Settings', path: '/settings', icon: Settings, tone: 'neutral' },
 ];
 
 export function BottomNav() {
@@ -31,36 +61,20 @@ export function BottomNav() {
         />
       )}
 
-      {/* More menu */}
+      {/* More menu — icon tiles, matching app-wide badge treatment */}
       {moreOpen && (
         <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">More</p>
           <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: 'Expenses', path: '/expenses' },
-              { label: 'Invoices', path: '/invoices' },
-              { label: 'Payroll', path: '/payroll' },
-              { label: 'Products', path: '/products' },
-              { label: 'Transfers', path: '/transfers' },
-              { label: 'Accounts', path: '/accounts' },
-              { label: 'Tax', path: '/tax' },
-              { label: 'Assets', path: '/assets' },
-              { label: 'Contacts', path: '/contacts' },
-              { label: 'AI', path: '/ai' },
-              { label: 'Settings', path: '/settings' },
-            ].map((item) => (
+            {MORE_MENU_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={() => setMoreOpen(false)}
-                className={({ isActive }) =>
-                  clsx(
-                    'rounded-xl px-3 py-2.5 text-center text-sm font-medium transition-colors',
-                    isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-100',
-                  )
-                }
+                className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50"
               >
-                {item.label}
+                <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
+                <span className="text-xs font-medium text-gray-600">{item.label}</span>
               </NavLink>
             ))}
           </div>
@@ -81,16 +95,16 @@ export function BottomNav() {
           <div className="flex flex-col items-center gap-3">
             <button
               onClick={() => { setFabOpen(false); setShowIncome(true); }}
-              className="flex items-center gap-3 rounded-2xl bg-white px-5 py-3 shadow-lg border border-gray-100"
+              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
             >
-              <span className="text-lg">💵</span>
+              <IconBadge icon={Wallet} tone="brand" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">Record Income</span>
             </button>
             <button
               onClick={() => { setFabOpen(false); setShowExpense(true); }}
-              className="flex items-center gap-3 rounded-2xl bg-white px-5 py-3 shadow-lg border border-gray-100"
+              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
             >
-              <span className="text-lg">🧾</span>
+              <IconBadge icon={Receipt} tone="negative" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">Record Expense</span>
             </button>
           </div>
@@ -100,30 +114,13 @@ export function BottomNav() {
       {/* Bottom nav bar */}
       <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center justify-between border-t border-gray-200 bg-white px-1 lg:hidden">
         {/* First 2 nav items */}
-        {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                clsx(
-                  'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
-                  isActive ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon className={clsx('h-5 w-5', isActive && 'text-brand-600')} />
-                  <span>{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          );
-        })}
+        {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
+          <NavTab key={item.path} {...item} />
+        ))}
 
-        {/* FAB center button */}
+        {/* FAB center button — intentionally kept as a solid brand circle,
+            not the white neumorphic badge, so it stays visually dominant
+            as the primary action. */}
         <button
           onClick={() => setFabOpen((v) => !v)}
           className={clsx(
@@ -135,39 +132,21 @@ export function BottomNav() {
         </button>
 
         {/* Last 2 nav items */}
-        {BOTTOM_NAV_ITEMS.slice(2).map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                clsx(
-                  'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
-                  isActive ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700',
-                )
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon className={clsx('h-5 w-5', isActive && 'text-brand-600')} />
-                  <span>{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          );
-        })}
+        {BOTTOM_NAV_ITEMS.slice(2).map((item) => (
+          <NavTab key={item.path} {...item} />
+        ))}
 
         {/* More button */}
         <button
           onClick={() => setMoreOpen((v) => !v)}
-          className={clsx(
-            'flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors',
-            moreOpen ? 'text-brand-600' : 'text-gray-500 hover:text-gray-700',
-          )}
+          className="group flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
         >
-          <MoreHorizontal className={clsx('h-5 w-5', moreOpen && 'text-brand-600')} />
-          <span>More</span>
+          {moreOpen ? (
+            <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
+          ) : (
+            <MoreHorizontal className="h-5 w-5 text-gray-500" />
+          )}
+          <span className={moreOpen ? 'text-brand-600' : 'text-gray-500'}>More</span>
         </button>
       </nav>
 
@@ -187,5 +166,33 @@ export function BottomNav() {
         </>
       )}
     </>
+  );
+}
+
+function NavTab({
+  label,
+  icon: Icon,
+  path,
+}: {
+  label: string;
+  path: string;
+  icon: typeof LayoutDashboard;
+}) {
+  return (
+    <NavLink to={path} className="group flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium">
+      {({ isActive }) =>
+        isActive ? (
+          <>
+            <IconBadge icon={Icon} tone="brand" size="sm" interactive />
+            <span className="text-brand-600">{label}</span>
+          </>
+        ) : (
+          <>
+            <Icon className="h-5 w-5 text-gray-500" />
+            <span className="text-gray-500">{label}</span>
+          </>
+        )
+      }
+    </NavLink>
   );
 }

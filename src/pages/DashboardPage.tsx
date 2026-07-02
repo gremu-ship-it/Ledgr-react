@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, Plus, DollarSign, Receipt, Users, FileText } from 'lucide-react';
+import { AlertCircle, Plus, DollarSign, Receipt, Users, FileText, TrendingUp, TrendingDown, Percent, type LucideIcon } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import {
   useMonthlyIncome,
   useMonthlyExpenses,
@@ -25,11 +26,13 @@ interface KpiCardProps {
   sub?: string;
   trendUp?: boolean;
   featured?: boolean;
+  icon: LucideIcon;
+  tone?: IconTone;
   isLoading?: boolean;
   isError?: boolean;
 }
 
-function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
+function KpiCard({ label, value, sub, trendUp = true, featured = false, icon: Icon, tone = 'neutral', isLoading, isError }: KpiCardProps) {
   if (isLoading) {
     return (
       <div className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5">
@@ -54,7 +57,12 @@ function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoadin
         className="relative overflow-hidden rounded-2xl p-5"
         style={{ background: 'linear-gradient(135deg, #065c42, #0a7c5a)' }}
       >
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-sm">
+            <Icon className="h-5 w-5 text-white" />
+          </span>
+        </div>
         <p className="mb-2 text-3xl font-extrabold text-white">{value}</p>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
@@ -70,7 +78,10 @@ function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoadin
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
+        <IconBadge icon={Icon} tone={tone} size="sm" />
+      </div>
       <p className="mb-2 text-2xl font-extrabold text-gray-900">{value}</p>
       {sub && <p className="text-sm text-gray-400">{sub}</p>}
     </div>
@@ -174,6 +185,7 @@ export function DashboardPage() {
           value={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
           sub="This month"
           trendUp={netProfit === undefined || netProfit >= 0}
+          icon={netProfit === undefined || netProfit >= 0 ? TrendingUp : TrendingDown}
           featured
           isLoading={netIsLoading}
           isError={netIsError}
@@ -183,6 +195,8 @@ export function DashboardPage() {
           value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
           sub={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
           trendUp
+          icon={DollarSign}
+          tone="brand"
           isLoading={income.isLoading}
           isError={income.isError}
         />
@@ -191,6 +205,8 @@ export function DashboardPage() {
           value={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
           sub="This month"
           trendUp={false}
+          icon={Receipt}
+          tone="negative"
           isLoading={expenses.isLoading}
           isError={expenses.isError}
         />
@@ -199,6 +215,8 @@ export function DashboardPage() {
           value={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
           sub={outstanding.data ? `${outstanding.data.count} unpaid invoices` : '0 invoices'}
           trendUp={false}
+          icon={FileText}
+          tone="info"
           isLoading={outstanding.isLoading}
           isError={outstanding.isError}
         />
@@ -207,6 +225,8 @@ export function DashboardPage() {
           value={formatMwk(vatAccrued)}
           sub="MRA · 17.5%"
           trendUp
+          icon={Percent}
+          tone="warning"
           isLoading={income.isLoading}
           isError={income.isError}
         />
