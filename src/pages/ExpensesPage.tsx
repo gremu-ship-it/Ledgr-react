@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
-import type { InsertDto } from '@/dal/types/database';
-import { createExpenseJournalEntry } from '@/services/journalService';
+import type { InsertDto, Row } from '@/dal/types/database';
+import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -21,6 +21,7 @@ interface QuickExpenseForm {
   expense_date: string;
   description: string;
   amount: string;
+  account_id: string;
   payment_method: string;
   reference: string;
   notes: string;
@@ -32,6 +33,7 @@ interface ExpenseLine {
   quantity: string;
   unit_price: string;
   tax_code: string;
+  account_id: string;
 }
 
 interface ExpenseForm {
@@ -60,6 +62,50 @@ const TAX_OPTIONS = [
   { value: 'vat_zero', label: 'VAT Zero Rated' },
   { value: 'none', label: 'No Tax' },
 ];
+
+// ── Expense accounts hook ────────────────────────────────────────────────────
+// Postable (non-group), active expense accounts for the category dropdown.
+
+function useExpenseAccounts(businessId?: string) {
+  return useQuery({
+    queryKey: ['accounts_expense', businessId],
+    queryFn: async () => {
+      const all = await repos.account.findByBusiness(businessId!);
+      return all
+        .filter((a: Row<'accounts'>) => a.account_type === 'expense' && !a.is_group && a.is_active)
+        .sort((a: Row<'accounts'>, b: Row<'accounts'>) => a.code.localeCompare(b.code));
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+function AccountSelect({
+  value,
+  onChange,
+  accounts,
+  placeholder = 'Select category…',
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  accounts: Row<'accounts'>[];
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+    >
+      <option value="">{placeholder}</option>
+      {accounts.map((a) => (
+        <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+      ))}
+    </select>
+  );
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -102,8 +148,9 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const { data: accounts = [] } = useExpenseAccounts(businessId);
   const [form, setForm] = useState<QuickExpenseForm>({
-    expense_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '', include_vat: false,
+    expense_date: today(), description: '', amount: '', account_id: '', payment_method: 'cash', reference: '', notes: '', include_vat: false,
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -112,6 +159,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       const rawAmount = parseFloat(values.amount);
       if (isNaN(rawAmount) || rawAmount <= 0) throw new Error('Enter a valid amount');
       if (!values.description.trim()) throw new Error('Description is required');
+      if (!values.account_id) throw new Error('Please select an expense category');
 
       const netAmount = values.include_vat ? rawAmount / 1.175 : rawAmount;
       const vatAmount = values.include_vat ? rawAmount - netAmount : 0;
@@ -146,36 +194,59 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           tax_rate: values.include_vat ? VAT_RATE : 0,
           tax_amount: vatAmount,
           line_total: totalAmount,
+          account_id: values.account_id,
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
       );
 
-      // Create journal entry
+      // Find the expense we just created so we have its id to link the
+      // journal entry back to, and to flag it if posting fails.
       const allExpenses = await repos.expense.findByBusiness(businessId);
       const created = allExpenses.find((e) => e.expense_number === expenseNumber);
-      if (created) {
-        try {
-          await createExpenseJournalEntry(
-            businessId,
-            expenseNumber,
-            values.expense_date,
-            totalAmount,
-            netAmount,
-            vatAmount,
-            'receipt',
-            created.id,
-          );
-        } catch (err) {
-          console.warn('Journal entry failed (non-critical):', err);
-        }
+      if (!created) return;
+
+      try {
+        const allocations: ExpenseAccountAllocation[] = [
+          { accountId: values.account_id, amount: netAmount, description: values.description },
+        ];
+        const journalEntryId = await createExpenseJournalEntry(
+          businessId,
+          expenseNumber,
+          values.expense_date,
+          totalAmount,
+          allocations,
+          vatAmount,
+          'receipt',
+          created.id,
+        );
+        // NOTE: assumes repos.expense exposes a generic update(id, patch)
+        // via BaseRepository, matching the pattern used across other
+        // repositories in this codebase. Adjust the method name here if
+        // yours differs.
+        await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+      } catch (err) {
+        // Posting failed — the expense record still exists but stays
+        // unlinked (journal_entry_id remains null), so it shows up as
+        // "Needs Posting" in the list below instead of silently vanishing
+        // from the accounts.
+        console.error('Journal entry failed for', expenseNumber, err);
+        throw new Error(
+          `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
+          `It will show as "Needs Posting" — you can retry from the expense list.`,
+        );
       }
     },
     onSuccess: () => {
-      setAlert({ type: 'success', message: 'Expense recorded successfully.' });
-      setForm({ expense_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '', include_vat: false });
+      setAlert({ type: 'success', message: 'Expense recorded and posted successfully.' });
+      setForm({ expense_date: today(), description: '', amount: '', account_id: '', payment_method: 'cash', reference: '', notes: '', include_vat: false });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => {
+      setAlert({ type: 'error', message: err.message });
+      // Even on a posting failure, the expense list should reflect the
+      // new (unposted) record, so refresh it.
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    },
   });
 
   function set(field: keyof QuickExpenseForm, value: string | boolean) {
@@ -204,6 +275,11 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               <input type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
+            <AccountSelect value={form.account_id} onChange={(v) => set('account_id', v)} accounts={accounts} />
           </div>
 
           <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
@@ -265,10 +341,11 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
 
 function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const { data: accounts = [] } = useExpenseAccounts(businessId);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm] = useState<ExpenseForm>({
     contact_id: '', expense_number: '', expense_date: today(), due_date: '', notes: '',
-    lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard' }],
+    lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', account_id: '' }],
   });
 
   const { data: suppliers = [] } = useQuery({
@@ -292,7 +369,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   }
 
   function addLine() {
-    setForm((f) => ({ ...f, lines: [...f.lines, { description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard' }] }));
+    setForm((f) => ({ ...f, lines: [...f.lines, { description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', account_id: '' }] }));
   }
 
   function removeLine(idx: number) {
@@ -317,6 +394,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       if (!form.expense_number) throw new Error('Expense number is required');
       const validLines = form.lines.filter((l) => l.description.trim() && parseFloat(l.unit_price) > 0);
       if (validLines.length === 0) throw new Error('Add at least one line item');
+      if (validLines.some((l) => !l.account_id)) throw new Error('Every line needs an expense category');
 
       await repos.expense.createWithLines(
         {
@@ -346,35 +424,56 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           return {
             line_number: idx + 1, description: l.description, quantity: qty, unit_price: price,
             tax_code: l.tax_code, tax_rate: taxRate, tax_amount: taxAmt, line_total: lineSub + taxAmt,
+            account_id: l.account_id,
           } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>;
         }),
       );
 
       const allExpenses = await repos.expense.findByBusiness(businessId);
       const created = allExpenses.find((e) => e.expense_number === form.expense_number);
-      if (created) {
-        try {
-          await createExpenseJournalEntry(
-            businessId,
-            form.expense_number,
-            form.expense_date,
-            total,
-            subtotal,
-            vatAmount,
-            'bill',
-            created.id,
-          );
-        } catch (err) {
-          console.warn('Journal entry failed (non-critical):', err);
+      if (!created) return;
+
+      try {
+        // One allocation per distinct account, summing amounts for lines
+        // that share the same category (e.g. two "Stationery" lines).
+        const allocationMap = new Map<string, number>();
+        for (const l of validLines) {
+          const qty = parseFloat(l.quantity) || 1;
+          const price = parseFloat(l.unit_price) || 0;
+          const net = qty * price;
+          allocationMap.set(l.account_id, (allocationMap.get(l.account_id) ?? 0) + net);
         }
+        const allocations: ExpenseAccountAllocation[] = Array.from(allocationMap.entries())
+          .map(([accountId, amount]) => ({ accountId, amount }));
+
+        const journalEntryId = await createExpenseJournalEntry(
+          businessId,
+          form.expense_number,
+          form.expense_date,
+          total,
+          allocations,
+          vatAmount,
+          'bill',
+          created.id,
+        );
+        await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+      } catch (err) {
+        console.error('Journal entry failed for', form.expense_number, err);
+        throw new Error(
+          `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
+          `It will show as "Needs Posting" — you can retry from the expense list.`,
+        );
       }
     },
     onSuccess: () => {
-      setAlert({ type: 'success', message: 'Expense created successfully.' });
+      setAlert({ type: 'success', message: 'Expense created and posted successfully.' });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => {
+      setAlert({ type: 'error', message: err.message });
+      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+    },
   });
 
   return (
@@ -429,6 +528,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                 <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <tr>
                     <th className="px-3 py-2 text-left">Description</th>
+                    <th className="w-40 px-3 py-2 text-left">Category</th>
                     <th className="w-20 px-3 py-2 text-right">Qty</th>
                     <th className="w-32 px-3 py-2 text-right">Unit Price</th>
                     <th className="w-36 px-3 py-2 text-center">Tax</th>
@@ -442,6 +542,15 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                       <td className="px-3 py-2">
                         <input type="text" placeholder="Description" value={line.description} onChange={(e) => setLine(idx, 'description', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                      </td>
+                      <td className="px-3 py-2">
+                        <AccountSelect
+                          value={line.account_id}
+                          onChange={(v) => setLine(idx, 'account_id', v)}
+                          accounts={accounts}
+                          placeholder="Category…"
+                          className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
                       </td>
                       <td className="px-3 py-2">
                         <input type="number" min="1" value={line.quantity} onChange={(e) => setLine(idx, 'quantity', e.target.value)}
@@ -498,12 +607,57 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   );
 }
 
+// ── Needs Posting retry ──────────────────────────────────────────────────────
+// For an expense whose journal_entry_id is null (posting never succeeded),
+// re-fetch its lines' account allocations and try again.
+
+function useRetryPosting(businessId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (expense: Row<'expenses'>) => {
+      const { data: lines, error } = await (repos.expense as any).client
+        .from('expense_lines')
+        .select('*')
+        .eq('expense_id', expense.id);
+      if (error) throw new Error(error.message);
+      if (!lines || lines.length === 0) throw new Error('No line items found for this expense.');
+      if (lines.some((l: Row<'expense_lines'>) => !l.account_id)) {
+        throw new Error('This expense has line(s) with no category set — edit it before retrying.');
+      }
+
+      const allocationMap = new Map<string, number>();
+      for (const l of lines as Row<'expense_lines'>[]) {
+        // Guarded above (throws if any account_id is null), so this is safe.
+        const accountId = l.account_id!;
+        allocationMap.set(accountId, (allocationMap.get(accountId) ?? 0) + Number(l.unit_price) * Number(l.quantity));
+      }
+      const allocations: ExpenseAccountAllocation[] = Array.from(allocationMap.entries())
+        .map(([accountId, amount]) => ({ accountId, amount }));
+
+      const journalEntryId = await createExpenseJournalEntry(
+        businessId,
+        expense.expense_number,
+        expense.expense_date,
+        Number(expense.total_amount),
+        allocations,
+        Number(expense.vat_amount),
+        expense.expense_type,
+        expense.id,
+      );
+      await (repos.expense as any).update(expense.id, { journal_entry_id: journalEntryId });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
 function ExpenseList({ businessId }: { businessId: string }) {
   const { data: expenses = [], isLoading, isError } = useQuery({
     queryKey: ['expenses', businessId],
     queryFn: () => repos.expense.findByBusiness(businessId),
     enabled: Boolean(businessId),
   });
+  const retry = useRetryPosting(businessId);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   if (isLoading) return <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
   if (isError) return <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load expenses.</div>;
@@ -521,22 +675,48 @@ function ExpenseList({ businessId }: { businessId: string }) {
               <th className="px-4 py-3 text-right">Amount</th>
               <th className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
               <th className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
+              <th className="px-4 py-3 text-center">Posting</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {expenses.map((exp) => (
-              <tr key={exp.id} className="transition-colors hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-brand-700">{exp.expense_number}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{exp.expense_date}</td>
-                <td className="px-4 py-3 text-gray-700">{exp.notes ?? exp.reference ?? '—'}</td>
-                <td className="px-4 py-3 text-right font-medium">{formatMwk(exp.total_amount)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(exp.amount_paid)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>
-              </tr>
-            ))}
+            {expenses.map((exp: Row<'expenses'>) => {
+              const needsPosting = !exp.journal_entry_id;
+              return (
+                <tr key={exp.id} className="transition-colors hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-brand-700">{exp.expense_number}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{exp.expense_date}</td>
+                  <td className="px-4 py-3 text-gray-700">{exp.notes ?? exp.reference ?? '—'}</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatMwk(exp.total_amount)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(exp.amount_paid)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>
+                  <td className="px-4 py-3 text-center">
+                    {needsPosting ? (
+                      <button
+                        onClick={() => { setRetryingId(exp.id); retry.mutate(exp, { onSettled: () => setRetryingId(null) }); }}
+                        disabled={retry.isPending && retryingId === exp.id}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                        title="This expense hasn't been posted to the ledger yet — click to retry."
+                      >
+                        <RefreshCw className={`h-3 w-3 ${retry.isPending && retryingId === exp.id ? 'animate-spin' : ''}`} />
+                        Needs Posting
+                      </button>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-brand-600">
+                        <CheckCircle className="h-3 w-3" /> Posted
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+      {retry.isError && (
+        <div className="border-t border-red-100 bg-red-50 px-4 py-2.5 text-xs text-red-700">
+          Retry failed: {(retry.error as Error).message}
+        </div>
+      )}
     </div>
   );
 }

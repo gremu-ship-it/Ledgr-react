@@ -5,6 +5,7 @@
  * Account codes used (from live Chart of Accounts):
  *   1110  Cash on Hand
  *   1131  Trade Debtors
+ *   1135  VAT Receivable (Input Tax)
  *   2111  Trade Creditors
  *   2121  VAT Payable (Output Tax)
  *   2122  PAYE Payable
@@ -177,35 +178,53 @@ export async function createInvoiceJournalEntry(
 }
 
 // ── Expense Journal Entry ─────────────────────────────────────────────────────
-// For a paid expense (receipt):
-//   DR  Operating Expense — use account 6100 Salaries or best match
-//   CR  Cash on Hand (1110) or Trade Creditors (2111) if bill
+// For a paid expense (receipt) or supplier bill:
+//   DR  Real expense account(s) — one line per selected category, net of VAT
+//   DR  VAT Receivable (1135)   — VAT amount, if any
+//   CR  Cash on Hand (1110) or Trade Creditors (2111) if bill — full total
 //
-// We use a generic operating expense account (6110 Basic Salaries is too specific).
-// For expenses we'll DR against 5100 Purchases (cost of sales) or a passed accountId.
-// Default expense DR account: we find first operating_expense posting account.
+// IMPORTANT: unlike the previous version of this function, the debit
+// account(s) are now supplied by the caller (from the user's category
+// selection on the expense form) instead of being guessed. Guessing
+// previously meant every expense — regardless of category — was silently
+// posted to the first active operating_expense account found, which for
+// this business was always "Salaries & Wages". See the reclassification
+// script that accompanied this fix for correcting historical entries.
+
+export interface ExpenseAccountAllocation {
+  /** accounts.id for the expense category this portion should be debited to */
+  accountId: string;
+  /** net amount (excl. VAT) allocated to this account */
+  amount: number;
+  description?: string;
+}
 
 export async function createExpenseJournalEntry(
   businessId: string,
   expenseNumber: string,
   expenseDate: string,
   totalAmount: number,
-  subtotal: number,
+  allocations: ExpenseAccountAllocation[],
   vatAmount: number,
   expenseType: string,
   sourceId: string,
-): Promise<void> {
-  const accounts = await repos.account.findByBusiness(businessId);
+): Promise<string> {
+  if (allocations.length === 0) {
+    throw new Error('At least one expense account allocation is required.');
+  }
 
-  // Pick debit account: first active operating_expense leaf account
-  const expenseAcc = accounts.find(
-    (a) => a.account_subtype === 'operating_expense' && !a.is_group && a.is_active,
-  );
-  if (!expenseAcc) throw new Error('No operating expense account found. Please set up your Chart of Accounts.');
+  const allocatedSubtotal = allocations.reduce((s, a) => s + a.amount, 0);
+  const expectedTotal = allocatedSubtotal + vatAmount;
+  if (Math.abs(expectedTotal - totalAmount) > 0.01) {
+    throw new Error(
+      `Expense allocations (${allocatedSubtotal} + VAT ${vatAmount} = ${expectedTotal}) ` +
+      `do not match the total amount (${totalAmount}). Please check category amounts.`,
+    );
+  }
 
-  const [creditors, vatReceivable, cash] = await Promise.all([
+  const [vatReceivable, creditors, cash] = await Promise.all([
+    vatAmount > 0 ? getAccountByCode(businessId, '1135') : Promise.resolve(null),
     getAccountByCode(businessId, '2111'),
-    getAccountByCode(businessId, '1135'),
     getAccountByCode(businessId, '1110'),
   ]);
 
@@ -215,24 +234,28 @@ export async function createExpenseJournalEntry(
   const entryNumber = await nextEntryNumber(businessId);
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
+  let lineNumber = 1;
 
-  lines.push({
-    line_number: 1,
-    account_id: expenseAcc.id,
-    description: `Expense ${expenseNumber}`,
-    is_debit: true,
-    amount: subtotal,
-    amount_base: subtotal,
-    currency: 'MWK',
-    exchange_rate: 1,
-    tax_code: 'none',
-    tax_amount: 0,
-    reconciled: false,
-  });
-
-  if (vatAmount > 0) {
+  for (const alloc of allocations) {
+    if (alloc.amount <= 0) continue;
     lines.push({
-      line_number: 2,
+      line_number: lineNumber++,
+      account_id: alloc.accountId,
+      description: alloc.description ?? `Expense ${expenseNumber}`,
+      is_debit: true,
+      amount: alloc.amount,
+      amount_base: alloc.amount,
+      currency: 'MWK',
+      exchange_rate: 1,
+      tax_code: 'none',
+      tax_amount: 0,
+      reconciled: false,
+    });
+  }
+
+  if (vatAmount > 0 && vatReceivable) {
+    lines.push({
+      line_number: lineNumber++,
       account_id: vatReceivable.id,
       description: `VAT input — Expense ${expenseNumber}`,
       is_debit: true,
@@ -247,7 +270,7 @@ export async function createExpenseJournalEntry(
   }
 
   lines.push({
-    line_number: vatAmount > 0 ? 3 : 2,
+    line_number: lineNumber++,
     account_id: creditAccount.id,
     description: isBill ? `Payable — Expense ${expenseNumber}` : `Cash paid — Expense ${expenseNumber}`,
     is_debit: false,
@@ -276,6 +299,8 @@ export async function createExpenseJournalEntry(
   );
 
   await repos.journal.post(entry.id, null as any);
+
+  return entry.id;
 }
 
 // ── Payroll Journal Entry ─────────────────────────────────────────────────────

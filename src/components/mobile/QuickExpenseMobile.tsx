@@ -1,23 +1,31 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, ChevronRight, ArrowLeft } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
-import { createExpenseJournalEntry } from '@/services/journalService';
-import type { InsertDto } from '@/dal/types/database';
+import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
+import type { InsertDto, Row } from '@/dal/types/database';
 
+// Each category maps to a preferred Chart of Accounts code. At runtime we
+// only ever match against accounts that are (a) type 'expense', (b) NOT a
+// group/header account, and (c) active — so even if one of these codes
+// turns out to be wrong or missing in a given business's CoA, we fall back
+// to "Miscellaneous Expenses" rather than ever posting to a group account
+// (which is exactly the bug this whole fix addresses).
 const CATEGORIES = [
-  { label: 'Fuel', emoji: '⛽' },
-  { label: 'Food', emoji: '🍽️' },
-  { label: 'Rent', emoji: '🏠' },
-  { label: 'Supplies', emoji: '📦' },
-  { label: 'Airtime', emoji: '📱' },
-  { label: 'Transport', emoji: '🚗' },
-  { label: 'Utilities', emoji: '💡' },
-  { label: 'Salary', emoji: '👤' },
-  { label: 'Other', emoji: '💰' },
+  { label: 'Fuel', emoji: '⛽', preferredCode: '7151' },       // Fuel & Oil
+  { label: 'Food', emoji: '🍽️', preferredCode: '7162' },      // Entertainment & Hospitality
+  { label: 'Rent', emoji: '🏠', preferredCode: '7110' },       // Rent
+  { label: 'Supplies', emoji: '📦', preferredCode: '7131' },   // Stationery & Printing
+  { label: 'Airtime', emoji: '📱', preferredCode: '7141' },    // Telephone & Internet
+  { label: 'Transport', emoji: '🚗', preferredCode: '7153' },  // Travel Subsistence
+  { label: 'Utilities', emoji: '💡', preferredCode: '7120' },  // Utilities
+  { label: 'Salary', emoji: '👤', preferredCode: '6100' },     // Salaries & Wages
+  { label: 'Other', emoji: '💰', preferredCode: '7400' },      // Miscellaneous Expenses
 ];
+
+const FALLBACK_CODE = '7400'; // Miscellaneous Expenses
 
 type Step = 'amount' | 'category' | 'description' | 'confirm' | 'success';
 
@@ -34,6 +42,34 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [includeVat, setIncludeVat] = useState(false);
+
+  // Leaf, active expense accounts only — never a group/header account.
+  const { data: expenseAccounts = [] } = useQuery({
+    queryKey: ['accounts_expense', businessId],
+    queryFn: async () => {
+      const all = await repos.account.findByBusiness(businessId);
+      return all.filter(
+        (a: Row<'accounts'>) => a.account_type === 'expense' && !a.is_group && a.is_active,
+      );
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
+
+  function resolveAccountForCategory(label: string): Row<'accounts'> | null {
+    const cat = CATEGORIES.find((c) => c.label === label);
+    const preferredCode = cat?.preferredCode;
+    const byPreferredCode = preferredCode
+      ? expenseAccounts.find((a) => a.code === preferredCode)
+      : undefined;
+    if (byPreferredCode) return byPreferredCode;
+
+    // Preferred code wasn't found among leaf accounts (could be a group
+    // account, renamed, or missing in this business's CoA) — fall back to
+    // Miscellaneous Expenses rather than guessing.
+    const fallback = expenseAccounts.find((a) => a.code === FALLBACK_CODE);
+    return fallback ?? null;
+  }
 
   function reset() {
     setStep('amount');
@@ -56,6 +92,14 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const account = resolveAccountForCategory(category);
+      if (!account) {
+        throw new Error(
+          'Could not find a matching expense account in your Chart of Accounts. ' +
+          'Please set one up, or record this expense from the Expenses page instead.',
+        );
+      }
+
       const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
       const desc = description.trim() || category;
 
@@ -85,6 +129,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           tax_rate: includeVat ? 0.175 : 0,
           tax_amount: vatAmount,
           line_total: rawAmount,
+          account_id: account.id,
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
       );
 
@@ -92,12 +137,25 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       const created = allExpenses.find((e) => e.expense_number === expenseNumber);
       if (created) {
         try {
-          await createExpenseJournalEntry(
+          const allocations: ExpenseAccountAllocation[] = [
+            { accountId: account.id, amount: netAmount, description: desc },
+          ];
+          const journalEntryId = await createExpenseJournalEntry(
             businessId, expenseNumber, today,
-            rawAmount, netAmount, vatAmount, 'receipt', created.id,
+            rawAmount, allocations, vatAmount, 'receipt', created.id,
           );
+          // NOTE: same assumption as ExpensesPage.tsx — repos.expense.update
+          // must exist via BaseRepository. Adjust if your method name differs.
+          await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
         } catch (err) {
-          console.warn('Journal entry failed:', err);
+          // The expense is still saved, but stays unlinked (journal_entry_id
+          // remains null) so it shows up as "Needs Posting" on the Expenses
+          // page instead of silently missing from the accounts.
+          console.error('Journal entry failed:', err);
+          throw new Error(
+            'Expense saved, but posting to the ledger failed. ' +
+            'It will show as "Needs Posting" on the Expenses page — you can retry from there.',
+          );
         }
       }
     },
@@ -292,7 +350,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
           {mutation.isError && (
             <p className="text-center text-sm text-red-600">
-              Something went wrong. Please try again.
+              {(mutation.error as Error)?.message || 'Something went wrong. Please try again.'}
             </p>
           )}
         </div>
