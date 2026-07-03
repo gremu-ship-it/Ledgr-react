@@ -4,45 +4,109 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
-import type { InsertDto } from '@/dal/types/database';
+import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry } from '@/services/journalService';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
-
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 type Tab = 'list' | 'quick' | 'invoice';
 
-interface QuickEntryForm {
-  issue_date: string;
-  description: string;
-  amount: string;
-  payment_method: string;
-  reference: string;
-  notes: string;
+// ── Shared hooks ──────────────────────────────────────────────────────────────
+
+function useBranches(businessId?: string) {
+  return useQuery({
+    queryKey: ['branches', businessId],
+    queryFn: async () => {
+      const { data, error } = await (repos as any).supabase
+        .from('branches')
+        .select('id, name, code')
+        .eq('business_id', businessId!)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: string; name: string; code: string | null }[];
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
 }
 
-interface InvoiceLine {
-  description: string;
-  quantity: string;
-  unit_price: string;
-  tax_code: string;
+function useAllProducts(businessId?: string) {
+  return useQuery({
+    queryKey: ['products_all', businessId],
+    queryFn: () => repos.inventory.findAllProducts(businessId!),
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 5,
+  });
 }
 
-interface InvoiceForm {
-  contact_id: string;
-  invoice_number: string;
-  issue_date: string;
-  due_date: string;
-  notes: string;
-  terms: string;
-  lines: InvoiceLine[];
+// ── Reusable selectors ────────────────────────────────────────────────────────
+
+function BranchSelect({
+  value,
+  onChange,
+  branches,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  branches: { id: string; name: string; code: string | null }[];
+  className?: string;
+}) {
+  if (branches.length === 0) return null;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+    >
+      <option value="">All branches / no branch</option>
+      {branches.map((b) => (
+        <option key={b.id} value={b.id}>
+          {b.name}{b.code ? ` (${b.code})` : ''}
+        </option>
+      ))}
+    </select>
+  );
 }
+
+function ProductSelect({
+  value,
+  onChange,
+  products,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  products: Row<'products'>[];
+  placeholder?: string;
+  className?: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+    >
+      <option value="">{placeholder ?? 'Select product / service…'}</option>
+      {products.map((p) => (
+        <option key={p.id} value={p.id}>
+          {p.name}{p.sku ? ` — ${p.sku}` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const VAT_RATE = 0.175;
 
@@ -61,6 +125,40 @@ const TAX_OPTIONS = [
   { value: 'vat_zero', label: 'VAT Zero Rated' },
   { value: 'none', label: 'No Tax' },
 ];
+
+// ── Form types ────────────────────────────────────────────────────────────────
+
+interface QuickEntryForm {
+  issue_date: string;
+  description: string;
+  amount: string;
+  payment_method: string;
+  reference: string;
+  notes: string;
+  product_id: string;   // NEW
+  branch_id: string;    // NEW
+}
+
+interface InvoiceLine {
+  description: string;
+  quantity: string;
+  unit_price: string;
+  tax_code: string;
+  product_id: string;   // NEW
+}
+
+interface InvoiceForm {
+  contact_id: string;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string;
+  notes: string;
+  terms: string;
+  branch_id: string;    // NEW
+  lines: InvoiceLine[];
+}
+
+// ── Status badge ──────────────────────────────────────────────────────────────
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -89,18 +187,26 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
       <p className="max-w-xs text-sm text-gray-500">
         Record your first income entry or create an invoice to get started.
       </p>
-      <button onClick={onRecord} className="mt-2 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
-        <Plus className="h-4 w-4" />
-        Record Income
+      <button
+        onClick={onRecord}
+        className="mt-2 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+      >
+        <Plus className="h-4 w-4" />Record Income
       </button>
     </div>
   );
 }
 
+// ── Quick Entry Tab ───────────────────────────────────────────────────────────
+
 function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const { data: branches = [] } = useBranches(businessId);
+  const { data: products = [] } = useAllProducts(businessId);
+
   const [form, setForm] = useState<QuickEntryForm>({
-    issue_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '',
+    issue_date: today(), description: '', amount: '', payment_method: 'cash',
+    reference: '', notes: '', product_id: '', branch_id: '',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -111,56 +217,67 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       if (!values.description.trim()) throw new Error('Description is required');
 
       const contacts = await repos.contact.findByBusiness(businessId, 'customer');
-      const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
+      const walkIn   = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
       if (!walkIn) {
         throw new Error(
-          'No customer contacts found. Please add a "Walk-in Customer" contact first, or use the Invoice Builder to select a specific customer.',
+          'No customer contacts found. Please add a "Walk-in Customer" contact first, or use the Invoice Builder.',
         );
       }
 
       const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
-      const accounts = await repos.account.findByBusiness(businessId);
-      const arAccount = accounts.find((a) => a.account_type === 'asset' && a.is_bank_account);
+      const accounts      = await repos.account.findByBusiness(businessId);
+      const arAccount     = accounts.find((a) => a.account_type === 'asset' && a.is_bank_account);
+
+      // Resolve product's sales account if a product is selected
+      const selectedProduct = values.product_id
+        ? products.find((p) => p.id === values.product_id)
+        : undefined;
 
       await repos.invoice.createWithLines(
         {
-          business_id: businessId,
-          invoice_number: invoiceNumber,
-          invoice_type: 'invoice',
-          status: 'paid',
-          contact_id: walkIn.id,
-          issue_date: values.issue_date,
-          due_date: values.issue_date,
-          currency: 'MWK',
-          exchange_rate: 1,
-          subtotal: amount,
-          discount_amount: 0,
+          business_id:      businessId,
+          invoice_number:   invoiceNumber,
+          invoice_type:     'invoice',
+          status:           'paid',
+          contact_id:       walkIn.id,
+          issue_date:       values.issue_date,
+          due_date:         values.issue_date,
+          currency:         'MWK',
+          exchange_rate:    1,
+          subtotal:         amount,
+          discount_amount:  0,
           discount_percent: 0,
-          taxable_amount: amount,
-          vat_amount: 0,
-          wht_amount: 0,
-          total_amount: amount,
-          amount_paid: amount,
-          ar_account_id: arAccount?.id ?? null,
-          notes: values.notes || null,
-          created_by: null,
+          taxable_amount:   amount,
+          vat_amount:       0,
+          wht_amount:       0,
+          total_amount:     amount,
+          amount_paid:      amount,
+          ar_account_id:    arAccount?.id ?? null,
+          notes:            values.notes || null,
+          // NEW: branch_id flows from the form into the invoice and then into
+          // the journal entry (journal_entries.branch_id) for branch reporting
+          branch_id:        values.branch_id || null,
+          created_by:       null,
         } as InsertDto<'invoices'>,
         [{
-          line_number: 1,
-          description: values.description,
-          quantity: 1,
-          unit_price: amount,
+          line_number:      1,
+          description:      values.description,
+          quantity:         1,
+          unit_price:       amount,
           discount_percent: 0,
-          tax_code: 'none',
-          tax_rate: 0,
-          tax_amount: 0,
-          line_total: amount,
+          tax_code:         'none',
+          tax_rate:         0,
+          tax_amount:       0,
+          line_total:       amount,
+          // NEW: link the line to the selected product so COGS / sales account
+          // can be resolved downstream; falls back to product's sales_account_id
+          product_id:       values.product_id || null,
+          account_id:       selectedProduct?.sales_account_id ?? null,
         } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>],
       );
 
-      // Create journal entry
       const allInvoices = await repos.invoice.findByBusiness(businessId);
-      const created = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
+      const created     = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
       if (created) {
         try {
           await createInvoiceJournalEntry(
@@ -171,6 +288,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             amount,
             0,
             created.id,
+            values.branch_id || null,  // NEW: pass branch through to journal entry
           );
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
@@ -179,7 +297,10 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
-      setForm({ issue_date: today(), description: '', amount: '', payment_method: 'cash', reference: '', notes: '' });
+      setForm({
+        issue_date: today(), description: '', amount: '', payment_method: 'cash',
+        reference: '', notes: '', product_id: '', branch_id: '',
+      });
       queryClient.invalidateQueries({ queryKey: ['income'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
@@ -198,12 +319,14 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           <Zap className="h-5 w-5 text-brand-500" />
           <h2 className="text-base font-semibold text-gray-900">Quick Income Entry</h2>
         </div>
+
         {alert && (
           <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${alert.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'}`}>
             {alert.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
             {alert.message}
           </div>
         )}
+
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -217,11 +340,39 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
+
+          {/* NEW: Product selector */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Product / Service <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <ProductSelect
+              value={form.product_id}
+              onChange={(v) => set('product_id', v)}
+              products={products}
+            />
+          </div>
+
+          {/* NEW: Branch selector — only shown when business has branches */}
+          {branches.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Branch <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <BranchSelect
+                value={form.branch_id}
+                onChange={(v) => set('branch_id', v)}
+                branches={branches}
+              />
+            </div>
+          )}
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
-            <input type="text" placeholder="e.g. Consulting fee — January" value={form.description} onChange={(e) => set('description', e.target.value)}
+            <input type="text" placeholder="e.g. 2 bags of maize — Lilongwe branch" value={form.description} onChange={(e) => set('description', e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Payment Method</label>
@@ -236,13 +387,18 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
             <textarea rows={2} placeholder="Any additional notes..." value={form.notes} onChange={(e) => set('notes', e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
-          <button onClick={() => mutation.mutate(form)} disabled={mutation.isPending}
-            className="w-full rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+
+          <button
+            onClick={() => mutation.mutate(form)}
+            disabled={mutation.isPending}
+            className="w-full rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+          >
             {mutation.isPending ? 'Saving…' : 'Record Income'}
           </button>
         </div>
@@ -251,14 +407,19 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
   );
 }
 
+// ── Invoice Builder Tab ───────────────────────────────────────────────────────
+
 function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const { data: branches = [] } = useBranches(businessId);
+  const { data: products = [] } = useAllProducts(businessId);
+
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [form, setForm] = useState<InvoiceForm>({
-    contact_id: '', invoice_number: '', issue_date: today(), due_date: '', notes: '',
-    terms: 'Payment due within 30 days.',
-    lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard' }],
+    contact_id: '', invoice_number: '', issue_date: today(), due_date: '',
+    notes: '', terms: 'Payment due within 30 days.', branch_id: '',
+    lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', product_id: '' }],
   });
 
   const { data: contacts = [], refetch: refetchContacts } = useQuery({
@@ -277,28 +438,49 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   function setField(field: keyof Omit<InvoiceForm, 'lines'>, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+
   function setLine(idx: number, field: keyof InvoiceLine, value: string) {
-    setForm((f) => ({ ...f, lines: f.lines.map((l, i) => (i === idx ? { ...l, [field]: value } : l)) }));
+    setForm((f) => ({
+      ...f,
+      lines: f.lines.map((l, i) => {
+        if (i !== idx) return l;
+        const updated = { ...l, [field]: value };
+        // Auto-fill unit_price from product's sale_price when product is selected
+        if (field === 'product_id' && value) {
+          const p = products.find((p) => p.id === value);
+          if (p) {
+            updated.description = updated.description || p.name;
+            updated.unit_price  = updated.unit_price  || String(p.sale_price);
+          }
+        }
+        return updated;
+      }),
+    }));
   }
+
   function addLine() {
-    setForm((f) => ({ ...f, lines: [...f.lines, { description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard' }] }));
+    setForm((f) => ({
+      ...f,
+      lines: [...f.lines, { description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', product_id: '' }],
+    }));
   }
+
   function removeLine(idx: number) {
     setForm((f) => ({ ...f, lines: f.lines.filter((_, i) => i !== idx) }));
   }
 
   const lineCalcs = form.lines.map((l) => {
-    const qty = parseFloat(l.quantity) || 0;
-    const price = parseFloat(l.unit_price) || 0;
+    const qty      = parseFloat(l.quantity) || 0;
+    const price    = parseFloat(l.unit_price) || 0;
     const subtotal = qty * price;
-    const taxRate = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
+    const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
     const taxAmount = subtotal * taxRate;
     return { subtotal, taxRate, taxAmount, lineTotal: subtotal + taxAmount };
   });
 
-  const subtotal = lineCalcs.reduce((s, l) => s + l.subtotal, 0);
+  const subtotal  = lineCalcs.reduce((s, l) => s + l.subtotal, 0);
   const vatAmount = lineCalcs.reduce((s, l) => s + l.taxAmount, 0);
-  const total = lineCalcs.reduce((s, l) => s + l.lineTotal, 0);
+  const total     = lineCalcs.reduce((s, l) => s + l.lineTotal, 0);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -309,44 +491,53 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
       await repos.invoice.createWithLines(
         {
-          business_id: businessId,
-          invoice_number: form.invoice_number,
-          invoice_type: 'invoice',
-          status: 'draft',
-          contact_id: form.contact_id,
-          issue_date: form.issue_date,
-          due_date: form.due_date || null,
-          currency: 'MWK',
-          exchange_rate: 1,
+          business_id:      businessId,
+          invoice_number:   form.invoice_number,
+          invoice_type:     'invoice',
+          status:           'draft',
+          contact_id:       form.contact_id,
+          issue_date:       form.issue_date,
+          due_date:         form.due_date || null,
+          currency:         'MWK',
+          exchange_rate:    1,
           subtotal,
-          discount_amount: 0,
+          discount_amount:  0,
           discount_percent: 0,
-          taxable_amount: subtotal,
-          vat_amount: vatAmount,
-          wht_amount: 0,
-          total_amount: total,
-          amount_paid: 0,
-          notes: form.notes || null,
-          terms: form.terms || null,
-          created_by: null,
+          taxable_amount:   subtotal,
+          vat_amount:       vatAmount,
+          wht_amount:       0,
+          total_amount:     total,
+          amount_paid:      0,
+          notes:            form.notes || null,
+          terms:            form.terms || null,
+          branch_id:        form.branch_id || null,  // NEW
+          created_by:       null,
         } as InsertDto<'invoices'>,
         validLines.map((l, idx) => {
-          const qty = parseFloat(l.quantity) || 1;
-          const price = parseFloat(l.unit_price) || 0;
-          const lineSub = qty * price;
-          const taxRate = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
-          const taxAmt = lineSub * taxRate;
+          const qty      = parseFloat(l.quantity) || 1;
+          const price    = parseFloat(l.unit_price) || 0;
+          const lineSub  = qty * price;
+          const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
+          const taxAmt   = lineSub * taxRate;
+          const product  = l.product_id ? products.find((p) => p.id === l.product_id) : undefined;
           return {
-            line_number: idx + 1, description: l.description, quantity: qty, unit_price: price,
-            discount_percent: 0, tax_code: l.tax_code, tax_rate: taxRate, tax_amount: taxAmt,
-            line_total: lineSub + taxAmt,
+            line_number:      idx + 1,
+            description:      l.description,
+            quantity:         qty,
+            unit_price:       price,
+            discount_percent: 0,
+            tax_code:         l.tax_code,
+            tax_rate:         taxRate,
+            tax_amount:       taxAmt,
+            line_total:       lineSub + taxAmt,
+            product_id:       l.product_id || null,     // NEW
+            account_id:       product?.sales_account_id ?? null,  // NEW: use product's sales account
           } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>;
         }),
       );
 
-      // Create journal entry
       const allInvoices = await repos.invoice.findByBusiness(businessId);
-      const created = allInvoices.find((inv) => inv.invoice_number === form.invoice_number);
+      const created     = allInvoices.find((inv) => inv.invoice_number === form.invoice_number);
       if (created) {
         try {
           await createInvoiceJournalEntry(
@@ -357,6 +548,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             subtotal,
             vatAmount,
             created.id,
+            form.branch_id || null,  // NEW
           );
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
@@ -379,30 +571,26 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           <FileText className="h-5 w-5 text-brand-500" />
           <h2 className="text-base font-semibold text-gray-900">New Invoice</h2>
         </div>
+
         {alert && (
           <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${alert.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'}`}>
             {alert.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
             {alert.message}
           </div>
         )}
+
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="text-sm font-medium text-gray-700">Customer</label>
-                <button
-                  type="button"
-                  onClick={() => setShowAddCustomer(true)}
-                  className="text-xs font-medium text-brand-600 hover:text-brand-700"
-                >
+                <button type="button" onClick={() => setShowAddCustomer(true)}
+                  className="text-xs font-medium text-brand-600 hover:text-brand-700">
                   + New Customer
                 </button>
               </div>
-              <select
-                value={form.contact_id}
-                onChange={(e) => setField('contact_id', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
+              <select value={form.contact_id} onChange={(e) => setField('contact_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="">Select customer…</option>
                 {contacts.map((c: { id: string; name: string }) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
@@ -415,6 +603,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Issue Date</label>
@@ -427,6 +616,21 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
+
+          {/* NEW: Branch selector at invoice level */}
+          {branches.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Branch <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <BranchSelect
+                value={form.branch_id}
+                onChange={(v) => setField('branch_id', v)}
+                branches={branches}
+              />
+            </div>
+          )}
+
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label className="text-sm font-medium text-gray-700">Line Items</label>
@@ -438,6 +642,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs font-medium text-gray-500">
                   <tr>
+                    <th className="px-3 py-2 text-left">Product / Service</th>  {/* NEW column */}
                     <th className="px-3 py-2 text-left">Description</th>
                     <th className="px-3 py-2 text-right w-20">Qty</th>
                     <th className="px-3 py-2 text-right w-32">Unit Price</th>
@@ -449,16 +654,29 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                 <tbody className="divide-y divide-gray-100">
                   {form.lines.map((line, idx) => (
                     <tr key={idx}>
+                      {/* NEW: per-line product picker */}
+                      <td className="px-3 py-2 min-w-[160px]">
+                        <ProductSelect
+                          value={line.product_id}
+                          onChange={(v) => setLine(idx, 'product_id', v)}
+                          products={products}
+                          placeholder="Select…"
+                          className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                        />
+                      </td>
                       <td className="px-3 py-2">
-                        <input type="text" placeholder="Description" value={line.description} onChange={(e) => setLine(idx, 'description', e.target.value)}
+                        <input type="text" placeholder="Description" value={line.description}
+                          onChange={(e) => setLine(idx, 'description', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
                       </td>
                       <td className="px-3 py-2">
-                        <input type="number" min="1" value={line.quantity} onChange={(e) => setLine(idx, 'quantity', e.target.value)}
+                        <input type="number" min="1" value={line.quantity}
+                          onChange={(e) => setLine(idx, 'quantity', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
                       </td>
                       <td className="px-3 py-2">
-                        <input type="number" min="0" step="0.01" placeholder="0.00" value={line.unit_price} onChange={(e) => setLine(idx, 'unit_price', e.target.value)}
+                        <input type="number" min="0" step="0.01" placeholder="0.00" value={line.unit_price}
+                          onChange={(e) => setLine(idx, 'unit_price', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
                       </td>
                       <td className="px-3 py-2">
@@ -481,6 +699,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               </table>
             </div>
           </div>
+
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwk(subtotal)}</span></div>
@@ -488,6 +707,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwk(total)}</span></div>
             </div>
           </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Notes</label>
@@ -500,6 +720,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
+
           <div className="flex justify-end gap-3">
             <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
               className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
@@ -515,9 +736,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           businessId={businessId}
           onClose={() => setShowAddCustomer(false)}
           onCreated={(id) => {
-            refetchContacts().then(() => {
-              setField('contact_id', id);
-            });
+            refetchContacts().then(() => setField('contact_id', id));
             setShowAddCustomer(false);
           }}
         />
@@ -525,6 +744,8 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     </div>
   );
 }
+
+// ── Income List ───────────────────────────────────────────────────────────────
 
 function IncomeList({ businessId }: { businessId: string }) {
   const { data: invoices = [], isLoading, isError } = useQuery({
@@ -534,7 +755,11 @@ function IncomeList({ businessId }: { businessId: string }) {
   });
 
   if (isLoading) return <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
-  if (isError) return <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load income records.</div>;
+  if (isError) return (
+    <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+      <AlertCircle className="h-4 w-4 shrink-0" />Failed to load income records.
+    </div>
+  );
 
   const incomeInvoices = invoices.filter((inv) => inv.invoice_type === 'invoice');
   if (incomeInvoices.length === 0) return null;
@@ -571,12 +796,17 @@ function IncomeList({ businessId }: { businessId: string }) {
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export function IncomePage() {
   const [searchParams] = useSearchParams();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
-  const businessId = currentBusiness?.business?.id;
+  const businessId      = currentBusiness?.business?.id;
 
-  const initialTab = (searchParams.get('action') === 'record' ? 'quick' : searchParams.get('action') === 'invoice' ? 'invoice' : 'list') as Tab;
+  const initialTab = (
+    searchParams.get('action') === 'record'  ? 'quick'   :
+    searchParams.get('action') === 'invoice' ? 'invoice' : 'list'
+  ) as Tab;
   const [tab, setTab] = useState<Tab>(initialTab);
 
   const { data: invoices = [] } = useQuery({
@@ -587,20 +817,28 @@ export function IncomePage() {
 
   const hasIncome = invoices.filter((i) => i.invoice_type === 'invoice').length > 0;
 
-  if (!businessId) return <div className="flex min-h-[60vh] items-center justify-center"><p className="text-sm text-gray-500">No business selected.</p></div>;
+  if (!businessId) return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <p className="text-sm text-gray-500">No business selected.</p>
+    </div>
+  );
 
   return (
     <div>
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Income</h1>
-          <p className="mt-1 text-sm text-gray-500">Record income and manage invoices for {currentBusiness.business.name}</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Record income and manage invoices for {currentBusiness.business.name}
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setTab('quick')} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+          <button onClick={() => setTab('quick')}
+            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Zap className="h-4 w-4 text-brand-500" />Quick Entry
           </button>
-          <button onClick={() => setTab('invoice')} className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+          <button onClick={() => setTab('invoice')}
+            className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
             <Plus className="h-4 w-4" />New Invoice
           </button>
         </div>
@@ -609,20 +847,25 @@ export function IncomePage() {
       {(tab === 'quick' || tab === 'invoice') && (
         <div className="mb-6">
           <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 w-fit">
-            <button onClick={() => setTab('quick')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'quick' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <button onClick={() => setTab('quick')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'quick' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               <Zap className="h-4 w-4" />Quick Entry
             </button>
-            <button onClick={() => setTab('invoice')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'invoice' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <button onClick={() => setTab('invoice')}
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'invoice' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               <FileText className="h-4 w-4" />Invoice Builder
             </button>
-            <button onClick={() => setTab('list')} className="rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+            <button onClick={() => setTab('list')}
+              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
+              Cancel
+            </button>
           </div>
         </div>
       )}
 
-      {tab === 'quick' && <QuickEntryTab businessId={businessId} onSuccess={() => setTab('list')} />}
+      {tab === 'quick'   && <QuickEntryTab    businessId={businessId} onSuccess={() => setTab('list')} />}
       {tab === 'invoice' && <InvoiceBuilderTab businessId={businessId} onSuccess={() => setTab('list')} />}
-      {tab === 'list' && (hasIncome ? <IncomeList businessId={businessId} /> : <EmptyState onRecord={() => setTab('quick')} />)}
+      {tab === 'list'    && (hasIncome ? <IncomeList businessId={businessId} /> : <EmptyState onRecord={() => setTab('quick')} />)}
     </div>
   );
 }

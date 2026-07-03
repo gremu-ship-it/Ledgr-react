@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown,
+  Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -9,9 +9,7 @@ import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
 
-// ── Receive stock modal ───────────────────────────────────────────────────────
-// Uses a 1-column stacked layout on mobile (below sm breakpoint) and the
-// original 12-column grid on larger screens — same fields, same submit logic.
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface ReceiveLineForm {
   productId: string;
@@ -19,23 +17,35 @@ interface ReceiveLineForm {
   unitCost: number;
 }
 
+// ── Receive Stock Modal ───────────────────────────────────────────────────────
+// FIX: Added `locationId` field so the user can pick which location to receive
+// into. Previously the modal used a hard-coded default location lookup, which
+// silently failed (and did nothing) when no default location was configured.
+
 function ReceiveStockModal({
   open,
   products,
+  locations,
   onClose,
   onSubmit,
   isLoading,
+  error,
 }: {
   open: boolean;
   products: Row<'products'>[];
+  locations: Row<'inventory_locations'>[];
   onClose: () => void;
-  onSubmit: (lines: ReceiveLineForm[], notes: string) => void;
+  onSubmit: (lines: ReceiveLineForm[], locationId: string, notes: string) => void;
   isLoading: boolean;
+  error: string | null;
 }) {
   const [lines, setLines] = useState<ReceiveLineForm[]>([
     { productId: '', quantity: 1, unitCost: 0 },
   ]);
   const [notes, setNotes] = useState('');
+  // Pre-select the default location if one exists
+  const defaultLocation = locations.find((l) => l.is_default);
+  const [locationId, setLocationId] = useState(defaultLocation?.id ?? '');
 
   if (!open) return null;
 
@@ -51,13 +61,18 @@ function ReceiveStockModal({
         if (idx !== i) return line;
         if (field === 'productId') {
           const p = products.find((p) => p.id === value);
-          return { ...line, productId: value as string, unitCost: p ? Number(p.purchase_price) : 0 };
+          return {
+            ...line,
+            productId: value as string,
+            unitCost: p ? Number(p.purchase_price) : 0,
+          };
         }
         return { ...line, [field]: value };
       }),
     );
 
-  const valid = lines.every((l) => l.productId && l.quantity > 0);
+  const valid =
+    lines.every((l) => l.productId && l.quantity > 0) && Boolean(locationId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
@@ -67,6 +82,39 @@ function ReceiveStockModal({
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={18} />
           </button>
+        </div>
+
+        {/* FIX: surface any mutation error inside the modal */}
+        {error && (
+          <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <AlertCircle size={15} className="mt-0.5 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        {/* FIX: location picker — required, pre-filled with default if available */}
+        <div className="mb-4">
+          <label className="mb-1 block text-xs font-medium text-gray-500">
+            Receive into location <span className="text-red-400">*</span>
+          </label>
+          {locations.length === 0 ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              No warehouse locations found. Go to Settings → Locations to add one first.
+            </p>
+          ) : (
+            <select
+              value={locationId}
+              onChange={(e) => setLocationId(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="">Select location…</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}{l.is_default ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
@@ -124,18 +172,22 @@ function ReceiveStockModal({
         <div className="mt-4">
           <label className="mb-1 block text-xs font-medium text-gray-500">Notes (optional)</label>
           <input
-            value={notes} onChange={(e) => setNotes(e.target.value)}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
             placeholder="Reference, supplier, delivery note number…"
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
           />
         </div>
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
             Cancel
           </button>
           <button
-            onClick={() => onSubmit(lines, notes)}
+            onClick={() => onSubmit(lines, locationId, notes)}
             disabled={!valid || isLoading}
             className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
           >
@@ -148,17 +200,17 @@ function ReceiveStockModal({
   );
 }
 
-// ── Shared row type ─────────────────────────────────────────────────────────
+// ── Shared row type ───────────────────────────────────────────────────────────
 
 type BalanceRow = Awaited<ReturnType<typeof repos.inventory.findAllWithDetails>>[number];
 
-// ── Mobile stock card ────────────────────────────────────────────────────────
+// ── Mobile stock card ─────────────────────────────────────────────────────────
 
 function StockCard({ balance }: { balance: BalanceRow }) {
   const reorderLevel = balance.products?.reorder_level;
-  const available = Number(balance.quantity_available ?? 0);
-  const isLow = reorderLevel != null && available <= Number(reorderLevel);
-  const stockValue = available * Number(balance.average_cost);
+  const available    = Number(balance.quantity_available ?? 0);
+  const isLow        = reorderLevel != null && available <= Number(reorderLevel);
+  const stockValue   = available * Number(balance.average_cost);
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -199,9 +251,10 @@ export function WarehousePage() {
   const queryClient = useQueryClient();
   const isMobile    = useIsMobile();
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch]               = useState('');
   const [locationFilter, setLocationFilter] = useState<string>('all');
-  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen]     = useState(false);
+  const [receiveError, setReceiveError]   = useState<string | null>(null);
 
   const { data: locations } = useQuery({
     queryKey: ['locations', businessId],
@@ -225,28 +278,41 @@ export function WarehousePage() {
     enabled: Boolean(businessId),
   });
 
-  const warehouseLocation = locations?.find((l) => l.is_default);
-
+  // FIX: mutationFn now accepts locationId from the modal instead of looking
+  // up the default location internally. onError is wired to surface errors
+  // inside the modal rather than swallowing them.
   const receiveMutation = useMutation({
-    mutationFn: async ({ lines, notes }: { lines: ReceiveLineForm[]; notes: string }) => {
-      if (!warehouseLocation) throw new Error('No warehouse location found');
+    mutationFn: async ({
+      lines,
+      locationId,
+      notes,
+    }: {
+      lines: ReceiveLineForm[];
+      locationId: string;
+      notes: string;
+    }) => {
+      if (!locationId) throw new Error('Please select a location to receive stock into.');
       const movements = lines.map((l) => ({
-        business_id: businessId!,
-        product_id: l.productId,
-        location_id: warehouseLocation.id,
+        business_id:   businessId!,
+        product_id:    l.productId,
+        location_id:   locationId,
         movement_type: 'purchase' as const,
         movement_date: new Date().toISOString().slice(0, 10),
-        quantity: l.quantity,
-        unit_cost: l.unitCost,
-        total_cost: l.quantity * l.unitCost,
-        notes: notes || null,
-        created_by: currentUser?.id ?? null,
+        quantity:      l.quantity,
+        unit_cost:     l.unitCost,
+        total_cost:    l.quantity * l.unitCost,
+        notes:         notes || null,
+        created_by:    currentUser?.id ?? null,
       }));
       return repos.inventory.recordMovements(movements);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
+      setReceiveError(null);
       setReceiveOpen(false);
+    },
+    onError: (err: Error) => {
+      setReceiveError(err.message);
     },
   });
 
@@ -270,11 +336,13 @@ export function WarehousePage() {
     <div className={isMobile ? 'pb-4' : undefined}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>Warehouse</h1>
+          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>
+            Warehouse
+          </h1>
           {!isMobile && <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>}
         </div>
         <button
-          onClick={() => setReceiveOpen(true)}
+          onClick={() => { setReceiveError(null); setReceiveOpen(true); }}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
         >
           <Plus size={16} /> {isMobile ? 'Receive' : 'Receive Stock'}
@@ -283,7 +351,7 @@ export function WarehousePage() {
 
       {lowStock.length > 0 && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
-          <AlertTriangle size={16} className="text-amber-500 shrink-0" />
+          <AlertTriangle size={16} className="shrink-0 text-amber-500" />
           <p className="text-sm text-amber-700">
             <span className="font-semibold">{lowStock.length} product{lowStock.length > 1 ? 's' : ''}</span>{' '}
             at or below reorder level
@@ -295,7 +363,8 @@ export function WarehousePage() {
         <div className="relative min-w-48 flex-1">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
-            value={search} onChange={(e) => setSearch(e.target.value)}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search products…"
             className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
@@ -316,7 +385,6 @@ export function WarehousePage() {
       </div>
 
       {isMobile ? (
-        // ── Mobile: card list ──────────────────────────────────────────────
         balancesLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -335,13 +403,17 @@ export function WarehousePage() {
           </div>
         )
       ) : (
-        // ── Desktop: table ─────────────────────────────────────────────────
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-soft">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 {['Product', 'Location', 'On Hand', 'Reserved', 'Available', 'Avg Cost', 'Stock Value', 'Status'].map((h, i) => (
-                  <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${i >= 2 && i <= 6 ? 'text-right' : i === 7 ? 'text-center' : 'text-left'}`}>
+                  <th
+                    key={h}
+                    className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${
+                      i >= 2 && i <= 6 ? 'text-right' : i === 7 ? 'text-center' : 'text-left'
+                    }`}
+                  >
                     {h}
                   </th>
                 ))}
@@ -352,7 +424,9 @@ export function WarehousePage() {
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     {Array.from({ length: 8 }).map((_, j) => (
-                      <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-gray-100" /></td>
+                      <td key={j} className="px-5 py-4">
+                        <div className="h-3 rounded bg-gray-100" />
+                      </td>
                     ))}
                   </tr>
                 ))
@@ -369,9 +443,9 @@ export function WarehousePage() {
               ) : (
                 filtered.map((b) => {
                   const reorderLevel = b.products?.reorder_level;
-                  const available   = Number(b.quantity_available ?? 0);
-                  const isLow       = reorderLevel != null && available <= Number(reorderLevel);
-                  const stockValue  = available * Number(b.average_cost);
+                  const available    = Number(b.quantity_available ?? 0);
+                  const isLow        = reorderLevel != null && available <= Number(reorderLevel);
+                  const stockValue   = available * Number(b.average_cost);
 
                   return (
                     <tr key={b.id} className="transition-colors hover:bg-gray-50/50">
@@ -402,9 +476,13 @@ export function WarehousePage() {
       <ReceiveStockModal
         open={receiveOpen}
         products={products ?? []}
-        onClose={() => setReceiveOpen(false)}
-        onSubmit={(lines, notes) => receiveMutation.mutate({ lines, notes })}
+        locations={locations ?? []}
+        onClose={() => { setReceiveOpen(false); setReceiveError(null); }}
+        onSubmit={(lines, locationId, notes) =>
+          receiveMutation.mutate({ lines, locationId, notes })
+        }
         isLoading={receiveMutation.isPending}
+        error={receiveError}
       />
     </div>
   );

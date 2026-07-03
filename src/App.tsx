@@ -1,17 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
-import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';
+import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';  // ← your live path
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { InstallPrompt } from '@/offline/InstallPrompt';
+import { InstallPrompt } from '@/offline/InstallPrompt';                     // ← your live path
 
-// Auth pages
+// Auth pages — kept in your existing flat @/pages/ location
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
-import { CreateBusinessPage } from '@/pages/CreateBusinessPage';
+import { CreateBusinessPage } from '@/pages/CreateBusinessPage';             // ← your live page, kept
 
-// App pages
+// App pages — all your live pages preserved exactly
 import { DashboardPage } from '@/pages/DashboardPage';
 import { IncomePage } from '@/pages/IncomePage';
 import { ExpensesPage } from '@/pages/ExpensesPage';
@@ -29,6 +29,8 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { WarehousePage } from './pages/WarehousePage';
 import { TransfersPage } from './pages/TransfersPage';
 import { BranchesPage } from './pages/BranchesPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,7 +54,16 @@ function App() {
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
+
+            {/*
+              Password reset — outside PublicOnlyRoute intentionally.
+              The Supabase PASSWORD_RECOVERY event fires after the user
+              clicks the reset link in their email. This needs to be
+              accessible whether the user is authenticated or not.
+            */}
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
 
             {/*
               Protected but outside AppLayout — user is authenticated but
@@ -82,6 +93,8 @@ function App() {
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />
                 <Route path="/branches" element={<BranchesPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               </Route>
             </Route>
 

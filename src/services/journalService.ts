@@ -29,9 +29,14 @@ async function getAccountByCode(
 }
 
 async function nextEntryNumber(_businessId: string): Promise<string> {
-  // Use a timestamp-based entry number since BusinessRepository may not have a journal counter
-  const now = new Date();
-  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+  const now   = new Date();
+  const stamp =
+    `${now.getFullYear()}` +
+    `${String(now.getMonth() + 1).padStart(2, '0')}` +
+    `${String(now.getDate()).padStart(2, '0')}` +
+    `${String(now.getHours()).padStart(2, '0')}` +
+    `${String(now.getMinutes()).padStart(2, '0')}` +
+    `${String(now.getSeconds()).padStart(2, '0')}`;
   return `JNL-${stamp}`;
 }
 
@@ -44,6 +49,10 @@ async function nextEntryNumber(_businessId: string): Promise<string> {
 // Then immediately settle:
 //   DR  Cash on Hand (1110)       — full invoice amount
 //   CR  Trade Debtors (1131)      — full invoice amount
+//
+// branchId — optional branch/location this sale belongs to.
+// Stored in journal_entries.branch_id so branch-level P&L reports
+// can filter correctly.
 
 export async function createInvoiceJournalEntry(
   businessId: string,
@@ -53,6 +62,7 @@ export async function createInvoiceJournalEntry(
   subtotal: number,
   vatAmount: number,
   sourceId: string,
+  branchId?: string | null,   // NEW
 ): Promise<void> {
   const [debtors, revenue, vatPayable, cash] = await Promise.all([
     getAccountByCode(businessId, '1131'),
@@ -67,65 +77,65 @@ export async function createInvoiceJournalEntry(
 
   // Invoice recognition lines
   lines.push({
-    line_number: 1,
-    account_id: debtors.id,
-    description: `Invoice ${invoiceNumber} — receivable`,
-    is_debit: true,
-    amount: totalAmount,
-    amount_base: totalAmount,
-    currency: 'MWK',
+    line_number:   1,
+    account_id:    debtors.id,
+    description:   `Invoice ${invoiceNumber} — receivable`,
+    is_debit:      true,
+    amount:        totalAmount,
+    amount_base:   totalAmount,
+    currency:      'MWK',
     exchange_rate: 1,
-    tax_code: 'none',
-    tax_amount: 0,
-    reconciled: false,
+    tax_code:      'none',
+    tax_amount:    0,
+    reconciled:    false,
   });
 
   lines.push({
-    line_number: 2,
-    account_id: revenue.id,
-    description: `Invoice ${invoiceNumber} — revenue`,
-    is_debit: false,
-    amount: subtotal,
-    amount_base: subtotal,
-    currency: 'MWK',
+    line_number:   2,
+    account_id:    revenue.id,
+    description:   `Invoice ${invoiceNumber} — revenue`,
+    is_debit:      false,
+    amount:        subtotal,
+    amount_base:   subtotal,
+    currency:      'MWK',
     exchange_rate: 1,
-    tax_code: 'none',
-    tax_amount: 0,
-    reconciled: false,
+    tax_code:      'none',
+    tax_amount:    0,
+    reconciled:    false,
   });
 
   if (vatAmount > 0) {
     lines.push({
-      line_number: 3,
-      account_id: vatPayable.id,
-      description: `Invoice ${invoiceNumber} — VAT`,
-      is_debit: false,
-      amount: vatAmount,
-      amount_base: vatAmount,
-      currency: 'MWK',
+      line_number:   3,
+      account_id:    vatPayable.id,
+      description:   `Invoice ${invoiceNumber} — VAT`,
+      is_debit:      false,
+      amount:        vatAmount,
+      amount_base:   vatAmount,
+      currency:      'MWK',
       exchange_rate: 1,
-      tax_code: 'vat_standard',
-      tax_amount: vatAmount,
-      reconciled: false,
+      tax_code:      'vat_standard',
+      tax_amount:    vatAmount,
+      reconciled:    false,
     });
   }
 
   const { entry } = await repos.journal.createBalancedEntry(
     {
-      business_id: businessId,
-      entry_number: entryNumber,
-      entry_date: invoiceDate,
-      description: `Invoice ${invoiceNumber}`,
-      source_type: 'invoice',
-      source_id: sourceId,
-      currency: 'MWK',
+      business_id:   businessId,
+      entry_number:  entryNumber,
+      entry_date:    invoiceDate,
+      description:   `Invoice ${invoiceNumber}`,
+      source_type:   'invoice',
+      source_id:     sourceId,
+      currency:      'MWK',
       exchange_rate: 1,
-      status: 'draft',
+      status:        'draft',
+      branch_id:     branchId ?? null,   // NEW
     },
     lines,
   );
 
-  // Post immediately
   await repos.journal.post(entry.id, null as any);
 
   // Settlement entry (cash received)
@@ -134,42 +144,43 @@ export async function createInvoiceJournalEntry(
 
   const { entry: entry2 } = await repos.journal.createBalancedEntry(
     {
-      business_id: businessId,
-      entry_number: entryNumber2,
-      entry_date: invoiceDate,
-      description: `Receipt for Invoice ${invoiceNumber}`,
-      source_type: 'invoice',
-      source_id: sourceId,
-      currency: 'MWK',
+      business_id:   businessId,
+      entry_number:  entryNumber2,
+      entry_date:    invoiceDate,
+      description:   `Receipt for Invoice ${invoiceNumber}`,
+      source_type:   'invoice',
+      source_id:     sourceId,
+      currency:      'MWK',
       exchange_rate: 1,
-      status: 'draft',
+      status:        'draft',
+      branch_id:     branchId ?? null,   // NEW
     },
     [
       {
-        line_number: 1,
-        account_id: cash.id,
-        description: `Cash received — Invoice ${invoiceNumber}`,
-        is_debit: true,
-        amount: totalAmount,
-        amount_base: totalAmount,
-        currency: 'MWK',
+        line_number:   1,
+        account_id:    cash.id,
+        description:   `Cash received — Invoice ${invoiceNumber}`,
+        is_debit:      true,
+        amount:        totalAmount,
+        amount_base:   totalAmount,
+        currency:      'MWK',
         exchange_rate: 1,
-        tax_code: 'none',
-        tax_amount: 0,
-        reconciled: false,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
       },
       {
-        line_number: 2,
-        account_id: debtors.id,
-        description: `Settle debtor — Invoice ${invoiceNumber}`,
-        is_debit: false,
-        amount: totalAmount,
-        amount_base: totalAmount,
-        currency: 'MWK',
+        line_number:   2,
+        account_id:    debtors.id,
+        description:   `Settle debtor — Invoice ${invoiceNumber}`,
+        is_debit:      false,
+        amount:        totalAmount,
+        amount_base:   totalAmount,
+        currency:      'MWK',
         exchange_rate: 1,
-        tax_code: 'none',
-        tax_amount: 0,
-        reconciled: false,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
       },
     ],
   );
@@ -183,13 +194,8 @@ export async function createInvoiceJournalEntry(
 //   DR  VAT Receivable (1135)   — VAT amount, if any
 //   CR  Cash on Hand (1110) or Trade Creditors (2111) if bill — full total
 //
-// IMPORTANT: unlike the previous version of this function, the debit
-// account(s) are now supplied by the caller (from the user's category
-// selection on the expense form) instead of being guessed. Guessing
-// previously meant every expense — regardless of category — was silently
-// posted to the first active operating_expense account found, which for
-// this business was always "Salaries & Wages". See the reclassification
-// script that accompanied this fix for correcting historical entries.
+// branchId — optional cost centre / branch this expense belongs to.
+// Stored in journal_entries.branch_id for branch-level P&L reporting.
 
 export interface ExpenseAccountAllocation {
   /** accounts.id for the expense category this portion should be debited to */
@@ -208,13 +214,14 @@ export async function createExpenseJournalEntry(
   vatAmount: number,
   expenseType: string,
   sourceId: string,
+  branchId?: string | null,   // NEW
 ): Promise<string> {
   if (allocations.length === 0) {
     throw new Error('At least one expense account allocation is required.');
   }
 
   const allocatedSubtotal = allocations.reduce((s, a) => s + a.amount, 0);
-  const expectedTotal = allocatedSubtotal + vatAmount;
+  const expectedTotal     = allocatedSubtotal + vatAmount;
   if (Math.abs(expectedTotal - totalAmount) > 0.01) {
     throw new Error(
       `Expense allocations (${allocatedSubtotal} + VAT ${vatAmount} = ${expectedTotal}) ` +
@@ -228,10 +235,9 @@ export async function createExpenseJournalEntry(
     getAccountByCode(businessId, '1110'),
   ]);
 
-  const isBill = expenseType === 'bill';
+  const isBill        = expenseType === 'bill';
   const creditAccount = isBill ? creditors : cash;
-
-  const entryNumber = await nextEntryNumber(businessId);
+  const entryNumber   = await nextEntryNumber(businessId);
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
   let lineNumber = 1;
@@ -239,61 +245,64 @@ export async function createExpenseJournalEntry(
   for (const alloc of allocations) {
     if (alloc.amount <= 0) continue;
     lines.push({
-      line_number: lineNumber++,
-      account_id: alloc.accountId,
-      description: alloc.description ?? `Expense ${expenseNumber}`,
-      is_debit: true,
-      amount: alloc.amount,
-      amount_base: alloc.amount,
-      currency: 'MWK',
+      line_number:   lineNumber++,
+      account_id:    alloc.accountId,
+      description:   alloc.description ?? `Expense ${expenseNumber}`,
+      is_debit:      true,
+      amount:        alloc.amount,
+      amount_base:   alloc.amount,
+      currency:      'MWK',
       exchange_rate: 1,
-      tax_code: 'none',
-      tax_amount: 0,
-      reconciled: false,
+      tax_code:      'none',
+      tax_amount:    0,
+      reconciled:    false,
     });
   }
 
   if (vatAmount > 0 && vatReceivable) {
     lines.push({
-      line_number: lineNumber++,
-      account_id: vatReceivable.id,
-      description: `VAT input — Expense ${expenseNumber}`,
-      is_debit: true,
-      amount: vatAmount,
-      amount_base: vatAmount,
-      currency: 'MWK',
+      line_number:   lineNumber++,
+      account_id:    vatReceivable.id,
+      description:   `VAT input — Expense ${expenseNumber}`,
+      is_debit:      true,
+      amount:        vatAmount,
+      amount_base:   vatAmount,
+      currency:      'MWK',
       exchange_rate: 1,
-      tax_code: 'vat_standard',
-      tax_amount: vatAmount,
-      reconciled: false,
+      tax_code:      'vat_standard',
+      tax_amount:    vatAmount,
+      reconciled:    false,
     });
   }
 
   lines.push({
-    line_number: lineNumber++,
-    account_id: creditAccount.id,
-    description: isBill ? `Payable — Expense ${expenseNumber}` : `Cash paid — Expense ${expenseNumber}`,
-    is_debit: false,
-    amount: totalAmount,
-    amount_base: totalAmount,
-    currency: 'MWK',
+    line_number:   lineNumber++,
+    account_id:    creditAccount.id,
+    description:   isBill
+      ? `Payable — Expense ${expenseNumber}`
+      : `Cash paid — Expense ${expenseNumber}`,
+    is_debit:      false,
+    amount:        totalAmount,
+    amount_base:   totalAmount,
+    currency:      'MWK',
     exchange_rate: 1,
-    tax_code: 'none',
-    tax_amount: 0,
-    reconciled: false,
+    tax_code:      'none',
+    tax_amount:    0,
+    reconciled:    false,
   });
 
   const { entry } = await repos.journal.createBalancedEntry(
     {
-      business_id: businessId,
-      entry_number: entryNumber,
-      entry_date: expenseDate,
-      description: `Expense ${expenseNumber}`,
-      source_type: 'expense',
-      source_id: sourceId,
-      currency: 'MWK',
+      business_id:   businessId,
+      entry_number:  entryNumber,
+      entry_date:    expenseDate,
+      description:   `Expense ${expenseNumber}`,
+      source_type:   'expense',
+      source_id:     sourceId,
+      currency:      'MWK',
       exchange_rate: 1,
-      status: 'draft',
+      status:        'draft',
+      branch_id:     branchId ?? null,   // NEW
     },
     lines,
   );
@@ -304,8 +313,8 @@ export async function createExpenseJournalEntry(
 }
 
 // ── Payroll Journal Entry ─────────────────────────────────────────────────────
-// DR  Basic Salaries (6110)        — gross pay
-// CR  PAYE Payable (2122)          — paye deduction
+// DR  Basic Salaries (6110)           — gross pay
+// CR  PAYE Payable (2122)             — paye deduction
 // CR  Salaries & Wages Payable (2131) — net pay
 
 export async function createPayrollJournalEntry(
@@ -327,55 +336,55 @@ export async function createPayrollJournalEntry(
 
   const { entry } = await repos.journal.createBalancedEntry(
     {
-      business_id: businessId,
-      entry_number: entryNumber,
-      entry_date: payDate,
-      description: `Payroll Run ${runNumber}`,
-      source_type: 'payroll',
-      source_id: sourceId,
-      currency: 'MWK',
+      business_id:   businessId,
+      entry_number:  entryNumber,
+      entry_date:    payDate,
+      description:   `Payroll Run ${runNumber}`,
+      source_type:   'payroll',
+      source_id:     sourceId,
+      currency:      'MWK',
       exchange_rate: 1,
-      status: 'draft',
+      status:        'draft',
     },
     [
       {
-        line_number: 1,
-        account_id: salariesExp.id,
-        description: `Gross pay — ${runNumber}`,
-        is_debit: true,
-        amount: totalGross,
-        amount_base: totalGross,
-        currency: 'MWK',
+        line_number:   1,
+        account_id:    salariesExp.id,
+        description:   `Gross pay — ${runNumber}`,
+        is_debit:      true,
+        amount:        totalGross,
+        amount_base:   totalGross,
+        currency:      'MWK',
         exchange_rate: 1,
-        tax_code: 'none',
-        tax_amount: 0,
-        reconciled: false,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
       },
       {
-        line_number: 2,
-        account_id: payePayable.id,
-        description: `PAYE payable — ${runNumber}`,
-        is_debit: false,
-        amount: totalPaye,
-        amount_base: totalPaye,
-        currency: 'MWK',
+        line_number:   2,
+        account_id:    payePayable.id,
+        description:   `PAYE payable — ${runNumber}`,
+        is_debit:      false,
+        amount:        totalPaye,
+        amount_base:   totalPaye,
+        currency:      'MWK',
         exchange_rate: 1,
-        tax_code: 'paye',
-        tax_amount: totalPaye,
-        reconciled: false,
+        tax_code:      'paye',
+        tax_amount:    totalPaye,
+        reconciled:    false,
       },
       {
-        line_number: 3,
-        account_id: salariesPayable.id,
-        description: `Net salaries payable — ${runNumber}`,
-        is_debit: false,
-        amount: totalNet,
-        amount_base: totalNet,
-        currency: 'MWK',
+        line_number:   3,
+        account_id:    salariesPayable.id,
+        description:   `Net salaries payable — ${runNumber}`,
+        is_debit:      false,
+        amount:        totalNet,
+        amount_base:   totalNet,
+        currency:      'MWK',
         exchange_rate: 1,
-        tax_code: 'none',
-        tax_amount: 0,
-        reconciled: false,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
       },
     ],
   );
