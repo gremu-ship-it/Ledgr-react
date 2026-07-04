@@ -23,7 +23,7 @@ function useBranches(businessId?: string) {
   return useQuery({
     queryKey: ['branches', businessId],
     queryFn: async () => {
-      const { data, error } = await (repos as any).supabase
+      const { data, error } = await (repos.inventory as any).client
         .from('branches')
         .select('id, name, code')
         .eq('business_id', businessId!)
@@ -45,6 +45,60 @@ function useAllProducts(businessId?: string) {
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
   });
+}
+
+// ── Stock deduction on sale ──────────────────────────────────────────────────
+// When a branch is selected and a line has a product_id, reduce stock at
+// that branch's linked inventory location. Non-blocking: if no location is
+// linked to the branch, or a product isn't inventory-tracked, we skip
+// silently rather than failing the whole sale — stock tracking is a bonus
+// on top of the sale, not a precondition for it.
+
+async function deductStockForBranchSale(
+  businessId: string,
+  branchId: string | null,
+  saleLines: { productId: string; quantity: number }[],
+  sourceId: string,
+  reference: string,
+  createdBy: string | null,
+): Promise<void> {
+  if (!branchId) return;
+  const linesWithProducts = saleLines.filter((l) => l.productId && l.quantity > 0);
+  if (linesWithProducts.length === 0) return;
+
+  const locations = await repos.inventory.findLocations(businessId);
+  const branchLocation = (locations as any[]).find((l) => l.branch_id === branchId);
+  if (!branchLocation) {
+    console.warn(`No inventory location linked to branch ${branchId} — stock not adjusted for this sale.`);
+    return;
+  }
+
+  const movements = [];
+  for (const line of linesWithProducts) {
+    const balance = await repos.inventory.findBalance(businessId, line.productId, branchLocation.id);
+    movements.push({
+      business_id: businessId,
+      product_id: line.productId,
+      location_id: branchLocation.id,
+      movement_type: 'sale' as const,
+      movement_date: new Date().toISOString().slice(0, 10),
+      // Negative: stock is leaving this location as part of the sale.
+      quantity: -line.quantity,
+      unit_cost: balance ? Number(balance.average_cost) : 0,
+      source_type: 'invoice',
+      source_id: sourceId,
+      reference,
+      created_by: createdBy,
+    });
+  }
+
+  try {
+    await repos.inventory.recordMovements(movements as any);
+  } catch (err) {
+    // Same philosophy as journal posting: don't block the sale, but don't
+    // pretend it worked either.
+    console.error('Stock deduction failed for sale', reference, err);
+  }
 }
 
 // ── Reusable selectors ────────────────────────────────────────────────────────
@@ -293,6 +347,17 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
         }
+
+        // NEW: if a branch + product were selected, reduce stock at that
+        // branch's linked location.
+        await deductStockForBranchSale(
+          businessId,
+          values.branch_id || null,
+          [{ productId: values.product_id, quantity: 1 }],
+          created.id,
+          invoiceNumber,
+          null,
+        );
       }
     },
     onSuccess: () => {
@@ -553,6 +618,18 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
         }
+
+        // NEW: reduce stock for every line that has a product selected.
+        await deductStockForBranchSale(
+          businessId,
+          form.branch_id || null,
+          validLines
+            .filter((l) => l.product_id)
+            .map((l) => ({ productId: l.product_id, quantity: parseFloat(l.quantity) || 0 })),
+          created.id,
+          form.invoice_number,
+          null,
+        );
       }
     },
     onSuccess: () => {

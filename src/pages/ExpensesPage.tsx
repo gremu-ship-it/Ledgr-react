@@ -36,7 +36,7 @@ function useBranches(businessId?: string) {
   return useQuery({
     queryKey: ['branches', businessId],
     queryFn: async () => {
-      const { data, error } = await (repos as any).supabase
+      const { data, error } = await (repos.inventory as any).client
         .from('branches')
         .select('id, name, code')
         .eq('business_id', businessId!)
