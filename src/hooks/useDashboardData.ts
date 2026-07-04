@@ -95,6 +95,32 @@ export function useMonthlyExpenses(businessId?: string) {
   });
 }
 
+/**
+ * Sum of input VAT (vat_amount) on expenses for the current month, anchored
+ * the same way as useMonthlyExpenses. Used alongside useMonthlyIncome's
+ * output vatAmount to compute net VAT payable/accrued:
+ *   net VAT = output VAT (sales) - input VAT (purchases)
+ *
+ * Added as a separate hook rather than changing useMonthlyExpenses' return
+ * shape, since that hook is already consumed elsewhere (e.g. MobileDashboard)
+ * expecting a plain number.
+ */
+export function useMonthlyExpenseVat(businessId?: string) {
+  return useQuery({
+    queryKey: ['expenses', 'monthly_vat', businessId],
+    queryFn: async () => {
+      const anchor = await fetchLatestRecordDate(businessId!);
+      const { from, to } = getMonthRange(anchor);
+      const rows = await repos.expense.findByDateRange(businessId!, from, to);
+      return rows
+        .filter((r) => r.status !== 'void')
+        .reduce((sum, r) => sum + Number(r.vat_amount), 0);
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useOutstandingInvoices(businessId?: string) {
   return useQuery({
     queryKey: ['invoices', 'outstanding', businessId],
@@ -152,20 +178,8 @@ export function useRecentJournalEntries(businessId?: string, limit = 10) {
       const from = new Date(ref.getFullYear() - 1, ref.getMonth(), ref.getDate())
         .toISOString()
         .slice(0, 10);
-
-      const [rows, periods] = await Promise.all([
-        repos.journal.findByBusinessAndDateRange(businessId!, from, to),
-        repos.period.findByBusiness(businessId!),
-      ]);
-
-      const lockedPeriodIds = new Set(
-        periods.filter((p) => p.is_closed).map((p) => p.id),
-      );
-
-      return rows.slice(0, limit).map((entry) => ({
-        ...entry,
-        isLocked: entry.period_id ? lockedPeriodIds.has(entry.period_id) : false,
-      }));
+      const rows = await repos.journal.findByBusinessAndDateRange(businessId!, from, to);
+      return rows.slice(0, limit);
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
