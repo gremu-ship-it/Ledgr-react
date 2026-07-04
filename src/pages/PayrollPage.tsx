@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Users, Plus, AlertCircle, CheckCircle, ChevronRight, ArrowLeft, X, Briefcase,
+  Users, Plus, AlertCircle, CheckCircle, ChevronRight, ArrowLeft, X, Briefcase, Pencil,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { createPayrollJournalEntry } from '@/services/journalService';
+import { EditEmployeeModal } from '@/components/payroll/EditEmployeeModal';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -334,7 +335,6 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
         } as Omit<InsertDto<'payroll_employee_lines'>, 'payroll_run_id'>)),
       );
 
-      // Create journal entry
       const allRuns = await repos.payroll.findByBusiness(businessId);
       const created = allRuns.find((r) => r.run_number === runNumber);
       if (created) {
@@ -583,7 +583,10 @@ function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRu
   );
 }
 
-function EmployeesTab({ businessId, onAddEmployee }: { businessId: string; onAddEmployee: () => void }) {
+function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: string; onAddEmployee: () => void; canEdit: boolean }) {
+  const [editingEmployee, setEditingEmployee] = useState<Row<'employees'> | null>(null);
+  const queryClient = useQueryClient();
+
   const { data: employees = [], isLoading, isError } = useQuery({
     queryKey: ['employees', businessId],
     queryFn: () => repos.payroll.findEmployees(businessId),
@@ -609,48 +612,70 @@ function EmployeesTab({ businessId, onAddEmployee }: { businessId: string; onAdd
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-          <tr>
-            <th className="px-4 py-3 text-left">Employee</th>
-            <th className="px-4 py-3 text-left">Employee #</th>
-            <th className="px-4 py-3 text-left">Job Title</th>
-            <th className="px-4 py-3 text-left">Type</th>
-            <th className="px-4 py-3 text-right">Gross Salary</th>
-            <th className="px-4 py-3 text-right">Est. PAYE</th>
-            <th className="px-4 py-3 text-right">Est. Net</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {employees.map((emp) => {
-            const gross = Number(emp.gross_salary);
-            const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, []);
-            const net = gross - paye;
-            return (
-              <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3">
-                  <p className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
-                  <p className="text-xs text-gray-400">{emp.payment_method.replace(/_/g, ' ')}</p>
-                </td>
-                <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
-                <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>
-                <td className="px-4 py-3 text-gray-500 capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
-                <td className="px-4 py-3 text-right">{formatMwk(gross)}</td>
-                <td className="px-4 py-3 text-right text-red-600">−{formatMwk(paye)}</td>
-                <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(net)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-4 py-3 text-left">Employee</th>
+              <th className="px-4 py-3 text-left">Employee #</th>
+              <th className="px-4 py-3 text-left">Job Title</th>
+              <th className="px-4 py-3 text-left">Type</th>
+              <th className="px-4 py-3 text-right">Gross Salary</th>
+              <th className="px-4 py-3 text-right">Est. PAYE</th>
+              <th className="px-4 py-3 text-right">Est. Net</th>
+              {canEdit && <th className="w-10" />}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {employees.map((emp) => {
+              const gross = Number(emp.gross_salary);
+              const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, []);
+              const net = gross - paye;
+              return (
+                <tr
+                  key={emp.id}
+                  onClick={() => canEdit && setEditingEmployee(emp)}
+                  className={`transition-colors hover:bg-gray-50 ${canEdit ? 'cursor-pointer' : ''}`}
+                >
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
+                    <p className="text-xs text-gray-400">{emp.payment_method.replace(/_/g, ' ')}</p>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
+                  <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
+                  <td className="px-4 py-3 text-right">{formatMwk(gross)}</td>
+                  <td className="px-4 py-3 text-right text-red-600">−{formatMwk(paye)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(net)}</td>
+                  {canEdit && (
+                    <td className="px-3 py-3">
+                      <Pencil className="h-4 w-4 text-gray-400" />
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {editingEmployee && (
+        <EditEmployeeModal
+          employee={editingEmployee}
+          onClose={() => setEditingEmployee(null)}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['employees'] })}
+        />
+      )}
+    </>
   );
 }
 
 export function PayrollPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
+  const role = currentBusiness?.role;
+  const canEditEmployees = role === 'owner' || role === 'admin';
   const [tab, setTab] = useState<MainTab>('runs');
   const [showRunModal, setShowRunModal] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
@@ -691,7 +716,7 @@ export function PayrollPage() {
       </div>
 
       {tab === 'runs' && <PayrollRunsTab businessId={businessId} onRunPayroll={() => setShowRunModal(true)} />}
-      {tab === 'employees' && <EmployeesTab businessId={businessId} onAddEmployee={() => setShowAddEmployeeModal(true)} />}
+      {tab === 'employees' && <EmployeesTab businessId={businessId} onAddEmployee={() => setShowAddEmployeeModal(true)} canEdit={canEditEmployees} />}
 
       {showRunModal && (
         <RunPayrollModal businessId={businessId} onClose={() => setShowRunModal(false)}
