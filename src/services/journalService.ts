@@ -28,7 +28,7 @@ async function getAccountByCode(
   return acc;
 }
 
-async function nextEntryNumber(_businessId: string): Promise<string> {
+export async function nextEntryNumber(_businessId: string): Promise<string> {
   const now   = new Date();
   const stamp =
     `${now.getFullYear()}` +
@@ -62,7 +62,7 @@ export async function createInvoiceJournalEntry(
   subtotal: number,
   vatAmount: number,
   sourceId: string,
-  branchId?: string | null,   // NEW
+  branchId?: string | null,
 ): Promise<void> {
   const [debtors, revenue, vatPayable, cash] = await Promise.all([
     getAccountByCode(businessId, '1131'),
@@ -75,7 +75,6 @@ export async function createInvoiceJournalEntry(
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
 
-  // Invoice recognition lines
   lines.push({
     line_number:   1,
     account_id:    debtors.id,
@@ -131,16 +130,15 @@ export async function createInvoiceJournalEntry(
       currency:      'MWK',
       exchange_rate: 1,
       status:        'draft',
-      branch_id:     branchId ?? null,   // NEW
+      branch_id:     branchId ?? null,
     },
     lines,
   );
 
   await repos.journal.post(entry.id, null as any);
 
-  // Settlement entry (cash received)
   const entryNumber2 = await nextEntryNumber(businessId);
-  await new Promise((r) => setTimeout(r, 100)); // ensure unique timestamp
+  await new Promise((r) => setTimeout(r, 100));
 
   const { entry: entry2 } = await repos.journal.createBalancedEntry(
     {
@@ -153,7 +151,7 @@ export async function createInvoiceJournalEntry(
       currency:      'MWK',
       exchange_rate: 1,
       status:        'draft',
-      branch_id:     branchId ?? null,   // NEW
+      branch_id:     branchId ?? null,
     },
     [
       {
@@ -189,18 +187,9 @@ export async function createInvoiceJournalEntry(
 }
 
 // ── Expense Journal Entry ─────────────────────────────────────────────────────
-// For a paid expense (receipt) or supplier bill:
-//   DR  Real expense account(s) — one line per selected category, net of VAT
-//   DR  VAT Receivable (1135)   — VAT amount, if any
-//   CR  Cash on Hand (1110) or Trade Creditors (2111) if bill — full total
-//
-// branchId — optional cost centre / branch this expense belongs to.
-// Stored in journal_entries.branch_id for branch-level P&L reporting.
 
 export interface ExpenseAccountAllocation {
-  /** accounts.id for the expense category this portion should be debited to */
   accountId: string;
-  /** net amount (excl. VAT) allocated to this account */
   amount: number;
   description?: string;
 }
@@ -214,7 +203,7 @@ export async function createExpenseJournalEntry(
   vatAmount: number,
   expenseType: string,
   sourceId: string,
-  branchId?: string | null,   // NEW
+  branchId?: string | null,
 ): Promise<string> {
   if (allocations.length === 0) {
     throw new Error('At least one expense account allocation is required.');
@@ -302,7 +291,7 @@ export async function createExpenseJournalEntry(
       currency:      'MWK',
       exchange_rate: 1,
       status:        'draft',
-      branch_id:     branchId ?? null,   // NEW
+      branch_id:     branchId ?? null,
     },
     lines,
   );
@@ -313,9 +302,6 @@ export async function createExpenseJournalEntry(
 }
 
 // ── Payroll Journal Entry ─────────────────────────────────────────────────────
-// DR  Basic Salaries (6110)           — gross pay
-// CR  PAYE Payable (2122)             — paye deduction
-// CR  Salaries & Wages Payable (2131) — net pay
 
 export async function createPayrollJournalEntry(
   businessId: string,

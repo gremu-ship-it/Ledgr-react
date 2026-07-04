@@ -152,8 +152,20 @@ export function useRecentJournalEntries(businessId?: string, limit = 10) {
       const from = new Date(ref.getFullYear() - 1, ref.getMonth(), ref.getDate())
         .toISOString()
         .slice(0, 10);
-      const rows = await repos.journal.findByBusinessAndDateRange(businessId!, from, to);
-      return rows.slice(0, limit);
+
+      const [rows, periods] = await Promise.all([
+        repos.journal.findByBusinessAndDateRange(businessId!, from, to),
+        repos.period.findByBusiness(businessId!),
+      ]);
+
+      const lockedPeriodIds = new Set(
+        periods.filter((p) => p.is_closed).map((p) => p.id),
+      );
+
+      return rows.slice(0, limit).map((entry) => ({
+        ...entry,
+        isLocked: entry.period_id ? lockedPeriodIds.has(entry.period_id) : false,
+      }));
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,

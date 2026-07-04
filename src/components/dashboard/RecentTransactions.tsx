@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { ArrowUpRight, ArrowDownLeft, RefreshCw, Search } from 'lucide-react';
 import type { Row } from '@/dal/types/database';
+import { LockedPeriodBadge } from '@/components/ui/LockedPeriodBadge';
+import { JournalEntryDetailModal } from './JournalEntryDetailModal';
 
 interface RecentTransactionsProps {
-  entries?: Row<'journal_entries'>[];
+  entries?: (Row<'journal_entries'> & { isLocked?: boolean })[];
   isLoading?: boolean;
   isError?: boolean;
 }
@@ -19,6 +21,7 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   const [sortKey, setSortKey]   = useState<'entry_date' | 'description' | 'status'>('entry_date');
   const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('desc');
   const [page, setPage]         = useState(1);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const pageSize = 5;
 
   function handleSort(key: typeof sortKey) {
@@ -58,20 +61,17 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
     );
   }
 
-  // Filter
   const filtered = entries.filter((e) =>
     e.description.toLowerCase().includes(search.toLowerCase()) ||
     (e.reference ?? '').toLowerCase().includes(search.toLowerCase()),
   );
 
-  // Sort
   const sorted = [...filtered].sort((a, b) => {
     let x: string = a[sortKey] ?? '';
     let y: string = b[sortKey] ?? '';
     return sortDir === 'asc' ? x.localeCompare(y) : y.localeCompare(x);
   });
 
-  // Paginate
   const total = sorted.length;
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, pages);
@@ -92,7 +92,6 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
 
   return (
     <div>
-      {/* Search bar */}
       <div className="mb-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
         <Search className="h-4 w-4 text-gray-400 shrink-0" />
         <input
@@ -104,7 +103,6 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
         />
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full min-w-[480px] border-collapse text-sm">
           <thead>
@@ -131,7 +129,11 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
               });
 
               return (
-                <tr key={entry.id} className="border-b border-gray-50 transition-colors hover:bg-[#e6f4ef]/40 last:border-0">
+                <tr
+                  key={entry.id}
+                  onClick={() => setSelectedEntryId(entry.id)}
+                  className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-[#e6f4ef]/40 last:border-0"
+                >
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{date}</td>
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-800 truncate max-w-[180px]">{entry.description}</p>
@@ -147,9 +149,12 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${status.bg} ${status.text}`}>
-                      {status.label}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${status.bg} ${status.text}`}>
+                        {status.label}
+                      </span>
+                      {entry.isLocked && <LockedPeriodBadge />}
+                    </div>
                   </td>
                 </tr>
               );
@@ -158,7 +163,6 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
         </table>
       </div>
 
-      {/* Pagination */}
       {total > pageSize && (
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-gray-400">
@@ -188,6 +192,13 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
             >›</button>
           </div>
         </div>
+      )}
+
+      {selectedEntryId && (
+        <JournalEntryDetailModal
+          entryId={selectedEntryId}
+          onClose={() => setSelectedEntryId(null)}
+        />
       )}
     </div>
   );
