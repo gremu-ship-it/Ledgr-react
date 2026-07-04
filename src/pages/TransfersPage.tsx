@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Plus, Search, X, Loader2, Truck,
-  CheckCircle, Printer,
+  CheckCircle, Printer, AlertCircle,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -116,6 +116,7 @@ function CreateTransferModal({
   onClose,
   onSubmit,
   isLoading,
+  errorMessage,
 }: {
   open: boolean;
   locations: Row<'inventory_locations'>[];
@@ -123,6 +124,7 @@ function CreateTransferModal({
   onClose: () => void;
   onSubmit: (fromId: string, toId: string, lines: TransferLineForm[], notes: string) => void;
   isLoading: boolean;
+  errorMessage?: string | null;
 }) {
   const [fromId, setFromId] = useState('');
   const [toId, setToId]     = useState('');
@@ -154,6 +156,13 @@ function CreateTransferModal({
           <h2 className="text-base font-semibold text-gray-900">New Stock Transfer</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
         </div>
+
+        {errorMessage && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {errorMessage}
+          </div>
+        )}
 
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
@@ -681,6 +690,7 @@ export function TransfersPage() {
           createMutation.mutate({ fromLocationId: from, toLocationId: to, lines, notes })
         }
         isLoading={createMutation.isPending}
+        errorMessage={createMutation.isError ? (createMutation.error as Error).message : null}
       />
 
       {selectedDetail && (

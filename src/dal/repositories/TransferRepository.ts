@@ -119,7 +119,7 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
         movement_date: new Date().toISOString().slice(0, 10),
         quantity: Number(l.quantity_dispatched),
         unit_cost: Number(l.unit_cost),
-        total_cost: Number(l.quantity_dispatched) * Number(l.unit_cost),
+        // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
         source_type: 'stock_transfer',
         source_id: transferId,
         reference: transfer.transfer_number,
@@ -164,7 +164,7 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
         movement_date: new Date().toISOString().slice(0, 10),
         quantity: Number(l.quantity_received),
         unit_cost: Number(l.unit_cost),
-        total_cost: Number(l.quantity_received) * Number(l.unit_cost),
+        // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
         source_type: 'stock_transfer',
         source_id: transferId,
         reference: transfer.transfer_number,
