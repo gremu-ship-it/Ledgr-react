@@ -50,17 +50,33 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
   }
 
   /**
-   * Entry count and total debits/credits for a period, from posted
-   * journal entries only. Used by the Period Management page.
+   * Entry count and total debits/credits for a period.
+   *
+   * FIX: journal_entries.period_id is not populated by journalService.ts
+   * on any entry-creation path (confirmed via DB query: 0 of 21 existing
+   * entries have period_id set). This method now matches entries by
+   * entry_date falling within [period_start, period_end], the same
+   * approach used by the DB trigger and the UI lock-detection hooks,
+   * rather than relying on the unpopulated period_id FK.
+   *
+   * FIX: status filter now includes both 'posted' and 'reversed' entries,
+   * not just 'posted'. A reversed original entry's status becomes
+   * 'reversed' (not 'posted') once reverse() runs — excluding it would
+   * count only the reversal's lines and not the original's, breaking the
+   * net-zero cancellation that a correct original+reversal pair should
+   * produce in the totals. Draft entries remain excluded.
    */
   async getSummary(periodId: string): Promise<{ entryCount: number; totalDebits: number; totalCredits: number }> {
     const period = await this.findById(periodId);
 
     const { data, error } = await this.client
       .from('journal_lines')
-      .select('is_debit, amount_base, journal_entries!inner(period_id, status)')
-      .eq('journal_entries.period_id', period.id)
-      .eq('journal_entries.status', 'posted');
+      .select('is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
+      .eq('business_id', period.business_id)
+      .eq('journal_entries.business_id', period.business_id)
+      .gte('journal_entries.entry_date', period.period_start)
+      .lte('journal_entries.entry_date', period.period_end)
+      .in('journal_entries.status', ['posted', 'reversed']);
 
     if (error) throw toRepositoryError('accounting_periods', error);
 
@@ -68,11 +84,15 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
     const totalDebits = lines.filter((l) => l.is_debit).reduce((s, l) => s + Number(l.amount_base), 0);
     const totalCredits = lines.filter((l) => !l.is_debit).reduce((s, l) => s + Number(l.amount_base), 0);
 
-    const { count } = await this.client
+    const { count, error: countError } = await this.client
       .from('journal_entries')
       .select('id', { count: 'exact', head: true })
-      .eq('period_id', period.id)
-      .eq('status', 'posted');
+      .eq('business_id', period.business_id)
+      .gte('entry_date', period.period_start)
+      .lte('entry_date', period.period_end)
+      .in('status', ['posted', 'reversed']);
+
+    if (countError) throw toRepositoryError('accounting_periods', countError);
 
     return { entryCount: count ?? 0, totalDebits, totalCredits };
   }
@@ -84,8 +104,7 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
    *
    * IMPORTANT: this method does NOT check the acting user's role. Callers
    * (UI layer) must verify membership.role is 'owner' or 'admin' before
-   * invoking this — enforcing that here would require this repository to
-   * know about business_users, which it currently does not.
+   * invoking this.
    */
   async lock(periodId: string, userId: string, userEmail?: string | null): Promise<Row<'accounting_periods'>> {
     const before = await this.findById(periodId);
@@ -139,10 +158,6 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
       notes: entry.notes ?? null,
     } as never);
 
-    // Deliberate choice: a failed audit write does not roll back or throw
-    // from the lock/unlock/reverse operation itself — the accounting action
-    // already succeeded and should not be undone because logging failed.
-    // It's still surfaced to the console for investigation.
     if (error) {
       console.error('Failed to write audit_log entry:', error);
     }
