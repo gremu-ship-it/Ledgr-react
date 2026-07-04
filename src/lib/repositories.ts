@@ -13,6 +13,7 @@ import { IncomeRepository } from '@/dal/repositories/IncomeRepository';
 import { ContactRepository } from '@/dal/repositories/ContactRepository';
 import { BranchRepository } from '@/dal/repositories/BranchRepository';
 import { TransferRepository } from '@/dal/repositories/TransferRepository';
+import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 
 export const repos = {
   business:  new BusinessRepository(supabase),
@@ -28,6 +29,7 @@ export const repos = {
   contact:   new ContactRepository(supabase),
   branch:    new BranchRepository(supabase),
   transfer:  new TransferRepository(supabase),
+  period: new PeriodRepository(supabase),
 };
 
 export type Repositories = typeof repos;

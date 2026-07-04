@@ -174,7 +174,15 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     entryNumber: string,
     reversalDate: string,
     postedBy: string,
+    reason: string,
   ): Promise<JournalEntryWithLines> {
+    if (!reason || !reason.trim()) {
+      throw new ValidationError(
+        'journal_entries',
+        'A reason is required to reverse a journal entry.',
+      );
+    }
+
     const { entry: original, lines: originalLines } = await this.findByIdWithLines(originalId);
 
     if (original.status !== 'posted') {
@@ -192,12 +200,27 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       );
     }
 
-    // Create the reversal entry with debits and credits swapped
+    // Reversals are final: an entry that is itself a reversal cannot be
+    // reversed again.
+    if (original.reversal_of) {
+      throw new ValidationError(
+        'journal_entries',
+        `Journal entry ${originalId} is itself a reversal entry and cannot be reversed again.`,
+      );
+    }
+
+    // FIX: derive the reversal's period from reversalDate, not the
+    // original entry's period_id. Copying the original's period_id would
+    // try to post the reversal into the same (possibly locked) period as
+    // the mistake it's correcting — exactly the case a reversal exists
+    // to handle. If no period covers reversalDate, period_id is left null.
+    const reversalPeriodId = await this.findPeriodIdForDate(original.business_id, reversalDate);
+
     const reversalLines = originalLines.map((line, i) => ({
       line_number: i + 1,
       account_id: line.account_id,
       description: `Reversal of: ${line.description ?? original.description}`,
-      is_debit: !line.is_debit,          // swap direction
+      is_debit: !line.is_debit,
       amount: line.amount,
       amount_base: line.amount_base,
       currency: line.currency,
@@ -223,18 +246,70 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
         reversal_of: originalId,
         branch_id: original.branch_id,
         department_id: original.department_id,
-        period_id: original.period_id,
+        period_id: reversalPeriodId,
         created_by: postedBy,
       },
       reversalLines,
     );
 
-    // Post the reversal immediately
     const postedReversal = await this.post(reversal.entry.id, postedBy);
 
-    // Mark the original as reversed
     await this.update(originalId, { reversed_by: reversal.entry.id });
 
+    await this.writeAuditLog({
+      business_id: original.business_id,
+      user_id: postedBy,
+      event_type: 'journal_entry_reversed',
+      resource_type: 'journal_entries',
+      resource_id: originalId,
+      resource_ref: original.entry_number,
+      old_values: { status: original.status },
+      new_values: { reversed_by: reversal.entry.id, reversal_entry_number: entryNumber },
+      notes: reason,
+    });
+
     return { entry: postedReversal, lines: reversal.lines };
+  }
+
+  private async findPeriodIdForDate(businessId: string, date: string): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('accounting_periods')
+      .select('*')
+      .eq('business_id', businessId)
+      .lte('period_start', date)
+      .gte('period_end', date)
+      .maybeSingle();
+    if (error) throw toRepositoryError('journal_entries', error);
+    return (data as Row<'accounting_periods'> | null)?.id ?? null;
+  }
+
+  private async writeAuditLog(entry: {
+    business_id: string;
+    user_id: string | null;
+    user_email?: string | null;
+    event_type: string;
+    resource_type: string;
+    resource_id: string;
+    resource_ref?: string | null;
+    old_values?: unknown;
+    new_values?: unknown;
+    notes?: string | null;
+  }): Promise<void> {
+    const { error } = await this.client.from('audit_log').insert({
+      business_id: entry.business_id,
+      user_id: entry.user_id,
+      user_email: entry.user_email ?? null,
+      event_type: entry.event_type,
+      resource_type: entry.resource_type,
+      resource_id: entry.resource_id,
+      resource_ref: entry.resource_ref ?? null,
+      old_values: entry.old_values ?? null,
+      new_values: entry.new_values ?? null,
+      notes: entry.notes ?? null,
+    } as never);
+
+    if (error) {
+      console.error('Failed to write audit_log entry:', error);
+    }
   }
 }
