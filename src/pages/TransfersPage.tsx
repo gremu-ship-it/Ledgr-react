@@ -247,7 +247,7 @@ function CreateTransferModal({
 
 function TransferDrawer({
   data, locations, products, businessName, isOwner,
-  onClose, onApprove, onDispatch, onReceive, isMutating,
+  onClose, onApprove, onDispatch, onReceive, isMutating, errorMessage,
 }: {
   data: TransferWithLines;
   locations: Row<'inventory_locations'>[];
@@ -259,6 +259,7 @@ function TransferDrawer({
   onDispatch: (quantities: { lineId: string; quantityDispatched: number }[]) => void;
   onReceive: (quantities: { lineId: string; quantityReceived: number }[]) => void;
   isMutating: boolean;
+  errorMessage?: string | null;
 }) {
   const { transfer, lines } = data;
   const [dispatchQtys, setDispatchQtys] = useState<Record<string, number>>(
@@ -293,6 +294,13 @@ function TransferDrawer({
         </div>
 
         <div className="space-y-5 p-6">
+          {errorMessage && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {errorMessage}
+            </div>
+          )}
+
           <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
             <div className="text-center">
               <p className="text-xs text-gray-400">From</p>
@@ -705,6 +713,12 @@ export function TransfersPage() {
           onDispatch={(quantities) => dispatchMutation.mutate({ transferId: selectedDetail.transfer.id, quantities })}
           onReceive={(quantities) => receiveMutation.mutate({ transferId: selectedDetail.transfer.id, quantities })}
           isMutating={isMutating}
+          errorMessage={
+            approveMutation.isError ? (approveMutation.error as Error).message
+            : dispatchMutation.isError ? (dispatchMutation.error as Error).message
+            : receiveMutation.isError ? (receiveMutation.error as Error).message
+            : null
+          }
         />
       )}
     </div>

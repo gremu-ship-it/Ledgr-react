@@ -117,7 +117,10 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
         location_id: transfer.from_location_id,
         movement_type: 'transfer_out' as const,
         movement_date: new Date().toISOString().slice(0, 10),
-        quantity: Number(l.quantity_dispatched),
+        // Negative: stock is LEAVING the source location. The
+        // update_inventory_balance() trigger just adds this quantity to
+        // the balance, so the sign here is what makes it a decrease.
+        quantity: -Number(l.quantity_dispatched),
         unit_cost: Number(l.unit_cost),
         // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
         source_type: 'stock_transfer',
