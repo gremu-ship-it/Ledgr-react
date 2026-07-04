@@ -64,6 +64,23 @@ async function fetchLatestRecordDate(businessId: string): Promise<string | undef
   return dates.sort().reverse()[0]; // most recent
 }
 
+/**
+ * FIX: journal_entries.period_id is not currently populated by any
+ * entry-creation path (confirmed via DB query: 0 of 21 existing entries
+ * have period_id set). Lock detection must therefore check entry_date
+ * against locked periods' date ranges directly — matching the DB trigger
+ * fn_check_period_not_locked's own logic — rather than relying on the
+ * period_id FK, which cannot be trusted for existing or future entries.
+ */
+function isDateInLockedPeriod(
+  entryDate: string,
+  lockedRanges: { period_start: string; period_end: string }[],
+): boolean {
+  return lockedRanges.some(
+    (r) => entryDate >= r.period_start && entryDate <= r.period_end,
+  );
+}
+
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
 export function useMonthlyIncome(businessId?: string) {
@@ -178,8 +195,20 @@ export function useRecentJournalEntries(businessId?: string, limit = 10) {
       const from = new Date(ref.getFullYear() - 1, ref.getMonth(), ref.getDate())
         .toISOString()
         .slice(0, 10);
-      const rows = await repos.journal.findByBusinessAndDateRange(businessId!, from, to);
-      return rows.slice(0, limit);
+
+      const [rows, periods] = await Promise.all([
+        repos.journal.findByBusinessAndDateRange(businessId!, from, to),
+        repos.period.findByBusiness(businessId!),
+      ]);
+
+      const lockedRanges = periods
+        .filter((p) => p.is_closed)
+        .map((p) => ({ period_start: p.period_start, period_end: p.period_end }));
+
+      return rows.slice(0, limit).map((entry) => ({
+        ...entry,
+        isLocked: isDateInLockedPeriod(entry.entry_date, lockedRanges),
+      }));
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
