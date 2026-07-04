@@ -300,7 +300,6 @@ export function WarehousePage() {
         movement_date: new Date().toISOString().slice(0, 10),
         quantity:      l.quantity,
         unit_cost:     l.unitCost,
-        total_cost:    l.quantity * l.unitCost,
         notes:         notes || null,
         created_by:    currentUser?.id ?? null,
       }));
