@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Row, InsertDto } from '../types/database';
+import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError } from '../errors/RepositoryError';
+import { toRepositoryError, NotFoundError } from '../errors/RepositoryError';
 
 export type PayrollRunWithLines = Row<'payroll_runs'> & {
   lines: Row<'payroll_employee_lines'>[];
@@ -70,6 +70,41 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       .order('last_name', { ascending: true });
     if (error) throw toRepositoryError('employees', error);
     return data ?? [];
+  }
+
+  async findEmployeeById(employeeId: string): Promise<Row<'employees'>> {
+    const { data, error } = await this.client
+      .from('employees')
+      .select('*')
+      .eq('id', employeeId)
+      .maybeSingle();
+    if (error) throw toRepositoryError('employees', error);
+    if (!data) throw new NotFoundError('employees', employeeId);
+    return data as Row<'employees'>;
+  }
+
+  /**
+   * Update an employee record, including salary and any other editable
+   * field. Audit logging is NOT performed here — the DB trigger
+   * `audit_employees` (bound to log_table_change()) already writes a
+   * full old/new row snapshot to audit_log on every UPDATE. Adding an
+   * app-level audit write here would create duplicate audit_log entries
+   * for the same change.
+   *
+   * Caller (UI layer) is responsible for verifying the acting user's role
+   * is 'owner' or 'admin' before invoking this — mirrors the same
+   * responsibility split used in PeriodRepository.lock()/unlock().
+   */
+  async updateEmployee(employeeId: string, dto: UpdateDto<'employees'>): Promise<Row<'employees'>> {
+    const { data, error } = await this.client
+      .from('employees')
+      .update({ ...dto, updated_at: new Date().toISOString() } as never)
+      .eq('id', employeeId)
+      .select('*')
+      .maybeSingle();
+    if (error) throw toRepositoryError('employees', error);
+    if (!data) throw new NotFoundError('employees', employeeId);
+    return data as Row<'employees'>;
   }
 
   async findPayeBands(
