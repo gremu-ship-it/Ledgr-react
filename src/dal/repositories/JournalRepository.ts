@@ -254,7 +254,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
 
     const postedReversal = await this.post(reversal.entry.id, postedBy);
 
-    await this.update(originalId, { reversed_by: reversal.entry.id });
+    await this.update(originalId, { reversed_by: reversal.entry.id, status: 'reversed' });
 
     await this.writeAuditLog({
       business_id: original.business_id,
