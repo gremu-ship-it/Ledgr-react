@@ -14,6 +14,8 @@ import {
   Warehouse,
   ArrowLeftRight,
   GitBranch,
+  Lock,
+  ScrollText,
 } from 'lucide-react';
 
 export const NAV_SECTIONS = [
@@ -53,6 +55,8 @@ export const NAV_SECTIONS = [
       { label: 'Tax',        path: '/tax',       icon: Percent },
       { label: 'Assets',     path: '/assets',    icon: Landmark },
       { label: 'Reports',    path: '/reports',   icon: BarChart2 },
+      { label: 'Journals',   path: '/journals',  icon: ScrollText },
+      { label: 'Periods',    path: '/periods',   icon: Lock },
     ],
   },
   {

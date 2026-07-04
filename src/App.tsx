@@ -1,17 +1,17 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
-import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';  // ← your live path
+import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { InstallPrompt } from '@/offline/InstallPrompt';                     // ← your live path
+import { InstallPrompt } from '@/offline/InstallPrompt';
 
-// Auth pages — kept in your existing flat @/pages/ location
+// Auth pages
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
-import { CreateBusinessPage } from '@/pages/CreateBusinessPage';             // ← your live page, kept
+import { CreateBusinessPage } from '@/pages/CreateBusinessPage';
 
-// App pages — all your live pages preserved exactly
+// App pages
 import { DashboardPage } from '@/pages/DashboardPage';
 import { IncomePage } from '@/pages/IncomePage';
 import { ExpensesPage } from '@/pages/ExpensesPage';
@@ -29,8 +29,10 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { WarehousePage } from './pages/WarehousePage';
 import { TransfersPage } from './pages/TransfersPage';
 import { BranchesPage } from './pages/BranchesPage';
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
+import { PeriodManagementPage } from '@/pages/PeriodManagementPage';
+import { JournalsPage } from '@/pages/JournalsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -50,30 +52,22 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <Routes>
-            {/* Public-only — redirect to /dashboard if already authenticated */}
+            {/* Public-only */}
             <Route element={<PublicOnlyRoute />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
 
-            {/*
-              Password reset — outside PublicOnlyRoute intentionally.
-              The Supabase PASSWORD_RECOVERY event fires after the user
-              clicks the reset link in their email. This needs to be
-              accessible whether the user is authenticated or not.
-            */}
+            {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
             <Route path="/reset-password" element={<ResetPasswordPage />} />
 
-            {/*
-              Protected but outside AppLayout — user is authenticated but
-              has no business yet, so the normal shell shouldn't render.
-            */}
+            {/* Protected, no AppLayout */}
             <Route element={<ProtectedRoute />}>
               <Route path="/create-business" element={<CreateBusinessPage />} />
             </Route>
 
-            {/* Protected — redirect to /login if not authenticated */}
+            {/* Protected with AppLayout */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route path="/dashboard" element={<DashboardPage />} />
@@ -88,13 +82,13 @@ function App() {
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/tax" element={<TaxPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
+                <Route path="/journals" element={<JournalsPage />} />
+                <Route path="/periods" element={<PeriodManagementPage />} />
                 <Route path="/ai" element={<AiInsightsPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />
                 <Route path="/branches" element={<BranchesPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               </Route>
             </Route>
 
