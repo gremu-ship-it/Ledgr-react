@@ -191,6 +191,7 @@ interface QuickEntryForm {
   notes: string;
   product_id: string;   // NEW
   branch_id: string;    // NEW
+  quantity: string;     // NEW: units sold, for stock deduction
 }
 
 interface InvoiceLine {
@@ -260,7 +261,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
 
   const [form, setForm] = useState<QuickEntryForm>({
     issue_date: today(), description: '', amount: '', payment_method: 'cash',
-    reference: '', notes: '', product_id: '', branch_id: '',
+    reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -269,6 +270,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       const amount = parseFloat(values.amount);
       if (isNaN(amount) || amount <= 0) throw new Error('Enter a valid amount');
       if (!values.description.trim()) throw new Error('Description is required');
+      const qty = parseFloat(values.quantity) || 1;
 
       const contacts = await repos.contact.findByBusiness(businessId, 'customer');
       const walkIn   = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
@@ -316,8 +318,8 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         [{
           line_number:      1,
           description:      values.description,
-          quantity:         1,
-          unit_price:       amount,
+          quantity:         qty,
+          unit_price:       qty > 0 ? amount / qty : amount,
           discount_percent: 0,
           tax_code:         'none',
           tax_rate:         0,
@@ -353,7 +355,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         await deductStockForBranchSale(
           businessId,
           values.branch_id || null,
-          [{ productId: values.product_id, quantity: 1 }],
+          [{ productId: values.product_id, quantity: qty }],
           created.id,
           invoiceNumber,
           null,
@@ -364,7 +366,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
         issue_date: today(), description: '', amount: '', payment_method: 'cash',
-        reference: '', notes: '', product_id: '', branch_id: '',
+        reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['income'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -417,6 +419,18 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
               products={products}
             />
           </div>
+
+          {/* NEW: Quantity — only meaningful once a product is selected, since
+              that's what drives the stock deduction at the chosen branch */}
+          {form.product_id && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Quantity Sold</label>
+              <input type="number" min="0" step="1" value={form.quantity}
+                onChange={(e) => set('quantity', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <p className="mt-1 text-xs text-gray-400">Amount above is the total for all units — stock will reduce by this quantity.</p>
+            </div>
+          )}
 
           {/* NEW: Branch selector — only shown when business has branches */}
           {branches.length > 0 && (

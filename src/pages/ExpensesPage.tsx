@@ -51,6 +51,54 @@ function useBranches(businessId?: string) {
   });
 }
 
+// ── Stock addition on purchase ───────────────────────────────────────────────
+// Mirror of IncomePage.tsx's deductStockForBranchSale, but for buying stock
+// IN rather than selling it out. Non-blocking: if the branch has no linked
+// inventory location, or a line has no product, we skip silently rather
+// than failing the whole expense — stock tracking is additive, not a
+// precondition for recording the purchase itself.
+
+async function addStockForBranchPurchase(
+  businessId: string,
+  branchId: string | null,
+  purchaseLines: { productId: string; quantity: number; unitCost: number }[],
+  sourceId: string,
+  reference: string,
+  createdBy: string | null,
+): Promise<void> {
+  if (!branchId) return;
+  const linesWithProducts = purchaseLines.filter((l) => l.productId && l.quantity > 0);
+  if (linesWithProducts.length === 0) return;
+
+  const locations = await repos.inventory.findLocations(businessId);
+  const branchLocation = (locations as any[]).find((l) => l.branch_id === branchId);
+  if (!branchLocation) {
+    console.warn(`No inventory location linked to branch ${branchId} — stock not adjusted for this purchase.`);
+    return;
+  }
+
+  const movements = linesWithProducts.map((line) => ({
+    business_id: businessId,
+    product_id: line.productId,
+    location_id: branchLocation.id,
+    movement_type: 'purchase' as const,
+    movement_date: new Date().toISOString().slice(0, 10),
+    // Positive: stock is arriving at this location as part of the purchase.
+    quantity: line.quantity,
+    unit_cost: line.unitCost,
+    source_type: 'expense',
+    source_id: sourceId,
+    reference,
+    created_by: createdBy,
+  }));
+
+  try {
+    await repos.inventory.recordMovements(movements as any);
+  } catch (err) {
+    console.error('Stock addition failed for purchase', reference, err);
+  }
+}
+
 function useAllProducts(businessId?: string) {
   return useQuery({
     queryKey: ['products_all', businessId],
@@ -186,6 +234,7 @@ interface QuickExpenseForm {
   include_vat:     boolean;
   product_id:      string;   // NEW
   branch_id:       string;   // NEW
+  quantity:        string;   // NEW: units purchased, for stock addition
 }
 
 interface ExpenseLine {
@@ -260,7 +309,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
   const [form, setForm] = useState<QuickExpenseForm>({
     expense_date: today(), description: '', amount: '', account_id: '',
     payment_method: 'cash', reference: '', notes: '', include_vat: false,
-    product_id: '', branch_id: '',
+    product_id: '', branch_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -274,6 +323,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       const netAmount   = values.include_vat ? rawAmount / 1.175 : rawAmount;
       const vatAmount   = values.include_vat ? rawAmount - netAmount : 0;
       const totalAmount = rawAmount;
+      const qty         = parseFloat(values.quantity) || 1;
 
       const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
 
@@ -307,8 +357,8 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         [{
           line_number:  1,
           description:  values.description,
-          quantity:     1,
-          unit_price:   netAmount,
+          quantity:     qty,
+          unit_price:   qty > 0 ? netAmount / qty : netAmount,
           tax_code:     values.include_vat ? 'vat_standard' : 'none',
           tax_rate:     values.include_vat ? VAT_RATE : 0,
           tax_amount:   vatAmount,
@@ -345,6 +395,17 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           values.branch_id || null,  // NEW: pass cost centre to journal entry
         );
         await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+
+        // NEW: if a branch + product were selected, add stock at that
+        // branch's linked location.
+        await addStockForBranchPurchase(
+          businessId,
+          values.branch_id || null,
+          [{ productId: values.product_id, quantity: qty, unitCost: qty > 0 ? netAmount / qty : netAmount }],
+          created.id,
+          expenseNumber,
+          null,
+        );
       } catch (err) {
         console.error('Journal entry failed for', expenseNumber, err);
         throw new Error(
@@ -358,7 +419,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       setForm({
         expense_date: today(), description: '', amount: '', account_id: '',
         payment_method: 'cash', reference: '', notes: '', include_vat: false,
-        product_id: '', branch_id: '',
+        product_id: '', branch_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
@@ -423,6 +484,17 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               </p>
             )}
           </div>
+
+          {/* NEW: Quantity — drives stock addition at the chosen branch */}
+          {form.product_id && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Quantity Purchased</label>
+              <input type="number" min="0" step="1" value={form.quantity}
+                onChange={(e) => set('quantity', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <p className="mt-1 text-xs text-gray-400">Amount above is the total for all units — stock will increase by this quantity.</p>
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
@@ -646,6 +718,22 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           form.branch_id || null,  // NEW: cost centre flows to journal entry
         );
         await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+
+        // NEW: add stock for every line that has a product selected.
+        await addStockForBranchPurchase(
+          businessId,
+          form.branch_id || null,
+          validLines
+            .filter((l) => l.product_id)
+            .map((l) => ({
+              productId: l.product_id,
+              quantity: parseFloat(l.quantity) || 0,
+              unitCost: parseFloat(l.unit_price) || 0,
+            })),
+          created.id,
+          form.expense_number,
+          null,
+        );
       } catch (err) {
         console.error('Journal entry failed for', form.expense_number, err);
         throw new Error(
