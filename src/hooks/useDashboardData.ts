@@ -4,6 +4,22 @@ import { repos } from '@/lib/repositories';
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
 /**
+ * Formats a Date's local calendar date as YYYY-MM-DD without ever routing
+ * through UTC conversion (i.e. never via .toISOString()). For timezones
+ * ahead of UTC (e.g. Africa/Johannesburg, UTC+2), constructing a local
+ * midnight Date and calling .toISOString() shifts it back into the
+ * previous day once converted to UTC — silently producing an off-by-one
+ * day range. Building the string directly from local getFullYear/getMonth/
+ * getDate avoids that conversion entirely.
+ */
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Returns the calendar-month range for the most recent month that has data.
  * We derive "today" from the DB records rather than the browser clock so that
  * dev/test environments with future-dated records still display correctly.
@@ -11,12 +27,8 @@ import { repos } from '@/lib/repositories';
  */
 function getMonthRange(anchorDate?: string): { from: string; to: string } {
   const ref = anchorDate ? new Date(anchorDate) : new Date();
-  const from = new Date(ref.getFullYear(), ref.getMonth(), 1)
-    .toISOString()
-    .slice(0, 10);
-  const to = new Date(ref.getFullYear(), ref.getMonth() + 1, 0)
-    .toISOString()
-    .slice(0, 10);
+  const from = toLocalDateString(new Date(ref.getFullYear(), ref.getMonth(), 1));
+  const to = toLocalDateString(new Date(ref.getFullYear(), ref.getMonth() + 1, 0));
   return { from, to };
 }
 
@@ -32,12 +44,8 @@ function getLastNMonths(
   const months = [];
   for (let i = n - 1; i >= 0; i--) {
     const d = new Date(ref.getFullYear(), ref.getMonth() - i, 1);
-    const from = new Date(d.getFullYear(), d.getMonth(), 1)
-      .toISOString()
-      .slice(0, 10);
-    const to = new Date(d.getFullYear(), d.getMonth() + 1, 0)
-      .toISOString()
-      .slice(0, 10);
+    const from = toLocalDateString(new Date(d.getFullYear(), d.getMonth(), 1));
+    const to = toLocalDateString(new Date(d.getFullYear(), d.getMonth() + 1, 0));
     const label = d.toLocaleString('default', { month: 'short', year: '2-digit' });
     months.push({ from, to, label });
   }
@@ -191,10 +199,8 @@ export function useRecentJournalEntries(businessId?: string, limit = 10) {
     queryFn: async () => {
       const anchor = await fetchLatestRecordDate(businessId!);
       const ref = anchor ? new Date(anchor) : new Date();
-      const to = ref.toISOString().slice(0, 10);
-      const from = new Date(ref.getFullYear() - 1, ref.getMonth(), ref.getDate())
-        .toISOString()
-        .slice(0, 10);
+      const to = toLocalDateString(ref);
+      const from = toLocalDateString(new Date(ref.getFullYear() - 1, ref.getMonth(), ref.getDate()));
 
       const [rows, periods] = await Promise.all([
         repos.journal.findByBusinessAndDateRange(businessId!, from, to),

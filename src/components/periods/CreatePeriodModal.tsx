@@ -15,10 +15,26 @@ function AlertBox({ alert }: { alert: Alert }) {
   );
 }
 
+/**
+ * Formats a Date's local calendar date as YYYY-MM-DD without ever routing
+ * through UTC conversion (i.e. never via .toISOString()). For timezones
+ * ahead of UTC (e.g. Africa/Johannesburg, UTC+2), constructing a local
+ * midnight Date and calling .toISOString() shifts it back into the
+ * previous day once converted to UTC — silently producing an off-by-one
+ * day range. Building the string directly from local getFullYear/getMonth/
+ * getDate avoids that conversion entirely.
+ */
+function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function currentMonthRange(): { name: string; start: string; end: string } {
   const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const start = toLocalDateString(new Date(now.getFullYear(), now.getMonth(), 1));
+  const end = toLocalDateString(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   const name = now.toLocaleDateString('en-MW', { month: 'long', year: 'numeric' });
   return { name, start, end };
 }
