@@ -34,6 +34,7 @@ import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { PeriodManagementPage } from '@/pages/PeriodManagementPage';
 import { JournalsPage } from '@/pages/JournalsPage';
+import { RepairCoaPage } from '@/pages/RepairCoaPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,6 +91,7 @@ function App() {
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />
                 <Route path="/branches" element={<BranchesPage />} />
+                <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
               </Route>
             </Route>
 

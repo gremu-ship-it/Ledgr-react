@@ -4,6 +4,7 @@ import { Loader2, AlertCircle, Building2, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
+import { ensureChartOfAccounts } from '@/services/seedChartOfAccounts';
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -37,8 +38,8 @@ function Input({ value, onChange, placeholder, type = 'text', required }: {
 type Step = 'details' | 'financial';
 
 const STEPS: { value: Step; label: string }[] = [
-  { value: 'details',   label: 'Business Details'   },
-  { value: 'financial', label: 'Financial Settings'  },
+  { value: 'details',   label: 'Business Details'  },
+  { value: 'financial', label: 'Financial Settings' },
 ];
 
 export function CreateBusinessPage() {
@@ -51,6 +52,7 @@ export function CreateBusinessPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
+  // Step 1 — details
   const [name, setName]               = useState('');
   const [tradingName, setTradingName] = useState('');
   const [phone, setPhone]             = useState('');
@@ -58,10 +60,12 @@ export function CreateBusinessPage() {
   const [city, setCity]               = useState('');
   const [country, setCountry]         = useState('Malawi');
 
+  // Step 2 — financial
   const [currency, setCurrency]           = useState('MWK');
   const [fyStart, setFyStart]             = useState('01-01');
   const [vatRegistered, setVatRegistered] = useState(false);
   const [timezone, setTimezone]           = useState('Africa/Blantyre');
+  const [coaTemplate, setCoaTemplate]     = useState<'gaap' | 'ifrs'>('gaap');
 
   const stepIndex = STEPS.findIndex((s) => s.value === step);
 
@@ -80,7 +84,7 @@ export function CreateBusinessPage() {
     setLoading(true);
 
     try {
-      // Use SECURITY DEFINER RPC to bypass RLS
+      // Create the business via SECURITY DEFINER RPC
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: businessId, error: rpcErr } = await (supabase.rpc as any)(
         'create_business_for_user',
@@ -101,6 +105,15 @@ export function CreateBusinessPage() {
       if (rpcErr) throw new Error(rpcErr.message);
       if (!businessId) throw new Error('Failed to create business.');
 
+      // Seed Chart of Accounts for the new business.
+      // Non-fatal — if it fails the user can repair from Settings later.
+      try {
+        await ensureChartOfAccounts(supabase, businessId, coaTemplate);
+      } catch (seedErr) {
+        console.warn('COA seed failed for new business:', businessId, seedErr);
+      }
+
+      // Refresh memberships and navigate
       const memberships = await repos.business.findMembershipsWithRole(currentUser.id);
       setBusinesses(memberships);
 
@@ -126,6 +139,7 @@ export function CreateBusinessPage() {
           <p className="mt-1 text-sm text-gray-500">Just a few details to get your Ledgr account ready.</p>
         </div>
 
+        {/* Step indicator */}
         <div className="mb-6 flex items-center gap-2">
           {STEPS.map((s, i) => (
             <div key={s.value} className="flex flex-1 items-center gap-2">
@@ -152,6 +166,7 @@ export function CreateBusinessPage() {
             </div>
           )}
 
+          {/* ── Step 1: Business Details ────────────────────────────────── */}
           {step === 'details' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-1">
@@ -183,11 +198,13 @@ export function CreateBusinessPage() {
             </div>
           )}
 
+          {/* ── Step 2: Financial Settings ──────────────────────────────── */}
           {step === 'financial' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 pb-1">
                 <span className="text-sm font-semibold text-gray-700">Financial Settings</span>
               </div>
+
               <Field label="Base Currency">
                 <select
                   value={currency}
@@ -204,9 +221,11 @@ export function CreateBusinessPage() {
                   <option value="ZMW">ZMW — Zambian Kwacha</option>
                 </select>
               </Field>
+
               <Field label="Financial Year Start" hint="Day-Month format, e.g. 01-01 for 1 January">
                 <Input value={fyStart} onChange={setFyStart} placeholder="01-01" />
               </Field>
+
               <Field label="Timezone">
                 <select
                   value={timezone}
@@ -219,6 +238,34 @@ export function CreateBusinessPage() {
                   <option value="UTC">UTC</option>
                 </select>
               </Field>
+
+              {/* NEW: COA template selector */}
+              <Field
+                label="Accounting Standard"
+                hint="Sets the Chart of Accounts template for this business. Can be changed later."
+              >
+                <div className="flex gap-2">
+                  {([
+                    { value: 'gaap', label: 'Local GAAP / MRA', desc: 'Recommended for most Malawian businesses' },
+                    { value: 'ifrs', label: 'IFRS',             desc: 'For businesses reporting under IFRS (adds lease accounts etc.)' },
+                  ] as const).map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setCoaTemplate(t.value)}
+                      className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
+                        coaTemplate === t.value
+                          ? 'border-brand-500 bg-brand-50 text-brand-700'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="block font-semibold">{t.label}</span>
+                      <span className="block text-xs opacity-70">{t.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </Field>
+
               <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5">
                 <input
                   type="checkbox"
@@ -228,7 +275,8 @@ export function CreateBusinessPage() {
                   className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
                 />
                 <label htmlFor="vat_registered" className="text-sm text-gray-700">
-                  My business is VAT registered <span className="text-gray-400">(17.5% MRA standard rate)</span>
+                  My business is VAT registered{' '}
+                  <span className="text-gray-400">(17.5% MRA standard rate)</span>
                 </label>
               </div>
             </div>
