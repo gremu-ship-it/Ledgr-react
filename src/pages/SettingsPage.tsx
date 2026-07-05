@@ -12,11 +12,14 @@ import {
   EyeOff,
   Plus,
   Trash2,
+  Cookie,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import type { Row } from '@/dal/types/database';
+import { useCookieConsent } from '@/lib/cookieConsent';
+import { DataExportButton } from '@/components/DataExportButton';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,7 +90,7 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team';
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy';
 
 const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'business', label: 'Business Profile', icon: Building2 },
@@ -95,6 +98,7 @@ const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'profile', label: 'User Profile', icon: User },
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'team', label: 'Team Members', icon: Users },
+  { value: 'privacy', label: 'Privacy', icon: Cookie },
 ];
 
 // ── Business Profile Tab ──────────────────────────────────────────────────────
@@ -826,6 +830,150 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
   );
 }
 
+// ── Privacy Tab ───────────────────────────────────────────────────────────────
+// Matches the pattern of the other tabs (h2 title, no outer page wrapper —
+// SettingsPage already provides the bordered card container).
+
+const DATA_CATEGORIES = [
+  {
+    title: 'Account information',
+    items: ['Full name', 'Email address', 'Phone number (optional)', 'Preferred currency', 'Sign-in history'],
+  },
+  {
+    title: 'Business financial data',
+    items: [
+      'Income, invoices, and customer contacts',
+      'Expenses, bills, and supplier contacts',
+      'Payroll and employee records (for businesses you own)',
+      'Inventory, products, and stock movements',
+      'Chart of accounts and journal entries',
+      'Fixed assets and depreciation records',
+    ],
+  },
+  {
+    title: 'Usage & technical data',
+    items: [
+      'Login timestamps and device/browser information',
+      'Audit log of actions taken within your businesses (for accountability and security)',
+    ],
+  },
+];
+
+function ToggleRow({
+  title,
+  description,
+  checked,
+  onChange,
+  disabled,
+  disabledLabel,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange?: (v: boolean) => void;
+  disabled?: boolean;
+  disabledLabel?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+      <div className="pr-4">
+        <p className="text-sm font-medium text-gray-800">{title}</p>
+        <p className="text-xs text-gray-500">{description}</p>
+      </div>
+      {disabled ? (
+        <span className="shrink-0 rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+          {disabledLabel ?? 'Always on'}
+        </span>
+      ) : (
+        <button
+          onClick={() => onChange?.(!checked)}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-brand-500' : 'bg-gray-300'}`}
+        >
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PrivacyTab() {
+  const { consent, updateConsent, hasDecided } = useCookieConsent();
+  const analytics = consent?.analytics ?? false;
+  const marketing = consent?.marketing ?? false;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">Privacy</h2>
+        <p className="mt-0.5 text-sm text-gray-500">What we collect, and how it's used.</p>
+      </div>
+
+      {/* What data is collected */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-gray-700">Data we collect</h3>
+        <div className="space-y-4">
+          {DATA_CATEGORIES.map((cat) => (
+            <div key={cat.title}>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">{cat.title}</p>
+              <ul className="space-y-1">
+                {cat.items.map((item) => (
+                  <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Cookie / tracking preferences */}
+      <div className="border-t border-gray-100 pt-6">
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">Cookie preferences</h3>
+        <p className="mb-4 text-xs text-gray-500">
+          {hasDecided
+            ? `Last updated ${new Date(consent!.decidedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}.`
+            : "You haven't set a preference yet — choices below default to off until saved."}
+        </p>
+        <div className="space-y-3">
+          <ToggleRow
+            title="Essential"
+            description="Required for sign-in and core functionality."
+            checked
+            disabled
+          />
+          <ToggleRow
+            title="Analytics"
+            description="Helps us understand how Ledgr is used. No analytics tool is live yet — this controls whether one would be allowed to run if added in future."
+            checked={analytics}
+            onChange={(v) => updateConsent(v, marketing)}
+          />
+          <ToggleRow
+            title="Marketing"
+            description="Used for tailored offers and communications."
+            checked={marketing}
+            onChange={(v) => updateConsent(analytics, v)}
+          />
+        </div>
+      </div>
+
+      {/* Data export (Right to Portability) */}
+      <div className="border-t border-gray-100 pt-6">
+        <DataExportButton />
+      </div>
+
+      <div className="flex items-start gap-2 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
+        <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p>
+          Account deletion and data-erasure requests will be available here soon. In the
+          meantime, contact support if you'd like your account or data removed.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
 export function SettingsPage() {
@@ -901,6 +1049,7 @@ export function SettingsPage() {
                 {activeTab === 'profile' && <UserProfileTab />}
                 {activeTab === 'security' && <SecurityTab />}
                 {activeTab === 'team' && <TeamMembersTab businessId={businessId} />}
+                {activeTab === 'privacy' && <PrivacyTab />}
               </>
             )}
           </div>

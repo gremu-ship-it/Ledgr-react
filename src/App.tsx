@@ -5,6 +5,7 @@ import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
+import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 
 // Auth pages
 import { LoginPage } from '@/pages/LoginPage';
@@ -98,6 +99,7 @@ function App() {
           </Routes>
 
           <InstallPrompt />
+          <CookieConsentBanner />
         </BrowserRouter>
       </QueryClientProvider>
     </ErrorBoundary>
