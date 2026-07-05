@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Row, UpdateDto } from '../types/database';
+import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError } from '../errors/RepositoryError';
+import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
 interface AuditLogEntry {
   business_id: string;
@@ -50,21 +50,44 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
   }
 
   /**
+   * Create a new accounting period, rejecting date ranges that overlap
+   * an existing period for the same business. Overlap is checked
+   * app-side (not DB-enforced) — if this becomes a real risk area later,
+   * consider adding a DB exclusion constraint (btree_gist + EXCLUDE)
+   * for a guaranteed race-condition-safe check.
+   */
+  async createPeriod(dto: InsertDto<'accounting_periods'>): Promise<Row<'accounting_periods'>> {
+    if (dto.period_end < dto.period_start) {
+      throw new ValidationError('accounting_periods', 'Period end date must be on or after the start date.');
+    }
+
+    const existing = await this.findByBusiness(dto.business_id);
+    const overlapping = existing.find(
+      (p) => dto.period_start <= p.period_end && dto.period_end >= p.period_start,
+    );
+    if (overlapping) {
+      throw new ValidationError(
+        'accounting_periods',
+        `This date range overlaps with an existing period: "${overlapping.name}" (${overlapping.period_start} to ${overlapping.period_end}).`,
+      );
+    }
+
+    return this.create(dto);
+  }
+
+  /**
    * Entry count and total debits/credits for a period.
    *
    * FIX: journal_entries.period_id is not populated by journalService.ts
    * on any entry-creation path (confirmed via DB query: 0 of 21 existing
-   * entries have period_id set). This method now matches entries by
-   * entry_date falling within [period_start, period_end], the same
-   * approach used by the DB trigger and the UI lock-detection hooks,
-   * rather than relying on the unpopulated period_id FK.
+   * entries have period_id set). This method matches entries by
+   * entry_date falling within [period_start, period_end] instead of
+   * relying on the unpopulated period_id FK.
    *
-   * FIX: status filter now includes both 'posted' and 'reversed' entries,
-   * not just 'posted'. A reversed original entry's status becomes
-   * 'reversed' (not 'posted') once reverse() runs — excluding it would
-   * count only the reversal's lines and not the original's, breaking the
-   * net-zero cancellation that a correct original+reversal pair should
-   * produce in the totals. Draft entries remain excluded.
+   * FIX: status filter includes both 'posted' and 'reversed' entries —
+   * a reversed original's status becomes 'reversed' (not 'posted'), and
+   * excluding it would break the net-zero cancellation a correct
+   * original+reversal pair should produce in the totals.
    */
   async getSummary(periodId: string): Promise<{ entryCount: number; totalDebits: number; totalCredits: number }> {
     const period = await this.findById(periodId);

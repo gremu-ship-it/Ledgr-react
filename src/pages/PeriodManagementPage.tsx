@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Lock, Unlock, Calendar, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Lock, Unlock, Calendar, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { formatMwk } from '@/lib/formatters';
 import type { Row } from '@/dal/types/database';
+import { CreatePeriodModal } from '@/components/periods/CreatePeriodModal';
 
 interface PeriodWithSummary {
   period: Row<'accounting_periods'>;
@@ -26,6 +27,7 @@ export function PeriodManagementPage() {
 
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['accounting_periods', businessId],
@@ -89,11 +91,21 @@ export function PeriodManagementPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Period Management</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Lock financial periods to prevent further posting once they're closed.
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Period Management</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Lock financial periods to prevent further posting once they're closed.
+          </p>
+        </div>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+          >
+            <Plus className="h-4 w-4" />Create Period
+          </button>
+        )}
       </div>
 
       {error && (
@@ -107,7 +119,7 @@ export function PeriodManagementPage() {
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
           <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
           <p className="text-sm text-amber-700">
-            Only business owners and admins can lock or unlock periods. You can view period status below.
+            Only business owners and admins can create, lock, or unlock periods. You can view period status below.
           </p>
         </div>
       )}
@@ -121,9 +133,17 @@ export function PeriodManagementPage() {
       ) : isError ? (
         <p className="text-sm text-red-500">Failed to load periods.</p>
       ) : !data || data.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-gray-200 py-12 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 py-12 text-center">
           <Calendar className="h-8 w-8 text-gray-300" />
           <p className="text-sm font-medium text-gray-500">No accounting periods yet</p>
+          {canManage && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="mt-1 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+            >
+              <Plus className="h-4 w-4" />Create Your First Period
+            </button>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -197,6 +217,14 @@ export function PeriodManagementPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {showCreateModal && (
+        <CreatePeriodModal
+          businessId={businessId}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] })}
+        />
       )}
     </div>
   );
