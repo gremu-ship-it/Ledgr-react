@@ -35,6 +35,7 @@ import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { PeriodManagementPage } from '@/pages/PeriodManagementPage';
 import { JournalsPage } from '@/pages/JournalsPage';
 import { RepairCoaPage } from '@/pages/RepairCoaPage';
+import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -92,6 +93,7 @@ function App() {
                 <Route path="/transfers" element={<TransfersPage />} />
                 <Route path="/branches" element={<BranchesPage />} />
                 <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
+                <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
               </Route>
             </Route>
 
