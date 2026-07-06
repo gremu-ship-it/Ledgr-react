@@ -35,7 +35,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'liability',     label: 'Liability' },
   { value: 'equity',        label: 'Equity' },
   { value: 'income',        label: 'Income / Revenue' },
-  { value: 'cost_of_sales', label: 'Cost of Sales' },
+  { value: 'expense' as AccountType, label: 'Cost of Sales (COGS)' },
   { value: 'expense',       label: 'Expense' },
 ];
 
@@ -47,10 +47,10 @@ const SUBTYPES: { value: AccountSubtype; label: string; for: AccountType[] }[] =
   { value: 'equity',               label: 'Equity',                   for: ['equity'] },
   { value: 'revenue',              label: 'Revenue',                  for: ['income'] },
   { value: 'other_income',         label: 'Other Income',             for: ['income'] },
-  { value: 'cost_of_sales',        label: 'Cost of Sales',            for: ['cost_of_sales'] },
+  { value: 'cost_of_sales',        label: 'Cost of Sales',            for: ['expense'] },
   { value: 'operating_expense',    label: 'Operating Expense',        for: ['expense'] },
-  { value: 'payroll_expense',      label: 'Payroll Expense',          for: ['expense'] },
-  { value: 'depreciation',         label: 'Depreciation',             for: ['expense'] },
+  { value: 'operating_expense',    label: 'Payroll Expense',          for: ['expense'] },
+  { value: 'depreciation_amortisation', label: 'Depreciation & Amortisation', for: ['expense'] },
   { value: 'finance_cost',         label: 'Finance Cost',             for: ['expense'] },
   { value: 'tax_expense',          label: 'Tax Expense',              for: ['expense'] },
 ];
@@ -60,7 +60,6 @@ const TYPE_COLOURS: Record<AccountType, string> = {
   liability:     'bg-red-50 text-red-700 border-red-200',
   equity:        'bg-purple-50 text-purple-700 border-purple-200',
   income:        'bg-emerald-50 text-emerald-700 border-emerald-200',
-  cost_of_sales: 'bg-amber-50 text-amber-700 border-amber-200',
   expense:       'bg-orange-50 text-orange-700 border-orange-200',
 };
 

@@ -27,14 +27,14 @@ export type CoaTemplate = 'ifrs' | 'gaap';
 
 export type AccountType =
   | 'asset' | 'liability' | 'equity'
-  | 'income' | 'cost_of_sales' | 'expense';
+  | 'income' | 'expense';
 
 export type AccountSubtype =
   | 'current_asset' | 'non_current_asset'
   | 'current_liability' | 'non_current_liability'
   | 'equity' | 'revenue' | 'other_income' | 'cost_of_sales'
-  | 'operating_expense' | 'payroll_expense'
-  | 'depreciation' | 'finance_cost' | 'tax_expense'
+  | 'operating_expense' 
+  | 'depreciation_amortisation' | 'finance_cost' | 'tax_expense'
   | null;
 
 export interface AccountSeed {
@@ -54,7 +54,7 @@ export interface AccountSeed {
 // ── Validation helpers (used by COA management UI) ────────────────────────────
 
 export function isDebitNature(type: AccountType): boolean {
-  return type === 'asset' || type === 'cost_of_sales' || type === 'expense';
+  return type === 'asset' || type === 'expense';
 }
 
 export function isPostable(account: { is_group: boolean }): boolean {
@@ -229,15 +229,15 @@ const COA: AccountSeed[] = [
   // ══════════════════════════════════════════════════
   // 5000s  COST OF SALES
   // ══════════════════════════════════════════════════
-  { code:'5000', name:'Cost of Sales',                 account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:true,  is_system:true,  is_bank_account:false },
-  { code:'5100', name:'Cost of Goods Sold',            account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Cost of trading stock sold' },
-  { code:'5110', name:'Cost of Agricultural Produce',  account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
-  { code:'5120', name:'Direct Materials',              account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Raw materials consumed in production' },
-  { code:'5130', name:'Direct Labour',                 account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
-  { code:'5140', name:'Manufacturing Overhead',        account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
-  { code:'5150', name:'Direct Service Costs',          account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Subcontractors and direct costs of delivering services' },
-  { code:'5160', name:'Freight & Delivery Inwards',    account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
-  { code:'5170', name:'Purchase Returns & Allowances', account_type:'cost_of_sales', account_subtype:'cost_of_sales', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5000', name:'Cost of Sales',                 account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:true,  is_system:true,  is_bank_account:false },
+  { code:'5100', name:'Cost of Goods Sold',            account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Cost of trading stock sold' },
+  { code:'5110', name:'Cost of Agricultural Produce',  account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5120', name:'Direct Materials',              account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Raw materials consumed in production' },
+  { code:'5130', name:'Direct Labour',                 account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5140', name:'Manufacturing Overhead',        account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5150', name:'Direct Service Costs',          account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Subcontractors and direct costs of delivering services' },
+  { code:'5160', name:'Freight & Delivery Inwards',    account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5170', name:'Purchase Returns & Allowances', account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
 
   // ══════════════════════════════════════════════════
   // 6000s  OPERATING EXPENSES
@@ -245,13 +245,13 @@ const COA: AccountSeed[] = [
   { code:'6000', name:'Operating Expenses',            account_type:'expense', account_subtype:'operating_expense', normal_balance:'debit', is_group:true, is_system:true, is_bank_account:false },
 
   // Payroll (6110 = journal service hardcode)
-  { code:'6100', name:'Payroll & Staff Costs',         account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },
-  { code:'6110', name:'Basic Salaries',                account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'6100', description:'Gross salaries and wages — all staff' },
-  { code:'6111', name:'Overtime & Allowances',         account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
-  { code:'6112', name:'Employer Pension Contributions',account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
-  { code:'6113', name:'Staff Welfare & Benefits',      account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
-  { code:'6114', name:'Casual Labour',                 account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
-  { code:'6115', name:'Recruitment Costs',             account_type:'expense', account_subtype:'payroll_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
+  { code:'6100', name:'Payroll & Staff Costs',         account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },
+  { code:'6110', name:'Basic Salaries',                account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'6100', description:'Gross salaries and wages — all staff' },
+  { code:'6111', name:'Overtime & Allowances',         account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
+  { code:'6112', name:'Employer Pension Contributions',account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
+  { code:'6113', name:'Staff Welfare & Benefits',      account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
+  { code:'6114', name:'Casual Labour',                 account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
+  { code:'6115', name:'Recruitment Costs',             account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
 
   // Rent & Utilities
   { code:'6200', name:'Rent & Utilities',              account_type:'expense', account_subtype:'operating_expense', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },
@@ -295,13 +295,13 @@ const COA: AccountSeed[] = [
   { code:'6703', name:'IT & Software Maintenance',     account_type:'expense', account_subtype:'operating_expense', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6700' },
 
   // Depreciation
-  { code:'6800', name:'Depreciation',                  account_type:'expense', account_subtype:'depreciation',      normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },
-  { code:'6801', name:'Depreciation — Buildings',      account_type:'expense', account_subtype:'depreciation',      normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
-  { code:'6802', name:'Depreciation — Motor Vehicles', account_type:'expense', account_subtype:'depreciation',      normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
-  { code:'6803', name:'Depreciation — Plant & Machinery', account_type:'expense', account_subtype:'depreciation',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
-  { code:'6804', name:'Depreciation — Furniture & Fittings', account_type:'expense', account_subtype:'depreciation',normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
-  { code:'6805', name:'Depreciation — Computer Equipment', account_type:'expense', account_subtype:'depreciation',  normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
-  { code:'6806', name:'Amortisation — Intangibles',    account_type:'expense', account_subtype:'depreciation',      normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
+  { code:'6800', name:'Depreciation',                  account_type:'expense', account_subtype:'depreciation_amortisation',      normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },
+  { code:'6801', name:'Depreciation — Buildings',      account_type:'expense', account_subtype:'depreciation_amortisation',      normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
+  { code:'6802', name:'Depreciation — Motor Vehicles', account_type:'expense', account_subtype:'depreciation_amortisation',      normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
+  { code:'6803', name:'Depreciation — Plant & Machinery', account_type:'expense', account_subtype:'depreciation_amortisation',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
+  { code:'6804', name:'Depreciation — Furniture & Fittings', account_type:'expense', account_subtype:'depreciation_amortisation',normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
+  { code:'6805', name:'Depreciation — Computer Equipment', account_type:'expense', account_subtype:'depreciation_amortisation',  normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
+  { code:'6806', name:'Amortisation — Intangibles',    account_type:'expense', account_subtype:'depreciation_amortisation',      normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6800' },
 
   // Misc
   { code:'6900', name:'Miscellaneous Expenses',        account_type:'expense', account_subtype:'operating_expense', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },

@@ -59,7 +59,7 @@ export type PaymentMethod =
   | 'other';
 
 /** DB: user_role — exact 4 members. 'admin' and 'staff' do NOT exist in the DB. */
-export type BusinessUserRole = 'owner' | 'accountant' | 'auditor' | 'viewer';
+export type BusinessUserRole = 'owner' | 'admin' | 'accountant' | 'payroll_manager' | 'auditor' | 'viewer';
 
 /**
  * DB: invoice_status — exact 7 members.
