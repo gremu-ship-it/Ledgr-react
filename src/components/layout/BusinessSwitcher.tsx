@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Building2 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
+import { AddBusinessButton } from '@/components/layout/AddBusinessButton';
 
 export function BusinessSwitcher() {
   const [open, setOpen] = useState(false);
@@ -124,6 +125,10 @@ export function BusinessSwitcher() {
               );
             })}
           </ul>
+
+          <div className="mt-1 border-t border-gray-100 pt-1">
+            <AddBusinessButton onClose={() => setOpen(false)} />
+          </div>
         </div>
       )}
     </div>

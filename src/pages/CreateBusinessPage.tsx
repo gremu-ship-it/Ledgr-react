@@ -1,22 +1,130 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, AlertCircle, Building2, CheckCircle2 } from 'lucide-react';
-import { useAppStore } from '@/store/useAppStore';
-import { repos } from '@/lib/repositories';
+import {
+  Building2, ChevronRight, ChevronLeft,
+  Loader2, AlertCircle, CheckCircle2,
+  Palette, FileText, Receipt,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { ensureChartOfAccounts } from '@/services/seedChartOfAccounts';
+import { useAppStore } from '@/store/useAppStore';
+import { clsx } from 'clsx';
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface BusinessForm {
+  // Step 1 — Basic info
+  name: string;
+  trading_name: string;
+  registration_number: string;
+  tpin: string;
+  vat_registered: boolean;
+  vat_number: string;
+
+  // Step 2 — Contact & location
+  email: string;
+  phone: string;
+  address_line1: string;
+  city: string;
+  country: string;
+
+  // Step 3 — Financial settings
+  base_currency: string;
+  financial_year_start: string;
+  timezone: string;
+
+  // Step 4 — Branding & numbering
+  brand_color: string;
+  invoice_prefix: string;
+  expense_prefix: string;
+  payroll_prefix: string;
+}
+
+const DEFAULTS: BusinessForm = {
+  name: '',
+  trading_name: '',
+  registration_number: '',
+  tpin: '',
+  vat_registered: false,
+  vat_number: '',
+  email: '',
+  phone: '',
+  address_line1: '',
+  city: 'Blantyre',
+  country: 'Malawi',
+  base_currency: 'MWK',
+  financial_year_start: '01-01',
+  timezone: 'Africa/Blantyre',
+  brand_color: '#1D9E75',
+  invoice_prefix: 'INV',
+  expense_prefix: 'EXP',
+  payroll_prefix: 'PAY',
+};
+
+const STEPS = [
+  { id: 1, label: 'Business details', icon: Building2 },
+  { id: 2, label: 'Contact & location', icon: FileText },
+  { id: 3, label: 'Financial settings', icon: Receipt },
+  { id: 4, label: 'Branding', icon: Palette },
+];
+
+const MALAWI_CITIES = [
+  'Blantyre', 'Lilongwe', 'Mzuzu', 'Zomba', 'Karonga',
+  'Kasungu', 'Mangochi', 'Salima', 'Liwonde', 'Dedza',
+];
+
+const CURRENCIES = [
+  { code: 'MWK', label: 'Malawian Kwacha (MWK)' },
+  { code: 'USD', label: 'US Dollar (USD)' },
+  { code: 'GBP', label: 'British Pound (GBP)' },
+  { code: 'EUR', label: 'Euro (EUR)' },
+  { code: 'ZAR', label: 'South African Rand (ZAR)' },
+  { code: 'ZMW', label: 'Zambian Kwacha (ZMW)' },
+];
+
+const FINANCIAL_YEAR_OPTIONS = [
+  { value: '01-01', label: 'January (01 Jan – 31 Dec)' },
+  { value: '04-01', label: 'April (01 Apr – 31 Mar)' },
+  { value: '07-01', label: 'July (01 Jul – 30 Jun)' },
+  { value: '10-01', label: 'October (01 Oct – 30 Sep)' },
+];
+
+const BRAND_COLORS = [
+  '#1D9E75', '#2563EB', '#7C3AED', '#DC2626',
+  '#D97706', '#059669', '#0891B2', '#4F46E5',
+];
+
+// ── Field component ───────────────────────────────────────────────────────────
+
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+        {label}
+        {required && <span className="ml-0.5 text-red-500">*</span>}
+      </label>
       {children}
       {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
     </div>
   );
 }
 
-function Input({ value, onChange, placeholder, type = 'text', required }: {
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  required,
+}: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
@@ -26,286 +134,501 @@ function Input({ value, onChange, placeholder, type = 'text', required }: {
   return (
     <input
       type={type}
+      required={required}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      required={required}
       className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
     />
   );
 }
 
-type Step = 'details' | 'financial';
+// ── Step components ───────────────────────────────────────────────────────────
 
-const STEPS: { value: Step; label: string }[] = [
-  { value: 'details',   label: 'Business Details'  },
-  { value: 'financial', label: 'Financial Settings' },
-];
+function Step1({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+  return (
+    <div className="space-y-4">
+      <Field label="Business name" required hint="Your registered legal business name">
+        <TextInput
+          required
+          value={form.name}
+          onChange={(v) => set('name', v)}
+          placeholder="Gremu & Associates Ltd"
+        />
+      </Field>
+
+      <Field label="Trading name" hint="Leave blank if same as business name">
+        <TextInput
+          value={form.trading_name}
+          onChange={(v) => set('trading_name', v)}
+          placeholder="Gremu Consulting"
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Company registration number" hint="MBRS registration number">
+          <TextInput
+            value={form.registration_number}
+            onChange={(v) => set('registration_number', v)}
+            placeholder="C00012345"
+          />
+        </Field>
+
+        <Field label="MRA TPIN" hint="Tax Payer Identification Number">
+          <TextInput
+            value={form.tpin}
+            onChange={(v) => set('tpin', v)}
+            placeholder="12345678"
+          />
+        </Field>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <label className="flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={form.vat_registered}
+            onChange={(e) => set('vat_registered', e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+          />
+          <div>
+            <p className="text-sm font-medium text-gray-700">VAT registered</p>
+            <p className="text-xs text-gray-500">VAT rate in Malawi is 17.5%. Tick if your business is registered with MRA for VAT.</p>
+          </div>
+        </label>
+
+        {form.vat_registered && (
+          <div className="mt-3">
+            <Field label="VAT registration number">
+              <TextInput
+                value={form.vat_number}
+                onChange={(v) => set('vat_number', v)}
+                placeholder="VAT/M/12345"
+              />
+            </Field>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Step2({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Business email">
+          <TextInput
+            type="email"
+            value={form.email}
+            onChange={(v) => set('email', v)}
+            placeholder="info@business.mw"
+          />
+        </Field>
+
+        <Field label="Phone number">
+          <TextInput
+            value={form.phone}
+            onChange={(v) => set('phone', v)}
+            placeholder="+265 999 000 000"
+          />
+        </Field>
+      </div>
+
+      <Field label="Street address">
+        <TextInput
+          value={form.address_line1}
+          onChange={(v) => set('address_line1', v)}
+          placeholder="Plot 15, Glyn Jones Road"
+        />
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="City">
+          <select
+            value={form.city}
+            onChange={(e) => set('city', e.target.value)}
+            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            {MALAWI_CITIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+            <option value="Other">Other</option>
+          </select>
+        </Field>
+
+        <Field label="Country">
+          <TextInput
+            value={form.country}
+            onChange={(v) => set('country', v)}
+            placeholder="Malawi"
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+  return (
+    <div className="space-y-4">
+      <Field label="Base currency" hint="Primary currency for all financial records">
+        <select
+          value={form.base_currency}
+          onChange={(e) => set('base_currency', e.target.value)}
+          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        >
+          {CURRENCIES.map((c) => (
+            <option key={c.code} value={c.code}>{c.label}</option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Financial year start" hint="When your financial year begins">
+        <select
+          value={form.financial_year_start}
+          onChange={(e) => set('financial_year_start', e.target.value)}
+          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        >
+          {FINANCIAL_YEAR_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label="Timezone">
+        <select
+          value={form.timezone}
+          onChange={(e) => set('timezone', e.target.value)}
+          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+        >
+          <option value="Africa/Blantyre">Africa/Blantyre (CAT, UTC+2)</option>
+          <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
+          <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
+          <option value="UTC">UTC</option>
+        </select>
+      </Field>
+
+      <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+        <p className="text-xs font-medium text-brand-700">MRA Tax defaults</p>
+        <ul className="mt-1.5 space-y-0.5 text-xs text-brand-600">
+          <li>• VAT: 17.5% (standard rate)</li>
+          <li>• WHT: 10% / 15% / 20% depending on payment type</li>
+          <li>• PAYE: graduated bands per MRA schedule</li>
+          <li>• CIT: 30% (standard) / 20% (SME)</li>
+        </ul>
+        <p className="mt-2 text-xs text-brand-500">These are configured in the Tax module after setup.</p>
+      </div>
+    </div>
+  );
+}
+
+function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+  return (
+    <div className="space-y-5">
+      <Field label="Brand colour" hint="Used across invoices, reports, and the business switcher">
+        <div className="mt-2 flex flex-wrap gap-2">
+          {BRAND_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              onClick={() => set('brand_color', color)}
+              className={clsx(
+                'h-9 w-9 rounded-full border-2 transition-transform hover:scale-110',
+                form.brand_color === color
+                  ? 'border-gray-800 scale-110'
+                  : 'border-transparent',
+              )}
+              style={{ backgroundColor: color }}
+              title={color}
+            />
+          ))}
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={form.brand_color}
+              onChange={(e) => set('brand_color', e.target.value)}
+              className="h-9 w-9 cursor-pointer rounded-full border-2 border-gray-200 bg-white p-0.5"
+              title="Custom colour"
+            />
+            <span className="text-xs text-gray-400">Custom</span>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+          <span
+            className="h-4 w-4 rounded-full"
+            style={{ backgroundColor: form.brand_color }}
+          />
+          <span className="font-mono text-xs text-gray-600">{form.brand_color}</span>
+        </div>
+      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Field label="Invoice prefix" hint="e.g. INV-0001">
+          <TextInput
+            value={form.invoice_prefix}
+            onChange={(v) => set('invoice_prefix', v.toUpperCase())}
+            placeholder="INV"
+          />
+        </Field>
+
+        <Field label="Expense prefix" hint="e.g. EXP-0001">
+          <TextInput
+            value={form.expense_prefix}
+            onChange={(v) => set('expense_prefix', v.toUpperCase())}
+            placeholder="EXP"
+          />
+        </Field>
+
+        <Field label="Payroll prefix" hint="e.g. PAY-0001">
+          <TextInput
+            value={form.payroll_prefix}
+            onChange={(v) => set('payroll_prefix', v.toUpperCase())}
+            placeholder="PAY"
+          />
+        </Field>
+      </div>
+
+      {/* Preview */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Preview</p>
+        <div className="flex items-center gap-3">
+          <div
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white"
+            style={{ backgroundColor: form.brand_color }}
+          >
+            {(form.trading_name || form.name || 'B').charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              {form.trading_name || form.name || 'Your Business'}
+            </p>
+            <p className="text-xs text-gray-400">{form.base_currency} · {form.city}, {form.country}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export function CreateBusinessPage() {
-  const navigate           = useNavigate();
-  const currentUser        = useAppStore((s) => s.currentUser);
-  const setBusinesses      = useAppStore((s) => s.setBusinesses);
+  const navigate = useNavigate();
+  const setBusinesses = useAppStore((s) => s.setBusinesses);
   const setCurrentBusiness = useAppStore((s) => s.setCurrentBusiness);
+  const currentUser = useAppStore((s) => s.currentUser);
 
-  const [step, setStep]       = useState<Step>('details');
+  const [step, setStep] = useState(1);
+  const [form, setForm] = useState<BusinessForm>(DEFAULTS);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Step 1 — details
-  const [name, setName]               = useState('');
-  const [tradingName, setTradingName] = useState('');
-  const [phone, setPhone]             = useState('');
-  const [email, setEmail]             = useState('');
-  const [city, setCity]               = useState('');
-  const [country, setCountry]         = useState('Malawi');
+  function set(key: keyof BusinessForm, value: string | boolean) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
 
-  // Step 2 — financial
-  const [currency, setCurrency]           = useState('MWK');
-  const [fyStart, setFyStart]             = useState('01-01');
-  const [vatRegistered, setVatRegistered] = useState(false);
-  const [timezone, setTimezone]           = useState('Africa/Blantyre');
-  const [coaTemplate, setCoaTemplate]     = useState<'gaap' | 'ifrs'>('gaap');
+  function validateStep(): boolean {
+    if (step === 1 && !form.name.trim()) {
+      setError('Business name is required.');
+      return false;
+    }
+    if (step === 1 && form.vat_registered && !form.vat_number.trim()) {
+      setError('Please enter your VAT registration number.');
+      return false;
+    }
+    setError(null);
+    return true;
+  }
 
-  const stepIndex = STEPS.findIndex((s) => s.value === step);
+  function handleNext(e?: React.MouseEvent) {
+    e?.preventDefault();
+    if (!validateStep()) return;
+    setStep((s) => Math.min(s + 1, 4));
+  }
+
+  function handleBack() {
+    setError(null);
+    setStep((s) => Math.max(s - 1, 1));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!currentUser?.id) return;
-
-    if (step === 'details') {
-      if (!name.trim()) { setError('Business name is required.'); return; }
-      setError(null);
-      setStep('financial');
-      return;
-    }
-
+    if (!validateStep()) return;
     setError(null);
     setLoading(true);
 
-    try {
-      // Create the business via SECURITY DEFINER RPC
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: businessId, error: rpcErr } = await (supabase.rpc as any)(
-        'create_business_for_user',
-        {
-          p_name:           name.trim(),
-          p_trading_name:   tradingName.trim() || null,
-          p_phone:          phone.trim() || null,
-          p_email:          email.trim() || null,
-          p_city:           city.trim() || null,
-          p_country:        country.trim() || null,
-          p_currency:       currency,
-          p_fy_start:       fyStart,
-          p_vat_registered: vatRegistered,
-          p_timezone:       timezone,
-        },
-      );
+    const { data: businessId, error: rpcError } = await (supabase as any).rpc(
+      'create_business_with_owner',
+      {
+        p_name: form.name.trim(),
+        p_trading_name: form.trading_name.trim() || null,
+        p_registration_number: form.registration_number.trim() || null,
+        p_tpin: form.tpin.trim() || null,
+        p_vat_number: form.vat_number.trim() || null,
+        p_vat_registered: form.vat_registered,
+        p_base_currency: form.base_currency,
+        p_financial_year_start: form.financial_year_start,
+        p_timezone: form.timezone,
+        p_address_line1: form.address_line1.trim() || null,
+        p_city: form.city,
+        p_country: form.country,
+        p_phone: form.phone.trim() || null,
+        p_email: form.email.trim() || null,
+        p_brand_color: form.brand_color,
+        p_invoice_prefix: form.invoice_prefix || 'INV',
+        p_expense_prefix: form.expense_prefix || 'EXP',
+        p_payroll_prefix: form.payroll_prefix || 'PAY',
+      },
+    );
 
-      if (rpcErr) throw new Error(rpcErr.message);
-      if (!businessId) throw new Error('Failed to create business.');
-
-      // Seed Chart of Accounts for the new business.
-      // Non-fatal — if it fails the user can repair from Settings later.
-      try {
-        await ensureChartOfAccounts(supabase, businessId, coaTemplate);
-      } catch (seedErr) {
-        console.warn('COA seed failed for new business:', businessId, seedErr);
-      }
-
-      // Refresh memberships and navigate
-      const memberships = await repos.business.findMembershipsWithRole(currentUser.id);
-      setBusinesses(memberships);
-
-      const created = memberships.find((m) => m.business.id === businessId);
-      if (created) setCurrentBusiness(created);
-
-      navigate('/dashboard', { replace: true });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-    } finally {
+    if (rpcError) {
       setLoading(false);
+      setError(rpcError.message);
+      return;
     }
+
+    // Reload memberships into the store
+    if (currentUser) {
+      const { data: memberships } = await supabase
+        .from('business_users')
+        .select('role, business:businesses!inner(*)')
+        .eq('user_id', currentUser.id)
+        .eq('is_active', true)
+        .eq('businesses.is_active', true)
+        .is('businesses.deleted_at', null);
+
+      if (memberships) {
+        type JoinRow = {
+          role: string;
+          business: Record<string, unknown> | Record<string, unknown>[] | null;
+        };
+
+        const mapped = (memberships as unknown as JoinRow[])
+          .map((row) => {
+            const business = Array.isArray(row.business) ? row.business[0] : row.business;
+            if (!business) return null;
+            return { business, role: row.role };
+          })
+          .filter((m): m is NonNullable<typeof m> => m !== null);
+
+        setBusinesses(mapped as any);
+
+        // Select the newly created business
+        const newBiz = mapped.find(
+          (m) => (m.business as { id: string }).id === businessId,
+        );
+        if (newBiz) setCurrentBusiness(newBiz as any);
+      }
+    }
+
+    setLoading(false);
+    navigate('/dashboard', { replace: true });
   }
+
+  const isLastStep = step === 4;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-lg">
-        <div className="mb-8 flex flex-col items-center text-center">
+
+        {/* Header */}
+        <div className="mb-8 flex flex-col items-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-lg font-bold text-white">
             L
           </div>
-          <h1 className="text-xl font-semibold text-gray-900">Set up your business</h1>
-          <p className="mt-1 text-sm text-gray-500">Just a few details to get your Ledgr account ready.</p>
+          <h1 className="text-xl font-semibold text-gray-900">
+            {step === 1 ? 'Set up your business' : STEPS[step - 1].label}
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Step {step} of {STEPS.length}
+          </p>
         </div>
 
-        {/* Step indicator */}
+        {/* Step indicators */}
         <div className="mb-6 flex items-center gap-2">
           {STEPS.map((s, i) => (
-            <div key={s.value} className="flex flex-1 items-center gap-2">
-              <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors ${
-                i <= stepIndex ? 'bg-brand-500 text-white' : 'bg-gray-200 text-gray-400'
-              }`}>
-                {i < stepIndex ? <CheckCircle2 className="h-4 w-4" /> : i + 1}
+            <div key={s.id} className="flex flex-1 items-center gap-2">
+              <div className={clsx(
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
+                step > s.id ? 'bg-brand-500 text-white' :
+                step === s.id ? 'bg-brand-500 text-white ring-4 ring-brand-100' :
+                'bg-gray-200 text-gray-500',
+              )}>
+                {step > s.id ? '✓' : s.id}
               </div>
-              <span className={`text-sm font-medium ${i <= stepIndex ? 'text-gray-900' : 'text-gray-400'}`}>
-                {s.label}
-              </span>
               {i < STEPS.length - 1 && (
-                <div className={`h-px flex-1 transition-colors ${i < stepIndex ? 'bg-brand-500' : 'bg-gray-200'}`} />
+                <div className={clsx(
+                  'h-0.5 flex-1 rounded-full transition-colors',
+                  step > s.id ? 'bg-brand-500' : 'bg-gray-200',
+                )} />
               )}
             </div>
           ))}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-soft">
+        {/* Card */}
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-soft">
           {error && (
-            <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{error}</span>
+              {error}
             </div>
           )}
 
-          {/* ── Step 1: Business Details ────────────────────────────────── */}
-          {step === 'details' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 pb-1">
-                <Building2 className="h-4 w-4 text-brand-500" />
-                <span className="text-sm font-semibold text-gray-700">Business Details</span>
-              </div>
-              <Field label="Business Name" hint="The registered or trading name of your business">
-                <Input value={name} onChange={setName} placeholder="Gremu Consultancy Ltd" required />
-              </Field>
-              <Field label="Trading Name" hint="Optional — if different from the registered name">
-                <Input value={tradingName} onChange={setTradingName} placeholder="Gremu Consulting" />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Phone">
-                  <Input value={phone} onChange={setPhone} placeholder="+265 999 123 456" type="tel" />
-                </Field>
-                <Field label="Email">
-                  <Input value={email} onChange={setEmail} placeholder="info@business.mw" type="email" />
-                </Field>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="City">
-                  <Input value={city} onChange={setCity} placeholder="Lilongwe" />
-                </Field>
-                <Field label="Country">
-                  <Input value={country} onChange={setCountry} placeholder="Malawi" />
-                </Field>
-              </div>
-            </div>
-          )}
+          <form onSubmit={isLastStep ? handleSubmit : (e) => { e.preventDefault(); handleNext(); }}>
+            {step === 1 && <Step1 form={form} set={set} />}
+            {step === 2 && <Step2 form={form} set={set} />}
+            {step === 3 && <Step3 form={form} set={set} />}
+            {step === 4 && <Step4 form={form} set={set} />}
 
-          {/* ── Step 2: Financial Settings ──────────────────────────────── */}
-          {step === 'financial' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 pb-1">
-                <span className="text-sm font-semibold text-gray-700">Financial Settings</span>
-              </div>
-
-              <Field label="Base Currency">
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            <div className="mt-6 flex gap-3">
+              {step > 1 && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
                 >
-                  <option value="MWK">MWK — Malawian Kwacha</option>
-                  <option value="USD">USD — US Dollar</option>
-                  <option value="GBP">GBP — British Pound</option>
-                  <option value="EUR">EUR — Euro</option>
-                  <option value="ZAR">ZAR — South African Rand</option>
-                  <option value="KES">KES — Kenyan Shilling</option>
-                  <option value="TZS">TZS — Tanzanian Shilling</option>
-                  <option value="ZMW">ZMW — Zambian Kwacha</option>
-                </select>
-              </Field>
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </button>
+              )}
 
-              <Field label="Financial Year Start" hint="Day-Month format, e.g. 01-01 for 1 January">
-                <Input value={fyStart} onChange={setFyStart} placeholder="01-01" />
-              </Field>
-
-              <Field label="Timezone">
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-                >
-                  <option value="Africa/Blantyre">Africa/Blantyre (CAT, UTC+2)</option>
-                  <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
-                  <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
-                  <option value="UTC">UTC</option>
-                </select>
-              </Field>
-
-              {/* NEW: COA template selector */}
-              <Field
-                label="Accounting Standard"
-                hint="Sets the Chart of Accounts template for this business. Can be changed later."
-              >
-                <div className="flex gap-2">
-                  {([
-                    { value: 'gaap', label: 'Local GAAP / MRA', desc: 'Recommended for most Malawian businesses' },
-                    { value: 'ifrs', label: 'IFRS',             desc: 'For businesses reporting under IFRS (adds lease accounts etc.)' },
-                  ] as const).map((t) => (
-                    <button
-                      key={t.value}
-                      type="button"
-                      onClick={() => setCoaTemplate(t.value)}
-                      className={`flex-1 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
-                        coaTemplate === t.value
-                          ? 'border-brand-500 bg-brand-50 text-brand-700'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="block font-semibold">{t.label}</span>
-                      <span className="block text-xs opacity-70">{t.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </Field>
-
-              <div className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5">
-                <input
-                  type="checkbox"
-                  id="vat_registered"
-                  checked={vatRegistered}
-                  onChange={(e) => setVatRegistered(e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
-                />
-                <label htmlFor="vat_registered" className="text-sm text-gray-700">
-                  My business is VAT registered{' '}
-                  <span className="text-gray-400">(17.5% MRA standard rate)</span>
-                </label>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-            {step === 'financial' ? (
               <button
-                type="button"
-                onClick={() => { setError(null); setStep('details'); }}
-                className="text-sm font-medium text-gray-500 hover:text-gray-700"
+                type="submit"
+                disabled={loading}
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
               >
-                ← Back
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Creating business…
+                  </>
+                ) : isLastStep ? (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Create business
+                  </>
+                ) : (
+                  <>
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </>
+                )}
               </button>
-            ) : <span />}
+            </div>
+          </form>
+        </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {step === 'details' ? 'Continue →' : loading ? 'Creating…' : 'Create Business'}
-            </button>
-          </div>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-gray-400">
-          You can update all of these details later in Settings.
+        {/* Skip link for users who already have a business */}
+        <p className="mt-4 text-center text-sm text-gray-400">
+          <button
+            type="button"
+            onClick={() => navigate('/dashboard', { replace: true })}
+            className="hover:text-gray-600"
+          >
+            Skip for now
+          </button>
         </p>
       </div>
     </div>
