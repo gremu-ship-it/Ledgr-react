@@ -32,8 +32,9 @@ export type AccountType =
 export type AccountSubtype =
   | 'current_asset' | 'non_current_asset'
   | 'current_liability' | 'non_current_liability'
-  | 'equity' | 'revenue' | 'other_income' | 'cost_of_sales'
-  | 'operating_expense' 
+  | 'share_capital' | 'retained_earnings' | 'reserves'
+  | 'revenue' | 'other_income' | 'cost_of_sales'
+  | 'operating_expense'
   | 'depreciation_amortisation' | 'finance_cost' | 'tax_expense'
   | null;
 
@@ -198,14 +199,14 @@ const COA: AccountSeed[] = [
   // ══════════════════════════════════════════════════
   // 3000s  EQUITY
   // ══════════════════════════════════════════════════
-  { code:'3000', name:'Equity',                        account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:true,  is_system:true,  is_bank_account:false },
-  { code:'3100', name:'Share Capital',                 account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000' },
-  { code:'3105', name:'Share Premium',                 account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000', templates:['ifrs'] },
-  { code:'3110', name:"Owner's Capital",               account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000', description:'Capital contributed by owner (sole trader / partnership)' },
-  { code:'3120', name:'Retained Earnings',             account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'3000', description:'Accumulated profits retained in the business' },
-  { code:'3130', name:'Current Year Profit / Loss',    account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'3000', description:'Net profit or loss for the current financial year' },
-  { code:'3140', name:'Drawings / Dividends Paid',     account_type:'equity', account_subtype:'equity', normal_balance:'debit',  is_group:false, is_system:false, is_bank_account:false, parent_code:'3000' },
-  { code:'3150', name:'Revaluation Reserve',           account_type:'equity', account_subtype:'equity', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000' },
+  { code:'3000', name:'Equity',                        account_type:'equity', account_subtype:null,               normal_balance:'credit', is_group:true,  is_system:true,  is_bank_account:false },
+  { code:'3100', name:'Share Capital',                 account_type:'equity', account_subtype:'share_capital',    normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000' },
+  { code:'3105', name:'Share Premium',                 account_type:'equity', account_subtype:'share_capital',    normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000', templates:['ifrs'] },
+  { code:'3110', name:"Owner's Capital",               account_type:'equity', account_subtype:'share_capital',    normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000', description:'Capital contributed by owner (sole trader / partnership)' },
+  { code:'3120', name:'Retained Earnings',             account_type:'equity', account_subtype:'retained_earnings', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'3000', description:'Accumulated profits retained in the business' },
+  { code:'3130', name:'Current Year Profit / Loss',    account_type:'equity', account_subtype:'retained_earnings', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'3000', description:'Net profit or loss for the current financial year' },
+  { code:'3140', name:'Drawings / Dividends Paid',     account_type:'equity', account_subtype:'retained_earnings', normal_balance:'debit',  is_group:false, is_system:false, is_bank_account:false, parent_code:'3000' },
+  { code:'3150', name:'Revaluation Reserve',           account_type:'equity', account_subtype:'reserves',         normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'3000' },
 
   // ══════════════════════════════════════════════════
   // 4000s  REVENUE / INCOME
