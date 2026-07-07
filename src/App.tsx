@@ -36,6 +36,7 @@ import { PeriodManagementPage } from '@/pages/PeriodManagementPage';
 import { JournalsPage } from '@/pages/JournalsPage';
 import { RepairCoaPage } from '@/pages/RepairCoaPage';
 import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
+import { AuditLogPage } from '@/pages/AuditLogPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -94,6 +95,7 @@ function App() {
                 <Route path="/branches" element={<BranchesPage />} />
                 <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                 <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
+                <Route path="/audit" element={<AuditLogPage />} />
               </Route>
             </Route>
 

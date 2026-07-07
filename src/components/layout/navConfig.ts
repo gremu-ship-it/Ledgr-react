@@ -16,6 +16,7 @@ import {
   GitBranch,
   Lock,
   ScrollText,
+  Shieldcheck
 } from 'lucide-react';
 
 export const NAV_SECTIONS = [
@@ -57,6 +58,7 @@ export const NAV_SECTIONS = [
       { label: 'Reports',    path: '/reports',   icon: BarChart2 },
       { label: 'Journals',   path: '/journals',  icon: ScrollText },
       { label: 'Periods',    path: '/periods',   icon: Lock },
+      { label: 'Audit Log', path: '/audit', icon: ShieldCheck }
     ],
   },
   {
