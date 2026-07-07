@@ -19,15 +19,17 @@ export class BaseRepository<T extends TableName> {
     this.client = client;
     this.table = table;
   }
-  /** Public accessor so consumers can run raw queries without bypassing the repo layer. */ get db(): SupabaseClient<Database> {
-  return this.client;
+
+  /** Public accessor so consumers can run raw queries without bypassing the repo layer. */
+  get db(): SupabaseClient<Database> {
+    return this.client;
   }
 
   async findById(id: string): Promise<Row<T>> {
     const { data, error } = await this.client
-      .from(this.table as string)
+      .from(this.table)
       .select('*')
-      .eq('id', id)
+      .eq('id' as any, id)
       .maybeSingle();
     if (error) throw toRepositoryError(this.table as string, error);
     if (!data) throw new NotFoundError(this.table as string, id);
@@ -40,9 +42,9 @@ export class BaseRepository<T extends TableName> {
     orderBy?: keyof Row<T> & string;
     ascending?: boolean;
   }): Promise<Row<T>[]> {
-    let query = this.client.from(this.table as string).select('*');
+    let query = this.client.from(this.table).select('*');
     if (options?.orderBy) {
-      query = query.order(options.orderBy, { ascending: options.ascending ?? true });
+      query = query.order(options.orderBy as any, { ascending: options.ascending ?? true });
     }
     if (options?.limit !== undefined) {
       const from = options.offset ?? 0;
@@ -55,7 +57,7 @@ export class BaseRepository<T extends TableName> {
 
   async create(dto: InsertDto<T>): Promise<Row<T>> {
     const { data, error } = await this.client
-      .from(this.table as string)
+      .from(this.table)
       .insert(dto as never)
       .select('*')
       .single();
@@ -65,9 +67,9 @@ export class BaseRepository<T extends TableName> {
 
   async update(id: string, dto: UpdateDto<T>): Promise<Row<T>> {
     const { data, error } = await this.client
-      .from(this.table as string)
+      .from(this.table)
       .update(dto as never)
-      .eq('id', id)
+      .eq('id' as any, id)
       .select('*')
       .maybeSingle();
     if (error) throw toRepositoryError(this.table as string, error);
@@ -87,11 +89,11 @@ export class BaseRepository<T extends TableName> {
    *               invoices, expenses, products, employees, fixed_assets.
    */
   async softDelete(id: string): Promise<Row<T>> {
-    const tableName = this.table as string;
+    const tableNameStr = this.table as string;
 
-    if (!SOFT_DELETE_TABLES.has(tableName)) {
+    if (!SOFT_DELETE_TABLES.has(tableNameStr)) {
       throw new UnsupportedOperationError(
-        tableName,
+        tableNameStr,
         `softDelete`,
         // message details which tables are valid
       );
@@ -99,13 +101,13 @@ export class BaseRepository<T extends TableName> {
 
     const dto = { deleted_at: new Date().toISOString() } as unknown as UpdateDto<T>;
     const { data, error } = await this.client
-      .from(tableName)
+      .from(this.table)
       .update(dto as never)
-      .eq('id', id)
+      .eq('id' as any, id)
       .select('*')
       .maybeSingle();
-    if (error) throw toRepositoryError(tableName, error);
-    if (!data) throw new NotFoundError(tableName, id);
+    if (error) throw toRepositoryError(tableNameStr, error);
+    if (!data) throw new NotFoundError(tableNameStr, id);
     return data as Row<T>;
   }
 }
