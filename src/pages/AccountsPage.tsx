@@ -4,12 +4,12 @@
  * Full Chart of Accounts management:
  *   - Hierarchical tree view with roll-up indicators
  *   - Add / edit custom accounts
- *   - IFRS vs local GAAP template switching
+ *   - IFRS vs local GAAP template switching (persisted on businesses.coa_template)
  *   - Validation: no posting to group accounts, debit/credit nature warnings
  *   - Repair / seed missing accounts
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, ChevronDown, AlertTriangle,
@@ -21,6 +21,7 @@ import { supabase } from '@/lib/supabase';
 import type { Row, InsertDto } from '@/dal/types/database';
 import {
   seedChartOfAccounts,
+  switchCoaTemplate,
   isDebitNature,
   validateDebitCredit,
   type CoaTemplate,
@@ -41,6 +42,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 
 const SUBTYPES: { value: AccountSubtype; label: string; for: AccountType[] }[] = [
   { value: 'current_asset',        label: 'Current Asset',            for: ['asset'] },
+  { value: 'fixed_asset',          label: 'Fixed Asset (PP&E)',       for: ['asset'] },
   { value: 'non_current_asset',    label: 'Non-Current Asset',        for: ['asset'] },
   { value: 'current_liability',    label: 'Current Liability',        for: ['liability'] },
   { value: 'non_current_liability',label: 'Non-Current Liability',    for: ['liability'] },
@@ -407,7 +409,7 @@ export function AccountsPage() {
   const [typeFilter, setType]   = useState<AccountType | 'all'>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modal,    setModal]    = useState<{ open: boolean; account?: Account }>({ open: false });
-  const [template, setTemplate] = useState<CoaTemplate>('gaap');
+  const [selectedTemplate, setSelectedTemplate] = useState<CoaTemplate>('gaap');
   const [seeding,  setSeeding]  = useState(false);
   const [seedMsg,  setSeedMsg]  = useState<{ type: 'success'|'error'; text: string } | null>(null);
 
@@ -416,6 +418,29 @@ export function AccountsPage() {
     queryFn:  () => repos.account.findByBusiness(businessId!),
     enabled:  Boolean(businessId),
   });
+
+  // The template actually stored on the business — the source of truth.
+  // `selectedTemplate` is just what's highlighted in the toggle; it syncs
+  // to this once loaded, and diverges only while the user is picking a
+  // different one to switch to.
+  const { data: businessTemplate } = useQuery({
+    queryKey: ['business_coa_template', businessId],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from('businesses') as any)
+        .select('coa_template')
+        .eq('id', businessId!)
+        .single();
+      if (error) throw new Error(error.message);
+      return ((data as any)?.coa_template ?? 'gaap') as CoaTemplate;
+    },
+    enabled: Boolean(businessId),
+  });
+
+  useEffect(() => {
+    if (businessTemplate) setSelectedTemplate(businessTemplate);
+  }, [businessTemplate]);
+
+  const templateChanged = businessTemplate != null && selectedTemplate !== businessTemplate;
 
   // Build tree & flatten with expansion state
   const tree = useMemo(() => buildTree(accounts), [accounts]);
@@ -478,17 +503,49 @@ export function AccountsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', businessId] }),
   });
 
-  async function runSeed() {
+  // Repair: seed anything missing for the CURRENT (stored) template — does
+  // not touch template assignment.
+  async function runRepair() {
     if (!businessId) return;
     setSeeding(true); setSeedMsg(null);
     try {
-      const { inserted, skipped } = await seedChartOfAccounts(supabase, businessId, template);
+      const templateToUse = businessTemplate ?? 'gaap';
+      const { inserted, skipped } = await seedChartOfAccounts(supabase, businessId, templateToUse);
       queryClient.invalidateQueries({ queryKey: ['accounts', businessId] });
       setSeedMsg({
         type: 'success',
         text: inserted > 0
           ? `Added ${inserted} missing accounts (${skipped} already existed).`
           : `Chart of Accounts is already complete — nothing to add.`,
+      });
+    } catch (e: unknown) {
+      setSeedMsg({ type: 'error', text: (e as Error).message });
+    } finally {
+      setSeeding(false);
+    }
+  }
+
+  // Switch: change the business's template, adding new-template accounts
+  // and deactivating old-template-exclusive ones. Requires confirmation
+  // since it changes which accounts are selectable.
+  async function runSwitch() {
+    if (!businessId || !businessTemplate) return;
+    const confirmed = window.confirm(
+      `Switch this business from ${businessTemplate.toUpperCase()} to ${selectedTemplate.toUpperCase()}?\n\n` +
+      `Accounts specific to ${businessTemplate.toUpperCase()} that don't exist under ${selectedTemplate.toUpperCase()} ` +
+      `will be deactivated (not deleted — any existing transactions are preserved). ` +
+      `Accounts needed for ${selectedTemplate.toUpperCase()} that don't exist yet will be added.`,
+    );
+    if (!confirmed) return;
+
+    setSeeding(true); setSeedMsg(null);
+    try {
+      const { added, deactivated } = await switchCoaTemplate(supabase, businessId, selectedTemplate);
+      queryClient.invalidateQueries({ queryKey: ['accounts', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['business_coa_template', businessId] });
+      setSeedMsg({
+        type: 'success',
+        text: `Switched to ${selectedTemplate.toUpperCase()}. Added ${added} account(s), deactivated ${deactivated}.`,
       });
     } catch (e: unknown) {
       setSeedMsg({ type: 'error', text: (e as Error).message });
@@ -525,7 +582,7 @@ export function AccountsPage() {
         </div>
       </div>
 
-      {/* Seed / repair panel */}
+      {/* Seed / repair / switch panel */}
       <div className="mb-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           <Settings2 size={16} className="text-gray-400 shrink-0" />
@@ -535,24 +592,36 @@ export function AccountsPage() {
             {(['gaap', 'ifrs'] as CoaTemplate[]).map(t => (
               <button
                 key={t}
-                onClick={() => setTemplate(t)}
+                onClick={() => setSelectedTemplate(t)}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-                  template === t ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  selectedTemplate === t ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
                 {t === 'gaap' ? 'Local GAAP / MRA' : 'IFRS'}
+                {businessTemplate === t && <span className="ml-1 text-brand-400">●</span>}
               </button>
             ))}
           </div>
 
-          <button
-            onClick={runSeed}
-            disabled={seeding}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={seeding ? 'animate-spin' : ''} />
-            {seeding ? 'Seeding…' : 'Repair / Seed Missing Accounts'}
-          </button>
+          {templateChanged ? (
+            <button
+              onClick={runSwitch}
+              disabled={seeding}
+              className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={seeding ? 'animate-spin' : ''} />
+              {seeding ? 'Switching…' : `Switch to ${selectedTemplate.toUpperCase()}`}
+            </button>
+          ) : (
+            <button
+              onClick={runRepair}
+              disabled={seeding}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={13} className={seeding ? 'animate-spin' : ''} />
+              {seeding ? 'Seeding…' : 'Repair / Seed Missing Accounts'}
+            </button>
+          )}
 
           {seedMsg && (
             <div className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${
@@ -567,6 +636,12 @@ export function AccountsPage() {
             </div>
           )}
         </div>
+        {businessTemplate && (
+          <p className="mt-2 text-xs text-gray-400">
+            Current template: <span className="font-medium text-gray-600">{businessTemplate.toUpperCase()}</span>
+            {templateChanged && ' — select "Switch" above to change it, or click the current template to cancel.'}
+          </p>
+        )}
       </div>
 
       {/* Filters */}

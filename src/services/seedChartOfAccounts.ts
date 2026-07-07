@@ -18,6 +18,12 @@
  *   2121  VAT Payable            2122  PAYE Payable
  *   2131  Salaries & Wages Payable
  *   4112  Service Revenue        6110  Basic Salaries
+ *
+ * Template switching: `switchCoaTemplate()` adds accounts exclusive to the
+ * target template and deactivates (never deletes) accounts exclusive to the
+ * template being left. Deactivation is safe for template-restricted rows
+ * because none of them are `is_system: true` — see the `templates` field
+ * on individual AccountSeed entries below.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -30,13 +36,18 @@ export type AccountType =
   | 'income' | 'expense';
 
 export type AccountSubtype =
-  | 'current_asset' | 'non_current_asset'
+  | 'current_asset' | 'non_current_asset' | 'fixed_asset'
   | 'current_liability' | 'non_current_liability'
   | 'share_capital' | 'retained_earnings' | 'reserves'
   | 'revenue' | 'other_income' | 'cost_of_sales'
   | 'operating_expense'
   | 'depreciation_amortisation' | 'finance_cost' | 'tax_expense'
   | null;
+
+export type TaxCode =
+  | 'vat_standard' | 'vat_zero' | 'vat_exempt'
+  | 'paye' | 'wht_10' | 'wht_15' | 'wht_20'
+  | 'cit' | 'fbt' | 'none';
 
 export interface AccountSeed {
   code:            string;
@@ -48,6 +59,7 @@ export interface AccountSeed {
   is_group:        boolean;
   is_system:       boolean;
   is_bank_account: boolean;
+  tax_code?:       TaxCode;
   parent_code?:    string;
   templates?:      CoaTemplate[];
 }
@@ -107,9 +119,9 @@ const COA: AccountSeed[] = [
   { code:'1134', name:'Provision for Bad Debts',       account_type:'asset', account_subtype:'current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1130', description:'Contra-asset — allowance for doubtful debts' },
 
   // Tax Receivables
-  { code:'1135', name:'VAT Receivable (Input Tax)',    account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'1100', description:'Input VAT claimable from MRA' },
-  { code:'1136', name:'WHT Receivable',                account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1100', description:'Withholding tax certificates receivable' },
-  { code:'1137', name:'Income Tax Receivable',         account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1100', description:'Tax overpaid — refund due from MRA' },
+  { code:'1135', name:'VAT Receivable (Input Tax)',    account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'1100', description:'Input VAT claimable from MRA', tax_code:'vat_standard' },
+  { code:'1136', name:'WHT Receivable',                account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1100', description:'Withholding tax certificates receivable — rate varies by transaction (10/15/20%)' },
+  { code:'1137', name:'Income Tax Receivable',         account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1100', description:'Tax overpaid — refund due from MRA', tax_code:'cit' },
 
   // Inventory
   { code:'1140', name:'Inventory',                     account_type:'asset', account_subtype:'current_asset', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'1100' },
@@ -129,32 +141,32 @@ const COA: AccountSeed[] = [
   // ══════════════════════════════════════════════════
   { code:'1500', name:'Non-Current Assets', account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:true, is_system:false, is_bank_account:false, parent_code:'1000' },
 
-  // PPE
-  { code:'1510', name:'Property, Plant & Equipment',   account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'1500' },
-  { code:'1511', name:'Land',                          account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510', description:'Land — not depreciated' },
-  { code:'1512', name:'Buildings',                     account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
-  { code:'1513', name:'Motor Vehicles',                account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
-  { code:'1514', name:'Plant & Machinery',             account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
-  { code:'1515', name:'Furniture & Fittings',          account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
-  { code:'1516', name:'Computer Equipment',            account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
-  { code:'1517', name:'Office Equipment',              account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
+  // PPE — fixed_asset subtype
+  { code:'1510', name:'Property, Plant & Equipment',   account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'1500' },
+  { code:'1511', name:'Land',                          account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510', description:'Land — not depreciated' },
+  { code:'1512', name:'Buildings',                     account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
+  { code:'1513', name:'Motor Vehicles',                account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
+  { code:'1514', name:'Plant & Machinery',             account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
+  { code:'1515', name:'Furniture & Fittings',          account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
+  { code:'1516', name:'Computer Equipment',            account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
+  { code:'1517', name:'Office Equipment',              account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1510' },
 
-  // Accumulated Depreciation
-  { code:'1520', name:'Accumulated Depreciation',      account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:true,  is_system:false, is_bank_account:false, parent_code:'1500', description:'Contra-asset — total depreciation to date' },
-  { code:'1521', name:'Accum. Depr. — Buildings',      account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
-  { code:'1522', name:'Accum. Depr. — Motor Vehicles', account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
-  { code:'1523', name:'Accum. Depr. — Plant & Machinery', account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
-  { code:'1524', name:'Accum. Depr. — Furniture & Fittings', account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
-  { code:'1525', name:'Accum. Depr. — Computer Equipment', account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
+  // Accumulated Depreciation — fixed_asset subtype (contra)
+  { code:'1520', name:'Accumulated Depreciation',      account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:true,  is_system:false, is_bank_account:false, parent_code:'1500', description:'Contra-asset — total depreciation to date' },
+  { code:'1521', name:'Accum. Depr. — Buildings',      account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
+  { code:'1522', name:'Accum. Depr. — Motor Vehicles', account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
+  { code:'1523', name:'Accum. Depr. — Plant & Machinery', account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
+  { code:'1524', name:'Accum. Depr. — Furniture & Fittings', account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
+  { code:'1525', name:'Accum. Depr. — Computer Equipment', account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520' },
 
-  // Intangibles
+  // Intangibles — stays non_current_asset
   { code:'1530', name:'Intangible Assets',             account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'1500' },
   { code:'1531', name:'Goodwill',                      account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1530' },
   { code:'1532', name:'Software & Licences',           account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1530' },
   { code:'1533', name:'Accum. Amortisation — Intangibles', account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1530' },
   { code:'1540', name:'Long-term Investments',         account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1500' },
-  { code:'1545', name:'Right-of-Use Assets',           account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1500', description:'IFRS 16 right-of-use assets', templates:['ifrs'] },
-  { code:'1546', name:'Accum. Depr. — Right-of-Use',  account_type:'asset', account_subtype:'non_current_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520', templates:['ifrs'] },
+  { code:'1545', name:'Right-of-Use Assets',           account_type:'asset', account_subtype:'fixed_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1500', description:'IFRS 16 right-of-use assets', templates:['ifrs'] },
+  { code:'1546', name:'Accum. Depr. — Right-of-Use',  account_type:'asset', account_subtype:'fixed_asset', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'1520', templates:['ifrs'] },
   { code:'1550', name:'Deferred Tax Asset',            account_type:'asset', account_subtype:'non_current_asset', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'1500' },
 
   // ══════════════════════════════════════════════════
@@ -171,11 +183,11 @@ const COA: AccountSeed[] = [
 
   // Tax Payables
   { code:'2120', name:'Tax Payables',                  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:true,  is_system:true,  is_bank_account:false, parent_code:'2100' },
-  { code:'2121', name:'VAT Payable (Output Tax)',       account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'2120', description:'Output VAT collected, payable to MRA' },
-  { code:'2122', name:'PAYE Payable',                  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'2120', description:'PAYE deducted from employees, payable to MRA' },
-  { code:'2123', name:'WHT Payable',                   account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2120', description:'Withholding tax deducted on payments' },
-  { code:'2124', name:'Income Tax Payable',            account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2120' },
-  { code:'2125', name:'VAT Clearing',                  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2120', description:'Net VAT position before MRA filing' },
+  { code:'2121', name:'VAT Payable (Output Tax)',       account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'2120', description:'Output VAT collected, payable to MRA', tax_code:'vat_standard' },
+  { code:'2122', name:'PAYE Payable',                  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'2120', description:'PAYE deducted from employees, payable to MRA', tax_code:'paye' },
+  { code:'2123', name:'WHT Payable',                   account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2120', description:'Withholding tax deducted on payments — rate varies by transaction (10/15/20%)' },
+  { code:'2124', name:'Income Tax Payable',            account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2120', tax_code:'cit' },
+  { code:'2125', name:'VAT Clearing',                  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2120', description:'Net VAT position before MRA filing', tax_code:'vat_standard' },
 
   // Payroll Payables
   { code:'2130', name:'Payroll Payables',              account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'2100' },
@@ -253,6 +265,7 @@ const COA: AccountSeed[] = [
   { code:'6113', name:'Staff Welfare & Benefits',      account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
   { code:'6114', name:'Casual Labour',                 account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
   { code:'6115', name:'Recruitment Costs',             account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100' },
+  { code:'6116', name:'Fringe Benefit Tax',            account_type:'expense', account_subtype:'operating_expense',   normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'6100', description:'FBT on non-cash employee benefits', tax_code:'fbt' },
 
   // Rent & Utilities
   { code:'6200', name:'Rent & Utilities',              account_type:'expense', account_subtype:'operating_expense', normal_balance:'debit', is_group:true,  is_system:false, is_bank_account:false, parent_code:'6000' },
@@ -322,7 +335,7 @@ const COA: AccountSeed[] = [
   { code:'7200', name:'Bank Charges',                  account_type:'expense', account_subtype:'finance_cost', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'7000' },
   { code:'7300', name:'FX Losses',                     account_type:'expense', account_subtype:'finance_cost', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'7000', description:'Foreign exchange losses on currency transactions' },
   { code:'7400', name:'Loss on Disposal of Assets',    account_type:'expense', account_subtype:'finance_cost', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'7000' },
-  { code:'7500', name:'Income Tax Expense',            account_type:'expense', account_subtype:'tax_expense',  normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'7000', description:'Corporate income tax charge for the period' },
+  { code:'7500', name:'Income Tax Expense',            account_type:'expense', account_subtype:'tax_expense',  normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'7000', description:'Corporate income tax charge for the period', tax_code:'cit' },
 ];
 
 // ── Template helper ───────────────────────────────────────────────────────────
@@ -383,6 +396,7 @@ export async function seedChartOfAccounts(
       is_group:        a.is_group,
       is_system:       a.is_system,
       is_bank_account: a.is_bank_account,
+      tax_code:        a.tax_code ?? 'none',
       currency:        'MWK' as const,
       opening_balance: 0,
       is_active:       true,
@@ -416,5 +430,72 @@ export async function ensureChartOfAccounts(
 
   const wasEmpty = (count ?? 0) === 0;
   const { inserted } = await seedChartOfAccounts(supabase, businessId, template);
+
+  if (wasEmpty) {
+    await (supabase.from('businesses') as any)
+      .update({ coa_template: template })
+      .eq('id', businessId);
+  }
+
   return { inserted, wasEmpty };
+}
+
+// ── Template switching ────────────────────────────────────────────────────────
+//
+// Adds accounts exclusive to `newTemplate` (via seedChartOfAccounts) and
+// deactivates — never deletes — accounts exclusive to whichever template
+// the business is leaving. Deactivation only touches rows where
+// `templates` restricts them away from the new template; every such row
+// in the COA above is `is_system: false`, so this never disables a
+// hardcoded/system account relied on by journalService.ts.
+//
+// Existing transactions posted to a deactivated account are preserved;
+// the account simply stops appearing as selectable in new entries.
+
+export async function switchCoaTemplate(
+  supabase: SupabaseClient<Database>,
+  businessId: string,
+  newTemplate: CoaTemplate,
+): Promise<{ added: number; deactivated: number; previousTemplate: CoaTemplate }> {
+
+  const { data: biz, error: bizErr } = await supabase
+    .from('businesses')
+    .select('coa_template')
+    .eq('id', businessId)
+    .single();
+  if (bizErr) throw new Error(`Failed to read business template: ${bizErr.message}`);
+
+  const previousTemplate = ((biz as any)?.coa_template ?? 'gaap') as CoaTemplate;
+  if (previousTemplate === newTemplate) {
+    return { added: 0, deactivated: 0, previousTemplate };
+  }
+
+  // Add whatever the new template needs that isn't there yet.
+  const { inserted: added } = await seedChartOfAccounts(supabase, businessId, newTemplate);
+
+  // Deactivate accounts exclusive to the template being left.
+  const toDeactivate = COA.filter(
+    (a) => a.templates
+      && a.templates.includes(previousTemplate)
+      && !a.templates.includes(newTemplate),
+  );
+  const codesToDeactivate = toDeactivate.map((a) => a.code);
+
+  let deactivated = 0;
+  if (codesToDeactivate.length > 0) {
+    const { data, error } = await (supabase.from('accounts') as any)
+      .update({ is_active: false })
+      .eq('business_id', businessId)
+      .in('code', codesToDeactivate)
+      .select('id');
+    if (error) throw new Error(`Failed to deactivate old-template accounts: ${error.message}`);
+    deactivated = (data ?? []).length;
+  }
+
+  const { error: updateErr } = await (supabase.from('businesses') as any)
+    .update({ coa_template: newTemplate })
+    .eq('id', businessId);
+  if (updateErr) throw new Error(`Failed to update business template: ${updateErr.message}`);
+
+  return { added, deactivated, previousTemplate };
 }
