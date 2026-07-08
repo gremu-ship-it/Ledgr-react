@@ -295,18 +295,16 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     new_values?: unknown;
     notes?: string | null;
   }): Promise<void> {
-    const { error } = await this.client.from('audit_log').insert({
-      business_id: entry.business_id,
-      user_id: entry.user_id,
-      user_email: entry.user_email ?? null,
-      event_type: entry.event_type,
-      resource_type: entry.resource_type,
-      resource_id: entry.resource_id,
-      resource_ref: entry.resource_ref ?? null,
-      old_values: entry.old_values ?? null,
-      new_values: entry.new_values ?? null,
-      notes: entry.notes ?? null,
-    } as never);
+    const { error } = await (this.client.rpc as any)('log_manual_audit_event', {
+      p_business_id: entry.business_id,
+      p_event_type: entry.event_type,
+      p_resource_type: entry.resource_type,
+      p_resource_id: entry.resource_id,
+      p_resource_ref: entry.resource_ref ?? null,
+      p_old_values: (entry.old_values ?? null),
+      p_new_values: (entry.new_values ?? null),
+      p_notes: entry.notes ?? null,
+    });
 
     if (error) {
       console.error('Failed to write audit_log entry:', error);
