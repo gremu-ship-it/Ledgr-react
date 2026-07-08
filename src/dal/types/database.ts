@@ -16,8 +16,16 @@ import type { Database } from './database.generated'
 // ---------------------------------------------------------------------------
 // Enum convenience aliases — exact members from live DB enum table
 // ---------------------------------------------------------------------------
-/** DB: currency_code */
-export type Currency = 'MWK' | 'USD' | 'EUR' | 'GBP' | 'ZAR' | 'ZMW' | 'TZS' | 'KES' | 'UGX';
+/**
+ * DB: was currency_code enum, now text FK -> currencies.code (150+ values).
+ * This alias covers only the 8 "primary" currencies pinned in the UI
+ * (see currencies.is_primary) for convenience in code that only ever
+ * deals with those. For anything accepting an arbitrary currency, use
+ * a plain string validated against currencies.code instead.
+ */
+export type PrimaryCurrency = 'MWK' | 'ZMW' | 'TZS' | 'MZN' | 'USD' | 'EUR' | 'GBP' | 'ZAR';
+/** @deprecated Use PrimaryCurrency or a plain string. Kept for existing call sites. */
+export type Currency = PrimaryCurrency | 'KES' | 'UGX';
 /** DB: account_type */
 export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
 /** DB: account_subtype — exact 15 members */
