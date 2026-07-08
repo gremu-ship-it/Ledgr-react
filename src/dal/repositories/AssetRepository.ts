@@ -39,19 +39,29 @@ export class AssetRepository extends BaseRepository<'fixed_assets'> {
   }
 
   async recordDepreciation(
-    schedule: InsertDto<'depreciation_schedules'>,
+    schedule: InsertDto<'depreciation_schedules'> & { journal_entry_id: string },
+    postedBy: string,
   ): Promise<{ schedule: Row<'depreciation_schedules'>; asset: Row<'fixed_assets'> }> {
     const { data, error } = await this.client
-      .from('depreciation_schedules').insert(schedule as never).select('*').single();
-    if (error) throw toRepositoryError('depreciation_schedules', error);
-    const asset = await this.findById(schedule.asset_id);
-    const updatedAsset = await this.update(asset.id, {
-      accumulated_depreciation: schedule.accumulated_to_date,
-      net_book_value: schedule.net_book_value,
-      last_depreciation_date: schedule.period_end,
-    });
-    return { schedule: data, asset: updatedAsset };
-  }
+    .from('depreciation_schedules')
+    .insert({
+      ...schedule,
+      posted: true,
+      posted_at: new Date().toISOString(),
+      posted_by: postedBy,
+    } as never)
+    .select('*')
+    .single();
+  if (error) throw toRepositoryError('depreciation_schedules', error);
+
+  const asset = await this.findById(schedule.asset_id);
+  const updatedAsset = await this.update(asset.id, {
+    accumulated_depreciation: schedule.accumulated_to_date,
+    net_book_value: schedule.net_book_value,
+    last_depreciation_date: schedule.period_end,
+  });
+  return { schedule: data, asset: updatedAsset };
+}
 
   /**
    * FIX [#5 Missing business_id on depreciation_schedules]:
@@ -71,6 +81,20 @@ export class AssetRepository extends BaseRepository<'fixed_assets'> {
     return data ?? [];
   }
 
+  async revalue(
+    id: string,
+    revaluationDate: string,
+    revaluedAmount: number,
+    revaluationSurplusAccountId: string,
+  ): Promise<Row<'fixed_assets'>> {
+    return this.update(id, {
+      revaluation_date: revaluationDate,
+      revalued_amount: revaluedAmount,
+      revaluation_surplus_account: revaluationSurplusAccountId,
+      net_book_value: revaluedAmount,
+    });
+  }
+  
   async dispose(
     id: string,
     disposalDate: string,

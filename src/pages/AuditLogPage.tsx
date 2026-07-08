@@ -347,6 +347,26 @@ export function AuditLogPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Audit Log</h1>
+            <div>
+  <h1 className="text-2xl font-extrabold text-gray-900">Audit Log</h1>
+  <button
+    onClick={async () => {
+      const { data, error } = await supabase.from('audit_log').insert({
+        business_id: businessId!,
+        event_type: 'FAKE',
+        resource_type: 'journal_entries',
+      });
+      console.log('INSERT TEST — data:', data);
+      console.log('INSERT TEST — error:', error);
+    }}
+    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white"
+  >
+    TEST: Direct Insert (temporary)
+  </button>
+  <p className="mt-0.5 text-sm text-gray-500">
+    Immutable, hash-chained record of all financial changes · IFRS compliant
+  </p>
+</div>
             <p className="mt-0.5 text-sm text-gray-500">
               Immutable, hash-chained record of all financial changes · IFRS compliant
             </p>

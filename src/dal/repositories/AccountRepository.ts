@@ -90,4 +90,29 @@ export class AccountRepository extends BaseRepository<'accounts'> {
     if (error) throw toRepositoryError('accounts', error);
     return data ?? [];
   }
+
+  async findOrCreateBySubtype(
+    businessId: string,
+    subtype: AccountSubtype,
+    accountType: AccountType,
+    defaults: { code: string; name: string; normalBalance: 'debit' | 'credit' },
+  ): Promise<Row<'accounts'>> {
+    const existing = await this.findBySubtype(businessId, subtype);
+    if (existing.length > 0) return existing[0];
+
+    return this.create({
+      business_id: businessId,
+      code: defaults.code,
+      name: defaults.name,
+      account_type: accountType,
+      account_subtype: subtype,
+      normal_balance: defaults.normalBalance,
+      currency: 'MWK',
+      is_group: false,
+      is_system: true,
+      is_active: true,
+      is_bank_account: false,
+      opening_balance: 0,
+    } as never);
+  }
 }
