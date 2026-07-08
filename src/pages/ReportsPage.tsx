@@ -4,6 +4,8 @@ import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2 } from 'lucide-r
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, AccountType } from '@/dal/types/database';
+import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
+import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitOrLoss';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -19,7 +21,7 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type Tab = 'pl' | 'balance' | 'cashflow' | 'trial';
+type Tab = 'pl' | 'balance' | 'cashflow' | 'trial' | 'sofp' | 'pl-ifrs';
 
 // ── Date Filter ───────────────────────────────────────────────────────────────
 
@@ -465,6 +467,14 @@ export function ReportsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'trial' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Table2 className="h-4 w-4" />Trial Balance
         </button>
+        <button onClick={() => setTab('sofp')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'sofp' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <Scale className="h-4 w-4" />SOFP (IFRS)
+        </button>
+        <button onClick={() => setTab('pl-ifrs')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <TrendingUp className="h-4 w-4" />P&L (IFRS)
+        </button>
       </div>
 
       {/* Date filter — not shown for trial balance */}
@@ -474,6 +484,8 @@ export function ReportsPage() {
       {tab === 'balance'  && <BalanceSheetReport businessId={businessId} range={range} />}
       {tab === 'cashflow' && <CashFlowReport businessId={businessId} range={range} />}
       {tab === 'trial'    && <TrialBalanceReport businessId={businessId} />}
+      {tab === 'sofp'    && <StatementOfFinancialPosition businessId={businessId} asOfDate={range.to} businessName={currentBusiness.business.name} />}
+      {tab === 'pl-ifrs' && <StatementOfProfitOrLoss businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
     </div>
   );
 }
