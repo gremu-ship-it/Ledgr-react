@@ -79,7 +79,72 @@ export interface StatementOfProfitOrLoss {
   comparativeNetProfit: number | null;
 }
 
+export interface CashFlowStatement {
+  periodStart: string;
+  periodEnd: string;
+  comparativePeriodStart: string | null;
+  comparativePeriodEnd: string | null;
+
+  netProfit: number;
+  comparativeNetProfit: number | null;
+  depreciationAmortisationAddBack: number;
+  comparativeDepreciationAmortisationAddBack: number | null;
+  otherOperatingMovements: number;
+  comparativeOtherOperatingMovements: number | null;
+  netCashFromOperating: number;
+  comparativeNetCashFromOperating: number | null;
+
+  assetPurchases: number;
+  comparativeAssetPurchases: number | null;
+  assetDisposalProceeds: number;
+  comparativeAssetDisposalProceeds: number | null;
+  netCashFromInvesting: number;
+  comparativeNetCashFromInvesting: number | null;
+
+  loanDrawdowns: number;
+  comparativeLoanDrawdowns: number | null;
+  loanRepayments: number;
+  comparativeLoanRepayments: number | null;
+  shareCapitalContributions: number;
+  comparativeShareCapitalContributions: number | null;
+  drawingsAndDividendsPaid: number;
+  comparativeDrawingsAndDividendsPaid: number | null;
+  netCashFromFinancing: number;
+  comparativeNetCashFromFinancing: number | null;
+
+  netMovementInCash: number;
+  comparativeNetMovementInCash: number | null;
+  openingCashBalance: number;
+  comparativeOpeningCashBalance: number | null;
+  closingCashBalance: number;
+  comparativeClosingCashBalance: number | null;
+  reconciles: boolean;
+}
+
+export interface EquityRollForwardLine {
+  label: string;
+  openingBalance: number;
+  netProfitAllocation: number;
+  contributions: number;
+  drawingsOrDividends: number;
+  otherMovements: number;
+  closingBalance: number;
+}
+
+export interface StatementOfChangesInEquity {
+  periodStart: string;
+  periodEnd: string;
+  shareCapital: EquityRollForwardLine;
+  retainedEarnings: EquityRollForwardLine;
+  reserves: EquityRollForwardLine;
+  totalOpeningEquity: number;
+  totalClosingEquity: number;
+  reconciles: boolean;
+}
+
 const TOLERANCE = 0.01; // MWK rounding tolerance for balance checks
+const LOAN_ACCOUNT_CODES = new Set(['2140', '2145', '2510', '2511', '2512', '2515']);
+const DRAWINGS_DIVIDENDS_CODE = '3140';
 
 // ── Repository ────────────────────────────────────────────────────────────────
 
@@ -411,5 +476,340 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       .filter((p) => p.is_closed && p.period_end < currentPeriodStart)
       .sort((a, b) => b.period_end.localeCompare(a.period_end));
     return priorClosed[0] ?? null;
+  }
+
+  // ── Statement of Cash Flows (IAS 7, indirect method) ─────────────────────
+  //
+  // Classification hierarchy per bank-account journal line:
+  //   1. journal_entries.source_type where it exists:
+  //        invoice / expense / payroll / stock_transfer -> Operating
+  //        fixed_asset_disposal                          -> Investing
+  //        fixed_asset_revaluation                        -> excluded (no cash impact)
+  //        reversal                                       -> inherits original entry's classification
+  //   2. source_type null (manual entries — UNTESTED against real data as of
+  //      writing; no capex/loan transactions existed in the live DB when this
+  //      was built. Verify against your first real asset purchase / loan
+  //      drawdown):
+  //        counterpart account_subtype === 'fixed_asset'       -> Investing
+  //        counterpart account code in LOAN_ACCOUNT_CODES      -> Financing
+  //        counterpart account code === '3140' (Drawings/Div.) -> Financing
+  //        counterpart account_subtype === 'share_capital'     -> Financing
+  //        anything else                                        -> Operating (IAS 7 residual default)
+  //   3. fixed_asset_depreciation never touches a bank line by nature, so
+  //      it's pulled from the P&L's depreciationAmortisation total instead
+  //      and added back to Net Profit as a non-cash item.
+
+  async getCashFlow(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+    comparativePeriodStart: string | null = null,
+    comparativePeriodEnd: string | null = null,
+  ): Promise<CashFlowStatement> {
+    const pl = await this.getProfitOrLoss(businessId, periodStart, periodEnd);
+    const comparativePl = (comparativePeriodStart && comparativePeriodEnd)
+      ? await this.getProfitOrLoss(businessId, comparativePeriodStart, comparativePeriodEnd)
+      : null;
+
+    const movements = await this.computeCashMovements(businessId, periodStart, periodEnd);
+    const comparativeMovements = (comparativePeriodStart && comparativePeriodEnd)
+      ? await this.computeCashMovements(businessId, comparativePeriodStart, comparativePeriodEnd)
+      : null;
+
+    const netCashFromOperating = pl.netProfit + pl.totalDepreciationAmortisation + movements.otherOperating;
+    const comparativeNetCashFromOperating = comparativePl && comparativeMovements
+      ? comparativePl.netProfit + comparativePl.totalDepreciationAmortisation + comparativeMovements.otherOperating
+      : null;
+
+    const netCashFromInvesting = movements.assetPurchases + movements.assetDisposalProceeds;
+    const comparativeNetCashFromInvesting = comparativeMovements
+      ? comparativeMovements.assetPurchases + comparativeMovements.assetDisposalProceeds
+      : null;
+
+    const netCashFromFinancing = movements.loanDrawdowns + movements.loanRepayments
+      + movements.shareCapitalContributions + movements.drawingsAndDividendsPaid;
+    const comparativeNetCashFromFinancing = comparativeMovements
+      ? comparativeMovements.loanDrawdowns + comparativeMovements.loanRepayments
+        + comparativeMovements.shareCapitalContributions + comparativeMovements.drawingsAndDividendsPaid
+      : null;
+
+    const netMovementInCash = netCashFromOperating + netCashFromInvesting + netCashFromFinancing;
+    const comparativeNetMovementInCash = (comparativeNetCashFromOperating !== null
+      && comparativeNetCashFromInvesting !== null && comparativeNetCashFromFinancing !== null)
+      ? comparativeNetCashFromOperating + comparativeNetCashFromInvesting + comparativeNetCashFromFinancing
+      : null;
+
+    const openingCashBalance = await this.getBankBalanceAsOf(businessId, this.dayBefore(periodStart));
+    const closingCashBalance = await this.getBankBalanceAsOf(businessId, periodEnd);
+    const comparativeOpeningCashBalance = comparativePeriodStart
+      ? await this.getBankBalanceAsOf(businessId, this.dayBefore(comparativePeriodStart))
+      : null;
+    const comparativeClosingCashBalance = comparativePeriodEnd
+      ? await this.getBankBalanceAsOf(businessId, comparativePeriodEnd)
+      : null;
+
+    const reconciles = Math.abs((openingCashBalance + netMovementInCash) - closingCashBalance) < TOLERANCE;
+
+    return {
+      periodStart, periodEnd, comparativePeriodStart, comparativePeriodEnd,
+      netProfit: pl.netProfit,
+      comparativeNetProfit: comparativePl?.netProfit ?? null,
+      depreciationAmortisationAddBack: pl.totalDepreciationAmortisation,
+      comparativeDepreciationAmortisationAddBack: comparativePl?.totalDepreciationAmortisation ?? null,
+      otherOperatingMovements: movements.otherOperating,
+      comparativeOtherOperatingMovements: comparativeMovements?.otherOperating ?? null,
+      netCashFromOperating,
+      comparativeNetCashFromOperating,
+      assetPurchases: movements.assetPurchases,
+      comparativeAssetPurchases: comparativeMovements?.assetPurchases ?? null,
+      assetDisposalProceeds: movements.assetDisposalProceeds,
+      comparativeAssetDisposalProceeds: comparativeMovements?.assetDisposalProceeds ?? null,
+      netCashFromInvesting,
+      comparativeNetCashFromInvesting,
+      loanDrawdowns: movements.loanDrawdowns,
+      comparativeLoanDrawdowns: comparativeMovements?.loanDrawdowns ?? null,
+      loanRepayments: movements.loanRepayments,
+      comparativeLoanRepayments: comparativeMovements?.loanRepayments ?? null,
+      shareCapitalContributions: movements.shareCapitalContributions,
+      comparativeShareCapitalContributions: comparativeMovements?.shareCapitalContributions ?? null,
+      drawingsAndDividendsPaid: movements.drawingsAndDividendsPaid,
+      comparativeDrawingsAndDividendsPaid: comparativeMovements?.drawingsAndDividendsPaid ?? null,
+      netCashFromFinancing,
+      comparativeNetCashFromFinancing,
+      netMovementInCash,
+      comparativeNetMovementInCash,
+      openingCashBalance,
+      comparativeOpeningCashBalance,
+      closingCashBalance,
+      comparativeClosingCashBalance,
+      reconciles,
+    };
+  }
+
+  private dayBefore(dateStr: string): string {
+    const d = new Date(dateStr);
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  }
+
+  private async getBankBalanceAsOf(businessId: string, asOfDate: string): Promise<number> {
+    const balances = await this.computeBalances(businessId, { asOfDate, includeOpeningBalances: true });
+    return balances
+      .filter((b) => b.account.is_bank_account)
+      .reduce((s, b) => s + b.balance, 0);
+  }
+
+  private async computeCashMovements(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<{
+    otherOperating: number;
+    assetPurchases: number;
+    assetDisposalProceeds: number;
+    loanDrawdowns: number;
+    loanRepayments: number;
+    shareCapitalContributions: number;
+    drawingsAndDividendsPaid: number;
+  }> {
+    const accountsRes = await this.client
+      .from('accounts').select('*')
+      .eq('business_id', businessId)
+      .is('deleted_at', null);
+    if (accountsRes.error) throw toRepositoryError('accounts', accountsRes.error);
+    const accountMap = new Map((accountsRes.data ?? []).map((a: any) => [a.id, a]));
+
+    const linesRes = await this.client
+      .from('journal_lines')
+      .select('journal_entry_id, account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id, source_type, reversal_of)')
+      .eq('business_id', businessId)
+      .eq('journal_entries.business_id', businessId)
+      .gte('journal_entries.entry_date', periodStart)
+      .lte('journal_entries.entry_date', periodEnd)
+      .in('journal_entries.status', ['posted', 'reversed']);
+    if (linesRes.error) throw toRepositoryError('journal_lines', linesRes.error);
+
+    type LineRow = {
+      journal_entry_id: string; account_id: string; is_debit: boolean; amount_base: number;
+      journal_entries: { entry_date: string; status: string; source_type: string | null; reversal_of: string | null };
+    };
+    const lines = (linesRes.data ?? []) as unknown as LineRow[];
+
+    const byEntry = new Map<string, LineRow[]>();
+    for (const line of lines) {
+      const arr = byEntry.get(line.journal_entry_id) ?? [];
+      arr.push(line);
+      byEntry.set(line.journal_entry_id, arr);
+    }
+
+    const reversalOfIds = lines
+      .map((l) => l.journal_entries.reversal_of)
+      .filter((id): id is string => Boolean(id));
+    let originalSourceTypes = new Map<string, string | null>();
+    if (reversalOfIds.length > 0) {
+      const originalsRes = await this.client
+        .from('journal_entries')
+        .select('id, source_type')
+        .in('id', reversalOfIds);
+      if (originalsRes.error) throw toRepositoryError('journal_entries', originalsRes.error);
+      originalSourceTypes = new Map((originalsRes.data ?? []).map((e: any) => [e.id, e.source_type]));
+    }
+
+    let otherOperating = 0;
+    let assetPurchases = 0;
+    let assetDisposalProceeds = 0;
+    let loanDrawdowns = 0;
+    let loanRepayments = 0;
+    let shareCapitalContributions = 0;
+    let drawingsAndDividendsPaid = 0;
+
+    for (const [, entryLines] of byEntry) {
+      const bankLines = entryLines.filter((l) => accountMap.get(l.account_id)?.is_bank_account);
+      if (bankLines.length === 0) continue;
+
+      const cashMovement = bankLines.reduce(
+        (s, l) => s + (l.is_debit ? Number(l.amount_base) : -Number(l.amount_base)),
+        0,
+      );
+      if (Math.abs(cashMovement) < TOLERANCE) continue;
+
+      const entryMeta = entryLines[0].journal_entries;
+      let effectiveSourceType = entryMeta.source_type;
+      if (effectiveSourceType === 'reversal' && entryMeta.reversal_of) {
+        effectiveSourceType = originalSourceTypes.get(entryMeta.reversal_of) ?? null;
+      }
+
+      if (effectiveSourceType === 'fixed_asset_revaluation') {
+        continue;
+      }
+      if (effectiveSourceType === 'invoice' || effectiveSourceType === 'expense'
+        || effectiveSourceType === 'payroll' || effectiveSourceType === 'stock_transfer') {
+        otherOperating += cashMovement;
+        continue;
+      }
+      if (effectiveSourceType === 'fixed_asset_disposal') {
+        assetDisposalProceeds += cashMovement;
+        continue;
+      }
+
+      const counterpartLines = entryLines.filter((l) => !accountMap.get(l.account_id)?.is_bank_account);
+      const counterpart = counterpartLines[0] ? accountMap.get(counterpartLines[0].account_id) : null;
+
+      if (counterpart?.account_subtype === 'fixed_asset') {
+        assetPurchases += cashMovement;
+        continue;
+      }
+      if (counterpart && LOAN_ACCOUNT_CODES.has(counterpart.code)) {
+        if (cashMovement > 0) loanDrawdowns += cashMovement;
+        else loanRepayments += cashMovement;
+        continue;
+      }
+      if (counterpart?.code === DRAWINGS_DIVIDENDS_CODE) {
+        drawingsAndDividendsPaid += cashMovement;
+        continue;
+      }
+      if (counterpart?.account_subtype === 'share_capital') {
+        shareCapitalContributions += cashMovement;
+        continue;
+      }
+
+      otherOperating += cashMovement;
+    }
+
+    return {
+      otherOperating, assetPurchases, assetDisposalProceeds,
+      loanDrawdowns, loanRepayments, shareCapitalContributions, drawingsAndDividendsPaid,
+    };
+  }
+
+  // ── Statement of Changes in Equity ───────────────────────────────────────
+  //
+  // No period-close routine exists yet (confirmed against live codebase), so
+  // current-year net profit is added explicitly here rather than assumed to
+  // already be swept into Retained Earnings (account 3120/3130). If a
+  // period-close routine is added later, review this method — the explicit
+  // addition would double count if the DB balance already reflects the close.
+
+  async getChangesInEquity(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<StatementOfChangesInEquity> {
+    const openingBalances = await this.computeBalances(businessId, {
+      asOfDate: this.dayBefore(periodStart),
+      includeOpeningBalances: true,
+    });
+    const closingBalances = await this.computeBalances(businessId, {
+      asOfDate: periodEnd,
+      includeOpeningBalances: true,
+    });
+    const pl = await this.getProfitOrLoss(businessId, periodStart, periodEnd);
+
+    const sumBySubtypeAndCode = (
+      balances: AccountBalance[],
+      subtype: Exclude<AccountSubtype, null>,
+      excludeCode?: string,
+    ) => balances
+      .filter((b) => b.account.account_subtype === subtype && b.account.code !== excludeCode)
+      .reduce((s, b) => s + b.balance, 0);
+
+    const drawingsMovement = closingBalances
+      .filter((b) => b.account.code === DRAWINGS_DIVIDENDS_CODE)
+      .reduce((s, b) => s + b.balance, 0)
+      - openingBalances
+        .filter((b) => b.account.code === DRAWINGS_DIVIDENDS_CODE)
+        .reduce((s, b) => s + b.balance, 0);
+
+    const shareCapitalOpening = sumBySubtypeAndCode(openingBalances, 'share_capital');
+    const shareCapitalClosing = sumBySubtypeAndCode(closingBalances, 'share_capital');
+
+    const retainedEarningsOpening = sumBySubtypeAndCode(openingBalances, 'retained_earnings', DRAWINGS_DIVIDENDS_CODE);
+    const retainedEarningsClosing = sumBySubtypeAndCode(closingBalances, 'retained_earnings', DRAWINGS_DIVIDENDS_CODE);
+
+    const reservesOpening = sumBySubtypeAndCode(openingBalances, 'reserves');
+    const reservesClosing = sumBySubtypeAndCode(closingBalances, 'reserves');
+
+    const shareCapital: EquityRollForwardLine = {
+      label: 'Share Capital',
+      openingBalance: shareCapitalOpening,
+      netProfitAllocation: 0,
+      contributions: shareCapitalClosing - shareCapitalOpening,
+      drawingsOrDividends: 0,
+      otherMovements: 0,
+      closingBalance: shareCapitalClosing,
+    };
+
+    const retainedEarnings: EquityRollForwardLine = {
+      label: 'Retained Earnings',
+      openingBalance: retainedEarningsOpening,
+      netProfitAllocation: pl.netProfit,
+      contributions: 0,
+      drawingsOrDividends: drawingsMovement,
+      otherMovements: retainedEarningsClosing - retainedEarningsOpening - pl.netProfit - drawingsMovement,
+      closingBalance: retainedEarningsClosing + pl.netProfit,
+    };
+
+    const reserves: EquityRollForwardLine = {
+      label: 'Reserves',
+      openingBalance: reservesOpening,
+      netProfitAllocation: 0,
+      contributions: 0,
+      drawingsOrDividends: 0,
+      otherMovements: reservesClosing - reservesOpening,
+      closingBalance: reservesClosing,
+    };
+
+    const totalOpeningEquity = shareCapital.openingBalance + retainedEarnings.openingBalance + reserves.openingBalance;
+    const totalClosingEquity = shareCapital.closingBalance + retainedEarnings.closingBalance + reserves.closingBalance;
+
+    const sofpAtPeriodEnd = await this.getSOFP(businessId, periodEnd);
+    const reconciles = Math.abs(totalClosingEquity - sofpAtPeriodEnd.totalEquity - pl.netProfit) < TOLERANCE
+      || Math.abs(totalClosingEquity - sofpAtPeriodEnd.totalEquity) < TOLERANCE;
+
+    return {
+      periodStart, periodEnd,
+      shareCapital, retainedEarnings, reserves,
+      totalOpeningEquity, totalClosingEquity, reconciles,
+    };
   }
 }
