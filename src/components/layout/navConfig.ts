@@ -16,7 +16,7 @@ import {
   GitBranch,
   Lock,
   ScrollText,
-  Shieldcheck
+  ShieldCheck
 } from 'lucide-react';
 
 export const NAV_SECTIONS = [

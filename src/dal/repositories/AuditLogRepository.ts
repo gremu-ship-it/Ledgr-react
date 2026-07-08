@@ -32,7 +32,11 @@ export interface ChainVerificationResult {
 }
 
 export class AuditLogRepository {
-  constructor(private readonly client: SupabaseClient<Database>) {}
+  private readonly client: SupabaseClient<Database>;
+
+  constructor(client: SupabaseClient<Database>) {
+    this.client = client;
+  }
 
   async findByBusiness(filters: AuditLogFilters): Promise<{
     data: AuditLogEntry[];

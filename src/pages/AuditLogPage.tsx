@@ -333,7 +333,7 @@ export function AuditLogPage() {
 
   return (
     <PermissionGate
-      check={(p) => p.canExport}
+      require = "canExport"
       fallback={
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
           <Shield className="h-10 w-10 text-gray-300" />
