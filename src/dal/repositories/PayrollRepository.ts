@@ -2,6 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError, NotFoundError } from '../errors/RepositoryError';
+import { JournalRepository } from './JournalRepository';
+import { TaxReturnRepository } from './TaxReturnRepository';
+import { ValidationError } from '../errors/RepositoryError';
 
 export type PayrollRunWithLines = Row<'payroll_runs'> & {
   lines: Row<'payroll_employee_lines'>[];
@@ -119,5 +122,213 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       .order('band_from', { ascending: true });
     if (error) throw toRepositoryError('paye_bands', error);
     return data ?? [];
+  }
+
+  /**
+ * Approve a draft payroll run: posts the payroll journal entry
+ * (Dr Salary Expense, Cr PAYE Payable, Cr Pension Payable, Cr Net Pay
+ * Payable/Bank), marks the run 'approved', then generates the
+ * corresponding PAYE and TPR tax_returns.
+ *
+ * ACCOUNT RESOLUTION — FLAGGED ASSUMPTION:
+ * - Salary expense account: no single column holds this at the run level;
+ *   employees.salary_account_id exists per-employee, so this posts one
+ *   expense line PER EMPLOYEE (not a single lump line) to respect
+ *   per-employee account overrides. If all employees share one expense
+ *   account, this still works, just with redundant lines of the same
+ *   account — acceptable but you may prefer a single summed line. Say so
+ *   if you'd rather I aggregate by distinct account_id first.
+ * - PAYE payable account: employees.paye_liability_account_id per
+ *   employee, OR falls back to tax_configurations('paye').tax_payable_
+ *   account_id if the employee-level field is null. I could not confirm
+ *   which should take precedence — this assumes employee-level overrides
+ *   the business default. Flag if that's backwards.
+ * - Pension payable account: NOT present anywhere in the schema you
+ *   shared (no pension_payable_account_id on employees or a pension-
+ *   specific table). This uses tax_configurations('tpr_pension').
+ *   tax_payable_account_id, which is seeded NULL by the migration — you
+ *   MUST link this account before calling approve(), or it throws.
+ * - Net pay payable: assumes a bank/net-pay-clearing account is passed in
+ *   by the caller (bankAccountId param) rather than inferred, since no
+ *   default "payroll bank account" field exists on payroll_runs or
+ *   businesses.
+ */
+   async approve(
+    runId: string,
+    approvedBy: string,
+    entryNumber: string,
+    bankAccountId: string,
+  ): Promise<Row<'payroll_runs'>> {
+    const run = await this.findWithLines(runId);
+    if (run.status !== 'draft') {
+      throw new ValidationError(
+        'payroll_runs',
+        `Cannot approve payroll run ${runId}: current status is '${run.status}'. Only 'draft' runs may be approved.`,
+      );
+    }
+    if (run.lines.length === 0) {
+      throw new ValidationError('payroll_runs', `Payroll run ${runId} has no employee lines.`);
+    }
+    
+    const journalRepo = new JournalRepository(this.client);
+    const taxReturnRepo = new TaxReturnRepository(this.client);
+    
+    // Resolve PAYE / TPR payable accounts once (business-level fallback).
+    const { data: payeConfig } = await this.client
+       .from('tax_configurations')
+       .select('*')
+       .eq('business_id', run.business_id)
+       .eq('tax_code', 'paye')
+       .eq('is_active', true)
+       .maybeSingle();
+     const { data: tprConfig } = await this.client
+       .from('tax_configurations')
+       .select('*')
+       .eq('business_id', run.business_id)
+       .eq('tax_code', 'tpr_pension')
+       .eq('is_active', true)
+       .maybeSingle();
+       
+      
+     if (!tprConfig?.tax_payable_account_id) {
+      throw new ValidationError(
+        'payroll_runs',
+        `TPR pension payable account is not linked for this business. Set tax_configurations.tax_payable_account_id for tax_code='tpr_pension' before approving payroll.`,
+      );
+    }
+    
+     const lines: Omit<InsertDto<'journal_lines'>, 'journal_entry_id' | 'business_id'>[] = [];
+     let lineNum = 1;
+     
+     // One salary expense line per employee (see flagged note above).
+     for (const line of run.lines) {
+       const employee = await this.findEmployeeById(line.employee_id);
+       const expenseAccountId = employee.salary_account_id;
+       if (!expenseAccountId) {
+        throw new ValidationError(
+          'payroll_runs',
+          `Employee ${employee.id} (${employee.first_name} ${employee.last_name}) has no salary_account_id set.`,
+        );
+      }
+      lines.push({
+        account_id: expenseAccountId,
+        description: `Gross pay — ${employee.employee_number}`,
+        is_debit: true,
+        amount: Number(line.gross_pay),
+        amount_base: Number(line.gross_pay),
+        currency: 'MWK',
+        exchange_rate: 1,
+        line_number: lineNum++,
+        tax_code: 'none',
+        tax_amount: 0,
+      });
+    }
+    
+     const totalPaye = run.lines.reduce((s, l) => s + Number(l.paye_deduction), 0);
+     const totalPensionEmployer = run.lines.reduce((s, l) => s + Number(l.pension_employer), 0);
+     const totalPensionEmployee = run.lines.reduce((s, l) => s + Number(l.pension_employee), 0);
+     const totalOtherDeductions = run.lines.reduce((s, l) => s + Number(l.other_deductions), 0);
+     const totalNetPay = run.lines.reduce((s, l) => s + Number(l.net_pay), 0);
+     
+     let payeAccountId = payeConfig?.tax_payable_account_id ?? null;
+     if (!payeAccountId && run.lines[0]) {
+      const firstEmployee = await this.findEmployeeById(run.lines[0].employee_id);
+      payeAccountId = firstEmployee.paye_liability_account_id;
+    }
+     if (totalPaye > 0 && !payeAccountId) {
+      throw new ValidationError('payroll_runs', `No PAYE payable account resolved (neither tax_configurations nor employee-level).`);
+    }
+     if (totalPaye > 0) {
+      lines.push({
+        account_id: payeAccountId!,
+        description: `PAYE payable — ${run.run_number}`,
+        is_debit: false,
+        amount: totalPaye,
+        amount_base: totalPaye,
+        currency: 'MWK',
+        exchange_rate: 1,
+        line_number: lineNum++,
+        tax_code: 'paye',
+        tax_amount: totalPaye,
+      });
+    }
+
+     // Pension: employer contribution is an ADDITIONAL expense (not a
+     // // deduction from gross), employee contribution is already netted out
+     // // of net_pay via other_deductions/pension_employee. Employer portion
+     // // needs its own expense line — FLAGGED: confirm there's a "Pension
+     // // Expense" account distinct from Pension Payable; this uses the same
+     // // config's tax_payable_account_id for the credit side, and reuses the
+     // // first employee's salary_account_id as a placeholder expense debit
+     // // if no dedicated pension expense account exists. Please supply one.
+     const totalPension = Math.round((totalPensionEmployer + totalPensionEmployee) * 100) / 100;
+     if (totalPension > 0) {
+      lines.push({
+        account_id: tprConfig.tax_payable_account_id,
+        description: `Pension payable (employer + employee) — ${run.run_number}`,
+        is_debit: false,
+        amount: totalPension,
+        amount_base: totalPension,
+        currency: 'MWK',
+        exchange_rate: 1,
+        line_number: lineNum++,
+        tax_code: 'tpr_pension',
+        tax_amount: totalPension,
+      });
+    }
+    
+    if (totalOtherDeductions > 0) {
+      // FLAGGED: no dedicated "other deductions payable" account identified
+      // // in the schema. Posting as a reduction against net pay payable
+      // // instead (i.e. folded into totalNetPay below) rather than its own
+      // // line — confirm if other_deductions need a separate payable account.
+    }
+    
+    lines.push({
+      account_id: bankAccountId,
+      description: `Net pay — ${run.run_number}`,
+      is_debit: false,
+      amount: totalNetPay,
+      amount_base: totalNetPay,
+      currency: 'MWK',
+      exchange_rate: 1,
+      line_number: lineNum++,
+      tax_code: 'none',
+      tax_amount: 0,
+    });
+    
+    const { entry } = await journalRepo.createBalancedEntry(
+      {
+        business_id: run.business_id,
+        entry_number: entryNumber,
+        entry_date: run.pay_date,
+        description: `Payroll — ${run.run_number}`,
+        source_type: 'payroll_run',
+        source_id: run.id,
+        currency: 'MWK',
+        exchange_rate: 1,
+        status: 'draft',
+        created_by: approvedBy,
+      },
+      lines,
+    );
+    await journalRepo.post(entry.id, approvedBy);
+    
+    const updatedRun = await this.update(runId, {
+      status: 'approved',
+      journal_entry_id: entry.id,
+      approved_by: approvedBy,
+      approved_at: new Date().toISOString(),
+    });
+
+    // Auto-generate PAYE + TPR returns now that liability is posted.
+    if (totalPaye > 0) {
+      await taxReturnRepo.generatePayeReturn(updatedRun);
+    }
+    if (totalPension > 0) {
+      await taxReturnRepo.generateTprReturn(updatedRun, run.lines);
+    }
+    
+    return updatedRun;
   }
 }

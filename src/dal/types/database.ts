@@ -54,6 +54,7 @@ export type TaxCode =
   | 'vat_zero'       // Zero-rated VAT — 0%
   | 'vat_exempt'     // VAT-exempt supply
   | 'paye'           // Pay As You Earn
+  | 'tpr_pension'    // TPR Pension — 10% employer / 5% employee
   | 'wht_15'         // Withholding Tax 15%
   | 'wht_20'         // Withholding Tax 20%
   | 'wht_10'         // Withholding Tax 10%
