@@ -98,8 +98,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       if (created) {
         try {
           await createInvoiceJournalEntry(
-            businessId, invoiceNumber, today,
-            rawAmount, rawAmount, 0, created.id,
+            businessId, created, rawAmount, 0, null,
           );
         } catch (err) {
           console.warn('Journal entry failed:', err);

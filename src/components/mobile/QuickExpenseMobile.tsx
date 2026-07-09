@@ -141,8 +141,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
             { accountId: account.id, amount: netAmount, description: desc },
           ];
           const journalEntryId = await createExpenseJournalEntry(
-            businessId, expenseNumber, today,
-            rawAmount, allocations, vatAmount, 'receipt', created.id,
+            businessId, created, allocations, vatAmount, null,
           );
           // NOTE: same assumption as ExpensesPage.tsx — repos.expense.update
           // must exist via BaseRepository. Adjust if your method name differs.

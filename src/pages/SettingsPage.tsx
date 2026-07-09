@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import type { Row } from '@/dal/types/database';
 import { useCookieConsent } from '@/lib/cookieConsent';
 import { DataExportButton } from '@/components/DataExportButton';
+import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -963,12 +964,9 @@ function PrivacyTab() {
         <DataExportButton />
       </div>
 
-      <div className="flex items-start gap-2 rounded-xl bg-gray-50 px-4 py-3 text-xs text-gray-500">
-        <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <p>
-          Account deletion and data-erasure requests will be available here soon. In the
-          meantime, contact support if you'd like your account or data removed.
-        </p>
+      {/* Account deletion (Right to Erasure) */}
+      <div className="border-t border-gray-100 pt-6">
+        <DeleteAccountSection />
       </div>
     </div>
   );

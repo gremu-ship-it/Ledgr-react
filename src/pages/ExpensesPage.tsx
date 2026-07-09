@@ -385,14 +385,10 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         }];
         const journalEntryId = await createExpenseJournalEntry(
           businessId,
-          expenseNumber,
-          values.expense_date,
-          totalAmount,
+          created,
           allocations,
           vatAmount,
-          'receipt',
-          created.id,
-          values.branch_id || null,  // NEW: pass cost centre to journal entry
+          values.branch_id || null,
         );
         await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
 
@@ -708,14 +704,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
         const journalEntryId = await createExpenseJournalEntry(
           businessId,
-          form.expense_number,
-          form.expense_date,
-          total,
+          created,
           allocations,
           vatAmount,
-          'bill',
-          created.id,
-          form.branch_id || null,  // NEW: cost centre flows to journal entry
+          form.branch_id || null,
         );
         await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
 
@@ -932,14 +924,10 @@ function useRetryPosting(businessId: string) {
 
       const journalEntryId = await createExpenseJournalEntry(
         businessId,
-        expense.expense_number,
-        expense.expense_date,
-        Number(expense.total_amount),
+        expense,
         allocations,
         Number(expense.vat_amount),
-        expense.expense_type,
-        expense.id,
-        (expense as any).branch_id ?? null,  // preserve branch on retry
+        (expense as any).branch_id ?? null,
       );
       await (repos.expense as any).update(expense.id, { journal_entry_id: journalEntryId });
     },

@@ -6,6 +6,8 @@ import { repos } from '@/lib/repositories';
 import type { Row, AccountType } from '@/dal/types/database';
 import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
 import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitOrLoss';
+import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
+import { StatementOfChangesInEquity } from '@/components/reports/StatementOfChangesInEquity';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -21,7 +23,7 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type Tab = 'pl' | 'balance' | 'cashflow' | 'trial' | 'sofp' | 'pl-ifrs';
+type Tab = 'pl' | 'balance' | 'cashflow' | 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity';
 
 // ── Date Filter ───────────────────────────────────────────────────────────────
 
@@ -475,6 +477,14 @@ export function ReportsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <TrendingUp className="h-4 w-4" />P&L (IFRS)
         </button>
+        <button onClick={() => setTab('cashflow-ifrs')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'cashflow-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <ArrowLeftRight className="h-4 w-4" />Cash Flow (IFRS)
+        </button>
+        <button onClick={() => setTab('equity')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'equity' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <Scale className="h-4 w-4" />Changes in Equity
+        </button>
       </div>
 
       {/* Date filter — not shown for trial balance */}
@@ -486,6 +496,8 @@ export function ReportsPage() {
       {tab === 'trial'    && <TrialBalanceReport businessId={businessId} />}
       {tab === 'sofp'    && <StatementOfFinancialPosition businessId={businessId} asOfDate={range.to} businessName={currentBusiness.business.name} />}
       {tab === 'pl-ifrs' && <StatementOfProfitOrLoss businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
+      {tab === 'cashflow-ifrs' && <CashFlowStatement businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
+      {tab === 'equity'        && <StatementOfChangesInEquity businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
     </div>
   );
 }

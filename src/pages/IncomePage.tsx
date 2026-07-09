@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
-import { createInvoiceJournalEntry } from '@/services/journalService';
+import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -338,13 +338,10 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         try {
           await createInvoiceJournalEntry(
             businessId,
-            invoiceNumber,
-            values.issue_date,
-            amount,
+            created,
             amount,
             0,
-            created.id,
-            values.branch_id || null,  // NEW: pass branch through to journal entry
+            values.branch_id || null,
           );
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
@@ -619,15 +616,10 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       const created     = allInvoices.find((inv) => inv.invoice_number === form.invoice_number);
       if (created) {
         try {
-          await createInvoiceJournalEntry(
+          await createInvoiceReceivableEntry(
             businessId,
-            form.invoice_number,
-            form.issue_date,
-            total,
-            subtotal,
-            vatAmount,
-            created.id,
-            form.branch_id || null,  // NEW
+            created,
+            form.branch_id || null,
           );
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
