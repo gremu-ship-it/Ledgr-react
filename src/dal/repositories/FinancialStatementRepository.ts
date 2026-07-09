@@ -499,6 +499,65 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
   //      it's pulled from the P&L's depreciationAmortisation total instead
   //      and added back to Net Profit as a non-cash item.
 
+  // ── Statement of Cash Flows (IAS 7, indirect method) ─────────────────────
+  //
+  // CORRECTED DESIGN (v2) — the first version double-counted operating cash
+  // flow by adding accrual Net Profit AND a raw bank-scan of operating-tagged
+  // movements together. Net Profit already includes revenue/expenses that
+  // haven't yet turned into cash (e.g. unpaid invoices), so adding actual
+  // cash movements on top overstated Operating Activities and broke the
+  // opening+movement=closing reconciliation.
+  //
+  // Correct approach (proper indirect method):
+  //   Net Cash from Operating = Net Profit
+  //     + Depreciation & Amortisation (non-cash add-back)
+  //     − Increase in non-cash current assets (AR, inventory, prepayments...)
+  //     + Increase in operating current liabilities (AP, tax payables...)
+  //   This is computed entirely from balance-sheet movements, independent of
+  //   scanning bank-account journal lines.
+  //
+  // Investing and Financing activities, by contrast, ARE derived from a
+  // direct bank-line scan, since asset purchases/disposals and loan/equity
+  // movements are capital transactions that don't flow through the P&L or
+  // ordinary current asset/liability accounts the way operating activity
+  // does.
+  //
+  // "Cash and cash equivalents" definition: broadened beyond the
+  // `is_bank_account` flag (which per the seed file only covers 4 named bank
+  // accounts, 1121–1124) to also include Cash on Hand (1110), Petty Cash
+  // (1115), and both Mobile Money accounts (1125, 1126). Missing this
+  // originally meant a transfer from Airtel Money into a bank account would
+  // have been misread as a real external cash movement rather than an
+  // internal transfer with zero net effect.
+  //
+  // Bank-line scan classification (Investing/Financing only):
+  //   1. journal_entries.source_type where it exists:
+  //        fixed_asset_disposal    -> Investing
+  //        fixed_asset_revaluation -> excluded (no cash impact)
+  //        reversal                -> inherits original entry's classification
+  //   2. source_type null (manual entries — UNTESTED against real data; no
+  //      capex/loan transactions existed in the live DB when this was
+  //      built. Verify against your first real asset purchase / loan
+  //      drawdown):
+  //        counterpart account_subtype === 'fixed_asset'       -> Investing
+  //        counterpart account code in LOAN_ACCOUNT_CODES      -> Financing
+  //        counterpart account code === '3140' (Drawings/Div.) -> Financing
+  //        counterpart account_subtype === 'share_capital'     -> Financing
+  //   3. If BOTH sides of an entry are cash-equivalent accounts (e.g.
+  //      Mobile Money -> Bank), the entry is an internal transfer and is
+  //      excluded entirely — it has no effect on total cash and equivalents.
+  //   4. Anything else touching a cash-equivalent account without a clear
+  //      Investing/Financing signal is left to fall through into the
+  //      Operating reconciliation naturally (it will already be reflected
+  //      via Net Profit or working-capital changes if it was a genuine
+  //      operating transaction; if not, the `reconciles` flag will catch it).
+
+  private readonly NON_BANK_CASH_CODES = new Set(['1110', '1115', '1125', '1126']);
+
+  private isCashEquivalent(account: Row<'accounts'>): boolean {
+    return account.is_bank_account || this.NON_BANK_CASH_CODES.has(account.code);
+  }
+
   async getCashFlow(
     businessId: string,
     periodStart: string,
@@ -511,26 +570,31 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? await this.getProfitOrLoss(businessId, comparativePeriodStart, comparativePeriodEnd)
       : null;
 
-    const movements = await this.computeCashMovements(businessId, periodStart, periodEnd);
-    const comparativeMovements = (comparativePeriodStart && comparativePeriodEnd)
-      ? await this.computeCashMovements(businessId, comparativePeriodStart, comparativePeriodEnd)
+    const workingCapitalChange = await this.computeWorkingCapitalChange(businessId, periodStart, periodEnd);
+    const comparativeWorkingCapitalChange = (comparativePeriodStart && comparativePeriodEnd)
+      ? await this.computeWorkingCapitalChange(businessId, comparativePeriodStart, comparativePeriodEnd)
       : null;
 
-    const netCashFromOperating = pl.netProfit + pl.totalDepreciationAmortisation + movements.otherOperating;
-    const comparativeNetCashFromOperating = comparativePl && comparativeMovements
-      ? comparativePl.netProfit + comparativePl.totalDepreciationAmortisation + comparativeMovements.otherOperating
+    const investingFinancing = await this.computeInvestingFinancingMovements(businessId, periodStart, periodEnd);
+    const comparativeInvestingFinancing = (comparativePeriodStart && comparativePeriodEnd)
+      ? await this.computeInvestingFinancingMovements(businessId, comparativePeriodStart, comparativePeriodEnd)
       : null;
 
-    const netCashFromInvesting = movements.assetPurchases + movements.assetDisposalProceeds;
-    const comparativeNetCashFromInvesting = comparativeMovements
-      ? comparativeMovements.assetPurchases + comparativeMovements.assetDisposalProceeds
+    const netCashFromOperating = pl.netProfit + pl.totalDepreciationAmortisation + workingCapitalChange;
+    const comparativeNetCashFromOperating = (comparativePl && comparativeWorkingCapitalChange !== null)
+      ? comparativePl.netProfit + comparativePl.totalDepreciationAmortisation + comparativeWorkingCapitalChange
       : null;
 
-    const netCashFromFinancing = movements.loanDrawdowns + movements.loanRepayments
-      + movements.shareCapitalContributions + movements.drawingsAndDividendsPaid;
-    const comparativeNetCashFromFinancing = comparativeMovements
-      ? comparativeMovements.loanDrawdowns + comparativeMovements.loanRepayments
-        + comparativeMovements.shareCapitalContributions + comparativeMovements.drawingsAndDividendsPaid
+    const netCashFromInvesting = investingFinancing.assetPurchases + investingFinancing.assetDisposalProceeds;
+    const comparativeNetCashFromInvesting = comparativeInvestingFinancing
+      ? comparativeInvestingFinancing.assetPurchases + comparativeInvestingFinancing.assetDisposalProceeds
+      : null;
+
+    const netCashFromFinancing = investingFinancing.loanDrawdowns + investingFinancing.loanRepayments
+      + investingFinancing.shareCapitalContributions + investingFinancing.drawingsAndDividendsPaid;
+    const comparativeNetCashFromFinancing = comparativeInvestingFinancing
+      ? comparativeInvestingFinancing.loanDrawdowns + comparativeInvestingFinancing.loanRepayments
+        + comparativeInvestingFinancing.shareCapitalContributions + comparativeInvestingFinancing.drawingsAndDividendsPaid
       : null;
 
     const netMovementInCash = netCashFromOperating + netCashFromInvesting + netCashFromFinancing;
@@ -539,13 +603,13 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? comparativeNetCashFromOperating + comparativeNetCashFromInvesting + comparativeNetCashFromFinancing
       : null;
 
-    const openingCashBalance = await this.getBankBalanceAsOf(businessId, this.dayBefore(periodStart));
-    const closingCashBalance = await this.getBankBalanceAsOf(businessId, periodEnd);
+    const openingCashBalance = await this.getCashAndEquivalentsBalance(businessId, this.dayBefore(periodStart));
+    const closingCashBalance = await this.getCashAndEquivalentsBalance(businessId, periodEnd);
     const comparativeOpeningCashBalance = comparativePeriodStart
-      ? await this.getBankBalanceAsOf(businessId, this.dayBefore(comparativePeriodStart))
+      ? await this.getCashAndEquivalentsBalance(businessId, this.dayBefore(comparativePeriodStart))
       : null;
     const comparativeClosingCashBalance = comparativePeriodEnd
-      ? await this.getBankBalanceAsOf(businessId, comparativePeriodEnd)
+      ? await this.getCashAndEquivalentsBalance(businessId, comparativePeriodEnd)
       : null;
 
     const reconciles = Math.abs((openingCashBalance + netMovementInCash) - closingCashBalance) < TOLERANCE;
@@ -556,24 +620,24 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       comparativeNetProfit: comparativePl?.netProfit ?? null,
       depreciationAmortisationAddBack: pl.totalDepreciationAmortisation,
       comparativeDepreciationAmortisationAddBack: comparativePl?.totalDepreciationAmortisation ?? null,
-      otherOperatingMovements: movements.otherOperating,
-      comparativeOtherOperatingMovements: comparativeMovements?.otherOperating ?? null,
+      otherOperatingMovements: workingCapitalChange,
+      comparativeOtherOperatingMovements: comparativeWorkingCapitalChange,
       netCashFromOperating,
       comparativeNetCashFromOperating,
-      assetPurchases: movements.assetPurchases,
-      comparativeAssetPurchases: comparativeMovements?.assetPurchases ?? null,
-      assetDisposalProceeds: movements.assetDisposalProceeds,
-      comparativeAssetDisposalProceeds: comparativeMovements?.assetDisposalProceeds ?? null,
+      assetPurchases: investingFinancing.assetPurchases,
+      comparativeAssetPurchases: comparativeInvestingFinancing?.assetPurchases ?? null,
+      assetDisposalProceeds: investingFinancing.assetDisposalProceeds,
+      comparativeAssetDisposalProceeds: comparativeInvestingFinancing?.assetDisposalProceeds ?? null,
       netCashFromInvesting,
       comparativeNetCashFromInvesting,
-      loanDrawdowns: movements.loanDrawdowns,
-      comparativeLoanDrawdowns: comparativeMovements?.loanDrawdowns ?? null,
-      loanRepayments: movements.loanRepayments,
-      comparativeLoanRepayments: comparativeMovements?.loanRepayments ?? null,
-      shareCapitalContributions: movements.shareCapitalContributions,
-      comparativeShareCapitalContributions: comparativeMovements?.shareCapitalContributions ?? null,
-      drawingsAndDividendsPaid: movements.drawingsAndDividendsPaid,
-      comparativeDrawingsAndDividendsPaid: comparativeMovements?.drawingsAndDividendsPaid ?? null,
+      loanDrawdowns: investingFinancing.loanDrawdowns,
+      comparativeLoanDrawdowns: comparativeInvestingFinancing?.loanDrawdowns ?? null,
+      loanRepayments: investingFinancing.loanRepayments,
+      comparativeLoanRepayments: comparativeInvestingFinancing?.loanRepayments ?? null,
+      shareCapitalContributions: investingFinancing.shareCapitalContributions,
+      comparativeShareCapitalContributions: comparativeInvestingFinancing?.shareCapitalContributions ?? null,
+      drawingsAndDividendsPaid: investingFinancing.drawingsAndDividendsPaid,
+      comparativeDrawingsAndDividendsPaid: comparativeInvestingFinancing?.drawingsAndDividendsPaid ?? null,
       netCashFromFinancing,
       comparativeNetCashFromFinancing,
       netMovementInCash,
@@ -592,19 +656,71 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     return d.toISOString().slice(0, 10);
   }
 
-  private async getBankBalanceAsOf(businessId: string, asOfDate: string): Promise<number> {
+  private async getCashAndEquivalentsBalance(businessId: string, asOfDate: string): Promise<number> {
     const balances = await this.computeBalances(businessId, { asOfDate, includeOpeningBalances: true });
     return balances
-      .filter((b) => b.account.is_bank_account)
+      .filter((b) => this.isCashEquivalent(b.account))
       .reduce((s, b) => s + b.balance, 0);
   }
 
-  private async computeCashMovements(
+  /**
+   * Computes the change in non-cash working capital between period start
+   * and period end: the balance-sheet-driven adjustment to Net Profit that
+   * the indirect method requires.
+   *
+   * − Increase in non-cash current assets (AR, inventory, prepayments, etc.
+   *   — everything with account_subtype 'current_asset' that isn't a cash
+   *   equivalent) reduces operating cash, since it means revenue/spend was
+   *   recognized but the cash hasn't moved yet.
+   * + Increase in operating current liabilities (AP, tax payables, payroll
+   *   payables, etc. — current_liability accounts EXCLUDING loan-type
+   *   accounts, which are financing, not operating) increases operating
+   *   cash, since obligations were incurred but not yet paid.
+   */
+  private async computeWorkingCapitalChange(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<number> {
+    const opening = await this.computeBalances(businessId, {
+      asOfDate: this.dayBefore(periodStart),
+      includeOpeningBalances: true,
+    });
+    const closing = await this.computeBalances(businessId, {
+      asOfDate: periodEnd,
+      includeOpeningBalances: true,
+    });
+
+    const sumNonCashCurrentAssets = (balances: AccountBalance[]) => balances
+      .filter((b) => b.account.account_subtype === 'current_asset' && !this.isCashEquivalent(b.account))
+      .reduce((s, b) => s + b.balance, 0);
+
+    const sumOperatingCurrentLiabilities = (balances: AccountBalance[]) => balances
+      .filter((b) => b.account.account_subtype === 'current_liability' && !LOAN_ACCOUNT_CODES.has(b.account.code))
+      .reduce((s, b) => s + b.balance, 0);
+
+    const openingAssets = sumNonCashCurrentAssets(opening);
+    const closingAssets = sumNonCashCurrentAssets(closing);
+    const changeInNonCashAssets = closingAssets - openingAssets;
+
+    const openingLiabilities = sumOperatingCurrentLiabilities(opening);
+    const closingLiabilities = sumOperatingCurrentLiabilities(closing);
+    const changeInOperatingLiabilities = closingLiabilities - openingLiabilities;
+
+    return changeInOperatingLiabilities - changeInNonCashAssets;
+  }
+
+  /**
+   * Scans journal entries touching cash-equivalent accounts to classify
+   * Investing and Financing cash movements only. Operating activity is
+   * handled separately via computeWorkingCapitalChange — it does NOT scan
+   * bank lines, since that would double count against Net Profit.
+   */
+  private async computeInvestingFinancingMovements(
     businessId: string,
     periodStart: string,
     periodEnd: string,
   ): Promise<{
-    otherOperating: number;
     assetPurchases: number;
     assetDisposalProceeds: number;
     loanDrawdowns: number;
@@ -655,7 +771,6 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       originalSourceTypes = new Map((originalsRes.data ?? []).map((e: any) => [e.id, e.source_type]));
     }
 
-    let otherOperating = 0;
     let assetPurchases = 0;
     let assetDisposalProceeds = 0;
     let loanDrawdowns = 0;
@@ -664,10 +779,22 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     let drawingsAndDividendsPaid = 0;
 
     for (const [, entryLines] of byEntry) {
-      const bankLines = entryLines.filter((l) => accountMap.get(l.account_id)?.is_bank_account);
-      if (bankLines.length === 0) continue;
+      const cashLines = entryLines.filter((l) => {
+        const acc = accountMap.get(l.account_id);
+        return acc && this.isCashEquivalent(acc);
+      });
+      if (cashLines.length === 0) continue;
 
-      const cashMovement = bankLines.reduce(
+      const nonCashLines = entryLines.filter((l) => {
+        const acc = accountMap.get(l.account_id);
+        return acc && !this.isCashEquivalent(acc);
+      });
+
+      // Both sides are cash-equivalent accounts (e.g. Mobile Money -> Bank):
+      // an internal transfer with zero net effect on total cash — exclude.
+      if (nonCashLines.length === 0) continue;
+
+      const cashMovement = cashLines.reduce(
         (s, l) => s + (l.is_debit ? Number(l.amount_base) : -Number(l.amount_base)),
         0,
       );
@@ -680,20 +807,18 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       }
 
       if (effectiveSourceType === 'fixed_asset_revaluation') {
-        continue;
-      }
-      if (effectiveSourceType === 'invoice' || effectiveSourceType === 'expense'
-        || effectiveSourceType === 'payroll' || effectiveSourceType === 'stock_transfer') {
-        otherOperating += cashMovement;
-        continue;
+        continue; // no cash impact
       }
       if (effectiveSourceType === 'fixed_asset_disposal') {
         assetDisposalProceeds += cashMovement;
         continue;
       }
 
-      const counterpartLines = entryLines.filter((l) => !accountMap.get(l.account_id)?.is_bank_account);
-      const counterpart = counterpartLines[0] ? accountMap.get(counterpartLines[0].account_id) : null;
+      // invoice / expense / payroll / stock_transfer / null / anything else
+      // touching ordinary operating accounts is intentionally NOT counted
+      // here — it's already reflected in Net Profit + working capital
+      // changes. Only capital-transaction signals below are captured.
+      const counterpart = nonCashLines[0] ? accountMap.get(nonCashLines[0].account_id) : null;
 
       if (counterpart?.account_subtype === 'fixed_asset') {
         assetPurchases += cashMovement;
@@ -712,23 +837,15 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
         shareCapitalContributions += cashMovement;
         continue;
       }
-
-      otherOperating += cashMovement;
+      // Otherwise: ordinary operating transaction, already covered by
+      // Net Profit + working capital changes — no action needed here.
     }
 
     return {
-      otherOperating, assetPurchases, assetDisposalProceeds,
+      assetPurchases, assetDisposalProceeds,
       loanDrawdowns, loanRepayments, shareCapitalContributions, drawingsAndDividendsPaid,
     };
   }
-
-  // ── Statement of Changes in Equity ───────────────────────────────────────
-  //
-  // No period-close routine exists yet (confirmed against live codebase), so
-  // current-year net profit is added explicitly here rather than assumed to
-  // already be swept into Retained Earnings (account 3120/3130). If a
-  // period-close routine is added later, review this method — the explicit
-  // addition would double count if the DB balance already reflects the close.
 
   async getChangesInEquity(
     businessId: string,
