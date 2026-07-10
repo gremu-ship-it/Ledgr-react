@@ -6,6 +6,8 @@ import { InvoiceRepository } from '@/dal/repositories/InvoiceRepository';
 import { ExpenseRepository } from '@/dal/repositories/ExpenseRepository';
 import { PayrollRepository } from '@/dal/repositories/PayrollRepository';
 import { TaxRepository } from '@/dal/repositories/TaxRepository';
+import { TaxReturnRepository } from '@/dal/repositories/TaxReturnRepository';
+import { TaxPaymentRepository } from '@/dal/repositories/TaxPaymentRepository';
 import { AccountRepository } from '@/dal/repositories/AccountRepository';
 import { AssetRepository } from '@/dal/repositories/AssetRepository';
 import { InventoryRepository } from '@/dal/repositories/InventoryRepository';
@@ -17,19 +19,21 @@ import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 
 export const repos = {
-  business:  new BusinessRepository(supabase),
-  journal:   new JournalRepository(supabase),
-  invoice:   new InvoiceRepository(supabase),
-  expense:   new ExpenseRepository(supabase),
-  payroll:   new PayrollRepository(supabase),
-  tax:       new TaxRepository(supabase),
-  account:   new AccountRepository(supabase),
-  asset:     new AssetRepository(supabase),
-  inventory: new InventoryRepository(supabase),
-  income:    new IncomeRepository(supabase),
-  contact:   new ContactRepository(supabase),
-  branch:    new BranchRepository(supabase),
-  transfer:  new TransferRepository(supabase),
+  business:   new BusinessRepository(supabase),
+  journal:    new JournalRepository(supabase),
+  invoice:    new InvoiceRepository(supabase),
+  expense:    new ExpenseRepository(supabase),
+  payroll:    new PayrollRepository(supabase),
+  tax:        new TaxRepository(supabase),
+  taxReturn:  new TaxReturnRepository(supabase),
+  taxPayment: new TaxPaymentRepository(supabase),
+  account:    new AccountRepository(supabase),
+  asset:      new AssetRepository(supabase),
+  inventory:  new InventoryRepository(supabase),
+  income:     new IncomeRepository(supabase),
+  contact:    new ContactRepository(supabase),
+  branch:     new BranchRepository(supabase),
+  transfer:   new TransferRepository(supabase),
   period: new PeriodRepository(supabase),
   auditLog: new AuditLogRepository(supabase),
 };

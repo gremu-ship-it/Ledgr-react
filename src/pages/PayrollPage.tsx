@@ -6,7 +6,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
-import { createPayrollJournalEntry } from '@/services/journalService';
+import { nextEntryNumber } from '@/services/journalService';
 import { EditEmployeeModal } from '@/components/payroll/EditEmployeeModal';
 
 function formatMwk(amount: number): string {
@@ -45,6 +45,28 @@ function calculatePAYE(annualGross: number, bands: PayeBand[]): number {
     tax += taxable * band.rate;
   }
   return tax / 12;
+}
+
+/**
+ * TPR pension: 10% employer / 5% employee, applied to gross monthly salary.
+ * Rates come from tax_configurations (tax_code='tpr_pension'), not hard-coded,
+ * so a business can adjust them without a code change if MRA/Pension Act
+ * rates ever move. Falls back to 0/0 if no config exists yet (surfaced as a
+ * warning in the UI rather than silently using a guessed default, unlike
+ * the PAYE fallback bands above — pension has no universally-agreed default
+ * the way the MRA bands do).
+ */
+function calculatePension(
+  grossMonthly: number,
+  employerRatePercent: number | null | undefined,
+  employeeRatePercent: number | null | undefined,
+): { employer: number; employee: number } {
+  const employerRate = Number(employerRatePercent ?? 0) / 100;
+  const employeeRate = Number(employeeRatePercent ?? 0) / 100;
+  return {
+    employer: Math.round(grossMonthly * employerRate * 100) / 100,
+    employee: Math.round(grossMonthly * employeeRate * 100) / 100,
+  };
 }
 
 type MainTab = 'runs' | 'employees';
@@ -284,17 +306,42 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
     enabled: Boolean(businessId),
   });
 
+  // TPR pension rates — mirrors the payeBands query above. Note: no
+  // as-of-date is passed, so this uses "today" via TaxRepository.findByCode's
+  // default — fine for a payroll run being created now, but if you ever
+  // backfill a historical run, this won't use the rate that was in effect
+  // at that time. Flag if that matters for your use case.
+  const { data: tprConfig } = useQuery({
+    queryKey: ['tax_configurations', businessId, 'tpr_pension'],
+    queryFn: () => repos.tax.findByCode(businessId, 'tpr_pension'),
+    enabled: Boolean(businessId),
+  });
+
   const payrollLines = employees.map((emp) => {
     const grossMonthly = Number(emp.gross_salary);
     const annualGross = grossMonthly * 12;
     const monthlyPaye = emp.tax_exempt ? 0 : calculatePAYE(annualGross, payeBands as PayeBand[]);
-    const netPay = grossMonthly - monthlyPaye;
-    return { employee: emp, gross_pay: grossMonthly, paye_deduction: monthlyPaye, net_pay: netPay };
+    const pension = calculatePension(grossMonthly, tprConfig?.employer_rate, tprConfig?.employee_rate);
+    const netPay = grossMonthly - monthlyPaye - pension.employee;
+    return {
+      employee: emp,
+      gross_pay: grossMonthly,
+      paye_deduction: monthlyPaye,
+      pension_employer: pension.employer,
+      pension_employee: pension.employee,
+      net_pay: netPay,
+    };
   });
 
   const totals = payrollLines.reduce(
-    (acc, line) => ({ gross: acc.gross + line.gross_pay, paye: acc.paye + line.paye_deduction, net: acc.net + line.net_pay }),
-    { gross: 0, paye: 0, net: 0 },
+    (acc, line) => ({
+      gross: acc.gross + line.gross_pay,
+      paye: acc.paye + line.paye_deduction,
+      pensionEmployer: acc.pensionEmployer + line.pension_employer,
+      pensionEmployee: acc.pensionEmployee + line.pension_employee,
+      net: acc.net + line.net_pay,
+    }),
+    { gross: 0, paye: 0, pensionEmployer: 0, pensionEmployee: 0, net: 0 },
   );
 
   const mutation = useMutation({
@@ -302,6 +349,11 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
       if (employees.length === 0) throw new Error('No active employees found');
       const runNumber = await repos.business.reserveNextPayrollNumber(businessId);
 
+      // NOTE: journal posting no longer happens here. Payroll runs are
+      // created as 'draft' only; posting the journal entry (and
+      // generating PAYE/TPR tax_returns) now happens explicitly via the
+      // "Approve Payroll" action, which calls PayrollRepository.approve().
+      // This replaces the old auto-post-at-creation flow.
       await repos.payroll.createWithLines(
         {
           business_id: businessId,
@@ -325,38 +377,20 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
           gross_pay: line.gross_pay,
           paye_taxable_income: line.gross_pay,
           paye_deduction: line.paye_deduction,
-          pension_employee: 0,
-          pension_employer: 0,
+          pension_employee: line.pension_employee,
+          pension_employer: line.pension_employer,
           other_deductions: 0,
-          total_deductions: line.paye_deduction,
+          total_deductions: line.paye_deduction + line.pension_employee,
           net_pay: line.net_pay,
           payment_method: line.employee.payment_method,
           payslip_generated: false,
         } as Omit<InsertDto<'payroll_employee_lines'>, 'payroll_run_id'>)),
       );
-
-      const allRuns = await repos.payroll.findByBusiness(businessId);
-      const created = allRuns.find((r) => r.run_number === runNumber);
-      if (created) {
-        try {
-          await createPayrollJournalEntry(
-            businessId,
-            runNumber,
-            form.pay_date,
-            totals.gross,
-            totals.paye,
-            totals.net,
-            created.id,
-          );
-        } catch (err) {
-          console.warn('Journal entry failed (non-critical):', err);
-        }
-      }
     },
     onSuccess: () => {
-      setAlert({ type: 'success', message: 'Payroll run created successfully.' });
+      setAlert({ type: 'success', message: 'Payroll run created as a draft. Approve it from the run detail view to post the journal entry.' });
       queryClient.invalidateQueries({ queryKey: ['payroll_runs'] });
-      setTimeout(() => { onSuccess(); onClose(); }, 1200);
+      setTimeout(() => { onSuccess(); onClose(); }, 1500);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
   });
@@ -403,6 +437,7 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
             <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
               <span className="font-medium text-gray-900">{employees.length}</span> active employee{employees.length !== 1 ? 's' : ''} will be included.
               {payeBands.length === 0 && <span className="ml-2 text-amber-600">⚠ No PAYE bands configured — using MRA 2024/25 defaults.</span>}
+              {!tprConfig && <span className="ml-2 text-amber-600">⚠ TPR pension rates not configured — pension will be calculated as MK 0.00.</span>}
             </div>
             <div className="flex gap-3 pt-1">
               <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
@@ -423,6 +458,7 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
                     <th className="px-4 py-2.5 text-left">Employee</th>
                     <th className="px-4 py-2.5 text-right">Gross Pay</th>
                     <th className="px-4 py-2.5 text-right">PAYE</th>
+                    <th className="px-4 py-2.5 text-right">Pension (5%)</th>
                     <th className="px-4 py-2.5 text-right">Net Pay</th>
                   </tr>
                 </thead>
@@ -435,6 +471,7 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
                       </td>
                       <td className="px-4 py-3 text-right">{formatMwk(line.gross_pay)}</td>
                       <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.paye_deduction)}</td>
+                      <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.pension_employee)}</td>
                       <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(line.net_pay)}</td>
                     </tr>
                   ))}
@@ -444,11 +481,18 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">Totals</td>
                     <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwk(totals.gross)}</td>
                     <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(totals.paye)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(totals.pensionEmployee)}</td>
                     <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwk(totals.net)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
+            {totals.pensionEmployer > 0 && (
+              <p className="text-xs text-gray-500">
+                Additional employer pension contribution (10%, not deducted from employees):{' '}
+                <span className="font-medium text-gray-700">{formatMwk(totals.pensionEmployer)}</span>
+              </p>
+            )}
             <div className="flex gap-3">
               <button onClick={() => setStep('setup')} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">← Back</button>
               <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
@@ -463,8 +507,98 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
   );
 }
 
-function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRunPayroll: () => void }) {
+/**
+ * Approve a draft payroll run: posts the journal entry via
+ * PayrollRepository.approve() and moves the run to 'approved'.
+ *
+ * ASSUMPTION: useAppStore's currentUser shape is { id, email, profile }
+ * based on useAuthListener.ts's setCurrentUser call — used here for the
+ * approvedBy audit field. If that selector path is wrong, this will need
+ * adjusting, but it matches the only place in the codebase that populates
+ * a user object into the store.
+ */
+function ApprovePayrollModal({
+  businessId, run, userId, onClose, onSuccess,
+}: {
+  businessId: string;
+  run: Row<'payroll_runs'>;
+  userId: string | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [alert, setAlert] = useState<Alert | null>(null);
+  const [bankAccountId, setBankAccountId] = useState('');
+
+  const { data: bankAccounts = [] } = useQuery({
+    queryKey: ['bank_accounts', businessId],
+    queryFn: () => repos.account.findBankAccounts(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      if (!userId) throw new Error('Unable to determine the current user. Please sign in again.');
+      if (!bankAccountId) throw new Error('Select a bank account for net pay disbursement.');
+      const entryNumber = await nextEntryNumber(businessId);
+      await repos.payroll.approve(run.id, userId, entryNumber, bankAccountId);
+    },
+    onSuccess: () => {
+      setAlert({ type: 'success', message: 'Payroll approved and posted to the journal.' });
+      setTimeout(() => { onSuccess(); onClose(); }, 1200);
+    },
+    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
+      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl my-8">
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-brand-500" />
+            <h2 className="text-base font-semibold text-gray-900">Approve Payroll — {run.run_number}</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+        </div>
+
+        {alert && <AlertBox alert={alert} />}
+
+        <p className="mb-4 text-sm text-gray-500">
+          This posts the payroll journal entry (salaries, PAYE, pension) and disburses net pay of{' '}
+          <span className="font-semibold text-gray-900">{formatMwk(Number(run.total_net))}</span> from the selected account.
+          PAYE and TPR remittances will be generated automatically. This cannot be undone from here.
+        </p>
+
+        <div className="mb-5">
+          <label className="mb-1 block text-sm font-medium text-gray-700">Pay From Account</label>
+          <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+            <option value="">Select an account…</option>
+            {bankAccounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>{acc.code} — {acc.name}</option>
+            ))}
+          </select>
+          {bankAccounts.length === 0 && (
+            <p className="mt-1 text-xs text-amber-600">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
+          )}
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+          <button onClick={() => mutation.mutate()} disabled={mutation.isPending || !bankAccountId}
+            className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            {mutation.isPending ? 'Approving…' : 'Approve & Post'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: string; onRunPayroll: () => void; canApprove: boolean }) {
   const [selectedRun, setSelectedRun] = useState<Row<'payroll_runs'> | null>(null);
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const queryClient = useQueryClient();
+  const currentUser = useAppStore((s) => s.currentUser);
 
   const { data: runs = [], isLoading, isError } = useQuery({
     queryKey: ['payroll_runs', businessId],
@@ -491,7 +625,15 @@ function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRu
               <p className="text-sm text-gray-500">Period: {selectedRun.period_start} → {selectedRun.period_end}</p>
               <p className="text-sm text-gray-500">Pay Date: {selectedRun.pay_date}</p>
             </div>
-            <StatusBadge status={selectedRun.status} />
+            <div className="flex items-center gap-3">
+              <StatusBadge status={selectedRun.status} />
+              {selectedRun.status === 'draft' && canApprove && (
+                <button onClick={() => setShowApproveModal(true)}
+                  className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+                  <CheckCircle className="h-4 w-4" />Approve Payroll
+                </button>
+              )}
+            </div>
           </div>
           <div className="overflow-hidden rounded-xl border border-gray-200">
             <table className="w-full text-sm">
@@ -500,6 +642,7 @@ function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRu
                   <th className="px-4 py-2.5 text-left">Employee</th>
                   <th className="px-4 py-2.5 text-right">Gross Pay</th>
                   <th className="px-4 py-2.5 text-right">PAYE</th>
+                  <th className="px-4 py-2.5 text-right">Pension (Employee)</th>
                   <th className="px-4 py-2.5 text-right">Other Deductions</th>
                   <th className="px-4 py-2.5 text-right">Net Pay</th>
                 </tr>
@@ -510,6 +653,7 @@ function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRu
                     <td className="px-4 py-3 font-medium text-gray-900">{line.employee_id}</td>
                     <td className="px-4 py-3 text-right">{formatMwk(Number(line.gross_pay))}</td>
                     <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.paye_deduction))}</td>
+                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.pension_employee))}</td>
                     <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.other_deductions))}</td>
                     <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(Number(line.net_pay))}</td>
                   </tr>
@@ -520,6 +664,9 @@ function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRu
                   <td className="px-4 py-3 text-sm font-semibold">Totals</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwk(Number(selectedRun.total_gross))}</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(Number(selectedRun.total_paye))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">
+                    −{formatMwk((runWithLines?.lines ?? []).reduce((s, l) => s + Number(l.pension_employee), 0))}
+                  </td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(Number(selectedRun.total_other_deductions))}</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwk(Number(selectedRun.total_net))}</td>
                 </tr>
@@ -527,6 +674,20 @@ function PayrollRunsTab({ businessId, onRunPayroll }: { businessId: string; onRu
             </table>
           </div>
         </div>
+
+        {showApproveModal && (
+          <ApprovePayrollModal
+            businessId={businessId}
+            run={selectedRun}
+            userId={currentUser?.id ?? null}
+            onClose={() => setShowApproveModal(false)}
+            onSuccess={() => {
+              queryClient.invalidateQueries({ queryKey: ['payroll_runs'] });
+              queryClient.invalidateQueries({ queryKey: ['payroll_run', 'lines', selectedRun.id] });
+              queryClient.invalidateQueries({ queryKey: ['tax_returns'] });
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -676,6 +837,11 @@ export function PayrollPage() {
   const businessId = currentBusiness?.business?.id;
   const role = currentBusiness?.role;
   const canEditEmployees = role === 'owner' || role === 'admin';
+  // ASSUMPTION: approve should be restricted similarly to employee edits,
+  // plus accountant (who's likely to be the one actually running payroll
+  // approvals in practice). Adjust if your role model intends something
+  // narrower or wider for this action.
+  const canApprovePayroll = role === 'owner' || role === 'admin' || role === 'accountant';
   const [tab, setTab] = useState<MainTab>('runs');
   const [showRunModal, setShowRunModal] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
@@ -715,7 +881,7 @@ export function PayrollPage() {
         </button>
       </div>
 
-      {tab === 'runs' && <PayrollRunsTab businessId={businessId} onRunPayroll={() => setShowRunModal(true)} />}
+      {tab === 'runs' && <PayrollRunsTab businessId={businessId} onRunPayroll={() => setShowRunModal(true)} canApprove={canApprovePayroll} />}
       {tab === 'employees' && <EmployeesTab businessId={businessId} onAddEmployee={() => setShowAddEmployeeModal(true)} canEdit={canEditEmployees} />}
 
       {showRunModal && (
