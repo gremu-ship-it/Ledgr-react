@@ -164,10 +164,27 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    *
    * Schema: `reversal_of uuid FK journal_entries`, `reversed_by uuid FK journal_entries`.
    *
+   * FIX [Auto-void linked source on reversal]:
+   * Reversing a journal entry only ever affected the ledger — the source
+   * invoice/expense/payroll run kept whatever status it had (e.g. 'paid'),
+   * so it kept counting in dashboard and report totals even though its
+   * ledger effect had been fully reversed. Reversal in this app's model
+   * means "this whole transaction was wrong," so the linked source record
+   * is now automatically voided as part of the reversal. This is a
+   * deliberate behavioural change: reversing either the recognition or
+   * the settlement half of an invoice/expense now voids the whole source
+   * record, not just the reversed entry.
+   *
+   * Both IncomeRepository.getTotals() and useMonthlyExpenses/
+   * useMonthlyExpenseVat already exclude status = 'void', so voiding the
+   * source record alone is sufficient to correct dashboard and report
+   * totals — no changes needed in those files.
+   *
    * @param originalId - The id of the posted entry to reverse.
    * @param entryNumber - The entry number for the new reversal entry.
    * @param reversalDate - The date of the reversal (ISO `YYYY-MM-DD`).
    * @param postedBy - The authenticated user's id.
+   * @param reason - Required explanation, written to the audit log.
    */
   async reverse(
     originalId: string,
@@ -256,6 +273,15 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
 
     await this.update(originalId, { reversed_by: reversal.entry.id, status: 'reversed' });
 
+    // FIX: Auto-void the source record when its journal entry is reversed.
+    // A reversal means "this whole transaction was wrong" — so the linked
+    // invoice/expense/payroll run must be voided too, otherwise it keeps
+    // counting in dashboard/report totals even though its ledger effect
+    // has been fully reversed.
+    if (original.source_id && original.source_type && original.source_type !== 'reversal') {
+      await this.voidSourceRecord(original.source_type, original.source_id, postedBy, reason);
+    }
+
     await this.writeAuditLog({
       business_id: original.business_id,
       user_id: postedBy,
@@ -281,6 +307,67 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       .maybeSingle();
     if (error) throw toRepositoryError('journal_entries', error);
     return (data as Row<'accounting_periods'> | null)?.id ?? null;
+  }
+
+  /**
+   * Auto-void the source invoice/expense/payroll run linked to a journal
+   * entry that has just been reversed. No-op for unrecognised source
+   * types (e.g. an entry with no source_type/source_id, or one from a
+   * flow not covered here) and for source records that are already void.
+   *
+   * Failures here are logged but never thrown — a failed auto-void must
+   * not roll back or block the reversal itself, which has already been
+   * committed to the ledger.
+   */
+  private async voidSourceRecord(
+    sourceType: string,
+    sourceId: string,
+    postedBy: string,
+    reason: string,
+  ): Promise<void> {
+    const tableMap: Record<string, 'invoices' | 'expenses' | 'payroll_runs'> = {
+      invoice: 'invoices',
+      expense: 'expenses',
+      payroll: 'payroll_runs',
+    };
+    const table = tableMap[sourceType];
+    if (!table) return; // unrecognised source_type — nothing to void
+
+    const { data: current, error: fetchError } = await this.client
+      .from(table)
+      .select('id, status, business_id')
+      .eq('id', sourceId)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error(`Failed to fetch ${table} ${sourceId} for auto-void:`, fetchError);
+      return;
+    }
+    if (!current) return;
+
+    const row = current as { id: string; status: string; business_id: string };
+    if (row.status === 'void') return; // already void — nothing to do
+
+    const { error: updateError } = await this.client
+      .from(table)
+      .update({ status: 'void' } as never)
+      .eq('id', sourceId);
+
+    if (updateError) {
+      console.error(`Failed to auto-void ${table} ${sourceId}:`, updateError);
+      return;
+    }
+
+    await this.writeAuditLog({
+      business_id: row.business_id,
+      user_id: postedBy,
+      event_type: `${sourceType}_auto_voided`,
+      resource_type: table,
+      resource_id: sourceId,
+      old_values: { status: row.status },
+      new_values: { status: 'void' },
+      notes: `Auto-voided: linked journal entry was reversed. Reason: ${reason}`,
+    });
   }
 
   private async writeAuditLog(entry: {
