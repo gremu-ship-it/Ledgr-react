@@ -1,9 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
-import type { Row, AccountType } from '@/dal/types/database';
+import type { Row } from '@/dal/types/database';
 import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
 import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitOrLoss';
 import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
@@ -23,7 +23,7 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type Tab = 'pl' | 'balance' | 'cashflow' | 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity';
+type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity';
 
 // ── Date Filter ───────────────────────────────────────────────────────────────
 
@@ -57,289 +57,6 @@ function DateFilter({ range, onChange }: { range: DateRange; onChange: (r: DateR
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── Report Line ───────────────────────────────────────────────────────────────
-
-function ReportLine({ label, amount, bold, indent, negative, highlight }: {
-  label: string; amount: number; bold?: boolean; indent?: number;
-  negative?: boolean; highlight?: boolean;
-}) {
-  const display = negative ? -amount : amount;
-  return (
-    <div className={`flex items-center justify-between py-1.5 ${highlight ? 'rounded-lg bg-brand-50 px-3 -mx-3' : ''}`}
-      style={{ paddingLeft: indent ? indent * 16 : undefined }}>
-      <span className={`text-sm ${bold ? 'font-semibold text-gray-900' : 'text-gray-600'}`}>{label}</span>
-      <span className={`text-sm ${bold ? 'font-semibold text-gray-900' : 'text-gray-600'} ${display < 0 ? 'text-red-600' : ''}`}>
-        {formatMwk(display)}
-      </span>
-    </div>
-  );
-}
-
-function Divider() {
-  return <div className="my-2 border-t border-gray-200" />;
-}
-
-function SectionHeader({ label }: { label: string }) {
-  return <p className="mt-4 mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">{label}</p>;
-}
-
-// ── P&L Report ────────────────────────────────────────────────────────────────
-
-function PLReport({ businessId, range }: { businessId: string; range: DateRange }) {
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['accounts', businessId],
-    queryFn: () => repos.account.findByBusiness(businessId),
-    enabled: Boolean(businessId),
-  });
-
-  const { data: journalLines = [], isLoading: linesLoading } = useQuery({
-    queryKey: ['journal_lines', businessId, range],
-    queryFn: async () => {
-      const { data, error } = await repos.journal['client']
-        .from('journal_lines')
-        .select('*, journal_entries!inner(entry_date, status, business_id)')
-        .eq('business_id', businessId)
-        .gte('journal_entries.entry_date', range.from)
-        .lte('journal_entries.entry_date', range.to)
-        .eq('journal_entries.status', 'posted');
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-    enabled: Boolean(businessId),
-  });
-
-  const loading = isLoading || linesLoading;
-
-  const accountMap = useMemo(() =>
-    Object.fromEntries(accounts.map((a) => [a.id, a])),
-    [accounts]
-  );
-
-  const balances = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const line of journalLines as any[]) {
-      const acc = accountMap[line.account_id];
-      if (!acc) continue;
-      const amount = Number(line.amount);
-      map[line.account_id] = (map[line.account_id] ?? 0) + (line.is_debit ? amount : -amount);
-    }
-    return map;
-  }, [journalLines, accountMap]);
-
-  function sumByType(type: AccountType) {
-    return accounts
-      .filter((a) => a.account_type === type && !a.is_group)
-      .reduce((s, a) => s + (balances[a.id] ?? 0), 0);
-  }
-
-  function accountsByType(type: AccountType) {
-    return accounts
-      .filter((a) => a.account_type === type && !a.is_group && (balances[a.id] ?? 0) !== 0)
-      .sort((a, b) => a.code.localeCompare(b.code));
-  }
-
-  const totalIncome = sumByType('income');
-  const totalExpense = sumByType('expense');
-  const netProfit = -totalIncome - totalExpense;
-
-  if (loading) return <div className="space-y-3">{[...Array(8)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-2xl">
-      <h2 className="mb-1 text-base font-semibold text-gray-900">Profit & Loss Statement</h2>
-      <p className="mb-6 text-xs text-gray-400">{range.from} to {range.to}</p>
-
-      <SectionHeader label="Revenue" />
-      {accountsByType('income').map((a) => (
-        <ReportLine key={a.id} label={a.name} amount={-(balances[a.id] ?? 0)} indent={1} />
-      ))}
-      <Divider />
-      <ReportLine label="Total Revenue" amount={-totalIncome} bold />
-
-      <SectionHeader label="Expenses" />
-      {accountsByType('expense').map((a) => (
-        <ReportLine key={a.id} label={a.name} amount={balances[a.id] ?? 0} indent={1} />
-      ))}
-      <Divider />
-      <ReportLine label="Total Expenses" amount={totalExpense} bold />
-
-      <Divider />
-      <ReportLine label="Net Profit / (Loss)" amount={netProfit} bold highlight />
-    </div>
-  );
-}
-
-// ── Balance Sheet ─────────────────────────────────────────────────────────────
-
-function BalanceSheetReport({ businessId, range }: { businessId: string; range: DateRange }) {
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['accounts', businessId],
-    queryFn: () => repos.account.findByBusiness(businessId),
-    enabled: Boolean(businessId),
-  });
-
-  const { data: journalLines = [], isLoading: linesLoading } = useQuery({
-    queryKey: ['journal_lines_bs', businessId, range],
-    queryFn: async () => {
-      const { data, error } = await repos.journal['client']
-        .from('journal_lines')
-        .select('*, journal_entries!inner(entry_date, status, business_id)')
-        .eq('business_id', businessId)
-        .lte('journal_entries.entry_date', range.to)
-        .eq('journal_entries.status', 'posted');
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-    enabled: Boolean(businessId),
-  });
-
-  const loading = isLoading || linesLoading;
-
-  const accountMap = useMemo(() =>
-    Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
-
-  const balances = useMemo(() => {
-    const map: Record<string, number> = {};
-    for (const line of journalLines as any[]) {
-      const acc = accountMap[line.account_id];
-      if (!acc) continue;
-      const amount = Number(line.amount);
-      map[line.account_id] = (map[line.account_id] ?? 0) + (line.is_debit ? amount : -amount);
-    }
-    // Add opening balances
-    for (const acc of accounts) {
-      if (acc.opening_balance && Number(acc.opening_balance) !== 0) {
-        const ob = Number(acc.opening_balance);
-        map[acc.id] = (map[acc.id] ?? 0) + (acc.normal_balance === 'debit' ? ob : -ob);
-      }
-    }
-    return map;
-  }, [journalLines, accountMap, accounts]);
-
-  function accountsByType(type: AccountType) {
-    return accounts
-      .filter((a) => a.account_type === type && !a.is_group)
-      .sort((a, b) => a.code.localeCompare(b.code));
-  }
-
-  function sumType(type: AccountType) {
-    return accountsByType(type).reduce((s, a) => s + (balances[a.id] ?? 0), 0);
-  }
-
-  const totalAssets = sumType('asset');
-  const totalLiabilities = -sumType('liability');
-  const totalEquity = -sumType('equity');
-
-  if (loading) return <div className="space-y-3">{[...Array(8)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-2xl">
-      <h2 className="mb-1 text-base font-semibold text-gray-900">Balance Sheet</h2>
-      <p className="mb-6 text-xs text-gray-400">As at {range.to}</p>
-
-      <SectionHeader label="Assets" />
-      {accountsByType('asset').map((a) => (
-        <ReportLine key={a.id} label={a.name} amount={balances[a.id] ?? 0} indent={1} />
-      ))}
-      <Divider />
-      <ReportLine label="Total Assets" amount={totalAssets} bold />
-
-      <SectionHeader label="Liabilities" />
-      {accountsByType('liability').map((a) => (
-        <ReportLine key={a.id} label={a.name} amount={-(balances[a.id] ?? 0)} indent={1} />
-      ))}
-      <Divider />
-      <ReportLine label="Total Liabilities" amount={totalLiabilities} bold />
-
-      <SectionHeader label="Equity" />
-      {accountsByType('equity').map((a) => (
-        <ReportLine key={a.id} label={a.name} amount={-(balances[a.id] ?? 0)} indent={1} />
-      ))}
-      <Divider />
-      <ReportLine label="Total Equity" amount={totalEquity} bold />
-
-      <Divider />
-      <ReportLine label="Total Liabilities & Equity" amount={totalLiabilities + totalEquity} bold highlight />
-    </div>
-  );
-}
-
-// ── Cash Flow ─────────────────────────────────────────────────────────────────
-
-function CashFlowReport({ businessId, range }: { businessId: string; range: DateRange }) {
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['accounts', businessId],
-    queryFn: () => repos.account.findByBusiness(businessId),
-    enabled: Boolean(businessId),
-  });
-
-  const { data: journalLines = [], isLoading } = useQuery({
-    queryKey: ['journal_lines_cf', businessId, range],
-    queryFn: async () => {
-      const { data, error } = await repos.journal['client']
-        .from('journal_lines')
-        .select('*, journal_entries!inner(entry_date, status, business_id, source_type)')
-        .eq('business_id', businessId)
-        .gte('journal_entries.entry_date', range.from)
-        .lte('journal_entries.entry_date', range.to)
-        .eq('journal_entries.status', 'posted');
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    },
-    enabled: Boolean(businessId),
-  });
-
-  const accountMap = useMemo(() =>
-    Object.fromEntries(accounts.map((a) => [a.id, a])), [accounts]);
-
-  const { operating, investing, financing } = useMemo(() => {
-    let operating = 0, investing = 0, financing = 0;
-    for (const line of journalLines as any[]) {
-      const acc = accountMap[line.account_id];
-      if (!acc || !acc.is_bank_account) continue;
-      const amount = Number(line.amount) * (line.is_debit ? 1 : -1);
-      const src = line.journal_entries?.source_type ?? '';
-      if (src === 'invoice' || src === 'expense' || src === 'payroll') operating += amount;
-      else if (src === 'asset') investing += amount;
-      else financing += amount;
-    }
-    return { operating, investing, financing };
-  }, [journalLines, accountMap]);
-
-  const netCashFlow = operating + investing + financing;
-
-  if (isLoading) return <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
-
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-2xl">
-      <h2 className="mb-1 text-base font-semibold text-gray-900">Cash Flow Summary</h2>
-      <p className="mb-6 text-xs text-gray-400">{range.from} to {range.to}</p>
-
-      <SectionHeader label="Operating Activities" />
-      <ReportLine label="Net cash from operations" amount={operating} indent={1} />
-      <Divider />
-      <ReportLine label="Total Operating" amount={operating} bold />
-
-      <SectionHeader label="Investing Activities" />
-      <ReportLine label="Net cash from investing" amount={investing} indent={1} />
-      <Divider />
-      <ReportLine label="Total Investing" amount={investing} bold />
-
-      <SectionHeader label="Financing Activities" />
-      <ReportLine label="Net cash from financing" amount={financing} indent={1} />
-      <Divider />
-      <ReportLine label="Total Financing" amount={financing} bold />
-
-      <Divider />
-      <ReportLine label="Net Cash Movement" amount={netCashFlow} bold highlight />
-
-      <p className="mt-4 text-xs text-gray-400">
-        Cash flow is derived from posted journal entries on bank accounts, classified by source type.
-      </p>
     </div>
   );
 }
@@ -431,7 +148,7 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
 export function ReportsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
-  const [tab, setTab] = useState<Tab>('pl');
+  const [tab, setTab] = useState<Tab>('sofp');
   const [range, setRange] = useState<DateRange>({ from: startOfYear(), to: todayStr() });
 
   if (!businessId) {
@@ -453,18 +170,6 @@ export function ReportsPage() {
 
       {/* Tabs */}
       <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 w-fit">
-        <button onClick={() => setTab('pl')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-          <TrendingUp className="h-4 w-4" />P&L
-        </button>
-        <button onClick={() => setTab('balance')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'balance' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-          <Scale className="h-4 w-4" />Balance Sheet
-        </button>
-        <button onClick={() => setTab('cashflow')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'cashflow' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-          <ArrowLeftRight className="h-4 w-4" />Cash Flow
-        </button>
         <button onClick={() => setTab('trial')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'trial' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Table2 className="h-4 w-4" />Trial Balance
@@ -490,9 +195,6 @@ export function ReportsPage() {
       {/* Date filter — not shown for trial balance */}
       {tab !== 'trial' && <DateFilter range={range} onChange={setRange} />}
 
-      {tab === 'pl'       && <PLReport businessId={businessId} range={range} />}
-      {tab === 'balance'  && <BalanceSheetReport businessId={businessId} range={range} />}
-      {tab === 'cashflow' && <CashFlowReport businessId={businessId} range={range} />}
       {tab === 'trial'    && <TrialBalanceReport businessId={businessId} />}
       {tab === 'sofp'    && <StatementOfFinancialPosition businessId={businessId} asOfDate={range.to} businessName={currentBusiness.business.name} />}
       {tab === 'pl-ifrs' && <StatementOfProfitOrLoss businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
