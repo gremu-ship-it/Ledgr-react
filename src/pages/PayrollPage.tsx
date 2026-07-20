@@ -1,3 +1,4 @@
+import { currentFiscalYear } from '@/lib/fiscalYear';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -15,10 +16,6 @@ function formatMwk(amount: number): string {
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function currentFiscalYear(): string {
-  return String(new Date().getFullYear());
 }
 
 interface PayeBand {

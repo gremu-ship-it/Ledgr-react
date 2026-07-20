@@ -303,11 +303,11 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     }
 
     if (totalPensionEmployer > 0) {
-      const pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6112');
+      const pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6130');
       if (!pensionExpenseAccountId) {
         throw new ValidationError(
           'payroll_runs',
-          `No account found with code '6112' (Employer Pension Contributions) for business ${run.business_id}.`,
+          `No account found with code '6130' (Employer Pension Contributions) for business ${run.business_id}.`,
         );
       }
       lines.push({

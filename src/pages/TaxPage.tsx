@@ -18,6 +18,7 @@ const TAX_CODES: { value: TaxCode; label: string }[] = [
   { value: 'wht_15',       label: 'WHT 15%' },
   { value: 'wht_20',       label: 'WHT 20%' },
   { value: 'paye',         label: 'PAYE' },
+  { value: 'tpr_pension',  label: 'TPR Pension (10% employer / 5% employee)' },
   { value: 'cit',          label: 'Corporate Income Tax' },
   { value: 'fbt',          label: 'Fringe Benefits Tax' },
   { value: 'none',         label: 'None / Not Applicable' },
@@ -52,6 +53,8 @@ interface TaxConfigForm {
   tax_code: TaxCode;
   name: string;
   rate: string;
+  employer_rate: string;
+  employee_rate: string;
   description: string;
   mra_reference: string;
   effective_from: string;
@@ -72,6 +75,8 @@ function TaxConfigModal({
       tax_code: existing.tax_code as TaxCode,
       name: existing.name ?? '',
       rate: String(existing.rate ?? ''),
+      employer_rate: existing.employer_rate != null ? String(existing.employer_rate) : '',
+      employee_rate: existing.employee_rate != null ? String(existing.employee_rate) : '',
       description: existing.description ?? '',
       mra_reference: existing.mra_reference ?? '',
       effective_from: existing.effective_from ?? today(),
@@ -81,6 +86,8 @@ function TaxConfigModal({
       tax_code: 'vat_standard',
       name: '',
       rate: '',
+      employer_rate: '',
+      employee_rate: '',
       description: '',
       mra_reference: '',
       effective_from: today(),
@@ -90,6 +97,8 @@ function TaxConfigModal({
   );
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const isPension = form.tax_code === 'tpr_pension';
+
   function set(field: keyof TaxConfigForm, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
   }
@@ -97,14 +106,28 @@ function TaxConfigModal({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!form.name.trim()) throw new Error('Name is required');
-      const rate = parseFloat(form.rate);
-      if (isNaN(rate) || rate < 0) throw new Error('Enter a valid rate');
+
+      let rate = 0;
+      let employerRate: number | null = null;
+      let employeeRate: number | null = null;
+
+      if (isPension) {
+        employerRate = parseFloat(form.employer_rate);
+        employeeRate = parseFloat(form.employee_rate);
+        if (isNaN(employerRate) || employerRate < 0) throw new Error('Enter a valid employer rate');
+        if (isNaN(employeeRate) || employeeRate < 0) throw new Error('Enter a valid employee rate');
+      } else {
+        rate = parseFloat(form.rate);
+        if (isNaN(rate) || rate < 0) throw new Error('Enter a valid rate');
+      }
 
       const payload: InsertDto<'tax_configurations'> = {
         business_id: businessId,
         tax_code: form.tax_code,
         name: form.name.trim(),
         rate,
+        employer_rate: employerRate,
+        employee_rate: employeeRate,
         description: form.description || null,
         mra_reference: form.mra_reference || null,
         effective_from: form.effective_from,
@@ -124,6 +147,7 @@ function TaxConfigModal({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tax_configs'] });
+      queryClient.invalidateQueries({ queryKey: ['tax_configurations'] });
       setAlert({ type: 'success', message: existing ? 'Tax config updated.' : 'Tax config created.' });
       setTimeout(onClose, 1000);
     },
@@ -142,7 +166,7 @@ function TaxConfigModal({
           {alert && <Alert type={alert.type} message={alert.message} />}
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            <div className="col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">Tax Code *</label>
               <select value={form.tax_code} onChange={(e) => set('tax_code', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
@@ -150,12 +174,32 @@ function TaxConfigModal({
               </select>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Rate (%)</label>
-              <input type="number" min="0" max="100" step="0.01" value={form.rate}
-                onChange={(e) => set('rate', e.target.value)} placeholder="e.g. 17.5"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-            </div>
+            {isPension ? (
+              <>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Employer Rate (%) *</label>
+                  <input type="number" min="0" max="100" step="0.01" value={form.employer_rate}
+                    onChange={(e) => set('employer_rate', e.target.value)} placeholder="e.g. 10"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Employee Rate (%) *</label>
+                  <input type="number" min="0" max="100" step="0.01" value={form.employee_rate}
+                    onChange={(e) => set('employee_rate', e.target.value)} placeholder="e.g. 5"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                </div>
+                <p className="col-span-2 text-xs text-gray-500">
+                  TPR pension uses two separate rates (employer contribution and employee deduction) instead of a single rate.
+                </p>
+              </>
+            ) : (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Rate (%)</label>
+                <input type="number" min="0" max="100" step="0.01" value={form.rate}
+                  onChange={(e) => set('rate', e.target.value)} placeholder="e.g. 17.5"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              </div>
+            )}
 
             <div className="col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
@@ -471,7 +515,11 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
                     </span>
                   </td>
                   <td className="px-4 py-3 font-medium text-gray-900">{cfg.name}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{Number(cfg.rate).toFixed(2)}%</td>
+                  <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                    {cfg.tax_code === 'tpr_pension'
+                      ? `${Number(cfg.employer_rate ?? 0).toFixed(1)}% / ${Number(cfg.employee_rate ?? 0).toFixed(1)}%`
+                      : `${Number(cfg.rate).toFixed(2)}%`}
+                  </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.mra_reference ?? '—'}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_from}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_to ?? '—'}</td>
