@@ -751,6 +751,17 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
     enabled: Boolean(businessId),
   });
 
+  // FIX: this previously called calculatePAYE(gross * 12, []) — an
+  // always-empty bands array — meaning the "Est. PAYE" column silently
+  // used the hardcoded MRA-default fallback for every business, every
+  // employee, regardless of that business's actual configured bands.
+  // Now fetches the real bands, same as RunPayrollModal does.
+  const { data: payeBands = [] } = useQuery({
+    queryKey: ['paye_bands', businessId, currentFiscalYear()],
+    queryFn: () => repos.payroll.findPayeBands(businessId, currentFiscalYear()),
+    enabled: Boolean(businessId),
+  });
+
   if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
   if (isError) return <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load employees.</div>;
 
@@ -788,7 +799,7 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
           <tbody className="divide-y divide-gray-100">
             {employees.map((emp) => {
               const gross = Number(emp.gross_salary);
-              const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, []);
+              const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
               const net = gross - paye;
               return (
                 <tr

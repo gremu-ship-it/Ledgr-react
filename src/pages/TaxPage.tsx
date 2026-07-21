@@ -1,3 +1,4 @@
+import { currentFiscalYear } from '@/lib/fiscalYear';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -27,13 +28,6 @@ const TAX_CODES: { value: TaxCode; label: string }[] = [
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
-
-function currentFiscalYear(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  return `${year}/${year + 1}`;
-}
-
 // ── Alert ─────────────────────────────────────────────────────────────────────
 
 function Alert({ type, message }: { type: 'success' | 'error'; message: string }) {
