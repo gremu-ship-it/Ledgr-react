@@ -19,6 +19,12 @@ function startOfYear(): string {
   return `${new Date().getFullYear()}-01-01`;
 }
 
+function oneYearBefore(dateStr: string): string {
+  const d = new Date(dateStr);
+  d.setFullYear(d.getFullYear() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -150,6 +156,7 @@ export function ReportsPage() {
   const businessId = currentBusiness?.business?.id;
   const [tab, setTab] = useState<Tab>('sofp');
   const [range, setRange] = useState<DateRange>({ from: startOfYear(), to: todayStr() });
+  const [showComparative, setShowComparative] = useState(false);
 
   if (!businessId) {
     return (
@@ -195,11 +202,54 @@ export function ReportsPage() {
       {/* Date filter — not shown for trial balance */}
       {tab !== 'trial' && <DateFilter range={range} onChange={setRange} />}
 
-      {tab === 'trial'    && <TrialBalanceReport businessId={businessId} />}
-      {tab === 'sofp'    && <StatementOfFinancialPosition businessId={businessId} asOfDate={range.to} businessName={currentBusiness.business.name} />}
-      {tab === 'pl-ifrs' && <StatementOfProfitOrLoss businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
-      {tab === 'cashflow-ifrs' && <CashFlowStatement businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
-      {tab === 'equity'        && <StatementOfChangesInEquity businessId={businessId} periodStart={range.from} periodEnd={range.to} businessName={currentBusiness.business.name} />}
+      {/* Comparative toggle — only relevant for SOFP and P&L (IFRS) tabs */}
+      {(tab === 'sofp' || tab === 'pl-ifrs') && (
+        <label className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+          <input
+            type="checkbox"
+            checked={showComparative}
+            onChange={(e) => setShowComparative(e.target.checked)}
+            className="rounded border-gray-300"
+          />
+          Show prior year comparison
+        </label>
+      )}
+
+      {tab === 'trial' && <TrialBalanceReport businessId={businessId} />}
+      {tab === 'sofp' && (
+        <StatementOfFinancialPosition
+          businessId={businessId}
+          asOfDate={range.to}
+          comparativeDate={showComparative ? oneYearBefore(range.to) : null}
+          businessName={currentBusiness.business.name}
+        />
+      )}
+      {tab === 'pl-ifrs' && (
+        <StatementOfProfitOrLoss
+          businessId={businessId}
+          periodStart={range.from}
+          periodEnd={range.to}
+          comparativePeriodStart={showComparative ? oneYearBefore(range.from) : null}
+          comparativePeriodEnd={showComparative ? oneYearBefore(range.to) : null}
+          businessName={currentBusiness.business.name}
+        />
+      )}
+      {tab === 'cashflow-ifrs' && (
+        <CashFlowStatement
+          businessId={businessId}
+          periodStart={range.from}
+          periodEnd={range.to}
+          businessName={currentBusiness.business.name}
+        />
+      )}
+      {tab === 'equity' && (
+        <StatementOfChangesInEquity
+          businessId={businessId}
+          periodStart={range.from}
+          periodEnd={range.to}
+          businessName={currentBusiness.business.name}
+        />
+      )}
     </div>
   );
 }
