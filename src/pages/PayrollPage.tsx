@@ -28,8 +28,8 @@ function calculatePAYE(annualGross: number, bands: PayeBand[]): number {
   if (bands.length === 0) {
     const fallbackBands: PayeBand[] = [
       { band_from: 0,         band_to: 1_200_000, rate: 0 },
-      { band_from: 1_200_000, band_to: 2_400_000, rate: 0.25 },
-      { band_from: 2_400_000, band_to: null,       rate: 0.35 },
+      { band_from: 1_200_000, band_to: 2_400_000, rate: 25 },
+      { band_from: 2_400_000, band_to: null,       rate: 35 },
     ];
     bands = fallbackBands;
   }
@@ -39,7 +39,7 @@ function calculatePAYE(annualGross: number, bands: PayeBand[]): number {
     const upper = band.band_to ?? Infinity;
     const taxable = Math.min(annualGross, upper) - band.band_from;
     if (taxable <= 0) continue;
-    tax += taxable * band.rate;
+    tax += taxable * (band.rate/100);
   }
   return tax / 12;
 }
