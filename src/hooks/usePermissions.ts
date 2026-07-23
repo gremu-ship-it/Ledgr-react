@@ -138,6 +138,58 @@ export function usePermissions(): Permissions {
         isGuest: false,
       };
 
+    case 'supervisor':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: true,
+        canWritePayroll: true,
+        role,
+        isGuest: false,
+      };
+
+    case 'data_entry':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: false,
+        canWritePayroll: false,
+        role,
+        isGuest: false,
+      };
+
+    case 'inventory_manager':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: true,
+        canWritePayroll: false,
+        role,
+        isGuest: false,
+      };
+
+    case 'sales_clerk':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: false,
+        canWritePayroll: false,
+        role,
+        isGuest: false,
+      };
+
     default:
       return GUEST;
   }
