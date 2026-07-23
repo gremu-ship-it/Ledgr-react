@@ -11,13 +11,12 @@ import {
   Users,
   BarChart2,
   Percent,
-  BookUser,
   ClipboardList,
   AlertTriangle,
   Lock,
   Package,
   Smartphone,
-  Plus,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';

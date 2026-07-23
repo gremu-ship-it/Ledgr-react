@@ -148,4 +148,3 @@ export function Header() {
     </header>
   );
 }
-}
