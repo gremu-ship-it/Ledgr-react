@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { repos } from '@/lib/repositories';
 import type { AccountSubtype, Row } from '@/dal/types/database';
+import { useChartColors } from '@/components/ui/useChartColors';
 
 const UNASSIGNED_BRANCH_ID = '__unassigned__';
 const TOLERANCE = 0.01;
@@ -273,18 +274,18 @@ function SummaryCard({
   tone?: 'neutral' | 'good' | 'bad';
 }) {
   const Icon = tone === 'bad' ? TrendingDown : tone === 'good' ? TrendingUp : BarChart3;
-  const colour = tone === 'bad' ? 'text-red-600 bg-red-50' : tone === 'good' ? 'text-emerald-600 bg-emerald-50' : 'text-brand-600 bg-brand-50';
+  const colour = tone === 'bad' ? 'text-danger bg-danger/10' : tone === 'good' ? 'text-brand-600 dark:text-brand-400 bg-brand-500/10' : 'text-brand-600 dark:text-brand-300 bg-brand-500/10';
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
         <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${colour}`}>
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className={`mt-3 text-xl font-bold ${tone === 'bad' ? 'text-red-600' : 'text-gray-900'}`}>{value}</p>
-      <p className="mt-1 text-xs text-gray-500">{helper}</p>
+      <p className={`mt-3 text-xl font-bold ${tone === 'bad' ? 'text-danger' : 'text-ink'}`}>{value}</p>
+      <p className="mt-1 text-xs text-muted">{helper}</p>
     </div>
   );
 }
@@ -295,14 +296,14 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
   onSelect: (branchId: string) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-200 px-6 py-4">
-        <h2 className="text-base font-semibold text-gray-900">Branch comparison</h2>
-        <p className="text-xs text-gray-400">Revenue, costs and profitability by branch</p>
+    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+      <div className="border-b border-line px-6 py-4">
+        <h2 className="text-base font-semibold text-ink">Branch comparison</h2>
+        <p className="text-xs text-muted">Revenue, costs and profitability by branch</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 text-left">Branch</th>
               <th className="px-4 py-3 text-right">Revenue</th>
@@ -313,7 +314,7 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
               <th className="hidden sm:table-cell px-4 py-3 text-right">Net Margin</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {rows.map((row) => {
               const isSelected = row.branchId === selectedBranchId;
               const totalExpenses = row.operatingExpenses + row.depreciationAmortisation + row.financeCosts + row.taxExpense;
@@ -321,32 +322,32 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
                 <tr
                   key={row.branchId}
                   onClick={() => onSelect(row.branchId)}
-                  className={`cursor-pointer transition-colors ${isSelected ? 'bg-brand-50' : 'hover:bg-gray-50'}`}
+                  className={`cursor-pointer transition-colors ${isSelected ? 'bg-brand-500/10' : 'hover:bg-bg'}`}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-100 text-gray-500">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface text-muted">
                         <Building2 className="h-4 w-4" />
                       </div>
                       <div>
-                        <p className="font-semibold text-gray-900">{row.branchName}</p>
-                        <p className="text-xs text-gray-400">
+                        <p className="font-semibold text-ink">{row.branchName}</p>
+                        <p className="text-xs text-muted">
                           {row.branchCode ? `${row.branchCode} · ` : ''}{row.location ?? 'No location'}
                           {!row.isActive && ' · inactive'}
                         </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMwk(row.revenue)}</td>
-                  <td className="hidden md:table-cell px-4 py-3 text-right text-gray-600">{formatMwk(row.costOfSales)}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${row.grossProfit < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
+                  <td className="px-4 py-3 text-right font-medium text-ink">{formatMwk(row.revenue)}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-right text-sub">{formatMwk(row.costOfSales)}</td>
+                  <td className={`px-4 py-3 text-right font-medium ${row.grossProfit < 0 ? 'text-danger' : 'text-brand-700 dark:text-brand-300'}`}>
                     {formatMwk(row.grossProfit)}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-3 text-right text-gray-600">{formatMwk(totalExpenses)}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${row.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                  <td className="hidden lg:table-cell px-4 py-3 text-right text-sub">{formatMwk(totalExpenses)}</td>
+                  <td className={`px-4 py-3 text-right font-semibold ${row.netProfit < 0 ? 'text-danger' : 'text-ink'}`}>
                     {formatMwk(row.netProfit)}
                   </td>
-                  <td className={`hidden sm:table-cell px-4 py-3 text-right font-medium ${(row.netMargin ?? 0) < 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                  <td className={`hidden sm:table-cell px-4 py-3 text-right font-medium ${(row.netMargin ?? 0) < 0 ? 'text-danger' : 'text-sub'}`}>
                     {formatPercent(row.netMargin)}
                   </td>
                 </tr>
@@ -368,36 +369,36 @@ function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
   }, {});
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4">
+    <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">{row.branchName} performance detail</h2>
-          <p className="mt-1 text-xs text-gray-400">Account-level profit or loss lines assigned to this branch.</p>
+          <h2 className="text-base font-semibold text-ink">{row.branchName} performance detail</h2>
+          <p className="mt-1 text-xs text-muted">Account-level profit or loss lines assigned to this branch.</p>
         </div>
-        <div className="rounded-xl bg-gray-50 px-3 py-2 text-right">
-          <p className="text-xs text-gray-400">Net Profit</p>
-          <p className={`text-sm font-bold ${row.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMwk(row.netProfit)}</p>
+        <div className="rounded-xl bg-bg px-3 py-2 text-right">
+          <p className="text-xs text-muted">Net Profit</p>
+          <p className={`text-sm font-bold ${row.netProfit < 0 ? 'text-danger' : 'text-ink'}`}>{formatMwk(row.netProfit)}</p>
         </div>
       </div>
 
       {row.accountBreakdown.length === 0 ? (
         <div className="flex min-h-[18vh] flex-col items-center justify-center gap-2 text-center">
-          <Table2 className="h-8 w-8 text-gray-300" />
-          <p className="text-sm text-gray-500">No P&amp;L activity was posted to this branch in the selected period.</p>
+          <Table2 className="h-8 w-8 text-muted/50" />
+          <p className="text-sm text-muted">No P&amp;L activity was posted to this branch in the selected period.</p>
         </div>
       ) : (
         <div className="space-y-4">
           {Object.entries(grouped).map(([label, lines]) => (
             <div key={label}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-              <div className="overflow-hidden rounded-xl border border-gray-100">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{label}</p>
+              <div className="overflow-hidden rounded-xl border border-line">
                 <table className="w-full text-sm">
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-line">
                     {lines.map((line) => (
                       <tr key={line.key}>
-                        <td className="px-3 py-2 font-mono text-xs text-gray-400">{line.code}</td>
-                        <td className="px-3 py-2 text-gray-700">{line.name}</td>
-                        <td className="px-3 py-2 text-right font-medium text-gray-900">{formatMwk(line.amount)}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-muted">{line.code}</td>
+                        <td className="px-3 py-2 text-sub">{line.name}</td>
+                        <td className="px-3 py-2 text-right font-medium text-ink">{formatMwk(line.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -421,6 +422,7 @@ export function BranchPerformanceReport({
   periodEnd: string;
 }) {
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const colors = useChartColors();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['branch_performance', businessId, periodStart, periodEnd],
@@ -485,7 +487,7 @@ export function BranchPerformanceReport({
   if (isLoading) {
     return (
       <div className="space-y-3">
-        {[...Array(8)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded bg-gray-100" />)}
+        {[...Array(8)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded bg-surface" />)}
       </div>
     );
   }
@@ -493,18 +495,18 @@ export function BranchPerformanceReport({
   if (error) {
     return (
       <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
-        <AlertTriangle className="h-8 w-8 text-red-400" />
-        <p className="text-sm text-gray-500">Could not load branch performance report.</p>
+        <AlertTriangle className="h-8 w-8 text-danger" />
+        <p className="text-sm text-muted">Could not load branch performance report.</p>
       </div>
     );
   }
 
   if (!data || data.branches.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
-        <Building2 className="mx-auto h-10 w-10 text-gray-300" />
-        <h2 className="mt-3 text-base font-semibold text-gray-900">No branches set up yet</h2>
-        <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+      <div className="rounded-2xl border border-dashed border-line bg-card p-8 text-center">
+        <Building2 className="mx-auto h-10 w-10 text-muted/50" />
+        <h2 className="mt-3 text-base font-semibold text-ink">No branches set up yet</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted">
           Create branches first, then assign income and expenses to a branch to monitor performance by selling point or cost centre.
         </p>
       </div>
@@ -513,10 +515,10 @@ export function BranchPerformanceReport({
 
   if (rows.length === 0 || rows.every((row) => row.accountBreakdown.length === 0)) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-        <BarChart3 className="mx-auto h-10 w-10 text-gray-300" />
-        <h2 className="mt-3 text-base font-semibold text-gray-900">No branch activity for this period</h2>
-        <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
+      <div className="rounded-2xl border border-line bg-card p-8 text-center shadow-sm">
+        <BarChart3 className="mx-auto h-10 w-10 text-muted/50" />
+        <h2 className="mt-3 text-base font-semibold text-ink">No branch activity for this period</h2>
+        <p className="mx-auto mt-1 max-w-md text-sm text-muted">
           Branch reports use posted journal entries from income and expense transactions that have a branch selected.
         </p>
       </div>
@@ -532,28 +534,38 @@ export function BranchPerformanceReport({
         <SummaryCard label="Top branch" value={bestBranch?.branchName ?? '—'} helper={bestBranch ? `${formatMwk(bestBranch.netProfit)} net profit` : 'No profitable branch yet'} tone="neutral" />
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Performance chart</h2>
-            <p className="text-xs text-gray-400">Compare revenue, gross profit and net profit side by side.</p>
+            <h2 className="text-base font-semibold text-ink">Performance chart</h2>
+            <p className="text-xs text-muted">Compare revenue, gross profit and net profit side by side.</p>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600">
-            <ChevronDown className="h-4 w-4 text-gray-400" />
+          <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-sm text-sub">
+            <ChevronDown className="h-4 w-4 text-muted" />
             Sorted by net profit
           </div>
         </div>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} tickFormatter={formatCompactMwk} />
-              <Tooltip formatter={(value) => formatMwk(Number(value))} />
-              <Legend />
-              <Bar dataKey="Revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="Gross Profit" fill="#10b981" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="Net Profit" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke={colors.grid} vertical={false} />
+              <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: colors.axis }} />
+              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: colors.axis }} tickFormatter={formatCompactMwk} />
+              <Tooltip
+                cursor={{ fill: colors.surface }}
+                contentStyle={{
+                  background: colors.ink,
+                  color: colors.surface,
+                  border: `1px solid ${colors.line}`,
+                  borderRadius: 12,
+                  fontSize: 12,
+                }}
+                formatter={(value) => formatMwk(Number(value))}
+              />
+              <Legend formatter={(value) => <span style={{ color: colors.legend }}>{value}</span>} />
+              <Bar dataKey="Revenue" fill={colors.revenue} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="Gross Profit" fill={colors.grossProfit} radius={[6, 6, 0, 0]} />
+              <Bar dataKey="Net Profit" fill={colors.netProfit} radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

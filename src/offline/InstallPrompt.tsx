@@ -84,22 +84,22 @@ export function InstallPrompt() {
   if (!deferredPrompt && !showIosInstructions) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md rounded-2xl border border-gray-200 bg-white p-4 shadow-lg sm:left-auto sm:right-4">
+    <div className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-md rounded-2xl border border-line bg-card p-4 shadow-lg sm:left-auto sm:right-4">
       <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50">
-          <Download className="h-5 w-5 text-brand-500" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500/10">
+          <Download className="h-5 w-5 text-brand-600 dark:text-brand-400" />
         </div>
 
         <div className="flex-1">
-          <p className="text-sm font-semibold text-gray-900">Install Ledgr</p>
+          <p className="text-sm font-semibold text-ink">Install Ledgr</p>
 
           {showIosInstructions ? (
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted">
               Tap <Share className="inline h-3.5 w-3.5 -translate-y-px" aria-hidden /> then{' '}
-              <span className="font-medium text-gray-700">Add to Home Screen</span> to install.
+              <span className="font-medium text-sub">Add to Home Screen</span> to install.
             </p>
           ) : (
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-muted">
               Install Ledgr on this device for quick access and offline use.
             </p>
           )}
@@ -107,7 +107,7 @@ export function InstallPrompt() {
           {!showIosInstructions && (
             <button
               onClick={() => void handleInstallClick()}
-              className="mt-3 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+              className="mt-3 rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
             >
               Install App
             </button>
@@ -116,7 +116,7 @@ export function InstallPrompt() {
 
         <button
           onClick={handleDismiss}
-          className="shrink-0 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+          className="shrink-0 rounded-lg p-1 text-muted transition-colors hover:bg-surface hover:text-sub"
           aria-label="Dismiss"
         >
           <X className="h-4 w-4" />

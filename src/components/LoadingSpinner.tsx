@@ -34,13 +34,13 @@ export function LoadingSpinner({
           sizeMap[size],
         )}
       />
-      {fullScreen && <p className="text-sm text-gray-500">{label}</p>}
+      {fullScreen && <p className="text-sm text-muted">{label}</p>}
     </div>
   );
 
   if (fullScreen) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+      <div className="flex h-screen w-full items-center justify-center bg-bg">
         {spinner}
       </div>
     );

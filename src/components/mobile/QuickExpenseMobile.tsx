@@ -182,11 +182,11 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       {/* Success */}
       {step === 'success' && (
         <div className="flex flex-col items-center py-8 gap-3">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
-            <CheckCircle className="h-8 w-8 text-brand-500" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-500/10">
+            <CheckCircle className="h-8 w-8 text-brand-600 dark:text-brand-400" />
           </div>
-          <p className="text-lg font-semibold text-gray-900">Expense Recorded!</p>
-          <p className="text-sm text-gray-500">
+          <p className="text-lg font-semibold text-ink">Expense Recorded!</p>
+          <p className="text-sm text-muted">
             MK {rawAmount.toLocaleString('en-MW')} · {category}
           </p>
         </div>
@@ -198,27 +198,27 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           <MwkNumberPad value={amount} onChange={setAmount} />
 
           {/* VAT toggle */}
-          <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+          <div className="flex items-center justify-between rounded-xl bg-bg px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-gray-700">Amount includes VAT</p>
+              <p className="text-sm font-medium text-sub">Amount includes VAT</p>
               {amount && includeVat && (
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-muted">
                   Net: MK {(parseFloat(amount) / 1.175).toFixed(2)} · VAT: MK {(parseFloat(amount) - parseFloat(amount) / 1.175).toFixed(2)}
                 </p>
               )}
             </div>
             <button
               onClick={() => setIncludeVat((v) => !v)}
-              className={`relative h-6 w-11 rounded-full transition-colors ${includeVat ? 'bg-brand-500' : 'bg-gray-300'}`}
+              className={`relative h-6 w-11 rounded-full transition-colors ${includeVat ? 'bg-brand-600' : 'bg-surface'}`}
             >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${includeVat ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-transform ${includeVat ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
           </div>
 
           <button
             onClick={() => setStep('category')}
             disabled={!amount || parseFloat(amount) <= 0}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white disabled:opacity-40 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white disabled:opacity-40 transition-all active:scale-95"
           >
             Next <ChevronRight className="h-5 w-5" />
           </button>
@@ -230,7 +230,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         <div className="flex flex-col gap-4">
           <button
             onClick={() => setStep('amount')}
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-sm text-muted"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
@@ -245,12 +245,12 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                 }}
                 className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all active:scale-95 ${
                   category === cat.label
-                    ? 'border-brand-500 bg-brand-50'
-                    : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                    ? 'border-brand-500 bg-brand-500/10'
+                    : 'border-line bg-bg hover:border-line'
                 }`}
               >
                 <span className="text-2xl">{cat.emoji}</span>
-                <span className="text-xs font-medium text-gray-700">{cat.label}</span>
+                <span className="text-xs font-medium text-sub">{cat.label}</span>
               </button>
             ))}
           </div>
@@ -262,20 +262,20 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         <div className="flex flex-col gap-4">
           <button
             onClick={() => setStep('category')}
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-sm text-muted"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
-          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
-            <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
+          <div className="rounded-xl bg-bg px-4 py-3 text-sm text-muted">
+            <span className="font-medium text-ink">MK {rawAmount.toLocaleString('en-MW')}</span>
             {' · '}
             <span>{category}</span>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Description <span className="text-gray-400">(optional)</span>
+            <label className="mb-1 block text-sm font-medium text-sub">
+              Description <span className="text-muted">(optional)</span>
             </label>
             <input
               type="text"
@@ -283,13 +283,13 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
               onChange={(e) => setDescription(e.target.value)}
               placeholder={`e.g. ${category} for office...`}
               autoFocus
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-xl border border-line px-4 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <button
             onClick={() => setStep('confirm')}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white transition-all active:scale-95"
           >
             Next <ChevronRight className="h-5 w-5" />
           </button>
@@ -301,54 +301,54 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         <div className="flex flex-col gap-4">
           <button
             onClick={() => setStep('description')}
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-1 text-sm text-muted"
           >
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
 
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+          <div className="rounded-2xl border border-line bg-bg p-4 space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Amount</span>
-              <span className="font-semibold text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
+              <span className="text-muted">Amount</span>
+              <span className="font-semibold text-ink">MK {rawAmount.toLocaleString('en-MW')}</span>
             </div>
             {includeVat && (
               <>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Net</span>
-                  <span className="text-gray-700">MK {netAmount.toFixed(2)}</span>
+                  <span className="text-muted">Net</span>
+                  <span className="text-sub">MK {netAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">VAT (17.5%)</span>
-                  <span className="text-gray-700">MK {vatAmount.toFixed(2)}</span>
+                  <span className="text-muted">VAT (17.5%)</span>
+                  <span className="text-sub">MK {vatAmount.toFixed(2)}</span>
                 </div>
               </>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Category</span>
-              <span className="text-gray-700">{category}</span>
+              <span className="text-muted">Category</span>
+              <span className="text-sub">{category}</span>
             </div>
             {description && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Description</span>
-                <span className="text-gray-700">{description}</span>
+                <span className="text-muted">Description</span>
+                <span className="text-sub">{description}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Date</span>
-              <span className="text-gray-700">{today}</span>
+              <span className="text-muted">Date</span>
+              <span className="text-sub">{today}</span>
             </div>
           </div>
 
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white disabled:opacity-60 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 py-4 text-base font-semibold text-white disabled:opacity-60 transition-all active:scale-95"
           >
             {mutation.isPending ? 'Saving…' : 'Record Expense ✓'}
           </button>
 
           {mutation.isError && (
-            <p className="text-center text-sm text-red-600">
+            <p className="text-center text-sm text-danger">
               {(mutation.error as Error)?.message || 'Something went wrong. Please try again.'}
             </p>
           )}

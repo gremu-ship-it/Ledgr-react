@@ -12,22 +12,22 @@ interface MetricCardProps {
 
 const toneConfig = {
   positive: {
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-brand-500',
-    valueColor: 'text-brand-700',
+    iconBg: 'bg-brand-500/10',
+    iconColor: 'text-brand-600 dark:text-brand-400',
+    valueColor: 'text-brand-700 dark:text-brand-300',
     border: 'border-brand-100',
   },
   negative: {
-    iconBg: 'bg-red-50',
-    iconColor: 'text-red-500',
-    valueColor: 'text-red-700',
-    border: 'border-red-100',
+    iconBg: 'bg-danger/10',
+    iconColor: 'text-danger',
+    valueColor: 'text-danger',
+    border: 'border-danger/20',
   },
   neutral: {
-    iconBg: 'bg-gray-50',
-    iconColor: 'text-gray-500',
-    valueColor: 'text-gray-900',
-    border: 'border-gray-200',
+    iconBg: 'bg-bg',
+    iconColor: 'text-muted',
+    valueColor: 'text-ink',
+    border: 'border-line',
   },
 };
 
@@ -44,39 +44,39 @@ export function MetricCard({
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-soft animate-pulse">
+      <div className="rounded-2xl border border-line bg-card p-5 shadow-soft animate-pulse">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-9 w-9 rounded-xl bg-gray-100" />
-          <div className="h-3 w-28 rounded bg-gray-100" />
+          <div className="h-9 w-9 rounded-xl bg-surface" />
+          <div className="h-3 w-28 rounded bg-surface" />
         </div>
-        <div className="h-7 w-32 rounded bg-gray-100 mb-2" />
-        <div className="h-3 w-20 rounded bg-gray-100" />
+        <div className="h-7 w-32 rounded bg-surface mb-2" />
+        <div className="h-3 w-20 rounded bg-surface" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="rounded-2xl border border-red-100 bg-white p-5 shadow-soft">
+      <div className="rounded-2xl border border-danger/20 bg-card p-5 shadow-soft">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50">
-            <Icon size={18} className="text-red-400" />
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-danger/10">
+            <Icon size={18} className="text-danger" />
           </div>
-          <span className="text-sm text-gray-500">{label}</span>
+          <span className="text-sm text-muted">{label}</span>
         </div>
-        <p className="text-sm text-red-500 font-medium">Failed to load</p>
+        <p className="text-sm text-danger font-medium">Failed to load</p>
       </div>
     );
   }
 
   return (
-    <div className={`rounded-2xl border ${cfg.border} bg-white p-5 shadow-soft`}>
+    <div className={`rounded-2xl border ${cfg.border} bg-card p-5 shadow-soft`}>
       {/* Icon + label row */}
       <div className="flex items-center gap-3 mb-3">
         <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${cfg.iconBg}`}>
           <Icon size={18} className={cfg.iconColor} />
         </div>
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-muted">{label}</span>
       </div>
 
       {/* Value */}
@@ -84,7 +84,7 @@ export function MetricCard({
 
       {/* Subtext */}
       {subtext && (
-        <p className="mt-1 text-xs text-gray-400">{subtext}</p>
+        <p className="mt-1 text-xs text-muted">{subtext}</p>
       )}
     </div>
   );

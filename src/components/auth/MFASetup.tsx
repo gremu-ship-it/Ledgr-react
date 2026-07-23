@@ -71,20 +71,20 @@ export function MFASetup({ onEnrolled, onUnenrolled }: MFASetupProps) {
     setCopied(true); setTimeout(() => setCopied(false), 2000);
   }
 
-  if (step === 'loading') return <div className="flex items-center gap-2 py-4 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Checking 2FA status…</div>;
+  if (step === 'loading') return <div className="flex items-center gap-2 py-4 text-sm text-muted"><Loader2 className="h-4 w-4 animate-spin" />Checking 2FA status…</div>;
 
   if (step === 'enabled') return (
     <div className="space-y-4">
       {error && <AuthAlert type="error" message={error} />}
-      <div className="flex items-center gap-3 rounded-xl bg-brand-50 px-4 py-3">
-        <ShieldCheck className="h-5 w-5 shrink-0 text-brand-600" />
+      <div className="flex items-center gap-3 rounded-xl bg-brand-500/10 px-4 py-3">
+        <ShieldCheck className="h-5 w-5 shrink-0 text-brand-600 dark:text-brand-300" />
         <div>
-          <p className="text-sm font-semibold text-brand-700">Two-factor authentication is enabled</p>
-          <p className="text-xs text-brand-600">Your account is protected with TOTP authentication.</p>
+          <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">Two-factor authentication is enabled</p>
+          <p className="text-xs text-brand-600 dark:text-brand-300">Your account is protected with TOTP authentication.</p>
         </div>
       </div>
       <button onClick={() => void handleUnenroll()} disabled={loading}
-        className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-50">
+        className="flex items-center gap-2 rounded-lg border border-danger/20 bg-danger/10 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldOff className="h-4 w-4" />}
         Disable two-factor authentication
       </button>
@@ -94,31 +94,31 @@ export function MFASetup({ onEnrolled, onUnenrolled }: MFASetupProps) {
   if (step === 'enrolling') return (
     <div className="space-y-5">
       {error && <AuthAlert type="error" message={error} />}
-      <div className="text-sm text-gray-600">
-        <p className="font-medium text-gray-900">Step 1 — Scan the QR code</p>
+      <div className="text-sm text-sub">
+        <p className="font-medium text-ink">Step 1 — Scan the QR code</p>
         <p className="mt-1">Open Google Authenticator, Authy, or any TOTP app and scan below.</p>
       </div>
       <div className="flex justify-center">
-        <img src={qrCode} alt="TOTP QR code" className="h-44 w-44 rounded-xl border border-gray-200 bg-white p-2" />
+        <img src={qrCode} alt="TOTP QR code" className="h-44 w-44 rounded-xl border border-line bg-card p-2" />
       </div>
       <div>
-        <p className="mb-1 text-xs font-medium text-gray-500">Can't scan? Enter this secret manually:</p>
+        <p className="mb-1 text-xs font-medium text-muted">Can't scan? Enter this secret manually:</p>
         <div className="flex items-center gap-2">
-          <code className="flex-1 rounded-lg bg-gray-100 px-3 py-2 font-mono text-xs tracking-widest text-gray-700">{secret}</code>
-          <button onClick={copySecret} className="shrink-0 rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50">
-            {copied ? <Check className="h-4 w-4 text-brand-500" /> : <Copy className="h-4 w-4" />}
+          <code className="flex-1 rounded-lg bg-surface px-3 py-2 font-mono text-xs tracking-widest text-sub">{secret}</code>
+          <button onClick={copySecret} className="shrink-0 rounded-lg border border-line p-2 text-muted hover:bg-bg">
+            {copied ? <Check className="h-4 w-4 text-brand-600 dark:text-brand-400" /> : <Copy className="h-4 w-4" />}
           </button>
         </div>
       </div>
       <div>
-        <p className="mb-2 text-sm font-medium text-gray-900">Step 2 — Enter the 6-digit code to verify</p>
+        <p className="mb-2 text-sm font-medium text-ink">Step 2 — Enter the 6-digit code to verify</p>
         <OTPInput value={otpCode} onChange={setOtpCode} disabled={loading} />
       </div>
       <div className="flex gap-3">
         <button onClick={() => { setStep('idle'); setOtpCode(''); setError(null); }}
-          className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+          className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg">Cancel</button>
         <button onClick={() => void handleVerify()} disabled={loading || otpCode.length !== 6}
-          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+          className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}Enable 2FA
         </button>
       </div>
@@ -128,12 +128,12 @@ export function MFASetup({ onEnrolled, onUnenrolled }: MFASetupProps) {
   return (
     <div className="space-y-4">
       {error && <AuthAlert type="error" message={error} />}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-        <p className="text-sm font-medium text-gray-700">Two-factor authentication is not enabled</p>
-        <p className="mt-0.5 text-xs text-gray-500">Add an extra layer of security with a TOTP authenticator app.</p>
+      <div className="rounded-xl border border-line bg-bg px-4 py-3">
+        <p className="text-sm font-medium text-sub">Two-factor authentication is not enabled</p>
+        <p className="mt-0.5 text-xs text-muted">Add an extra layer of security with a TOTP authenticator app.</p>
       </div>
       <button onClick={() => void startEnrollment()} disabled={loading}
-        className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+        className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
         Set up two-factor authentication
       </button>

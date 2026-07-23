@@ -16,27 +16,27 @@ export function InactivityWarningModal({ secondsRemaining, onExtend, onLogoutNow
   return (
     <div role="alertdialog" aria-modal="true" aria-labelledby="inactivity-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="mx-4 w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl">
         <div className="flex flex-col items-center gap-4 text-center">
-          <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border-4 border-amber-400 bg-amber-50">
-            <Clock className="h-5 w-5 text-amber-500" />
-            <span className="mt-0.5 text-xs font-bold tabular-nums text-amber-700">{formatCountdown(secondsRemaining)}</span>
+          <div className="flex h-16 w-16 flex-col items-center justify-center rounded-full border-4 border-warning/40 bg-warning/12">
+            <Clock className="h-5 w-5 text-warning" />
+            <span className="mt-0.5 text-xs font-bold tabular-nums text-warning">{formatCountdown(secondsRemaining)}</span>
           </div>
           <div>
-            <h2 id="inactivity-title" className="text-base font-semibold text-gray-900">Are you still there?</h2>
-            <p className="mt-1.5 text-sm text-gray-500">
+            <h2 id="inactivity-title" className="text-base font-semibold text-ink">Are you still there?</h2>
+            <p className="mt-1.5 text-sm text-muted">
               You'll be signed out automatically due to inactivity in{' '}
-              <span className="font-semibold tabular-nums text-amber-600">{formatCountdown(secondsRemaining)}</span>.
+              <span className="font-semibold tabular-nums text-warning">{formatCountdown(secondsRemaining)}</span>.
               Any unsaved changes will be lost.
             </p>
           </div>
           <div className="flex w-full flex-col gap-2">
             <button onClick={onExtend}
-              className="w-full rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600">
+              className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
               I'm still here — keep me signed in
             </button>
             <button onClick={onLogoutNow}
-              className="w-full rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              className="w-full rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">
               Sign out now
             </button>
           </div>

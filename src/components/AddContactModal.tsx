@@ -15,7 +15,7 @@ interface ContactForm {
 function Alert({ type, message }: { type: 'success' | 'error'; message: string }) {
   return (
     <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
-      type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+      type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'
     }`}>
       {type === 'success'
         ? <CheckCircle className="h-4 w-4 shrink-0" />
@@ -74,10 +74,10 @@ export function AddContactModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Add {label}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+      <div className="w-full max-w-sm rounded-2xl bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-base font-semibold text-ink">Add {label}</h2>
+          <button onClick={onClose} className="text-muted hover:text-sub">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -86,58 +86,58 @@ export function AddContactModal({
           {alert && <Alert type={alert.type} message={alert.message} />}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Name *</label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
               placeholder={contactType === 'customer' ? 'e.g. John Banda' : 'e.g. Apex Suppliers Ltd'}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Email (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Email (optional)</label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => set('email', e.target.value)}
               placeholder="email@example.com"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Phone (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Phone (optional)</label>
             <input
               type="text"
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
               placeholder="+265 99 000 0000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">TPIN (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">TPIN (optional)</label>
             <input
               type="text"
               value={form.tpin}
               onChange={(e) => set('tpin', e.target.value)}
               placeholder="e.g. 100000000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-gray-200 px-5 py-4">
+        <div className="flex justify-end gap-2 border-t border-line px-5 py-4">
           <button onClick={onClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-brand-500/8 hover:text-ink transition-colors">
             Cancel
           </button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             {mutation.isPending ? 'Saving…' : `Add ${label}`}
           </button>
         </div>

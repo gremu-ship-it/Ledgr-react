@@ -35,9 +35,9 @@ export function QuickActions() {
           <button
             key={action.label}
             onClick={action.onClick}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 hover:text-brand-700"
+            className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-sm font-medium text-sub shadow-sm transition-colors hover:bg-bg hover:text-brand-700 dark:text-brand-300"
           >
-            <Icon className="h-4 w-4 text-brand-500" />
+            <Icon className="h-4 w-4 text-brand-600 dark:text-brand-400" />
             {action.label}
           </button>
         );

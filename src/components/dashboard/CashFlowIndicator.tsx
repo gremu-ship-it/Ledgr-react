@@ -14,9 +14,9 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
   const status = net > 0 ? 'profit' : net < 0 ? 'loss' : 'breakeven';
 
   const config = {
-    profit:    { label: 'Profitable', Icon: TrendingUp,   color: 'text-emerald-600', bg: 'bg-emerald-50'  },
-    loss:      { label: 'Loss',       Icon: TrendingDown, color: 'text-red-600',     bg: 'bg-red-50'      },
-    breakeven: { label: 'Break Even', Icon: Minus,        color: 'text-gray-500',    bg: 'bg-gray-100'    },
+    profit:    { label: 'Profitable', Icon: TrendingUp,   color: 'text-brand-600 dark:text-brand-400', bg: 'bg-brand-500/10'  },
+    loss:      { label: 'Loss',       Icon: TrendingDown, color: 'text-danger',     bg: 'bg-danger/10'      },
+    breakeven: { label: 'Break Even', Icon: Minus,        color: 'text-muted',    bg: 'bg-surface'    },
   }[status];
 
   const maxVal = Math.max(income ?? 0, expenses ?? 0, 1);
@@ -25,27 +25,27 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
 
   if (isLoading) {
     return (
-      <div className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="mb-4 h-4 w-24 rounded bg-gray-100" />
-        <div className="mb-2 h-8 w-32 rounded bg-gray-100" />
-        <div className="h-3 w-20 rounded bg-gray-100" />
+      <div className="animate-pulse rounded-2xl border border-line bg-card p-5">
+        <div className="mb-4 h-4 w-24 rounded bg-surface" />
+        <div className="mb-2 h-8 w-32 rounded bg-surface" />
+        <div className="h-3 w-20 rounded bg-surface" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white p-5">
-        <p className="text-sm text-red-500">Failed to load</p>
+      <div className="flex items-center justify-center rounded-2xl border border-line bg-card p-5">
+        <p className="text-sm text-danger">Failed to load</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-gray-900">Cash Flow</h3>
+        <h3 className="text-sm font-bold text-ink">Cash Flow</h3>
         <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${config.bg}`}>
           <config.Icon className={`h-3.5 w-3.5 ${config.color}`} />
           <span className={`text-xs font-bold ${config.color}`}>{config.label}</span>
@@ -54,12 +54,12 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
 
       {/* Net figure */}
       <div className="mb-5">
-        <p className="text-xs text-gray-400 mb-0.5">Net this month</p>
+        <p className="text-xs text-muted mb-0.5">Net this month</p>
         <p className={`text-2xl font-extrabold ${config.color}`}>
           {formatMwk(Math.abs(net))}
         </p>
         {(income ?? 0) > 0 && (
-          <p className="text-xs text-gray-400 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             {Math.abs(margin)}% {status === 'profit' ? 'profit margin' : status === 'loss' ? 'loss rate' : ''}
           </p>
         )}
@@ -69,24 +69,24 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
       <div className="space-y-3">
         <div>
           <div className="mb-1 flex justify-between">
-            <span className="text-xs text-gray-500">Income</span>
-            <span className="text-xs font-semibold text-gray-700">{formatMwk(income ?? 0)}</span>
+            <span className="text-xs text-muted">Income</span>
+            <span className="text-xs font-semibold text-sub">{formatMwk(income ?? 0)}</span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
             <div
               className="h-2 rounded-full transition-all duration-700"
-              style={{ width: `${incomeW}%`, background: 'linear-gradient(90deg, #065c42, #14b886)' }}
+              style={{ width: `${incomeW}%`, background: 'linear-gradient(90deg, #0F766E, #2DD4A7)' }}
             />
           </div>
         </div>
         <div>
           <div className="mb-1 flex justify-between">
-            <span className="text-xs text-gray-500">Expenses</span>
-            <span className="text-xs font-semibold text-gray-700">{formatMwk(expenses ?? 0)}</span>
+            <span className="text-xs text-muted">Expenses</span>
+            <span className="text-xs font-semibold text-sub">{formatMwk(expenses ?? 0)}</span>
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
             <div
-              className="h-2 rounded-full bg-red-400 transition-all duration-700"
+              className="h-2 rounded-full bg-danger/80 transition-all duration-700"
               style={{ width: `${expensesW}%` }}
             />
           </div>

@@ -79,51 +79,51 @@ export function SessionManager() {
     if (scope === 'local') setSuccess('Signed out from this device.');
   }
 
-  if (loading) return <div className="flex items-center gap-2 py-4 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Loading session information…</div>;
+  if (loading) return <div className="flex items-center gap-2 py-4 text-sm text-muted"><Loader2 className="h-4 w-4 animate-spin" />Loading session information…</div>;
 
   return (
     <div className="space-y-5">
       {error && <AuthAlert type="error" message={error} />}
       {success && <AuthAlert type="success" message={success} />}
       {sessionInfo && (
-        <div className="rounded-xl border border-brand-100 bg-brand-50/50 p-4">
+        <div className="rounded-xl border border-brand-100 bg-brand-500/10/50 p-4">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-100">
-              <Monitor className="h-5 w-5 text-brand-600" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/10">
+              <Monitor className="h-5 w-5 text-brand-600 dark:text-brand-300" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-900">{getBrowserName()} on {getOSName()}</p>
-                <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700">This device</span>
+                <p className="text-sm font-semibold text-ink">{getBrowserName()} on {getOSName()}</p>
+                <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-xs font-medium text-brand-700 dark:text-brand-300">This device</span>
               </div>
-              <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-gray-500 sm:grid-cols-2">
-                {sessionInfo.lastSignInAt && <><dt className="font-medium text-gray-600">Last sign-in</dt><dd>{formatDate(new Date(sessionInfo.lastSignInAt))}</dd></>}
-                <dt className="font-medium text-gray-600">Session started</dt><dd>{formatDate(sessionInfo.issuedAt)}</dd>
-                <dt className="font-medium text-gray-600">Session expires</dt><dd>{formatDate(sessionInfo.expiresAt)}</dd>
-                <dt className="font-medium text-gray-600">Auth provider</dt><dd className="capitalize">{sessionInfo.provider}</dd>
-                <dt className="font-medium text-gray-600">Account</dt><dd className="truncate">{sessionInfo.email}</dd>
+              <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-2">
+                {sessionInfo.lastSignInAt && <><dt className="font-medium text-sub">Last sign-in</dt><dd>{formatDate(new Date(sessionInfo.lastSignInAt))}</dd></>}
+                <dt className="font-medium text-sub">Session started</dt><dd>{formatDate(sessionInfo.issuedAt)}</dd>
+                <dt className="font-medium text-sub">Session expires</dt><dd>{formatDate(sessionInfo.expiresAt)}</dd>
+                <dt className="font-medium text-sub">Auth provider</dt><dd className="capitalize">{sessionInfo.provider}</dd>
+                <dt className="font-medium text-sub">Account</dt><dd className="truncate">{sessionInfo.email}</dd>
               </dl>
             </div>
           </div>
         </div>
       )}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
+      <div className="flex items-start gap-2 rounded-lg border border-warning/20 bg-warning/12 px-3 py-2.5 text-xs text-warning">
         <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>Per-session revocation across other devices requires a server-side Admin API call. Use <strong>Sign out everywhere</strong> to terminate all active sessions.</span>
       </div>
-      {user && <div className="text-xs text-gray-400">User ID: <code className="font-mono">{user.id}</code></div>}
+      {user && <div className="text-xs text-muted">User ID: <code className="font-mono">{user.id}</code></div>}
       <div className="flex flex-col gap-2 sm:flex-row">
         <button onClick={() => void loadSession()} disabled={loading || !!signingOut}
-          className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+          className="flex items-center justify-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-sub hover:bg-bg disabled:opacity-50">
           <RefreshCw className="h-4 w-4" />Refresh
         </button>
         <button onClick={() => void handleSignOut('local')} disabled={!!signingOut}
-          className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+          className="flex items-center justify-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-sub hover:bg-bg disabled:opacity-50">
           {signingOut === 'local' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
           Sign out this device
         </button>
         <button onClick={() => void handleSignOut('global')} disabled={!!signingOut}
-          className="flex items-center justify-center gap-2 rounded-lg border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50">
+          className="flex items-center justify-center gap-2 rounded-lg border border-danger/20 px-4 py-2.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50">
           {signingOut === 'global' ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
           Sign out everywhere
         </button>

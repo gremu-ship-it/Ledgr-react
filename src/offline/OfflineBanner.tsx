@@ -22,11 +22,11 @@ export function OfflineBanner() {
 
   if (!isOnline) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-white">
+      <div className="flex items-center justify-center gap-2 bg-warning px-4 py-2 text-sm font-medium text-white">
         <WifiOff className="h-4 w-4 shrink-0" />
         <span>You are offline — transactions will sync when connected.</span>
         {pendingCount > 0 && (
-          <span className="ml-1 rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">
+          <span className="ml-1 rounded-full bg-card/20 px-2 py-0.5 text-xs font-semibold">
             {pendingCount} queued
           </span>
         )}
@@ -36,7 +36,7 @@ export function OfflineBanner() {
 
   if (isSyncing && progress) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-brand-500 px-4 py-2 text-sm font-medium text-white">
+      <div className="flex items-center justify-center gap-2 bg-brand-600 px-4 py-2 text-sm font-medium text-white">
         <RefreshCw className="h-4 w-4 shrink-0 animate-spin" />
         <span>
           Syncing {progress.total} transaction{progress.total === 1 ? '' : 's'}...
@@ -48,14 +48,14 @@ export function OfflineBanner() {
 
   if (failedCount > 0) {
     return (
-      <div className="flex items-center justify-center gap-3 bg-red-500 px-4 py-2 text-sm font-medium text-white">
+      <div className="flex items-center justify-center gap-3 bg-danger px-4 py-2 text-sm font-medium text-white">
         <AlertTriangle className="h-4 w-4 shrink-0" />
         <span>
           {failedCount} transaction{failedCount === 1 ? '' : 's'} failed to sync.
         </span>
         <button
           onClick={() => void syncNow()}
-          className="rounded-full bg-white/20 px-3 py-0.5 text-xs font-semibold transition-colors hover:bg-white/30"
+          className="rounded-full bg-card/20 px-3 py-0.5 text-xs font-semibold transition-colors hover:bg-card/30"
         >
           Retry
         </button>
@@ -67,7 +67,7 @@ export function OfflineBanner() {
   // once progress is cleared by the next online-status check.
   if (progress && progress.completed > 0 && progress.failed === 0 && pendingCount === 0) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-brand-500 px-4 py-2 text-sm font-medium text-white">
+      <div className="flex items-center justify-center gap-2 bg-brand-600 px-4 py-2 text-sm font-medium text-white">
         <CheckCircle2 className="h-4 w-4 shrink-0" />
         <span>All transactions synced.</span>
       </div>

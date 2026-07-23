@@ -26,10 +26,10 @@ export function TaxReminderModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-card shadow-2xl">
         {/* Header */}
         <div className={`rounded-t-2xl px-5 py-4 ${
-          hasOverdue ? 'bg-red-500' : 'bg-amber-500'
+          hasOverdue ? 'bg-danger' : 'bg-warning'
         }`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -61,21 +61,21 @@ export function TaxReminderModal() {
               <div
                 key={d.taxType}
                 className={`rounded-xl p-3 ${
-                  d.isOverdue ? 'bg-red-50 border border-red-100' : 'bg-amber-50 border border-amber-100'
+                  d.isOverdue ? 'bg-danger/10 border border-danger/20' : 'bg-warning/12 border border-warning/20'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div>
                     <p className={`text-sm font-semibold ${
-                      d.isOverdue ? 'text-red-800' : 'text-amber-800'
+                      d.isOverdue ? 'text-danger' : 'text-warning'
                     }`}>
                       {d.taxType}
                     </p>
-                    <p className="text-xs text-gray-500">Period: {d.period}</p>
+                    <p className="text-xs text-muted">Period: {d.period}</p>
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-bold ${
-                      d.isOverdue ? 'text-red-600' : 'text-amber-600'
+                      d.isOverdue ? 'text-danger' : 'text-warning'
                     }`}>
                       {d.isOverdue
                         ? `${Math.abs(d.daysUntilDue)} days overdue`
@@ -83,7 +83,7 @@ export function TaxReminderModal() {
                         ? 'Due TODAY'
                         : `Due in ${d.daysUntilDue} days`}
                     </p>
-                    <p className="text-xs text-gray-500">{d.dueDateStr}</p>
+                    <p className="text-xs text-muted">{d.dueDateStr}</p>
                   </div>
                 </div>
               </div>
@@ -92,7 +92,7 @@ export function TaxReminderModal() {
 
           {/* MRA penalty warning */}
           {hasOverdue && (
-            <div className="mt-3 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700">
+            <div className="mt-3 rounded-lg bg-danger/10 border border-danger/20 px-3 py-2 text-xs text-danger">
               ⚠ Failure to remit PAYE/WHT/VAT on time attracts a <strong>20% penalty</strong> on the unpaid amount per MRA regulations.
             </div>
           )}
@@ -103,8 +103,8 @@ export function TaxReminderModal() {
               onClick={() => setOpen(false)}
               className={`flex-1 rounded-lg py-2.5 text-sm font-semibold text-white transition-colors ${
                 hasOverdue
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-amber-500 hover:bg-amber-600'
+                  ? 'bg-danger hover:bg-danger'
+                  : 'bg-warning hover:bg-warning'
               }`}
             >
               Acknowledge
@@ -113,14 +113,14 @@ export function TaxReminderModal() {
               href="https://mra.mw"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-1.5 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors"
             >
               MRA Portal
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>
 
-          <p className="mt-3 text-center text-xs text-gray-400">
+          <p className="mt-3 text-center text-xs text-muted">
             This reminder shows once per session
           </p>
         </div>

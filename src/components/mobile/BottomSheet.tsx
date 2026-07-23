@@ -29,18 +29,18 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
       />
 
       {/* Sheet */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-white shadow-2xl">
+      <div className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl bg-card shadow-2xl">
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full bg-gray-200" />
+          <div className="h-1 w-10 rounded-full bg-surface" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-line">
+          <h2 className="text-base font-semibold text-ink">{title}</h2>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-muted hover:bg-surface"
           >
             <X className="h-4 w-4" />
           </button>

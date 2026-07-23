@@ -81,10 +81,10 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl max-h-[85vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Journal Entry</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+      <div className="w-full max-w-lg rounded-2xl bg-card shadow-xl max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
+          <h2 className="text-base font-semibold text-ink">Journal Entry</h2>
+          <button onClick={onClose} className="rounded-lg p-1 text-muted hover:bg-surface hover:text-sub">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -93,61 +93,61 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-6 animate-pulse rounded bg-gray-100" />
+                <div key={i} className="h-6 animate-pulse rounded bg-surface" />
               ))}
             </div>
           ) : isError || !data ? (
-            <p className="text-sm text-red-500">Failed to load this entry.</p>
+            <p className="text-sm text-danger">Failed to load this entry.</p>
           ) : (
             <>
               <div className="mb-4 space-y-1">
-                <p className="text-sm font-medium text-gray-900">{data.entry.description}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm font-medium text-ink">{data.entry.description}</p>
+                <p className="text-xs text-muted">
                   {data.entry.entry_number} · {new Date(data.entry.entry_date).toLocaleDateString('en-MW', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold capitalize text-gray-600">
+                  <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold capitalize text-sub">
                     {data.entry.status}
                   </span>
                   {period?.is_closed && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
                       <Lock className="h-3 w-3" /> Locked period
                     </span>
                   )}
                   {data.entry.reversal_of && (
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                    <span className="rounded-full bg-warning/12 px-2 py-0.5 text-[11px] font-semibold text-warning">
                       This is a reversal entry
                     </span>
                   )}
                   {data.entry.reversed_by && (
-                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+                    <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-muted">
                       Reversed
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-gray-100">
+              <div className="overflow-hidden rounded-xl border border-line">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-400">
+                  <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-3 py-2 text-left">Account</th>
                       <th className="px-3 py-2 text-right">Debit</th>
                       <th className="px-3 py-2 text-right">Credit</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-50">
+                  <tbody className="divide-y divide-line">
                     {data.lines.map((line) => {
                       const acc = accountMap[line.account_id];
                       return (
                         <tr key={line.id}>
-                          <td className="px-3 py-2 text-gray-700">
+                          <td className="px-3 py-2 text-sub">
                             {acc ? `${acc.code} — ${acc.name}` : line.account_id}
                           </td>
-                          <td className="px-3 py-2 text-right text-gray-600">
+                          <td className="px-3 py-2 text-right text-sub">
                             {line.is_debit ? formatMwk(Number(line.amount_base)) : ''}
                           </td>
-                          <td className="px-3 py-2 text-right text-gray-600">
+                          <td className="px-3 py-2 text-right text-sub">
                             {!line.is_debit ? formatMwk(Number(line.amount_base)) : ''}
                           </td>
                         </tr>
@@ -161,30 +161,30 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                   Per product decision, editing a posted entry is never exposed —
                   only viewing and, where permitted, reversing. */}
               {data.entry.status === 'posted' && (
-                <p className="mt-3 text-xs text-gray-400">
+                <p className="mt-3 text-xs text-muted">
                   Posted entries are permanent and cannot be edited. To correct a mistake, reverse this entry instead.
                 </p>
               )}
 
               {error && (
-                <div className="mt-3 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2">
-                  <AlertCircle className="h-4 w-4 text-red-500 shrink-0" />
-                  <p className="text-sm text-red-600">{error}</p>
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-danger/20 bg-danger/10 px-3 py-2">
+                  <AlertCircle className="h-4 w-4 text-danger shrink-0" />
+                  <p className="text-sm text-danger">{error}</p>
                 </div>
               )}
 
               {canActuallyReverse && !showReverseForm && (
                 <button
                   onClick={() => setShowReverseForm(true)}
-                  className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+                  className="mt-4 inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-semibold text-sub transition-colors hover:bg-bg"
                 >
                   <RotateCcw className="h-4 w-4" /> Reverse Entry
                 </button>
               )}
 
               {canActuallyReverse && showReverseForm && (
-                <div className="mt-4 rounded-xl border border-gray-200 p-3">
-                  <label className="mb-1.5 block text-xs font-semibold text-gray-600">
+                <div className="mt-4 rounded-xl border border-line p-3">
+                  <label className="mb-1.5 block text-xs font-semibold text-sub">
                     Reason for reversal (required)
                   </label>
                   <textarea
@@ -192,20 +192,20 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                     onChange={(e) => setReason(e.target.value)}
                     rows={2}
                     placeholder="e.g. Duplicate entry, incorrect account, wrong amount…"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                   />
                   <div className="mt-3 flex justify-end gap-2">
                     <button
                       onClick={() => { setShowReverseForm(false); setReason(''); setError(null); }}
                       disabled={submitting}
-                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-muted hover:bg-bg disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleConfirmReverse}
                       disabled={submitting || !reason.trim()}
-                      className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                      className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
                     >
                       {submitting ? 'Reversing…' : 'Confirm Reversal'}
                     </button>

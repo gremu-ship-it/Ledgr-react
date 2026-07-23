@@ -25,29 +25,29 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
   return (
     <div className={`mb-6 rounded-2xl border p-5 ${
       overdueDates.length > 0
-        ? 'border-red-200 bg-red-50'
+        ? 'border-danger/20 bg-danger/10'
         : dueSoonDates.length > 0
-        ? 'border-amber-200 bg-amber-50'
-        : 'border-brand-100 bg-brand-50'
+        ? 'border-warning/20 bg-warning/12'
+        : 'border-brand-100 bg-brand-500/10'
     }`}>
       {/* Header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           {overdueDates.length > 0 ? (
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <AlertTriangle className="h-5 w-5 text-danger" />
           ) : dueSoonDates.length > 0 ? (
-            <Clock className="h-5 w-5 text-amber-500" />
+            <Clock className="h-5 w-5 text-warning" />
           ) : (
-            <Calendar className="h-5 w-5 text-brand-500" />
+            <Calendar className="h-5 w-5 text-brand-600 dark:text-brand-400" />
           )}
-          <h2 className="text-base font-semibold text-gray-900">
+          <h2 className="text-base font-semibold text-ink">
             MRA Tax Remittance
           </h2>
           {hasUrgent && (
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
               overdueDates.length > 0
-                ? 'bg-red-100 text-red-700'
-                : 'bg-amber-100 text-amber-700'
+                ? 'bg-danger/10 text-danger'
+                : 'bg-warning/12 text-warning'
             }`}>
               {overdueDates.length > 0
                 ? `${overdueDates.length} overdue`
@@ -55,61 +55,61 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
             </span>
           )}
         </div>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-muted">
           {new Date().toLocaleDateString('en-MW', { month: 'long', year: 'numeric' })}
         </span>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* VAT Summary */}
-        <div className="rounded-xl border border-white/60 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <div className="rounded-xl border border-white/60 bg-card p-4 shadow-sm">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
             VAT Position (Last Month)
           </p>
           {vat.isLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-4 animate-pulse rounded bg-gray-100" />
+                <div key={i} className="h-4 animate-pulse rounded bg-surface" />
               ))}
             </div>
           ) : (
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-sub">
                 <span>Output VAT (Sales)</span>
                 <span className="font-medium">{formatMwk(vat.data?.outputVat ?? 0)}</span>
               </div>
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-sub">
                 <span>Input VAT (Expenses)</span>
-                <span className="font-medium text-brand-600">
+                <span className="font-medium text-brand-600 dark:text-brand-300">
                   − {formatMwk(vat.data?.inputVat ?? 0)}
                 </span>
               </div>
-              <div className={`flex justify-between border-t border-gray-100 pt-1.5 font-semibold ${
-                (vat.data?.vatPayable ?? 0) > 0 ? 'text-red-600' : 'text-brand-600'
+              <div className={`flex justify-between border-t border-line pt-1.5 font-semibold ${
+                (vat.data?.vatPayable ?? 0) > 0 ? 'text-danger' : 'text-brand-600 dark:text-brand-300'
               }`}>
                 <span>VAT Payable to MRA</span>
                 <span>{formatMwk(vat.data?.vatPayable ?? 0)}</span>
               </div>
-              <p className="text-xs text-gray-400">Period: {vat.data?.period ?? '—'}</p>
+              <p className="text-xs text-muted">Period: {vat.data?.period ?? '—'}</p>
             </div>
           )}
         </div>
 
         {/* PAYE Summary */}
-        <div className="rounded-xl border border-white/60 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <div className="rounded-xl border border-white/60 bg-card p-4 shadow-sm">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
             PAYE Due (Last Month)
           </p>
           {paye.isLoading ? (
-            <div className="h-4 animate-pulse rounded bg-gray-100" />
+            <div className="h-4 animate-pulse rounded bg-surface" />
           ) : (
             <div className="space-y-1.5 text-sm">
-              <div className="flex justify-between font-semibold text-red-600">
+              <div className="flex justify-between font-semibold text-danger">
                 <span>Total PAYE to Remit</span>
                 <span>{formatMwk(paye.data?.totalPaye ?? 0)}</span>
               </div>
-              <p className="text-xs text-gray-400">Period: {paye.data?.period ?? '—'}</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted">Period: {paye.data?.period ?? '—'}</p>
+              <p className="text-xs text-muted">
                 Due: 14th of current month
               </p>
             </div>
@@ -117,8 +117,8 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
         </div>
 
         {/* Due Dates */}
-        <div className="rounded-xl border border-white/60 bg-white p-4 shadow-sm">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <div className="rounded-xl border border-white/60 bg-card p-4 shadow-sm">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
             Upcoming Due Dates
           </p>
           <div className="space-y-2">
@@ -126,21 +126,21 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
               <div key={d.taxType} className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-1.5">
                   {d.isOverdue ? (
-                    <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+                    <AlertTriangle className="h-3.5 w-3.5 text-danger" />
                   ) : d.isDueSoon ? (
-                    <Clock className="h-3.5 w-3.5 text-amber-500" />
+                    <Clock className="h-3.5 w-3.5 text-warning" />
                   ) : (
-                    <CheckCircle className="h-3.5 w-3.5 text-gray-300" />
+                    <CheckCircle className="h-3.5 w-3.5 text-muted/50" />
                   )}
                   <span className={`font-medium ${
-                    d.isOverdue ? 'text-red-700' : d.isDueSoon ? 'text-amber-700' : 'text-gray-700'
+                    d.isOverdue ? 'text-danger' : d.isDueSoon ? 'text-warning' : 'text-sub'
                   }`}>
                     {d.taxType}
                   </span>
                 </div>
                 <div className="text-right">
                   <p className={`text-xs font-semibold ${
-                    d.isOverdue ? 'text-red-600' : d.isDueSoon ? 'text-amber-600' : 'text-gray-500'
+                    d.isOverdue ? 'text-danger' : d.isDueSoon ? 'text-warning' : 'text-muted'
                   }`}>
                     {d.isOverdue
                       ? `${Math.abs(d.daysUntilDue)}d overdue`
@@ -148,7 +148,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
                       ? 'Due today!'
                       : `${d.daysUntilDue}d left`}
                   </p>
-                  <p className="text-xs text-gray-400">{d.dueDateStr}</p>
+                  <p className="text-xs text-muted">{d.dueDateStr}</p>
                 </div>
               </div>
             ))}

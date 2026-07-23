@@ -46,19 +46,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
       return (
         <div className="flex h-full min-h-[400px] w-full flex-col items-center justify-center gap-4 p-8 text-center">
-          <div className="rounded-full bg-red-50 p-3">
-            <AlertTriangle className="h-6 w-6 text-red-500" />
+          <div className="rounded-full bg-danger/10 p-3">
+            <AlertTriangle className="h-6 w-6 text-danger" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Something went wrong</h2>
-            <p className="mt-1 max-w-sm text-sm text-gray-500">
+            <h2 className="text-lg font-semibold text-ink">Something went wrong</h2>
+            <p className="mt-1 max-w-sm text-sm text-muted">
               An unexpected error occurred while loading this page. You can try again, or refresh
               the app if the problem persists.
             </p>
           </div>
           <button
             onClick={this.reset}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
           >
             <RefreshCw className="h-4 w-4" />
             Try again

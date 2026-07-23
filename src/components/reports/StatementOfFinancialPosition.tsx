@@ -30,26 +30,26 @@ function SectionRows({ section, showComparative }: { section: StatementSection; 
   return (
     <>
       <tr>
-        <td colSpan={showComparative ? 3 : 2} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <td colSpan={showComparative ? 3 : 2} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-muted">
           {section.label}
         </td>
       </tr>
       {section.lines.map((line) => (
         <tr key={line.code}>
-          <td className="py-1 pl-4 text-sm text-gray-600">{line.name}</td>
-          <td className="py-1 text-right text-sm text-gray-600">{formatMwk(line.amount)}</td>
+          <td className="py-1 pl-4 text-sm text-sub">{line.name}</td>
+          <td className="py-1 text-right text-sm text-sub">{formatMwk(line.amount)}</td>
           {showComparative && (
-            <td className="py-1 text-right text-sm text-gray-400">
+            <td className="py-1 text-right text-sm text-muted">
               {line.comparativeAmount !== null ? formatMwk(line.comparativeAmount) : '—'}
             </td>
           )}
         </tr>
       ))}
-      <tr className="border-t border-gray-100">
-        <td className="py-1.5 text-sm font-semibold text-gray-900">Total {section.label}</td>
-        <td className="py-1.5 text-right text-sm font-semibold text-gray-900">{formatMwk(section.subtotal)}</td>
+      <tr className="border-t border-line">
+        <td className="py-1.5 text-sm font-semibold text-ink">Total {section.label}</td>
+        <td className="py-1.5 text-right text-sm font-semibold text-ink">{formatMwk(section.subtotal)}</td>
         {showComparative && (
-          <td className="py-1.5 text-right text-sm font-semibold text-gray-500">
+          <td className="py-1.5 text-right text-sm font-semibold text-muted">
             {section.comparativeSubtotal !== null ? formatMwk(section.comparativeSubtotal) : '—'}
           </td>
         )}
@@ -64,11 +64,11 @@ function GrandTotalRow({
   label: string; amount: number; comparativeAmount: number | null; showComparative: boolean; highlight?: boolean;
 }) {
   return (
-    <tr className={highlight ? 'bg-brand-50' : 'border-t-2 border-gray-300'}>
-      <td className="py-2 text-sm font-bold text-gray-900">{label}</td>
-      <td className="py-2 text-right text-sm font-bold text-gray-900">{formatMwk(amount)}</td>
+    <tr className={highlight ? 'bg-brand-500/10' : 'border-t-2 border-line'}>
+      <td className="py-2 text-sm font-bold text-ink">{label}</td>
+      <td className="py-2 text-right text-sm font-bold text-ink">{formatMwk(amount)}</td>
       {showComparative && (
-        <td className="py-2 text-right text-sm font-bold text-gray-600">
+        <td className="py-2 text-right text-sm font-bold text-sub">
           {comparativeAmount !== null ? formatMwk(comparativeAmount) : '—'}
         </td>
       )}
@@ -92,29 +92,29 @@ export function StatementOfFinancialPosition({
   }), [asOfDate]);
 
   if (isLoading) {
-    return <div className="space-y-3">{[...Array(10)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
+    return <div className="space-y-3">{[...Array(10)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-surface" />)}</div>;
   }
 
   if (error || !sofp) {
     return (
       <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
-        <AlertTriangle className="h-8 w-8 text-red-400" />
-        <p className="text-sm text-gray-500">Could not load Statement of Financial Position.</p>
+        <AlertTriangle className="h-8 w-8 text-danger" />
+        <p className="text-sm text-muted">Could not load Statement of Financial Position.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-3xl">
-      <div className="mb-6 border-b border-gray-100 pb-4">
-        {businessName && <h1 className="text-lg font-bold text-gray-900">{businessName}</h1>}
-        <h2 className="text-base font-semibold text-gray-900">Statement of Financial Position</h2>
-        <p className="text-xs text-gray-400">As at {dateLabel} · Currency: MWK</p>
-        {preparerName && <p className="text-xs text-gray-400">Prepared by: {preparerName}</p>}
+    <div className="rounded-2xl border border-line bg-card p-6 shadow-sm max-w-3xl">
+      <div className="mb-6 border-b border-line pb-4">
+        {businessName && <h1 className="text-lg font-bold text-ink">{businessName}</h1>}
+        <h2 className="text-base font-semibold text-ink">Statement of Financial Position</h2>
+        <p className="text-xs text-muted">As at {dateLabel} · Currency: MWK</p>
+        {preparerName && <p className="text-xs text-muted">Prepared by: {preparerName}</p>}
       </div>
 
       {!sofp.isBalanced && (
-        <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+        <div className="mb-4 flex items-start gap-2 rounded-lg bg-warning/12 p-3 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>
             Net Assets ({formatMwk(sofp.netAssets)}) does not equal Total Equity ({formatMwk(sofp.totalEquity)}).
@@ -127,12 +127,12 @@ export function StatementOfFinancialPosition({
       <table className="w-full">
         <thead>
           <tr>
-            <th className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400">Assets</th>
-            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400">
+            <th className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-muted">Assets</th>
+            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-muted">
               {dateLabel}
             </th>
             {showComparative && (
-              <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400">
+              <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-muted">
                 {comparativeDate ? new Date(comparativeDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
               </th>
             )}

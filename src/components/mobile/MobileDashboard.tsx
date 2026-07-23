@@ -48,27 +48,27 @@ interface ToneStyle {
 
 const TONE_STYLES: Record<IconTone, ToneStyle> = {
   brand: {
-    icon: 'text-brand-600',
+    icon: 'text-brand-600 dark:text-brand-300',
     raised: 'shadow-[4px_4px_10px_rgba(15,118,110,0.18),-4px_-4px_10px_rgba(255,255,255,0.9)]',
     pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(15,118,110,0.20),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
   },
   negative: {
-    icon: 'text-red-500',
+    icon: 'text-danger',
     raised: 'shadow-[4px_4px_10px_rgba(244,63,94,0.16),-4px_-4px_10px_rgba(255,255,255,0.9)]',
     pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(244,63,94,0.18),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
   },
   neutral: {
-    icon: 'text-slate-500',
+    icon: 'text-muted',
     raised: 'shadow-[4px_4px_10px_rgba(100,116,139,0.15),-4px_-4px_10px_rgba(255,255,255,0.9)]',
     pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(100,116,139,0.17),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
   },
   warning: {
-    icon: 'text-amber-500',
+    icon: 'text-warning',
     raised: 'shadow-[4px_4px_10px_rgba(245,158,11,0.18),-4px_-4px_10px_rgba(255,255,255,0.9)]',
     pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(245,158,11,0.20),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
   },
   info: {
-    icon: 'text-indigo-500',
+    icon: 'text-accent dark:text-accent-light',
     raised: 'shadow-[4px_4px_10px_rgba(99,102,241,0.16),-4px_-4px_10px_rgba(255,255,255,0.9)]',
     pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(99,102,241,0.18),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
   },
@@ -96,7 +96,7 @@ function IconBadge({
   return (
     <span
       className={clsx(
-        'flex shrink-0 items-center justify-center rounded-2xl bg-white transition-shadow duration-150',
+        'flex shrink-0 items-center justify-center rounded-2xl bg-card transition-shadow duration-150',
         s.box,
         t.raised,
         interactive && t.pressedActive,
@@ -144,22 +144,22 @@ function StatCard({
   onClick?: () => void;
 }) {
   const valueColor = {
-    brand: 'text-brand-700',
-    negative: 'text-red-600',
-    neutral: 'text-gray-900',
-    warning: 'text-amber-600',
-    info: 'text-indigo-600',
+    brand: 'text-brand-700 dark:text-brand-300',
+    negative: 'text-danger',
+    neutral: 'text-ink',
+    warning: 'text-warning',
+    info: 'text-accent dark:text-accent-light',
   }[tone];
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 animate-pulse">
+      <div className="rounded-2xl border border-line bg-card p-4 animate-pulse">
         <div className="flex items-center justify-between mb-3">
-          <div className="h-3 w-16 rounded bg-gray-100" />
-          <div className="h-9 w-9 rounded-2xl bg-gray-100" />
+          <div className="h-3 w-16 rounded bg-surface" />
+          <div className="h-9 w-9 rounded-2xl bg-surface" />
         </div>
-        <div className="h-5 w-20 rounded bg-gray-100 mb-2" />
-        <div className="h-2.5 w-14 rounded bg-gray-100" />
+        <div className="h-5 w-20 rounded bg-surface mb-2" />
+        <div className="h-2.5 w-14 rounded bg-surface" />
       </div>
     );
   }
@@ -170,22 +170,22 @@ function StatCard({
     <Wrapper
       onClick={onClick}
       className={clsx(
-        'group w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-transform',
+        'group w-full rounded-2xl border border-line bg-card p-4 text-left transition-transform',
         onClick && 'active:scale-[0.98]',
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 truncate">{label}</p>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted truncate">{label}</p>
         <IconBadge icon={icon} tone={tone} size="sm" interactive={!!onClick} />
       </div>
       <p className={`text-lg font-bold ${valueColor} truncate`}>{value}</p>
       <div className="mt-1 flex items-center gap-1.5">
-        {subtext && <p className="text-[11px] text-gray-400 truncate">{subtext}</p>}
+        {subtext && <p className="text-[11px] text-muted truncate">{subtext}</p>}
         {trend && (
           <span
             className={clsx(
               'inline-flex items-center gap-0.5 text-[11px] font-medium shrink-0',
-              trend.positive ? 'text-brand-600' : 'text-red-500',
+              trend.positive ? 'text-brand-600 dark:text-brand-300' : 'text-danger',
             )}
           >
             {trend.positive ? (
@@ -197,7 +197,7 @@ function StatCard({
           </span>
         )}
         {onClick && !trend && (
-          <ChevronRight className="h-3 w-3 text-gray-300 ml-auto shrink-0" />
+          <ChevronRight className="h-3 w-3 text-muted/50 ml-auto shrink-0" />
         )}
       </div>
     </Wrapper>
@@ -220,10 +220,10 @@ function QuickActionButton({
   return (
     <button
       onClick={onClick}
-      className="group flex flex-col items-center gap-2 rounded-2xl border border-gray-200 bg-white p-4 transition-transform active:scale-95"
+      className="group flex flex-col items-center gap-2 rounded-2xl border border-line bg-card p-4 transition-transform active:scale-95"
     >
       <IconBadge icon={icon} tone={tone} size="lg" interactive />
-      <span className="text-xs font-medium text-gray-700">{label}</span>
+      <span className="text-xs font-medium text-sub">{label}</span>
     </button>
   );
 }
@@ -277,15 +277,15 @@ export function MobileDashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-gray-400">{greeting()}</p>
-          <h1 className="text-lg font-bold text-gray-900">{firstName} 👋</h1>
+          <p className="text-xs text-muted">{greeting()}</p>
+          <h1 className="text-lg font-bold text-ink">{firstName} 👋</h1>
           {businessName && (
-            <p className="text-xs text-gray-500 mt-0.5">{businessName}</p>
+            <p className="text-xs text-muted mt-0.5">{businessName}</p>
           )}
         </div>
         <button
           onClick={() => navigate('/settings')}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white shadow-sm"
+          className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white shadow-sm"
         >
           {firstName[0]?.toUpperCase()}
         </button>
@@ -295,16 +295,16 @@ export function MobileDashboard() {
       <div className={clsx(
         'rounded-2xl p-5',
         netProfit === undefined
-          ? 'bg-gray-100'
+          ? 'bg-surface'
           : netProfit >= 0
-          ? 'bg-brand-500'
-          : 'bg-red-600',
+          ? 'bg-brand-600'
+          : 'bg-danger',
       )}>
         {income.isLoading || expenses.isLoading ? (
           <div className="animate-pulse space-y-3">
-            <div className="h-3 w-24 rounded bg-white/20" />
-            <div className="h-8 w-40 rounded bg-white/20" />
-            <div className="h-3 w-20 rounded bg-white/20" />
+            <div className="h-3 w-24 rounded bg-card/20" />
+            <div className="h-8 w-40 rounded bg-card/20" />
+            <div className="h-3 w-20 rounded bg-card/20" />
           </div>
         ) : (
           <>
@@ -366,10 +366,10 @@ export function MobileDashboard() {
       </div>
 
       {/* Income vs Expenses Chart */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
         <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">Income vs Expenses</h2>
-          <span className="text-xs text-gray-400">6 months</span>
+          <h2 className="text-sm font-semibold text-ink">Income vs Expenses</h2>
+          <span className="text-xs text-muted">6 months</span>
         </div>
         <IncomeExpenseChart
           data={trend.data}
@@ -380,7 +380,7 @@ export function MobileDashboard() {
 
       {/* Quick Actions */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
           Quick Actions
         </p>
         <div className="grid grid-cols-4 gap-2">
@@ -415,31 +415,31 @@ export function MobileDashboard() {
       <div className="grid grid-cols-1 gap-3">
         <button
           onClick={() => navigate('/warehouse')}
-          className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-transform active:scale-[0.98]"
+          className="w-full rounded-2xl border border-line bg-card p-4 text-left transition-transform active:scale-[0.98]"
         >
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Inventory</span>
+              <span className="text-sm font-semibold text-ink">Inventory</span>
             </div>
-            <ChevronRight className="h-4 w-4 text-gray-300" />
+            <ChevronRight className="h-4 w-4 text-muted/50" />
           </div>
 
           {lowStock.isLoading ? (
-            <div className="h-8 animate-pulse rounded bg-gray-100" />
+            <div className="h-8 animate-pulse rounded bg-surface" />
           ) : lowStock.data && lowStock.data.length > 0 ? (
             <>
               <div className="mb-2 flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                <p className="text-xs text-amber-600">
+                <AlertTriangle className="h-3.5 w-3.5 text-warning" />
+                <p className="text-xs text-warning">
                   <span className="font-semibold">{lowStock.data.length}</span> product{lowStock.data.length > 1 ? 's' : ''} at or below reorder level
                 </p>
               </div>
               <div className="space-y-1.5">
                 {lowStock.data.slice(0, 3).map((alert) => (
                   <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between text-xs">
-                    <span className="truncate text-gray-600">{alert.product_name}</span>
-                    <span className="shrink-0 font-medium text-gray-800">
+                    <span className="truncate text-sub">{alert.product_name}</span>
+                    <span className="shrink-0 font-medium text-ink">
                       {Number(alert.quantity_available)} left
                     </span>
                   </div>
@@ -447,28 +447,28 @@ export function MobileDashboard() {
               </div>
             </>
           ) : (
-            <p className="text-xs text-gray-400">All products are well stocked</p>
+            <p className="text-xs text-muted">All products are well stocked</p>
           )}
         </button>
 
-        <div className="w-full rounded-2xl border border-dashed border-gray-200 bg-white p-4">
+        <div className="w-full rounded-2xl border border-dashed border-line bg-card p-4">
           <div className="flex items-center gap-2">
             <IconBadge icon={Smartphone} tone="neutral" size="sm" />
-            <span className="text-sm font-semibold text-gray-700">Mobile Money</span>
+            <span className="text-sm font-semibold text-sub">Mobile Money</span>
           </div>
-          <p className="mt-2 text-xs text-gray-400">Airtel Money and Mpamba integration coming soon</p>
+          <p className="mt-2 text-xs text-muted">Airtel Money and Mpamba integration coming soon</p>
         </div>
       </div>
 
       {/* Recent Transactions */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">
             Recent Transactions
           </p>
           <button
             onClick={() => navigate('/reports')}
-            className="text-xs font-medium text-brand-600"
+            className="text-xs font-medium text-brand-600 dark:text-brand-300"
           >
             See all
           </button>
@@ -477,17 +477,17 @@ export function MobileDashboard() {
         {recentEntries.isLoading ? (
           <div className="space-y-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />
+              <div key={i} className="h-14 animate-pulse rounded-xl bg-surface" />
             ))}
           </div>
         ) : !recentEntries.data || recentEntries.data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-8 text-center">
-            <Receipt className="mb-2 h-8 w-8 text-gray-300" />
-            <p className="text-sm font-medium text-gray-500">No transactions yet</p>
-            <p className="mt-0.5 text-xs text-gray-400">Tap + to record your first one</p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line py-8 text-center">
+            <Receipt className="mb-2 h-8 w-8 text-muted/50" />
+            <p className="text-sm font-medium text-muted">No transactions yet</p>
+            <p className="mt-0.5 text-xs text-muted">Tap + to record your first one</p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
+          <div className="overflow-hidden rounded-2xl border border-line bg-card divide-y divide-line shadow-sm">
             {recentEntries.data.map((entry, i) => {
               const t: IconTone =
                 entry.source_type === 'invoice' ? 'brand'
@@ -503,15 +503,15 @@ export function MobileDashboard() {
                   <div className="flex items-center gap-3 min-w-0">
                     <IconBadge icon={Icon} tone={t} size="sm" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate max-w-[140px]">
+                      <p className="text-sm font-medium text-ink truncate max-w-[140px]">
                         {entry.description ?? entry.source_type ?? 'Transaction'}
                       </p>
-                      <p className="text-xs text-gray-400">{entry.entry_date}</p>
+                      <p className="text-xs text-muted">{entry.entry_date}</p>
                     </div>
                   </div>
                   <p className={clsx(
                     'text-xs font-medium px-2 py-0.5 rounded-full shrink-0',
-                    entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700',
+                    entry.source_type === 'expense' ? 'bg-danger/10 text-danger' : 'bg-brand-500/10 text-brand-700 dark:text-brand-300',
                   )}>
                     {entry.source_type ?? 'journal'}
                   </p>
@@ -524,10 +524,10 @@ export function MobileDashboard() {
 
       {/* Shortcuts */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
           Shortcuts
         </p>
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card divide-y divide-line shadow-sm">
           {[
             { label: 'View Invoices', icon: FileText, tone: 'info' as IconTone, path: '/invoices' },
             { label: 'Tax & Compliance', icon: Percent, tone: 'warning' as IconTone, path: '/tax' },
@@ -537,13 +537,13 @@ export function MobileDashboard() {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="group flex w-full items-center justify-between px-4 py-3 transition-colors active:bg-gray-50"
+              className="group flex w-full items-center justify-between px-4 py-3 transition-colors active:bg-bg"
             >
               <div className="flex items-center gap-3">
                 <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-sm font-medium text-gray-700">{item.label}</span>
+                <span className="text-sm font-medium text-sub">{item.label}</span>
               </div>
-              <ChevronRight className="h-4 w-4 text-gray-400" />
+              <ChevronRight className="h-4 w-4 text-muted" />
             </button>
           ))}
         </div>

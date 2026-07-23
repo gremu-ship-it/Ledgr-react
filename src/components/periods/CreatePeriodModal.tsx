@@ -8,7 +8,7 @@ interface Alert { type: 'success' | 'error'; message: string; }
 
 function AlertBox({ alert }: { alert: Alert }) {
   return (
-    <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${alert.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'}`}>
+    <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${alert.type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'}`}>
       {alert.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
       {alert.message}
     </div>
@@ -83,65 +83,65 @@ export function CreatePeriodModal({ businessId, onClose, onSuccess }: CreatePeri
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-brand-500" />
-            <h2 className="text-base font-semibold text-gray-900">Create Accounting Period</h2>
+            <Calendar className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h2 className="text-base font-semibold text-ink">Create Accounting Period</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="text-muted hover:text-sub transition-colors"><X className="h-5 w-5" /></button>
         </div>
 
         {alert && <AlertBox alert={alert} />}
 
         <button
           onClick={useThisMonth}
-          className="mb-4 w-full rounded-lg border border-dashed border-brand-300 bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700 hover:bg-brand-100 transition-colors"
+          className="mb-4 w-full rounded-lg border border-dashed border-brand-300 bg-brand-500/10 px-3 py-2 text-sm font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-500/10 transition-colors"
         >
           Use This Month
         </button>
 
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Period Name</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Period Name</label>
             <input
               type="text"
               placeholder="e.g. March 2025, Q1 2025"
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Start Date</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Start Date</label>
               <input
                 type="date"
                 value={form.period_start}
                 onChange={(e) => set('period_start', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">End Date</label>
+              <label className="mb-1 block text-sm font-medium text-sub">End Date</label>
               <input
                 type="date"
                 value={form.period_end}
                 onChange={(e) => set('period_end', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
 
           <div className="flex gap-3 pt-1">
-            <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <button onClick={onClose} className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors">
               Cancel
             </button>
             <button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+              className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
             >
               {mutation.isPending ? 'Creating…' : 'Create Period'}
             </button>

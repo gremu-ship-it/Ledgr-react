@@ -49,12 +49,12 @@ export function DataExportButton() {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+    <div className="rounded-2xl border border-line bg-card p-5">
       <div className="mb-1 flex items-center gap-2">
-        <Download className="h-4 w-4 text-brand-500" />
-        <h3 className="text-sm font-semibold text-gray-900">Download my data</h3>
+        <Download className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+        <h3 className="text-sm font-semibold text-ink">Download my data</h3>
       </div>
-      <p className="mb-4 text-xs text-gray-500">
+      <p className="mb-4 text-xs text-muted">
         Get a copy of your personal information and the full data for any business you own,
         as a ZIP file containing JSON and CSV files.
       </p>
@@ -62,7 +62,7 @@ export function DataExportButton() {
       <button
         onClick={handleExport}
         disabled={status === 'loading'}
-        className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+        className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
       >
         {status === 'loading' ? (
           <>
@@ -79,7 +79,7 @@ export function DataExportButton() {
 
       {message && (
         <div className={`mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${
-          status === 'error' ? 'bg-red-50 text-red-700' : 'bg-brand-50 text-brand-700'
+          status === 'error' ? 'bg-danger/10 text-danger' : 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
         }`}>
           {status === 'error' ? (
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />

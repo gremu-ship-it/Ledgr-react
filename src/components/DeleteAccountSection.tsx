@@ -81,17 +81,17 @@ export function DeleteAccountSection() {
   }
 
   if (isLoading) {
-    return <div className="h-24 animate-pulse rounded-xl bg-gray-100" />;
+    return <div className="h-24 animate-pulse rounded-xl bg-surface" />;
   }
 
   if (isPending) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+      <div className="rounded-2xl border border-warning/20 bg-warning/12 p-5">
         <div className="mb-2 flex items-center gap-2">
-          <ShieldAlert className="h-4 w-4 text-amber-600" />
-          <h3 className="text-sm font-semibold text-amber-900">Account scheduled for deletion</h3>
+          <ShieldAlert className="h-4 w-4 text-warning" />
+          <h3 className="text-sm font-semibold text-warning">Account scheduled for deletion</h3>
         </div>
-        <p className="mb-4 text-xs text-amber-700">
+        <p className="mb-4 text-xs text-warning">
           Your personal information has been anonymized. Your account will be permanently
           locked on{' '}
           <span className="font-semibold">
@@ -99,11 +99,11 @@ export function DeleteAccountSection() {
           </span>{' '}
           unless you cancel before then.
         </p>
-        {error && <p className="mb-3 text-xs text-red-600">{error}</p>}
+        {error && <p className="mb-3 text-xs text-danger">{error}</p>}
         <button
           onClick={handleCancelDeletion}
           disabled={cancelling}
-          className="flex items-center gap-2 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 disabled:opacity-60 transition-colors"
+          className="flex items-center gap-2 rounded-lg border border-warning/30 bg-card px-4 py-2 text-sm font-semibold text-warning hover:bg-warning/12 disabled:opacity-60 transition-colors"
         >
           {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
           Cancel Deletion
@@ -113,15 +113,15 @@ export function DeleteAccountSection() {
   }
 
   return (
-    <div className="rounded-2xl border border-red-200 bg-white p-5">
+    <div className="rounded-2xl border border-danger/20 bg-card p-5">
       <div className="mb-1 flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-red-500" />
-        <h3 className="text-sm font-semibold text-gray-900">Delete my account</h3>
+        <AlertTriangle className="h-4 w-4 text-danger" />
+        <h3 className="text-sm font-semibold text-ink">Delete my account</h3>
       </div>
 
       {!showConfirmStep ? (
         <>
-          <p className="mb-4 text-xs text-gray-500">
+          <p className="mb-4 text-xs text-muted">
             This will immediately anonymize your personal information (name, phone, avatar)
             and permanently lock your account after 30 days. Financial records for any
             business you own are retained after this, as required by tax and accounting law
@@ -130,14 +130,14 @@ export function DeleteAccountSection() {
           </p>
           <button
             onClick={() => setShowConfirmStep(true)}
-            className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+            className="rounded-lg border border-danger/20 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10 transition-colors"
           >
             Delete my account
           </button>
         </>
       ) : (
         <div className="space-y-3">
-          <div className="flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">
+          <div className="flex items-start gap-2 rounded-lg bg-danger/10 px-4 py-3 text-xs text-danger">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <p>
               This action starts immediately and cannot be undone after 30 days. Type{' '}
@@ -149,20 +149,20 @@ export function DeleteAccountSection() {
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             placeholder="Type DELETE to confirm"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-400"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-danger/40 focus:outline-none focus:ring-1 focus:ring-red-400"
           />
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex gap-2">
             <button
               onClick={() => { setShowConfirmStep(false); setConfirmText(''); setError(null); }}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleConfirmDeletion}
               disabled={confirmText !== 'DELETE' || submitting}
-              className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white hover:bg-danger disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
               Confirm Deletion
