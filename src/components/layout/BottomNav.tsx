@@ -112,43 +112,47 @@ export function BottomNav() {
       )}
 
       {/* Bottom nav bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center justify-between border-t border-gray-200 bg-white px-1 lg:hidden">
-        {/* First 2 nav items */}
-        {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
-          <NavTab key={item.path} {...item} />
-        ))}
+      <div className="fixed bottom-6 left-6 right-6 z-30 lg:hidden">
+        <nav className="flex h-16 items-center justify-around rounded-3xl border border-white/20 bg-white/80 px-2 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
+          {/* First 2 nav items */}
+          {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
+            <NavTab key={item.path} {...item} />
+          ))}
 
-        {/* FAB center button — intentionally kept as a solid brand circle,
-            not the white neumorphic badge, so it stays visually dominant
-            as the primary action. */}
-        <button
-          onClick={() => setFabOpen((v) => !v)}
-          className={clsx(
-            'flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all active:scale-95',
-            fabOpen ? 'bg-gray-800 rotate-45' : 'bg-brand-500',
-          )}
-        >
-          <Plus className="h-6 w-6 text-white" />
-        </button>
+          {/* FAB center button */}
+          <button
+            onClick={() => setFabOpen((v) => !v)}
+            className={clsx(
+              'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-2xl shadow-xl transition-all active:scale-90',
+              fabOpen 
+                ? 'bg-gray-900 rotate-45' 
+                : 'bg-gradient-to-br from-brand-400 to-brand-600 ring-4 ring-white shadow-brand-500/30',
+            )}
+          >
+            <Plus className="h-7 w-7 text-white" />
+          </button>
 
-        {/* Last 2 nav items */}
-        {BOTTOM_NAV_ITEMS.slice(2).map((item) => (
-          <NavTab key={item.path} {...item} />
-        ))}
+          {/* Last 2 nav items */}
+          {BOTTOM_NAV_ITEMS.slice(2).map((item) => (
+            <NavTab key={item.path} {...item} />
+          ))}
 
-        {/* More button */}
-        <button
-          onClick={() => setMoreOpen((v) => !v)}
-          className="group flex flex-col items-center gap-1 rounded-xl px-3 py-2 text-xs font-medium transition-colors"
-        >
-          {moreOpen ? (
-            <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
-          ) : (
-            <MoreHorizontal className="h-5 w-5 text-gray-500" />
-          )}
-          <span className={moreOpen ? 'text-brand-600' : 'text-gray-500'}>More</span>
-        </button>
-      </nav>
+          {/* More button */}
+          <button
+            onClick={() => setMoreOpen((v) => !v)}
+            className="group flex flex-col items-center gap-1 rounded-xl px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors"
+          >
+            {moreOpen ? (
+              <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
+            ) : (
+              <div className="flex flex-col items-center">
+                <MoreHorizontal className="h-5 w-5 text-gray-400 transition-colors group-active:text-brand-500" />
+                <span className="text-gray-400 group-active:text-brand-500">More</span>
+              </div>
+            )}
+          </button>
+        </nav>
+      </div>
 
       {/* Mobile quick entry sheets */}
       {businessId && (
@@ -179,17 +183,20 @@ function NavTab({
   icon: typeof LayoutDashboard;
 }) {
   return (
-    <NavLink to={path} className="group flex flex-col items-center gap-1 px-3 py-2 text-xs font-medium">
+    <NavLink to={path} className="group flex flex-col items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
       {({ isActive }) =>
         isActive ? (
           <>
-            <IconBadge icon={Icon} tone="brand" size="sm" interactive />
+            <div className="relative">
+              <div className="absolute -inset-1 rounded-full bg-brand-500/20 blur-sm" />
+              <Icon className="relative h-5 w-5 text-brand-600" />
+            </div>
             <span className="text-brand-600">{label}</span>
           </>
         ) : (
           <>
-            <Icon className="h-5 w-5 text-gray-500" />
-            <span className="text-gray-500">{label}</span>
+            <Icon className="h-5 w-5 text-gray-400 transition-colors group-active:text-brand-500" />
+            <span className="text-gray-400 group-active:text-brand-500">{label}</span>
           </>
         )
       }

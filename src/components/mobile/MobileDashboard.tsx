@@ -36,80 +36,7 @@ import { formatMwk, formatMwkCompact } from '@/lib/formatters';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
 import { QuickIncomeMobile } from './QuickIncomeMobile';
-
-// ── Icon Badge (neumorphic) ─────────────────────────────────────────────
-// Shared soft-UI icon container used across stat cards, quick actions,
-// shortcuts, and transaction rows for a consistent "app" feel.
-
-type IconTone = 'brand' | 'negative' | 'neutral' | 'warning' | 'info';
-type IconSize = 'sm' | 'md' | 'lg';
-
-interface ToneStyle {
-  icon: string;
-  raised: string;
-  pressedActive: string;
-}
-
-const TONE_STYLES: Record<IconTone, ToneStyle> = {
-  brand: {
-    icon: 'text-brand-600',
-    raised: 'shadow-[4px_4px_10px_rgba(15,118,110,0.18),-4px_-4px_10px_rgba(255,255,255,0.9)]',
-    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(15,118,110,0.20),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
-  },
-  negative: {
-    icon: 'text-red-500',
-    raised: 'shadow-[4px_4px_10px_rgba(244,63,94,0.16),-4px_-4px_10px_rgba(255,255,255,0.9)]',
-    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(244,63,94,0.18),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
-  },
-  neutral: {
-    icon: 'text-slate-500',
-    raised: 'shadow-[4px_4px_10px_rgba(100,116,139,0.15),-4px_-4px_10px_rgba(255,255,255,0.9)]',
-    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(100,116,139,0.17),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
-  },
-  warning: {
-    icon: 'text-amber-500',
-    raised: 'shadow-[4px_4px_10px_rgba(245,158,11,0.18),-4px_-4px_10px_rgba(255,255,255,0.9)]',
-    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(245,158,11,0.20),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
-  },
-  info: {
-    icon: 'text-indigo-500',
-    raised: 'shadow-[4px_4px_10px_rgba(99,102,241,0.16),-4px_-4px_10px_rgba(255,255,255,0.9)]',
-    pressedActive: 'group-active:shadow-[inset_3px_3px_6px_rgba(99,102,241,0.18),inset_-3px_-3px_6px_rgba(255,255,255,0.9)]',
-  },
-};
-
-const SIZE_STYLES: Record<IconSize, { box: string; icon: string }> = {
-  sm: { box: 'h-9 w-9', icon: 'h-4 w-4' },
-  md: { box: 'h-11 w-11', icon: 'h-5 w-5' },
-  lg: { box: 'h-14 w-14', icon: 'h-6 w-6' },
-};
-
-function IconBadge({
-  icon: Icon,
-  tone = 'neutral',
-  size = 'md',
-  interactive = false,
-}: {
-  icon: LucideIcon;
-  tone?: IconTone;
-  size?: IconSize;
-  interactive?: boolean;
-}) {
-  const t = TONE_STYLES[tone];
-  const s = SIZE_STYLES[size];
-  return (
-    <span
-      className={clsx(
-        'flex shrink-0 items-center justify-center rounded-2xl bg-white transition-shadow duration-150',
-        s.box,
-        t.raised,
-        interactive && t.pressedActive,
-      )}
-    >
-      <Icon className={clsx(s.icon, t.icon)} />
-    </span>
-  );
-}
+import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -176,36 +103,31 @@ function StatCard({
     <Wrapper
       onClick={onClick}
       className={clsx(
-        'group w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-transform',
-        onClick && 'active:scale-[0.98]',
+        'group w-full rounded-3xl border border-white bg-white/60 p-4 text-left shadow-sm backdrop-blur-md transition-all',
+        onClick && 'active:scale-95 active:bg-white/80',
       )}
     >
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 truncate">{label}</p>
+      <div className="flex items-center justify-between mb-3">
         <IconBadge icon={icon} tone={tone} size="sm" interactive={!!onClick} />
-      </div>
-      <p className={`text-lg font-bold ${valueColor} truncate`} title={valueTitle ?? value}>{value}</p>
-      <div className="mt-1 flex items-center gap-1.5">
-        {subtext && <p className="text-[11px] text-gray-400 truncate">{subtext}</p>}
         {trend && (
           <span
             className={clsx(
-              'inline-flex items-center gap-0.5 text-[11px] font-medium shrink-0',
-              trend.positive ? 'text-brand-600' : 'text-red-500',
+              'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight',
+              trend.positive ? 'bg-brand-50 text-brand-600' : 'bg-red-50 text-red-500',
             )}
           >
             {trend.positive ? (
-              <TrendingUp className="h-3 w-3" />
+              <TrendingUp className="h-2.5 w-2.5" />
             ) : (
-              <TrendingDown className="h-3 w-3" />
+              <TrendingDown className="h-2.5 w-2.5" />
             )}
-            {trend.pct.toFixed(1)}%
+            {trend.pct.toFixed(0)}%
           </span>
         )}
-        {onClick && !trend && (
-          <ChevronRight className="h-3 w-3 text-gray-300 ml-auto shrink-0" />
-        )}
       </div>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
+      <p className={`text-xl font-black tracking-tight ${valueColor} truncate`} title={valueTitle ?? value}>{value}</p>
+      {subtext && <p className="mt-1 text-[10px] font-medium text-gray-400 truncate uppercase">{subtext}</p>}
     </Wrapper>
   );
 }
@@ -286,83 +208,129 @@ export function MobileDashboard() {
   const { logoUrl } = useBrandTheme();
 
   return (
-    <div className="flex flex-col gap-5 pb-4">
+    <div className="relative flex flex-col gap-6 pb-24">
+      {/* Futuristic Background Elements */}
+      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[10%] -left-[10%] h-[40%] w-[70%] rounded-full bg-brand-500/5 blur-[120px]" />
+        <div className="absolute top-[20%] -right-[10%] h-[30%] w-[60%] rounded-full bg-indigo-500/5 blur-[100px]" />
+        <div className="absolute bottom-[10%] left-[20%] h-[40%] w-[80%] rounded-full bg-brand-400/5 blur-[120px]" />
+      </div>
+
       {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          {logoUrl ? (
-            <img
-              src={logoUrl}
-              alt="Business logo"
-              className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-sm"
-            />
-          ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white shadow-sm">
-              {firstName[0]?.toUpperCase()}
-            </div>
-          )}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 opacity-20 blur-sm" />
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Business logo"
+                className="relative h-12 w-12 shrink-0 rounded-2xl object-cover shadow-sm ring-2 ring-white"
+              />
+            ) : (
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-lg font-black text-white shadow-lg ring-2 ring-white">
+                {firstName[0]?.toUpperCase()}
+              </div>
+            )}
+          </div>
           <div className="min-w-0">
-            <p className="text-xs text-gray-400">{greeting()}</p>
-            <h1 className="text-lg font-bold text-gray-900 truncate">{firstName} 👋</h1>
+            <h1 className="text-xl font-black tracking-tight text-gray-900 leading-none">
+              {greeting()}, <span className="text-brand-600">{firstName}</span>
+            </h1>
             {businessName && (
-              <p className="text-xs text-gray-500 mt-0.5 truncate">{businessName}</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1.5 truncate">
+                {businessName}
+              </p>
             )}
           </div>
         </div>
         <button
           onClick={() => navigate('/settings')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white shadow-sm active:scale-95"
+          className="group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform active:scale-90"
         >
-          {firstName[0]?.toUpperCase()}
+          <Smartphone className="h-5 w-5 text-gray-400 group-hover:text-brand-600" />
         </button>
       </div>
 
-      {/* Net Profit Hero Card — flat fill, no gradient */}
-      <div className={clsx(
-        'rounded-2xl p-5',
-        netProfit === undefined
-          ? 'bg-gray-100'
-          : netProfit >= 0
-          ? 'bg-brand-500'
-          : 'bg-red-600',
-      )}>
-        {income.isLoading || expenses.isLoading ? (
-          <div className="animate-pulse space-y-3">
-            <div className="h-3 w-24 rounded bg-white/20" />
-            <div className="h-8 w-40 rounded bg-white/20" />
-            <div className="h-3 w-20 rounded bg-white/20" />
-          </div>
-        ) : (
-          <>
-            <p className="text-xs font-medium uppercase tracking-wider text-white/70">
-              Net Profit This Month
-            </p>
-            <p
-              className="mt-1 text-white tracking-tight font-bold truncate"
-              style={{ fontSize: 'clamp(1.5rem, 8vw, 2.75rem)' }}
-            >
-              {netProfit !== undefined ? formatMwkCompact(Math.abs(netProfit)) : formatMwkCompact(0)}
-            </p>
-            <p
-              className="text-xs text-white/70 truncate"
-              title={netProfit !== undefined ? formatMwk(Math.abs(netProfit)) : formatMwk(0)}
-            >
-              {netProfit !== undefined ? formatMwk(Math.abs(netProfit)) : formatMwk(0)}
-            </p>
-            <div className="mt-3 flex items-center gap-1">
-              {netProfit !== undefined && netProfit >= 0
-                ? <TrendingUp className="h-3.5 w-3.5 text-white/70" />
-                : <TrendingDown className="h-3.5 w-3.5 text-white/70" />}
-              <p className="text-xs text-white/70">
-                {netProfit !== undefined && netProfit >= 0 ? 'Profitable' : 'Loss'} · {new Date().toLocaleDateString('en-MW', { month: 'long', year: 'numeric' })}
-              </p>
+      {/* Net Profit Hero Card — Futuristic Glassmorphism */}
+      <div className="relative overflow-hidden rounded-[2.5rem] p-6 shadow-2xl shadow-brand-500/20 ring-1 ring-white/20">
+        <div className={clsx(
+          'absolute inset-0 transition-colors duration-500',
+          netProfit === undefined
+            ? 'bg-gray-100'
+            : netProfit >= 0
+            ? 'bg-gradient-to-br from-brand-500 via-brand-600 to-emerald-600'
+            : 'bg-gradient-to-br from-red-500 via-red-600 to-rose-700',
+        )} />
+        
+        {/* Decorative Circles */}
+        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-black/10 blur-2xl" />
+
+        <div className="relative z-10">
+          {income.isLoading || expenses.isLoading ? (
+            <div className="animate-pulse space-y-4">
+              <div className="h-3 w-24 rounded bg-white/20" />
+              <div className="h-10 w-48 rounded bg-white/20" />
+              <div className="h-4 w-32 rounded bg-white/20" />
             </div>
-          </>
-        )}
+          ) : (
+            <>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">
+                  Current Balance
+                </p>
+                <div className="rounded-full bg-white/20 px-3 py-1 backdrop-blur-md">
+                  <p className="text-[10px] font-bold text-white uppercase">
+                    {new Date().toLocaleDateString('en-MW', { month: 'short', year: 'numeric' })}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="mt-4">
+                <p
+                  className="text-white tracking-tighter font-black leading-none"
+                  style={{ fontSize: 'clamp(2rem, 10vw, 3.5rem)' }}
+                >
+                  {netProfit !== undefined ? formatMwkCompact(Math.abs(netProfit)) : formatMwkCompact(0)}
+                </p>
+                <p className="mt-1 text-sm font-medium text-white/70">
+                  {netProfit !== undefined ? formatMwk(Math.abs(netProfit)) : formatMwk(0)}
+                </p>
+              </div>
+
+              <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+                <div className="flex items-center gap-2">
+                  <div className={clsx(
+                    'flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md',
+                    netProfit !== undefined && netProfit >= 0 ? 'bg-white/20' : 'bg-black/20'
+                  )}>
+                    {netProfit !== undefined && netProfit >= 0
+                      ? <TrendingUp className="h-4 w-4 text-white" />
+                      : <TrendingDown className="h-4 w-4 text-white" />}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/60 leading-none">Status</p>
+                    <p className="text-xs font-black text-white mt-0.5">
+                      {netProfit !== undefined && netProfit >= 0 ? 'Surplus' : 'Deficit'}
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  onClick={() => navigate('/reports')}
+                  className="rounded-xl bg-white/20 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md transition-all active:scale-95 active:bg-white/30"
+                >
+                  View Insights
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Stat Cards — 2-column grid */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-4">
         <StatCard
           label="Income"
           value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)}
@@ -405,10 +373,13 @@ export function MobileDashboard() {
       </div>
 
       {/* Income vs Expenses Chart */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-900">Income vs Expenses</h2>
-          <span className="text-xs text-gray-400">6 months</span>
+      <div className="rounded-[2rem] border border-white bg-white/60 p-6 shadow-sm backdrop-blur-md">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Analytics</h2>
+            <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Income vs Expenses</p>
+          </div>
+          <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500 uppercase">6 Months</span>
         </div>
         <IncomeExpenseChart
           data={trend.data}
@@ -419,11 +390,11 @@ export function MobileDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-          Quick Actions
+      <div className="px-1">
+        <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+          Terminal
         </p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-4">
           <QuickActionButton
             icon={DollarSign}
             tone="brand"
@@ -451,83 +422,89 @@ export function MobileDashboard() {
         </div>
       </div>
 
-      {/* Inventory + Mobile Money — real low-stock data, mobile money teaser */}
-      <div className="grid grid-cols-1 gap-3">
+      {/* Inventory + Mobile Money */}
+      <div className="grid grid-cols-1 gap-4">
         <button
           onClick={() => navigate('/warehouse')}
-          className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left transition-transform active:scale-[0.98]"
+          className="relative overflow-hidden w-full rounded-[2rem] border border-white bg-white/60 p-6 text-left shadow-sm backdrop-blur-md transition-all active:scale-[0.98]"
         >
-          <div className="mb-2 flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
               <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Inventory</span>
+              <div>
+                <span className="text-sm font-black uppercase tracking-widest text-gray-900">Inventory</span>
+                <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Stock Management</p>
+              </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-gray-300" />
+            <ChevronRight className="h-5 w-5 text-gray-300" />
           </div>
 
           {lowStock.isLoading ? (
-            <div className="h-8 animate-pulse rounded bg-gray-100" />
+            <div className="h-12 animate-pulse rounded-2xl bg-gray-100/50" />
           ) : lowStock.data && lowStock.data.length > 0 ? (
-            <>
-              <div className="mb-2 flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                <p className="text-xs text-amber-600">
-                  <span className="font-semibold">{lowStock.data.length}</span> product{lowStock.data.length > 1 ? 's' : ''} at or below reorder level
+            <div className="rounded-2xl bg-amber-50/50 p-3 ring-1 ring-amber-100">
+              <div className="mb-2 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <p className="text-[11px] font-bold text-amber-700 uppercase">
+                  {lowStock.data.length} Alerts
                 </p>
               </div>
-              <div className="space-y-1.5">
-                {lowStock.data.slice(0, 3).map((alert) => (
-                  <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between text-xs">
-                    <span className="truncate text-gray-600">{alert.product_name}</span>
-                    <span className="shrink-0 font-medium text-gray-800">
+              <div className="space-y-2">
+                {lowStock.data.slice(0, 2).map((alert) => (
+                  <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between">
+                    <span className="truncate text-xs font-medium text-gray-600">{alert.product_name}</span>
+                    <span className="shrink-0 text-xs font-black text-gray-900">
                       {Number(alert.quantity_available)} left
                     </span>
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           ) : (
-            <p className="text-xs text-gray-400">All products are well stocked</p>
+            <div className="rounded-2xl bg-brand-50/50 p-3 ring-1 ring-brand-100">
+              <p className="text-xs font-bold text-brand-700 uppercase text-center italic">Optimal stock levels maintained</p>
+            </div>
           )}
         </button>
 
-        <div className="w-full rounded-2xl border border-dashed border-gray-200 bg-white p-4">
-          <div className="flex items-center gap-2">
+        <div className="w-full rounded-[2rem] border border-dashed border-gray-200 bg-white/40 p-6 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
             <IconBadge icon={Smartphone} tone="neutral" size="sm" />
-            <span className="text-sm font-semibold text-gray-700">Mobile Money</span>
+            <div>
+              <span className="text-sm font-black uppercase tracking-widest text-gray-400">Integrations</span>
+              <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Mobile Money (Coming Soon)</p>
+            </div>
           </div>
-          <p className="mt-2 text-xs text-gray-400">Airtel Money and Mpamba integration coming soon</p>
         </div>
       </div>
 
       {/* Recent Transactions */}
-      <div>
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-            Recent Transactions
+      <div className="px-1">
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+            Log
           </p>
           <button
             onClick={() => navigate('/reports')}
-            className="text-xs font-medium text-brand-600"
+            className="text-[10px] font-black uppercase tracking-widest text-brand-600 underline underline-offset-4"
           >
-            See all
+            History
           </button>
         </div>
 
         {recentEntries.isLoading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-16 animate-pulse rounded-3xl bg-gray-100/50" />
             ))}
           </div>
         ) : !recentEntries.data || recentEntries.data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-8 text-center">
-            <Receipt className="mb-2 h-8 w-8 text-gray-300" />
-            <p className="text-sm font-medium text-gray-500">No transactions yet</p>
-            <p className="mt-0.5 text-xs text-gray-400">Tap + to record your first one</p>
+          <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 py-10 text-center">
+            <Receipt className="mb-3 h-10 w-10 text-gray-200" />
+            <p className="text-xs font-black uppercase tracking-widest text-gray-400 text-center px-6 leading-relaxed">No data detected. Start by recording a transaction.</p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
+          <div className="overflow-hidden rounded-[2rem] border border-white bg-white/60 shadow-sm backdrop-blur-md divide-y divide-gray-100/50">
             {recentEntries.data.map((entry, i) => {
               const t: IconTone =
                 entry.source_type === 'invoice' ? 'brand'
@@ -539,32 +516,29 @@ export function MobileDashboard() {
                 : ClipboardList;
 
               return (
-                <div key={i} className="flex items-center justify-between px-4 py-3.5">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div key={i} className="flex items-center justify-between px-5 py-4 transition-colors active:bg-white/40">
+                  <div className="flex items-center gap-4 min-w-0">
                     <IconBadge icon={Icon} tone={t} size="sm" />
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-sm font-medium text-gray-900 truncate max-w-[120px]">
-                          {entry.description ?? entry.source_type ?? 'Transaction'}
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-black text-gray-900 truncate max-w-[140px] uppercase tracking-wide">
+                          {entry.description ?? entry.source_type ?? 'Journal'}
                         </p>
                         {entry.isLocked && (
-                          <span
-                            className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 shrink-0"
-                            title="Locked period"
-                          >
-                            <Lock className="h-2.5 w-2.5" /> Locked
-                          </span>
+                          <Lock className="h-3 w-3 text-amber-500" />
                         )}
                       </div>
-                      <p className="text-xs text-gray-400">{entry.entry_date}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">{entry.entry_date}</p>
                     </div>
                   </div>
-                  <p className={clsx(
-                    'text-xs font-medium px-2 py-0.5 rounded-full shrink-0',
-                    entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700',
-                  )}>
-                    {entry.source_type ?? 'journal'}
-                  </p>
+                  <div className="text-right">
+                    <p className={clsx(
+                      'text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg',
+                      entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700',
+                    )}>
+                      {entry.source_type ?? 'entry'}
+                    </p>
+                  </div>
                 </div>
               );
             })}
@@ -573,41 +547,34 @@ export function MobileDashboard() {
       </div>
 
       {/* Shortcuts */}
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-          Shortcuts
+      <div className="px-1">
+        <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
+          Navigation
         </p>
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
+        <div className="overflow-hidden rounded-[2rem] border border-white bg-white/60 shadow-sm backdrop-blur-md divide-y divide-gray-100/50">
           {[
             { label: 'View Invoices', icon: FileText, tone: 'info' as IconTone, path: '/invoices' },
-            { label: 'Tax & Compliance', icon: Percent, tone: 'warning' as IconTone, path: '/tax' },
-            { label: 'Reports', icon: BarChart2, tone: 'brand' as IconTone, path: '/reports' },
-            { label: 'Contacts', icon: BookUser, tone: 'neutral' as IconTone, path: '/contacts' },
+            { label: 'Tax Center', icon: Percent, tone: 'warning' as IconTone, path: '/tax' },
+            { label: 'Market Intelligence', icon: BarChart2, tone: 'brand' as IconTone, path: '/reports' },
+            { label: 'Neural Network', icon: Sparkles, tone: 'brand' as IconTone, path: '/ai' },
           ].map((item) => (
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className="group flex w-full items-center justify-between px-4 py-3 transition-colors active:bg-gray-50"
+              className="group flex w-full items-center justify-between px-5 py-4 transition-colors active:bg-white/40"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-4">
                 <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-sm font-medium text-gray-700">{item.label}</span>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-700">{item.label}</span>
               </div>
-              <ChevronRight className="h-4 w-4 text-gray-400" />
+              <ChevronRight className="h-5 w-5 text-gray-300 transition-transform group-active:translate-x-1" />
             </button>
           ))}
         </div>
       </div>
 
-      {/* Floating Action Button (+) — quick income entry */}
-      <button
-        onClick={() => setShowIncome(true)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-xl shadow-brand-600/25 transition-transform active:scale-90 hover:bg-brand-700"
-        aria-label="Quick income entry"
-        title="Record income"
-      >
-        <Plus className="h-7 w-7" strokeWidth={2.5} />
-      </button>
+      {/* Action Button Removed — Now part of BottomNav */}
+
 
       {/* Quick entry sheets */}
       {businessId && (
