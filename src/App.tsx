@@ -23,6 +23,7 @@ import { ProductsPage } from '@/pages/ProductsPage';
 import { InventoryPage } from '@/pages/InventoryPage';
 import { AccountsPage } from '@/pages/AccountsPage';
 import { AssetsPage } from '@/pages/AssetsPage';
+import { CapitalPage } from '@/pages/CapitalPage';
 import { TaxPage } from '@/pages/TaxPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { AiInsightsPage } from '@/pages/AiInsightsPage';
@@ -84,6 +85,7 @@ function App() {
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/accounts" element={<AccountsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
+                <Route path="/capital" element={<CapitalPage />} />
                 <Route path="/tax" element={<TaxPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/journals" element={<JournalsPage />} />
