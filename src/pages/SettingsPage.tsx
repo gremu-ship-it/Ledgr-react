@@ -15,6 +15,8 @@ import {
   Cookie,
   Upload,
   ImageIcon,
+  Copy,
+  ExternalLink,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -761,20 +763,40 @@ function SecurityTab() {
 
 // ── Team Members Tab ──────────────────────────────────────────────────────────
 
-const ROLES = ['owner', 'admin', 'accountant', 'payroll_manager', 'auditor', 'viewer', 'staff'] as const;
+const ROLES = [
+  'owner',
+  'admin',
+  'accountant',
+  'payroll_manager',
+  'supervisor',
+  'data_entry',
+  'inventory_manager',
+  'sales_clerk',
+  'auditor',
+  'viewer',
+  'staff',
+] as const;
 
 function TeamMembersTab({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', role: 'staff' as typeof ROLES[number] });
+  const [inviteMode, setInviteMode] = useState<'direct' | 'link'>('direct');
+
+  // Direct Add state
+  const [directForm, setDirectForm] = useState({ email: '', role: 'viewer' as typeof ROLES[number] });
+
+  // Shareable Link state
+  const [linkRole, setLinkRole] = useState<typeof ROLES[number]>('viewer');
+  const [linkEmail, setLinkEmail] = useState('');
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const currentUser = useAppStore((s) => s.currentUser);
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['team', businessId],
     queryFn: async () => {
-      // Try enriched server-side list first (includes email from auth)
       try {
         const { data, error } = await supabase.functions.invoke('list-team-members', {
           body: { business_id: businessId },
@@ -795,7 +817,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
           }>;
         }
       } catch {
-        // fallback to direct query
+        // fallback
       }
 
       const { data, error } = await supabase
@@ -805,7 +827,6 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
         .eq('is_active', true)
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
-      // Normalize to enriched shape
       return (data ?? []).map((row: any) => ({
         id: row.id,
         user_id: row.user_id,
@@ -823,14 +844,28 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     enabled: Boolean(businessId),
   });
 
-  const inviteMutation = useMutation({
+  const { data: activeInvites = [], refetch: refetchInvites } = useQuery({
+    queryKey: ['team-invites', businessId],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('business_invitations')
+        .select('*')
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .eq('business_id', businessId);
+      if (error) throw new Error(error.message);
+      return data || [];
+    },
+    enabled: Boolean(businessId),
+  });
+
+  const directInviteMutation = useMutation({
     mutationFn: async () => {
-      const email = inviteForm.email.trim().toLowerCase();
+      const email = directForm.email.trim().toLowerCase();
       if (!email) throw new Error('Email is required');
       if (!email.includes('@')) throw new Error('Enter a valid email address');
-      const normalizedRole = (inviteForm.role === 'staff' ? 'accountant' : inviteForm.role) as string;
+      const normalizedRole = (directForm.role === 'staff' ? 'accountant' : directForm.role) as string;
 
-      // Server-side Edge Function: verifies caller is owner/admin, looks up auth user by email, inserts business_users
       const { data, error } = await supabase.functions.invoke('invite-team-member', {
         body: {
           business_id: businessId,
@@ -850,7 +885,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     },
     onSuccess: (data) => {
       setAlert({ type: 'success', message: data?.message || 'Team member added successfully.' });
-      setInviteForm({ email: '', role: 'staff' as typeof ROLES[number] });
+      setDirectForm({ email: '', role: 'viewer' });
       setShowInvite(false);
       queryClient.invalidateQueries({ queryKey: ['team', businessId] });
       setTimeout(() => setAlert(null), 4000);
@@ -864,6 +899,33 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
       } else {
         setAlert({ type: 'error', message: err.message });
       }
+    },
+  });
+
+  const generateLinkMutation = useMutation({
+    mutationFn: async () => {
+      const normalizedRole = (linkRole === 'staff' ? 'accountant' : linkRole) as string;
+      const { data, error } = await supabase.functions.invoke('create-invite-link', {
+        body: {
+          business_id: businessId,
+          role: normalizedRole,
+          email: linkEmail.trim() || undefined,
+          origin: window.location.origin,
+        },
+      });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.message || data.error);
+      return data as { invite_url: string };
+    },
+    onSuccess: (data) => {
+      setGeneratedLink(data.invite_url);
+      setAlert({ type: 'success', message: 'Shareable invitation link created!' });
+      void refetchInvites();
+      setTimeout(() => setAlert(null), 4000);
+    },
+    onError: (err: Error) => {
+      setAlert({ type: 'error', message: err.message });
     },
   });
 
@@ -901,6 +963,36 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
   });
 
+  const revokeInviteMutation = useMutation({
+    mutationFn: async (inviteId: string) => {
+      const { error } = await (supabase as any)
+        .from('business_invitations')
+        .delete()
+        .eq('id', inviteId);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      setAlert({ type: 'success', message: 'Invitation link revoked.' });
+      void refetchInvites();
+      setTimeout(() => setAlert(null), 3000);
+    },
+    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+  });
+
+  function handleCopy() {
+    if (!generatedLink) return;
+    navigator.clipboard.writeText(generatedLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleCopyLinkToken(token: string) {
+    const link = `${window.location.origin}/accept-invitation?token=${token}`;
+    navigator.clipboard.writeText(link);
+    setAlert({ type: 'success', message: 'Invitation link copied.' });
+    setTimeout(() => setAlert(null), 2000);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -909,7 +1001,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
           <p className="mt-0.5 text-sm text-gray-500">Manage who has access to this business.</p>
         </div>
         <button
-          onClick={() => setShowInvite((v) => !v)}
+          onClick={() => { setShowInvite((v) => !v); setGeneratedLink(null); }}
           className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
         >
           <Plus className="h-4 w-4" />
@@ -919,100 +1011,223 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
       {alert && <Alert type={alert.type} message={alert.message} />}
 
-      {/* How it works – clear guidance replaces old error */}
+      {/* How it works */}
       <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
         <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
           <Users className="h-4 w-4 text-gray-500" />
           How to add someone
         </h4>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-600">
-          <li>Ask the person to create a Ledgr account at <a href={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`} className="font-medium text-brand-600 hover:text-brand-700">{typeof window !== 'undefined' ? `${window.location.origin}/register` : '/register'}</a>.</li>
-          <li>Once they’ve registered, enter their email below and choose a role.</li>
-          <li>Click Add member – they’ll instantly have access.</li>
+          <li>Ask the person to create a Ledgr account at <a href={`${window.location.origin}/register`} className="font-medium text-brand-600 hover:text-brand-700">{window.location.origin}/register</a>.</li>
+          <li>Once they’ve registered, you can add them directly via email.</li>
+          <li>Alternatively, generate a Shareable Invite Link and send it to them.</li>
         </ol>
-        <div className="mt-3 flex items-center gap-2">
-          <input
-            readOnly
-            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`}
-            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600"
-          />
-          <button
-            onClick={() => {
-              const url = `${window.location.origin}/register`;
-              navigator.clipboard.writeText(url);
-              setAlert({ type: 'success', message: 'Registration link copied.' });
-              setTimeout(() => setAlert(null), 2000);
-            }}
-            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Copy link
-          </button>
-        </div>
       </div>
 
       {showInvite && (
-        <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-brand-900">Add existing user to this business</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-brand-800">User’s email (must already be registered)</label>
-              <input
-                type="email"
-                placeholder="colleague@business.mw"
-                value={inviteForm.email}
-                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-brand-800">Role</label>
-              <select
-                value={inviteForm.role}
-                onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value as typeof ROLES[number] }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="mt-2 text-xs text-brand-700">
-            {inviteForm.role === 'owner' && 'Owner: full access including billing. Only owners can assign this.'}
-            {inviteForm.role === 'admin' && 'Admin: full access except billing. Only owners can assign admins.'}
-            {(inviteForm.role === 'accountant' || inviteForm.role === 'staff') && 'Accountant: read/write all financial data.'}
-            {inviteForm.role === 'payroll_manager' && 'Payroll Manager: payroll read/write, read-only elsewhere.'}
-            {inviteForm.role === 'auditor' && 'Auditor: read-only + can export reports.'}
-            {inviteForm.role === 'viewer' && 'Viewer: read-only dashboard and reports.'}
-          </div>
-
-          <div className="mt-3 flex gap-2">
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-5 space-y-4">
+          <div className="flex border-b border-brand-100 pb-2 gap-4">
             <button
-              onClick={() => inviteMutation.mutate()}
-              disabled={inviteMutation.isPending || !inviteForm.email.trim()}
-              className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
-            >
-              {inviteMutation.isPending ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Adding…
-                </>
-              ) : (
-                'Add member'
+              type="button"
+              onClick={() => { setInviteMode('direct'); setGeneratedLink(null); }}
+              className={cls(
+                'pb-1 text-xs font-semibold border-b-2 transition-all',
+                inviteMode === 'direct' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
               )}
+            >
+              Direct Add (Existing User)
             </button>
             <button
-              onClick={() => setShowInvite(false)}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              type="button"
+              onClick={() => { setInviteMode('link'); setGeneratedLink(null); }}
+              className={cls(
+                'pb-1 text-xs font-semibold border-b-2 transition-all',
+                inviteMode === 'link' ? 'border-brand-500 text-brand-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+              )}
             >
-              Cancel
+              Shareable Invite Link
             </button>
           </div>
 
-          <p className="mt-3 text-xs text-brand-600">
-            Uses server function <code className="rounded bg-white px-1 py-0.5">invite-team-member</code> – verifies your owner/admin role, looks up email via Auth Admin, creates <code className="rounded bg-white px-1">business_users</code> row.
+          {inviteMode === 'direct' ? (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-brand-900">Add existing user directly</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-brand-800">User’s email (must already be registered)</label>
+                  <input
+                    type="email"
+                    placeholder="colleague@business.mw"
+                    value={directForm.email}
+                    onChange={(e) => setDirectForm((f) => ({ ...f, email: e.target.value }))}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-brand-800">Role</label>
+                  <select
+                    value={directForm.role}
+                    onChange={(e) => setDirectForm((f) => ({ ...f, role: e.target.value as typeof ROLES[number] }))}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none capitalize"
+                  >
+                    {ROLES.filter(r => r !== 'owner').map((r) => (
+                      <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => directInviteMutation.mutate()}
+                  disabled={directInviteMutation.isPending || !directForm.email.trim()}
+                  className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+                >
+                  {directInviteMutation.isPending ? 'Adding…' : 'Add member'}
+                </button>
+                <button
+                  onClick={() => setShowInvite(false)}
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-brand-900">Create shareable invitation link (Business-scoped only)</h3>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <label className="mb-1 block text-xs font-medium text-brand-800">Restrict to email (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="Only this email can accept (Optional)"
+                    value={linkEmail}
+                    onChange={(e) => setLinkEmail(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-brand-800">Role</label>
+                  <select
+                    value={linkRole}
+                    onChange={(e) => setLinkRole(e.target.value as typeof ROLES[number])}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none capitalize"
+                  >
+                    {ROLES.filter(r => r !== 'owner').map((r) => (
+                      <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {generatedLink && (
+                <div className="rounded-lg border border-brand-200 bg-white p-3 space-y-1">
+                  <span className="block text-xs font-medium text-brand-800">Shareable link (expires in 7 days):</span>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={generatedLink}
+                      className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs text-gray-600 select-all focus:outline-none"
+                    />
+                    <button
+                      onClick={handleCopy}
+                      className="flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      {copied ? 'Copied!' : 'Copy'}
+                    </button>
+                    <a
+                      href={generatedLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-center rounded-lg border border-gray-200 px-3 py-1.5 hover:bg-gray-50"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 text-gray-600" />
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => generateLinkMutation.mutate()}
+                  disabled={generateLinkMutation.isPending}
+                  className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+                >
+                  {generateLinkMutation.isPending ? 'Generating…' : 'Generate Link'}
+                </button>
+                <button
+                  onClick={() => setShowInvite(false)}
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          <p className="text-xs text-brand-600 border-t border-brand-100 pt-3">
+            Active invitation links are strictly scoped and restricted to this business only.
           </p>
+        </div>
+      )}
+
+      {/* Active Shareable invitation links table */}
+      {activeInvites.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-gray-900">Active Shareable Invitation Links</h3>
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-4 py-3 text-left">Restriction</th>
+                  <th className="px-4 py-3 text-left">Role</th>
+                  <th className="px-4 py-3 text-left">Expires</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {activeInvites.map((lnk: any) => (
+                  <tr key={lnk.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 text-gray-900 font-medium">
+                      {lnk.email ? lnk.email : 'Anyone with link'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 capitalize">
+                      {lnk.role.replace('_', ' ')}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {new Date(lnk.expires_at).toLocaleDateString('en-MW', {
+                        day: '2-digit', month: 'short', year: 'numeric',
+                      })}
+                    </td>
+                    <td className="px-4 py-3 text-right flex justify-end gap-2">
+                      <button
+                        onClick={() => handleCopyLinkToken(lnk.token)}
+                        className="text-gray-400 hover:text-brand-600 transition-colors"
+                        title="Copy Link"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm('Revoke this shareable invite link?')) {
+                            revokeInviteMutation.mutate(lnk.id);
+                          }
+                        }}
+                        disabled={revokeInviteMutation.isPending}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        title="Revoke Link"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

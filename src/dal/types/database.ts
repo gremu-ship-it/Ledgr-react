@@ -70,8 +70,17 @@ export type PaymentMethod =
   | 'tnm_mpamba'
   | 'card'
   | 'other';
-/** DB: user_role — exact 6 members. */
-export type BusinessUserRole = 'owner' | 'admin' | 'accountant' | 'payroll_manager' | 'supervisor' | 'data_entry' | 'inventory_manager' | 'sales_clerk' | 'auditor' | 'viewer';
+export type BusinessUserRole =
+  | 'owner'
+  | 'admin'
+  | 'accountant'
+  | 'payroll_manager'
+  | 'supervisor'
+  | 'data_entry'
+  | 'inventory_manager'
+  | 'sales_clerk'
+  | 'auditor'
+  | 'viewer';
 /**
  * DB: invoice_status — exact 7 members.
  * 'partial' → 'partially_paid', 'viewed' does NOT exist, 'credit_note' is a status value.
