@@ -625,7 +625,7 @@ function SecurityTab() {
 
 // ── Team Members Tab ──────────────────────────────────────────────────────────
 
-const ROLES = ['owner', 'admin', 'accountant', 'staff', 'viewer'] as const;
+const ROLES = ['owner', 'admin', 'accountant', 'payroll_manager', 'auditor', 'viewer', 'staff'] as const;
 
 function TeamMembersTab({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
@@ -633,9 +633,35 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
   const [showInvite, setShowInvite] = useState(false);
   const [inviteForm, setInviteForm] = useState({ email: '', role: 'staff' as typeof ROLES[number] });
 
+  const currentUser = useAppStore((s) => s.currentUser);
+
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['team', businessId],
     queryFn: async () => {
+      // Try enriched server-side list first (includes email from auth)
+      try {
+        const { data, error } = await supabase.functions.invoke('list-team-members', {
+          body: { business_id: businessId },
+        });
+        if (!error && data && !(data as any).error && (data as any).members) {
+          return (data as any).members as Array<{
+            id: string;
+            user_id: string;
+            role: string;
+            is_active: boolean;
+            invited_at: string | null;
+            accepted_at: string | null;
+            created_at: string;
+            email: string | null;
+            full_name: string | null;
+            avatar_url: string | null;
+            profile?: { full_name: string | null } | null;
+          }>;
+        }
+      } catch {
+        // fallback to direct query
+      }
+
       const { data, error } = await supabase
         .from('business_users')
         .select('*, profile:user_profiles(full_name)')
@@ -643,22 +669,66 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
         .eq('is_active', true)
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
-      return data ?? [];
+      // Normalize to enriched shape
+      return (data ?? []).map((row: any) => ({
+        id: row.id,
+        user_id: row.user_id,
+        role: row.role,
+        is_active: true,
+        invited_at: row.invited_at ?? null,
+        accepted_at: row.accepted_at ?? null,
+        created_at: row.created_at,
+        email: null as string | null,
+        full_name: row.profile?.full_name ?? row.user_profiles?.full_name ?? null,
+        avatar_url: null,
+        profile: row.profile ?? null,
+      }));
     },
     enabled: Boolean(businessId),
   });
 
   const inviteMutation = useMutation({
     mutationFn: async () => {
-      if (!inviteForm.email.trim()) throw new Error('Email is required');
+      const email = inviteForm.email.trim().toLowerCase();
+      if (!email) throw new Error('Email is required');
+      if (!email.includes('@')) throw new Error('Enter a valid email address');
+      const normalizedRole = (inviteForm.role === 'staff' ? 'accountant' : inviteForm.role) as string;
 
-      // Look up user by email via auth admin (requires service role — use edge function in production)
-      // For now, we show a message that invite emails need to be handled server-side
-      throw new Error(
-        'Team invitations require a server-side function. The invited user should register at /register and you can then assign their role in Supabase.',
-      );
+      // Server-side Edge Function: verifies caller is owner/admin, looks up auth user by email, inserts business_users
+      const { data, error } = await supabase.functions.invoke('invite-team-member', {
+        body: {
+          business_id: businessId,
+          email,
+          role: normalizedRole,
+        },
+      });
+
+      if (error) {
+        const msg = (data as any)?.message || (data as any)?.error || error.message;
+        throw new Error(msg);
+      }
+      if ((data as any)?.error) {
+        throw new Error((data as any).message || (data as any).error);
+      }
+      return data as { success: boolean; message: string; member: any };
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onSuccess: (data) => {
+      setAlert({ type: 'success', message: data?.message || 'Team member added successfully.' });
+      setInviteForm({ email: '', role: 'staff' as typeof ROLES[number] });
+      setShowInvite(false);
+      queryClient.invalidateQueries({ queryKey: ['team', businessId] });
+      setTimeout(() => setAlert(null), 4000);
+    },
+    onError: (err: Error) => {
+      if (err.message.toLowerCase().includes('no account found') || err.message.includes('USER_NOT_FOUND')) {
+        setAlert({
+          type: 'error',
+          message: `${err.message} Ask them to create an account at ${window.location.origin}/register first.`,
+        });
+      } else {
+        setAlert({ type: 'error', message: err.message });
+      }
+    },
   });
 
   const removeRoleMutation = useMutation({
@@ -713,44 +783,100 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
       {alert && <Alert type={alert.type} message={alert.message} />}
 
+      {/* How it works – clear guidance replaces old error */}
+      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+          <Users className="h-4 w-4 text-gray-500" />
+          How to add someone
+        </h4>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-600">
+          <li>Ask the person to create a Ledgr account at <a href={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`} className="font-medium text-brand-600 hover:text-brand-700">{typeof window !== 'undefined' ? `${window.location.origin}/register` : '/register'}</a>.</li>
+          <li>Once they’ve registered, enter their email below and choose a role.</li>
+          <li>Click Add member – they’ll instantly have access.</li>
+        </ol>
+        <div className="mt-3 flex items-center gap-2">
+          <input
+            readOnly
+            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`}
+            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600"
+          />
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/register`;
+              navigator.clipboard.writeText(url);
+              setAlert({ type: 'success', message: 'Registration link copied.' });
+              setTimeout(() => setAlert(null), 2000);
+            }}
+            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Copy link
+          </button>
+        </div>
+      </div>
+
       {showInvite && (
         <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-brand-900">Invite Team Member</h3>
+          <h3 className="mb-3 text-sm font-semibold text-brand-900">Add existing user to this business</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-brand-800">User’s email (must already be registered)</label>
               <input
                 type="email"
-                placeholder="Email address"
+                placeholder="colleague@business.mw"
                 value={inviteForm.email}
                 onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
-            <select
-              value={inviteForm.role}
-              onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value as typeof ROLES[number] }))}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            >
-              {ROLES.map((r) => (
-                <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</option>
-              ))}
-            </select>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-brand-800">Role</label>
+              <select
+                value={inviteForm.role}
+                onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value as typeof ROLES[number] }))}
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          <div className="mt-2 text-xs text-brand-700">
+            {inviteForm.role === 'owner' && 'Owner: full access including billing. Only owners can assign this.'}
+            {inviteForm.role === 'admin' && 'Admin: full access except billing. Only owners can assign admins.'}
+            {(inviteForm.role === 'accountant' || inviteForm.role === 'staff') && 'Accountant: read/write all financial data.'}
+            {inviteForm.role === 'payroll_manager' && 'Payroll Manager: payroll read/write, read-only elsewhere.'}
+            {inviteForm.role === 'auditor' && 'Auditor: read-only + can export reports.'}
+            {inviteForm.role === 'viewer' && 'Viewer: read-only dashboard and reports.'}
+          </div>
+
           <div className="mt-3 flex gap-2">
             <button
               onClick={() => inviteMutation.mutate()}
-              disabled={inviteMutation.isPending}
-              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+              disabled={inviteMutation.isPending || !inviteForm.email.trim()}
+              className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
             >
-              Send Invite
+              {inviteMutation.isPending ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Adding…
+                </>
+              ) : (
+                'Add member'
+              )}
             </button>
             <button
               onClick={() => setShowInvite(false)}
-              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
           </div>
+
+          <p className="mt-3 text-xs text-brand-600">
+            Uses server function <code className="rounded bg-white px-1 py-0.5">invite-team-member</code> – verifies your owner/admin role, looks up email via Auth Admin, creates <code className="rounded bg-white px-1">business_users</code> row.
+          </p>
         </div>
       )}
 
@@ -772,57 +898,70 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {members.map((member: any) => (
-                <tr key={member.user_id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
-                        {(member.profile?.full_name ?? member.user_id)
-                          .slice(0, 2).toUpperCase()}
+              {members.map((member: any) => {
+                const isSelf = member.user_id === currentUser?.id;
+                const displayName = member.full_name || member.profile?.full_name || member.email || 'Unknown User';
+                const initialsSource = member.full_name || member.profile?.full_name || member.email || member.user_id || '?';
+                const subText = member.email ? `${member.email}` : `${member.user_id.slice(0, 8)}…`;
+                return (
+                  <tr key={member.user_id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
+                          {initialsSource.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-2 font-medium text-gray-900">
+                            <span className="truncate">{displayName}</span>
+                            {isSelf && (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">you</span>
+                            )}
+                          </p>
+                          <p className="truncate text-xs text-gray-400">{subText}{member.email && ` • ${member.user_id.slice(0, 8)}…`}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {member.profile?.full_name ?? 'Unknown User'}
-                        </p>
-                        <p className="text-xs text-gray-400">{member.user_id.slice(0, 8)}…</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <select
-                      value={member.role}
-                      onChange={(e) =>
-                        updateRoleMutation.mutate({ userId: member.user_id, role: e.target.value })
-                      }
-                      disabled={member.role === 'owner'}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-transparent disabled:border-transparent disabled:font-medium disabled:text-brand-700"
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {new Date(member.created_at).toLocaleDateString('en-MW', {
-                      day: '2-digit', month: 'short', year: 'numeric',
-                    })}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    {member.role !== 'owner' && (
-                      <button
-                        onClick={() => {
-                          if (confirm('Remove this team member?')) {
-                            removeRoleMutation.mutate(member.user_id);
-                          }
-                        }}
-                        className="text-gray-400 hover:text-red-500 transition-colors"
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={member.role}
+                        onChange={(e) =>
+                          updateRoleMutation.mutate({ userId: member.user_id, role: e.target.value })
+                        }
+                        disabled={member.role === 'owner' && currentUser?.id !== member.user_id && !members.some((m: any) => m.user_id === currentUser?.id && m.role === 'owner')}
+                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-transparent disabled:border-transparent disabled:font-medium disabled:text-brand-700"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                        {ROLES.map((r) => (
+                          <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-4 py-3 text-gray-500">
+                      {member.created_at
+                        ? new Date(member.created_at).toLocaleDateString('en-MW', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {member.role !== 'owner' && !isSelf && (
+                        <button
+                          onClick={() => {
+                            if (confirm(`Remove ${member.email || displayName} from this business?`)) {
+                              removeRoleMutation.mutate(member.user_id);
+                            }
+                          }}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                          title="Remove from business"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

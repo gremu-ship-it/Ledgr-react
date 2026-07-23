@@ -1,11 +1,32 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { PasswordStrengthMeter, measureStrength } from '@/components/auth/AuthUI';
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnToParam = searchParams.get('returnTo');
+  const getSafeReturnUrl = (): string | null => {
+    if (!returnToParam) return null;
+    try {
+      const decoded = decodeURIComponent(returnToParam);
+      if (decoded.startsWith('http')) {
+        const url = new URL(decoded);
+        if (url.origin === window.location.origin) {
+          return url.pathname + url.search + url.hash;
+        }
+        return null;
+      }
+      if (decoded.startsWith('/')) return decoded;
+      return null;
+    } catch {
+      return null;
+    }
+  };
+  const safeReturnTo = getSafeReturnUrl();
+
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -39,8 +60,13 @@ export function RegisterPage() {
     });
     setLoading(false);
     if (signUpError) { setError(signUpError.message); return; }
-    if (data.session) { navigate('/create-business', { replace: true }); }
-    else { setSuccess(true); }
+    if (data.session) {
+      if (safeReturnTo) {
+        navigate(safeReturnTo, { replace: true });
+      } else {
+        navigate('/create-business', { replace: true });
+      }
+    } else { setSuccess(true); }
   }
 
   if (success) {
@@ -55,7 +81,10 @@ export function RegisterPage() {
             We've sent a confirmation link to <span className="font-medium">{email}</span>.
             Confirm your email to finish setting up your account.
           </p>
-          <Link to="/login" className="mt-5 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
+          {safeReturnTo && (
+            <p className="mt-2 text-xs text-gray-400">After confirming, you’ll be able to sign in and accept your invitation, or ask the business owner to add you via Settings → Team Members.</p>
+          )}
+          <Link to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : '/login'} className="mt-5 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
             Back to sign in
           </Link>
         </div>
@@ -69,7 +98,12 @@ export function RegisterPage() {
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-lg font-bold text-white">L</div>
           <h1 className="text-xl font-semibold text-gray-900">Create your Ledgr account</h1>
-          <p className="mt-1 text-sm text-gray-500">Start managing your business finances</p>
+          <p className="mt-1 text-sm text-gray-500">{safeReturnTo ? 'Create an account to accept your invitation' : 'Start managing your business finances'}</p>
+          {safeReturnTo && (
+            <div className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+              You were invited to join a business. After creating your account you’ll be taken back to accept the invitation. The business owner can also add you via email in Settings → Team Members once you’ve registered.
+            </div>
+          )}
         </div>
         <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border border-gray-200 bg-white p-6 shadow-soft">
           {error && (
@@ -120,7 +154,7 @@ export function RegisterPage() {
         </form>
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
-          <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700">Sign in</Link>
+          <Link to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : '/login'} className="font-medium text-brand-600 hover:text-brand-700">Sign in</Link>
         </p>
       </div>
     </div>

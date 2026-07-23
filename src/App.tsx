@@ -65,6 +65,8 @@ function App() {
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            {/* Invitation flow – public so it can show "sign in to accept" UI; internally handles both authenticated and unauthenticated states */}
+            <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
 
             {/* Protected, no AppLayout */}
             <Route element={<ProtectedRoute />}>
@@ -94,7 +96,6 @@ function App() {
                 <Route path="/transfers" element={<TransfersPage />} />
                 <Route path="/branches" element={<BranchesPage />} />
                 <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
-                <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
                 <Route path="/audit" element={<AuditLogPage />} />
               </Route>
             </Route>

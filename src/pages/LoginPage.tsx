@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState, type FormEvent, useMemo } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
 import {
@@ -16,7 +16,29 @@ type LoginStep = 'credentials' | 'mfa';
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as { from?: { pathname?: string } })?.from?.pathname ?? '/dashboard';
+  const [searchParams] = useSearchParams();
+
+  // Support both state.from (protected redirect) and ?returnTo= (invite flow)
+  const fromState = (location.state as { from?: { pathname?: string } })?.from?.pathname;
+  const returnToParam = searchParams.get('returnTo');
+
+  const safeReturnTo = useMemo(() => {
+    if (!returnToParam) return null;
+    try {
+      const decoded = decodeURIComponent(returnToParam);
+      if (decoded.startsWith('http')) {
+        const url = new URL(decoded);
+        if (url.origin === window.location.origin) return url.pathname + url.search + url.hash;
+        return null;
+      }
+      if (decoded.startsWith('/')) return decoded;
+      return null;
+    } catch {
+      return null;
+    }
+  }, [returnToParam]);
+
+  const from = safeReturnTo ?? fromState ?? '/dashboard';
   const inactivityLogout = (location.state as { reason?: string })?.reason === 'inactivity';
 
   // Step 1: email + password
@@ -206,7 +228,10 @@ export function LoginPage() {
 
       <p className="mt-5 text-center text-sm text-gray-500">
         Don't have an account?{' '}
-        <Link to="/register" className="font-medium text-brand-600 hover:text-brand-700">
+        <Link
+          to={safeReturnTo ? `/register?returnTo=${encodeURIComponent(safeReturnTo)}` : '/register'}
+          className="font-medium text-brand-600 hover:text-brand-700"
+        >
           Create one
         </Link>
       </p>
