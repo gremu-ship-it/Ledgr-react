@@ -3908,6 +3908,159 @@ export type Database = {
         }
         Relationships: []
       }
+      loans: {
+        Row: {
+          business_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          drawdown_journal_id: string | null
+          first_payment_date: string | null
+          id: string
+          interest_expense_account_id: string | null
+          interest_rate_pct: number | null
+          lender_name: string
+          loan_account_id: string
+          principal_amount: number
+          start_date: string
+          status: string
+          term_months: number | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          drawdown_journal_id?: string | null
+          first_payment_date?: string | null
+          id?: string
+          interest_expense_account_id?: string | null
+          interest_rate_pct?: number | null
+          lender_name: string
+          loan_account_id: string
+          principal_amount: number
+          start_date: string
+          status?: string
+          term_months?: number | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          drawdown_journal_id?: string | null
+          first_payment_date?: string | null
+          id?: string
+          interest_expense_account_id?: string | null
+          interest_rate_pct?: number | null
+          lender_name?: string
+          loan_account_id?: string
+          principal_amount?: number
+          start_date?: string
+          status?: string
+          term_months?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      loan_repayments: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          interest_portion: number
+          journal_entry_id: string | null
+          loan_id: string
+          notes: string | null
+          principal_portion: number
+          reference: string | null
+          repayment_date: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          interest_portion: number
+          journal_entry_id?: string | null
+          loan_id: string
+          notes?: string | null
+          principal_portion: number
+          reference?: string | null
+          repayment_date: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          interest_portion?: number
+          journal_entry_id?: string | null
+          loan_id?: string
+          notes?: string | null
+          principal_portion?: number
+          reference?: string | null
+          repayment_date?: string
+        }
+        Relationships: []
+      }
+      share_transactions: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          journal_entry_id: string | null
+          notes: string | null
+          reference: string | null
+          share_account_id: string
+          shareholder_name: string
+          shares_count: number | null
+          transaction_type: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          notes?: string | null
+          reference?: string | null
+          share_account_id: string
+          shareholder_name: string
+          shares_count?: number | null
+          transaction_type: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          journal_entry_id?: string | null
+          notes?: string | null
+          reference?: string | null
+          share_account_id?: string
+          shareholder_name?: string
+          shares_count?: number | null
+          transaction_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       v_ar_ageing: {

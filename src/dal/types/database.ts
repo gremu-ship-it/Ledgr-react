@@ -124,6 +124,13 @@ export type StockMovementType =
 export type PayrollRunStatus = 'draft' | 'approved' | 'paid' | 'void';
 /** DB: journal_status */
 export type JournalEntryStatus = 'draft' | 'posted' | 'reversed';
+/**
+ * DB: loans.status — text column, documented allowed values.
+ * Mirrors the convention used by other status unions in this file.
+ */
+export type LoanStatus = 'active' | 'paid_off' | 'defaulted' | 'cancelled';
+/** DB: share_transactions.transaction_type — text column. */
+export type ShareTransactionType = 'issue' | 'buyback';
 
 // ---------------------------------------------------------------------------
 // Row / InsertDto / UpdateDto helpers

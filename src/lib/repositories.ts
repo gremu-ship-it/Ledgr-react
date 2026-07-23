@@ -10,6 +10,8 @@ import { TaxReturnRepository } from '@/dal/repositories/TaxReturnRepository';
 import { TaxPaymentRepository } from '@/dal/repositories/TaxPaymentRepository';
 import { AccountRepository } from '@/dal/repositories/AccountRepository';
 import { AssetRepository } from '@/dal/repositories/AssetRepository';
+import { LoanRepository, LoanRepaymentRepository } from '@/dal/repositories/LoanRepository';
+import { ShareRepository } from '@/dal/repositories/ShareRepository';
 import { InventoryRepository } from '@/dal/repositories/InventoryRepository';
 import { IncomeRepository } from '@/dal/repositories/IncomeRepository';
 import { ContactRepository } from '@/dal/repositories/ContactRepository';
@@ -29,6 +31,9 @@ export const repos = {
   taxPayment: new TaxPaymentRepository(supabase),
   account:    new AccountRepository(supabase),
   asset:      new AssetRepository(supabase),
+  loan:       new LoanRepository(supabase),
+  loanRepayment: new LoanRepaymentRepository(supabase),
+  share:      new ShareRepository(supabase),
   inventory:  new InventoryRepository(supabase),
   income:     new IncomeRepository(supabase),
   contact:    new ContactRepository(supabase),
