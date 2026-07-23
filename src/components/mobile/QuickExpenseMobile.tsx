@@ -194,48 +194,48 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
       {/* Step: Amount */}
       {step === 'amount' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           <MwkNumberPad value={amount} onChange={setAmount} />
 
           {/* VAT toggle */}
-          <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+          <div className="flex items-center justify-between rounded-3xl bg-gray-50/50 px-5 py-4 ring-1 ring-gray-100">
             <div>
-              <p className="text-sm font-medium text-gray-700">Amount includes VAT</p>
+              <p className="text-xs font-black uppercase tracking-wider text-gray-700">Include VAT (17.5%)</p>
               {amount && includeVat && (
-                <p className="text-xs text-gray-400">
-                  Net: MK {(parseFloat(amount) / 1.175).toFixed(2)} · VAT: MK {(parseFloat(amount) - parseFloat(amount) / 1.175).toFixed(2)}
+                <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
+                  Net: MK {(parseFloat(amount) / 1.175).toFixed(0)} · VAT: MK {(parseFloat(amount) - parseFloat(amount) / 1.175).toFixed(0)}
                 </p>
               )}
             </div>
             <button
               onClick={() => setIncludeVat((v) => !v)}
-              className={`relative h-6 w-11 rounded-full transition-colors ${includeVat ? 'bg-brand-500' : 'bg-gray-300'}`}
+              className={`relative h-7 w-12 rounded-full transition-all ${includeVat ? 'bg-brand-500 shadow-lg shadow-brand-500/20' : 'bg-gray-200'}`}
             >
-              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${includeVat ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              <div className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${includeVat ? 'translate-x-6' : 'translate-x-1'}`} />
             </button>
           </div>
 
           <button
             onClick={() => setStep('category')}
             disabled={!amount || parseFloat(amount) <= 0}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white disabled:opacity-40 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-[2rem] bg-brand-500 py-5 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-brand-500/20 disabled:opacity-40 transition-all active:scale-95"
           >
-            Next <ChevronRight className="h-5 w-5" />
+            Select Category <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}
 
       {/* Step: Category */}
       {step === 'category' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-6">
           <button
             onClick={() => setStep('amount')}
-            className="flex items-center gap-1 text-sm text-gray-500"
+            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400"
           >
-            <ArrowLeft className="h-4 w-4" /> Back
+            <ArrowLeft className="h-4 w-4" /> Back to Amount
           </button>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-4">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.label}
@@ -243,14 +243,14 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                   setCategory(cat.label);
                   setStep('description');
                 }}
-                className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all active:scale-95 ${
+                className={`flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all active:scale-90 ${
                   category === cat.label
-                    ? 'border-brand-500 bg-brand-50'
-                    : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                    ? 'border-brand-500 bg-brand-50 shadow-lg shadow-brand-500/10'
+                    : 'border-transparent bg-gray-50/50 hover:bg-gray-50'
                 }`}
               >
-                <span className="text-2xl">{cat.emoji}</span>
-                <span className="text-xs font-medium text-gray-700">{cat.label}</span>
+                <span className="text-3xl">{cat.emoji}</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-700">{cat.label}</span>
               </button>
             ))}
           </div>

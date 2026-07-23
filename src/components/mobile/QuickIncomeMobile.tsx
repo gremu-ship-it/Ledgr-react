@@ -140,37 +140,40 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
       {/* Step: Amount */}
       {step === 'amount' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-8">
           <MwkNumberPad value={amount} onChange={setAmount} />
           <button
             onClick={() => setStep('category')}
             disabled={!amount || parseFloat(amount) <= 0}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white disabled:opacity-40 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-[2rem] bg-brand-500 py-5 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-brand-500/20 disabled:opacity-40 transition-all active:scale-95"
           >
-            Next <ChevronRight className="h-5 w-5" />
+            Select Category <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}
 
       {/* Step: Category */}
       {step === 'category' && (
-        <div className="flex flex-col gap-4">
-          <button onClick={() => setStep('amount')} className="flex items-center gap-1 text-sm text-gray-500">
-            <ArrowLeft className="h-4 w-4" /> Back
+        <div className="flex flex-col gap-6">
+          <button
+            onClick={() => setStep('amount')}
+            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Amount
           </button>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-4">
             {CATEGORIES.map((cat) => (
               <button
                 key={cat.label}
                 onClick={() => { setCategory(cat.label); setStep('description'); }}
-                className={`flex flex-col items-center gap-2 rounded-2xl border-2 p-4 transition-all active:scale-95 ${
+                className={`flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all active:scale-90 ${
                   category === cat.label
-                    ? 'border-brand-500 bg-brand-50'
-                    : 'border-gray-100 bg-gray-50 hover:border-gray-200'
+                    ? 'border-brand-500 bg-brand-50 shadow-lg shadow-brand-500/10'
+                    : 'border-transparent bg-gray-50/50 hover:bg-gray-50'
                 }`}
               >
-                <span className="text-2xl">{cat.emoji}</span>
-                <span className="text-xs font-medium text-gray-700">{cat.label}</span>
+                <span className="text-3xl">{cat.emoji}</span>
+                <span className="text-[10px] font-black uppercase tracking-wider text-gray-700">{cat.label}</span>
               </button>
             ))}
           </div>

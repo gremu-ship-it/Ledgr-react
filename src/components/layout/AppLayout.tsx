@@ -8,11 +8,19 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { OfflineBanner } from '@/offline/OfflineBanner';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useLocation } from 'react-router-dom';
+
 export function AppLayout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const isMobile = useIsMobile();
+  const location = useLocation();
 
   // Apply brand colors globally based on current business settings
   useBrandTheme();
+
+  const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+  const showMobileHeader = isMobile && !isDashboard;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -31,9 +39,12 @@ export function AppLayout() {
           sidebarOpen ? 'lg:pl-64' : 'lg:pl-[72px]',
         )}
       >
-        <Header />
+        {(!isMobile || showMobileHeader) && <Header />}
 
-        <main className="flex-1 p-4 sm:p-6 pb-20 lg:pb-6">
+        <main className={clsx(
+          'flex-1 p-4 sm:p-6 pb-32 lg:pb-6',
+          isMobile && isDashboard && 'pt-6'
+        )}>
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>
