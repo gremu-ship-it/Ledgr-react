@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Search, AlertCircle, ScrollText } from 'lucide-react';
+import { Search, AlertCircle, ScrollText, Plus } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { useJournalEntries } from '@/hooks/useJournalEntries';
 import { LockedPeriodBadge } from '@/components/ui/LockedPeriodBadge';
 import { JournalEntryDetailModal } from '@/components/dashboard/JournalEntryDetailModal';
+import { NewJournalEntryModal } from '@/components/dashboard/NewJournalEntryModal';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ export function JournalsPage() {
   const [reversedOnly, setReversedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [showNewEntry, setShowNewEntry] = useState(false);
   const pageSize = 15;
 
   const { data: entries, isLoading, isError } = useJournalEntries(businessId, range.from, range.to);
@@ -87,9 +89,17 @@ export function JournalsPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Journals</h1>
-        <p className="mt-1 text-sm text-gray-500">Browse and search all journal entries for {currentBusiness?.business.name}</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Journals</h1>
+          <p className="mt-1 text-sm text-gray-500">Browse and search all journal entries for {currentBusiness?.business.name}</p>
+        </div>
+        <button
+          onClick={() => setShowNewEntry(true)}
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+        >
+          <Plus className="h-4 w-4" /> New Entry
+        </button>
       </div>
 
       {/* Date range presets */}
@@ -266,6 +276,13 @@ export function JournalsPage() {
         <JournalEntryDetailModal
           entryId={selectedEntryId}
           onClose={() => setSelectedEntryId(null)}
+        />
+      )}
+
+      {showNewEntry && (
+        <NewJournalEntryModal
+          businessId={businessId}
+          onClose={() => setShowNewEntry(false)}
         />
       )}
     </div>
