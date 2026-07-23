@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
+import { ReportHeader } from './ReportHeader';
 
 function formatMwk(amount: number): string {
   const abs = Math.abs(amount);
@@ -33,7 +34,7 @@ function Divider() {
   return <div className="my-2 border-t border-gray-200" />;
 }
 
-export function CashFlowStatement({ businessId, periodStart, periodEnd, businessName }: Props) {
+export function CashFlowStatement({ businessId, periodStart, periodEnd, businessName: _businessName }: Props) {
   const { data: cf, isLoading, error } = useQuery({
     queryKey: ['cash_flow', businessId, periodStart, periodEnd],
     queryFn: () => financialStatementRepo.getCashFlow(businessId, periodStart, periodEnd),
@@ -53,11 +54,10 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd, business
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-2xl">
-      {businessName && <h1 className="text-lg font-bold text-gray-900">{businessName}</h1>}
-      <h2 className="mb-1 text-base font-semibold text-gray-900">Statement of Cash Flows</h2>
-      <p className="mb-6 text-xs text-gray-400">
-        {periodStart} to {periodEnd} · Indirect method · Currency: MWK
-      </p>
+      <ReportHeader
+        title="Statement of Cash Flows"
+        subtitle={`${periodStart} to ${periodEnd} · Indirect method · Currency: MWK`}
+      />
 
       {!cf.reconciles && (
         <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">

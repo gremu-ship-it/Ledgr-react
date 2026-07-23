@@ -9,6 +9,7 @@ import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitO
 import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
 import { StatementOfChangesInEquity } from '@/components/reports/StatementOfChangesInEquity';
 import { BranchPerformanceReport } from '@/components/reports/BranchPerformanceReport';
+import { ReportHeader } from '@/components/reports/ReportHeader';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,11 +99,11 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-200 px-6 py-4">
-        <h2 className="text-base font-semibold text-gray-900">Trial Balance</h2>
-        <p className="text-xs text-gray-400">All posted journal entries</p>
-      </div>
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-3xl">
+      <ReportHeader
+        title="Trial Balance"
+        subtitle="All posted journal entries"
+      />
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">

@@ -12,6 +12,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -349,6 +350,7 @@ function InvoiceDetail({
 }) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const queryClient = useQueryClient();
+  const { logoUrl, businessName, tradingName, business: businessData } = useBrandTheme();
 
   const { data: withLines, isLoading } = useQuery({
     queryKey: ['invoice', 'lines', invoice.id],
@@ -397,19 +399,61 @@ function InvoiceDetail({
         {/* Main invoice card */}
         <div className="lg:col-span-2">
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-            {/* Invoice header */}
+            {/* Invoice header with business branding */}
             <div className="mb-6 flex items-start justify-between">
-              <div>
-                <h1 className="text-xl font-semibold text-gray-900">
+              <div className="flex items-start gap-4">
+                {/* Business logo */}
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt={businessName}
+                    className="h-14 w-14 shrink-0 rounded-lg object-contain"
+                  />
+                ) : (
+                  <div
+                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg text-lg font-bold text-white"
+                    style={{ backgroundColor: 'var(--color-brand-500, #0F766E)' }}
+                  >
+                    {(businessName || 'L').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                {/* Business info */}
+                <div>
+                  <h1 className="text-lg font-semibold" style={{ color: 'var(--color-brand-700, #334155)' }}>
+                    {tradingName || businessName}
+                  </h1>
+                  {businessData && (
+                    <div className="mt-0.5 text-xs text-gray-500">
+                      {businessData.address_line1 && (
+                        <span>{businessData.address_line1}{businessData.city ? `, ${businessData.city}` : ''}</span>
+                      )}
+                      {businessData.phone && (
+                        <span> · {businessData.phone}</span>
+                      )}
+                      {businessData.email && (
+                        <span> · {businessData.email}</span>
+                      )}
+                      {businessData.tpin && (
+                        <div className="mt-0.5">TPIN: {businessData.tpin}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-400">Invoice</p>
+                <h2 className="text-xl font-semibold text-gray-900">
                   {invoice.invoice_number}
-                </h1>
+                </h2>
                 <p className="mt-1 text-sm text-gray-500">
                   Issued {formatDate(invoice.issue_date)}
                   {invoice.due_date &&
                     ` · Due ${formatDate(invoice.due_date)}`}
                 </p>
+                <div className="mt-2">
+                  <StatusBadge status={invoice.status} />
+                </div>
               </div>
-              <StatusBadge status={invoice.status} />
             </div>
 
             {/* Line items */}

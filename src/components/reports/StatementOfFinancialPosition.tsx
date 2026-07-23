@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { StatementSection } from '@/dal/repositories/FinancialStatementRepository';
+import { ReportHeader } from './ReportHeader';
 
 function formatMwk(amount: number): string {
   const abs = Math.abs(amount);
@@ -22,7 +23,7 @@ interface Props {
   businessId: string;
   asOfDate: string;
   comparativeDate?: string | null;
-  businessName?: string;
+  businessName?: string; // kept for backward compatibility; ReportHeader now sources name from useBrandTheme
   preparerName?: string;
 }
 
@@ -77,7 +78,7 @@ function GrandTotalRow({
 }
 
 export function StatementOfFinancialPosition({
-  businessId, asOfDate, comparativeDate = null, businessName, preparerName,
+  businessId, asOfDate, comparativeDate = null, businessName: _businessName, preparerName,
 }: Props) {
   const { data: sofp, isLoading, error } = useQuery({
     queryKey: ['sofp', businessId, asOfDate, comparativeDate],
@@ -106,12 +107,11 @@ export function StatementOfFinancialPosition({
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-3xl">
-      <div className="mb-6 border-b border-gray-100 pb-4">
-        {businessName && <h1 className="text-lg font-bold text-gray-900">{businessName}</h1>}
-        <h2 className="text-base font-semibold text-gray-900">Statement of Financial Position</h2>
-        <p className="text-xs text-gray-400">As at {dateLabel} · Currency: MWK</p>
-        {preparerName && <p className="text-xs text-gray-400">Prepared by: {preparerName}</p>}
-      </div>
+      <ReportHeader
+        title="Statement of Financial Position"
+        subtitle={`As at ${dateLabel} · Currency: MWK`}
+        preparerName={preparerName}
+      />
 
       {!sofp.isBalanced && (
         <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
