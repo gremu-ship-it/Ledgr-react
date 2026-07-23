@@ -53,11 +53,11 @@ export function Header() {
   const initials = getInitials(currentUser?.profile?.full_name, currentUser?.email);
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-line bg-card px-4 sm:px-6">
       <div className="flex items-center gap-3">
         <button
           onClick={toggleSidebar}
-          className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+          className="rounded-lg p-2 text-muted transition-colors hover:bg-surface hover:text-sub lg:hidden"
           aria-label="Toggle sidebar"
         >
           <Menu className="h-5 w-5" />
@@ -79,22 +79,22 @@ export function Header() {
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => setNotificationsOpen((v) => !v)}
-            className="relative rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="relative rounded-lg p-2 text-muted transition-colors hover:bg-surface hover:text-sub"
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger ring-2 ring-white" />
             )}
           </button>
 
           {notificationsOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
+            <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-xl border border-line bg-card p-1.5 shadow-lg">
               <div className="px-3 py-2.5">
-                <p className="text-sm font-semibold text-gray-900">Notifications</p>
+                <p className="text-sm font-semibold text-ink">Notifications</p>
               </div>
               <div className="px-3 py-8 text-center">
-                <p className="text-sm text-gray-400">You're all caught up.</p>
+                <p className="text-sm text-muted">You're all caught up.</p>
               </div>
             </div>
           )}
@@ -104,30 +104,30 @@ export function Header() {
         <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen((v) => !v)}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-semibold text-white transition-opacity hover:opacity-90"
           >
             {initials}
           </button>
 
           {userMenuOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg">
+            <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded-xl border border-line bg-card p-1.5 shadow-lg">
               <div className="px-3 py-2.5">
-                <p className="truncate text-sm font-semibold text-gray-900">
+                <p className="truncate text-sm font-semibold text-ink">
                   {currentUser?.profile?.full_name ?? 'User'}
                 </p>
-                <p className="truncate text-xs text-gray-500">{currentUser?.email}</p>
+                <p className="truncate text-xs text-muted">{currentUser?.email}</p>
               </div>
-              <div className="my-1 border-t border-gray-100" />
+              <div className="my-1 border-t border-line" />
               <button
                 onClick={() => {
                   setUserMenuOpen(false);
                   navigate('/settings');
                 }}
                 className={clsx(
-                  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50',
+                  'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-sub transition-colors hover:bg-bg',
                 )}
               >
-                <User className="h-4 w-4 text-gray-400" />
+                <User className="h-4 w-4 text-muted" />
                 Profile
               </button>
               <button
@@ -135,15 +135,15 @@ export function Header() {
                   setUserMenuOpen(false);
                   navigate('/settings');
                 }}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-sub transition-colors hover:bg-bg"
               >
-                <Settings className="h-4 w-4 text-gray-400" />
+                <Settings className="h-4 w-4 text-muted" />
                 Settings
               </button>
-              <div className="my-1 border-t border-gray-100" />
+              <div className="my-1 border-t border-line" />
               <button
                 onClick={handleSignOut}
-                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-50"
+                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-danger transition-colors hover:bg-danger/10"
               >
                 <LogOut className="h-4 w-4" />
                 Sign out

@@ -63,18 +63,18 @@ export function BottomNav() {
 
       {/* More menu — icon tiles, matching app-wide badge treatment */}
       {moreOpen && (
-        <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">More</p>
+        <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-line bg-card p-4 shadow-xl lg:hidden">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">More</p>
           <div className="grid grid-cols-3 gap-2">
             {MORE_MENU_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={() => setMoreOpen(false)}
-                className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50"
+                className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-bg"
               >
                 <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-xs font-medium text-gray-600">{item.label}</span>
+                <span className="text-xs font-medium text-sub">{item.label}</span>
               </NavLink>
             ))}
           </div>
@@ -95,24 +95,24 @@ export function BottomNav() {
           <div className="flex flex-col items-center gap-3">
             <button
               onClick={() => { setFabOpen(false); setShowIncome(true); }}
-              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
+              className="group flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-lg border border-line"
             >
               <IconBadge icon={Wallet} tone="brand" size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Record Income</span>
+              <span className="text-sm font-semibold text-ink">Record Income</span>
             </button>
             <button
               onClick={() => { setFabOpen(false); setShowExpense(true); }}
-              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
+              className="group flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-lg border border-line"
             >
               <IconBadge icon={Receipt} tone="negative" size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Record Expense</span>
+              <span className="text-sm font-semibold text-ink">Record Expense</span>
             </button>
           </div>
         </div>
       )}
 
       {/* Bottom nav bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center justify-between border-t border-gray-200 bg-white px-1 lg:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-16 items-center justify-between border-t border-line bg-card px-1 lg:hidden">
         {/* First 2 nav items */}
         {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
           <NavTab key={item.path} {...item} />
@@ -125,7 +125,7 @@ export function BottomNav() {
           onClick={() => setFabOpen((v) => !v)}
           className={clsx(
             'flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all active:scale-95',
-            fabOpen ? 'bg-gray-800 rotate-45' : 'bg-brand-500',
+            fabOpen ? 'bg-navy-900 rotate-45' : 'bg-brand-600',
           )}
         >
           <Plus className="h-6 w-6 text-white" />
@@ -144,9 +144,9 @@ export function BottomNav() {
           {moreOpen ? (
             <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
           ) : (
-            <MoreHorizontal className="h-5 w-5 text-gray-500" />
+            <MoreHorizontal className="h-5 w-5 text-muted" />
           )}
-          <span className={moreOpen ? 'text-brand-600' : 'text-gray-500'}>More</span>
+          <span className={moreOpen ? 'text-brand-600 dark:text-brand-300' : 'text-muted'}>More</span>
         </button>
       </nav>
 
@@ -184,12 +184,12 @@ function NavTab({
         isActive ? (
           <>
             <IconBadge icon={Icon} tone="brand" size="sm" interactive />
-            <span className="text-brand-600">{label}</span>
+            <span className="text-brand-600 dark:text-brand-300">{label}</span>
           </>
         ) : (
           <>
-            <Icon className="h-5 w-5 text-gray-500" />
-            <span className="text-gray-500">{label}</span>
+            <Icon className="h-5 w-5 text-muted" />
+            <span className="text-muted">{label}</span>
           </>
         )
       }
