@@ -60,19 +60,19 @@ const PAYMENT_METHODS = [
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    sent: 'bg-blue-50 text-blue-700',
-    viewed: 'bg-purple-50 text-purple-700',
-    partially_paid: 'bg-amber-50 text-amber-700',
-    paid: 'bg-brand-50 text-brand-700',
-    overdue: 'bg-red-50 text-red-700',
-    voided: 'bg-gray-100 text-gray-400',
-    credited: 'bg-gray-100 text-gray-400',
+    draft: 'bg-surface text-sub',
+    sent: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    viewed: 'bg-accent/12 text-accent dark:text-accent-light',
+    partially_paid: 'bg-warning/12 text-warning',
+    paid: 'bg-brand-500/10 text-brand-700 dark:text-brand-300',
+    overdue: 'bg-danger/10 text-danger',
+    voided: 'bg-surface text-muted',
+    credited: 'bg-surface text-muted',
   };
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${
-        map[status] ?? 'bg-gray-100 text-gray-600'
+        map[status] ?? 'bg-surface text-sub'
       }`}
     >
       {status.replace(/_/g, ' ')}
@@ -160,41 +160,41 @@ function RecordPaymentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-brand-500" />
-            <h2 className="text-base font-semibold text-gray-900">
+            <CreditCard className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h2 className="text-base font-semibold text-ink">
               Record Payment
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
+            className="text-muted hover:text-sub transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Invoice summary */}
-        <div className="mb-5 rounded-xl bg-gray-50 px-4 py-3 text-sm">
-          <div className="flex justify-between text-gray-600">
+        <div className="mb-5 rounded-xl bg-bg px-4 py-3 text-sm">
+          <div className="flex justify-between text-sub">
             <span>Invoice</span>
-            <span className="font-medium text-gray-900">
+            <span className="font-medium text-ink">
               {invoice.invoice_number}
             </span>
           </div>
-          <div className="mt-1 flex justify-between text-gray-600">
+          <div className="mt-1 flex justify-between text-sub">
             <span>Total</span>
             <span>{formatMwk(Number(invoice.total_amount))}</span>
           </div>
-          <div className="mt-1 flex justify-between text-gray-600">
+          <div className="mt-1 flex justify-between text-sub">
             <span>Already Paid</span>
             <span>{formatMwk(Number(invoice.amount_paid))}</span>
           </div>
-          <div className="mt-2 flex justify-between border-t border-gray-200 pt-2 font-semibold text-gray-900">
+          <div className="mt-2 flex justify-between border-t border-line pt-2 font-semibold text-ink">
             <span>Outstanding</span>
-            <span className="text-brand-700">{formatMwk(amountDue)}</span>
+            <span className="text-brand-700 dark:text-brand-300">{formatMwk(amountDue)}</span>
           </div>
         </div>
 
@@ -202,8 +202,8 @@ function RecordPaymentModal({
           <div
             className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
               alert.type === 'success'
-                ? 'bg-brand-50 text-brand-700'
-                : 'bg-red-50 text-red-700'
+                ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                : 'bg-danger/10 text-danger'
             }`}
           >
             {alert.type === 'success' ? (
@@ -218,7 +218,7 @@ function RecordPaymentModal({
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-sub">
                 Payment Date
               </label>
               <input
@@ -227,11 +227,11 @@ function RecordPaymentModal({
                 onChange={(e) =>
                   setForm((f) => ({ ...f, payment_date: e.target.value }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-sub">
                 Amount (MWK)
               </label>
               <input
@@ -242,13 +242,13 @@ function RecordPaymentModal({
                 onChange={(e) =>
                   setForm((f) => ({ ...f, amount: e.target.value }))
                 }
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-sub">
               Payment Method
             </label>
             <select
@@ -256,7 +256,7 @@ function RecordPaymentModal({
               onChange={(e) =>
                 setForm((f) => ({ ...f, payment_method: e.target.value }))
               }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               {PAYMENT_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -268,13 +268,13 @@ function RecordPaymentModal({
 
           {bankAccounts.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
+              <label className="mb-1 block text-sm font-medium text-sub">
                 Deposit to Account
               </label>
               <select
                 value={bankAccountId}
                 onChange={(e) => setBankAccountId(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="">Select account…</option>
                 {bankAccounts.map((a) => (
@@ -287,7 +287,7 @@ function RecordPaymentModal({
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-sub">
               Reference (optional)
             </label>
             <input
@@ -297,12 +297,12 @@ function RecordPaymentModal({
               onChange={(e) =>
                 setForm((f) => ({ ...f, reference: e.target.value }))
               }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label className="mb-1 block text-sm font-medium text-sub">
               Notes (optional)
             </label>
             <textarea
@@ -311,21 +311,21 @@ function RecordPaymentModal({
               onChange={(e) =>
                 setForm((f) => ({ ...f, notes: e.target.value }))
               }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <div className="flex gap-3 pt-1">
             <button
               onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+              className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
             >
               {mutation.isPending ? 'Saving…' : 'Record Payment'}
             </button>
@@ -376,7 +376,7 @@ function InvoiceDetail({
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors"
+            className="flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Invoices
@@ -385,7 +385,7 @@ function InvoiceDetail({
         {canPay && amountDue > 0 && (
           <button
             onClick={() => setShowPaymentModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
           >
             <CreditCard className="h-4 w-4" />
             Record Payment
@@ -396,14 +396,14 @@ function InvoiceDetail({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Main invoice card */}
         <div className="lg:col-span-2">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
             {/* Invoice header */}
             <div className="mb-6 flex items-start justify-between">
               <div>
-                <h1 className="text-xl font-semibold text-gray-900">
+                <h1 className="text-xl font-semibold text-ink">
                   {invoice.invoice_number}
                 </h1>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-muted">
                   Issued {formatDate(invoice.issue_date)}
                   {invoice.due_date &&
                     ` · Due ${formatDate(invoice.due_date)}`}
@@ -418,14 +418,14 @@ function InvoiceDetail({
                 {[...Array(3)].map((_, i) => (
                   <div
                     key={i}
-                    className="h-10 animate-pulse rounded-lg bg-gray-100"
+                    className="h-10 animate-pulse rounded-lg bg-surface"
                   />
                 ))}
               </div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-gray-200">
+              <div className="overflow-hidden rounded-lg border border-line">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                     <tr>
                       <th className="px-4 py-2.5 text-left">Description</th>
                       <th className="px-4 py-2.5 text-right">Qty</th>
@@ -434,19 +434,19 @@ function InvoiceDetail({
                       <th className="px-4 py-2.5 text-right">Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
+                  <tbody className="divide-y divide-line">
                     {(withLines?.lines ?? []).map((line) => (
                       <tr key={line.id}>
-                        <td className="px-4 py-3 text-gray-700">
+                        <td className="px-4 py-3 text-sub">
                           {line.description}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-500">
+                        <td className="px-4 py-3 text-right text-muted">
                           {line.quantity}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-500">
+                        <td className="px-4 py-3 text-right text-muted">
                           {formatMwk(Number(line.unit_price))}
                         </td>
-                        <td className="px-4 py-3 text-right text-gray-500">
+                        <td className="px-4 py-3 text-right text-muted">
                           {formatMwk(Number(line.tax_amount))}
                         </td>
                         <td className="px-4 py-3 text-right font-medium">
@@ -462,21 +462,21 @@ function InvoiceDetail({
             {/* Totals */}
             <div className="mt-4 flex justify-end">
               <div className="w-64 space-y-1.5 text-sm">
-                <div className="flex justify-between text-gray-600">
+                <div className="flex justify-between text-sub">
                   <span>Subtotal</span>
                   <span>{formatMwk(Number(invoice.subtotal))}</span>
                 </div>
-                <div className="flex justify-between text-gray-600">
+                <div className="flex justify-between text-sub">
                   <span>VAT (17.5%)</span>
                   <span>{formatMwk(Number(invoice.vat_amount))}</span>
                 </div>
                 {Number(invoice.wht_amount) > 0 && (
-                  <div className="flex justify-between text-gray-600">
+                  <div className="flex justify-between text-sub">
                     <span>WHT</span>
                     <span>−{formatMwk(Number(invoice.wht_amount))}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900">
+                <div className="flex justify-between border-t border-line pt-1.5 font-semibold text-ink">
                   <span>Total</span>
                   <span>{formatMwk(Number(invoice.total_amount))}</span>
                 </div>
@@ -485,8 +485,8 @@ function InvoiceDetail({
 
             {/* Notes */}
             {invoice.notes && (
-              <div className="mt-5 rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                <span className="font-medium text-gray-700">Notes: </span>
+              <div className="mt-5 rounded-lg bg-bg px-4 py-3 text-sm text-sub">
+                <span className="font-medium text-sub">Notes: </span>
                 {invoice.notes}
               </div>
             )}
@@ -496,24 +496,24 @@ function InvoiceDetail({
         {/* Sidebar — payment status + history */}
         <div className="space-y-4">
           {/* Payment summary */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-            <h3 className="mb-4 text-sm font-semibold text-gray-900">
+          <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
+            <h3 className="mb-4 text-sm font-semibold text-ink">
               Payment Status
             </h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-sub">
                 <span>Invoice Total</span>
                 <span>{formatMwk(Number(invoice.total_amount))}</span>
               </div>
-              <div className="flex justify-between text-gray-600">
+              <div className="flex justify-between text-sub">
                 <span>Amount Paid</span>
-                <span className="text-brand-700">
+                <span className="text-brand-700 dark:text-brand-300">
                   {formatMwk(Number(invoice.amount_paid))}
                 </span>
               </div>
-              <div className="flex justify-between border-t border-gray-100 pt-2 font-semibold text-gray-900">
+              <div className="flex justify-between border-t border-line pt-2 font-semibold text-ink">
                 <span>Outstanding</span>
-                <span className={amountDue > 0 ? 'text-red-600' : 'text-brand-700'}>
+                <span className={amountDue > 0 ? 'text-danger' : 'text-brand-700 dark:text-brand-300'}>
                   {formatMwk(amountDue)}
                 </span>
               </div>
@@ -521,9 +521,9 @@ function InvoiceDetail({
 
             {/* Progress bar */}
             <div className="mt-4">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
                 <div
-                  className="h-2 rounded-full bg-brand-500 transition-all"
+                  className="h-2 rounded-full bg-brand-600 transition-all"
                   style={{
                     width: `${Math.min(
                       100,
@@ -534,7 +534,7 @@ function InvoiceDetail({
                   }}
                 />
               </div>
-              <p className="mt-1.5 text-xs text-gray-400">
+              <p className="mt-1.5 text-xs text-muted">
                 {Math.round(
                   (Number(invoice.amount_paid) /
                     Number(invoice.total_amount)) *
@@ -547,7 +547,7 @@ function InvoiceDetail({
             {canPay && amountDue > 0 && (
               <button
                 onClick={() => setShowPaymentModal(true)}
-                className="mt-4 w-full rounded-lg bg-brand-500 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+                className="mt-4 w-full rounded-lg bg-brand-600 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
               >
                 Record Payment
               </button>
@@ -556,8 +556,8 @@ function InvoiceDetail({
 
           {/* Payment history */}
           {payments.length > 0 && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <h3 className="mb-3 text-sm font-semibold text-gray-900">
+            <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
+              <h3 className="mb-3 text-sm font-semibold text-ink">
                 Payment History
               </h3>
               <div className="space-y-3">
@@ -567,16 +567,16 @@ function InvoiceDetail({
                     className="flex items-center justify-between text-sm"
                   >
                     <div>
-                      <p className="font-medium text-gray-900">
+                      <p className="font-medium text-ink">
                         {formatMwk(Number(p.amount))}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-muted">
                         {formatDate(p.payment_date)} ·{' '}
                         {p.payment_method.replace(/_/g, ' ')}
                       </p>
                     </div>
                     {p.reference && (
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-muted">
                         {p.reference}
                       </span>
                     )}
@@ -633,7 +633,7 @@ function InvoiceList({
         {[...Array(5)].map((_, i) => (
           <div
             key={i}
-            className="h-16 animate-pulse rounded-xl bg-gray-100"
+            className="h-16 animate-pulse rounded-xl bg-surface"
           />
         ))}
       </div>
@@ -642,7 +642,7 @@ function InvoiceList({
 
   if (isError) {
     return (
-      <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+      <div className="flex items-center gap-2 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
         <AlertCircle className="h-4 w-4 shrink-0" />
         Failed to load invoices.
       </div>
@@ -664,16 +664,16 @@ function InvoiceList({
               onClick={() => setStatusFilter(tab.value)}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 statusFilter === tab.value
-                  ? 'bg-brand-500 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-card border border-line text-sub hover:bg-bg'
               }`}
             >
               {tab.label}
               <span
                 className={`rounded-full px-1.5 py-0.5 text-xs ${
                   statusFilter === tab.value
-                    ? 'bg-white/20 text-white'
-                    : 'bg-gray-100 text-gray-500'
+                    ? 'bg-card/20 text-white'
+                    : 'bg-surface text-muted'
                 }`}
               >
                 {count}
@@ -686,18 +686,18 @@ function InvoiceList({
       {/* Empty state */}
       {filtered.length === 0 ? (
         <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
-          <FileText className="h-10 w-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">
+          <FileText className="h-10 w-10 text-muted/50" />
+          <p className="text-sm font-medium text-muted">
             {statusFilter === 'all'
               ? 'No invoices yet'
               : `No ${statusFilter.replace('_', ' ')} invoices`}
           </p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                 <tr>
                   <th className="hidden sm:table-cell px-4 py-3 text-left">Issue Date</th>
                   <th className="hidden sm:table-cell px-4 py-3 text-left">Due Date</th>
@@ -707,7 +707,7 @@ function InvoiceList({
                   <th className="w-8" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {filtered.map((inv) => {
                   const amountDue =
                     inv.amount_due !== null
@@ -717,15 +717,15 @@ function InvoiceList({
                     <tr
                       key={inv.id}
                       onClick={() => onSelect(inv)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50"
+                      className="cursor-pointer transition-colors hover:bg-bg"
                     >
-                      <td className="px-4 py-3 font-medium text-brand-700">
+                      <td className="px-4 py-3 font-medium text-brand-700 dark:text-brand-300">
                         {inv.invoice_number}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
+                      <td className="hidden sm:table-cell px-4 py-3 text-muted">
                         {formatDate(inv.issue_date)}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
+                      <td className="hidden sm:table-cell px-4 py-3 text-muted">
                         {inv.due_date ? formatDate(inv.due_date) : '—'}
                       </td>
                       <td className="px-4 py-3 text-right font-medium">
@@ -734,8 +734,8 @@ function InvoiceList({
                       <td
                         className={`hidden sm:table-cell px-4 py-3 text-right ${
                           amountDue > 0
-                            ? 'font-medium text-red-600'
-                            : 'text-gray-400'
+                            ? 'font-medium text-danger'
+                            : 'text-muted'
                         }`}
                       >
                         {amountDue > 0 ? formatMwk(amountDue) : '—'}
@@ -744,7 +744,7 @@ function InvoiceList({
                         <StatusBadge status={inv.status} />
                       </td>
                       <td className="px-3 py-3">
-                        <ChevronRight className="h-4 w-4 text-gray-400" />
+                        <ChevronRight className="h-4 w-4 text-muted" />
                       </td>
                     </tr>
                   );
@@ -769,7 +769,7 @@ export function InvoicesPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -778,8 +778,8 @@ export function InvoicesPage() {
     <div>
       {!selectedInvoice && (
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">Invoices</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-ink">Invoices</h1>
+          <p className="mt-1 text-sm text-muted">
             Manage invoices for {currentBusiness.business.name}
           </p>
         </div>

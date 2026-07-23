@@ -173,18 +173,18 @@ function MessageBubble({ message, onAction }: { message: Message; onAction: (pat
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${
-        isUser ? 'bg-brand-500' : 'bg-gray-100'
+        isUser ? 'bg-brand-600' : 'bg-surface'
       }`}>
         {isUser
           ? <User className="h-4 w-4 text-white" />
-          : <Bot className="h-4 w-4 text-gray-600" />}
+          : <Bot className="h-4 w-4 text-sub" />}
       </div>
 
       <div className={`max-w-[75%] space-y-2 ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
         <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
           isUser
-            ? 'bg-brand-500 text-white rounded-tr-sm'
-            : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm shadow-sm'
+            ? 'bg-brand-600 text-white rounded-tr-sm'
+            : 'bg-card border border-line text-ink rounded-tl-sm shadow-sm'
         }`}>
           {message.content.split('\n').map((line, i) => (
             <span key={i}>
@@ -202,8 +202,8 @@ function MessageBubble({ message, onAction }: { message: Message; onAction: (pat
                 onClick={() => onAction(action.path)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   action.variant === 'primary'
-                    ? 'bg-brand-500 text-white hover:bg-brand-600'
-                    : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    ? 'bg-brand-600 text-white hover:bg-brand-700'
+                    : 'border border-line bg-card text-sub hover:bg-bg'
                 }`}
               >
                 {action.label} →
@@ -212,7 +212,7 @@ function MessageBubble({ message, onAction }: { message: Message; onAction: (pat
           </div>
         )}
 
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-muted">
           {message.timestamp.toLocaleTimeString('en-MW', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
@@ -322,7 +322,7 @@ ${context}`,
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -331,21 +331,21 @@ ${context}`,
     <div className="flex h-[calc(100vh-8rem)] flex-col">
       {/* Header */}
       <div className="mb-4 flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600">
           <Sparkles className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Ledgr AI</h1>
-          <p className="text-xs text-gray-500">Live data from {businessName} · Powered by Claude</p>
+          <h1 className="text-xl font-semibold text-ink">Ledgr AI</h1>
+          <p className="text-xs text-muted">Live data from {businessName} · Powered by Claude</p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1">
-          <div className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
-          <span className="text-xs font-medium text-brand-700">Connected</span>
+        <div className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-500/10 px-3 py-1">
+          <div className="h-2 w-2 rounded-full bg-brand-600 animate-pulse" />
+          <span className="text-xs font-medium text-brand-700 dark:text-brand-300">Connected</span>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto rounded-2xl border border-line bg-bg p-4 space-y-4">
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
@@ -356,12 +356,12 @@ ${context}`,
 
         {isLoading && (
           <div className="flex gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100">
-              <Bot className="h-4 w-4 text-gray-600" />
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface">
+              <Bot className="h-4 w-4 text-sub" />
             </div>
-            <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-4 py-3 shadow-sm">
-              <Loader2 className="h-4 w-4 animate-spin text-brand-500" />
-              <span className="text-sm text-gray-500">Analysing your data…</span>
+            <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-line bg-card px-4 py-3 shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin text-brand-600 dark:text-brand-400" />
+              <span className="text-sm text-muted">Analysing your data…</span>
             </div>
           </div>
         )}
@@ -378,9 +378,9 @@ ${context}`,
               <button
                 key={q.text}
                 onClick={() => sendMessage(q.text)}
-                className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-xs font-medium text-gray-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors shadow-sm"
+                className="flex items-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5 text-left text-xs font-medium text-sub hover:border-brand-300 hover:bg-brand-500/10 hover:text-brand-700 dark:text-brand-300 transition-colors shadow-sm"
               >
-                <Icon className="h-4 w-4 shrink-0 text-brand-500" />
+                <Icon className="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" />
                 {q.text}
               </button>
             );
@@ -390,7 +390,7 @@ ${context}`,
 
       {/* Input */}
       <div className="mt-3 flex gap-2 items-end">
-        <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
+        <div className="flex-1 rounded-xl border border-line bg-card shadow-sm focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
           <textarea
             ref={inputRef}
             rows={1}
@@ -402,19 +402,19 @@ ${context}`,
             }}
             onKeyDown={handleKeyDown}
             placeholder="Ask anything about your business…"
-            className="w-full resize-none rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
+            className="w-full resize-none rounded-xl px-4 py-3 text-sm text-ink placeholder-gray-400 focus:outline-none"
             disabled={isLoading}
           />
         </div>
         <button
           onClick={() => sendMessage(input)}
           disabled={!input.trim() || isLoading}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40 transition-colors"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 transition-colors"
         >
           <Send className="h-4 w-4" />
         </button>
       </div>
-      <p className="mt-2 text-center text-xs text-gray-400">Press Enter to send · Shift+Enter for new line</p>
+      <p className="mt-2 text-center text-xs text-muted">Press Enter to send · Shift+Enter for new line</p>
     </div>
   );
 }

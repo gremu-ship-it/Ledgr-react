@@ -39,14 +39,14 @@ export function ResetPasswordPage() {
   }
 
   if (pageState === 'awaiting_session') {
-    return <AuthShell title="Verifying link…"><div className="py-6 text-center text-sm text-gray-500">Validating your reset link…</div></AuthShell>;
+    return <AuthShell title="Verifying link…"><div className="py-6 text-center text-sm text-muted">Validating your reset link…</div></AuthShell>;
   }
   if (pageState === 'invalid_link') {
     return (
       <AuthShell title="Link expired or invalid">
         <AuthAlert type="error" message="This password reset link is invalid or has expired. Please request a new one." />
-        <p className="mt-4 text-center text-sm text-gray-500">
-          <a href="/forgot-password" className="font-medium text-brand-600 hover:text-brand-700">Request a new link</a>
+        <p className="mt-4 text-center text-sm text-muted">
+          <a href="/forgot-password" className="font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300">Request a new link</a>
         </p>
       </AuthShell>
     );

@@ -33,7 +33,7 @@ function today(): string {
 function Alert({ type, message }: { type: 'success' | 'error'; message: string }) {
   return (
     <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
-      type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+      type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'
     }`}>
       {type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
       {message}
@@ -150,10 +150,10 @@ function TaxConfigModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">{existing ? 'Edit Tax Configuration' : 'New Tax Configuration'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+      <div className="w-full max-w-lg rounded-2xl bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">{existing ? 'Edit Tax Configuration' : 'New Tax Configuration'}</h2>
+          <button onClick={onClose} className="text-muted hover:text-sub"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-4">
@@ -161,9 +161,9 @@ function TaxConfigModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Tax Code *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Tax Code *</label>
               <select value={form.tax_code} onChange={(e) => set('tax_code', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 {TAX_CODES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
@@ -171,79 +171,79 @@ function TaxConfigModal({
             {isPension ? (
               <>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Employer Rate (%) *</label>
+                  <label className="mb-1 block text-sm font-medium text-sub">Employer Rate (%) *</label>
                   <input type="number" min="0" max="100" step="0.01" value={form.employer_rate}
                     onChange={(e) => set('employer_rate', e.target.value)} placeholder="e.g. 10"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Employee Rate (%) *</label>
+                  <label className="mb-1 block text-sm font-medium text-sub">Employee Rate (%) *</label>
                   <input type="number" min="0" max="100" step="0.01" value={form.employee_rate}
                     onChange={(e) => set('employee_rate', e.target.value)} placeholder="e.g. 5"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                    className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
                 </div>
-                <p className="col-span-2 text-xs text-gray-500">
+                <p className="col-span-2 text-xs text-muted">
                   TPR pension uses two separate rates (employer contribution and employee deduction) instead of a single rate.
                 </p>
               </>
             ) : (
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Rate (%)</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Rate (%)</label>
                 <input type="number" min="0" max="100" step="0.01" value={form.rate}
                   onChange={(e) => set('rate', e.target.value)} placeholder="e.g. 17.5"
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
             )}
 
             <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Name *</label>
               <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
                 placeholder="e.g. Standard VAT"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Description (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Description (optional)</label>
               <input type="text" value={form.description} onChange={(e) => set('description', e.target.value)}
                 placeholder="e.g. Standard rate VAT per MRA regulations"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">MRA Reference (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">MRA Reference (optional)</label>
               <input type="text" value={form.mra_reference} onChange={(e) => set('mra_reference', e.target.value)}
                 placeholder="e.g. VAT/2024/001"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div className="flex items-center gap-2 pt-6">
               <input type="checkbox" id="is_active" checked={form.is_active}
                 onChange={(e) => set('is_active', e.target.checked)}
-                className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500" />
-              <label htmlFor="is_active" className="text-sm text-gray-700">Active</label>
+                className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-500" />
+              <label htmlFor="is_active" className="text-sm text-sub">Active</label>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Effective From *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Effective From *</label>
               <input type="date" value={form.effective_from} onChange={(e) => set('effective_from', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Effective To (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Effective To (optional)</label>
               <input type="date" value={form.effective_to} onChange={(e) => set('effective_to', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-gray-200 px-6 py-4">
+        <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
           <button onClick={onClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
             Cancel
           </button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             {mutation.isPending ? 'Saving…' : existing ? 'Save Changes' : 'Create'}
           </button>
         </div>
@@ -336,10 +336,10 @@ function PayeBandModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">{existing ? 'Edit PAYE Band' : 'New PAYE Band'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+      <div className="w-full max-w-lg rounded-2xl bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">{existing ? 'Edit PAYE Band' : 'New PAYE Band'}</h2>
+          <button onClick={onClose} className="text-muted hover:text-sub"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="px-6 py-5 space-y-4">
@@ -347,61 +347,61 @@ function PayeBandModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Fiscal Year *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Fiscal Year *</label>
               <input type="text" value={form.fiscal_year} onChange={(e) => set('fiscal_year', e.target.value)}
                 placeholder="e.g. 2024/2025"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Band Label (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Band Label (optional)</label>
               <input type="text" value={form.band_label} onChange={(e) => set('band_label', e.target.value)}
                 placeholder="e.g. First Band"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Band From (MWK) *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Band From (MWK) *</label>
               <input type="number" min="0" value={form.band_from} onChange={(e) => set('band_from', e.target.value)}
                 placeholder="e.g. 0"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Band To (MWK, blank = no limit)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Band To (MWK, blank = no limit)</label>
               <input type="number" min="0" value={form.band_to} onChange={(e) => set('band_to', e.target.value)}
                 placeholder="Leave blank for top band"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Rate (%) *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Rate (%) *</label>
               <input type="number" min="0" max="100" step="0.01" value={form.rate}
                 onChange={(e) => set('rate', e.target.value)} placeholder="e.g. 15"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Effective From *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Effective From *</label>
               <input type="date" value={form.effective_from} onChange={(e) => set('effective_from', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Effective To (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Effective To (optional)</label>
               <input type="date" value={form.effective_to} onChange={(e) => set('effective_to', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-gray-200 px-6 py-4">
+        <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
           <button onClick={onClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
             Cancel
           </button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             {mutation.isPending ? 'Saving…' : existing ? 'Save Changes' : 'Create Band'}
           </button>
         </div>
@@ -417,18 +417,18 @@ function DeleteConfirm({ label, onConfirm, onCancel, isPending }: {
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-900">Delete?</h3>
-        <p className="mt-2 text-sm text-gray-500">
-          <span className="font-medium text-gray-700">{label}</span> will be removed permanently.
+      <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
+        <h3 className="text-base font-semibold text-ink">Delete?</h3>
+        <p className="mt-2 text-sm text-muted">
+          <span className="font-medium text-sub">{label}</span> will be removed permanently.
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onCancel}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm} disabled={isPending}
-            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white hover:bg-danger disabled:opacity-60 transition-colors">
             {isPending ? 'Deleting…' : 'Delete'}
           </button>
         </div>
@@ -467,28 +467,28 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
     <div>
       <div className="mb-4 flex justify-end">
         <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
           <Plus className="h-4 w-4" />New Tax Config
         </button>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />)}</div>
+        <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-surface" />)}</div>
       ) : configs.length === 0 ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-            <Percent className="h-7 w-7 text-brand-400" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+            <Percent className="h-7 w-7 text-brand-600 dark:text-brand-400" />
           </div>
-          <h2 className="text-base font-semibold text-gray-900">No tax configurations yet</h2>
+          <h2 className="text-base font-semibold text-ink">No tax configurations yet</h2>
           <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-            className="mt-1 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+            className="mt-1 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
             <Plus className="h-4 w-4" />New Tax Config
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Tax Code</th>
                 <th className="px-4 py-3 text-left">Name</th>
@@ -500,26 +500,26 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-line">
               {configs.map((cfg) => (
-                <tr key={cfg.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={cfg.id} className="hover:bg-bg transition-colors">
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                    <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-xs font-medium text-brand-700 dark:text-brand-300">
                       {cfg.tax_code}
                     </span>
                   </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{cfg.name}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                  <td className="px-4 py-3 font-medium text-ink">{cfg.name}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink">
                     {cfg.tax_code === 'tpr_pension'
                       ? `${Number(cfg.employer_rate ?? 0).toFixed(1)}% / ${Number(cfg.employee_rate ?? 0).toFixed(1)}%`
                       : `${Number(cfg.rate).toFixed(2)}%`}
                   </td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.mra_reference ?? '—'}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_from}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_to ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted">{cfg.mra_reference ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted">{cfg.effective_from}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted">{cfg.effective_to ?? '—'}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      cfg.is_active ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-500'
+                      cfg.is_active ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-surface text-muted'
                     }`}>
                       {cfg.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -527,11 +527,11 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => { setEditing(cfg); setShowModal(true); }}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                        className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-sub transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button onClick={() => setDeleting(cfg)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                        className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger transition-colors">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -597,35 +597,35 @@ function PayeBandsTab({ businessId }: { businessId: string }) {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Fiscal Year:</label>
+          <label className="text-sm font-medium text-sub">Fiscal Year:</label>
           <input type="text" value={fiscalYear} onChange={(e) => setFiscalYear(e.target.value)}
             placeholder="e.g. 2024/2025"
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 w-36" />
+            className="rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 w-36" />
         </div>
         <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
           <Plus className="h-4 w-4" />Add Band
         </button>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-gray-100" />)}</div>
+        <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-14 animate-pulse rounded-xl bg-surface" />)}</div>
       ) : bands.length === 0 ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-            <Calculator className="h-7 w-7 text-brand-400" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+            <Calculator className="h-7 w-7 text-brand-600 dark:text-brand-400" />
           </div>
-          <h2 className="text-base font-semibold text-gray-900">No PAYE bands for {fiscalYear}</h2>
-          <p className="max-w-xs text-sm text-gray-500">Add MRA PAYE bands for this fiscal year to enable automatic payroll tax calculation.</p>
+          <h2 className="text-base font-semibold text-ink">No PAYE bands for {fiscalYear}</h2>
+          <p className="max-w-xs text-sm text-muted">Add MRA PAYE bands for this fiscal year to enable automatic payroll tax calculation.</p>
           <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-            className="mt-1 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+            className="mt-1 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
             <Plus className="h-4 w-4" />Add Band
           </button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Label</th>
                 <th className="px-4 py-3 text-right">From (MWK)</th>
@@ -635,24 +635,24 @@ function PayeBandsTab({ businessId }: { businessId: string }) {
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-line">
               {bands.map((band) => (
-                <tr key={band.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{band.band_label ?? '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{formatMwk(Number(band.band_from))}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">
+                <tr key={band.id} className="hover:bg-bg transition-colors">
+                  <td className="px-4 py-3 font-medium text-ink">{band.band_label ?? '—'}</td>
+                  <td className="px-4 py-3 text-right text-sub">{formatMwk(Number(band.band_from))}</td>
+                  <td className="px-4 py-3 text-right text-sub">
                     {band.band_to != null ? formatMwk(Number(band.band_to)) : 'No limit'}
                   </td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">{Number(band.rate).toFixed(1)}%</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{band.effective_from}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-ink">{Number(band.rate).toFixed(1)}%</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted">{band.effective_from}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => { setEditing(band); setShowModal(true); }}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                        className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-sub transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button onClick={() => setDeleting(band)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                        className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger transition-colors">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -693,7 +693,7 @@ export function TaxPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -702,21 +702,21 @@ export function TaxPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Tax</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage tax configurations and PAYE bands for {currentBusiness.business.name}</p>
+          <h1 className="text-2xl font-semibold text-ink">Tax</h1>
+          <p className="mt-1 text-sm text-muted">Manage tax configurations and PAYE bands for {currentBusiness.business.name}</p>
         </div>
       </div>
 
-      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-line bg-bg p-1">
         <button onClick={() => setTab('configs')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'configs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            tab === 'configs' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'
           }`}>
           <Percent className="h-4 w-4" />Tax Configurations
         </button>
         <button onClick={() => setTab('paye')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'paye' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            tab === 'paye' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'
           }`}>
           <Calculator className="h-4 w-4" />PAYE Bands
         </button>

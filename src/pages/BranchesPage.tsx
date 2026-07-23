@@ -44,41 +44,41 @@ function BranchModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-        <h2 className="mb-4 text-base font-semibold text-gray-900">
+      <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-xl">
+        <h2 className="mb-4 text-base font-semibold text-ink">
           {initial ? 'Edit Branch' : 'New Branch'}
         </h2>
 
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">
-              Branch Name <span className="text-red-500">*</span>
+            <label className="mb-1 block text-xs font-medium text-sub">
+              Branch Name <span className="text-danger">*</span>
             </label>
             <input
               value={form.name}
               onChange={set('name')}
               placeholder="e.g. Blantyre Branch"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Branch Code</label>
+            <label className="mb-1 block text-xs font-medium text-sub">Branch Code</label>
             <input
               value={form.code}
               onChange={set('code')}
               placeholder="e.g. BLT"
               maxLength={6}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm uppercase focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
-            <p className="mt-1 text-xs text-gray-400">Up to 6 characters. Auto-generated if blank.</p>
+            <p className="mt-1 text-xs text-muted">Up to 6 characters. Auto-generated if blank.</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Location / Address</label>
+            <label className="mb-1 block text-xs font-medium text-sub">Location / Address</label>
             <input
               value={form.location}
               onChange={set('location')}
               placeholder="e.g. Ginnery Corner, Blantyre"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
         </div>
@@ -86,14 +86,14 @@ function BranchModal({
         <div className="mt-6 flex justify-end gap-2">
           <button
             onClick={onClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg"
           >
             Cancel
           </button>
           <button
             onClick={() => onSubmit(form)}
             disabled={!form.name.trim() || isLoading}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {isLoading && <Loader2 size={14} className="animate-spin" />}
             {initial ? 'Save Changes' : 'Create Branch'}
@@ -179,14 +179,14 @@ export function BranchesPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Branches</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-ink">Branches</h1>
+          <p className="mt-1 text-sm text-muted">
             Manage your selling points and stock locations
           </p>
         </div>
         <button
           onClick={() => setModalOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+          className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700"
         >
           <Plus size={16} />
           New Branch
@@ -194,16 +194,16 @@ export function BranchesPage() {
       </div>
 
       {/* Warehouse banner */}
-      <div className="mb-4 rounded-2xl border border-brand-100 bg-brand-50 p-5">
+      <div className="mb-4 rounded-2xl border border-brand-100 bg-brand-500/10 p-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600">
             <Building2 size={18} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-brand-800">Main Warehouse</p>
-            <p className="text-xs text-brand-600">Central stock location · Default receiving point</p>
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">Main Warehouse</p>
+            <p className="text-xs text-brand-600 dark:text-brand-300">Central stock location · Default receiving point</p>
           </div>
-          <span className="ml-auto rounded-full bg-brand-100 px-2.5 py-0.5 text-xs font-semibold text-brand-700">
+          <span className="ml-auto rounded-full bg-brand-500/10 px-2.5 py-0.5 text-xs font-semibold text-brand-700 dark:text-brand-300">
             Warehouse
           </span>
         </div>
@@ -213,26 +213,26 @@ export function BranchesPage() {
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-24 animate-pulse rounded-2xl bg-gray-100" />
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-surface" />
           ))}
         </div>
       ) : isError ? (
-        <div className="flex items-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-5">
-          <AlertCircle size={18} className="text-red-500" />
-          <p className="text-sm text-red-600">Failed to load branches.</p>
+        <div className="flex items-center gap-3 rounded-2xl border border-danger/20 bg-danger/10 p-5">
+          <AlertCircle size={18} className="text-danger" />
+          <p className="text-sm text-danger">Failed to load branches.</p>
         </div>
       ) : branches?.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 py-16 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
-            <Building2 size={22} className="text-gray-300" />
+        <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-line py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-bg">
+            <Building2 size={22} className="text-muted/50" />
           </div>
-          <p className="text-sm font-medium text-gray-500">No branches yet</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-sm font-medium text-muted">No branches yet</p>
+          <p className="text-xs text-muted">
             Create a branch to start dispatching stock from the warehouse
           </p>
           <button
             onClick={() => setModalOpen(true)}
-            className="mt-1 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600"
+            className="mt-1 flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
           >
             <Plus size={13} /> New Branch
           </button>
@@ -244,18 +244,18 @@ export function BranchesPage() {
             return (
               <div
                 key={branch.id}
-                className="relative rounded-2xl border border-gray-200 bg-white p-5 shadow-soft"
+                className="relative rounded-2xl border border-line bg-card p-5 shadow-soft"
               >
                 {/* Menu */}
                 <div className="absolute right-3 top-3">
                   <button
                     onClick={() => setMenuOpen(menuOpen === branch.id ? null : branch.id)}
-                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                    className="rounded-lg p-1.5 text-muted hover:bg-bg hover:text-sub"
                   >
                     <MoreVertical size={15} />
                   </button>
                   {menuOpen === branch.id && (
-                    <div className="absolute right-0 top-8 z-10 w-40 rounded-xl border border-gray-100 bg-white py-1 shadow-lg">
+                    <div className="absolute right-0 top-8 z-10 w-40 rounded-xl border border-line bg-card py-1 shadow-lg">
                       <button
                         onClick={() => {
                           setEditTarget({
@@ -268,7 +268,7 @@ export function BranchesPage() {
                           });
                           setMenuOpen(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-sub hover:bg-bg"
                       >
                         <Pencil size={13} /> Edit
                       </button>
@@ -277,7 +277,7 @@ export function BranchesPage() {
                           deactivateMutation.mutate(branch.id);
                           setMenuOpen(null);
                         }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-danger/10"
                       >
                         <XCircle size={13} /> Deactivate
                       </button>
@@ -287,36 +287,36 @@ export function BranchesPage() {
 
                 {/* Content */}
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gray-50">
-                    <Building2 size={16} className="text-gray-400" />
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-bg">
+                    <Building2 size={16} className="text-muted" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-gray-800">{branch.name}</p>
-                    {branch.code && <p className="text-xs text-gray-400">{branch.code}</p>}
+                    <p className="text-sm font-semibold text-ink">{branch.name}</p>
+                    {branch.code && <p className="text-xs text-muted">{branch.code}</p>}
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
                   {branch.location && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <MapPin size={12} className="text-gray-300" />
+                    <div className="flex items-center gap-2 text-xs text-muted">
+                      <MapPin size={12} className="text-muted/50" />
                       {branch.location}
                     </div>
                   )}
                   {loc && (
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <CheckCircle size={12} className="text-brand-400" />
+                    <div className="flex items-center gap-2 text-xs text-muted">
+                      <CheckCircle size={12} className="text-brand-600 dark:text-brand-400" />
                       Stock location: {loc.name}
                     </div>
                   )}
                 </div>
 
-                <div className="mt-3 flex items-center justify-between border-t border-gray-50 pt-3">
+                <div className="mt-3 flex items-center justify-between border-t border-line pt-3">
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                       branch.is_active
-                        ? 'bg-emerald-50 text-brand-600'
-                        : 'bg-gray-100 text-gray-400'
+                        ? 'bg-brand-500/10 text-brand-600 dark:text-brand-300'
+                        : 'bg-surface text-muted'
                     }`}
                   >
                     {branch.is_active ? 'Active' : 'Inactive'}

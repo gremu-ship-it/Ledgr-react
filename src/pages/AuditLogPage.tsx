@@ -31,14 +31,14 @@ function fmtTable(name: string) {
 }
 
 const EVENT_COLORS: Record<string, string> = {
-  INSERT:                    'bg-emerald-50 text-emerald-700',
-  UPDATE:                    'bg-blue-50 text-blue-700',
-  DELETE:                    'bg-red-50 text-red-700',
-  journal_entry_reversed:    'bg-purple-50 text-purple-700',
+  INSERT:                    'bg-brand-500/10 text-brand-700 dark:text-brand-300',
+  UPDATE:                    'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+  DELETE:                    'bg-danger/10 text-danger',
+  journal_entry_reversed:    'bg-accent/12 text-accent dark:text-accent-light',
 };
 
 function EventBadge({ type }: { type: string }) {
-  const color = EVENT_COLORS[type] ?? 'bg-gray-100 text-gray-600';
+  const color = EVENT_COLORS[type] ?? 'bg-surface text-sub';
   return (
     <span className={cls('inline-flex rounded-full px-2 py-0.5 text-xs font-semibold', color)}>
       {type}
@@ -47,12 +47,12 @@ function EventBadge({ type }: { type: string }) {
 }
 
 function ChainBadge({ valid, hash }: { valid?: boolean; hash?: string | null }) {
-  if (!hash) return <span className="text-xs text-gray-400">—</span>;
-  if (valid === undefined) return <span className="font-mono text-xs text-gray-400">{hash.slice(0, 8)}…</span>;
+  if (!hash) return <span className="text-xs text-muted">—</span>;
+  if (valid === undefined) return <span className="font-mono text-xs text-muted">{hash.slice(0, 8)}…</span>;
   return (
     <span className={cls(
       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
-      valid ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700',
+      valid ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger',
     )}>
       {valid
         ? <><CheckCircle2 className="h-3 w-3" />{hash.slice(0, 8)}…</>
@@ -68,7 +68,7 @@ function JsonDiff({ old: oldVal, next: newVal, fields }: {
   next?: Record<string, unknown> | null;
   fields?: string[] | null;
 }) {
-  if (!oldVal && !newVal) return <p className="text-xs text-gray-400">No data</p>;
+  if (!oldVal && !newVal) return <p className="text-xs text-muted">No data</p>;
 
   const keys = Array.from(new Set([
     ...Object.keys(oldVal ?? {}),
@@ -78,28 +78,28 @@ function JsonDiff({ old: oldVal, next: newVal, fields }: {
   const changedKeys = new Set(fields ?? []);
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-100 bg-gray-50">
+    <div className="overflow-x-auto rounded-lg border border-line bg-bg">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-gray-200 bg-gray-100">
-            <th className="px-3 py-1.5 text-left font-semibold text-gray-500">Field</th>
-            {oldVal && <th className="px-3 py-1.5 text-left font-semibold text-gray-500">Before</th>}
-            {newVal && <th className="px-3 py-1.5 text-left font-semibold text-gray-500">After</th>}
+          <tr className="border-b border-line bg-surface">
+            <th className="px-3 py-1.5 text-left font-semibold text-muted">Field</th>
+            {oldVal && <th className="px-3 py-1.5 text-left font-semibold text-muted">Before</th>}
+            {newVal && <th className="px-3 py-1.5 text-left font-semibold text-muted">After</th>}
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-line">
           {keys.map((k) => {
             const isChanged = changedKeys.size > 0 ? changedKeys.has(k) : oldVal?.[k] !== newVal?.[k];
             return (
-              <tr key={k} className={isChanged ? 'bg-amber-50' : ''}>
-                <td className="px-3 py-1.5 font-mono text-gray-600">{k}</td>
+              <tr key={k} className={isChanged ? 'bg-warning/12' : ''}>
+                <td className="px-3 py-1.5 font-mono text-sub">{k}</td>
                 {oldVal && (
-                  <td className="px-3 py-1.5 font-mono text-red-700">
+                  <td className="px-3 py-1.5 font-mono text-danger">
                     {oldVal[k] !== undefined ? JSON.stringify(oldVal[k]) : '—'}
                   </td>
                 )}
                 {newVal && (
-                  <td className="px-3 py-1.5 font-mono text-emerald-700">
+                  <td className="px-3 py-1.5 font-mono text-brand-700 dark:text-brand-300">
                     {newVal[k] !== undefined ? JSON.stringify(newVal[k]) : '—'}
                   </td>
                 )}
@@ -126,10 +126,10 @@ function AuditRow({
   return (
     <>
       <tr
-        className="cursor-pointer hover:bg-gray-50 transition-colors"
+        className="cursor-pointer hover:bg-bg transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+        <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
           <div className="flex items-center gap-1.5">
             <Clock className="h-3 w-3" />
             {fmtDate(entry.occurred_at)}
@@ -137,11 +137,11 @@ function AuditRow({
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
-            <Database className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-            <span className="text-xs font-medium text-gray-700">{fmtTable(entry.resource_type)}</span>
+            <Database className="h-3.5 w-3.5 text-muted shrink-0" />
+            <span className="text-xs font-medium text-sub">{fmtTable(entry.resource_type)}</span>
           </div>
           {entry.resource_ref && (
-            <p className="mt-0.5 text-xs text-gray-400">{entry.resource_ref}</p>
+            <p className="mt-0.5 text-xs text-muted">{entry.resource_ref}</p>
           )}
         </td>
         <td className="px-4 py-3">
@@ -149,8 +149,8 @@ function AuditRow({
         </td>
         <td className="px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <User className="h-3 w-3 text-gray-400" />
-            <span className="text-xs text-gray-600">{entry.user_email ?? entry.user_id?.slice(0, 8) ?? '—'}</span>
+            <User className="h-3 w-3 text-muted" />
+            <span className="text-xs text-sub">{entry.user_email ?? entry.user_id?.slice(0, 8) ?? '—'}</span>
           </div>
         </td>
         <td className="px-4 py-3">
@@ -161,30 +161,30 @@ function AuditRow({
         </td>
         <td className="px-4 py-3 text-right">
           {expanded
-            ? <ChevronDown className="h-4 w-4 text-gray-400 ml-auto" />
-            : <ChevronRight className="h-4 w-4 text-gray-400 ml-auto" />}
+            ? <ChevronDown className="h-4 w-4 text-muted ml-auto" />
+            : <ChevronRight className="h-4 w-4 text-muted ml-auto" />}
         </td>
       </tr>
 
       {expanded && (
         <tr>
-          <td colSpan={6} className="px-4 pb-4 pt-0 bg-gray-50 border-b border-gray-100">
+          <td colSpan={6} className="px-4 pb-4 pt-0 bg-bg border-b border-line">
             <div className="space-y-3 pt-2">
               {/* Hash chain info */}
-              <div className="rounded-lg border border-gray-200 bg-white p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Hash Chain</p>
+              <div className="rounded-lg border border-line bg-card p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Hash Chain</p>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   <div>
-                    <p className="text-xs text-gray-500">Previous hash</p>
-                    <p className="font-mono text-xs text-gray-700 break-all">{entry.prev_hash ?? 'GENESIS'}</p>
+                    <p className="text-xs text-muted">Previous hash</p>
+                    <p className="font-mono text-xs text-sub break-all">{entry.prev_hash ?? 'GENESIS'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Entry hash</p>
-                    <p className="font-mono text-xs text-gray-700 break-all">{entry.entry_hash ?? '—'}</p>
+                    <p className="text-xs text-muted">Entry hash</p>
+                    <p className="font-mono text-xs text-sub break-all">{entry.entry_hash ?? '—'}</p>
                   </div>
                 </div>
                 {chainResult && !chainResult.chain_valid && (
-                  <div className="mt-2 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                  <div className="mt-2 flex items-center gap-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger">
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     Chain integrity violation detected — this entry may have been tampered with.
                   </div>
@@ -193,7 +193,7 @@ function AuditRow({
 
               {/* Data diff */}
               <div>
-                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">
                   {entry.event_type === 'INSERT' ? 'Created Values' :
                    entry.event_type === 'DELETE' ? 'Deleted Values' : 'Changes'}
                 </p>
@@ -206,9 +206,9 @@ function AuditRow({
 
               {/* Notes */}
               {entry.notes && (
-                <div className="rounded-lg border border-gray-200 bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Notes</p>
-                  <p className="text-sm text-gray-700">{entry.notes}</p>
+                <div className="rounded-lg border border-line bg-card p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1">Notes</p>
+                  <p className="text-sm text-sub">{entry.notes}</p>
                 </div>
               )}
             </div>
@@ -326,7 +326,7 @@ export function AuditLogPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -336,9 +336,9 @@ export function AuditLogPage() {
       require = "canExport"
       fallback={
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
-          <Shield className="h-10 w-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">Access Restricted</p>
-          <p className="text-xs text-gray-400">You need at least Auditor role to view the audit log.</p>
+          <Shield className="h-10 w-10 text-muted/50" />
+          <p className="text-sm font-medium text-muted">Access Restricted</p>
+          <p className="text-xs text-muted">You need at least Auditor role to view the audit log.</p>
         </div>
       }
     >
@@ -346,9 +346,9 @@ export function AuditLogPage() {
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-extrabold text-gray-900">Audit Log</h1>
+            <h1 className="text-2xl font-extrabold text-ink">Audit Log</h1>
             <div>
-  <h1 className="text-2xl font-extrabold text-gray-900">Audit Log</h1>
+  <h1 className="text-2xl font-extrabold text-ink">Audit Log</h1>
   <button
     onClick={async () => {
       const { data, error } = await supabase.from('audit_log').insert({
@@ -359,15 +359,15 @@ export function AuditLogPage() {
       console.log('INSERT TEST — data:', data);
       console.log('INSERT TEST — error:', error);
     }}
-    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white"
+    className="rounded-xl bg-danger px-4 py-2 text-sm font-semibold text-white"
   >
     TEST: Direct Insert (temporary)
   </button>
-  <p className="mt-0.5 text-sm text-gray-500">
+  <p className="mt-0.5 text-sm text-muted">
     Immutable, hash-chained record of all financial changes · IFRS compliant
   </p>
 </div>
-            <p className="mt-0.5 text-sm text-gray-500">
+            <p className="mt-0.5 text-sm text-muted">
               Immutable, hash-chained record of all financial changes · IFRS compliant
             </p>
           </div>
@@ -377,8 +377,8 @@ export function AuditLogPage() {
               className={cls(
                 'flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors',
                 showVerify
-                  ? 'bg-brand-500 text-white hover:bg-brand-600'
-                  : 'border border-gray-200 bg-white text-gray-700 hover:bg-gray-50',
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
+                  : 'border border-line bg-card text-sub hover:bg-bg',
               )}
             >
               {chainLoading
@@ -389,7 +389,7 @@ export function AuditLogPage() {
             <button
               onClick={handleExportCSV}
               disabled={!logData?.data.length}
-              className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+              className="flex items-center gap-2 rounded-xl border border-line bg-card px-4 py-2 text-sm font-semibold text-sub hover:bg-bg disabled:opacity-40 transition-colors"
             >
               <Download className="h-4 w-4" />
               Export CSV
@@ -399,13 +399,13 @@ export function AuditLogPage() {
 
         {/* Tamper alert */}
         {showVerify && tamperCount > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4">
-            <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" />
+          <div className="flex items-center gap-3 rounded-2xl border border-danger/20 bg-danger/10 px-5 py-4">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-danger" />
             <div>
-              <p className="text-sm font-bold text-red-800">
+              <p className="text-sm font-bold text-danger">
                 {tamperCount} integrity violation{tamperCount !== 1 ? 's' : ''} detected
               </p>
-              <p className="text-xs text-red-700">
+              <p className="text-xs text-danger">
                 Hash chain is broken. Entries marked in red may have been tampered with. Contact your system administrator immediately.
               </p>
             </div>
@@ -414,25 +414,25 @@ export function AuditLogPage() {
 
         {/* Chain OK banner */}
         {showVerify && !chainLoading && tamperCount === 0 && (chainData?.length ?? 0) > 0 && (
-          <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-            <p className="text-sm font-semibold text-emerald-800">
+          <div className="flex items-center gap-3 rounded-2xl border border-brand-500/20 bg-brand-500/10 px-5 py-3">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-600 dark:text-brand-400" />
+            <p className="text-sm font-semibold text-brand-700 dark:text-brand-300">
               Hash chain verified — {chainData?.length} entries, all intact.
             </p>
           </div>
         )}
 
         {/* Filters */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-line bg-card p-4 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <input
                 type="text"
                 placeholder="Search by reference, email, or notes…"
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-                className="w-full rounded-xl border border-gray-200 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-xl border border-line py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <button
@@ -440,8 +440,8 @@ export function AuditLogPage() {
               className={cls(
                 'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-colors',
                 filtersOpen
-                  ? 'border-brand-500 bg-brand-50 text-brand-700'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50',
+                  ? 'border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                  : 'border-line text-sub hover:bg-bg',
               )}
             >
               <Filter className="h-4 w-4" />
@@ -449,7 +449,7 @@ export function AuditLogPage() {
             </button>
             <button
               onClick={() => { refetch(); if (showVerify) refetchChain(); }}
-              className="rounded-xl border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 transition-colors"
+              className="rounded-xl border border-line p-2 text-muted hover:bg-bg transition-colors"
               title="Refresh"
             >
               <RefreshCw className="h-4 w-4" />
@@ -457,31 +457,31 @@ export function AuditLogPage() {
           </div>
 
           {filtersOpen && (
-            <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-100 pt-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-4 grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">From Date</label>
+                <label className="mb-1 block text-xs font-medium text-muted">From Date</label>
                 <input
                   type="date"
                   value={fromDate}
                   onChange={(e) => { setFromDate(e.target.value); setPage(0); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">To Date</label>
+                <label className="mb-1 block text-xs font-medium text-muted">To Date</label>
                 <input
                   type="date"
                   value={toDate}
                   onChange={(e) => { setToDate(e.target.value); setPage(0); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Table</label>
+                <label className="mb-1 block text-xs font-medium text-muted">Table</label>
                 <select
                   value={resourceType}
                   onChange={(e) => { setResourceType(e.target.value); setPage(0); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
                 >
                   <option value="">All tables</option>
                   {resourceTypes.map((t) => (
@@ -490,11 +490,11 @@ export function AuditLogPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">Action</label>
+                <label className="mb-1 block text-xs font-medium text-muted">Action</label>
                 <select
                   value={eventType}
                   onChange={(e) => { setEventType(e.target.value); setPage(0); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
                 >
                   <option value="">All actions</option>
                   <option value="INSERT">INSERT</option>
@@ -504,11 +504,11 @@ export function AuditLogPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs font-medium text-gray-500">User</label>
+                <label className="mb-1 block text-xs font-medium text-muted">User</label>
                 <select
                   value={userId}
                   onChange={(e) => { setUserId(e.target.value); setPage(0); }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                  className="w-full rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
                 >
                   <option value="">All users</option>
                   {users.map((u) => (
@@ -524,7 +524,7 @@ export function AuditLogPage() {
                     setFromDate(''); setToDate(''); setResourceType('');
                     setEventType(''); setUserId(''); setSearch(''); setPage(0);
                   }}
-                  className="text-sm font-medium text-gray-400 hover:text-gray-600"
+                  className="text-sm font-medium text-muted hover:text-sub"
                 >
                   Clear filters
                 </button>
@@ -536,17 +536,17 @@ export function AuditLogPage() {
         {/* Summary stats */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: 'Total Entries', value: logData?.count ?? '—', icon: FileText, color: 'text-gray-900' },
-            { label: 'Shown',         value: logData?.data.length ?? '—', icon: Eye, color: 'text-brand-700' },
-            { label: 'Verified',      value: showVerify ? (chainData?.length ?? '—') : '—', icon: CheckCircle2, color: 'text-emerald-700' },
-            { label: 'Violations',    value: showVerify ? tamperCount : '—', icon: AlertTriangle, color: tamperCount > 0 ? 'text-red-600' : 'text-gray-400' },
+            { label: 'Total Entries', value: logData?.count ?? '—', icon: FileText, color: 'text-ink' },
+            { label: 'Shown',         value: logData?.data.length ?? '—', icon: Eye, color: 'text-brand-700 dark:text-brand-300' },
+            { label: 'Verified',      value: showVerify ? (chainData?.length ?? '—') : '—', icon: CheckCircle2, color: 'text-brand-700 dark:text-brand-300' },
+            { label: 'Violations',    value: showVerify ? tamperCount : '—', icon: AlertTriangle, color: tamperCount > 0 ? 'text-danger' : 'text-muted' },
           ].map((stat) => {
             const Icon = stat.icon;
             return (
-              <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div key={stat.label} className="rounded-2xl border border-line bg-card p-4 shadow-sm">
                 <div className="flex items-center gap-2">
                   <Icon className={cls('h-4 w-4', stat.color)} />
-                  <p className="text-xs text-gray-500">{stat.label}</p>
+                  <p className="text-xs text-muted">{stat.label}</p>
                 </div>
                 <p className={cls('mt-1 text-xl font-bold', stat.color)}>{stat.value}</p>
               </div>
@@ -555,39 +555,39 @@ export function AuditLogPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           {isLoading ? (
             <div className="space-y-2 p-4">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-100" />
+                <div key={i} className="h-12 animate-pulse rounded-lg bg-surface" />
               ))}
             </div>
           ) : isError ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-              <AlertTriangle className="h-8 w-8 text-red-400" />
-              <p className="text-sm font-medium text-red-600">Failed to load audit log</p>
-              <button onClick={() => refetch()} className="text-xs text-brand-600 hover:underline">Try again</button>
+              <AlertTriangle className="h-8 w-8 text-danger" />
+              <p className="text-sm font-medium text-danger">Failed to load audit log</p>
+              <button onClick={() => refetch()} className="text-xs text-brand-600 dark:text-brand-300 hover:underline">Try again</button>
             </div>
           ) : !logData?.data.length ? (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-              <Shield className="h-8 w-8 text-gray-200" />
-              <p className="text-sm font-medium text-gray-500">No audit entries found</p>
-              <p className="text-xs text-gray-400">Try adjusting your filters</p>
+              <Shield className="h-8 w-8 text-muted" />
+              <p className="text-sm font-medium text-muted">No audit entries found</p>
+              <p className="text-xs text-muted">Try adjusting your filters</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-sm">
-                <thead className="border-b border-gray-100 bg-gray-50">
+                <thead className="border-b border-line bg-bg">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Timestamp</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Resource</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">User</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Hash</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-muted">Timestamp</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-muted">Resource</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-muted">Action</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-muted">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-muted">Hash</th>
                     <th className="px-4 py-3" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
+                <tbody className="divide-y divide-line">
                   {logData.data.map((entry) => (
                     <AuditRow
                       key={entry.id}
@@ -602,15 +602,15 @@ export function AuditLogPage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
-              <p className="text-xs text-gray-500">
+            <div className="flex items-center justify-between border-t border-line px-4 py-3">
+              <p className="text-xs text-muted">
                 {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, logData?.count ?? 0)} of {logData?.count ?? 0}
               </p>
               <div className="flex gap-1">
                 <button
                   disabled={page === 0}
                   onClick={() => setPage((p) => p - 1)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-semibold text-gray-500 transition-colors hover:border-brand-500 hover:bg-brand-500 hover:text-white disabled:opacity-40"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-sm font-semibold text-muted transition-colors hover:border-brand-500 hover:bg-brand-700 hover:text-white disabled:opacity-40"
                 >‹</button>
                 {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i).map((i) => (
                   <button
@@ -619,15 +619,15 @@ export function AuditLogPage() {
                     className={cls(
                       'flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-bold transition-colors',
                       i === page
-                        ? 'border-brand-500 bg-brand-500 text-white'
-                        : 'border-gray-200 text-gray-500 hover:border-brand-500 hover:bg-brand-500 hover:text-white',
+                        ? 'border-brand-500 bg-brand-600 text-white'
+                        : 'border-line text-muted hover:border-brand-500 hover:bg-brand-700 hover:text-white',
                     )}
                   >{i + 1}</button>
                 ))}
                 <button
                   disabled={page >= totalPages - 1}
                   onClick={() => setPage((p) => p + 1)}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-semibold text-gray-500 transition-colors hover:border-brand-500 hover:bg-brand-500 hover:text-white disabled:opacity-40"
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-line text-sm font-semibold text-muted transition-colors hover:border-brand-500 hover:bg-brand-700 hover:text-white disabled:opacity-40"
                 >›</button>
               </div>
             </div>
@@ -635,11 +635,11 @@ export function AuditLogPage() {
         </div>
 
         {/* IFRS compliance note */}
-        <div className="rounded-2xl border border-gray-100 bg-gray-50 px-5 py-4">
+        <div className="rounded-2xl border border-line bg-bg px-5 py-4">
           <div className="flex items-start gap-3">
-            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
-            <div className="text-xs text-gray-500">
-              <span className="font-semibold text-gray-700">IFRS Compliance: </span>
+            <Shield className="mt-0.5 h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" />
+            <div className="text-xs text-muted">
+              <span className="font-semibold text-sub">IFRS Compliance: </span>
               This audit log is append-only and immutable at the database level via trigger enforcement.
               Each entry is SHA-256 hash-chained to the previous entry — any tampering breaks the chain and is immediately detectable.
               The log captures all INSERT, UPDATE, and DELETE operations on financial tables including journal entries, invoices, expenses, and payroll.

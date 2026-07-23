@@ -127,7 +127,7 @@ function AccountSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+      className={className ?? 'w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
     >
       <option value="">{placeholder}</option>
       {accounts.map((a) => (
@@ -153,13 +153,13 @@ function BranchSelect({
   if (branches.length === 0) return null;
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">
-        {label} <span className="font-normal text-gray-400">(optional)</span>
+      <label className="mb-1 block text-sm font-medium text-sub">
+        {label} <span className="font-normal text-muted">(optional)</span>
       </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+        className={className ?? 'w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
       >
         <option value="">No cost centre</option>
         {branches.map((b) => (
@@ -189,7 +189,7 @@ function ProductSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+      className={className ?? 'w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
     >
       <option value="">{placeholder ?? 'Select product / service…'}</option>
       {products.map((p) => (
@@ -260,14 +260,14 @@ interface ExpenseForm {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    draft:           'bg-gray-100 text-gray-600',
-    approved:        'bg-blue-50 text-blue-700',
-    partially_paid:  'bg-amber-50 text-amber-700',
-    paid:            'bg-brand-50 text-brand-700',
-    void:            'bg-gray-100 text-gray-400',
+    draft:           'bg-surface text-sub',
+    approved:        'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    partially_paid:  'bg-warning/12 text-warning',
+    paid:            'bg-brand-500/10 text-brand-700 dark:text-brand-300',
+    void:            'bg-surface text-muted',
   };
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] ?? 'bg-surface text-sub'}`}>
       {status.replace('_', ' ')}
     </span>
   );
@@ -275,7 +275,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function Alert({ type, message }: { type: 'success' | 'error'; message: string }) {
   return (
-    <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'}`}>
+    <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'}`}>
       {type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
       {message}
     </div>
@@ -285,13 +285,13 @@ function Alert({ type, message }: { type: 'success' | 'error'; message: string }
 function EmptyState({ onRecord }: { onRecord: () => void }) {
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
-        <Receipt className="h-7 w-7 text-red-400" />
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-danger/10">
+        <Receipt className="h-7 w-7 text-danger" />
       </div>
-      <h2 className="text-base font-semibold text-gray-900">No expenses recorded yet</h2>
-      <p className="max-w-xs text-sm text-gray-500">Record your first expense to start tracking your business costs.</p>
+      <h2 className="text-base font-semibold text-ink">No expenses recorded yet</h2>
+      <p className="max-w-xs text-sm text-muted">Record your first expense to start tracking your business costs.</p>
       <button onClick={onRecord}
-        className="mt-2 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+        className="mt-2 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
         <Plus className="h-4 w-4" />Record Expense
       </button>
     </div>
@@ -432,10 +432,10 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
 
   return (
     <div className="mx-auto max-w-lg">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
-          <Zap className="h-5 w-5 text-brand-500" />
-          <h2 className="text-base font-semibold text-gray-900">Quick Expense Entry</h2>
+          <Zap className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+          <h2 className="text-base font-semibold text-ink">Quick Expense Entry</h2>
         </div>
 
         {alert && <Alert type={alert.type} message={alert.message} />}
@@ -443,21 +443,21 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Date</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Date</label>
               <input type="date" value={form.expense_date} onChange={(e) => set('expense_date', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Amount (MWK)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Amount (MWK)</label>
               <input type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           {/* NEW: Product / service selector */}
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Product / Service (COGS) <span className="font-normal text-gray-400">(optional)</span>
+            <label className="mb-1 block text-sm font-medium text-sub">
+              Product / Service (COGS) <span className="font-normal text-muted">(optional)</span>
             </label>
             <ProductSelect
               value={form.product_id}
@@ -475,7 +475,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               placeholder="Select product being purchased…"
             />
             {form.product_id && products.find((p) => p.id === form.product_id)?.cogs_account_id && (
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-muted">
                 COGS account auto-selected from product. Override below if needed.
               </p>
             )}
@@ -484,16 +484,16 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           {/* NEW: Quantity — drives stock addition at the chosen branch */}
           {form.product_id && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Quantity Purchased</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Quantity Purchased</label>
               <input type="number" min="0" step="1" value={form.quantity}
                 onChange={(e) => set('quantity', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-              <p className="mt-1 text-xs text-gray-400">Amount above is the total for all units — stock will increase by this quantity.</p>
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <p className="mt-1 text-xs text-muted">Amount above is the total for all units — stock will increase by this quantity.</p>
             </div>
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Category</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Category</label>
             <AccountSelect value={form.account_id} onChange={(v) => set('account_id', v)} accounts={accounts} />
           </div>
 
@@ -504,54 +504,54 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
             branches={branches}
           />
 
-          <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
+          <div className="flex items-center gap-2 rounded-lg border border-line px-3 py-2">
             <input type="checkbox" id="include_vat" checked={form.include_vat}
               onChange={(e) => set('include_vat', e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-500" />
-            <label htmlFor="include_vat" className="text-sm text-gray-700">
+              className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400" />
+            <label htmlFor="include_vat" className="text-sm text-sub">
               Amount includes VAT (17.5%) — split automatically
             </label>
           </div>
 
           {form.include_vat && form.amount && (
-            <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            <div className="rounded-lg bg-bg px-3 py-2 text-xs text-muted">
               Net: MK {(parseFloat(form.amount) / 1.175).toFixed(2)} ·{' '}
               VAT: MK {(parseFloat(form.amount) - parseFloat(form.amount) / 1.175).toFixed(2)}
             </div>
           )}
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Description</label>
             <input type="text" placeholder="e.g. 10 bags of maize — Blantyre branch" value={form.description}
               onChange={(e) => set('description', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Payment Method</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Payment Method</label>
               <select value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 {PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Reference (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Reference (optional)</label>
               <input type="text" placeholder="e.g. Receipt #002" value={form.reference}
                 onChange={(e) => set('reference', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Notes (optional)</label>
             <textarea rows={2} placeholder="Any additional notes..." value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <button onClick={() => mutation.mutate(form)} disabled={mutation.isPending}
-            className="w-full rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             {mutation.isPending ? 'Saving…' : 'Record Expense'}
           </button>
         </div>
@@ -747,10 +747,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
-          <Receipt className="h-5 w-5 text-brand-500" />
-          <h2 className="text-base font-semibold text-gray-900">New Expense / Supplier Bill</h2>
+          <Receipt className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+          <h2 className="text-base font-semibold text-ink">New Expense / Supplier Bill</h2>
         </div>
 
         {alert && <Alert type={alert.type} message={alert.message} />}
@@ -758,9 +758,9 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         <div className="space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Supplier (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Supplier (optional)</label>
               <select value={form.contact_id} onChange={(e) => setField('contact_id', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="">Select supplier…</option>
                 {suppliers.map((s: { id: string; name: string }) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
@@ -768,22 +768,22 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Expense Number</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Expense Number</label>
               <input type="text" value={form.expense_number} onChange={(e) => setField('expense_number', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Expense Date</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Expense Date</label>
               <input type="date" value={form.expense_date} onChange={(e) => setField('expense_date', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Due Date (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Due Date (optional)</label>
               <input type="date" value={form.due_date} onChange={(e) => setField('due_date', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
@@ -796,14 +796,14 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">Line Items</label>
-              <button onClick={addLine} className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700">
+              <label className="text-sm font-medium text-sub">Line Items</label>
+              <button onClick={addLine} className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300">
                 <Plus className="h-3.5 w-3.5" /> Add Line
               </button>
             </div>
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
+            <div className="overflow-x-auto rounded-lg border border-line">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-3 py-2 text-left">Product / Service</th>  {/* NEW */}
                     <th className="px-3 py-2 text-left">Description</th>
@@ -815,7 +815,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                     <th className="w-8" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-line">
                   {form.lines.map((line, idx) => (
                     <tr key={idx}>
                       {/* NEW: per-line product picker */}
@@ -861,7 +861,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                       <td className="px-3 py-2 text-right text-sm font-medium">{formatMwk(lineCalcs[idx]?.lineTotal ?? 0)}</td>
                       <td className="px-2 py-2">
                         {form.lines.length > 1 && (
-                          <button onClick={() => removeLine(idx)} className="text-gray-400 transition-colors hover:text-red-500">
+                          <button onClick={() => removeLine(idx)} className="text-muted transition-colors hover:text-danger">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         )}
@@ -875,21 +875,21 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwk(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwk(vatAmount)}</span></div>
-              <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwk(total)}</span></div>
+              <div className="flex justify-between text-sub"><span>Subtotal</span><span>{formatMwk(subtotal)}</span></div>
+              <div className="flex justify-between text-sub"><span>VAT (17.5%)</span><span>{formatMwk(vatAmount)}</span></div>
+              <div className="flex justify-between border-t border-line pt-1.5 font-semibold text-ink"><span>Total</span><span>{formatMwk(total)}</span></div>
             </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Notes (optional)</label>
             <textarea rows={2} value={form.notes} onChange={(e) => setField('notes', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <div className="flex justify-end">
             <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-              className="rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+              className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
               {mutation.isPending ? 'Saving…' : 'Create Expense'}
             </button>
           </div>
@@ -946,19 +946,19 @@ function ExpenseList({ businessId }: { businessId: string }) {
   const retry = useRetryPosting(businessId);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  if (isLoading) return <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
+  if (isLoading) return <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />)}</div>;
   if (isError) return (
-    <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+    <div className="flex items-center gap-2 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger">
       <AlertCircle className="h-4 w-4 shrink-0" />Failed to load expenses.
     </div>
   );
   if (expenses.length === 0) return null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 text-left">Expense #</th>
               <th className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
@@ -969,30 +969,30 @@ function ExpenseList({ businessId }: { businessId: string }) {
               <th className="px-4 py-3 text-center">Posting</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {expenses.map((exp: Row<'expenses'>) => {
               const needsPosting = !exp.journal_entry_id;
               return (
-                <tr key={exp.id} className="transition-colors hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-brand-700">{exp.expense_number}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{exp.expense_date}</td>
-                  <td className="px-4 py-3 text-gray-700">{exp.notes ?? exp.reference ?? '—'}</td>
+                <tr key={exp.id} className="transition-colors hover:bg-bg">
+                  <td className="px-4 py-3 font-medium text-brand-700 dark:text-brand-300">{exp.expense_number}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted">{exp.expense_date}</td>
+                  <td className="px-4 py-3 text-sub">{exp.notes ?? exp.reference ?? '—'}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatMwk(exp.total_amount)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(exp.amount_paid)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-muted">{formatMwk(exp.amount_paid)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>
                   <td className="px-4 py-3 text-center">
                     {needsPosting ? (
                       <button
                         onClick={() => { setRetryingId(exp.id); retry.mutate(exp, { onSettled: () => setRetryingId(null) }); }}
                         disabled={retry.isPending && retryingId === exp.id}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-warning/12 px-2.5 py-0.5 text-xs font-medium text-warning hover:bg-warning/12 disabled:opacity-60"
                         title="Not posted to ledger — click to retry."
                       >
                         <RefreshCw className={`h-3 w-3 ${retry.isPending && retryingId === exp.id ? 'animate-spin' : ''}`} />
                         Needs Posting
                       </button>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-brand-600">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-brand-500/10 px-2.5 py-0.5 text-xs font-medium text-brand-600 dark:text-brand-300">
                         <CheckCircle className="h-3 w-3" /> Posted
                       </span>
                     )}
@@ -1004,7 +1004,7 @@ function ExpenseList({ businessId }: { businessId: string }) {
         </table>
       </div>
       {retry.isError && (
-        <div className="border-t border-red-100 bg-red-50 px-4 py-2.5 text-xs text-red-700">
+        <div className="border-t border-danger/20 bg-danger/10 px-4 py-2.5 text-xs text-danger">
           Retry failed: {(retry.error as Error).message}
         </div>
       )}
@@ -1036,7 +1036,7 @@ export function ExpensesPage() {
 
   if (!businessId) return (
     <div className="flex min-h-[60vh] items-center justify-center">
-      <p className="text-sm text-gray-500">No business selected.</p>
+      <p className="text-sm text-muted">No business selected.</p>
     </div>
   );
 
@@ -1044,16 +1044,16 @@ export function ExpensesPage() {
     <div>
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Expenses</h1>
-          <p className="mt-1 text-sm text-gray-500">Track and manage expenses for {currentBusiness.business.name}</p>
+          <h1 className="text-2xl font-semibold text-ink">Expenses</h1>
+          <p className="mt-1 text-sm text-muted">Track and manage expenses for {currentBusiness.business.name}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setTab('quick')}
-            className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-            <Zap className="h-4 w-4 text-brand-500" />Quick Entry
+            className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
+            <Zap className="h-4 w-4 text-brand-600 dark:text-brand-400" />Quick Entry
           </button>
           <button onClick={() => setTab('expense')}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
             <Plus className="h-4 w-4" />New Expense
           </button>
         </div>
@@ -1061,17 +1061,17 @@ export function ExpensesPage() {
 
       {(tab === 'quick' || tab === 'expense') && (
         <div className="mb-6">
-          <div className="flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+          <div className="flex w-fit gap-1 rounded-xl border border-line bg-bg p-1">
             <button onClick={() => setTab('quick')}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'quick' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'quick' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
               <Zap className="h-4 w-4" />Quick Entry
             </button>
             <button onClick={() => setTab('expense')}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'expense' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'expense' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
               <Receipt className="h-4 w-4" />Expense Builder
             </button>
             <button onClick={() => setTab('list')}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
+              className="rounded-lg px-4 py-2 text-sm font-medium text-muted hover:text-sub transition-colors">
               Cancel
             </button>
           </div>

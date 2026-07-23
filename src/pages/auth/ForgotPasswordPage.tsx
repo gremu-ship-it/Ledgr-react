@@ -27,15 +27,15 @@ export function ForgotPasswordPage() {
     return (
       <AuthShell title="Check your inbox">
         <div className="flex flex-col items-center gap-3 py-4 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-            <CheckCircle2 className="h-7 w-7 text-brand-500" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+            <CheckCircle2 className="h-7 w-7 text-brand-600 dark:text-brand-400" />
           </div>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-sub">
             If <span className="font-semibold">{email}</span> is registered with Ledgr, you'll
             receive a password reset link shortly.
           </p>
-          <p className="text-xs text-gray-400">Check your spam folder if it doesn't arrive.</p>
-          <Link to="/login" className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700">
+          <p className="text-xs text-muted">Check your spam folder if it doesn't arrive.</p>
+          <Link to="/login" className="mt-2 text-sm font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300">
             Back to sign in
           </Link>
         </div>
@@ -60,9 +60,9 @@ export function ForgotPasswordPage() {
         </FormField>
         <SubmitButton loading={loading} label="Send reset link" loadingLabel="Sending…" />
       </form>
-      <p className="mt-5 text-center text-sm text-gray-500">
+      <p className="mt-5 text-center text-sm text-muted">
         Remembered it?{' '}
-        <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700">
+        <Link to="/login" className="font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300">
           Sign in
         </Link>
       </p>

@@ -60,10 +60,10 @@ const SUBTYPES: { value: AccountSubtype; label: string; for: AccountType[] }[] =
 ];
 
 const TYPE_COLOURS: Record<AccountType, string> = {
-  asset:         'bg-blue-50 text-blue-700 border-blue-200',
-  liability:     'bg-red-50 text-red-700 border-red-200',
-  equity:        'bg-purple-50 text-purple-700 border-purple-200',
-  income:        'bg-emerald-50 text-emerald-700 border-emerald-200',
+  asset:         'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+  liability:     'bg-danger/10 text-danger border-danger/20',
+  equity:        'bg-accent/12 text-accent dark:text-accent-light border-accent/20',
+  income:        'bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/20',
   expense:       'bg-orange-50 text-orange-700 border-orange-200',
 };
 
@@ -212,56 +212,56 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-card shadow-2xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">
             {isEdit ? 'Edit Account' : 'New Account'}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <button onClick={onClose} className="text-muted hover:text-sub">
             <X size={18} />
           </button>
         </div>
 
         <div className="space-y-4 px-6 py-5">
           {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            <div className="flex items-center gap-2 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger">
               <AlertCircle size={14} className="shrink-0" />{error}
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Code <span className="text-red-400">*</span>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Code <span className="text-danger">*</span>
               </label>
               <input
                 value={form.code}
                 onChange={e => set('code', e.target.value)}
                 placeholder="e.g. 6910"
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 ${codeExists ? 'border-red-300' : 'border-gray-300'}`}
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 ${codeExists ? 'border-danger/30' : 'border-line'}`}
               />
-              {codeExists && <p className="mt-1 text-xs text-red-500">Code already in use</p>}
+              {codeExists && <p className="mt-1 text-xs text-danger">Code already in use</p>}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Name <span className="text-red-400">*</span>
+              <label className="mb-1 block text-xs font-medium text-muted">
+                Name <span className="text-danger">*</span>
               </label>
               <input
                 value={form.name}
                 onChange={e => set('name', e.target.value)}
                 placeholder="e.g. Cleaning Supplies"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Account Type *</label>
+              <label className="mb-1 block text-xs font-medium text-muted">Account Type *</label>
               <select
                 value={form.account_type}
                 onChange={e => handleTypeChange(e.target.value as AccountType)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 {ACCOUNT_TYPES.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
@@ -269,11 +269,11 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Subtype</label>
+              <label className="mb-1 block text-xs font-medium text-muted">Subtype</label>
               <select
                 value={form.account_subtype ?? ''}
                 onChange={e => set('account_subtype', e.target.value || null)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="">— None —</option>
                 {filteredSubtypes.map(s => (
@@ -285,27 +285,27 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Normal Balance</label>
+              <label className="mb-1 block text-xs font-medium text-muted">Normal Balance</label>
               <select
                 value={form.normal_balance}
                 onChange={e => set('normal_balance', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="debit">Debit</option>
                 <option value="credit">Credit</option>
               </select>
               {debitCreditWarning && (
-                <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+                <p className="mt-1 flex items-center gap-1 text-xs text-warning">
                   <AlertTriangle size={11} />{debitCreditWarning}
                 </p>
               )}
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Currency</label>
+              <label className="mb-1 block text-xs font-medium text-muted">Currency</label>
               <select
                 value={form.currency}
                 onChange={e => set('currency', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="MWK">MWK — Malawi Kwacha</option>
                 <option value="USD">USD — US Dollar</option>
@@ -317,11 +317,11 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Parent Account</label>
+            <label className="mb-1 block text-xs font-medium text-muted">Parent Account</label>
             <select
               value={form.parent_id}
               onChange={e => set('parent_id', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
               <option value="">— No parent (top-level) —</option>
               {postableParents
@@ -333,27 +333,27 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Description</label>
+            <label className="mb-1 block text-xs font-medium text-muted">Description</label>
             <textarea
               rows={2}
               value={form.description}
               onChange={e => set('description', e.target.value)}
               placeholder="Optional description"
-              className="w-full resize-none rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full resize-none rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Opening Balance (MWK)</label>
+            <label className="mb-1 block text-xs font-medium text-muted">Opening Balance (MWK)</label>
             <input
               type="number" min={0} step="0.01"
               value={form.opening_balance}
               onChange={e => set('opening_balance', parseFloat(e.target.value) || 0)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
 
-          <div className="flex flex-wrap gap-4 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm">
+          <div className="flex flex-wrap gap-4 rounded-lg border border-line bg-bg px-4 py-3 text-sm">
             {[
               { key: 'is_group',        label: 'Header / group account (no posting)' },
               { key: 'is_bank_account', label: 'Bank / cash account' },
@@ -364,15 +364,15 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
                   type="checkbox"
                   checked={form[key as keyof typeof form] as boolean}
                   onChange={e => set(key as keyof typeof form, e.target.checked)}
-                  className="h-4 w-4 rounded border-gray-300 text-brand-500"
+                  className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400"
                 />
-                <span className="text-gray-700">{label}</span>
+                <span className="text-sub">{label}</span>
               </label>
             ))}
           </div>
 
           {form.is_group && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/12 px-3 py-2 text-xs text-warning">
               <AlertTriangle size={13} className="shrink-0" />
               Header accounts cannot be posted to — transactions must use child accounts.
             </div>
@@ -381,14 +381,14 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
           <div className="flex gap-3 pt-1">
             <button
               onClick={onClose}
-              className="flex-1 rounded-lg border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              className="flex-1 rounded-lg border border-line py-2 text-sm font-medium text-sub hover:bg-bg"
             >
               Cancel
             </button>
             <button
               onClick={handleSubmit}
               disabled={saving}
-              className="flex-1 rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+              className="flex-1 rounded-lg bg-brand-600 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
               {saving ? 'Saving…' : isEdit ? 'Update' : 'Create Account'}
             </button>
@@ -567,15 +567,15 @@ export function AccountsPage() {
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Chart of Accounts</h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <h1 className="text-2xl font-semibold text-ink">Chart of Accounts</h1>
+          <p className="mt-1 text-sm text-muted">
             {stats.total} accounts · {stats.active} active · {stats.groups} groups
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setModal({ open: true })}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
           >
             <Plus size={15} /> Add Account
           </button>
@@ -583,22 +583,22 @@ export function AccountsPage() {
       </div>
 
       {/* Seed / repair / switch panel */}
-      <div className="mb-5 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-5 rounded-xl border border-line bg-card p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
-          <Settings2 size={16} className="text-gray-400 shrink-0" />
-          <span className="text-sm font-medium text-gray-700">COA Template</span>
+          <Settings2 size={16} className="text-muted shrink-0" />
+          <span className="text-sm font-medium text-sub">COA Template</span>
 
-          <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          <div className="flex gap-1 rounded-lg border border-line bg-bg p-0.5">
             {(['gaap', 'ifrs'] as CoaTemplate[]).map(t => (
               <button
                 key={t}
                 onClick={() => setSelectedTemplate(t)}
                 className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-                  selectedTemplate === t ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                  selectedTemplate === t ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'
                 }`}
               >
                 {t === 'gaap' ? 'Local GAAP / MRA' : 'IFRS'}
-                {businessTemplate === t && <span className="ml-1 text-brand-400">●</span>}
+                {businessTemplate === t && <span className="ml-1 text-brand-600 dark:text-brand-400">●</span>}
               </button>
             ))}
           </div>
@@ -607,7 +607,7 @@ export function AccountsPage() {
             <button
               onClick={runSwitch}
               disabled={seeding}
-              className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/12 px-3 py-1.5 text-xs font-semibold text-warning hover:bg-warning/12 transition-colors disabled:opacity-50"
             >
               <RefreshCw size={13} className={seeding ? 'animate-spin' : ''} />
               {seeding ? 'Switching…' : `Switch to ${selectedTemplate.toUpperCase()}`}
@@ -616,7 +616,7 @@ export function AccountsPage() {
             <button
               onClick={runRepair}
               disabled={seeding}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-sub hover:bg-bg transition-colors disabled:opacity-50"
             >
               <RefreshCw size={13} className={seeding ? 'animate-spin' : ''} />
               {seeding ? 'Seeding…' : 'Repair / Seed Missing Accounts'}
@@ -626,8 +626,8 @@ export function AccountsPage() {
           {seedMsg && (
             <div className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium ${
               seedMsg.type === 'success'
-                ? 'bg-emerald-50 text-emerald-700'
-                : 'bg-red-50 text-red-700'
+                ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                : 'bg-danger/10 text-danger'
             }`}>
               {seedMsg.type === 'success'
                 ? <CheckCircle size={13} />
@@ -637,8 +637,8 @@ export function AccountsPage() {
           )}
         </div>
         {businessTemplate && (
-          <p className="mt-2 text-xs text-gray-400">
-            Current template: <span className="font-medium text-gray-600">{businessTemplate.toUpperCase()}</span>
+          <p className="mt-2 text-xs text-muted">
+            Current template: <span className="font-medium text-sub">{businessTemplate.toUpperCase()}</span>
             {templateChanged && ' — select "Switch" above to change it, or click the current template to cancel.'}
           </p>
         )}
@@ -650,12 +650,12 @@ export function AccountsPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by code or name…"
-          className="min-w-48 flex-1 rounded-xl border border-gray-200 bg-white py-2 px-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="min-w-48 flex-1 rounded-xl border border-line bg-card py-2 px-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         />
         <select
           value={typeFilter}
           onChange={e => setType(e.target.value as AccountType | 'all')}
-          className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:border-brand-500 focus:outline-none"
+          className="rounded-xl border border-line bg-card px-3 py-2 text-sm text-sub focus:border-brand-500 focus:outline-none"
         >
           <option value="all">All types</option>
           {ACCOUNT_TYPES.map(t => (
@@ -667,13 +667,13 @@ export function AccountsPage() {
           <div className="flex gap-1">
             <button
               onClick={() => setExpanded(new Set(allExpanded))}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-sub hover:bg-bg"
             >
               Expand all
             </button>
             <button
               onClick={() => setExpanded(new Set())}
-              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-sub hover:bg-bg"
             >
               Collapse all
             </button>
@@ -682,18 +682,18 @@ export function AccountsPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
         {isLoading ? (
           <div className="space-y-0">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 border-b border-gray-50 px-5 py-3">
-                <div className="h-3 w-16 animate-pulse rounded bg-gray-100" />
-                <div className="h-3 flex-1 animate-pulse rounded bg-gray-100" />
+              <div key={i} className="flex items-center gap-4 border-b border-line px-5 py-3">
+                <div className="h-3 w-16 animate-pulse rounded bg-surface" />
+                <div className="h-3 flex-1 animate-pulse rounded bg-surface" />
               </div>
             ))}
           </div>
         ) : displayed.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <div className="flex flex-col items-center justify-center py-16 text-muted">
             <p className="text-sm">No accounts found.</p>
             {accounts.length === 0 && (
               <p className="mt-1 text-xs">Use "Repair / Seed" above to populate the Chart of Accounts.</p>
@@ -702,17 +702,17 @@ export function AccountsPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Code</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Name</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Type</th>
-                <th className="hidden md:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Balance</th>
-                <th className="hidden md:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Postable</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
+              <tr className="border-b border-line bg-bg">
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">Code</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">Name</th>
+                <th className="hidden sm:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">Type</th>
+                <th className="hidden md:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-muted">Balance</th>
+                <th className="hidden md:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted">Postable</th>
+                <th className="hidden sm:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-muted">Status</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-line">
               {displayed.map(({ account: a, depth, children }) => {
                 const hasChildren = children.length > 0 || accounts.some(x => x.parent_id === a.id);
                 const isExpanded  = expanded.has(a.id);
@@ -720,15 +720,15 @@ export function AccountsPage() {
                 return (
                   <tr
                     key={a.id}
-                    className={`transition-colors hover:bg-gray-50/50 ${!a.is_active ? 'opacity-50' : ''}`}
+                    className={`transition-colors hover:bg-bg/50 ${!a.is_active ? 'opacity-50' : ''}`}
                   >
                     {/* Code */}
-                    <td className="px-5 py-3 font-mono text-xs text-gray-500">
+                    <td className="px-5 py-3 font-mono text-xs text-muted">
                       <div style={{ paddingLeft: `${depth * 20}px` }} className="flex items-center gap-1">
                         {hasChildren && !search && typeFilter === 'all' ? (
                           <button
                             onClick={() => toggleExpand(a.id)}
-                            className="text-gray-400 hover:text-gray-700"
+                            className="text-muted hover:text-sub"
                           >
                             {isExpanded
                               ? <ChevronDown size={13} />
@@ -743,16 +743,16 @@ export function AccountsPage() {
 
                     {/* Name */}
                     <td className="px-5 py-3">
-                      <span className={`font-medium ${a.is_group ? 'text-gray-900' : 'text-gray-700'}`}>
+                      <span className={`font-medium ${a.is_group ? 'text-ink' : 'text-sub'}`}>
                         {a.is_group ? <strong>{a.name}</strong> : a.name}
                       </span>
                       {a.is_system && (
-                        <span className="ml-2 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
+                        <span className="ml-2 rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600">
                           System
                         </span>
                       )}
                       {a.description && (
-                        <p className="mt-0.5 text-xs text-gray-400 truncate max-w-xs">{a.description}</p>
+                        <p className="mt-0.5 text-xs text-muted truncate max-w-xs">{a.description}</p>
                       )}
                     </td>
 
@@ -764,16 +764,16 @@ export function AccountsPage() {
                     </td>
 
                     {/* Normal balance */}
-                    <td className="hidden md:table-cell px-5 py-3 text-xs capitalize text-gray-500">
+                    <td className="hidden md:table-cell px-5 py-3 text-xs capitalize text-muted">
                       {a.normal_balance}
                     </td>
 
                     {/* Postable indicator */}
                     <td className="hidden md:table-cell px-5 py-3 text-center">
                       {a.is_group ? (
-                        <span className="text-xs text-gray-300">—</span>
+                        <span className="text-xs text-muted/50">—</span>
                       ) : (
-                        <CheckCircle size={14} className="mx-auto text-emerald-500" />
+                        <CheckCircle size={14} className="mx-auto text-brand-600 dark:text-brand-400" />
                       )}
                     </td>
 
@@ -781,8 +781,8 @@ export function AccountsPage() {
                     <td className="hidden sm:table-cell px-5 py-3 text-center">
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                         a.is_active
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'bg-gray-100 text-gray-400'
+                          ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                          : 'bg-surface text-muted'
                       }`}>
                         {a.is_active ? 'Active' : 'Inactive'}
                       </span>
@@ -793,7 +793,7 @@ export function AccountsPage() {
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => setModal({ open: true, account: a })}
-                          className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                          className="rounded p-1 text-muted hover:bg-surface hover:text-sub"
                           title="Edit"
                         >
                           <Settings2 size={14} />
@@ -803,7 +803,7 @@ export function AccountsPage() {
                             onClick={() => {
                               if (confirm(`Deactivate "${a.name}"?`)) deactivateMutation.mutate(a.id);
                             }}
-                            className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                            className="rounded p-1 text-muted hover:bg-danger/10 hover:text-danger"
                             title="Deactivate"
                           >
                             <X size={14} />

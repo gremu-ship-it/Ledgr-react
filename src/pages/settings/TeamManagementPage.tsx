@@ -37,37 +37,37 @@ const ROLE_CONFIG: Record<UserRole, {
     label: 'Owner',
     description: 'Full access including billing and user management',
     icon: Crown,
-    badge: 'bg-amber-100 text-amber-700',
+    badge: 'bg-warning/12 text-warning',
   },
   admin: {
     label: 'Admin',
     description: 'Full access except billing',
     icon: Shield,
-    badge: 'bg-brand-100 text-brand-700',
+    badge: 'bg-brand-500/10 text-brand-700 dark:text-brand-300',
   },
   accountant: {
     label: 'Accountant',
     description: 'Read/write all financial data',
     icon: Calculator,
-    badge: 'bg-blue-100 text-blue-700',
+    badge: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
   },
   payroll_manager: {
     label: 'Payroll Manager',
     description: 'Read/write payroll, read-only on other modules',
     icon: Users,
-    badge: 'bg-purple-100 text-purple-700',
+    badge: 'bg-accent/12 text-accent dark:text-accent-light',
   },
   auditor: {
     label: 'Auditor',
     description: 'Read-only access, can export reports',
     icon: Eye,
-    badge: 'bg-gray-100 text-gray-700',
+    badge: 'bg-surface text-sub',
   },
   viewer: {
     label: 'Viewer',
     description: 'Read-only dashboard and reports',
     icon: BarChart3,
-    badge: 'bg-gray-100 text-gray-600',
+    badge: 'bg-surface text-sub',
   },
 };
 
@@ -167,51 +167,51 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-900">Add a team member</h3>
-      <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3">
-        <p className="text-xs font-medium text-gray-700">How it works (server-side):</p>
-        <ol className="mt-1 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
+    <div className="rounded-xl border border-line bg-bg p-4">
+      <h3 className="mb-3 text-sm font-semibold text-ink">Add a team member</h3>
+      <div className="mb-3 rounded-lg bg-card border border-line p-3">
+        <p className="text-xs font-medium text-sub">How it works (server-side):</p>
+        <ol className="mt-1 list-decimal pl-4 text-xs text-sub space-y-0.5">
           <li>Person registers at <span className="font-medium">{window.location.origin}/register</span></li>
           <li>You enter their email + role below and click Add member</li>
           <li>They get instant access – no invitation link needed</li>
         </ol>
-        <p className="mt-2 text-[11px] text-gray-400">Uses Edge Function <code className="bg-gray-50 px-1 rounded">invite-team-member</code>.</p>
+        <p className="mt-2 text-[11px] text-muted">Uses Edge Function <code className="bg-bg px-1 rounded">invite-team-member</code>.</p>
       </div>
 
       {error && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div className="mb-3 flex items-start gap-2 rounded-lg bg-danger/10 p-3 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="break-words">{error}</span>
         </div>
       )}
 
       {success && (
-        <div className="mb-3 rounded-lg bg-brand-50 p-3 text-sm text-brand-700">
+        <div className="mb-3 rounded-lg bg-brand-500/10 p-3 text-sm text-brand-700 dark:text-brand-300">
           <p className="font-medium">Success!</p>
-          <p className="mt-1 break-all text-xs text-brand-600">{success}</p>
+          <p className="mt-1 break-all text-xs text-brand-600 dark:text-brand-300">{success}</p>
         </div>
       )}
 
       <form onSubmit={handleInvite} className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium text-gray-600">Email address</label>
+          <label className="mb-1 block text-xs font-medium text-sub">Email address</label>
           <input
             type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="colleague@business.mw"
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="block w-full rounded-lg border border-line px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           />
         </div>
 
         <div className="w-full sm:w-44">
-          <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
+          <label className="mb-1 block text-xs font-medium text-sub">Role</label>
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as UserRole)}
-            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="block w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             {assignableRoles.map((r) => (
               <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
@@ -222,7 +222,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         <button
           type="submit"
           disabled={loading}
-          className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          className="flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
           Add member
@@ -230,8 +230,8 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
       </form>
 
       <div className="mt-3">
-        <p className="text-xs font-medium text-gray-500">Role permissions:</p>
-        <p className="text-xs text-gray-400">{ROLE_CONFIG[role].description}</p>
+        <p className="text-xs font-medium text-muted">Role permissions:</p>
+        <p className="text-xs text-muted">{ROLE_CONFIG[role].description}</p>
       </div>
     </div>
   );
@@ -383,7 +383,7 @@ export function TeamManagementPage() {
 
   if (!businessId) {
     return (
-      <div className="py-8 text-center text-sm text-gray-500">
+      <div className="py-8 text-center text-sm text-muted">
         No business selected.
       </div>
     );
@@ -395,7 +395,7 @@ export function TeamManagementPage() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+        <div className="flex items-start gap-2 rounded-lg bg-danger/10 p-3 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {error}
         </div>
@@ -412,19 +412,19 @@ export function TeamManagementPage() {
 
       {/* Active members */}
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">
+        <h3 className="mb-3 text-sm font-semibold text-ink">
           Active members ({activeMembers.length})
         </h3>
 
         {loading ? (
-          <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
+          <div className="flex items-center gap-2 py-6 text-sm text-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading members…
           </div>
         ) : activeMembers.length === 0 ? (
-          <p className="py-4 text-sm text-gray-400">No active members found.</p>
+          <p className="py-4 text-sm text-muted">No active members found.</p>
         ) : (
-          <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+          <div className="divide-y divide-line rounded-xl border border-line bg-card">
             {activeMembers.map((member) => {
               const isCurrentUser = member.user_id === currentUser?.id;
               const isMemberOwner = member.role === 'owner';
@@ -438,20 +438,20 @@ export function TeamManagementPage() {
               return (
                 <div key={member.id} className="flex items-center gap-3 px-4 py-3">
                   {/* Avatar */}
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-sm font-semibold text-brand-700 dark:text-brand-300">
                     {(member.full_name ?? member.email ?? '?').charAt(0).toUpperCase()}
                   </div>
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-gray-900">
+                    <p className="truncate text-sm font-medium text-ink">
                       {member.full_name ?? member.email ?? 'Unknown user'}
                       {isCurrentUser && (
-                        <span className="ml-1.5 text-xs font-normal text-gray-400">(you)</span>
+                        <span className="ml-1.5 text-xs font-normal text-muted">(you)</span>
                       )}
                     </p>
                     {member.email && member.full_name && (
-                      <p className="truncate text-xs text-gray-500">{member.email}</p>
+                      <p className="truncate text-xs text-muted">{member.email}</p>
                     )}
                   </div>
 
@@ -460,7 +460,7 @@ export function TeamManagementPage() {
                     <select
                       value={member.role}
                       onChange={(e) => void handleChangeRole(member.id, e.target.value as UserRole)}
-                      className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                      className="rounded-lg border border-line bg-card px-2 py-1 text-xs font-medium text-sub focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
                       {/* Admins can't promote to owner */}
                       {(currentRole === 'owner' ? Object.keys(ROLE_CONFIG) as UserRole[] : INVITABLE_ROLES).map((r) => (
@@ -476,7 +476,7 @@ export function TeamManagementPage() {
                     <button
                       onClick={() => void handleRemove(member.id, member.user_id)}
                       disabled={removing === member.id}
-                      className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                      className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                       title="Remove member"
                     >
                       {removing === member.id
@@ -495,21 +495,21 @@ export function TeamManagementPage() {
       {/* Pending invitations */}
       {pendingMembers.length > 0 && (
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-gray-900">
+          <h3 className="mb-3 text-sm font-semibold text-ink">
             Pending invitations ({pendingMembers.length})
           </h3>
-          <div className="divide-y divide-gray-100 rounded-xl border border-dashed border-gray-200 bg-white">
+          <div className="divide-y divide-line rounded-xl border border-dashed border-line bg-card">
             {pendingMembers.map((member) => (
               <div key={member.id} className="flex items-center gap-3 px-4 py-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                  <Mail className="h-4 w-4 text-gray-400" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface">
+                  <Mail className="h-4 w-4 text-muted" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-gray-700">
+                  <p className="truncate text-sm text-sub">
                     {member.email ?? 'Invited user'}
                   </p>
                   {member.invited_at && (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-muted">
                       Invited {new Date(member.invited_at).toLocaleDateString('en-GB', {
                         day: 'numeric', month: 'short', year: 'numeric',
                       })}
@@ -521,7 +521,7 @@ export function TeamManagementPage() {
                   <button
                     onClick={() => void handleRemove(member.id, member.user_id)}
                     disabled={removing === member.id}
-                    className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                    className="shrink-0 rounded-lg p-1.5 text-muted transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-50"
                     title="Cancel invitation"
                   >
                     {removing === member.id
@@ -538,20 +538,20 @@ export function TeamManagementPage() {
 
       {/* Role reference */}
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-gray-900">Role permissions</h3>
-        <div className="overflow-x-auto rounded-xl border border-gray-200">
+        <h3 className="mb-3 text-sm font-semibold text-ink">Role permissions</h3>
+        <div className="overflow-x-auto rounded-xl border border-line">
           <table className="w-full min-w-[520px] text-xs">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Permission</th>
+              <tr className="border-b border-line bg-bg">
+                <th className="px-4 py-2.5 text-left font-semibold text-sub">Permission</th>
                 {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => (
-                  <th key={r} className="px-3 py-2.5 text-center font-semibold text-gray-600">
+                  <th key={r} className="px-3 py-2.5 text-center font-semibold text-sub">
                     {ROLE_CONFIG[r].label}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-line">
               {[
                 { label: 'Read data', key: 'canRead' },
                 { label: 'Write financial data', key: 'canWrite' },
@@ -561,8 +561,8 @@ export function TeamManagementPage() {
                 { label: 'Export reports', key: 'canExport' },
                 { label: 'Billing & subscription', key: 'canManageBilling' },
               ].map(({ label, key }) => (
-                <tr key={key} className="hover:bg-gray-50/50">
-                  <td className="px-4 py-2 font-medium text-gray-700">{label}</td>
+                <tr key={key} className="hover:bg-bg/50">
+                  <td className="px-4 py-2 font-medium text-sub">{label}</td>
                   {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
                     const perm = {
                       canRead: ['owner','admin','accountant','payroll_manager','auditor','viewer'],
@@ -578,7 +578,7 @@ export function TeamManagementPage() {
                       <td key={r} className="px-3 py-2 text-center">
                         <span className={clsx(
                           'inline-block h-4 w-4 rounded-full text-[10px] font-bold leading-4',
-                          has ? 'bg-brand-100 text-brand-600' : 'bg-gray-100 text-gray-400',
+                          has ? 'bg-brand-500/10 text-brand-600 dark:text-brand-300' : 'bg-surface text-muted',
                         )}>
                           {has ? '✓' : '–'}
                         </span>

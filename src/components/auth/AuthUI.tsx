@@ -126,7 +126,7 @@ export function AuthAlert({ type, message }: AuthAlertProps) {
   const styles = {
     error:   { bg: 'bg-danger/10',    border: 'border-danger/20',   icon: 'text-danger',   text: 'text-danger',   Icon: AlertCircle  },
     success: { bg: 'bg-brand-500/10',  border: 'border-brand-200', icon: 'text-brand-600 dark:text-brand-400', text: 'text-brand-700 dark:text-brand-300', Icon: CheckCircle2 },
-    info:    { bg: 'bg-blue-500/10/10',   border: 'border-blue-500/20',  icon: 'text-blue-600 dark:text-blue-400',  text: 'text-blue-600 dark:text-blue-400',  Icon: AlertCircle  },
+    info:    { bg: 'bg-blue-500/10',   border: 'border-blue-500/20',  icon: 'text-blue-600 dark:text-blue-400',  text: 'text-blue-600 dark:text-blue-400',  Icon: AlertCircle  },
   };
   const { bg, border, icon, text, Icon } = styles[type];
   return (

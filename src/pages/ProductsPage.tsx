@@ -64,7 +64,7 @@ const MOVEMENT_TYPES = [
 function Alert({ type, message }: { type: 'success' | 'error'; message: string }) {
   return (
     <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
-      type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+      type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'
     }`}>
       {type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
       {message}
@@ -149,10 +149,10 @@ function ProductModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">{existing ? 'Edit Product' : 'Add Product / Service'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+      <div className="w-full max-w-xl rounded-2xl bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">{existing ? 'Edit Product' : 'Add Product / Service'}</h2>
+          <button onClick={onClose} className="text-muted hover:text-sub"><X className="h-5 w-5" /></button>
         </div>
 
         <div className="max-h-[70vh] overflow-y-auto px-6 py-5 space-y-4">
@@ -160,55 +160,55 @@ function ProductModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Name *</label>
               <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
                 placeholder="e.g. Consulting Package"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Type</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Type</label>
               <select value={form.product_type} onChange={(e) => set('product_type', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="product">Physical Product</option>
                 <option value="service">Service</option>
               </select>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">SKU (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">SKU (optional)</label>
               <input type="text" value={form.sku} onChange={(e) => set('sku', e.target.value)}
                 placeholder="e.g. PROD-001"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Sale Price (MWK) *</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Sale Price (MWK) *</label>
               <input type="number" min="0" step="0.01" value={form.sale_price}
                 onChange={(e) => set('sale_price', e.target.value)}
                 placeholder="0.00"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Purchase Price (MWK)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Purchase Price (MWK)</label>
               <input type="number" min="0" step="0.01" value={form.purchase_price}
                 onChange={(e) => set('purchase_price', e.target.value)}
                 placeholder="0.00"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Unit of Measure</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Unit of Measure</label>
               <input type="text" value={form.unit_of_measure} onChange={(e) => set('unit_of_measure', e.target.value)}
                 placeholder="e.g. kg, litre, piece, hour"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Description (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Description (optional)</label>
               <textarea rows={2} value={form.description} onChange={(e) => set('description', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
 
             {form.product_type === 'product' && (
@@ -216,25 +216,25 @@ function ProductModal({
                 <div className="col-span-2 flex items-center gap-2">
                   <input type="checkbox" id="track_inventory" checked={form.track_inventory}
                     onChange={(e) => set('track_inventory', e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500" />
-                  <label htmlFor="track_inventory" className="text-sm text-gray-700">Track inventory for this product</label>
+                    className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-500" />
+                  <label htmlFor="track_inventory" className="text-sm text-sub">Track inventory for this product</label>
                 </div>
 
                 {form.track_inventory && (
                   <>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Reorder Level</label>
+                      <label className="mb-1 block text-sm font-medium text-sub">Reorder Level</label>
                       <input type="number" min="0" value={form.reorder_level}
                         onChange={(e) => set('reorder_level', e.target.value)}
                         placeholder="e.g. 10"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                        className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Reorder Quantity</label>
+                      <label className="mb-1 block text-sm font-medium text-sub">Reorder Quantity</label>
                       <input type="number" min="0" value={form.reorder_quantity}
                         onChange={(e) => set('reorder_quantity', e.target.value)}
                         placeholder="e.g. 50"
-                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                        className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
                     </div>
                   </>
                 )}
@@ -243,13 +243,13 @@ function ProductModal({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-gray-200 px-6 py-4">
+        <div className="flex justify-end gap-2 border-t border-line px-6 py-4">
           <button onClick={onClose}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
             Cancel
           </button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             {mutation.isPending ? 'Saving…' : existing ? 'Save Changes' : 'Add Product'}
           </button>
         </div>
@@ -265,18 +265,18 @@ function DeleteConfirm({ name, onConfirm, onCancel, isPending }: {
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-gray-900">Delete product?</h3>
-        <p className="mt-2 text-sm text-gray-500">
-          <span className="font-medium text-gray-700">{name}</span> will be removed. This cannot be undone.
+      <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
+        <h3 className="text-base font-semibold text-ink">Delete product?</h3>
+        <p className="mt-2 text-sm text-muted">
+          <span className="font-medium text-sub">{name}</span> will be removed. This cannot be undone.
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button onClick={onCancel}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
             Cancel
           </button>
           <button onClick={onConfirm} disabled={isPending}
-            className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-60 transition-colors">
+            className="rounded-lg bg-danger px-4 py-2 text-sm font-semibold text-white hover:bg-danger disabled:opacity-60 transition-colors">
             {isPending ? 'Deleting…' : 'Delete'}
           </button>
         </div>
@@ -333,36 +333,36 @@ function ProductsTab({ businessId }: { businessId: string }) {
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <input type="text" placeholder="Search products…" value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            className="w-full rounded-lg border border-line bg-card py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
           <Plus className="h-4 w-4" />Add Product
         </button>
       </div>
 
       {isLoading ? (
-        <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>
+        <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />)}</div>
       ) : filtered.length === 0 ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-            <Package className="h-7 w-7 text-brand-400" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+            <Package className="h-7 w-7 text-brand-600 dark:text-brand-400" />
           </div>
-          <h2 className="text-base font-semibold text-gray-900">{search ? 'No products match your search' : 'No products yet'}</h2>
+          <h2 className="text-base font-semibold text-ink">{search ? 'No products match your search' : 'No products yet'}</h2>
           {!search && (
             <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-              className="mt-1 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+              className="mt-1 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
               <Plus className="h-4 w-4" />Add Product
             </button>
           )}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Name</th>
                 <th className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
@@ -373,36 +373,36 @@ function ProductsTab({ businessId }: { businessId: string }) {
                 <th className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-line">
               {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={p.id} className="hover:bg-bg transition-colors">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{p.name}</div>
-                    {p.description && <div className="text-xs text-gray-400 truncate max-w-xs">{p.description}</div>}
+                    <div className="font-medium text-ink">{p.name}</div>
+                    {p.description && <div className="text-xs text-muted truncate max-w-xs">{p.description}</div>}
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      p.product_type === 'service' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
+                      p.product_type === 'service' ? 'bg-accent/12 text-accent dark:text-accent-light' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
                     }`}>
                       {p.product_type === 'service' ? 'Service' : 'Product'}
                     </span>
                   </td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{p.sku ?? '—'}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-muted">{p.sku ?? '—'}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatMwk(p.sale_price)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(p.purchase_price)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-muted">{formatMwk(p.purchase_price)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center">
                     {p.track_inventory
-                      ? <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Tracked</span>
-                      : <span className="text-xs text-gray-400">—</span>}
+                      ? <span className="inline-flex rounded-full bg-brand-500/10 px-2 py-0.5 text-xs font-medium text-brand-700 dark:text-brand-300">Tracked</span>
+                      : <span className="text-xs text-muted">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => { setEditing(p); setShowModal(true); }}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                        className="rounded-lg p-1.5 text-muted hover:bg-surface hover:text-sub transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button onClick={() => setDeleting(p)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                        className="rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger transition-colors">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
@@ -488,24 +488,24 @@ function StockTab({ businessId }: { businessId: string }) {
     return (alerts as any[]).some((a) => a.product_id === productId);
   }
 
-  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
+  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />)}</div>;
 
   if (trackedProducts.length === 0) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-          <BarChart3 className="h-7 w-7 text-brand-400" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+          <BarChart3 className="h-7 w-7 text-brand-600 dark:text-brand-400" />
         </div>
-        <h2 className="text-base font-semibold text-gray-900">No tracked products</h2>
-        <p className="max-w-xs text-sm text-gray-500">Enable inventory tracking on a product to see stock levels here.</p>
+        <h2 className="text-base font-semibold text-ink">No tracked products</h2>
+        <p className="max-w-xs text-sm text-muted">Enable inventory tracking on a product to see stock levels here.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+        <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
           <tr>
             <th className="px-4 py-3 text-left">Product</th>
             {locations.map((loc) => (
@@ -516,7 +516,7 @@ function StockTab({ businessId }: { businessId: string }) {
             <th className="px-4 py-3 text-center">Status</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-line">
           {trackedProducts.map((p) => {
             const totalOnHand = balances
               .filter((b) => b.product_id === p.id)
@@ -525,25 +525,25 @@ function StockTab({ businessId }: { businessId: string }) {
             const low = isLowStock(p.id);
 
             return (
-              <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+              <tr key={p.id} className="hover:bg-bg transition-colors">
                 <td className="px-4 py-3">
-                  <div className="font-medium text-gray-900">{p.name}</div>
-                  {p.sku && <div className="text-xs text-gray-400">{p.sku}</div>}
+                  <div className="font-medium text-ink">{p.name}</div>
+                  {p.sku && <div className="text-xs text-muted">{p.sku}</div>}
                 </td>
                 {locations.map((loc) => {
                   const bal = getBalance(p.id, loc.id);
                   return (
-                    <td key={loc.id} className="px-4 py-3 text-right text-gray-600">
+                    <td key={loc.id} className="px-4 py-3 text-right text-sub">
                       {bal ? Number(bal.quantity_on_hand).toFixed(2) : '—'}
                     </td>
                   );
                 })}
-                <td className="px-4 py-3 text-right font-semibold text-gray-900">{totalOnHand.toFixed(2)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(Number(avgCost))}</td>
+                <td className="px-4 py-3 text-right font-semibold text-ink">{totalOnHand.toFixed(2)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-muted">{formatMwk(Number(avgCost))}</td>
                 <td className="px-4 py-3 text-center">
                   {low
-                    ? <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">Low Stock</span>
-                    : <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">OK</span>}
+                    ? <span className="inline-flex rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">Low Stock</span>
+                    : <span className="inline-flex rounded-full bg-brand-500/10 px-2 py-0.5 text-xs font-medium text-brand-700 dark:text-brand-300">OK</span>}
                 </td>
               </tr>
             );
@@ -635,20 +635,20 @@ function MovementsTab({ businessId }: { businessId: string }) {
   return (
     <div className="space-y-6">
       {/* Record Movement Form */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
         <div className="mb-5 flex items-center gap-2">
-          <ArrowUpDown className="h-5 w-5 text-brand-500" />
-          <h2 className="text-base font-semibold text-gray-900">Record Stock Movement</h2>
+          <ArrowUpDown className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+          <h2 className="text-base font-semibold text-ink">Record Stock Movement</h2>
         </div>
 
         {alert && <Alert type={alert.type} message={alert.message} />}
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Product *</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Product *</label>
             <select value={form.product_id}
               onChange={(e) => { setF('product_id', e.target.value); setSelectedProduct(e.target.value); }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
               <option value="">Select product…</option>
               {(products as Row<'products'>[]).map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
@@ -657,9 +657,9 @@ function MovementsTab({ businessId }: { businessId: string }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Location *</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Location *</label>
             <select value={form.location_id} onChange={(e) => setF('location_id', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
               <option value="">Select location…</option>
               {locations.map((l) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
@@ -668,9 +668,9 @@ function MovementsTab({ businessId }: { businessId: string }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Movement Type *</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Movement Type *</label>
             <select value={form.movement_type} onChange={(e) => setF('movement_type', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
               {MOVEMENT_TYPES.map((t) => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}
@@ -678,43 +678,43 @@ function MovementsTab({ businessId }: { businessId: string }) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Date *</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Date *</label>
             <input type="date" value={form.movement_date} onChange={(e) => setF('movement_date', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Quantity *</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Quantity *</label>
             <input type="number" min="0" step="0.01" value={form.quantity}
               onChange={(e) => setF('quantity', e.target.value)} placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Unit Cost (MWK)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Unit Cost (MWK)</label>
             <input type="number" min="0" step="0.01" value={form.unit_cost}
               onChange={(e) => setF('unit_cost', e.target.value)} placeholder="0.00"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Reference (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Reference (optional)</label>
             <input type="text" value={form.reference} onChange={(e) => setF('reference', e.target.value)}
               placeholder="e.g. PO-001"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Notes (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-sub">Notes (optional)</label>
             <input type="text" value={form.notes} onChange={(e) => setF('notes', e.target.value)}
               placeholder="Any additional notes…"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
           </div>
         </div>
 
         <div className="mt-4 flex justify-end">
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             <ArrowUpDown className="h-4 w-4" />
             {mutation.isPending ? 'Recording…' : 'Record Movement'}
           </button>
@@ -722,11 +722,11 @@ function MovementsTab({ businessId }: { businessId: string }) {
       </div>
 
       {/* Movement History */}
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-gray-900">Movement History</h2>
+      <div className="rounded-2xl border border-line bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="text-base font-semibold text-ink">Movement History</h2>
           <select value={selectedProduct} onChange={(e) => setSelectedProduct(e.target.value)}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+            className="rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
             <option value="">Select product…</option>
             {(products as Row<'products'>[]).map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -735,15 +735,15 @@ function MovementsTab({ businessId }: { businessId: string }) {
         </div>
 
         {!selectedProduct ? (
-          <div className="flex items-center justify-center py-12 text-sm text-gray-400">Select a product to view history</div>
+          <div className="flex items-center justify-center py-12 text-sm text-muted">Select a product to view history</div>
         ) : historyLoading ? (
-          <div className="space-y-2 p-4">{[...Array(4)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-100" />)}</div>
+          <div className="space-y-2 p-4">{[...Array(4)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-surface" />)}</div>
         ) : (history as Row<'stock_movements'>[]).length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-sm text-gray-400">No movements recorded yet</div>
+          <div className="flex items-center justify-center py-12 text-sm text-muted">No movements recorded yet</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Type</th>
@@ -753,23 +753,23 @@ function MovementsTab({ businessId }: { businessId: string }) {
                   <th className="hidden sm:table-cell px-4 py-3 text-left">Reference</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {(history as Row<'stock_movements'>[]).map((m) => (
-                  <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 text-gray-500">{m.movement_date}</td>
+                  <tr key={m.id} className="hover:bg-bg transition-colors">
+                    <td className="px-4 py-3 text-muted">{m.movement_date}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
                         m.movement_type.includes('in') || m.movement_type === 'purchase' || m.movement_type === 'opening_balance'
-                          ? 'bg-brand-50 text-brand-700'
-                          : 'bg-red-50 text-red-600'
+                          ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                          : 'bg-danger/10 text-danger'
                       }`}>
                         {m.movement_type.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="hidden sm:table-cell px-4 py-3 text-gray-600">{locationMap[m.location_id] ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-sub">{locationMap[m.location_id] ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-medium">{Number(m.quantity).toFixed(2)}</td>
-                    <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(Number(m.unit_cost))}</td>
-                    <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{m.reference ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-right text-muted">{formatMwk(Number(m.unit_cost))}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-muted">{m.reference ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -791,7 +791,7 @@ export function ProductsPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -800,28 +800,28 @@ export function ProductsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Products & Inventory</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage products, stock levels, and movements for {currentBusiness.business.name}</p>
+          <h1 className="text-2xl font-semibold text-ink">Products & Inventory</h1>
+          <p className="mt-1 text-sm text-muted">Manage products, stock levels, and movements for {currentBusiness.business.name}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-line bg-bg p-1">
         <button onClick={() => setTab('products')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'products' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            tab === 'products' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'
           }`}>
           <Package className="h-4 w-4" />Products
         </button>
         <button onClick={() => setTab('stock')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'stock' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            tab === 'stock' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'
           }`}>
           <BarChart3 className="h-4 w-4" />Stock Levels
         </button>
         <button onClick={() => setTab('movements')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'movements' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            tab === 'movements' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'
           }`}>
           <ArrowUpDown className="h-4 w-4" />Movements
         </button>

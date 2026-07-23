@@ -139,25 +139,25 @@ export function AcceptInvitationPage() {
   if (pageState === 'needs_login') {
     const returnUrl = encodeURIComponent(window.location.href);
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-soft">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-lg font-bold text-white">
+      <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+        <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 text-center shadow-soft">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
             L
           </div>
-          <h1 className="text-lg font-semibold text-gray-900">You've been invited to Ledgr</h1>
-          <p className="mt-2 text-sm text-gray-500">
+          <h1 className="text-lg font-semibold text-ink">You've been invited to Ledgr</h1>
+          <p className="mt-2 text-sm text-muted">
             Sign in or create an account to accept this invitation and join the business.
           </p>
           <div className="mt-5 flex flex-col gap-2">
             <Link
               to={`/login?returnTo=${returnUrl}`}
-              className="block rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+              className="block rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
             >
               Sign in
             </Link>
             <Link
               to={`/register?returnTo=${returnUrl}`}
-              className="block rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              className="block rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-sub transition-colors hover:bg-bg"
             >
               Create account
             </Link>
@@ -170,10 +170,10 @@ export function AcceptInvitationPage() {
   // ── Loading ────────────────────────────────────────────────────────────────
   if (pageState === 'loading') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
+      <div className="flex min-h-screen items-center justify-center bg-bg">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-500" />
-          <p className="text-sm text-gray-500">Accepting invitation…</p>
+          <Loader2 className="h-8 w-8 animate-spin text-brand-600 dark:text-brand-400" />
+          <p className="text-sm text-muted">Accepting invitation…</p>
         </div>
       </div>
     );
@@ -182,16 +182,16 @@ export function AcceptInvitationPage() {
   // ── Error ──────────────────────────────────────────────────────────────────
   if (pageState === 'error') {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-        <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-soft">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50">
-            <AlertCircle className="h-6 w-6 text-red-500" />
+      <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+        <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 text-center shadow-soft">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger/10">
+            <AlertCircle className="h-6 w-6 text-danger" />
           </div>
-          <h1 className="text-lg font-semibold text-gray-900">Invitation failed</h1>
-          <p className="mt-2 text-sm text-gray-500">{errorMessage}</p>
+          <h1 className="text-lg font-semibold text-ink">Invitation failed</h1>
+          <p className="mt-2 text-sm text-muted">{errorMessage}</p>
           <Link
             to="/dashboard"
-            className="mt-5 inline-block text-sm font-medium text-brand-600 hover:text-brand-700"
+            className="mt-5 inline-block text-sm font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300"
           >
             Go to dashboard
           </Link>
@@ -202,15 +202,15 @@ export function AcceptInvitationPage() {
 
   // ── Success ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-soft">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50">
-          <CheckCircle2 className="h-6 w-6 text-brand-500" />
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+      <div className="w-full max-w-sm rounded-2xl border border-line bg-card p-6 text-center shadow-soft">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-500/10">
+          <CheckCircle2 className="h-6 w-6 text-brand-600 dark:text-brand-400" />
         </div>
-        <h1 className="text-lg font-semibold text-gray-900">
+        <h1 className="text-lg font-semibold text-ink">
           Welcome to {result?.business_name ?? 'the business'}!
         </h1>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-muted">
           You've joined as{' '}
           <span className="font-medium capitalize">
             {result?.role?.replace('_', ' ') ?? 'a member'}

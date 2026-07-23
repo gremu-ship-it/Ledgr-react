@@ -94,17 +94,17 @@ export function RepairCoaPage() {
     <div className="mx-auto max-w-2xl py-10 px-6">
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
-          <Database className="h-6 w-6 text-brand-500" />
-          <h1 className="text-2xl font-semibold text-gray-900">Repair Chart of Accounts</h1>
+          <Database className="h-6 w-6 text-brand-600 dark:text-brand-400" />
+          <h1 className="text-2xl font-semibold text-ink">Repair Chart of Accounts</h1>
         </div>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted">
           Seeds a complete Malawian Chart of Accounts for any business that is missing
           accounts. Safe to run multiple times — existing accounts are never overwritten.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4">
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-700">
+      <div className="rounded-2xl border border-line bg-card p-6 shadow-sm space-y-4">
+        <div className="rounded-lg bg-warning/12 border border-warning/20 px-4 py-3 text-sm text-warning">
           <strong>Note:</strong> This seeds ~100 standard accounts including all codes required
           by the journal service (1110, 1131, 1135, 2111, 2121, 2122, 2131, 4112, 6110).
           Existing accounts with the same code are skipped.
@@ -114,7 +114,7 @@ export function RepairCoaPage() {
           <button
             onClick={seedCurrent}
             disabled={running || !businessId}
-            className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50 transition-colors"
+            className="flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50 transition-colors"
           >
             {running && !runAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
             Seed Current Business
@@ -123,7 +123,7 @@ export function RepairCoaPage() {
           <button
             onClick={() => { setRunAll(true); seedAll(); }}
             disabled={running}
-            className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="flex items-center justify-center gap-2 rounded-lg border border-line bg-card px-5 py-2.5 text-sm font-semibold text-sub hover:bg-bg disabled:opacity-50 transition-colors"
           >
             {running && runAll ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Seed All Businesses
@@ -137,23 +137,23 @@ export function RepairCoaPage() {
                 key={r.businessId}
                 className={`flex items-start gap-3 rounded-lg px-4 py-3 text-sm ${
                   r.error
-                    ? 'bg-red-50 border border-red-200'
+                    ? 'bg-danger/10 border border-danger/20'
                     : r.inserted > 0
-                    ? 'bg-emerald-50 border border-emerald-200'
-                    : 'bg-gray-50 border border-gray-200'
+                    ? 'bg-brand-500/10 border border-brand-500/20'
+                    : 'bg-bg border border-line'
                 }`}
               >
                 {r.error ? (
-                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-danger" />
                 ) : (
-                  <CheckCircle className="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" />
+                  <CheckCircle className="h-4 w-4 mt-0.5 shrink-0 text-brand-600 dark:text-brand-400" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800 truncate">{r.businessName}</p>
+                  <p className="font-medium text-ink truncate">{r.businessName}</p>
                   {r.error ? (
-                    <p className="text-red-600 mt-0.5">{r.error}</p>
+                    <p className="text-danger mt-0.5">{r.error}</p>
                   ) : (
-                    <p className="text-gray-500 mt-0.5">
+                    <p className="text-muted mt-0.5">
                       {r.inserted > 0
                         ? `${r.inserted} accounts added`
                         : 'Already complete — nothing to add'}
@@ -168,7 +168,7 @@ export function RepairCoaPage() {
 
         {allDone && results.length > 0 && (
           <div className={`rounded-lg px-4 py-3 text-sm font-medium ${
-            totalErrors > 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'
+            totalErrors > 0 ? 'bg-danger/10 text-danger' : 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
           }`}>
             {totalErrors > 0
               ? `Completed with ${totalErrors} error${totalErrors > 1 ? 's' : ''}. Check details above.`

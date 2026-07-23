@@ -86,7 +86,7 @@ export function SessionManager() {
       {error && <AuthAlert type="error" message={error} />}
       {success && <AuthAlert type="success" message={success} />}
       {sessionInfo && (
-        <div className="rounded-xl border border-brand-100 bg-brand-500/10/50 p-4">
+        <div className="rounded-xl border border-brand-100 bg-brand-500/10 p-4">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/10">
               <Monitor className="h-5 w-5 text-brand-600 dark:text-brand-300" />

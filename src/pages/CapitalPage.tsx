@@ -25,14 +25,14 @@ function hasSubtype(a: Row<'accounts'>, set: Set<AccountSubtype>): boolean {
 }
 
 const LOAN_STATUSES: { value: LoanStatus; label: string; color: string }[] = [
-  { value: 'active',    label: 'Active',    color: 'bg-brand-50 text-brand-700' },
-  { value: 'paid_off',  label: 'Paid Off',  color: 'bg-emerald-50 text-emerald-700' },
-  { value: 'defaulted', label: 'Defaulted', color: 'bg-red-50 text-red-600' },
-  { value: 'cancelled', label: 'Cancelled', color: 'bg-gray-100 text-gray-500' },
+  { value: 'active',    label: 'Active',    color: 'bg-brand-500/10 text-brand-700 dark:text-brand-300' },
+  { value: 'paid_off',  label: 'Paid Off',  color: 'bg-brand-500/10 text-brand-700 dark:text-brand-300' },
+  { value: 'defaulted', label: 'Defaulted', color: 'bg-danger/10 text-danger' },
+  { value: 'cancelled', label: 'Cancelled', color: 'bg-surface text-muted' },
 ];
 
 function loanStatusColor(s: string) {
-  return LOAN_STATUSES.find((x) => x.value === s)?.color ?? 'bg-gray-100 text-gray-500';
+  return LOAN_STATUSES.find((x) => x.value === s)?.color ?? 'bg-surface text-muted';
 }
 function loanStatusLabel(s: string) {
   return LOAN_STATUSES.find((x) => x.value === s)?.label ?? s;
@@ -245,7 +245,7 @@ function openRepaymentSchedule(
     td { padding: 9px 12px; border-bottom: 1px solid #eee; }
     tr.alt td { background: #fafafa; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; }
-    td.actual { font-size: 11px; color: #059669; font-weight: 500; }
+    td.actual { font-size: 11px; color: #0F766E; font-weight: 500; }
     td.projected { font-size: 11px; color: #888; }
     .summary { margin-top: 20px; display: flex; gap: 40px; font-size: 13px; }
     .summary div { padding: 12px 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
@@ -317,7 +317,7 @@ function openRepaymentSchedule(
 function Alert({ type, message }: { type: 'success' | 'error'; message: string }) {
   return (
     <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${
-      type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+      type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'
     }`}>
       {type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
       {message}
@@ -337,9 +337,9 @@ function AccountPicker({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}{required ? ' *' : ''}</label>
+      <label className="mb-1 block text-sm font-medium text-sub">{label}{required ? ' *' : ''}</label>
       <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+        className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
         <option value="">{placeholder ?? 'Select account…'}</option>
         {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
       </select>
@@ -355,15 +355,15 @@ function ModalShell({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-          <h2 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+      <div className="w-full max-w-lg rounded-2xl bg-card shadow-xl">
+        <div className="flex items-center justify-between border-b border-line px-6 py-4">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
             {icon}{title}
           </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="text-muted hover:text-sub"><X className="h-5 w-5" /></button>
         </div>
         <div className="max-h-[78vh] overflow-y-auto px-6 py-5 space-y-4">{children}</div>
-        <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">{footer}</div>
+        <div className="flex justify-end gap-3 border-t border-line px-6 py-4">{footer}</div>
       </div>
     </div>
   );
@@ -372,14 +372,14 @@ function ModalShell({
 function Field({ label, children, required }: { label: string; children: ReactNode; required?: boolean }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}{required ? ' *' : ''}</label>
+      <label className="mb-1 block text-sm font-medium text-sub">{label}{required ? ' *' : ''}</label>
       {children}
     </div>
   );
 }
 
 const inputCls =
-  'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500';
+  'w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500';
 
 // ── New Loan modal ─────────────────────────────────────────────────────────────
 
@@ -431,10 +431,10 @@ function LoanModal({
 
   return (
     <ModalShell
-      title="New Loan" icon={<Landmark className="h-5 w-5 text-brand-600" />} onClose={onClose}
+      title="New Loan" icon={<Landmark className="h-5 w-5 text-brand-600 dark:text-brand-300" />} onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">Cancel</button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Record Loan
@@ -472,7 +472,7 @@ function LoanModal({
         <AccountPicker label="Interest expense account" value={form.interestAccountId}
           onChange={(v) => setForm({ ...form, interestAccountId: v })} accounts={interestAccounts} placeholder="Select expense…" />
       </div>
-      <p className="text-xs text-gray-500">Recording posts: Dr Bank/Cash · Cr Loan Payable.</p>
+      <p className="text-xs text-muted">Recording posts: Dr Bank/Cash · Cr Loan Payable.</p>
     </ModalShell>
   );
 }
@@ -522,10 +522,10 @@ function RepaymentModal({
 
   return (
     <ModalShell
-      title="Record Loan Repayment" icon={<ArrowDownCircle className="h-5 w-5 text-brand-600" />} onClose={onClose}
+      title="Record Loan Repayment" icon={<ArrowDownCircle className="h-5 w-5 text-brand-600 dark:text-brand-300" />} onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">Cancel</button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}Post Repayment
@@ -551,14 +551,14 @@ function RepaymentModal({
           <input type="number" step="0.01" className={inputCls} value={form.principalPortion} onChange={(e) => setForm({ ...form, principalPortion: e.target.value })} />
         </Field>
         <Field label="Interest portion (MK)">
-          <input className={inputCls + ' bg-gray-50'} value={formatMwk(interest)} readOnly />
+          <input className={inputCls + ' bg-bg'} value={formatMwk(interest)} readOnly />
         </Field>
         <div className="col-span-2"><AccountPicker label="Bank/Cash paid from" required value={form.bankAccountId}
           onChange={(v) => setForm({ ...form, bankAccountId: v })} accounts={bankAccounts} placeholder="Select bank/cash…" /></div>
         <Field label="Reference"><input className={inputCls} value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></Field>
         <Field label="Notes"><input className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
       </div>
-      <p className="text-xs text-gray-500">Posts: Dr Loan Payable (principal) · Dr Interest Expense · Cr Bank/Cash.</p>
+      <p className="text-xs text-muted">Posts: Dr Loan Payable (principal) · Dr Interest Expense · Cr Bank/Cash.</p>
     </ModalShell>
   );
 }
@@ -603,10 +603,10 @@ function ShareModal({
 
   return (
     <ModalShell
-      title={type === 'issue' ? 'Issue Shares (In)' : 'Buy Back Shares (Out)'} icon={<Coins className="h-5 w-5 text-brand-600" />} onClose={onClose}
+      title={type === 'issue' ? 'Issue Shares (In)' : 'Buy Back Shares (Out)'} icon={<Coins className="h-5 w-5 text-brand-600 dark:text-brand-300" />} onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">Cancel</button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
             className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60">
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{type === 'issue' ? 'Issue Shares' : 'Buy Back'}
@@ -617,11 +617,11 @@ function ShareModal({
       {alert && <Alert type={alert.type} message={alert.message} />}
       <div className="mb-2 flex gap-2">
         <button onClick={() => setType('issue')}
-          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${type === 'issue' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-300 text-gray-600'}`}>
+          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${type === 'issue' ? 'border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'border-line text-sub'}`}>
           <ArrowUpCircle className="mr-1 inline h-4 w-4" />Shares In
         </button>
         <button onClick={() => setType('buyback')}
-          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${type === 'buyback' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-300 text-gray-600'}`}>
+          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium ${type === 'buyback' ? 'border-warning/40 bg-warning/12 text-warning' : 'border-line text-sub'}`}>
           <ArrowDownCircle className="mr-1 inline h-4 w-4" />Shares Out
         </button>
       </div>
@@ -640,7 +640,7 @@ function ShareModal({
         <Field label="Reference"><input className={inputCls} value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} /></Field>
         <div className="col-span-2"><Field label="Notes"><input className={inputCls} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field></div>
       </div>
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-muted">
         {type === 'issue' ? 'Posts: Dr Bank/Cash · Cr Share Capital.' : 'Posts: Dr Share Capital · Cr Bank/Cash.'}
       </p>
     </ModalShell>
@@ -701,15 +701,15 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
 
       <div className="mb-4 flex items-center justify-between">
         <div className="relative w-64">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search lender…"
-            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            className="w-full rounded-lg border border-line py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportLoansCsv(loans, repayments)} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <button onClick={() => exportLoansCsv(loans, repayments)} className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">
             <FileDown className="h-4 w-4" />Export CSV
           </button>
-          <button onClick={() => openRepay()} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <button onClick={() => openRepay()} className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">
             <ArrowDownCircle className="h-4 w-4" />Record Repayment
           </button>
           <button onClick={() => setShowLoan(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
@@ -718,9 +718,9 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <div className="overflow-x-auto rounded-xl border border-line">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+          <thead className="bg-bg text-left text-xs uppercase text-muted">
             <tr>
               <th className="px-4 py-3">Lender</th>
               <th className="px-4 py-3 text-right">Principal</th>
@@ -732,17 +732,17 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
               <th className="px-4 py-3 text-right">Action</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>}
+          <tbody className="divide-y divide-line">
+            {isLoading && <tr><td colSpan={8} className="px-4 py-6 text-center text-muted">Loading…</td></tr>}
             {!isLoading && filtered.length === 0 && (
-              <tr><td colSpan={8} className="px-4 py-10 text-center text-gray-400">No loans yet. Click “New Loan” to record one.</td></tr>
+              <tr><td colSpan={8} className="px-4 py-10 text-center text-muted">No loans yet. Click “New Loan” to record one.</td></tr>
             )}
             {filtered.map((l) => {
               const repaid = repaidByLoan.get(l.id) ?? 0;
               const out = Number(l.principal_amount) - repaid;
               return (
-                <tr key={l.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">{l.lender_name}</td>
+                <tr key={l.id} className="hover:bg-bg">
+                  <td className="px-4 py-3 font-medium text-ink">{l.lender_name}</td>
                   <td className="px-4 py-3 text-right">{formatMwk(Number(l.principal_amount))}</td>
                   <td className="px-4 py-3 text-right">{formatMwk(repaid)}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatMwk(out)}</td>
@@ -757,12 +757,12 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
                           openRepaymentSchedule(l, loanRepayments);
                         }}
                         title="View repayment schedule"
-                        className="rounded-lg border border-gray-300 p-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                        className="rounded-lg border border-line p-1.5 text-xs text-muted hover:bg-surface hover:text-sub"
                       >
                         <Printer className="h-3.5 w-3.5" />
                       </button>
                       <button onClick={() => openRepay(l.id)} disabled={l.status === 'paid_off' || l.status === 'cancelled'}
-                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40">
+                        className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-sub hover:bg-surface disabled:opacity-40">
                         Repay
                       </button>
                     </div>
@@ -776,17 +776,17 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
 
       {repayments.length > 0 && (
         <div className="mt-8">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">Recent Repayments</h3>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <h3 className="mb-3 text-sm font-semibold text-sub">Recent Repayments</h3>
+          <div className="overflow-x-auto rounded-xl border border-line">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <thead className="bg-bg text-left text-xs uppercase text-muted">
                 <tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Loan</th><th className="px-4 py-3 text-right">Principal</th><th className="px-4 py-3 text-right">Interest</th><th className="px-4 py-3 text-right">Total</th></tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {repayments.slice(0, 10).map((r) => {
                   const loan = loans.find((l) => l.id === r.loan_id);
                   return (
-                    <tr key={r.id} className="hover:bg-gray-50">
+                    <tr key={r.id} className="hover:bg-bg">
                       <td className="px-4 py-2.5">{r.repayment_date}</td>
                       <td className="px-4 py-2.5">{loan?.lender_name ?? '—'}</td>
                       <td className="px-4 py-2.5 text-right">{formatMwk(Number(r.principal_portion))}</td>
@@ -850,12 +850,12 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
 
       <div className="mb-4 flex items-center justify-between">
         <div className="relative w-64">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search shareholder…"
-            className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            className="w-full rounded-lg border border-line py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <div className="flex gap-2">
-          <button onClick={() => exportSharesCsv(shares)} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+          <button onClick={() => exportSharesCsv(shares)} className="flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">
             <FileDown className="h-4 w-4" />Export CSV
           </button>
           <button onClick={() => setShow(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
@@ -864,9 +864,9 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200">
+      <div className="overflow-x-auto rounded-xl border border-line">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+          <thead className="bg-bg text-left text-xs uppercase text-muted">
             <tr>
               <th className="px-4 py-3">Shareholder</th>
               <th className="px-4 py-3">Type</th>
@@ -876,23 +876,23 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
               <th className="px-4 py-3">Reference</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400">Loading…</td></tr>}
+          <tbody className="divide-y divide-line">
+            {isLoading && <tr><td colSpan={6} className="px-4 py-6 text-center text-muted">Loading…</td></tr>}
             {!isLoading && filtered.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400">No share movements yet.</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-muted">No share movements yet.</td></tr>
             )}
             {filtered.map((s) => (
-              <tr key={s.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3 font-medium text-gray-900">{s.shareholder_name}</td>
+              <tr key={s.id} className="hover:bg-bg">
+                <td className="px-4 py-3 font-medium text-ink">{s.shareholder_name}</td>
                 <td className="px-4 py-3">
                   {s.transaction_type === 'issue'
-                    ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Shares In</span>
-                    : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Shares Out</span>}
+                    ? <span className="rounded-full bg-brand-500/10 px-2 py-0.5 text-xs font-medium text-brand-700 dark:text-brand-300">Shares In</span>
+                    : <span className="rounded-full bg-warning/12 px-2 py-0.5 text-xs font-medium text-warning">Shares Out</span>}
                 </td>
                 <td className="px-4 py-3 text-right">{s.shares_count != null ? Number(s.shares_count).toLocaleString() : '—'}</td>
                 <td className="px-4 py-3 text-right font-medium">{formatMwk(Number(s.amount))}</td>
                 <td className="px-4 py-3">{s.created_at.slice(0, 10)}</td>
-                <td className="px-4 py-3 text-gray-500">{s.reference ?? '—'}</td>
+                <td className="px-4 py-3 text-muted">{s.reference ?? '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -912,9 +912,9 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
 
 function SummaryCard({ label, value, icon, accent }: { label: string; value: string; icon: ReactNode; accent?: boolean }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? 'border-brand-200 bg-brand-50' : 'border-gray-200 bg-white'}`}>
-      <div className="flex items-center gap-2 text-xs font-medium text-gray-500">{icon}{label}</div>
-      <div className="mt-1 text-xl font-semibold text-gray-900">{value}</div>
+    <div className={`rounded-xl border p-4 ${accent ? 'border-brand-200 bg-brand-500/10' : 'border-line bg-card'}`}>
+      <div className="flex items-center gap-2 text-xs font-medium text-muted">{icon}{label}</div>
+      <div className="mt-1 text-xl font-semibold text-ink">{value}</div>
     </div>
   );
 }
@@ -930,7 +930,7 @@ export function CapitalPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -938,17 +938,17 @@ export function CapitalPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Capital & Financing</h1>
-        <p className="mt-1 text-sm text-gray-500">Record loans, repayments and share capital movements. Each entry posts a double-entry journal.</p>
+        <h1 className="text-2xl font-semibold text-ink">Capital & Financing</h1>
+        <p className="mt-1 text-sm text-muted">Record loans, repayments and share capital movements. Each entry posts a double-entry journal.</p>
       </div>
 
-      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-line bg-bg p-1">
         <button onClick={() => setTab('loans')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'loans' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'loans' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Landmark className="h-4 w-4" />Loans
         </button>
         <button onClick={() => setTab('shares')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'shares' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'shares' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Coins className="h-4 w-4" />Share Capital
         </button>
       </div>

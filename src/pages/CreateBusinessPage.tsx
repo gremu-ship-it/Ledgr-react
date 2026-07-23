@@ -54,7 +54,7 @@ const DEFAULTS: BusinessForm = {
   base_currency: 'MWK',
   financial_year_start: '01-01',
   timezone: 'Africa/Blantyre',
-  brand_color: '#1D9E75',
+  brand_color: '#0F766E',
   invoice_prefix: 'INV',
   expense_prefix: 'EXP',
   payroll_prefix: 'PAY',
@@ -89,8 +89,8 @@ const FINANCIAL_YEAR_OPTIONS = [
 ];
 
 const BRAND_COLORS = [
-  '#1D9E75', '#2563EB', '#7C3AED', '#DC2626',
-  '#D97706', '#059669', '#0891B2', '#4F46E5',
+  '#0F766E', '#2563EB', '#7C3AED', '#DC2626',
+  '#D97706', '#0F766E', '#0891B2', '#4F46E5',
 ];
 
 // ── Field component ───────────────────────────────────────────────────────────
@@ -108,12 +108,12 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium text-gray-700">
+      <label className="mb-1.5 block text-sm font-medium text-sub">
         {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
+        {required && <span className="ml-0.5 text-danger">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -138,7 +138,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      className="block w-full rounded-lg border border-line px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
     />
   );
 }
@@ -183,17 +183,17 @@ function Step1({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
         </Field>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <div className="rounded-xl border border-line bg-bg p-4">
         <label className="flex cursor-pointer items-center gap-3">
           <input
             type="checkbox"
             checked={form.vat_registered}
             onChange={(e) => set('vat_registered', e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+            className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-500"
           />
           <div>
-            <p className="text-sm font-medium text-gray-700">VAT registered</p>
-            <p className="text-xs text-gray-500">VAT rate in Malawi is 17.5%. Tick if your business is registered with MRA for VAT.</p>
+            <p className="text-sm font-medium text-sub">VAT registered</p>
+            <p className="text-xs text-muted">VAT rate in Malawi is 17.5%. Tick if your business is registered with MRA for VAT.</p>
           </div>
         </label>
 
@@ -248,7 +248,7 @@ function Step2({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
           <select
             value={form.city}
             onChange={(e) => set('city', e.target.value)}
-            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="block w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             {MALAWI_CITIES.map((c) => (
               <option key={c} value={c}>{c}</option>
@@ -276,7 +276,7 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
         <select
           value={form.base_currency}
           onChange={(e) => set('base_currency', e.target.value)}
-          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="block w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           {CURRENCIES.map((c) => (
             <option key={c.code} value={c.code}>{c.label}</option>
@@ -288,7 +288,7 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
         <select
           value={form.financial_year_start}
           onChange={(e) => set('financial_year_start', e.target.value)}
-          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="block w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           {FINANCIAL_YEAR_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>{o.label}</option>
@@ -300,7 +300,7 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
         <select
           value={form.timezone}
           onChange={(e) => set('timezone', e.target.value)}
-          className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          className="block w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
         >
           <option value="Africa/Blantyre">Africa/Blantyre (CAT, UTC+2)</option>
           <option value="Africa/Johannesburg">Africa/Johannesburg (SAST, UTC+2)</option>
@@ -309,15 +309,15 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
         </select>
       </Field>
 
-      <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
-        <p className="text-xs font-medium text-brand-700">MRA Tax defaults</p>
-        <ul className="mt-1.5 space-y-0.5 text-xs text-brand-600">
+      <div className="rounded-xl border border-brand-100 bg-brand-500/10 p-4">
+        <p className="text-xs font-medium text-brand-700 dark:text-brand-300">MRA Tax defaults</p>
+        <ul className="mt-1.5 space-y-0.5 text-xs text-brand-600 dark:text-brand-300">
           <li>• VAT: 17.5% (standard rate)</li>
           <li>• WHT: 10% / 15% / 20% depending on payment type</li>
           <li>• PAYE: graduated bands per MRA schedule</li>
           <li>• CIT: 30% (standard) / 20% (SME)</li>
         </ul>
-        <p className="mt-2 text-xs text-brand-500">These are configured in the Tax module after setup.</p>
+        <p className="mt-2 text-xs text-brand-600 dark:text-brand-400">These are configured in the Tax module after setup.</p>
       </div>
     </div>
   );
@@ -336,7 +336,7 @@ function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
               className={clsx(
                 'h-9 w-9 rounded-full border-2 transition-transform hover:scale-110',
                 form.brand_color === color
-                  ? 'border-gray-800 scale-110'
+                  ? 'border-line scale-110'
                   : 'border-transparent',
               )}
               style={{ backgroundColor: color }}
@@ -348,18 +348,18 @@ function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
               type="color"
               value={form.brand_color}
               onChange={(e) => set('brand_color', e.target.value)}
-              className="h-9 w-9 cursor-pointer rounded-full border-2 border-gray-200 bg-white p-0.5"
+              className="h-9 w-9 cursor-pointer rounded-full border-2 border-line bg-card p-0.5"
               title="Custom colour"
             />
-            <span className="text-xs text-gray-400">Custom</span>
+            <span className="text-xs text-muted">Custom</span>
           </div>
         </div>
-        <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+        <div className="mt-3 flex items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2">
           <span
             className="h-4 w-4 rounded-full"
             style={{ backgroundColor: form.brand_color }}
           />
-          <span className="font-mono text-xs text-gray-600">{form.brand_color}</span>
+          <span className="font-mono text-xs text-sub">{form.brand_color}</span>
         </div>
       </Field>
 
@@ -390,8 +390,8 @@ function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
       </div>
 
       {/* Preview */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">Preview</p>
+      <div className="rounded-xl border border-line bg-card p-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">Preview</p>
         <div className="flex items-center gap-3">
           <div
             className="flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white"
@@ -400,10 +400,10 @@ function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
             {(form.trading_name || form.name || 'B').charAt(0).toUpperCase()}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">
+            <p className="text-sm font-semibold text-ink">
               {form.trading_name || form.name || 'Your Business'}
             </p>
-            <p className="text-xs text-gray-400">{form.base_currency} · {form.city}, {form.country}</p>
+            <p className="text-xs text-muted">{form.base_currency} · {form.city}, {form.country}</p>
           </div>
         </div>
       </div>
@@ -529,18 +529,18 @@ export function CreateBusinessPage() {
   const isLastStep = step === 4;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-bg px-4 py-12">
       <div className="w-full max-w-lg">
 
         {/* Header */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-lg font-bold text-white">
+          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-600 text-lg font-bold text-white">
             L
           </div>
-          <h1 className="text-xl font-semibold text-gray-900">
+          <h1 className="text-xl font-semibold text-ink">
             {step === 1 ? 'Set up your business' : STEPS[step - 1].label}
           </h1>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted">
             Step {step} of {STEPS.length}
           </p>
         </div>
@@ -551,16 +551,16 @@ export function CreateBusinessPage() {
             <div key={s.id} className="flex flex-1 items-center gap-2">
               <div className={clsx(
                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors',
-                step > s.id ? 'bg-brand-500 text-white' :
-                step === s.id ? 'bg-brand-500 text-white ring-4 ring-brand-100' :
-                'bg-gray-200 text-gray-500',
+                step > s.id ? 'bg-brand-600 text-white' :
+                step === s.id ? 'bg-brand-600 text-white ring-4 ring-brand-100' :
+                'bg-surface text-muted',
               )}>
                 {step > s.id ? '✓' : s.id}
               </div>
               {i < STEPS.length - 1 && (
                 <div className={clsx(
                   'h-0.5 flex-1 rounded-full transition-colors',
-                  step > s.id ? 'bg-brand-500' : 'bg-gray-200',
+                  step > s.id ? 'bg-brand-600' : 'bg-surface',
                 )} />
               )}
             </div>
@@ -568,9 +568,9 @@ export function CreateBusinessPage() {
         </div>
 
         {/* Card */}
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-soft">
+        <div className="rounded-2xl border border-line bg-card p-6 shadow-soft">
           {error && (
-            <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-danger/10 p-3 text-sm text-danger">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               {error}
             </div>
@@ -587,7 +587,7 @@ export function CreateBusinessPage() {
                 <button
                   type="button"
                   onClick={handleBack}
-                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                  className="flex items-center gap-2 rounded-lg border border-line px-4 py-2.5 text-sm font-medium text-sub transition-colors hover:bg-bg"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   Back
@@ -597,7 +597,7 @@ export function CreateBusinessPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-60"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
               >
                 {loading ? (
                   <>
@@ -621,11 +621,11 @@ export function CreateBusinessPage() {
         </div>
 
         {/* Skip link for users who already have a business */}
-        <p className="mt-4 text-center text-sm text-gray-400">
+        <p className="mt-4 text-center text-sm text-muted">
           <button
             type="button"
             onClick={() => navigate('/dashboard', { replace: true })}
-            className="hover:text-gray-600"
+            className="hover:text-sub"
           >
             Skip for now
           </button>

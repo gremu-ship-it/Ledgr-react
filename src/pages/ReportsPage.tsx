@@ -47,19 +47,19 @@ function DateFilter({ range, onChange }: { range: DateRange; onChange: (r: DateR
   return (
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-gray-600">From</label>
+        <label className="text-sm font-medium text-sub">From</label>
         <input type="date" value={range.from} onChange={(e) => onChange({ ...range, from: e.target.value })}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+          className="rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
       <div className="flex items-center gap-2">
-        <label className="text-sm font-medium text-gray-600">To</label>
+        <label className="text-sm font-medium text-sub">To</label>
         <input type="date" value={range.to} onChange={(e) => onChange({ ...range, to: e.target.value })}
-          className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+          className="rounded-lg border border-line px-3 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
       </div>
       <div className="flex gap-1">
         {PRESETS.map((p) => (
           <button key={p.label} onClick={() => onChange({ from: p.from(), to: p.to() })}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors">
+            className="rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-sub hover:bg-bg transition-colors">
             {p.label}
           </button>
         ))}
@@ -88,24 +88,24 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
   const totalDebits = rows.reduce((s, r) => s + Number(r.total_debits ?? 0), 0);
   const totalCredits = rows.reduce((s, r) => s + Number(r.total_credits ?? 0), 0);
 
-  if (isLoading) return <div className="space-y-3">{[...Array(10)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />)}</div>;
+  if (isLoading) return <div className="space-y-3">{[...Array(10)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded bg-surface" />)}</div>;
 
   if (rows.length === 0) return (
     <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
-      <AlertCircle className="h-8 w-8 text-gray-300" />
-      <p className="text-sm text-gray-500">No posted journal entries found.</p>
+      <AlertCircle className="h-8 w-8 text-muted/50" />
+      <p className="text-sm text-muted">No posted journal entries found.</p>
     </div>
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="border-b border-gray-200 px-6 py-4">
-        <h2 className="text-base font-semibold text-gray-900">Trial Balance</h2>
-        <p className="text-xs text-gray-400">All posted journal entries</p>
+    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
+      <div className="border-b border-line px-6 py-4">
+        <h2 className="text-base font-semibold text-ink">Trial Balance</h2>
+        <p className="text-xs text-muted">All posted journal entries</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
             <tr>
               <th className="hidden sm:table-cell px-4 py-3 text-left">Code</th>
               <th className="px-4 py-3 text-left">Account</th>
@@ -115,31 +115,31 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
               <th className="px-4 py-3 text-right">Balance</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {rows.map((row, i) => (
-              <tr key={i} className="hover:bg-gray-50 transition-colors">
-                <td className="hidden sm:table-cell px-4 py-2.5 font-mono text-xs text-gray-400">{row.code}</td>
-                <td className="px-4 py-2.5 font-medium text-gray-900">{row.name}</td>
+              <tr key={i} className="hover:bg-bg transition-colors">
+                <td className="hidden sm:table-cell px-4 py-2.5 font-mono text-xs text-muted">{row.code}</td>
+                <td className="px-4 py-2.5 font-medium text-ink">{row.name}</td>
                 <td className="hidden sm:table-cell px-4 py-2.5">
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-600">
+                  <span className="rounded-full bg-surface px-2 py-0.5 text-xs capitalize text-sub">
                     {row.account_type}
                   </span>
                 </td>
-                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_debits ?? 0))}</td>
-                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_credits ?? 0))}</td>
-                <td className={`px-4 py-2.5 text-right font-medium ${Number(row.balance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-sub">{formatMwk(Number(row.total_debits ?? 0))}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-sub">{formatMwk(Number(row.total_credits ?? 0))}</td>
+                <td className={`px-4 py-2.5 text-right font-medium ${Number(row.balance ?? 0) < 0 ? 'text-danger' : 'text-ink'}`}>
                   {formatMwk(Number(row.balance ?? 0))}
                 </td>
               </tr>
             ))}
           </tbody>
-          <tfoot className="bg-gray-50 font-semibold text-sm">
-            <tr className="border-t-2 border-gray-300">
-              <td colSpan={2} className="px-4 py-3 text-gray-900">Totals</td>
-              <td className="hidden sm:table-cell px-4 py-3 text-gray-900"></td>
-              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwk(totalDebits)}</td>
-              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwk(totalCredits)}</td>
-              <td className={`px-4 py-3 text-right ${Math.abs(totalDebits - totalCredits) > 0.01 ? 'text-red-600' : 'text-brand-700'}`}>
+          <tfoot className="bg-bg font-semibold text-sm">
+            <tr className="border-t-2 border-line">
+              <td colSpan={2} className="px-4 py-3 text-ink">Totals</td>
+              <td className="hidden sm:table-cell px-4 py-3 text-ink"></td>
+              <td className="hidden sm:table-cell px-4 py-3 text-right text-ink">{formatMwk(totalDebits)}</td>
+              <td className="hidden sm:table-cell px-4 py-3 text-right text-ink">{formatMwk(totalCredits)}</td>
+              <td className={`px-4 py-3 text-right ${Math.abs(totalDebits - totalCredits) > 0.01 ? 'text-danger' : 'text-brand-700 dark:text-brand-300'}`}>
                 {Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwk(totalDebits - totalCredits)}
               </td>
             </tr>
@@ -162,7 +162,7 @@ export function ReportsPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -171,35 +171,35 @@ export function ReportsPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
-          <p className="mt-1 text-sm text-gray-500">Financial reports for {currentBusiness.business.name}</p>
+          <h1 className="text-2xl font-semibold text-ink">Reports</h1>
+          <p className="mt-1 text-sm text-muted">Financial reports for {currentBusiness.business.name}</p>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 w-fit">
+      <div className="mb-6 flex flex-wrap gap-1 rounded-xl border border-line bg-bg p-1 w-fit">
         <button onClick={() => setTab('trial')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'trial' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'trial' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Table2 className="h-4 w-4" />Trial Balance
         </button>
         <button onClick={() => setTab('sofp')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'sofp' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'sofp' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Scale className="h-4 w-4" />SOFP (IFRS)
         </button>
         <button onClick={() => setTab('pl-ifrs')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl-ifrs' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <TrendingUp className="h-4 w-4" />P&L (IFRS)
         </button>
         <button onClick={() => setTab('cashflow-ifrs')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'cashflow-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'cashflow-ifrs' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <ArrowLeftRight className="h-4 w-4" />Cash Flow (IFRS)
         </button>
         <button onClick={() => setTab('equity')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'equity' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'equity' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Scale className="h-4 w-4" />Changes in Equity
         </button>
         <button onClick={() => setTab('branches')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'branches' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'branches' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Building2 className="h-4 w-4" />Branch Performance
         </button>
       </div>
@@ -209,12 +209,12 @@ export function ReportsPage() {
 
       {/* Comparative toggle — only relevant for SOFP and P&L (IFRS) tabs */}
       {(tab === 'sofp' || tab === 'pl-ifrs') && (
-        <label className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+        <label className="mb-4 flex items-center gap-2 text-sm text-sub">
           <input
             type="checkbox"
             checked={showComparative}
             onChange={(e) => setShowComparative(e.target.checked)}
-            className="rounded border-gray-300"
+            className="rounded border-line"
           />
           Show prior year comparison
         </label>

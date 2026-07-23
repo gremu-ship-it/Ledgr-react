@@ -13,11 +13,11 @@ import type { TransferWithLines, TransferStatus } from '@/dal/repositories/Trans
 // ── Status config ─────────────────────────────────────────────────────────────
 
 const STATUS: Record<TransferStatus, { label: string; bg: string; text: string }> = {
-  draft:            { label: 'Draft',           bg: 'bg-gray-100',   text: 'text-gray-500'   },
-  pending_approval: { label: 'Pending Approval', bg: 'bg-amber-50',   text: 'text-amber-600'  },
-  approved:         { label: 'Approved',         bg: 'bg-blue-50',    text: 'text-blue-600'   },
-  dispatched:       { label: 'Dispatched',       bg: 'bg-purple-50',  text: 'text-purple-600' },
-  received:         { label: 'Received',         bg: 'bg-emerald-50', text: 'text-brand-600'  },
+  draft:            { label: 'Draft',           bg: 'bg-surface',   text: 'text-muted'   },
+  pending_approval: { label: 'Pending Approval', bg: 'bg-warning/12',   text: 'text-warning'  },
+  approved:         { label: 'Approved',         bg: 'bg-blue-500/10',    text: 'text-blue-600'   },
+  dispatched:       { label: 'Dispatched',       bg: 'bg-accent/12',  text: 'text-accent dark:text-accent-light' },
+  received:         { label: 'Received',         bg: 'bg-brand-500/10', text: 'text-brand-600 dark:text-brand-300'  },
 };
 
 // ── Delivery note printer ─────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ function printDeliveryNote(
 <title>Delivery Note – ${transfer.transfer_number}</title>
 <style>
   body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:32px;}
-  h1{font-size:22px;margin:0 0 4px;color:#1D9E75;}
+  h1{font-size:22px;margin:0 0 4px;color:#0F766E;}
   .meta{display:flex;justify-content:space-between;margin-bottom:24px;}
   .label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;}
   table{width:100%;border-collapse:collapse;margin-top:16px;}
@@ -56,7 +56,7 @@ function printDeliveryNote(
   th:nth-child(n+3){text-align:right;}th:nth-child(2){text-align:center;}
   .footer{margin-top:40px;display:flex;justify-content:space-between;}
   .sig-line{border-top:1px solid #d1d5db;margin-top:40px;padding-top:6px;font-size:11px;color:#9ca3af;}
-  .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;background:#ecfdf5;color:#1D9E75;}
+  .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;background:#ecfdf5;color:#0F766E;}
 </style></head><body>
 <h1>${businessName}</h1>
 <p style="color:#6b7280;margin:0 0 24px;">Delivery Note / Waybill</p>
@@ -151,14 +151,14 @@ function CreateTransferModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 sm:p-6 shadow-xl">
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card p-5 sm:p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">New Stock Transfer</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+          <h2 className="text-base font-semibold text-ink">New Stock Transfer</h2>
+          <button onClick={onClose} className="text-muted hover:text-sub"><X size={18} /></button>
         </div>
 
         {errorMessage && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
             <AlertCircle className="h-4 w-4 shrink-0" />
             {errorMessage}
           </div>
@@ -166,17 +166,17 @@ function CreateTransferModal({
 
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">From Location</label>
+            <label className="mb-1 block text-xs font-medium text-muted">From Location</label>
             <select value={fromId} onChange={(e) => setFromId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
+              className="w-full rounded-lg border border-line px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
               <option value="">Select…</option>
               {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">To Location</label>
+            <label className="mb-1 block text-xs font-medium text-muted">To Location</label>
             <select value={toId} onChange={(e) => setToId(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
+              className="w-full rounded-lg border border-line px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
               <option value="">Select…</option>
               {locations.filter((l) => l.id !== fromId).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -187,29 +187,29 @@ function CreateTransferModal({
           {lines.map((line, i) => (
             <div key={i} className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
               <div className="sm:col-span-6">
-                <label className="mb-1 block text-xs font-medium text-gray-500">Product</label>
+                <label className="mb-1 block text-xs font-medium text-muted">Product</label>
                 <select value={line.productId} onChange={(e) => updateLine(i, 'productId', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
+                  className="w-full rounded-lg border border-line px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
                   <option value="">Select product…</option>
                   {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-2 sm:col-span-6 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Qty</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">Qty</label>
                   <input type="number" min={1} value={line.quantityRequested}
                     onChange={(e) => updateLine(i, 'quantityRequested', Number(e.target.value))}
-                    className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+                    className="w-full rounded-lg border border-line px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-500">Cost</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">Cost</label>
                   <input type="number" min={0} value={line.unitCost}
                     onChange={(e) => updateLine(i, 'unitCost', Number(e.target.value))}
-                    className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+                    className="w-full rounded-lg border border-line px-2 py-2 text-sm focus:border-brand-500 focus:outline-none" />
                 </div>
                 <div className="flex items-end justify-end pb-0.5">
                   {lines.length > 1 && (
-                    <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-400"><X size={15} /></button>
+                    <button onClick={() => removeLine(i)} className="text-muted/50 hover:text-danger"><X size={15} /></button>
                   )}
                 </div>
               </div>
@@ -217,21 +217,21 @@ function CreateTransferModal({
           ))}
         </div>
 
-        <button onClick={addLine} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-brand-500 hover:text-brand-700">
+        <button onClick={addLine} className="mt-2 flex items-center gap-1.5 text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:text-brand-300">
           <Plus size={13} /> Add product
         </button>
 
         <div className="mt-3">
-          <label className="mb-1 block text-xs font-medium text-gray-500">Notes (optional)</label>
+          <label className="mb-1 block text-xs font-medium text-muted">Notes (optional)</label>
           <input value={notes} onChange={(e) => setNotes(e.target.value)}
             placeholder="Reason for transfer, instructions…"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none" />
         </div>
 
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <button onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button onClick={onClose} className="rounded-lg border border-line px-4 py-2 text-sm font-medium text-sub hover:bg-bg">Cancel</button>
           <button onClick={() => onSubmit(fromId, toId, lines, notes)} disabled={!valid || isLoading}
-            className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+            className="flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
             {isLoading && <Loader2 size={14} className="animate-spin" />}
             Create Transfer
           </button>
@@ -276,103 +276,103 @@ function TransferDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative w-full max-w-lg overflow-y-auto bg-white shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
+      <div className="relative w-full max-w-lg overflow-y-auto bg-card shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-card px-6 py-4">
           <div>
-            <p className="text-xs text-gray-400">Transfer</p>
-            <p className="font-semibold text-gray-900">{transfer.transfer_number}</p>
+            <p className="text-xs text-muted">Transfer</p>
+            <p className="font-semibold text-ink">{transfer.transfer_number}</p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => printDeliveryNote(transfer, lines, locations, products, businessName)}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-sub hover:bg-bg"
             >
               <Printer size={13} /> Delivery Note
             </button>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+            <button onClick={onClose} className="text-muted hover:text-sub"><X size={18} /></button>
           </div>
         </div>
 
         <div className="space-y-5 p-6">
           {errorMessage && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="flex items-center gap-2 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
               <AlertCircle className="h-4 w-4 shrink-0" />
               {errorMessage}
             </div>
           )}
 
-          <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-xl bg-bg px-4 py-3">
             <div className="text-center">
-              <p className="text-xs text-gray-400">From</p>
-              <p className="text-sm font-semibold text-gray-800">{fromLoc}</p>
+              <p className="text-xs text-muted">From</p>
+              <p className="text-sm font-semibold text-ink">{fromLoc}</p>
             </div>
-            <ArrowRight size={16} className="mx-auto flex-1 flex-shrink-0 text-gray-300" />
+            <ArrowRight size={16} className="mx-auto flex-1 flex-shrink-0 text-muted/50" />
             <div className="text-center">
-              <p className="text-xs text-gray-400">To</p>
-              <p className="text-sm font-semibold text-gray-800">{toLoc}</p>
+              <p className="text-xs text-muted">To</p>
+              <p className="text-sm font-semibold text-ink">{toLoc}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="mb-1 text-xs text-gray-400">Status</p>
+              <p className="mb-1 text-xs text-muted">Status</p>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.bg} ${status.text}`}>
                 {status.label}
               </span>
             </div>
             {transfer.dispatched_at && (
               <div>
-                <p className="mb-1 text-xs text-gray-400">Dispatched</p>
-                <p className="text-sm text-gray-700">{new Date(transfer.dispatched_at).toLocaleDateString('en-GB')}</p>
+                <p className="mb-1 text-xs text-muted">Dispatched</p>
+                <p className="text-sm text-sub">{new Date(transfer.dispatched_at).toLocaleDateString('en-GB')}</p>
               </div>
             )}
             {transfer.received_at && (
               <div>
-                <p className="mb-1 text-xs text-gray-400">Received</p>
-                <p className="text-sm text-gray-700">{new Date(transfer.received_at).toLocaleDateString('en-GB')}</p>
+                <p className="mb-1 text-xs text-muted">Received</p>
+                <p className="text-sm text-sub">{new Date(transfer.received_at).toLocaleDateString('en-GB')}</p>
               </div>
             )}
           </div>
 
           {transfer.notes && (
-            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">{transfer.notes}</div>
+            <div className="rounded-xl bg-bg px-4 py-3 text-sm text-sub">{transfer.notes}</div>
           )}
 
           <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Items</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted">Items</p>
             <div className="space-y-2">
               {lines.map((line: Row<'stock_transfer_lines'>) => {
                 const product = products.find((p) => p.id === line.product_id);
                 return (
-                  <div key={line.id} className="rounded-xl border border-gray-100 p-3">
-                    <p className="text-sm font-medium text-gray-800">{product?.name ?? '—'}</p>
+                  <div key={line.id} className="rounded-xl border border-line p-3">
+                    <p className="text-sm font-medium text-ink">{product?.name ?? '—'}</p>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                       <div>
-                        <p className="text-gray-400">Requested</p>
-                        <p className="font-semibold text-gray-700">{Number(line.quantity_requested)}</p>
+                        <p className="text-muted">Requested</p>
+                        <p className="font-semibold text-sub">{Number(line.quantity_requested)}</p>
                       </div>
                       <div>
-                        <p className="text-gray-400">Dispatched</p>
+                        <p className="text-muted">Dispatched</p>
                         {transfer.status === 'approved' ? (
                           <input type="number" min={0} max={Number(line.quantity_requested)}
                             value={dispatchQtys[line.id] ?? Number(line.quantity_requested)}
                             onChange={(e) => setDispatchQtys((q) => ({ ...q, [line.id]: Number(e.target.value) }))}
-                            className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-xs focus:border-brand-500 focus:outline-none" />
+                            className="w-16 rounded border border-line px-1.5 py-0.5 text-xs focus:border-brand-500 focus:outline-none" />
                         ) : (
-                          <p className="font-semibold text-gray-700">
+                          <p className="font-semibold text-sub">
                             {line.quantity_dispatched != null ? Number(line.quantity_dispatched) : '—'}
                           </p>
                         )}
                       </div>
                       <div>
-                        <p className="text-gray-400">Received</p>
+                        <p className="text-muted">Received</p>
                         {transfer.status === 'dispatched' ? (
                           <input type="number" min={0} max={Number(line.quantity_dispatched ?? line.quantity_requested)}
                             value={receiveQtys[line.id] ?? Number(line.quantity_dispatched ?? line.quantity_requested)}
                             onChange={(e) => setReceiveQtys((q) => ({ ...q, [line.id]: Number(e.target.value) }))}
-                            className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-xs focus:border-brand-500 focus:outline-none" />
+                            className="w-16 rounded border border-line px-1.5 py-0.5 text-xs focus:border-brand-500 focus:outline-none" />
                         ) : (
-                          <p className="font-semibold text-gray-700">
+                          <p className="font-semibold text-sub">
                             {line.quantity_received != null ? Number(line.quantity_received) : '—'}
                           </p>
                         )}
@@ -387,7 +387,7 @@ function TransferDrawer({
           <div className="space-y-2 pt-2">
             {transfer.status === 'pending_approval' && isOwner && (
               <button onClick={onApprove} disabled={isMutating}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500 py-2.5 text-sm font-semibold text-white hover:bg-blue-600 disabled:opacity-50">
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-500/10 py-2.5 text-sm font-semibold text-white hover:bg-blue-500/10 disabled:opacity-50">
                 {isMutating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={16} />}
                 Approve Transfer
               </button>
@@ -396,7 +396,7 @@ function TransferDrawer({
               <button
                 onClick={() => onDispatch(lines.map((l: Row<'stock_transfer_lines'>) => ({ lineId: l.id, quantityDispatched: dispatchQtys[l.id] ?? Number(l.quantity_requested) })))}
                 disabled={isMutating}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-500 py-2.5 text-sm font-semibold text-white hover:bg-purple-600 disabled:opacity-50">
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent/12 py-2.5 text-sm font-semibold text-white hover:bg-accent/12 disabled:opacity-50">
                 {isMutating ? <Loader2 size={14} className="animate-spin" /> : <Truck size={16} />}
                 Dispatch
               </button>
@@ -405,7 +405,7 @@ function TransferDrawer({
               <button
                 onClick={() => onReceive(lines.map((l: Row<'stock_transfer_lines'>) => ({ lineId: l.id, quantityReceived: receiveQtys[l.id] ?? Number(l.quantity_dispatched ?? l.quantity_requested) })))}
                 disabled={isMutating}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50">
                 {isMutating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={16} />}
                 Confirm Receipt
               </button>
@@ -434,20 +434,20 @@ function TransferCard({
   return (
     <button
       onClick={onClick}
-      className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
+      className="w-full rounded-2xl border border-line bg-card p-4 text-left shadow-sm active:scale-[0.99] transition-transform"
     >
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-900">{transfer.transfer_number}</p>
+        <p className="text-sm font-semibold text-ink">{transfer.transfer_number}</p>
         <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.text}`}>
           {status.label}
         </span>
       </div>
-      <div className="flex items-center gap-2 text-xs text-gray-500">
+      <div className="flex items-center gap-2 text-xs text-muted">
         <span className="truncate">{fromName}</span>
-        <ArrowRight size={12} className="shrink-0 text-gray-300" />
+        <ArrowRight size={12} className="shrink-0 text-muted/50" />
         <span className="truncate">{toName}</span>
       </div>
-      <p className="mt-2 text-[11px] text-gray-400">
+      <p className="mt-2 text-[11px] text-muted">
         {new Date(transfer.created_at).toLocaleDateString('en-GB')}
       </p>
     </button>
@@ -581,26 +581,26 @@ export function TransfersPage() {
     <div className={isMobile ? 'pb-4' : undefined}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>Stock Transfers</h1>
-          {!isMobile && <p className="mt-1 text-sm text-gray-500">Dispatch stock between warehouse and branches</p>}
+          <h1 className={isMobile ? 'text-lg font-semibold text-ink' : 'text-2xl font-semibold text-ink'}>Stock Transfers</h1>
+          {!isMobile && <p className="mt-1 text-sm text-muted">Dispatch stock between warehouse and branches</p>}
         </div>
         <button onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600">
+          className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-700">
           <Plus size={16} /> {isMobile ? 'New' : 'New Transfer'}
         </button>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="relative min-w-48 flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by transfer number…"
-            className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none" />
+            className="w-full rounded-xl border border-line bg-card py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none" />
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-gray-200 bg-white p-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-xl border border-line bg-card p-1">
           {(['all', 'pending_approval', 'approved', 'dispatched', 'received'] as const).map((s) => (
             <button key={s} onClick={() => setStatusFilter(s)}
-              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-brand-500 text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
+              className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${statusFilter === s ? 'bg-brand-600 text-white' : 'text-muted hover:bg-bg'}`}>
               {s === 'all' ? 'All' : STATUS[s]?.label}
             </button>
           ))}
@@ -612,14 +612,14 @@ export function TransfersPage() {
         isLoading ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-gray-100" />
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-surface" />
             ))}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-12 text-center">
-            <Truck size={28} className="mb-2 text-gray-200" />
-            <p className="text-sm text-gray-400">No transfers yet</p>
-            <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line py-12 text-center">
+            <Truck size={28} className="mb-2 text-muted" />
+            <p className="text-sm text-muted">No transfers yet</p>
+            <p className="text-xs text-muted/50">Create a transfer to dispatch stock to a branch</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -636,21 +636,21 @@ export function TransfersPage() {
         )
       ) : (
         // ── Desktop: table ─────────────────────────────────────────────────
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-soft">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-soft">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
+              <tr className="border-b border-line bg-bg">
                 {['Transfer #', 'From', 'To', 'Date', 'Status', ''].map((h) => (
-                  <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${h === 'Status' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted ${h === 'Status' ? 'text-center' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="divide-y divide-line">
               {isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <tr key={i} className="animate-pulse">
                     {Array.from({ length: 6 }).map((_, j) => (
-                      <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-gray-100" /></td>
+                      <td key={j} className="px-5 py-4"><div className="h-3 rounded bg-surface" /></td>
                     ))}
                   </tr>
                 ))
@@ -658,9 +658,9 @@ export function TransfersPage() {
                 <tr>
                   <td colSpan={6} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
-                      <Truck size={28} className="text-gray-200" />
-                      <p className="text-sm text-gray-400">No transfers yet</p>
-                      <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
+                      <Truck size={28} className="text-muted" />
+                      <p className="text-sm text-muted">No transfers yet</p>
+                      <p className="text-xs text-muted/50">Create a transfer to dispatch stock to a branch</p>
                     </div>
                   </td>
                 </tr>
@@ -669,17 +669,17 @@ export function TransfersPage() {
                   const status = STATUS[t.status as TransferStatus] ?? STATUS.draft;
                   return (
                     <tr key={t.id} onClick={() => setSelectedTransferId(t.id)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50/50">
-                      <td className="px-5 py-3.5 font-semibold text-gray-800">{t.transfer_number}</td>
-                      <td className="px-5 py-3.5 text-gray-600">{locMap.get(t.from_location_id) ?? '—'}</td>
-                      <td className="px-5 py-3.5 text-gray-600">{locMap.get(t.to_location_id) ?? '—'}</td>
-                      <td className="px-5 py-3.5 text-gray-500">{new Date(t.created_at).toLocaleDateString('en-GB')}</td>
+                      className="cursor-pointer transition-colors hover:bg-bg/50">
+                      <td className="px-5 py-3.5 font-semibold text-ink">{t.transfer_number}</td>
+                      <td className="px-5 py-3.5 text-sub">{locMap.get(t.from_location_id) ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-sub">{locMap.get(t.to_location_id) ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-muted">{new Date(t.created_at).toLocaleDateString('en-GB')}</td>
                       <td className="px-5 py-3.5 text-center">
                         <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.text}`}>
                           {status.label}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-right"><ArrowRight size={14} className="text-gray-300" /></td>
+                      <td className="px-5 py-3.5 text-right"><ArrowRight size={14} className="text-muted/50" /></td>
                     </tr>
                   );
                 })

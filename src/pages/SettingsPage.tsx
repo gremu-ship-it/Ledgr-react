@@ -34,7 +34,7 @@ function Alert({ type, message }: { type: 'success' | 'error'; message: string }
   return (
     <div className={cls(
       'flex items-center gap-2 rounded-lg px-4 py-3 text-sm',
-      type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700',
+      type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger',
     )}>
       {type === 'success'
         ? <CheckCircle className="h-4 w-4 shrink-0" />
@@ -57,9 +57,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-sub">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -84,7 +84,7 @@ function Input({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       disabled={disabled}
-      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+      className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-bg disabled:text-muted"
     />
   );
 }
@@ -120,7 +120,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
     address_line2: business.address_line2 ?? '',
     city: business.city ?? '',
     country: business.country ?? 'Malawi',
-    brand_color: business.brand_color ?? '#1D9E75',
+    brand_color: business.brand_color ?? '#0F766E',
   });
 
   function set(field: string, value: string) {
@@ -157,8 +157,8 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">Business Profile</h2>
-        <p className="mt-0.5 text-sm text-gray-500">Update your business information and branding.</p>
+        <h2 className="text-base font-semibold text-ink">Business Profile</h2>
+        <p className="mt-0.5 text-sm text-muted">Update your business information and branding.</p>
       </div>
 
       {alert && <Alert type={alert.type} message={alert.message} />}
@@ -206,15 +206,15 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
               type="color"
               value={form.brand_color}
               onChange={(e) => set('brand_color', e.target.value)}
-              className="h-9 w-16 cursor-pointer rounded-lg border border-gray-300 p-1"
+              className="h-9 w-16 cursor-pointer rounded-lg border border-line p-1"
             />
-            <Input value={form.brand_color} onChange={(v) => set('brand_color', v)} placeholder="#1D9E75" />
+            <Input value={form.brand_color} onChange={(v) => set('brand_color', v)} placeholder="#0F766E" />
           </div>
         </Field>
       </div>
 
-      <div className="flex justify-end border-t border-gray-100 pt-4">
-        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
+      <div className="flex justify-end border-t border-line pt-4">
+        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
       </div>
     </div>
   );
@@ -268,8 +268,8 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">Financial Settings</h2>
-        <p className="mt-0.5 text-sm text-gray-500">Configure currency, numbering, and accounting preferences.</p>
+        <h2 className="text-base font-semibold text-ink">Financial Settings</h2>
+        <p className="mt-0.5 text-sm text-muted">Configure currency, numbering, and accounting preferences.</p>
       </div>
 
       {alert && <Alert type={alert.type} message={alert.message} />}
@@ -279,7 +279,7 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
           <select
             value={form.base_currency}
             onChange={(e) => set('base_currency', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             <option value="MWK">MWK — Malawian Kwacha</option>
             <option value="USD">USD — US Dollar</option>
@@ -300,7 +300,7 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
           <select
             value={form.timezone}
             onChange={(e) => set('timezone', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             <option value="Africa/Blantyre">Africa/Blantyre (CAT, UTC+2)</option>
             <option value="Africa/Nairobi">Africa/Nairobi (EAT, UTC+3)</option>
@@ -310,15 +310,15 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
         </Field>
 
         <Field label="VAT Registration">
-          <div className="flex items-center gap-3 rounded-lg border border-gray-300 px-3 py-2">
+          <div className="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
             <input
               type="checkbox"
               id="vat_registered"
               checked={form.vat_registered}
               onChange={(e) => set('vat_registered', e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-500"
             />
-            <label htmlFor="vat_registered" className="text-sm text-gray-700">
+            <label htmlFor="vat_registered" className="text-sm text-sub">
               Business is VAT registered (17.5% MRA standard rate)
             </label>
           </div>
@@ -326,10 +326,10 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
       </div>
 
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">Document Numbering</h3>
+        <h3 className="mb-3 text-sm font-semibold text-sub">Document Numbering</h3>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-gray-200 p-4">
-            <p className="mb-3 text-sm font-medium text-gray-700">Invoices</p>
+          <div className="rounded-xl border border-line p-4">
+            <p className="mb-3 text-sm font-medium text-sub">Invoices</p>
             <div className="space-y-2">
               <Field label="Prefix">
                 <Input value={form.invoice_prefix} onChange={(v) => set('invoice_prefix', v)} placeholder="INV" />
@@ -339,8 +339,8 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
               </Field>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 p-4">
-            <p className="mb-3 text-sm font-medium text-gray-700">Expenses</p>
+          <div className="rounded-xl border border-line p-4">
+            <p className="mb-3 text-sm font-medium text-sub">Expenses</p>
             <div className="space-y-2">
               <Field label="Prefix">
                 <Input value={form.expense_prefix} onChange={(v) => set('expense_prefix', v)} placeholder="EXP" />
@@ -350,8 +350,8 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
               </Field>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 p-4">
-            <p className="mb-3 text-sm font-medium text-gray-700">Payroll</p>
+          <div className="rounded-xl border border-line p-4">
+            <p className="mb-3 text-sm font-medium text-sub">Payroll</p>
             <div className="space-y-2">
               <Field label="Prefix">
                 <Input value={form.payroll_prefix} onChange={(v) => set('payroll_prefix', v)} placeholder="PAY" />
@@ -364,8 +364,8 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
         </div>
       </div>
 
-      <div className="flex justify-end border-t border-gray-100 pt-4">
-        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
+      <div className="flex justify-end border-t border-line pt-4">
+        <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
       </div>
     </div>
   );
@@ -406,21 +406,21 @@ function UserProfileTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">User Profile</h2>
-        <p className="mt-0.5 text-sm text-gray-500">Manage your personal account information.</p>
+        <h2 className="text-base font-semibold text-ink">User Profile</h2>
+        <p className="mt-0.5 text-sm text-muted">Manage your personal account information.</p>
       </div>
 
       {alert && <Alert type={alert.type} message={alert.message} />}
 
       <div className="flex items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-500 text-xl font-bold text-white">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-600 text-xl font-bold text-white">
           {form.full_name
             ? form.full_name.trim().split(/\s+/).map((n) => n[0]).slice(0, 2).join('').toUpperCase()
             : currentUser?.email?.slice(0, 2).toUpperCase() ?? '??'}
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-900">{form.full_name || 'Your Name'}</p>
-          <p className="text-sm text-gray-500">{currentUser?.email}</p>
+          <p className="text-sm font-medium text-ink">{form.full_name || 'Your Name'}</p>
+          <p className="text-sm text-muted">{currentUser?.email}</p>
         </div>
       </div>
 
@@ -433,11 +433,11 @@ function UserProfileTab() {
         </Field>
       </div>
 
-      <div className="flex justify-end border-t border-gray-100 pt-4">
+      <div className="flex justify-end border-t border-line pt-4">
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
-          className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+          className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
         >
           {mutation.isPending ? 'Saving…' : 'Save Changes'}
         </button>
@@ -476,7 +476,7 @@ function SecurityTab() {
   })();
 
   const strengthLabel = ['', 'Weak', 'Fair', 'Good', 'Strong', 'Very Strong'][strength] ?? '';
-  const strengthColor = ['', 'bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-brand-400', 'bg-brand-500'][strength] ?? '';
+  const strengthColor = ['', 'bg-danger/80', 'bg-orange-400', 'bg-yellow-400', 'bg-brand-400', 'bg-brand-600'][strength] ?? '';
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -508,15 +508,15 @@ function SecurityTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">Security</h2>
-        <p className="mt-0.5 text-sm text-gray-500">Manage your password and account security.</p>
+        <h2 className="text-base font-semibold text-ink">Security</h2>
+        <p className="mt-0.5 text-sm text-muted">Manage your password and account security.</p>
       </div>
 
       {alert && <Alert type={alert.type} message={alert.message} />}
 
       {/* Change Password */}
-      <div className="rounded-2xl border border-gray-200 p-5">
-        <h3 className="mb-4 text-sm font-semibold text-gray-900">Change Password</h3>
+      <div className="rounded-2xl border border-line p-5">
+        <h3 className="mb-4 text-sm font-semibold text-ink">Change Password</h3>
         <div className="space-y-4">
           <Field label="Current Password">
             <div className="relative">
@@ -524,12 +524,12 @@ function SecurityTab() {
                 type={showCurrent ? 'text' : 'password'}
                 value={form.current_password}
                 onChange={(e) => set('current_password', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
               <button
                 type="button"
                 onClick={() => setShowCurrent((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-sub"
               >
                 {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -542,12 +542,12 @@ function SecurityTab() {
                 type={showNew ? 'text' : 'password'}
                 value={form.new_password}
                 onChange={(e) => set('new_password', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
               <button
                 type="button"
                 onClick={() => setShowNew((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-sub"
               >
                 {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -560,12 +560,12 @@ function SecurityTab() {
                       key={i}
                       className={cls(
                         'h-1.5 flex-1 rounded-full transition-colors',
-                        i <= strength ? strengthColor : 'bg-gray-200',
+                        i <= strength ? strengthColor : 'bg-surface',
                       )}
                     />
                   ))}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">{strengthLabel}</p>
+                <p className="mt-1 text-xs text-muted">{strengthLabel}</p>
               </div>
             )}
           </Field>
@@ -576,18 +576,18 @@ function SecurityTab() {
                 type={showConfirm ? 'text' : 'password'}
                 value={form.confirm_password}
                 onChange={(e) => set('confirm_password', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line px-3 py-2 pr-10 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
               <button
                 type="button"
                 onClick={() => setShowConfirm((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-sub"
               >
                 {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {form.confirm_password && form.new_password !== form.confirm_password && (
-              <p className="mt-1 text-xs text-red-500">Passwords do not match</p>
+              <p className="mt-1 text-xs text-danger">Passwords do not match</p>
             )}
           </Field>
 
@@ -595,7 +595,7 @@ function SecurityTab() {
             <button
               onClick={() => mutation.mutate()}
               disabled={mutation.isPending}
-              className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+              className="rounded-lg bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
             >
               {mutation.isPending ? 'Updating…' : 'Update Password'}
             </button>
@@ -604,9 +604,9 @@ function SecurityTab() {
       </div>
 
       {/* Session info */}
-      <div className="rounded-2xl border border-gray-200 p-5">
-        <h3 className="mb-2 text-sm font-semibold text-gray-900">Active Session</h3>
-        <p className="text-sm text-gray-500">
+      <div className="rounded-2xl border border-line p-5">
+        <h3 className="mb-2 text-sm font-semibold text-ink">Active Session</h3>
+        <p className="text-sm text-muted">
           You are currently signed in. To sign out of all devices, use the Sign Out Everywhere option.
         </p>
         <button
@@ -614,7 +614,7 @@ function SecurityTab() {
             await supabase.auth.signOut({ scope: 'global' });
             window.location.href = '/login';
           }}
-          className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+          className="mt-3 rounded-lg border border-danger/20 px-4 py-2 text-sm font-medium text-danger hover:bg-danger/10 transition-colors"
         >
           Sign Out Everywhere
         </button>
@@ -769,12 +769,12 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">Team Members</h2>
-          <p className="mt-0.5 text-sm text-gray-500">Manage who has access to this business.</p>
+          <h2 className="text-base font-semibold text-ink">Team Members</h2>
+          <p className="mt-0.5 text-sm text-muted">Manage who has access to this business.</p>
         </div>
         <button
           onClick={() => setShowInvite((v) => !v)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
+          className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
         >
           <Plus className="h-4 w-4" />
           Invite Member
@@ -784,13 +784,13 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
       {alert && <Alert type={alert.type} message={alert.message} />}
 
       {/* How it works – clear guidance replaces old error */}
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-        <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-800">
-          <Users className="h-4 w-4 text-gray-500" />
+      <div className="rounded-xl border border-line bg-bg p-4">
+        <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <Users className="h-4 w-4 text-muted" />
           How to add someone
         </h4>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-gray-600">
-          <li>Ask the person to create a Ledgr account at <a href={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`} className="font-medium text-brand-600 hover:text-brand-700">{typeof window !== 'undefined' ? `${window.location.origin}/register` : '/register'}</a>.</li>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-sub">
+          <li>Ask the person to create a Ledgr account at <a href={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`} className="font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300">{typeof window !== 'undefined' ? `${window.location.origin}/register` : '/register'}</a>.</li>
           <li>Once they’ve registered, enter their email below and choose a role.</li>
           <li>Click Add member – they’ll instantly have access.</li>
         </ol>
@@ -798,7 +798,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
           <input
             readOnly
             value={`${typeof window !== 'undefined' ? window.location.origin : ''}/register`}
-            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600"
+            className="flex-1 rounded-lg border border-line bg-card px-3 py-1.5 text-xs text-sub"
           />
           <button
             onClick={() => {
@@ -807,7 +807,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
               setAlert({ type: 'success', message: 'Registration link copied.' });
               setTimeout(() => setAlert(null), 2000);
             }}
-            className="shrink-0 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            className="shrink-0 rounded-lg border border-line bg-card px-3 py-1.5 text-xs font-medium text-sub hover:bg-bg"
           >
             Copy link
           </button>
@@ -815,25 +815,25 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
       </div>
 
       {showInvite && (
-        <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-brand-900">Add existing user to this business</h3>
+        <div className="rounded-xl border border-brand-200 bg-brand-500/10 p-4">
+          <h3 className="mb-3 text-sm font-semibold text-brand-700 dark:text-brand-300">Add existing user to this business</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
-              <label className="mb-1 block text-xs font-medium text-brand-800">User’s email (must already be registered)</label>
+              <label className="mb-1 block text-xs font-medium text-brand-700 dark:text-brand-300">User’s email (must already be registered)</label>
               <input
                 type="email"
                 placeholder="colleague@business.mw"
                 value={inviteForm.email}
                 onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-brand-800">Role</label>
+              <label className="mb-1 block text-xs font-medium text-brand-700 dark:text-brand-300">Role</label>
               <select
                 value={inviteForm.role}
                 onChange={(e) => setInviteForm((f) => ({ ...f, role: e.target.value as typeof ROLES[number] }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
@@ -842,7 +842,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
             </div>
           </div>
 
-          <div className="mt-2 text-xs text-brand-700">
+          <div className="mt-2 text-xs text-brand-700 dark:text-brand-300">
             {inviteForm.role === 'owner' && 'Owner: full access including billing. Only owners can assign this.'}
             {inviteForm.role === 'admin' && 'Admin: full access except billing. Only owners can assign admins.'}
             {(inviteForm.role === 'accountant' || inviteForm.role === 'staff') && 'Accountant: read/write all financial data.'}
@@ -855,7 +855,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
             <button
               onClick={() => inviteMutation.mutate()}
               disabled={inviteMutation.isPending || !inviteForm.email.trim()}
-              className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60 transition-colors"
             >
               {inviteMutation.isPending ? (
                 <>
@@ -868,14 +868,14 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
             </button>
             <button
               onClick={() => setShowInvite(false)}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              className="rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors"
             >
               Cancel
             </button>
           </div>
 
-          <p className="mt-3 text-xs text-brand-600">
-            Uses server function <code className="rounded bg-white px-1 py-0.5">invite-team-member</code> – verifies your owner/admin role, looks up email via Auth Admin, creates <code className="rounded bg-white px-1">business_users</code> row.
+          <p className="mt-3 text-xs text-brand-600 dark:text-brand-300">
+            Uses server function <code className="rounded bg-card px-1 py-0.5">invite-team-member</code> – verifies your owner/admin role, looks up email via Auth Admin, creates <code className="rounded bg-card px-1">business_users</code> row.
           </p>
         </div>
       )}
@@ -883,13 +883,13 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />
+            <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />
           ))}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <div className="overflow-hidden rounded-2xl border border-line bg-card">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
               <tr>
                 <th className="px-4 py-3 text-left">Member</th>
                 <th className="px-4 py-3 text-left">Role</th>
@@ -897,27 +897,27 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-line">
               {members.map((member: any) => {
                 const isSelf = member.user_id === currentUser?.id;
                 const displayName = member.full_name || member.profile?.full_name || member.email || 'Unknown User';
                 const initialsSource = member.full_name || member.profile?.full_name || member.email || member.user_id || '?';
                 const subText = member.email ? `${member.email}` : `${member.user_id.slice(0, 8)}…`;
                 return (
-                  <tr key={member.user_id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={member.user_id} className="hover:bg-bg transition-colors">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-xs font-semibold text-brand-700 dark:text-brand-300">
                           {initialsSource.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <p className="flex items-center gap-2 font-medium text-gray-900">
+                          <p className="flex items-center gap-2 font-medium text-ink">
                             <span className="truncate">{displayName}</span>
                             {isSelf && (
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">you</span>
+                              <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium text-muted">you</span>
                             )}
                           </p>
-                          <p className="truncate text-xs text-gray-400">{subText}{member.email && ` • ${member.user_id.slice(0, 8)}…`}</p>
+                          <p className="truncate text-xs text-muted">{subText}{member.email && ` • ${member.user_id.slice(0, 8)}…`}</p>
                         </div>
                       </div>
                     </td>
@@ -928,14 +928,14 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                           updateRoleMutation.mutate({ userId: member.user_id, role: e.target.value })
                         }
                         disabled={member.role === 'owner' && currentUser?.id !== member.user_id && !members.some((m: any) => m.user_id === currentUser?.id && m.role === 'owner')}
-                        className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-transparent disabled:border-transparent disabled:font-medium disabled:text-brand-700"
+                        className="rounded-lg border border-line bg-card px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-transparent disabled:border-transparent disabled:font-medium disabled:text-brand-700 dark:text-brand-300"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r} className="capitalize">{r === 'staff' ? 'Staff (Accountant)' : r.charAt(0).toUpperCase() + r.slice(1).replace('_', ' ')}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-gray-500">
+                    <td className="px-4 py-3 text-muted">
                       {member.created_at
                         ? new Date(member.created_at).toLocaleDateString('en-MW', {
                             day: '2-digit',
@@ -952,7 +952,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                               removeRoleMutation.mutate(member.user_id);
                             }
                           }}
-                          className="text-gray-400 hover:text-red-500 transition-colors"
+                          className="text-muted hover:text-danger transition-colors"
                           title="Remove from business"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1015,21 +1015,21 @@ function ToggleRow({
   disabledLabel?: string;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+    <div className="flex items-center justify-between rounded-xl border border-line bg-bg px-4 py-3">
       <div className="pr-4">
-        <p className="text-sm font-medium text-gray-800">{title}</p>
-        <p className="text-xs text-gray-500">{description}</p>
+        <p className="text-sm font-medium text-ink">{title}</p>
+        <p className="text-xs text-muted">{description}</p>
       </div>
       {disabled ? (
-        <span className="shrink-0 rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-500">
+        <span className="shrink-0 rounded-full bg-surface px-2.5 py-0.5 text-xs font-medium text-muted">
           {disabledLabel ?? 'Always on'}
         </span>
       ) : (
         <button
           onClick={() => onChange?.(!checked)}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-brand-500' : 'bg-gray-300'}`}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-brand-600' : 'bg-surface'}`}
         >
-          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
+          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-0.5'}`} />
         </button>
       )}
     </div>
@@ -1044,21 +1044,21 @@ function PrivacyTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-gray-900">Privacy</h2>
-        <p className="mt-0.5 text-sm text-gray-500">What we collect, and how it's used.</p>
+        <h2 className="text-base font-semibold text-ink">Privacy</h2>
+        <p className="mt-0.5 text-sm text-muted">What we collect, and how it's used.</p>
       </div>
 
       {/* What data is collected */}
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-gray-700">Data we collect</h3>
+        <h3 className="mb-3 text-sm font-semibold text-sub">Data we collect</h3>
         <div className="space-y-4">
           {DATA_CATEGORIES.map((cat) => (
             <div key={cat.title}>
-              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400">{cat.title}</p>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{cat.title}</p>
               <ul className="space-y-1">
                 {cat.items.map((item) => (
-                  <li key={item} className="flex items-start gap-2 text-sm text-gray-600">
-                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-gray-300" />
+                  <li key={item} className="flex items-start gap-2 text-sm text-sub">
+                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-surface" />
                     {item}
                   </li>
                 ))}
@@ -1069,9 +1069,9 @@ function PrivacyTab() {
       </div>
 
       {/* Cookie / tracking preferences */}
-      <div className="border-t border-gray-100 pt-6">
-        <h3 className="mb-1 text-sm font-semibold text-gray-700">Cookie preferences</h3>
-        <p className="mb-4 text-xs text-gray-500">
+      <div className="border-t border-line pt-6">
+        <h3 className="mb-1 text-sm font-semibold text-sub">Cookie preferences</h3>
+        <p className="mb-4 text-xs text-muted">
           {hasDecided
             ? `Last updated ${new Date(consent!.decidedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}.`
             : "You haven't set a preference yet — choices below default to off until saved."}
@@ -1099,12 +1099,12 @@ function PrivacyTab() {
       </div>
 
       {/* Data export (Right to Portability) */}
-      <div className="border-t border-gray-100 pt-6">
+      <div className="border-t border-line pt-6">
         <DataExportButton />
       </div>
 
       {/* Account deletion (Right to Erasure) */}
-      <div className="border-t border-gray-100 pt-6">
+      <div className="border-t border-line pt-6">
         <DeleteAccountSection />
       </div>
     </div>
@@ -1127,7 +1127,7 @@ export function SettingsPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-muted">No business selected.</p>
       </div>
     );
   }
@@ -1135,8 +1135,8 @@ export function SettingsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Settings</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-semibold text-ink">Settings</h1>
+        <p className="mt-1 text-sm text-muted">
           Manage your business and account preferences
         </p>
       </div>
@@ -1154,8 +1154,8 @@ export function SettingsPage() {
                   className={cls(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left',
                     activeTab === tab.value
-                      ? 'bg-brand-50 text-brand-700'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                      ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300'
+                      : 'text-sub hover:bg-surface hover:text-ink',
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
@@ -1168,11 +1168,11 @@ export function SettingsPage() {
 
         {/* Tab content */}
         <div className="flex-1 min-w-0">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
             {isLoading ? (
               <div className="space-y-4">
                 {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-10 animate-pulse rounded-lg bg-gray-100" />
+                  <div key={i} className="h-10 animate-pulse rounded-lg bg-surface" />
                 ))}
               </div>
             ) : (

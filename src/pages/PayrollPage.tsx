@@ -72,13 +72,13 @@ interface Alert { type: 'success' | 'error'; message: string; }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    draft: 'bg-gray-100 text-gray-600',
-    approved: 'bg-blue-50 text-blue-700',
-    paid: 'bg-brand-50 text-brand-700',
-    voided: 'bg-gray-100 text-gray-400',
+    draft: 'bg-surface text-sub',
+    approved: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    paid: 'bg-brand-500/10 text-brand-700 dark:text-brand-300',
+    voided: 'bg-surface text-muted',
   };
   return (
-    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] ?? 'bg-gray-100 text-gray-600'}`}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${map[status] ?? 'bg-surface text-sub'}`}>
       {status}
     </span>
   );
@@ -86,7 +86,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function AlertBox({ alert }: { alert: Alert }) {
   return (
-    <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${alert.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'}`}>
+    <div className={`mb-4 flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${alert.type === 'success' ? 'bg-brand-500/10 text-brand-700 dark:text-brand-300' : 'bg-danger/10 text-danger'}`}>
       {alert.type === 'success' ? <CheckCircle className="h-4 w-4 shrink-0" /> : <AlertCircle className="h-4 w-4 shrink-0" />}
       {alert.message}
     </div>
@@ -144,13 +144,13 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-xl my-8">
+      <div className="w-full max-w-lg rounded-2xl border border-line bg-card p-6 shadow-xl my-8">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-brand-500" />
-            <h2 className="text-base font-semibold text-gray-900">Add Employee</h2>
+            <Users className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h2 className="text-base font-semibold text-ink">Add Employee</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="text-muted hover:text-sub transition-colors"><X className="h-5 w-5" /></button>
         </div>
 
         {alert && <AlertBox alert={alert} />}
@@ -158,35 +158,35 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">First Name</label>
+              <label className="mb-1 block text-sm font-medium text-sub">First Name</label>
               <input type="text" value={form.first_name} onChange={(e) => set('first_name', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Last Name</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Last Name</label>
               <input type="text" value={form.last_name} onChange={(e) => set('last_name', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Employee Number</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Employee Number</label>
               <input type="text" placeholder="e.g. EMP-001" value={form.employee_number} onChange={(e) => set('employee_number', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Job Title</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Job Title</label>
               <input type="text" placeholder="e.g. Accountant" value={form.job_title} onChange={(e) => set('job_title', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Employment Type</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Employment Type</label>
               <select value={form.employment_type} onChange={(e) => set('employment_type', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="permanent">Permanent</option>
                 <option value="contract">Contract</option>
                 <option value="casual">Casual</option>
@@ -194,22 +194,22 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Gross Monthly Salary (MWK)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Gross Monthly Salary (MWK)</label>
               <input type="number" min="0" step="0.01" placeholder="0.00" value={form.gross_salary} onChange={(e) => set('gross_salary', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Start Date</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Start Date</label>
               <input type="date" value={form.start_date} onChange={(e) => set('start_date', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Payment Method</label>
+              <label className="mb-1 block text-sm font-medium text-sub">Payment Method</label>
               <select value={form.payment_method} onChange={(e) => set('payment_method', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="bank_transfer">Bank Transfer</option>
                 <option value="mobile_money">Mobile Money</option>
                 <option value="cash">Cash</option>
@@ -221,14 +221,14 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
           {form.payment_method === 'bank_transfer' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Bank Name</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Bank Name</label>
                 <input type="text" placeholder="e.g. NBS Bank" value={form.bank_name} onChange={(e) => set('bank_name', e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Account Number</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Account Number</label>
                 <input type="text" value={form.bank_account_number} onChange={(e) => set('bank_account_number', e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
             </div>
           )}
@@ -236,39 +236,39 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
           {form.payment_method === 'mobile_money' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Provider</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Provider</label>
                 <select value={form.mobile_money_type} onChange={(e) => set('mobile_money_type', e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                   <option value="">Select…</option>
                   <option value="airtel_money">Airtel Money</option>
                   <option value="tnm_mpamba">TNM Mpamba</option>
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Mobile Number</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Mobile Number</label>
                 <input type="text" placeholder="e.g. 0999123456" value={form.mobile_money_number} onChange={(e) => set('mobile_money_number', e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">National ID (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">National ID (optional)</label>
               <input type="text" value={form.national_id} onChange={(e) => set('national_id', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">TPIN (optional)</label>
+              <label className="mb-1 block text-sm font-medium text-sub">TPIN (optional)</label>
               <input type="text" value={form.tpin} onChange={(e) => set('tpin', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
           </div>
 
           <div className="flex gap-3 pt-1">
-            <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+            <button onClick={onClose} className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors">Cancel</button>
             <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-              className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+              className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
               {mutation.isPending ? 'Saving…' : 'Add Employee'}
             </button>
           </div>
@@ -394,13 +394,13 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white p-6 shadow-xl my-8">
+      <div className="w-full max-w-2xl rounded-2xl border border-line bg-card p-6 shadow-xl my-8">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-brand-500" />
-            <h2 className="text-base font-semibold text-gray-900">Run Payroll</h2>
+            <Briefcase className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h2 className="text-base font-semibold text-ink">Run Payroll</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="text-muted hover:text-sub transition-colors"><X className="h-5 w-5" /></button>
         </div>
 
         {alert && <AlertBox alert={alert} />}
@@ -409,37 +409,37 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Payroll Period</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Payroll Period</label>
                 <input type="month" value={form.payroll_period} onChange={(e) => setForm((f) => ({ ...f, payroll_period: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Pay Date</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Pay Date</label>
                 <input type="date" value={form.pay_date} onChange={(e) => setForm((f) => ({ ...f, pay_date: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Period Start</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Period Start</label>
                 <input type="date" value={form.period_start} onChange={(e) => setForm((f) => ({ ...f, period_start: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">Period End</label>
+                <label className="mb-1 block text-sm font-medium text-sub">Period End</label>
                 <input type="date" value={form.period_end} onChange={(e) => setForm((f) => ({ ...f, period_end: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                  className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
             </div>
-            <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
-              <span className="font-medium text-gray-900">{employees.length}</span> active employee{employees.length !== 1 ? 's' : ''} will be included.
-              {payeBands.length === 0 && <span className="ml-2 text-amber-600">⚠ No PAYE bands configured — using MRA 2024/25 defaults.</span>}
-              {!tprConfig && <span className="ml-2 text-amber-600">⚠ TPR pension rates not configured — pension will be calculated as MK 0.00.</span>}
+            <div className="rounded-xl bg-bg px-4 py-3 text-sm text-sub">
+              <span className="font-medium text-ink">{employees.length}</span> active employee{employees.length !== 1 ? 's' : ''} will be included.
+              {payeBands.length === 0 && <span className="ml-2 text-warning">⚠ No PAYE bands configured — using MRA 2024/25 defaults.</span>}
+              {!tprConfig && <span className="ml-2 text-warning">⚠ TPR pension rates not configured — pension will be calculated as MK 0.00.</span>}
             </div>
             <div className="flex gap-3 pt-1">
-              <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+              <button onClick={onClose} className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors">Cancel</button>
               <button onClick={() => setStep('review')} disabled={employees.length === 0}
-                className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+                className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
                 Review Payroll →
               </button>
             </div>
@@ -448,9 +448,9 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
 
         {step === 'review' && (
           <div className="space-y-4">
-            <div className="overflow-hidden rounded-xl border border-gray-200">
+            <div className="overflow-hidden rounded-xl border border-line">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-4 py-2.5 text-left">Employee</th>
                     <th className="px-4 py-2.5 text-right">Gross Pay</th>
@@ -459,41 +459,41 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
                     <th className="px-4 py-2.5 text-right">Net Pay</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-line">
                   {payrollLines.map((line) => (
                     <tr key={line.employee.id}>
                       <td className="px-4 py-3">
-                        <p className="font-medium text-gray-900">{line.employee.first_name} {line.employee.last_name}</p>
-                        <p className="text-xs text-gray-400">{line.employee.job_title ?? line.employee.employee_number}</p>
+                        <p className="font-medium text-ink">{line.employee.first_name} {line.employee.last_name}</p>
+                        <p className="text-xs text-muted">{line.employee.job_title ?? line.employee.employee_number}</p>
                       </td>
                       <td className="px-4 py-3 text-right">{formatMwk(line.gross_pay)}</td>
-                      <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.paye_deduction)}</td>
-                      <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.pension_employee)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(line.net_pay)}</td>
+                      <td className="px-4 py-3 text-right text-danger">−{formatMwk(line.paye_deduction)}</td>
+                      <td className="px-4 py-3 text-right text-danger">−{formatMwk(line.pension_employee)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-brand-700 dark:text-brand-300">{formatMwk(line.net_pay)}</td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                <tfoot className="border-t-2 border-line bg-bg">
                   <tr>
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">Totals</td>
+                    <td className="px-4 py-3 text-sm font-semibold text-ink">Totals</td>
                     <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwk(totals.gross)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(totals.paye)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(totals.pensionEmployee)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwk(totals.net)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-danger">−{formatMwk(totals.paye)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-danger">−{formatMwk(totals.pensionEmployee)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700 dark:text-brand-300">{formatMwk(totals.net)}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
             {totals.pensionEmployer > 0 && (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 Additional employer pension contribution (10%, not deducted from employees):{' '}
-                <span className="font-medium text-gray-700">{formatMwk(totals.pensionEmployer)}</span>
+                <span className="font-medium text-sub">{formatMwk(totals.pensionEmployer)}</span>
               </p>
             )}
             <div className="flex gap-3">
-              <button onClick={() => setStep('setup')} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">← Back</button>
+              <button onClick={() => setStep('setup')} className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors">← Back</button>
               <button onClick={() => mutation.mutate()} disabled={mutation.isPending}
-                className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+                className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
                 {mutation.isPending ? 'Creating…' : 'Create Payroll Run'}
               </button>
             </div>
@@ -548,41 +548,41 @@ function ApprovePayrollModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl my-8">
+      <div className="w-full max-w-md rounded-2xl border border-line bg-card p-6 shadow-xl my-8">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-brand-500" />
-            <h2 className="text-base font-semibold text-gray-900">Approve Payroll — {run.run_number}</h2>
+            <CheckCircle className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+            <h2 className="text-base font-semibold text-ink">Approve Payroll — {run.run_number}</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><X className="h-5 w-5" /></button>
+          <button onClick={onClose} className="text-muted hover:text-sub transition-colors"><X className="h-5 w-5" /></button>
         </div>
 
         {alert && <AlertBox alert={alert} />}
 
-        <p className="mb-4 text-sm text-gray-500">
+        <p className="mb-4 text-sm text-muted">
           This posts the payroll journal entry (salaries, PAYE, pension) and disburses net pay of{' '}
-          <span className="font-semibold text-gray-900">{formatMwk(Number(run.total_net))}</span> from the selected account.
+          <span className="font-semibold text-ink">{formatMwk(Number(run.total_net))}</span> from the selected account.
           PAYE and TPR remittances will be generated automatically. This cannot be undone from here.
         </p>
 
         <div className="mb-5">
-          <label className="mb-1 block text-sm font-medium text-gray-700">Pay From Account</label>
+          <label className="mb-1 block text-sm font-medium text-sub">Pay From Account</label>
           <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+            className="w-full rounded-lg border border-line px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
             <option value="">Select an account…</option>
             {bankAccounts.map((acc) => (
               <option key={acc.id} value={acc.id}>{acc.code} — {acc.name}</option>
             ))}
           </select>
           {bankAccounts.length === 0 && (
-            <p className="mt-1 text-xs text-amber-600">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
+            <p className="mt-1 text-xs text-warning">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
           )}
         </div>
 
         <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
+          <button onClick={onClose} className="flex-1 rounded-lg border border-line py-2.5 text-sm font-medium text-sub hover:bg-bg transition-colors">Cancel</button>
           <button onClick={() => mutation.mutate()} disabled={mutation.isPending || !bankAccountId}
-            className="flex-1 rounded-lg bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">
+            className="flex-1 rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition-colors">
             {mutation.isPending ? 'Approving…' : 'Approve & Post'}
           </button>
         </div>
@@ -612,29 +612,29 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
   if (selectedRun) {
     return (
       <div>
-        <button onClick={() => setSelectedRun(null)} className="mb-5 flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
+        <button onClick={() => setSelectedRun(null)} className="mb-5 flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink transition-colors">
           <ArrowLeft className="h-4 w-4" />Back to Payroll Runs
         </button>
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="rounded-2xl border border-line bg-card p-6 shadow-sm">
           <div className="mb-5 flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">{selectedRun.run_number}</h2>
-              <p className="text-sm text-gray-500">Period: {selectedRun.period_start} → {selectedRun.period_end}</p>
-              <p className="text-sm text-gray-500">Pay Date: {selectedRun.pay_date}</p>
+              <h2 className="text-lg font-semibold text-ink">{selectedRun.run_number}</h2>
+              <p className="text-sm text-muted">Period: {selectedRun.period_start} → {selectedRun.period_end}</p>
+              <p className="text-sm text-muted">Pay Date: {selectedRun.pay_date}</p>
             </div>
             <div className="flex items-center gap-3">
               <StatusBadge status={selectedRun.status} />
               {selectedRun.status === 'draft' && canApprove && (
                 <button onClick={() => setShowApproveModal(true)}
-                  className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+                  className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
                   <CheckCircle className="h-4 w-4" />Approve Payroll
                 </button>
               )}
             </div>
           </div>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
+          <div className="overflow-hidden rounded-xl border border-line">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
                 <tr>
                   <th className="px-4 py-2.5 text-left">Employee</th>
                   <th className="px-4 py-2.5 text-right">Gross Pay</th>
@@ -644,28 +644,28 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
                   <th className="px-4 py-2.5 text-right">Net Pay</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-line">
                 {(runWithLines?.lines ?? []).map((line) => (
                   <tr key={line.id}>
-                    <td className="px-4 py-3 font-medium text-gray-900">{line.employee_id}</td>
+                    <td className="px-4 py-3 font-medium text-ink">{line.employee_id}</td>
                     <td className="px-4 py-3 text-right">{formatMwk(Number(line.gross_pay))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.paye_deduction))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.pension_employee))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.other_deductions))}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(Number(line.net_pay))}</td>
+                    <td className="px-4 py-3 text-right text-danger">−{formatMwk(Number(line.paye_deduction))}</td>
+                    <td className="px-4 py-3 text-right text-danger">−{formatMwk(Number(line.pension_employee))}</td>
+                    <td className="px-4 py-3 text-right text-danger">−{formatMwk(Number(line.other_deductions))}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-brand-700 dark:text-brand-300">{formatMwk(Number(line.net_pay))}</td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+              <tfoot className="border-t-2 border-line bg-bg">
                 <tr>
                   <td className="px-4 py-3 text-sm font-semibold">Totals</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwk(Number(selectedRun.total_gross))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(Number(selectedRun.total_paye))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-danger">−{formatMwk(Number(selectedRun.total_paye))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-danger">
                     −{formatMwk((runWithLines?.lines ?? []).reduce((s, l) => s + Number(l.pension_employee), 0))}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(Number(selectedRun.total_other_deductions))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwk(Number(selectedRun.total_net))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-danger">−{formatMwk(Number(selectedRun.total_other_deductions))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700 dark:text-brand-300">{formatMwk(Number(selectedRun.total_net))}</td>
                 </tr>
               </tfoot>
             </table>
@@ -689,18 +689,18 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
     );
   }
 
-  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
-  if (isError) return <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load payroll runs.</div>;
+  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />)}</div>;
+  if (isError) return <div className="flex items-center gap-2 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load payroll runs.</div>;
 
   if (runs.length === 0) {
     return (
       <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-          <Briefcase className="h-7 w-7 text-brand-500" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+          <Briefcase className="h-7 w-7 text-brand-600 dark:text-brand-400" />
         </div>
-        <h2 className="text-base font-semibold text-gray-900">No payroll runs yet</h2>
-        <p className="max-w-xs text-sm text-gray-500">Run your first payroll to calculate PAYE and net pay for all employees.</p>
-        <button onClick={onRunPayroll} className="mt-2 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+        <h2 className="text-base font-semibold text-ink">No payroll runs yet</h2>
+        <p className="max-w-xs text-sm text-muted">Run your first payroll to calculate PAYE and net pay for all employees.</p>
+        <button onClick={onRunPayroll} className="mt-2 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
           <Plus className="h-4 w-4" />Run Payroll
         </button>
       </div>
@@ -708,9 +708,9 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+        <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
           <tr>
             <th className="px-4 py-3 text-left">Run #</th>
             <th className="px-4 py-3 text-left">Period</th>
@@ -722,17 +722,17 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
             <th className="w-8" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
+        <tbody className="divide-y divide-line">
           {runs.map((run) => (
-            <tr key={run.id} onClick={() => setSelectedRun(run)} className="cursor-pointer transition-colors hover:bg-gray-50">
-              <td className="px-4 py-3 font-medium text-brand-700">{run.run_number}</td>
-              <td className="px-4 py-3 text-gray-500">{run.payroll_period}</td>
-              <td className="px-4 py-3 text-gray-500">{run.pay_date}</td>
+            <tr key={run.id} onClick={() => setSelectedRun(run)} className="cursor-pointer transition-colors hover:bg-bg">
+              <td className="px-4 py-3 font-medium text-brand-700 dark:text-brand-300">{run.run_number}</td>
+              <td className="px-4 py-3 text-muted">{run.payroll_period}</td>
+              <td className="px-4 py-3 text-muted">{run.pay_date}</td>
               <td className="px-4 py-3 text-right">{formatMwk(Number(run.total_gross))}</td>
-              <td className="px-4 py-3 text-right text-red-600">{formatMwk(Number(run.total_paye))}</td>
-              <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(Number(run.total_net))}</td>
+              <td className="px-4 py-3 text-right text-danger">{formatMwk(Number(run.total_paye))}</td>
+              <td className="px-4 py-3 text-right font-semibold text-brand-700 dark:text-brand-300">{formatMwk(Number(run.total_net))}</td>
               <td className="px-4 py-3 text-center"><StatusBadge status={run.status} /></td>
-              <td className="px-3 py-3"><ChevronRight className="h-4 w-4 text-gray-400" /></td>
+              <td className="px-3 py-3"><ChevronRight className="h-4 w-4 text-muted" /></td>
             </tr>
           ))}
         </tbody>
@@ -762,18 +762,18 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
     enabled: Boolean(businessId),
   });
 
-  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
-  if (isError) return <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load employees.</div>;
+  if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-surface" />)}</div>;
+  if (isError) return <div className="flex items-center gap-2 rounded-xl bg-danger/10 px-4 py-3 text-sm text-danger"><AlertCircle className="h-4 w-4 shrink-0" />Failed to load employees.</div>;
 
   if (employees.length === 0) {
     return (
       <div className="flex min-h-[35vh] flex-col items-center justify-center gap-3 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-          <Users className="h-7 w-7 text-brand-500" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+          <Users className="h-7 w-7 text-brand-600 dark:text-brand-400" />
         </div>
-        <h2 className="text-base font-semibold text-gray-900">No employees yet</h2>
-        <p className="max-w-xs text-sm text-gray-500">Add your first employee to start running payroll.</p>
-        <button onClick={onAddEmployee} className="mt-2 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+        <h2 className="text-base font-semibold text-ink">No employees yet</h2>
+        <p className="max-w-xs text-sm text-muted">Add your first employee to start running payroll.</p>
+        <button onClick={onAddEmployee} className="mt-2 flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
           <Plus className="h-4 w-4" />Add Employee
         </button>
       </div>
@@ -782,9 +782,9 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
 
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="bg-bg text-xs font-medium uppercase tracking-wide text-muted">
             <tr>
               <th className="px-4 py-3 text-left">Employee</th>
               <th className="px-4 py-3 text-left">Employee #</th>
@@ -796,7 +796,7 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
               {canEdit && <th className="w-10" />}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-line">
             {employees.map((emp) => {
               const gross = Number(emp.gross_salary);
               const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
@@ -805,21 +805,21 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
                 <tr
                   key={emp.id}
                   onClick={() => canEdit && setEditingEmployee(emp)}
-                  className={`transition-colors hover:bg-gray-50 ${canEdit ? 'cursor-pointer' : ''}`}
+                  className={`transition-colors hover:bg-bg ${canEdit ? 'cursor-pointer' : ''}`}
                 >
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
-                    <p className="text-xs text-gray-400">{emp.payment_method.replace(/_/g, ' ')}</p>
+                    <p className="font-medium text-ink">{emp.first_name} {emp.last_name}</p>
+                    <p className="text-xs text-muted">{emp.payment_method.replace(/_/g, ' ')}</p>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
-                  <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
+                  <td className="px-4 py-3 text-muted">{emp.employee_number}</td>
+                  <td className="px-4 py-3 text-muted">{emp.job_title ?? '—'}</td>
+                  <td className="px-4 py-3 text-muted capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-3 text-right">{formatMwk(gross)}</td>
-                  <td className="px-4 py-3 text-right text-red-600">−{formatMwk(paye)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(net)}</td>
+                  <td className="px-4 py-3 text-right text-danger">−{formatMwk(paye)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-brand-700 dark:text-brand-300">{formatMwk(net)}</td>
                   {canEdit && (
                     <td className="px-3 py-3">
-                      <Pencil className="h-4 w-4 text-gray-400" />
+                      <Pencil className="h-4 w-4 text-muted" />
                     </td>
                   )}
                 </tr>
@@ -856,35 +856,35 @@ export function PayrollPage() {
   const queryClient = useQueryClient();
 
   if (!businessId) {
-    return <div className="flex min-h-[60vh] items-center justify-center"><p className="text-sm text-gray-500">No business selected.</p></div>;
+    return <div className="flex min-h-[60vh] items-center justify-center"><p className="text-sm text-muted">No business selected.</p></div>;
   }
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Payroll</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage payroll and employees for {currentBusiness.business.name}</p>
+          <h1 className="text-2xl font-semibold text-ink">Payroll</h1>
+          <p className="mt-1 text-sm text-muted">Manage payroll and employees for {currentBusiness.business.name}</p>
         </div>
         <div className="flex gap-2">
           {tab === 'employees' && (
             <button onClick={() => setShowAddEmployeeModal(true)}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              <Plus className="h-4 w-4 text-brand-500" />Add Employee
+              className="flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-2 text-sm font-medium text-sub hover:bg-bg transition-colors">
+              <Plus className="h-4 w-4 text-brand-600 dark:text-brand-400" />Add Employee
             </button>
           )}
           <button onClick={() => setShowRunModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+            className="flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
             <Briefcase className="h-4 w-4" />Run Payroll
           </button>
         </div>
       </div>
 
-      <div className="mb-6 flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 w-fit">
-        <button onClick={() => setTab('runs')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'runs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+      <div className="mb-6 flex gap-1 rounded-xl border border-line bg-bg p-1 w-fit">
+        <button onClick={() => setTab('runs')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'runs' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Briefcase className="h-4 w-4" />Payroll Runs
         </button>
-        <button onClick={() => setTab('employees')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'employees' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+        <button onClick={() => setTab('employees')} className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'employees' ? 'bg-card text-brand-700 dark:text-brand-300 shadow-sm' : 'text-muted hover:text-sub'}`}>
           <Users className="h-4 w-4" />Employees
         </button>
       </div>

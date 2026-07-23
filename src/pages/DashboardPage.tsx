@@ -33,33 +33,30 @@ interface KpiCardProps {
 function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
   if (isLoading) {
     return (
-      <div className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="mb-4 h-3 w-24 rounded bg-gray-100" />
-        <div className="mb-2 h-7 w-32 rounded bg-gray-100" />
-        <div className="h-3 w-20 rounded bg-gray-100" />
+      <div className="animate-pulse rounded-2xl border border-line bg-card p-5">
+        <div className="mb-4 h-3 w-24 rounded bg-surface" />
+        <div className="mb-2 h-7 w-32 rounded bg-surface" />
+        <div className="h-3 w-20 rounded bg-surface" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex items-center justify-center rounded-2xl border border-red-100 bg-red-50 p-5">
-        <p className="text-xs text-red-500">Failed to load</p>
+      <div className="flex items-center justify-center rounded-2xl border border-danger/20 bg-danger/10 p-5">
+        <p className="text-xs text-danger">Failed to load</p>
       </div>
     );
   }
 
   if (featured) {
     return (
-      <div
-        className="relative overflow-hidden rounded-2xl p-5"
-        style={{ background: 'linear-gradient(135deg, #065c42, #0a7c5a)' }}
-      >
+      <div className="relative overflow-hidden rounded-2xl bg-brand-gradient p-5">
         <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
         <p className="mb-2 text-3xl font-extrabold text-white">{value}</p>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-            trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'
+            trendUp ? 'bg-card/20 text-white' : 'bg-danger/30 text-white'
           }`}>
             {trendUp ? '▲' : '▼'} {trendUp ? 'Profitable' : 'Loss'}
           </span>
@@ -70,10 +67,10 @@ function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoadin
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mb-2 text-2xl font-extrabold text-gray-900">{value}</p>
-      {sub && <p className="text-sm text-gray-400">{sub}</p>}
+    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted">{label}</p>
+      <p className="mb-2 text-2xl font-extrabold text-ink">{value}</p>
+      {sub && <p className="text-sm text-muted">{sub}</p>}
     </div>
   );
 }
@@ -84,10 +81,10 @@ function QuickActions() {
   const navigate = useNavigate();
 
   const actions = [
-    { label: 'New Invoice',    icon: Plus,       onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-500 hover:bg-brand-600 text-white' },
-    { label: 'Record Income',  icon: DollarSign, onClick: () => navigate('/income?action=record'),   color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: 'Record Expense', icon: Receipt,    onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: 'Run Payroll',    icon: Users,      onClick: () => navigate('/payroll?action=run'),     color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: 'New Invoice',    icon: Plus,       onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-600 hover:bg-brand-700 text-white' },
+    { label: 'Record Income',  icon: DollarSign, onClick: () => navigate('/income?action=record'),   color: 'bg-card hover:bg-bg text-sub border border-line' },
+    { label: 'Record Expense', icon: Receipt,    onClick: () => navigate('/expenses?action=record'), color: 'bg-card hover:bg-bg text-sub border border-line' },
+    { label: 'Run Payroll',    icon: Users,      onClick: () => navigate('/payroll?action=run'),     color: 'bg-card hover:bg-bg text-sub border border-line' },
   ];
 
   return (
@@ -145,11 +142,11 @@ export function DashboardPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-          <AlertCircle className="h-7 w-7 text-brand-500" />
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-500/10">
+          <AlertCircle className="h-7 w-7 text-brand-600 dark:text-brand-400" />
         </div>
-        <h1 className="text-lg font-semibold text-gray-900">No business selected</h1>
-        <p className="max-w-sm text-sm text-gray-500">
+        <h1 className="text-lg font-semibold text-ink">No business selected</h1>
+        <p className="max-w-sm text-sm text-muted">
           You don't have an active business yet, or none is currently selected.
         </p>
       </div>
@@ -169,8 +166,8 @@ export function DashboardPage() {
       {/* Page header + Quick Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900">Financial Overview</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
+          <h1 className="text-2xl font-extrabold text-ink">Financial Overview</h1>
+          <p className="mt-0.5 text-sm text-muted">
             {businessName ? `Real-time insights for ${businessName}` : 'Real-time insights'} · MWK
           </p>
         </div>
@@ -224,11 +221,11 @@ export function DashboardPage() {
 
       {/* Charts row — Income/Expense chart (2/3) + Cash Flow (1/3) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="lg:col-span-2 rounded-2xl border border-line bg-card p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-gray-900">Income vs Expenses</h2>
-              <p className="text-xs text-gray-400">Monthly cash flow (MWK) · Last 6 months</p>
+              <h2 className="text-base font-bold text-ink">Income vs Expenses</h2>
+              <p className="text-xs text-muted">Monthly cash flow (MWK) · Last 6 months</p>
             </div>
           </div>
           <IncomeExpenseChart
@@ -249,13 +246,13 @@ export function DashboardPage() {
       </div>
 
       {/* Recent Transactions — full width with search + pagination */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-line bg-card p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Recent Transactions</h2>
-            <p className="mt-0.5 text-xs text-gray-400">Last 10 journal entries</p>
+            <h2 className="text-base font-bold text-ink">Recent Transactions</h2>
+            <p className="mt-0.5 text-xs text-muted">Last 10 journal entries</p>
           </div>
-          <FileText className="h-4 w-4 text-gray-300" />
+          <FileText className="h-4 w-4 text-muted/50" />
         </div>
         <RecentTransactions
           entries={recentEntries.data}

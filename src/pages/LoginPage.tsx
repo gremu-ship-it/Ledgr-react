@@ -164,7 +164,7 @@ export function LoginPage() {
               setMfaCode('');
               setError(null);
             }}
-            className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+            className="w-full text-center text-sm text-muted hover:text-sub"
           >
             ← Back to sign in
           </button>
@@ -209,16 +209,16 @@ export function LoginPage() {
         </FormField>
 
         <div className="flex items-center justify-between text-sm">
-          <label className="flex cursor-pointer items-center gap-2 text-gray-600">
+          <label className="flex cursor-pointer items-center gap-2 text-sub">
             <input
               type="checkbox"
               checked={rememberMe}
               onChange={(e) => setRememberMe(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              className="h-4 w-4 rounded border-line text-brand-600 dark:text-brand-400 focus:ring-brand-500"
             />
             Remember me (30 days)
           </label>
-          <Link to="/forgot-password" className="font-medium text-brand-600 hover:text-brand-700">
+          <Link to="/forgot-password" className="font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300">
             Forgot password?
           </Link>
         </div>
@@ -226,11 +226,11 @@ export function LoginPage() {
         <SubmitButton loading={loading} label="Sign in" loadingLabel="Signing in…" />
       </form>
 
-      <p className="mt-5 text-center text-sm text-gray-500">
+      <p className="mt-5 text-center text-sm text-muted">
         Don't have an account?{' '}
         <Link
           to={safeReturnTo ? `/register?returnTo=${encodeURIComponent(safeReturnTo)}` : '/register'}
-          className="font-medium text-brand-600 hover:text-brand-700"
+          className="font-medium text-brand-600 dark:text-brand-300 hover:text-brand-700 dark:text-brand-300"
         >
           Create one
         </Link>
