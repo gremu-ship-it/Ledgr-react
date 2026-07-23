@@ -6,9 +6,13 @@ import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { OfflineBanner } from '@/offline/OfflineBanner';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 export function AppLayout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+
+  // Apply brand colors globally based on current business settings
+  useBrandTheme();
 
   return (
     <div className="min-h-screen bg-gray-50">

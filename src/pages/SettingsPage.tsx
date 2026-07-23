@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
@@ -13,6 +13,8 @@ import {
   Plus,
   Trash2,
   Cookie,
+  Upload,
+  ImageIcon,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -107,6 +109,8 @@ const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
 function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: business.name ?? '',
     trading_name: business.trading_name ?? '',
@@ -122,10 +126,73 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
     country: business.country ?? 'Malawi',
     brand_color: business.brand_color ?? '#1D9E75',
   });
+  const [logoUrl, setLogoUrl] = useState<string | null>(business.logo_url ?? null);
+
+  // Sync logo URL when business data refreshes (e.g. after save or query invalidation)
+  useEffect(() => {
+    setLogoUrl(business.logo_url ?? null);
+  }, [business.logo_url]);
 
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+
+  // ── Logo upload ──────────────────────────────────────────────────────────────
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setAlert({ type: 'error', message: 'Please upload a PNG, JPEG, SVG, or WebP image.' });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setAlert({ type: 'error', message: 'Image must be under 2MB.' });
+      setTimeout(() => setAlert(null), 3000);
+      return;
+    }
+
+    setLogoUploading(true);
+    try {
+      // Create a unique file path
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${business.id}/logo-${Date.now()}.${fileExt}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('business-logos')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get the public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('business-logos')
+        .getPublicUrl(fileName);
+
+      setLogoUrl(publicUrl);
+      setAlert({ type: 'success', message: 'Logo uploaded successfully.' });
+      setTimeout(() => setAlert(null), 3000);
+    } catch (err: any) {
+      console.error('Logo upload error:', err);
+      setAlert({ type: 'error', message: err.message || 'Failed to upload logo.' });
+      setTimeout(() => setAlert(null), 3000);
+    } finally {
+      setLogoUploading(false);
+      // Reset file input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoUrl(null);
+  };
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -144,11 +211,13 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
         city: form.city || null,
         country: form.country || null,
         brand_color: form.brand_color || null,
+        logo_url: logoUrl,
       });
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Business profile updated successfully.' });
       queryClient.invalidateQueries({ queryKey: ['business', business.id] });
+      queryClient.invalidateQueries({ queryKey: ['business-brand', business.id] });
       setTimeout(() => setAlert(null), 3000);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
@@ -200,7 +269,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
         <Field label="Country">
           <Input value={form.country} onChange={(v) => set('country', v)} placeholder="Malawi" />
         </Field>
-        <Field label="Brand Color" hint="Used for invoices and app accents">
+        <Field label="Brand Color" hint="Used for invoices, receipts, and app accents">
           <div className="flex items-center gap-3">
             <input
               type="color"
@@ -210,7 +279,74 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
             />
             <Input value={form.brand_color} onChange={(v) => set('brand_color', v)} placeholder="#1D9E75" />
           </div>
+          {/* Brand color preview */}
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-gray-500">Preview:</span>
+            <div className="flex gap-1">
+              {[50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((shade) => (
+                <div
+                  key={shade}
+                  className="h-6 w-5 rounded-sm"
+                  style={{ backgroundColor: `var(--color-brand-${shade}, #ccc)` }}
+                  title={`${shade}`}
+                />
+              ))}
+            </div>
+          </div>
         </Field>
+      </div>
+
+      {/* ── Logo Upload ─────────────────────────────────────────────────────── */}
+      <div className="border-t border-gray-100 pt-6">
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">Business Logo</h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Upload your business logo to display on invoices, receipts, and the app sidebar.
+          Accepted formats: PNG, JPEG, SVG, WebP (max 2MB).
+        </p>
+        <div className="flex items-start gap-4">
+          {/* Logo preview */}
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Business logo"
+                className="h-full w-full object-contain"
+              />
+            ) : (
+              <ImageIcon className="h-8 w-8 text-gray-300" />
+            )}
+          </div>
+
+          {/* Upload / remove buttons */}
+          <div className="flex flex-col gap-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/png,image/jpeg,image/svg+xml,image/webp"
+              onChange={handleLogoUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={logoUploading}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
+            >
+              <Upload className="h-4 w-4" />
+              {logoUploading ? 'Uploading…' : logoUrl ? 'Change Logo' : 'Upload Logo'}
+            </button>
+            {logoUrl && (
+              <button
+                type="button"
+                onClick={handleRemoveLogo}
+                className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove Logo
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="flex justify-end border-t border-gray-100 pt-4">

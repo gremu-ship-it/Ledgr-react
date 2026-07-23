@@ -4,6 +4,7 @@ import { AlertTriangle } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { StatementSection } from '@/dal/repositories/FinancialStatementRepository';
+import { ReportHeader } from './ReportHeader';
 
 function formatMwk(amount: number): string {
   const abs = Math.abs(amount);
@@ -81,7 +82,7 @@ function SubtotalRow({
 export function StatementOfProfitOrLoss({
   businessId, periodStart, periodEnd,
   comparativePeriodStart = null, comparativePeriodEnd = null,
-  businessName, preparerName,
+  businessName: _businessName, preparerName,
 }: Props) {
   const { data: pl, isLoading, error } = useQuery({
     queryKey: ['profit_or_loss', businessId, periodStart, periodEnd, comparativePeriodStart, comparativePeriodEnd],
@@ -121,12 +122,11 @@ export function StatementOfProfitOrLoss({
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-3xl">
-      <div className="mb-6 border-b border-gray-100 pb-4">
-        {businessName && <h1 className="text-lg font-bold text-gray-900">{businessName}</h1>}
-        <h2 className="text-base font-semibold text-gray-900">Statement of Profit or Loss</h2>
-        <p className="text-xs text-gray-400">For the period {periodLabel} · Currency: MWK</p>
-        {preparerName && <p className="text-xs text-gray-400">Prepared by: {preparerName}</p>}
-      </div>
+      <ReportHeader
+        title="Statement of Profit or Loss"
+        subtitle={`For the period ${periodLabel} · Currency: MWK`}
+        preparerName={preparerName}
+      />
 
       <table className="w-full">
         <thead>

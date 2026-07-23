@@ -3,11 +3,13 @@ import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { NAV_SECTIONS } from './navConfig';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 export function Sidebar() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
+  const { logoUrl, businessName } = useBrandTheme();
 
   return (
     <>
@@ -31,11 +33,19 @@ export function Sidebar() {
         )}
       >
         <div className="flex h-16 items-center gap-2 border-b border-gray-200 px-4">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
-            L
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={businessName}
+              className="h-8 w-8 shrink-0 rounded-lg object-cover"
+            />
+          ) : (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
+              {(businessName || 'L').charAt(0).toUpperCase()}
+            </div>
+          )}
           {sidebarOpen && (
-            <span className="truncate text-lg font-semibold text-gray-900">Ledgr</span>
+            <span className="truncate text-lg font-semibold text-gray-900">{businessName}</span>
           )}
           {/* Mobile close button */}
           {sidebarOpen && (
