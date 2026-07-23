@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2 } from 'lucide-react';
+import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
@@ -8,6 +8,7 @@ import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFi
 import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitOrLoss';
 import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
 import { StatementOfChangesInEquity } from '@/components/reports/StatementOfChangesInEquity';
+import { BranchPerformanceReport } from '@/components/reports/BranchPerformanceReport';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,7 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity';
+type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity' | 'branches';
 
 // ── Date Filter ───────────────────────────────────────────────────────────────
 
@@ -197,6 +198,10 @@ export function ReportsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'equity' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Scale className="h-4 w-4" />Changes in Equity
         </button>
+        <button onClick={() => setTab('branches')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'branches' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <Building2 className="h-4 w-4" />Branch Performance
+        </button>
       </div>
 
       {/* Date filter — not shown for trial balance */}
@@ -248,6 +253,13 @@ export function ReportsPage() {
           periodStart={range.from}
           periodEnd={range.to}
           businessName={currentBusiness.business.name}
+        />
+      )}
+      {tab === 'branches' && (
+        <BranchPerformanceReport
+          businessId={businessId}
+          periodStart={range.from}
+          periodEnd={range.to}
         />
       )}
     </div>
