@@ -59,9 +59,31 @@ export function AcceptInvitationPage() {
   async function acceptInvitation(inviteToken: string) {
     setPageState('loading');
 
-    const { data, error } = await (supabase.rpc as any)('accept_invitation', {
-      p_token: inviteToken,
+    // Try Edge Function first (new link-based invites)
+    let { data, error } = await supabase.functions.invoke('accept-invite-link', {
+      body: { token: inviteToken },
     });
+
+    if (error || (data as any)?.error) {
+      // Fallback to legacy RPC
+      const rpcRes = await (supabase.rpc as any)('accept_invitation', {
+        p_token: inviteToken,
+      });
+      data = rpcRes.data;
+      error = rpcRes.error;
+    }
+
+    // Handle already_member gracefully
+    if ((data as any)?.already_member || (error?.message || '').toLowerCase().includes('already')) {
+      setPageState('success');
+      setResult({
+        business_id: (data as any)?.business_id || '',
+        role: (data as any)?.role || 'member',
+        business_name: (data as any)?.business_name || 'the business',
+      });
+      setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+      return;
+    }
 
     if (error) {
       setPageState('error');
