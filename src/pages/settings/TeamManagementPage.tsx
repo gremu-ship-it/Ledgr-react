@@ -112,55 +112,84 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
     setSuccess(null);
     setLoading(true);
 
-    const { data, error: rpcError } = await (supabase.rpc as any)('invite_member', {
-      p_business_id: businessId,
-      p_email: email.trim().toLowerCase(),
-      p_role: role,
-    });
+    // NEW FLOW: Server-side Edge Function — user must already be registered at /register
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('invite-team-member', {
+        body: {
+          business_id: businessId,
+          email: email.trim().toLowerCase(),
+          role,
+        },
+      });
 
-    setLoading(false);
+      if (fnError) {
+        // If Edge Function deployment is missing or errors, fallback to legacy RPC for backwards compat
+        const legacyMsg = (data as any)?.message || (data as any)?.error || fnError.message;
+        // If it's USER_NOT_FOUND we should show clear guidance instead of trying legacy RPC
+        if (legacyMsg.toLowerCase().includes('no account found') || legacyMsg.toLowerCase().includes('user not found')) {
+          throw new Error(legacyMsg);
+        }
 
-    if (rpcError) {
-      setError(rpcError.message);
-      return;
+        // Attempt legacy RPC as fallback (token-based)
+        try {
+          const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('invite_member', {
+            p_business_id: businessId,
+            p_email: email.trim().toLowerCase(),
+            p_role: role,
+          });
+          if (rpcError) throw new Error(rpcError.message);
+          const token = rpcData as string;
+          const inviteUrl = `${window.location.origin}/accept-invitation?token=${token}`;
+          setSuccess(`Invitation created (legacy token flow). Link: ${inviteUrl} – Ask user to register at /register first if needed.`);
+          setEmail('');
+          setRole('viewer');
+          onInvited();
+          return;
+        } catch {
+          // If fallback also fails, surface original Edge Function message
+          throw new Error(legacyMsg);
+        }
+      }
+
+      if ((data as any)?.error) {
+        throw new Error((data as any).message || (data as any).error);
+      }
+
+      setSuccess((data as any)?.message || `Added ${email} as ${role} successfully.`);
+      setEmail('');
+      setRole('viewer');
+      onInvited();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
     }
-
-    // Build the invite URL using the returned token
-    const token = data as string;
-    const inviteUrl = `${window.location.origin}/accept-invitation?token=${token}`;
-
-    // Send the invite email via Supabase Auth invite
-    // Falls back to showing the link if email sending is not configured
-    const { error: emailError } = await supabase.auth.admin
-      ? { error: null } // admin API not available client-side
-      : { error: null };
-
-    void emailError; // email is sent server-side via Supabase trigger or Edge Function
-
-    setSuccess(`Invitation sent to ${email}. Link: ${inviteUrl}`);
-    setEmail('');
-    setRole('viewer');
-    onInvited();
   }
 
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-900">Invite a team member</h3>
+      <h3 className="mb-3 text-sm font-semibold text-gray-900">Add a team member</h3>
+      <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3">
+        <p className="text-xs font-medium text-gray-700">How it works (server-side):</p>
+        <ol className="mt-1 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
+          <li>Person registers at <span className="font-medium">{window.location.origin}/register</span></li>
+          <li>You enter their email + role below and click Add member</li>
+          <li>They get instant access – no invitation link needed</li>
+        </ol>
+        <p className="mt-2 text-[11px] text-gray-400">Uses Edge Function <code className="bg-gray-50 px-1 rounded">invite-team-member</code>.</p>
+      </div>
 
       {error && (
         <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          {error}
+          <span className="break-words">{error}</span>
         </div>
       )}
 
       {success && (
         <div className="mb-3 rounded-lg bg-brand-50 p-3 text-sm text-brand-700">
-          <p className="font-medium">Invitation created!</p>
+          <p className="font-medium">Success!</p>
           <p className="mt-1 break-all text-xs text-brand-600">{success}</p>
-          <p className="mt-1 text-xs text-brand-500">
-            Copy and share the link above, or configure Supabase email templates to send automatically.
-          </p>
         </div>
       )}
 
@@ -196,7 +225,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-          Send invite
+          Add member
         </button>
       </form>
 
@@ -228,7 +257,43 @@ export function TeamManagementPage() {
     setLoading(true);
     setError(null);
 
-    // Fetch members joined with their profile data
+    // Try enriched server-side list first (includes email via Auth Admin API)
+    try {
+      const { data, error } = await supabase.functions.invoke('list-team-members', {
+        body: { business_id: businessId },
+      });
+      if (!error && data && !(data as any).error && (data as any).members) {
+        const enriched = (data as any).members as Array<{
+          id: string;
+          user_id: string;
+          role: UserRole;
+          is_active: boolean;
+          invited_at: string | null;
+          accepted_at: string | null;
+          email: string | null;
+          full_name: string | null;
+        }>;
+        setMembers(
+          enriched.map((m) => ({
+            id: m.id,
+            user_id: m.user_id,
+            role: m.role,
+            is_active: m.is_active,
+            invited_at: m.invited_at,
+            accepted_at: m.accepted_at,
+            invitation_token: null,
+            email: m.email,
+            full_name: m.full_name,
+          })),
+        );
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // fall through to client query
+    }
+
+    // Fallback: client-side query (may not have email if auth_users view unavailable)
     const { data, error: fetchError } = await supabase
       .from('business_users')
       .select(`
@@ -241,9 +306,6 @@ export function TeamManagementPage() {
         invitation_token,
         user_profiles (
           full_name
-        ),
-        auth_users:user_id (
-          email
         )
       `)
       .eq('business_id', businessId)
@@ -256,8 +318,7 @@ export function TeamManagementPage() {
       return;
     }
 
-    // Flatten the joined data
-    const mapped: Member[] = (data ?? []).map((row: Record<string, unknown>) => ({
+    const mapped: Member[] = (data ?? []).map((row: any) => ({
       id: row.id as string,
       user_id: row.user_id as string,
       role: row.role as UserRole,
@@ -265,7 +326,7 @@ export function TeamManagementPage() {
       invited_at: row.invited_at as string | null,
       accepted_at: row.accepted_at as string | null,
       invitation_token: row.invitation_token as string | null,
-      email: (row.auth_users as { email?: string } | null)?.email ?? null,
+      email: null,
       full_name: (row.user_profiles as { full_name?: string } | null)?.full_name ?? null,
     }));
 
