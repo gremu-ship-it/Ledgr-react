@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, X, Search, AlertCircle, CheckCircle, Loader2,
   Landmark, Coins, TrendingUp, ArrowDownCircle, ArrowUpCircle,
-  Wallet, Receipt,
+  Wallet, Receipt, Printer, FileDown,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -47,6 +47,269 @@ function today(): string {
 function num(v: string): number {
   const n = parseFloat(v);
   return isNaN(n) ? 0 : n;
+}
+
+// ── CSV Export helpers ──────────────────────────────────────────────────────────
+
+function downloadCsv(headers: string[], rows: string[][], filename: string) {
+  const escape = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const csv = [headers.join(','), ...rows.map((r) => r.map(escape).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportLoansCsv(
+  loans: Row<'loans'>[],
+  repayments: Row<'loan_repayments'>[],
+) {
+  const repaidByLoan = new Map<string, number>();
+  repayments.forEach((r) => repaidByLoan.set(r.loan_id, (repaidByLoan.get(r.loan_id) ?? 0) + Number(r.principal_portion)));
+
+  const headers = ['Lender', 'Principal (MK)', 'Repaid (MK)', 'Outstanding (MK)', 'Rate (%)', 'Term (months)', 'Start Date', 'Status'];
+  const rows = loans.map((l) => {
+    const repaid = repaidByLoan.get(l.id) ?? 0;
+    const outstanding = Number(l.principal_amount) - repaid;
+    return [
+      l.lender_name,
+      String(Number(l.principal_amount).toFixed(2)),
+      String(repaid.toFixed(2)),
+      String(outstanding.toFixed(2)),
+      l.interest_rate_pct != null ? String(l.interest_rate_pct) : '',
+      l.term_months != null ? String(l.term_months) : '',
+      l.start_date,
+      loanStatusLabel(l.status),
+    ];
+  });
+  downloadCsv(headers, rows, `loans_${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
+function exportSharesCsv(shares: Row<'share_transactions'>[]) {
+  const headers = ['Shareholder', 'Type', 'Shares', 'Amount (MK)', 'Date', 'Reference'];
+  const rows = shares.map((s) => [
+    s.shareholder_name,
+    s.transaction_type === 'issue' ? 'Shares In' : 'Shares Out',
+    s.shares_count != null ? String(Number(s.shares_count)) : '',
+    String(Number(s.amount).toFixed(2)),
+    s.created_at.slice(0, 10),
+    s.reference ?? '',
+  ]);
+  downloadCsv(headers, rows, `share_capital_${new Date().toISOString().slice(0, 10)}.csv`);
+}
+
+// ── Repayment Schedule (printable, opens in new tab) ───────────────────────────
+
+function openRepaymentSchedule(
+  loan: Row<'loans'>,
+  repayments: Row<'loan_repayments'>[],
+) {
+  const principal = Number(loan.principal_amount);
+  const ratePct = loan.interest_rate_pct != null ? Number(loan.interest_rate_pct) : null;
+  const term = loan.term_months != null ? Number(loan.term_months) : null;
+
+  // Build amortisation rows
+  interface ScheduleRow {
+    date: string;
+    type: 'actual' | 'projected';
+    principal: number;
+    interest: number;
+    total: number;
+    balance: number;
+  }
+
+  const schedule: ScheduleRow[] = [];
+  let remaining = principal;
+
+  // Determine monthly payment if we have rate + term
+  let monthlyPayment: number | null = null;
+  if (ratePct != null && term != null && term > 0 && ratePct > 0) {
+    const monthlyRate = ratePct / 100 / 12;
+    monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, term)) / (Math.pow(1 + monthlyRate, term) - 1);
+  }
+
+  // Collect actual repayment dates that have been recorded
+  const recordedDates = new Set(repayments.map((r) => r.repayment_date));
+  let runningBalance = principal;
+
+  // Show actual repayments first
+  const sortedActual = [...repayments].sort((a, b) => a.repayment_date.localeCompare(b.repayment_date));
+  for (const r of sortedActual) {
+    const p = Number(r.principal_portion);
+    const i = Number(r.interest_portion);
+    runningBalance -= p;
+    schedule.push({
+      date: r.repayment_date,
+      type: 'actual',
+      principal: p,
+      interest: i,
+      total: Number(r.amount),
+      balance: Math.max(0, runningBalance),
+    });
+    remaining = runningBalance;
+  }
+
+  // Project future payments if we have terms and remaining balance
+  if (monthlyPayment != null && term != null && remaining > 0.01) {
+    const doneCount = schedule.length;
+    const remainingMonths = term - doneCount;
+    let projectedBalance = remaining;
+
+    // Start from the next month after the last actual repayment, or first payment date, or start date
+    let cursor = new Date(loan.first_payment_date || loan.start_date);
+    // Advance cursor by doneCount months from first payment date
+    if (doneCount > 0) {
+      cursor = new Date(cursor);
+      cursor.setMonth(cursor.getMonth() + doneCount);
+    }
+
+    // Normalise to first of month for projection
+    for (let m = 0; m < Math.max(remainingMonths, 0); m++) {
+      const dateStr = cursor.toISOString().slice(0, 10);
+      // Skip if this month already has an actual repayment
+      if (recordedDates.has(dateStr)) {
+        cursor.setMonth(cursor.getMonth() + 1);
+        continue;
+      }
+
+      const interestPart = projectedBalance * (ratePct! / 100 / 12);
+      const principalPart = Math.min(monthlyPayment - interestPart, projectedBalance);
+      projectedBalance -= principalPart;
+
+      schedule.push({
+        date: dateStr,
+        type: 'projected',
+        principal: Math.max(0, principalPart),
+        interest: Math.max(0, interestPart),
+        total: principalPart + interestPart,
+        balance: Math.max(0, projectedBalance),
+      });
+
+      if (projectedBalance < 0.01) break;
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+  }
+
+  // Compute totals
+  const totals = schedule.reduce(
+    (acc, r) => ({
+      principal: acc.principal + r.principal,
+      interest: acc.interest + r.interest,
+      total: acc.total + r.total,
+    }),
+    { principal: 0, interest: 0, total: 0 },
+  );
+
+  // Open a new tab with the printable schedule
+  const win = window.open('', '_blank');
+  if (!win) return; // popup blocked
+
+  const rowsHtml = schedule
+    .map(
+      (r, i) => `<tr${i % 2 === 0 ? '' : ' class="alt"'}>
+        <td>${r.date}</td>
+        <td class="${r.type}">${r.type === 'actual' ? 'Actual' : 'Projected'}</td>
+        <td class="num">${formatMwk(r.principal)}</td>
+        <td class="num">${formatMwk(r.interest)}</td>
+        <td class="num">${formatMwk(r.total)}</td>
+        <td class="num">${formatMwk(r.balance)}</td>
+      </tr>`,
+    )
+    .join('\n');
+
+  const rateDisplay = ratePct != null ? `${ratePct}% p.a.` : '—';
+  const termDisplay = term != null ? `${term} months` : '—';
+
+  win.document.write(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repayment Schedule — ${loan.lender_name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; padding: 40px; color: #111; background: #fff; }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; }
+    .header h1 { font-size: 22px; font-weight: 700; }
+    .header .meta { margin-top: 8px; font-size: 13px; color: #555; }
+    .header .meta span { display: inline-block; margin-right: 24px; }
+    .header .actions button { padding: 8px 20px; font-size: 13px; font-weight: 600; border: 1px solid #bbb; border-radius: 6px; background: #f5f5f5; cursor: pointer; }
+    .header .actions button:hover { background: #e8e8e8; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: #f0f4f8; text-align: left; padding: 10px 12px; font-weight: 600; color: #333; border-bottom: 2px solid #ddd; }
+    td { padding: 9px 12px; border-bottom: 1px solid #eee; }
+    tr.alt td { background: #fafafa; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.actual { font-size: 11px; color: #059669; font-weight: 500; }
+    td.projected { font-size: 11px; color: #888; }
+    .summary { margin-top: 20px; display: flex; gap: 40px; font-size: 13px; }
+    .summary div { padding: 12px 20px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .summary .label { font-size: 11px; color: #666; margin-bottom: 2px; }
+    .summary .value { font-size: 16px; font-weight: 700; }
+    .footer { margin-top: 32px; font-size: 11px; color: #999; border-top: 1px solid #e5e7eb; padding-top: 16px; text-align: center; }
+    @media print {
+      .actions { display: none !important; }
+      body { padding: 20px; }
+      th { background: #eef2f6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      tr.alt td { background: #f8f8f8 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>${loan.lender_name} — Repayment Schedule</h1>
+      <div class="meta">
+        <span><strong>Principal:</strong> ${formatMwk(principal)}</span>
+        <span><strong>Interest Rate:</strong> ${rateDisplay}</span>
+        <span><strong>Term:</strong> ${termDisplay}</span>
+        <span><strong>Start Date:</strong> ${loan.start_date}</span>
+        <span><strong>Status:</strong> ${loanStatusLabel(loan.status)}</span>
+      </div>
+    </div>
+    <div class="actions">
+      <button onclick="window.print()">🖨️ Print / Save as PDF</button>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Type</th>
+        <th class="num">Principal</th>
+        <th class="num">Interest</th>
+        <th class="num">Total</th>
+        <th class="num">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+
+  <div class="summary">
+    <div><div class="label">Total Principal</div><div class="value">${formatMwk(totals.principal)}</div></div>
+    <div><div class="label">Total Interest</div><div class="value">${formatMwk(totals.interest)}</div></div>
+    <div><div class="label">Total Paid</div><div class="value">${formatMwk(totals.total)}</div></div>
+  </div>
+
+  <div class="footer">
+    Generated by Ledgr on ${new Date().toLocaleDateString('en-MW', { year: 'numeric', month: 'long', day: 'numeric' })}
+  </div>
+
+  <script>
+    // Auto-focus the print button for keyboard accessibility
+    document.querySelector('button')?.focus();
+  <\/script>
+</body>
+</html>`);
+  win.document.close();
 }
 
 // ── Shared UI ──────────────────────────────────────────────────────────────────
@@ -443,6 +706,9 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
             className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
         <div className="flex gap-2">
+          <button onClick={() => exportLoansCsv(loans, repayments)} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <FileDown className="h-4 w-4" />Export CSV
+          </button>
           <button onClick={() => openRepay()} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
             <ArrowDownCircle className="h-4 w-4" />Record Repayment
           </button>
@@ -484,10 +750,22 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
                   <td className="px-4 py-3">{l.start_date}</td>
                   <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${loanStatusColor(l.status)}`}>{loanStatusLabel(l.status)}</span></td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => openRepay(l.id)} disabled={l.status === 'paid_off' || l.status === 'cancelled'}
-                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40">
-                      Repay
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          const loanRepayments = repayments.filter((r) => r.loan_id === l.id);
+                          openRepaymentSchedule(l, loanRepayments);
+                        }}
+                        title="View repayment schedule"
+                        className="rounded-lg border border-gray-300 p-1.5 text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        <Printer className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => openRepay(l.id)} disabled={l.status === 'paid_off' || l.status === 'cancelled'}
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40">
+                        Repay
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );
@@ -576,9 +854,14 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search shareholder…"
             className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
         </div>
-        <button onClick={() => setShow(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
-          <Plus className="h-4 w-4" />Record Share Movement
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => exportSharesCsv(shares)} className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <FileDown className="h-4 w-4" />Export CSV
+          </button>
+          <button onClick={() => setShow(true)} className="flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700">
+            <Plus className="h-4 w-4" />Record Share Movement
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-gray-200">
