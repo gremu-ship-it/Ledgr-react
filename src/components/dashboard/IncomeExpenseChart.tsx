@@ -20,6 +20,7 @@ interface IncomeExpenseChartProps {
   data?: ChartDataPoint[];
   isLoading?: boolean;
   isError?: boolean;
+  compact?: boolean;
 }
 
 function CustomTooltip({
@@ -52,10 +53,10 @@ function fmtShort(v: number) {
   return String(v);
 }
 
-export function IncomeExpenseChart({ data, isLoading, isError }: IncomeExpenseChartProps) {
+export function IncomeExpenseChart({ data, isLoading, isError, compact }: IncomeExpenseChartProps) {
   if (isLoading) {
     return (
-      <div className="flex h-72 items-center justify-center">
+      <div className={compact ? 'flex h-52 items-center justify-center' : 'flex h-72 items-center justify-center'}>
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
       </div>
     );
@@ -63,7 +64,7 @@ export function IncomeExpenseChart({ data, isLoading, isError }: IncomeExpenseCh
 
   if (isError) {
     return (
-      <div className="flex h-72 flex-col items-center justify-center gap-2 text-center">
+      <div className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}>
         <p className="text-sm font-medium text-red-500">Failed to load chart data</p>
       </div>
     );
@@ -73,7 +74,7 @@ export function IncomeExpenseChart({ data, isLoading, isError }: IncomeExpenseCh
 
   if (isEmpty) {
     return (
-      <div className="flex h-72 flex-col items-center justify-center gap-2 text-center">
+      <div className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}>
         <p className="text-sm font-medium text-gray-400">No transactions yet</p>
         <p className="text-xs text-gray-300">Income and expenses will appear here once recorded</p>
       </div>
@@ -81,7 +82,7 @@ export function IncomeExpenseChart({ data, isLoading, isError }: IncomeExpenseCh
   }
 
   return (
-    <div className="h-72">
+      <div className={compact ? 'h-52' : 'h-72'}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>
