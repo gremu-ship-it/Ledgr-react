@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   UserPlus, Trash2, Loader2, AlertCircle,
   Crown, Shield, Calculator, Users, Eye, BarChart3, Mail,
+  Link, Copy, ExternalLink, Plus
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
@@ -11,7 +12,17 @@ import { clsx } from 'clsx';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type UserRole = 'owner' | 'admin' | 'accountant' | 'payroll_manager' | 'auditor' | 'viewer';
+type UserRole =
+  | 'owner'
+  | 'admin'
+  | 'accountant'
+  | 'payroll_manager'
+  | 'supervisor'
+  | 'data_entry'
+  | 'inventory_manager'
+  | 'sales_clerk'
+  | 'auditor'
+  | 'viewer';
 
 interface Member {
   id: string;
@@ -23,6 +34,19 @@ interface Member {
   invitation_token: string | null;
   email: string | null;
   full_name: string | null;
+}
+
+interface InvitationLink {
+  id: string;
+  business_id: string;
+  email: string | null;
+  role: UserRole;
+  token: string;
+  invited_by: string | null;
+  invited_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
 }
 
 // ── Role display config ───────────────────────────────────────────────────────
@@ -57,6 +81,30 @@ const ROLE_CONFIG: Record<UserRole, {
     icon: Users,
     badge: 'bg-purple-100 text-purple-700',
   },
+  supervisor: {
+    label: 'Supervisor',
+    description: 'Read/write financial data and write payroll',
+    icon: Shield,
+    badge: 'bg-indigo-100 text-indigo-700',
+  },
+  data_entry: {
+    label: 'Data Entry',
+    description: 'Read/write financial data, cannot write payroll or export',
+    icon: Calculator,
+    badge: 'bg-teal-100 text-teal-700',
+  },
+  inventory_manager: {
+    label: 'Inventory Manager',
+    description: 'Read/write stock and financial records, can export',
+    icon: Eye,
+    badge: 'bg-sky-100 text-sky-700',
+  },
+  sales_clerk: {
+    label: 'Sales Clerk',
+    description: 'Read/write sales and expenses',
+    icon: Calculator,
+    badge: 'bg-green-100 text-green-700',
+  },
   auditor: {
     label: 'Auditor',
     description: 'Read-only access, can export reports',
@@ -71,7 +119,17 @@ const ROLE_CONFIG: Record<UserRole, {
   },
 };
 
-const INVITABLE_ROLES: UserRole[] = ['admin', 'accountant', 'payroll_manager', 'auditor', 'viewer'];
+const INVITABLE_ROLES: UserRole[] = [
+  'admin',
+  'accountant',
+  'payroll_manager',
+  'supervisor',
+  'data_entry',
+  'inventory_manager',
+  'sales_clerk',
+  'auditor',
+  'viewer',
+];
 
 // ── RoleBadge ────────────────────────────────────────────────────────────────
 
@@ -95,8 +153,18 @@ interface InviteMemberFormProps {
 }
 
 function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFormProps) {
-  const [email, setEmail] = useState('');
-  const [role, setRole] = useState<UserRole>('viewer');
+  const [activeTab, setActiveTab] = useState<'direct' | 'link'>('direct');
+  
+  // Direct Add state
+  const [directEmail, setDirectEmail] = useState('');
+  const [directRole, setDirectRole] = useState<UserRole>('viewer');
+  
+  // Invite Link state
+  const [linkRole, setLinkRole] = useState<UserRole>('viewer');
+  const [linkEmailRestriction, setLinkEmailRestriction] = useState('');
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -106,26 +174,23 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
     ? INVITABLE_ROLES
     : INVITABLE_ROLES.filter((r) => r !== 'admin');
 
-  async function handleInvite(e: React.FormEvent) {
+  async function handleDirectInvite(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     setLoading(true);
 
-    // NEW FLOW: Server-side Edge Function — user must already be registered at /register
     try {
       const { data, error: fnError } = await supabase.functions.invoke('invite-team-member', {
         body: {
           business_id: businessId,
-          email: email.trim().toLowerCase(),
-          role,
+          email: directEmail.trim().toLowerCase(),
+          role: directRole,
         },
       });
 
       if (fnError) {
-        // If Edge Function deployment is missing or errors, fallback to legacy RPC for backwards compat
         const legacyMsg = (data as any)?.message || (data as any)?.error || fnError.message;
-        // If it's USER_NOT_FOUND we should show clear guidance instead of trying legacy RPC
         if (legacyMsg.toLowerCase().includes('no account found') || legacyMsg.toLowerCase().includes('user not found')) {
           throw new Error(legacyMsg);
         }
@@ -134,19 +199,18 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         try {
           const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('invite_member', {
             p_business_id: businessId,
-            p_email: email.trim().toLowerCase(),
-            p_role: role,
+            p_email: directEmail.trim().toLowerCase(),
+            p_role: directRole,
           });
           if (rpcError) throw new Error(rpcError.message);
           const token = rpcData as string;
           const inviteUrl = `${window.location.origin}/accept-invitation?token=${token}`;
           setSuccess(`Invitation created (legacy token flow). Link: ${inviteUrl} – Ask user to register at /register first if needed.`);
-          setEmail('');
-          setRole('viewer');
+          setDirectEmail('');
+          setDirectRole('viewer');
           onInvited();
           return;
         } catch {
-          // If fallback also fails, surface original Edge Function message
           throw new Error(legacyMsg);
         }
       }
@@ -155,9 +219,9 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         throw new Error((data as any).message || (data as any).error);
       }
 
-      setSuccess((data as any)?.message || `Added ${email} as ${role} successfully.`);
-      setEmail('');
-      setRole('viewer');
+      setSuccess((data as any)?.message || `Added ${directEmail} as ${directRole} successfully.`);
+      setDirectEmail('');
+      setDirectRole('viewer');
       onInvited();
     } catch (err) {
       setError((err as Error).message);
@@ -166,73 +230,236 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
     }
   }
 
+  async function handleCreateInviteLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setGeneratedLink(null);
+    setLoading(true);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('create-invite-link', {
+        body: {
+          business_id: businessId,
+          role: linkRole,
+          email: linkEmailRestriction.trim() || undefined,
+          origin: window.location.origin,
+        },
+      });
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+      if (data?.error) {
+        throw new Error(data.message || data.error);
+      }
+
+      setGeneratedLink(data.invite_url);
+      setSuccess(`Invite link created for ${ROLE_CONFIG[linkRole].label}!`);
+      onInvited();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleCopy() {
+    if (!generatedLink) return;
+    navigator.clipboard.writeText(generatedLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   return (
     <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-900">Add a team member</h3>
-      <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3">
-        <p className="text-xs font-medium text-gray-700">How it works (server-side):</p>
-        <ol className="mt-1 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
-          <li>Person registers at <span className="font-medium">{window.location.origin}/register</span></li>
-          <li>You enter their email + role below and click Add member</li>
-          <li>They get instant access – no invitation link needed</li>
-        </ol>
-        <p className="mt-2 text-[11px] text-gray-400">Uses Edge Function <code className="bg-gray-50 px-1 rounded">invite-team-member</code>.</p>
-      </div>
-
-      {error && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="break-words">{error}</span>
-        </div>
-      )}
-
-      {success && (
-        <div className="mb-3 rounded-lg bg-brand-50 p-3 text-sm text-brand-700">
-          <p className="font-medium">Success!</p>
-          <p className="mt-1 break-all text-xs text-brand-600">{success}</p>
-        </div>
-      )}
-
-      <form onSubmit={handleInvite} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1">
-          <label className="mb-1 block text-xs font-medium text-gray-600">Email address</label>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="colleague@business.mw"
-            className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          />
-        </div>
-
-        <div className="w-full sm:w-44">
-          <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
-          <select
-            value={role}
-            onChange={(e) => setRole(e.target.value as UserRole)}
-            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-          >
-            {assignableRoles.map((r) => (
-              <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
-            ))}
-          </select>
-        </div>
-
+      <div className="flex border-b border-gray-200 mb-4">
         <button
-          type="submit"
-          disabled={loading}
-          className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          type="button"
+          onClick={() => { setActiveTab('direct'); setError(null); setSuccess(null); setGeneratedLink(null); }}
+          className={clsx(
+            'px-4 py-2 text-xs font-semibold -mb-px border-b-2 transition-all',
+            activeTab === 'direct'
+              ? 'border-brand-500 text-brand-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
         >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-          Add member
+          Direct Add (Existing User)
         </button>
-      </form>
-
-      <div className="mt-3">
-        <p className="text-xs font-medium text-gray-500">Role permissions:</p>
-        <p className="text-xs text-gray-400">{ROLE_CONFIG[role].description}</p>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('link'); setError(null); setSuccess(null); setGeneratedLink(null); }}
+          className={clsx(
+            'px-4 py-2 text-xs font-semibold -mb-px border-b-2 transition-all',
+            activeTab === 'link'
+              ? 'border-brand-500 text-brand-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+        >
+          Shareable Invite Link
+        </button>
       </div>
+
+      {activeTab === 'direct' ? (
+        <div>
+          <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3">
+            <p className="text-xs font-medium text-gray-700">How it works (server-side):</p>
+            <ol className="mt-1 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
+              <li>Person registers at <span className="font-medium">{window.location.origin}/register</span></li>
+              <li>You enter their email + role below and click Add member</li>
+              <li>They get instant access – no invitation link needed</li>
+            </ol>
+            <p className="mt-2 text-[11px] text-gray-400">Uses Edge Function <code className="bg-gray-50 px-1 rounded">invite-team-member</code>.</p>
+          </div>
+
+          {error && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="break-words">{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-3 rounded-lg bg-brand-50 p-3 text-sm text-brand-700">
+              <p className="font-medium">Success!</p>
+              <p className="mt-1 break-all text-xs text-brand-600">{success}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleDirectInvite} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Email address</label>
+              <input
+                type="email"
+                required
+                value={directEmail}
+                onChange={(e) => setDirectEmail(e.target.value)}
+                placeholder="colleague@business.mw"
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+
+            <div className="w-full sm:w-44">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
+              <select
+                value={directRole}
+                onChange={(e) => setDirectRole(e.target.value as UserRole)}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                {assignableRoles.map((r) => (
+                  <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+              Add member
+            </button>
+          </form>
+          <div className="mt-3">
+            <p className="text-xs font-medium text-gray-500">Role permissions:</p>
+            <p className="text-xs text-gray-400">{ROLE_CONFIG[directRole].description}</p>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3">
+            <p className="text-xs font-medium text-gray-700">How it works (shareable links):</p>
+            <ol className="mt-1 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
+              <li>Select a role and optionally restrict the link to a specific email address.</li>
+              <li>Click Generate Link – a unique, secure invitation token is registered in the database.</li>
+              <li>Copy and send the URL. The recipient can click, sign in/register, and join.</li>
+            </ol>
+            <p className="mt-2 text-[11px] text-gray-400">Uses Edge Function <code className="bg-gray-50 px-1 rounded">create-invite-link</code>. Explicitly restricted to this business only.</p>
+          </div>
+
+          {error && (
+            <div className="mb-3 flex items-start gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span className="break-words">{error}</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-3 rounded-lg bg-brand-50 p-3 text-sm text-brand-700">
+              <p className="font-medium">{success}</p>
+            </div>
+          )}
+
+          {generatedLink && (
+            <div className="mb-4 rounded-lg border border-brand-200 bg-white p-3">
+              <label className="block text-xs font-medium text-brand-800 mb-1">Invitation Link (Expires in 7 days):</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={generatedLink}
+                  className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600 select-all"
+                />
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-600"
+                >
+                  <Copy className="h-3 w-3" />
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+                <a
+                  href={generatedLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50"
+                >
+                  <ExternalLink className="h-3 w-3 text-gray-600" />
+                </a>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleCreateInviteLink} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Restrict to email (Optional)</label>
+              <input
+                type="email"
+                value={linkEmailRestriction}
+                onChange={(e) => setLinkEmailRestriction(e.target.value)}
+                placeholder="Only this email can accept (Optional)"
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+
+            <div className="w-full sm:w-44">
+              <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
+              <select
+                value={linkRole}
+                onChange={(e) => setLinkRole(e.target.value as UserRole)}
+                className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                {assignableRoles.map((r) => (
+                  <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Generate Link
+            </button>
+          </form>
+          <div className="mt-3">
+            <p className="text-xs font-medium text-gray-500">Role permissions:</p>
+            <p className="text-xs text-gray-400">{ROLE_CONFIG[linkRole].description}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -245,19 +472,21 @@ export function TeamManagementPage() {
   const permissions = usePermissions();
 
   const [members, setMembers] = useState<Member[]>([]);
+  const [activeLinks, setActiveLinks] = useState<InvitationLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
 
   const businessId = currentBusiness?.business.id;
   const currentRole = (currentBusiness?.role ?? 'viewer') as UserRole;
 
-  const loadMembers = useCallback(async () => {
+  const loadMembersAndInvites = useCallback(async () => {
     if (!businessId) return;
     setLoading(true);
     setError(null);
 
-    // Try enriched server-side list first (includes email via Auth Admin API)
+    // 1. Fetch active members
     try {
       const { data, error } = await supabase.functions.invoke('list-team-members', {
         body: { business_id: businessId },
@@ -286,59 +515,67 @@ export function TeamManagementPage() {
             full_name: m.full_name,
           })),
         );
-        setLoading(false);
-        return;
+      } else {
+        // Fallback Client-side query
+        const { data: directMembers, error: fetchError } = await supabase
+          .from('business_users')
+          .select(`
+            id,
+            user_id,
+            role,
+            is_active,
+            invited_at,
+            accepted_at,
+            invitation_token,
+            user_profiles (
+              full_name
+            )
+          `)
+          .eq('business_id', businessId)
+          .order('created_at', { ascending: true });
+
+        if (fetchError) throw fetchError;
+
+        const mapped: Member[] = (directMembers ?? []).map((row: any) => ({
+          id: row.id as string,
+          user_id: row.user_id as string,
+          role: row.role as UserRole,
+          is_active: row.is_active as boolean,
+          invited_at: row.invited_at as string | null,
+          accepted_at: row.accepted_at as string | null,
+          invitation_token: row.invitation_token as string | null,
+          email: null,
+          full_name: (row.user_profiles as { full_name?: string } | null)?.full_name ?? null,
+        }));
+        setMembers(mapped);
       }
-    } catch {
-      // fall through to client query
+    } catch (err: any) {
+      setError(err.message || 'Error loading team members');
     }
 
-    // Fallback: client-side query (may not have email if auth_users view unavailable)
-    const { data, error: fetchError } = await supabase
-      .from('business_users')
-      .select(`
-        id,
-        user_id,
-        role,
-        is_active,
-        invited_at,
-        accepted_at,
-        invitation_token,
-        user_profiles (
-          full_name
-        )
-      `)
-      .eq('business_id', businessId)
-      .order('created_at', { ascending: true });
+    // 2. Fetch active shareable invite links from business_invitations
+    try {
+      const { data: invitesData, error: invitesError } = await (supabase as any)
+        .from('business_invitations')
+        .select('*')
+        .is('accepted_at', null)
+        .gt('expires_at', new Date().toISOString())
+        .eq('business_id', businessId);
 
-    setLoading(false);
-
-    if (fetchError) {
-      setError(fetchError.message);
-      return;
+      if (invitesError) throw invitesError;
+      setActiveLinks((invitesData || []) as any as InvitationLink[]);
+    } catch (err: any) {
+      console.error('Error loading invite links:', err);
+    } finally {
+      setLoading(false);
     }
-
-    const mapped: Member[] = (data ?? []).map((row: any) => ({
-      id: row.id as string,
-      user_id: row.user_id as string,
-      role: row.role as UserRole,
-      is_active: row.is_active as boolean,
-      invited_at: row.invited_at as string | null,
-      accepted_at: row.accepted_at as string | null,
-      invitation_token: row.invitation_token as string | null,
-      email: null,
-      full_name: (row.user_profiles as { full_name?: string } | null)?.full_name ?? null,
-    }));
-
-    setMembers(mapped);
   }, [businessId]);
 
   useEffect(() => {
-    void loadMembers();
-  }, [loadMembers]);
+    void loadMembersAndInvites();
+  }, [loadMembersAndInvites]);
 
   async function handleRemove(memberId: string, memberUserId: string) {
-    // Prevent removing yourself
     if (memberUserId === currentUser?.id) {
       alert('You cannot remove yourself from the business.');
       return;
@@ -348,9 +585,9 @@ export function TeamManagementPage() {
 
     setRemoving(memberId);
 
-    const { error: removeError } = await (supabase as any)
+    const { error: removeError } = await supabase
       .from('business_users')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .update({ is_active: false, updated_at: new Date().toISOString() } as any)
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -365,9 +602,9 @@ export function TeamManagementPage() {
   }
 
   async function handleChangeRole(memberId: string, newRole: UserRole) {
-    const { error: updateError } = await (supabase as any)
+    const { error: updateError } = await supabase
       .from('business_users')
-      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .update({ role: newRole, updated_at: new Date().toISOString() } as any)
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -379,6 +616,31 @@ export function TeamManagementPage() {
     setMembers((prev) =>
       prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m))
     );
+  }
+
+  async function handleRevokeInviteLink(inviteId: string) {
+    if (!window.confirm('Are you sure you want to revoke this invitation link? It will immediately stop working.')) return;
+    setRevoking(inviteId);
+
+    const { error: revokeError } = await (supabase as any)
+      .from('business_invitations')
+      .delete()
+      .eq('id', inviteId);
+
+    setRevoking(null);
+
+    if (revokeError) {
+      setError(revokeError.message);
+      return;
+    }
+
+    setActiveLinks((prev) => prev.filter((lnk) => lnk.id !== inviteId));
+  }
+
+  function copyInviteLink(token: string) {
+    const link = `${window.location.origin}/accept-invitation?token=${token}`;
+    navigator.clipboard.writeText(link);
+    alert('Invitation link copied!');
   }
 
   if (!businessId) {
@@ -406,7 +668,7 @@ export function TeamManagementPage() {
         <InviteMemberForm
           businessId={businessId}
           currentRole={currentRole}
-          onInvited={() => void loadMembers()}
+          onInvited={() => void loadMembersAndInvites()}
         />
       </PermissionGate>
 
@@ -419,7 +681,7 @@ export function TeamManagementPage() {
         {loading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Loading members…
+            Loading members and invites…
           </div>
         ) : activeMembers.length === 0 ? (
           <p className="py-4 text-sm text-gray-400">No active members found.</p>
@@ -428,8 +690,6 @@ export function TeamManagementPage() {
             {activeMembers.map((member) => {
               const isCurrentUser = member.user_id === currentUser?.id;
               const isMemberOwner = member.role === 'owner';
-              // Can only change/remove if you have manage permission
-              // and the target is not an owner (unless you're an owner)
               const canModify =
                 permissions.canManageUsers &&
                 !isCurrentUser &&
@@ -437,12 +697,10 @@ export function TeamManagementPage() {
 
               return (
                 <div key={member.id} className="flex items-center gap-3 px-4 py-3">
-                  {/* Avatar */}
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
                     {(member.full_name ?? member.email ?? '?').charAt(0).toUpperCase()}
                   </div>
 
-                  {/* Info */}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">
                       {member.full_name ?? member.email ?? 'Unknown user'}
@@ -455,14 +713,12 @@ export function TeamManagementPage() {
                     )}
                   </div>
 
-                  {/* Role selector or badge */}
                   {canModify ? (
                     <select
                       value={member.role}
                       onChange={(e) => void handleChangeRole(member.id, e.target.value as UserRole)}
                       className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
-                      {/* Admins can't promote to owner */}
                       {(currentRole === 'owner' ? Object.keys(ROLE_CONFIG) as UserRole[] : INVITABLE_ROLES).map((r) => (
                         <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
                       ))}
@@ -471,7 +727,6 @@ export function TeamManagementPage() {
                     <RoleBadge role={member.role} />
                   )}
 
-                  {/* Remove button */}
                   {canModify && (
                     <button
                       onClick={() => void handleRemove(member.id, member.user_id)}
@@ -492,11 +747,59 @@ export function TeamManagementPage() {
         )}
       </div>
 
-      {/* Pending invitations */}
+      {/* Active shareable invite links */}
+      {!loading && activeLinks.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-gray-900">
+            Active shareable invitation links ({activeLinks.length})
+          </h3>
+          <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+            {activeLinks.map((lnk) => (
+              <div key={lnk.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-50">
+                  <Link className="h-4 w-4 text-brand-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    {lnk.email ? `Restricted to: ${lnk.email}` : 'Anyone with the link can accept'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Expires {new Date(lnk.expires_at).toLocaleDateString('en-GB', {
+                      day: 'numeric', month: 'short', year: 'numeric',
+                    })}
+                  </p>
+                </div>
+                <RoleBadge role={lnk.role} />
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => copyInviteLink(lnk.token)}
+                    className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    title="Copy Link"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  <PermissionGate require="canManageUsers">
+                    <button
+                      onClick={() => void handleRevokeInviteLink(lnk.id)}
+                      disabled={revoking === lnk.id}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                      title="Revoke Invitation"
+                    >
+                      {revoking === lnk.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  </PermissionGate>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Legacy/Direct Pending invitations */}
       {pendingMembers.length > 0 && (
         <div>
           <h3 className="mb-3 text-sm font-semibold text-gray-900">
-            Pending invitations ({pendingMembers.length})
+            Direct pending invitations ({pendingMembers.length})
           </h3>
           <div className="divide-y divide-gray-100 rounded-xl border border-dashed border-gray-200 bg-white">
             {pendingMembers.map((member) => (
@@ -565,12 +868,12 @@ export function TeamManagementPage() {
                   <td className="px-4 py-2 font-medium text-gray-700">{label}</td>
                   {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
                     const perm = {
-                      canRead: ['owner','admin','accountant','payroll_manager','auditor','viewer'],
-                      canWrite: ['owner','admin','accountant'],
-                      canWritePayroll: ['owner','admin','accountant','payroll_manager'],
+                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer'],
+                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk'],
+                      canWritePayroll: ['owner','admin','accountant','payroll_manager','supervisor'],
                       canDelete: ['owner','admin'],
                       canManageUsers: ['owner','admin'],
-                      canExport: ['owner','admin','accountant','payroll_manager','auditor'],
+                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor'],
                       canManageBilling: ['owner'],
                     }[key] ?? [];
                     const has = perm.includes(r);
