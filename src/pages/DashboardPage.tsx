@@ -14,7 +14,7 @@ import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { CashFlowIndicator } from '@/components/dashboard/CashFlowIndicator';
 import { TaxRemittancePanel } from '@/components/dashboard/TaxRemittancePanel';
 import { TaxReminderModal } from '@/components/dashboard/TaxReminderModal';
-import { formatMwk } from '@/lib/formatters';
+import { formatMwk, formatMwkCompact } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 
@@ -23,6 +23,7 @@ import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 interface KpiCardProps {
   label: string;
   value: string;
+  valueTitle?: string;
   sub?: string;
   trendUp?: boolean;
   featured?: boolean;
@@ -30,7 +31,7 @@ interface KpiCardProps {
   isError?: boolean;
 }
 
-function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
+function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
   if (isLoading) {
     return (
       <div className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5">
@@ -56,7 +57,13 @@ function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoadin
         style={{ background: 'linear-gradient(135deg, #065c42, #0a7c5a)' }}
       >
         <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
-        <p className="mb-2 text-3xl font-extrabold text-white">{value}</p>
+        <p
+          className="mb-2 font-extrabold text-white truncate"
+          style={{ fontSize: 'clamp(1.25rem, 3.5vw, 1.75rem)' }}
+          title={valueTitle ?? value}
+        >
+          {value}
+        </p>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
             trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'
@@ -71,9 +78,15 @@ function KpiCard({ label, value, sub, trendUp = true, featured = false, isLoadin
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mb-2 text-2xl font-extrabold text-gray-900">{value}</p>
-      {sub && <p className="text-sm text-gray-400">{sub}</p>}
+      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400 truncate">{label}</p>
+      <p
+        className="mb-2 font-extrabold text-gray-900 truncate"
+        style={{ fontSize: 'clamp(1.1rem, 2.5vw, 1.5rem)' }}
+        title={valueTitle ?? value}
+      >
+        {value}
+      </p>
+      {sub && <p className="text-sm text-gray-400 truncate overflow-hidden">{sub}</p>}
     </div>
   );
 }
@@ -98,7 +111,7 @@ function QuickActions() {
           <button
             key={action.label}
             onClick={action.onClick}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-sm transition-all ${action.color}`}
+            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 sm:px-4 sm:py-2.5 text-sm font-semibold shadow-sm transition-all ${action.color}`}
           >
             <Icon className="h-4 w-4" />
             {action.label}
@@ -181,7 +194,8 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label="Net Profit"
-          value={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
+          value={netProfit !== undefined ? formatMwkCompact(netProfit) : formatMwkCompact(0)}
+          valueTitle={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
           sub="This month"
           trendUp={netProfit === undefined || netProfit >= 0}
           featured
@@ -190,7 +204,8 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Total Income"
-          value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
+          value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)}
+          valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
           sub={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
           trendUp
           isLoading={income.isLoading}
@@ -198,7 +213,8 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Total Expenses"
-          value={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
+          value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)}
+          valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
           sub="This month"
           trendUp={false}
           isLoading={expenses.isLoading}
@@ -206,7 +222,8 @@ export function DashboardPage() {
         />
         <KpiCard
           label="Accounts Receivable"
-          value={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
+          value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
+          valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
           sub={outstanding.data ? `${outstanding.data.count} unpaid invoices` : '0 invoices'}
           trendUp={false}
           isLoading={outstanding.isLoading}
@@ -214,7 +231,8 @@ export function DashboardPage() {
         />
         <KpiCard
           label="VAT Accrued"
-          value={formatMwk(Math.abs(netVat))}
+          value={formatMwkCompact(Math.abs(netVat))}
+          valueTitle={formatMwk(Math.abs(netVat))}
           sub={netVat >= 0 ? 'Payable to MRA' : 'Refundable (input > output)'}
           trendUp={netVat >= 0}
           isLoading={vatIsLoading}

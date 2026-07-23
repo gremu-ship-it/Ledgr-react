@@ -14,8 +14,10 @@ import {
   BookUser,
   ClipboardList,
   AlertTriangle,
+  Lock,
   Package,
   Smartphone,
+  Plus,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -27,9 +29,11 @@ import {
   useOutstandingInvoices,
   useIncomeExpenseTrend,
   useRecentJournalEntries,
+  useMonthlyExpenseVat,
 } from '@/hooks/useDashboardData';
 import { IncomeExpenseChart } from '@/components/dashboard/IncomeExpenseChart';
-import { formatMwk } from '@/lib/formatters';
+import { formatMwk, formatMwkCompact } from '@/lib/formatters';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
 import { QuickIncomeMobile } from './QuickIncomeMobile';
 
@@ -127,6 +131,7 @@ function monthOverMonthChange(
 function StatCard({
   label,
   value,
+  valueTitle,
   subtext,
   tone = 'neutral',
   icon,
@@ -136,6 +141,7 @@ function StatCard({
 }: {
   label: string;
   value: string;
+  valueTitle?: string;
   subtext?: string;
   tone?: IconTone;
   icon: LucideIcon;
@@ -178,7 +184,7 @@ function StatCard({
         <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400 truncate">{label}</p>
         <IconBadge icon={icon} tone={tone} size="sm" interactive={!!onClick} />
       </div>
-      <p className={`text-lg font-bold ${valueColor} truncate`}>{value}</p>
+      <p className={`text-lg font-bold ${valueColor} truncate`} title={valueTitle ?? value}>{value}</p>
       <div className="mt-1 flex items-center gap-1.5">
         {subtext && <p className="text-[11px] text-gray-400 truncate">{subtext}</p>}
         {trend && (
@@ -220,7 +226,7 @@ function QuickActionButton({
   return (
     <button
       onClick={onClick}
-      className="group flex flex-col items-center gap-2 rounded-2xl border border-gray-200 bg-white p-4 transition-transform active:scale-95"
+      className="group flex flex-col items-center gap-2 rounded-2xl border border-gray-200 bg-white p-5 transition-transform active:scale-95"
     >
       <IconBadge icon={icon} tone={tone} size="lg" interactive />
       <span className="text-xs font-medium text-gray-700">{label}</span>
@@ -261,6 +267,11 @@ export function MobileDashboard() {
   const incomeTrend = monthOverMonthChange(trend.data, 'income');
   const expensesTrend = monthOverMonthChange(trend.data, 'expenses');
 
+  const expenseVat = useMonthlyExpenseVat(businessId);
+  const outputVat = income.data?.vatAmount ?? 0;
+  const inputVat = expenseVat.data ?? 0;
+  const netVat = outputVat - inputVat;
+
   const greeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -272,20 +283,35 @@ export function MobileDashboard() {
     ?? currentUser?.email?.split('@')[0]
     ?? 'there';
 
+  const { logoUrl } = useBrandTheme();
+
   return (
     <div className="flex flex-col gap-5 pb-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs text-gray-400">{greeting()}</p>
-          <h1 className="text-lg font-bold text-gray-900">{firstName} 👋</h1>
-          {businessName && (
-            <p className="text-xs text-gray-500 mt-0.5">{businessName}</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Business logo"
+              className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-sm"
+            />
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-sm font-bold text-white shadow-sm">
+              {firstName[0]?.toUpperCase()}
+            </div>
           )}
+          <div className="min-w-0">
+            <p className="text-xs text-gray-400">{greeting()}</p>
+            <h1 className="text-lg font-bold text-gray-900 truncate">{firstName} 👋</h1>
+            {businessName && (
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{businessName}</p>
+            )}
+          </div>
         </div>
         <button
           onClick={() => navigate('/settings')}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white shadow-sm"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-sm font-bold text-white shadow-sm active:scale-95"
         >
           {firstName[0]?.toUpperCase()}
         </button>
@@ -311,7 +337,16 @@ export function MobileDashboard() {
             <p className="text-xs font-medium uppercase tracking-wider text-white/70">
               Net Profit This Month
             </p>
-            <p className="mt-1 text-3xl font-bold text-white tracking-tight">
+            <p
+              className="mt-1 text-white tracking-tight font-bold truncate"
+              style={{ fontSize: 'clamp(1.5rem, 8vw, 2.75rem)' }}
+            >
+              {netProfit !== undefined ? formatMwkCompact(Math.abs(netProfit)) : formatMwkCompact(0)}
+            </p>
+            <p
+              className="text-xs text-white/70 truncate"
+              title={netProfit !== undefined ? formatMwk(Math.abs(netProfit)) : formatMwk(0)}
+            >
               {netProfit !== undefined ? formatMwk(Math.abs(netProfit)) : formatMwk(0)}
             </p>
             <div className="mt-3 flex items-center gap-1">
@@ -330,7 +365,8 @@ export function MobileDashboard() {
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           label="Income"
-          value={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
+          value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)}
+          valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
           subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
           tone="brand"
           icon={TrendingUp}
@@ -339,7 +375,8 @@ export function MobileDashboard() {
         />
         <StatCard
           label="Expenses"
-          value={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
+          value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)}
+          valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
           tone="negative"
           icon={Receipt}
           isLoading={expenses.isLoading}
@@ -347,7 +384,8 @@ export function MobileDashboard() {
         />
         <StatCard
           label="Outstanding"
-          value={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
+          value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
+          valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
           subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined}
           tone="info"
           icon={FileText}
@@ -355,13 +393,14 @@ export function MobileDashboard() {
           onClick={() => navigate('/invoices')}
         />
         <StatCard
-          label="This Month"
-          value={new Date().toLocaleDateString('en-MW', { month: 'short', year: 'numeric' })}
-          subtext="Tap for reports"
-          tone="neutral"
-          icon={BarChart2}
-          isLoading={false}
-          onClick={() => navigate('/reports')}
+          label="VAT Accrued"
+          value={netVat !== undefined ? formatMwkCompact(Math.abs(netVat)) : formatMwkCompact(0)}
+          valueTitle={netVat !== undefined ? formatMwk(Math.abs(netVat)) : formatMwk(0)}
+          subtext={netVat !== undefined ? (netVat >= 0 ? 'Payable to MRA' : 'Refundable (input > output)') : 'Tax status'}
+          tone="warning"
+          icon={Percent}
+          isLoading={expenseVat.isLoading || income.isLoading}
+          onClick={() => navigate('/tax')}
         />
       </div>
 
@@ -375,6 +414,7 @@ export function MobileDashboard() {
           data={trend.data}
           isLoading={trend.isLoading}
           isError={trend.isError}
+          compact
         />
       </div>
 
@@ -499,13 +539,23 @@ export function MobileDashboard() {
                 : ClipboardList;
 
               return (
-                <div key={i} className="flex items-center justify-between px-4 py-3">
+                <div key={i} className="flex items-center justify-between px-4 py-3.5">
                   <div className="flex items-center gap-3 min-w-0">
                     <IconBadge icon={Icon} tone={t} size="sm" />
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate max-w-[140px]">
-                        {entry.description ?? entry.source_type ?? 'Transaction'}
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-medium text-gray-900 truncate max-w-[120px]">
+                          {entry.description ?? entry.source_type ?? 'Transaction'}
+                        </p>
+                        {entry.isLocked && (
+                          <span
+                            className="inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-600 shrink-0"
+                            title="Locked period"
+                          >
+                            <Lock className="h-2.5 w-2.5" /> Locked
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400">{entry.entry_date}</p>
                     </div>
                   </div>
@@ -548,6 +598,16 @@ export function MobileDashboard() {
           ))}
         </div>
       </div>
+
+      {/* Floating Action Button (+) — quick income entry */}
+      <button
+        onClick={() => setShowIncome(true)}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-xl shadow-brand-600/25 transition-transform active:scale-90 hover:bg-brand-700"
+        aria-label="Quick income entry"
+        title="Record income"
+      >
+        <Plus className="h-7 w-7" strokeWidth={2.5} />
+      </button>
 
       {/* Quick entry sheets */}
       {businessId && (
