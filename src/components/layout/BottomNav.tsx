@@ -16,6 +16,7 @@ import {
   BookUser,
   Sparkles,
   Settings,
+  type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useState } from 'react';
@@ -31,7 +32,7 @@ const BOTTOM_NAV_ITEMS = [
   { label: 'Reports', path: '/reports', icon: BarChart2 },
 ];
 
-const MORE_MENU_ITEMS: { label: string; path: string; icon: typeof Receipt; tone: IconTone }[] = [
+const MORE_MENU_ITEMS: { label: string; path: string; icon: LucideIcon; tone: IconTone }[] = [
   { label: 'Expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { label: 'Invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { label: 'Payroll', path: '/payroll', icon: Users, tone: 'neutral' },
@@ -180,7 +181,7 @@ function NavTab({
 }: {
   label: string;
   path: string;
-  icon: typeof LayoutDashboard;
+  icon: LucideIcon;
 }) {
   return (
     <NavLink to={path} className="group flex flex-col items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
