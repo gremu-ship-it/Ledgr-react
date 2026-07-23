@@ -86,8 +86,7 @@ export const useAppStore = create<AppState>()(
 
       theme: getInitialTheme(),
       setTheme: (theme) => {
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-        document.documentElement.classList.toggle('dark', theme === 'dark');
+        applyTheme(theme);
         set({ theme });
       },
       toggleTheme: () => {
@@ -116,3 +115,33 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
+
+function applyTheme(theme: Theme) {
+  document.documentElement.classList.toggle('dark', theme === 'dark');
+  document.documentElement.style.colorScheme = theme;
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Apply the persisted (or OS-preferred) theme immediately, and keep following
+ * the OS preference until the user explicitly picks a theme. Call once, before
+ * the app renders, to avoid a flash of the wrong theme.
+ */
+export function initTheme() {
+  applyTheme(useAppStore.getState().theme);
+  try {
+    window
+      .matchMedia('(prefers-color-scheme: dark)')
+      .addEventListener('change', (e) => {
+        if (!window.localStorage.getItem(THEME_STORAGE_KEY)) {
+          useAppStore.getState().setTheme(e.matches ? 'dark' : 'light');
+        }
+      });
+  } catch {
+    /* ignore */
+  }
+}

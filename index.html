@@ -5,7 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1D9E75" />
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('ledgr-theme');
+          if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          if (t === 'dark') document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = t;
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="theme-color" content="#0A0E17" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F8FAFC" media="(prefers-color-scheme: light)" />
     <meta name="description" content="MWK-first accounting, invoicing, payroll, and inventory for Malawian SMEs." />
     <title>Ledgr</title>
   </head>
