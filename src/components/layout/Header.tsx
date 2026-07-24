@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, Menu, LogOut, Settings, User, Sun, Moon } from 'lucide-react';
-import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { BusinessSwitcher } from './BusinessSwitcher';
