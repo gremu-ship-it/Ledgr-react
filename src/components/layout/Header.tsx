@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Menu, LogOut, Settings, User } from 'lucide-react';
+import { Bell, Menu, LogOut, Settings, User, Sun, Moon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -21,6 +21,8 @@ export function Header() {
   const navigate = useNavigate();
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const currentUser = useAppStore((s) => s.currentUser);
+  const theme = useAppStore((s) => s.theme);
+  const toggleTheme = useAppStore((s) => s.toggleTheme);
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -91,6 +93,15 @@ export function Header() {
             </div>
           )}
         </div>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          className="rounded-lg p-2 text-sub transition-colors hover:bg-brand-500/10 hover:text-ink"
+        >
+          {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+        </button>
 
         {/* User avatar menu */}
         <div className="relative" ref={userMenuRef}>
