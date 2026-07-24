@@ -23,7 +23,7 @@ export function AppLayout() {
   const showMobileHeader = isMobile && !isDashboard;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-bg text-ink">
       {/* Offline banner */}
       <div className="sticky top-0 z-40">
         <OfflineBanner />

@@ -53,11 +53,11 @@ export function Header() {
   const initials = getInitials(currentUser?.profile?.full_name, currentUser?.email);
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-gray-100 bg-white/80 px-4 backdrop-blur-md sm:px-6 lg:bg-white">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-line bg-card/80 px-4 backdrop-blur-md sm:px-6 lg:bg-card">
       <div className="flex items-center gap-3">
         <button
           onClick={toggleSidebar}
-          className="rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
+          className="rounded-xl p-2 text-muted transition-colors hover:bg-brand-500/8 hover:text-ink lg:hidden"
           aria-label="Toggle sidebar"
         >
           <Menu className="h-5 w-5" />
@@ -70,7 +70,7 @@ export function Header() {
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => setNotificationsOpen((v) => !v)}
-            className="relative rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            className="relative rounded-xl p-2 text-muted transition-colors hover:bg-brand-500/8 hover:text-ink"
             aria-label="Notifications"
           >
             <Bell className="h-5 w-5" />
@@ -80,15 +80,15 @@ export function Header() {
           </button>
 
           {notificationsOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-gray-100 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-line bg-card/95 p-1.5 shadow-xl backdrop-blur-xl">
               <div className="px-3 py-2.5">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-900">Notifications</p>
+                <p className="text-xs font-black uppercase tracking-widest text-ink">Notifications</p>
               </div>
               <div className="px-3 py-10 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
-                  <Bell className="h-6 w-6 text-gray-200" />
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface">
+                  <Bell className="h-6 w-6 text-muted" />
                 </div>
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">All caught up</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-muted">All caught up</p>
               </div>
             </div>
           )}
@@ -107,29 +107,27 @@ export function Header() {
         <div className="relative" ref={userMenuRef}>
           <button
             onClick={() => setUserMenuOpen((v) => !v)}
-            className="group relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-500 to-brand-600 text-xs font-black text-white shadow-lg transition-all active:scale-90"
+            className="group relative flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-xs font-black text-white shadow-sm transition-all active:scale-90"
           >
             <div className="absolute -inset-1 rounded-xl bg-brand-500/20 blur-sm group-hover:bg-brand-500/30" />
             <span className="relative">{initials}</span>
           </button>
 
           {userMenuOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-2xl border border-gray-100 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-2xl border border-line bg-card p-1.5 shadow-card dark:shadow-card-dark backdrop-blur-xl">
               <div className="px-4 py-3">
-                <p className="truncate text-xs font-black uppercase tracking-widest text-gray-900">
+                <p className="truncate text-xs font-black uppercase tracking-widest text-ink">
                   {currentUser?.profile?.full_name ?? 'Account'}
                 </p>
-                <p className="truncate text-[10px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">{currentUser?.email}</p>
+                <p className="truncate text-[10px] font-bold text-muted uppercase tracking-tighter mt-0.5">{currentUser?.email}</p>
               </div>
-              <div className="my-1 border-t border-gray-100/50" />
+              <div className="my-1 border-t border-line" />
               <button
                 onClick={() => {
                   setUserMenuOpen(false);
                   navigate('/settings');
                 }}
-                className={clsx(
-                  'flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-50 hover:text-brand-600',
-                )}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-sub transition-colors hover:bg-brand-500/8 hover:text-ink"
               >
                 <User className="h-4 w-4" />
                 Profile
@@ -139,15 +137,15 @@ export function Header() {
                   setUserMenuOpen(false);
                   navigate('/settings');
                 }}
-                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-50 hover:text-brand-600"
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-sub transition-colors hover:bg-brand-500/8 hover:text-ink"
               >
                 <Settings className="h-4 w-4" />
                 Settings
               </button>
-              <div className="my-1 border-t border-gray-100/50" />
+              <div className="my-1 border-t border-line" />
               <button
                 onClick={handleSignOut}
-                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-red-600 transition-colors hover:bg-red-50"
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-danger transition-colors hover:bg-danger/10"
               >
                 <LogOut className="h-4 w-4" />
                 Log Out
