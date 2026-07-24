@@ -18,13 +18,11 @@ interface AcceptResult {
  * Flow:
  * 1. Extract token from ?token= query param
  * 2. If user is not authenticated → redirect to /login with return URL
- * 3. If authenticated → call accept_invitation(token) RPC
+ * 3. If authenticated → call accept-invite-link Edge Function
  * 4. On success → reload business memberships, redirect to /dashboard
- * 5. On error → show message (invalid/expired token, already a member, etc.)
+ * 5. On error → show message (invalid/expired token, email restriction mismatch, etc.)
  *
  * Route: /accept-invitation?token=<hex>
- * Add to App.tsx as a public route (outside ProtectedRoute — the user
- * may not be logged in yet when they click the link).
  */
 export function AcceptInvitationPage() {
   const [searchParams] = useSearchParams();
@@ -64,8 +62,12 @@ export function AcceptInvitationPage() {
       body: { token: inviteToken },
     });
 
-    if (error || (data as any)?.error) {
-      // Fallback to legacy RPC
+    const isNotFound = 
+      (error && ((error as any).status === 404 || error.message.includes('404'))) ||
+      (data?.error && data?.code === 'INVITATION_NOT_FOUND');
+
+    if (isNotFound) {
+      console.log('Token not found in business_invitations, trying legacy RPC...');
       const rpcRes = await (supabase.rpc as any)('accept_invitation', {
         p_token: inviteToken,
       });
@@ -74,7 +76,7 @@ export function AcceptInvitationPage() {
     }
 
     // Handle already_member gracefully
-    if ((data as any)?.already_member || (error?.message || '').toLowerCase().includes('already')) {
+    if ((data as any)?.already_member || (error?.message || '').toLowerCase().includes('already') || data?.code === 'ALREADY_MEMBER') {
       setPageState('success');
       setResult({
         business_id: (data as any)?.business_id || '',
@@ -85,14 +87,16 @@ export function AcceptInvitationPage() {
       return;
     }
 
-    if (error) {
+    const finalError = error || (data?.error ? { message: data.message || data.error } : null);
+
+    if (finalError) {
       setPageState('error');
       setErrorMessage(
-        error.message.includes('Invalid or expired')
+        finalError.message.includes('Invalid or expired')
           ? 'This invitation link is invalid or has expired. Ask the business owner to send a new invite.'
-          : error.message.includes('already a member')
+          : finalError.message.includes('already a member')
             ? 'You are already a member of this business.'
-            : error.message,
+            : finalError.message,
       );
       return;
     }
