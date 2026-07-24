@@ -1013,6 +1013,48 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <PlayCircle className="h-4 w-4" />Run Depreciation
           </button>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <input
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const text = await file.text();
+                const lines = text.trim().split(/\r?\n/);
+                const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+                const idx = (name: string) => headers.indexOf(name);
+
+                for (let i = 1; i < lines.length; i++) {
+                  const cols = lines[i].split(',').map(c => c.trim());
+                  if (!cols[idx('asset_number')]) continue;
+
+                  try {
+                    await repos.asset['client'].from('fixed_assets').insert({
+                      business_id: businessId,
+                      asset_number: cols[idx('asset_number')],
+                      name: cols[idx('name')] || 'Imported Asset',
+                      category_id: cols[idx('category_id')] || null,
+                      acquisition_date: cols[idx('acquisition_date')] || today(),
+                      acquisition_cost: parseFloat(cols[idx('acquisition_cost')] || '0'),
+                      residual_value: parseFloat(cols[idx('residual_value')] || '0'),
+                      depreciation_method: (cols[idx('depreciation_method')] || 'straight_line') as any,
+                      useful_life_years: parseInt(cols[idx('useful_life_years')] || '5'),
+                      depreciation_start_date: cols[idx('depreciation_start_date')] || cols[idx('acquisition_date')] || today(),
+                      status: 'active',
+                      is_active: true,
+                    } as never);
+                  } catch (err) {
+                    console.error('CSV import row failed', err);
+                  }
+                }
+                queryClient.invalidateQueries({ queryKey: ['assets'] });
+                e.target.value = '';
+              }}
+            />
+            <span>Import CSV</span>
+          </label>
           <button onClick={() => { setEditing(undefined); setShowModal(true); }}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
             <Plus className="h-4 w-4" />Add Asset

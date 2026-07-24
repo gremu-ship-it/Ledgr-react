@@ -25,6 +25,10 @@ import { AccountsPage } from '@/pages/AccountsPage';
 import { AssetsPage } from '@/pages/AssetsPage';
 import { CapitalPage } from '@/pages/CapitalPage';
 import { TaxPage } from '@/pages/TaxPage';
+import { BankReconciliation } from '@/components/bank/BankReconciliation';
+import { ApiDocumentationPage } from '@/pages/ApiDocumentationPage';
+import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { ZapierIntegrationPage } from '@/pages/ZapierIntegrationPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -89,6 +93,8 @@ function App() {
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/capital" element={<CapitalPage />} />
                 <Route path="/tax" element={<TaxPage />} />
+                <Route path="/bank-reconcile" element={<BankReconciliation businessId={currentBusiness?.business?.id || ''} />} />
+                <Route path="/api-docs" element={<ApiDocumentationPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/journals" element={<JournalsPage />} />
                 <Route path="/periods" element={<PeriodManagementPage />} />
