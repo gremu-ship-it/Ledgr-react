@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { callArenaAgent, isArenaConfigured } from '@/lib/arenaAgent';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,75 @@ const SUGGESTED_QUESTIONS = [
   { icon: Receipt, text: 'What are my biggest expenses this month?' },
   { icon: Users, text: 'Who are my top customers by revenue?' },
 ];
+
+// ── Anomaly Detection (runs on load) ─────────────────────────────────────────
+async function detectAnomalies(businessId: string): Promise<string[]> {
+  const anomalies: string[] = [];
+  try {
+    const [journals, expenses] = await Promise.all([
+      repos.journal.findByBusiness(businessId),
+      repos.expense.findByBusiness(businessId),
+    ]);
+
+    const posted = journals.filter(j => j.status === 'posted');
+    if (posted.length > 5) {
+      const amounts = posted.map(j => Number(j.total_debits));
+      const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+      const large = posted.filter(j => Number(j.total_debits) > avg * 2);
+      if (large.length) anomalies.push(`${large.length} unusually large journal(s) (>2× average)`);
+    }
+
+    // Duplicate amounts same day
+    const byDay: Record<string, number[]> = {};
+    posted.forEach(j => {
+      const d = j.entry_date;
+      if (!byDay[d]) byDay[d] = [];
+      byDay[d].push(Number(j.total_debits));
+    });
+    Object.entries(byDay).forEach(([d, arr]) => {
+      const seen = new Set();
+      arr.forEach(a => {
+        if (seen.has(a)) anomalies.push(`Duplicate amount ${formatMwk(a)} on ${d}`);
+        seen.add(a);
+      });
+    });
+  } catch {}
+  return anomalies;
+}
+
+// ── Cash Flow Forecast (simple 60-day projection) ─────────────────────────────
+async function buildCashForecast(businessId: string): Promise<{ dates: string[]; projected: number[]; lower: number[]; upper: number[] }> {
+  // Very lightweight projection — real implementation would use regression
+  const today = new Date();
+  const dates: string[] = [];
+  const projected: number[] = [];
+  const lower: number[] = [];
+  const upper: number[] = [];
+
+  // Pull last 3 months cash movement
+  const start = new Date(today);
+  start.setMonth(start.getMonth() - 3);
+  const { data: movements } = await supabase
+    .from('journal_entries')
+    .select('entry_date,total_debits,total_credits')
+    .eq('business_id', businessId)
+    .gte('entry_date', start.toISOString().slice(0,10))
+    .eq('status','posted');
+
+  const netDaily = (movements || []).reduce((sum: number, m: any) => sum + (Number(m.total_credits) - Number(m.total_debits)), 0) / 90;
+  let balance = 500000; // placeholder opening cash
+
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().slice(0,10));
+    balance += netDaily * (0.9 + Math.random() * 0.2);
+    projected.push(Math.round(balance));
+    lower.push(Math.round(balance * 0.85));
+    upper.push(Math.round(balance * 1.15));
+  }
+  return { dates, projected, lower, upper };
+}
 
 // ── Build Business Context ────────────────────────────────────────────────────
 
@@ -227,6 +297,16 @@ export function AiInsightsPage() {
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name ?? 'your business';
 
+  const [anomalies, setAnomalies] = useState<string[]>([]);
+  const [forecast, setForecast] = useState<any>(null);
+
+  useEffect(() => {
+    if (businessId) {
+      detectAnomalies(businessId).then(setAnomalies);
+      buildCashForecast(businessId).then(setForecast);
+    }
+  }, [businessId]);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '0',
@@ -267,26 +347,13 @@ export function AiInsightsPage() {
       // Build conversation history for the API
       const history = messages
         .filter((m) => m.id !== '0')
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-      const response = await fetch('https://hsuhuvuxfuufrlejsatw.supabase.co/functions/v1/chat-proxy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
-          system: `You are Ledgr AI, a financial assistant for small and medium businesses in Malawi. You have access to live business data shown below. Be concise, friendly, and specific — always reference actual numbers from the data. When you identify issues (overdue invoices, high expenses, etc.), suggest concrete actions. Use MWK currency. Never make up data not in the context
-
-${context}`,
-          messages: [
-            ...history,
-            { role: 'user', content: text.trim() },
-          ],
-        }),
-      });
-
-      const data = await response.json();
-      const content = data.content?.[0]?.text ?? 'Sorry, I could not generate a response. Please try again.';
+      const { content } = await callArenaAgent(
+        history,
+        `You are Ledgr AI, a financial assistant for small and medium businesses in Malawi. You have access to live business data shown below. Be concise, friendly, and specific — always reference actual numbers from the data. When you identify issues (overdue invoices, high expenses, etc.), suggest concrete actions. Use MWK currency. Never make up data not in the context.`,
+        context
+      );
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -340,7 +407,9 @@ ${context}`,
         </div>
         <div className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1">
           <div className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
-          <span className="text-xs font-medium text-brand-700">Connected</span>
+          <span className="text-xs font-medium text-brand-700">
+            {isArenaConfigured() ? 'Arena Agent' : 'Connected'}
+          </span>
         </div>
       </div>
 
@@ -368,6 +437,13 @@ ${context}`,
 
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Anomaly banner */}
+      {anomalies.length > 0 && (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          ⚠️ {anomalies.length} anomaly{anomalies.length > 1 ? 'ies' : ''} detected — {anomalies.slice(0,2).join(', ')}
+        </div>
+      )}
 
       {/* Suggested questions — show only at start */}
       {messages.length === 1 && (

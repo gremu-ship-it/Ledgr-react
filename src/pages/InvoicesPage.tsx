@@ -13,6 +13,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { INVOICE_TEMPLATES, InvoiceTemplate } from '@/components/invoice/InvoiceTemplates';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ function RecordPaymentModal({
         invoice_id: invoice.id,
         payment_date: form.payment_date,
         amount,
-        currency: 'MWK',
+        currency: currentBusiness?.business?.base_currency || 'MWK',
         exchange_rate: 1,
         payment_method: form.payment_method as Row<'invoice_payments'>['payment_method'],
         reference: form.reference || null,

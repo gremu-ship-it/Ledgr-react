@@ -340,7 +340,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           expense_type:    'receipt',
           status:          'paid',
           expense_date:    values.expense_date,
-          currency:        'MWK',
+          currency:        currentBusiness?.business?.base_currency || 'MWK',
           exchange_rate:   1,
           subtotal:        netAmount,
           vat_amount:      vatAmount,
