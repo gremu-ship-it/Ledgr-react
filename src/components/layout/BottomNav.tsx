@@ -64,18 +64,18 @@ export function BottomNav() {
 
       {/* More menu — icon tiles, matching app-wide badge treatment */}
       {moreOpen && (
-        <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">More</p>
+        <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-line bg-card p-4 shadow-card dark:shadow-card-dark lg:hidden">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">More</p>
           <div className="grid grid-cols-3 gap-2">
             {MORE_MENU_ITEMS.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
                 onClick={() => setMoreOpen(false)}
-                className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50"
+                className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors hover:bg-brand-500/8 active:bg-brand-500/8"
               >
                 <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-xs font-medium text-gray-600">{item.label}</span>
+                <span className="text-xs font-medium text-sub">{item.label}</span>
               </NavLink>
             ))}
           </div>
@@ -96,17 +96,17 @@ export function BottomNav() {
           <div className="flex flex-col items-center gap-3">
             <button
               onClick={() => { setFabOpen(false); setShowIncome(true); }}
-              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
+              className="group flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-lg border border-line transition-colors hover:bg-brand-500/8"
             >
               <IconBadge icon={Wallet} tone="brand" size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Record Income</span>
+              <span className="text-sm font-semibold text-ink">Record Income</span>
             </button>
             <button
               onClick={() => { setFabOpen(false); setShowExpense(true); }}
-              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
+              className="group flex items-center gap-3 rounded-2xl bg-card px-4 py-3 shadow-lg border border-line transition-colors hover:bg-brand-500/8"
             >
               <IconBadge icon={Receipt} tone="negative" size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Record Expense</span>
+              <span className="text-sm font-semibold text-ink">Record Expense</span>
             </button>
           </div>
         </div>
@@ -114,7 +114,7 @@ export function BottomNav() {
 
       {/* Bottom nav bar */}
       <div className="fixed bottom-6 left-6 right-6 z-30 lg:hidden">
-        <nav className="flex h-16 items-center justify-around rounded-3xl border border-white/20 bg-white/80 px-2 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
+        <nav className="flex h-16 items-center justify-around rounded-3xl border border-white/20 bg-card/90 px-2 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
           {/* First 2 nav items */}
           {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
             <NavTab key={item.path} {...item} />
@@ -126,8 +126,8 @@ export function BottomNav() {
             className={clsx(
               'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-2xl shadow-xl transition-all active:scale-90',
               fabOpen 
-                ? 'bg-gray-900 rotate-45' 
-                : 'bg-gradient-to-br from-brand-400 to-brand-600 ring-4 ring-white shadow-brand-500/30',
+                ? 'bg-ink rotate-45' 
+                : 'bg-brand-600 ring-4 ring-card shadow-brand-500/30',
             )}
           >
             <Plus className="h-7 w-7 text-white" />
@@ -192,12 +192,12 @@ function NavTab({
               <div className="absolute -inset-1 rounded-full bg-brand-500/20 blur-sm" />
               <Icon className="relative h-5 w-5 text-brand-600" />
             </div>
-            <span className="text-brand-600">{label}</span>
+            <span className="text-brand-600 dark:text-brand-400">{label}</span>
           </>
         ) : (
           <>
-            <Icon className="h-5 w-5 text-gray-400 transition-colors group-active:text-brand-500" />
-            <span className="text-gray-400 group-active:text-brand-500">{label}</span>
+            <Icon className="h-5 w-5 text-muted transition-colors group-active:text-brand-500" />
+            <span className="text-muted group-active:text-brand-500">{label}</span>
           </>
         )
       }

@@ -42,6 +42,12 @@ function getInitialSidebarOpen(): boolean {
   return stored === 'true';
 }
 
+function applyTheme(t: Theme) {
+  document.documentElement.classList.toggle('dark', t === 'dark');
+  document.documentElement.style.colorScheme = t;
+  try { localStorage.setItem(THEME_STORAGE_KEY, t); } catch { /* ignore */ }
+}
+
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') return 'light';
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -85,14 +91,10 @@ export const useAppStore = create<AppState>()(
       },
 
       theme: getInitialTheme(),
-      setTheme: (theme) => {
-        window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-        document.documentElement.classList.toggle('dark', theme === 'dark');
-        set({ theme });
-      },
+      setTheme: (t) => { applyTheme(t); set({ theme: t }); },
       toggleTheme: () => {
         const next = get().theme === 'light' ? 'dark' : 'light';
-        get().setTheme(next);
+        applyTheme(next); set({ theme: next });
       },
 
       reset: () =>
@@ -111,8 +113,18 @@ export const useAppStore = create<AppState>()(
       onRehydrateStorage: () => (state) => {
         if (state?.theme) {
           document.documentElement.classList.toggle('dark', state.theme === 'dark');
+          document.documentElement.style.colorScheme = state.theme;
         }
       },
     },
   ),
 );
+
+export function initTheme() {
+  applyTheme(useAppStore.getState().theme);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+    if (!localStorage.getItem(THEME_STORAGE_KEY)) {
+      useAppStore.getState().setTheme(e.matches ? 'dark' : 'light');
+    }
+  });
+}
