@@ -250,7 +250,7 @@ export function AiInsightsPage() {
     if (!text.trim() || isLoading || !businessId) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: (Date.now() + Math.random()).toString(),
       role: 'user',
       content: text.trim(),
       timestamp: new Date(),
@@ -289,7 +289,7 @@ ${context}`,
       const content = data.content?.[0]?.text ?? 'Sorry, I could not generate a response. Please try again.';
 
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: (Date.now() + Math.random() + 1).toString(),
         role: 'assistant',
         content,
         actions: parseActions(content),
@@ -301,7 +301,7 @@ ${context}`,
       setMessages((prev) => [
         ...prev,
         {
-          id: (Date.now() + 1).toString(),
+          id: (Date.now() + Math.random() + 1).toString(),
           role: 'assistant',
           content: 'Sorry, something went wrong. Please check your connection and try again.',
           timestamp: new Date(),

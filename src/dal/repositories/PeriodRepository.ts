@@ -11,8 +11,8 @@ interface AuditLogEntry {
   resource_type: string;
   resource_id: string;
   resource_ref?: string | null;
-  old_values?: unknown;
-  new_values?: unknown;
+  old_values?: any;
+  new_values?: any;
   notes?: string | null;
 }
 

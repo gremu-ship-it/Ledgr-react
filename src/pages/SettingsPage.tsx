@@ -132,7 +132,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
 
   // Sync logo URL when business data refreshes (e.g. after save or query invalidation)
   useEffect(() => {
-    setLogoUrl(business.logo_url ?? null);
+    if (business.logo_url !== logoUrl) { setLogoUrl(business.logo_url ?? null); }
   }, [business.logo_url]);
 
   function set(field: string, value: string) {

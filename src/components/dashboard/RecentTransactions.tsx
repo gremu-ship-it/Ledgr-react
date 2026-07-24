@@ -67,8 +67,8 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   );
 
   const sorted = [...filtered].sort((a, b) => {
-    let x: string = a[sortKey] ?? '';
-    let y: string = b[sortKey] ?? '';
+    const x: string = a[sortKey] ?? '';
+    const y: string = b[sortKey] ?? '';
     return sortDir === 'asc' ? x.localeCompare(y) : y.localeCompare(x);
   });
 

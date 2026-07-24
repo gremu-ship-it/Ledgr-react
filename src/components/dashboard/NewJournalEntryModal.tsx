@@ -152,7 +152,7 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
       onCreated?.();
       onClose();
     },
-    onError: (err: unknown) => {
+    onError: (err: any) => {
       setSubmitError(err instanceof Error ? err.message : 'Failed to post journal entry.');
     },
   });

@@ -275,7 +275,7 @@ export type Database = {
           entry_hash: string | null
           event_type: string
           id: number
-          ip_address: unknown
+          ip_address: any
           new_values: Json | null
           notes: string | null
           occurred_at: string
@@ -295,7 +295,7 @@ export type Database = {
           entry_hash?: string | null
           event_type: string
           id?: number
-          ip_address?: unknown
+          ip_address?: any
           new_values?: Json | null
           notes?: string | null
           occurred_at?: string
@@ -315,7 +315,7 @@ export type Database = {
           entry_hash?: string | null
           event_type?: string
           id?: number
-          ip_address?: unknown
+          ip_address?: any
           new_values?: Json | null
           notes?: string | null
           occurred_at?: string

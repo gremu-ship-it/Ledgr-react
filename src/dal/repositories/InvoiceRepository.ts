@@ -87,7 +87,7 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
     // Attempt atomic increment via RPC
     const { error: rpcError } = await (
       this.client as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: unknown }>;
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: any }>;
       }
     ).rpc('increment_amount_paid', {
       p_table:  'invoices',

@@ -13,7 +13,7 @@ export function TaxReminderModal() {
     const dueDates = getMraDueDates();
     const urgent = dueDates.filter((d) => d.isOverdue || d.isDueSoon);
 
-    if (urgent.length > 0) {
+    if (urgent.length > 0 && !sessionStorage.getItem('ledgr_tax_reminder_shown')) {
       setUrgentDates(urgent);
       setOpen(true);
       sessionStorage.setItem('ledgr_tax_reminder_shown', '1');
