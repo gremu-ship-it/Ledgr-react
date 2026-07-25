@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, Plus, DollarSign, Receipt, Users, FileText } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import {
@@ -32,6 +33,7 @@ interface KpiCardProps {
 }
 
 function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
+  const { t } = useTranslation();
   if (isLoading) {
     return (
       <div className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5">
@@ -45,7 +47,7 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
   if (isError) {
     return (
       <div className="flex items-center justify-center rounded-2xl border border-red-100 bg-red-50 p-5">
-        <p className="text-xs text-red-500">Failed to load</p>
+        <p className="text-xs text-red-500">{t('dashboard.failedToLoad')}</p>
       </div>
     );
   }
@@ -68,7 +70,7 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
             trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'
           }`}>
-            {trendUp ? '▲' : '▼'} {trendUp ? 'Profitable' : 'Loss'}
+            {trendUp ? '▲' : '▼'} {trendUp ? t('dashboard.profitable') : t('dashboard.loss')}
           </span>
           {sub && <span className="text-sm text-white/80">{sub}</span>}
         </div>
@@ -94,13 +96,14 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
 // ── Quick Actions ─────────────────────────────────────────────────────────────
 
 function QuickActions() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const actions = [
-    { label: 'New Invoice',    icon: Plus,       onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-500 hover:bg-brand-600 text-white' },
-    { label: 'Record Income',  icon: DollarSign, onClick: () => navigate('/income?action=record'),   color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: 'Record Expense', icon: Receipt,    onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: 'Run Payroll',    icon: Users,      onClick: () => navigate('/payroll?action=run'),     color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.newInvoice'),    icon: Plus,       onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-500 hover:bg-brand-600 text-white' },
+    { label: t('dashboard.recordIncome'),  icon: DollarSign, onClick: () => navigate('/income?action=record'),   color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.recordExpense'), icon: Receipt,    onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.runPayroll'),    icon: Users,      onClick: () => navigate('/payroll?action=run'),     color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
   ];
 
   return (
@@ -125,6 +128,7 @@ function QuickActions() {
 // ── Main Dashboard Page ───────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId      = currentBusiness?.business.id;
   const businessName    = currentBusiness?.business.name;
@@ -161,9 +165,9 @@ export function DashboardPage() {
         <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
           <AlertCircle className="h-7 w-7 text-brand-500" />
         </div>
-        <h1 className="text-lg font-semibold text-gray-900">No business selected</h1>
+        <h1 className="text-lg font-semibold text-gray-900">{t('dashboard.noBusinessSelected')}</h1>
         <p className="max-w-sm text-sm text-gray-500">
-          You don't have an active business yet, or none is currently selected.
+          {t('dashboard.noBusinessBody')}
         </p>
       </div>
     );
@@ -182,9 +186,9 @@ export function DashboardPage() {
       {/* Page header + Quick Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900">Financial Overview</h1>
+          <h1 className="text-2xl font-extrabold text-gray-900">{t('dashboard.financialOverview')}</h1>
           <p className="mt-0.5 text-sm text-gray-500">
-            {businessName ? `Real-time insights for ${businessName}` : 'Real-time insights'} · MWK
+            {businessName ? t('dashboard.realtimeInsightsFor', { business: businessName }) : t('dashboard.realtimeInsights')} · MWK
           </p>
         </div>
         <QuickActions />
@@ -193,47 +197,47 @@ export function DashboardPage() {
       {/* KPI Cards — 5 cards, first one featured */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
-          label="Net Profit"
+          label={t('dashboard.netProfit')}
           value={netProfit !== undefined ? formatMwkCompact(netProfit) : formatMwkCompact(0)}
           valueTitle={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
-          sub="This month"
+          sub={t('dashboard.thisMonth')}
           trendUp={netProfit === undefined || netProfit >= 0}
           featured
           isLoading={netIsLoading}
           isError={netIsError}
         />
         <KpiCard
-          label="Total Income"
+          label={t('dashboard.totalIncome')}
           value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)}
           valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
-          sub={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
+          sub={income.data ? t('dashboard.collected', { amount: formatMwk(income.data.amountPaid) }) : undefined}
           trendUp
           isLoading={income.isLoading}
           isError={income.isError}
         />
         <KpiCard
-          label="Total Expenses"
+          label={t('dashboard.totalExpenses')}
           value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)}
           valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
-          sub="This month"
+          sub={t('dashboard.thisMonth')}
           trendUp={false}
           isLoading={expenses.isLoading}
           isError={expenses.isError}
         />
         <KpiCard
-          label="Accounts Receivable"
+          label={t('dashboard.accountsReceivable')}
           value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
           valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
-          sub={outstanding.data ? `${outstanding.data.count} unpaid invoices` : '0 invoices'}
+          sub={outstanding.data ? t('dashboard.unpaidInvoices', { count: outstanding.data.count }) : t('dashboard.invoices', { count: 0 })}
           trendUp={false}
           isLoading={outstanding.isLoading}
           isError={outstanding.isError}
         />
         <KpiCard
-          label="VAT Accrued"
+          label={t('dashboard.vatAccrued')}
           value={formatMwkCompact(Math.abs(netVat))}
           valueTitle={formatMwk(Math.abs(netVat))}
-          sub={netVat >= 0 ? 'Payable to MRA' : 'Refundable (input > output)'}
+          sub={netVat >= 0 ? t('dashboard.payableToMra') : t('dashboard.refundableVat')}
           trendUp={netVat >= 0}
           isLoading={vatIsLoading}
           isError={vatIsError}
@@ -245,8 +249,8 @@ export function DashboardPage() {
         <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-gray-900">Income vs Expenses</h2>
-              <p className="text-xs text-gray-400">Monthly cash flow (MWK) · Last 6 months</p>
+              <h2 className="text-base font-bold text-gray-900">{t('dashboard.incomeVsExpenses')}</h2>
+              <p className="text-xs text-gray-400">{t('dashboard.monthlyCashFlow')}</p>
             </div>
           </div>
           <IncomeExpenseChart
@@ -270,8 +274,8 @@ export function DashboardPage() {
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Recent Transactions</h2>
-            <p className="mt-0.5 text-xs text-gray-400">Last 10 journal entries</p>
+            <h2 className="text-base font-bold text-gray-900">{t('dashboard.recentTransactions')}</h2>
+            <p className="mt-0.5 text-xs text-gray-400">{t('dashboard.lastJournalEntries')}</p>
           </div>
           <FileText className="h-4 w-4 text-gray-300" />
         </div>

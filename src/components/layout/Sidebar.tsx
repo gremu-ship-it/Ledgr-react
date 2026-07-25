@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -6,6 +7,7 @@ import { NAV_SECTIONS } from './navConfig';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
@@ -23,7 +25,7 @@ export function Sidebar() {
 
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-30 flex flex-col border-r border-gray-200 bg-white transition-all duration-200',
+          'fixed inset-y-0 start-0 z-30 flex flex-col border-e border-gray-200 bg-white transition-all duration-200',
           // Desktop: always visible, collapses to icon rail
           'lg:translate-x-0',
           sidebarOpen ? 'w-64' : 'lg:w-[72px]',
@@ -51,7 +53,7 @@ export function Sidebar() {
           {sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(false)}
-              className="ml-auto rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
+              className="ms-auto rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden"
             >
               <X className="h-5 w-5" />
             </button>
@@ -60,10 +62,10 @@ export function Sidebar() {
 
         <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4">
           {NAV_SECTIONS.map((section) => (
-            <div key={section.label} className="mb-6">
+            <div key={section.labelKey} className="mb-6">
               {sidebarOpen && (
                 <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  {section.label}
+                  {t(section.labelKey)}
                 </p>
               )}
               <ul className="space-y-1">
@@ -73,7 +75,7 @@ export function Sidebar() {
                     <li key={item.path}>
                       <NavLink
                         to={item.path}
-                        title={!sidebarOpen ? item.label : undefined}
+                        title={!sidebarOpen ? t(item.labelKey) : undefined}
                         onClick={() => {
                           // Close sidebar on mobile after navigation
                           if (window.innerWidth < 1024) setSidebarOpen(false);
@@ -89,7 +91,7 @@ export function Sidebar() {
                         }
                       >
                         <Icon className="h-[18px] w-[18px] shrink-0" />
-                        {sidebarOpen && <span className="truncate">{item.label}</span>}
+                        {sidebarOpen && <span className="truncate">{t(item.labelKey)}</span>}
                       </NavLink>
                     </li>
                   );
@@ -110,7 +112,7 @@ export function Sidebar() {
             {sidebarOpen ? (
               <>
                 <ChevronsLeft className="h-[18px] w-[18px]" />
-                <span>Collapse</span>
+                <span>{t('common.collapse')}</span>
               </>
             ) : (
               <ChevronsRight className="h-[18px] w-[18px]" />

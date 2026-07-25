@@ -1389,6 +1389,7 @@ function ToggleRow({
 
 function PrivacyTab() {
   const { consent, updateConsent, hasDecided } = useCookieConsent();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const analytics = consent?.analytics ?? false;
   const marketing = consent?.marketing ?? false;
 
@@ -1457,6 +1458,78 @@ function PrivacyTab() {
       {/* Account deletion (Right to Erasure) */}
       <div className="border-t border-gray-100 pt-6">
         <DeleteAccountSection />
+      </div>
+
+      {/* Data Retention Policy */}
+      <div className="border-t border-gray-100 pt-6">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900">Data retention policy</h3>
+          <p className="mb-3 text-xs text-gray-500">
+            In compliance with Malawi tax law and international accounting standards, financial records
+            (journals, invoices, payroll, etc.) are retained for a minimum of 7 years. After this period,
+            records are automatically archived to cold storage (read-only, encrypted). Personal data is
+            handled according to your deletion request above.
+          </p>
+          <p className="text-[10px] text-gray-400">
+            Archiving is performed nightly by a secure background job. You can request early archival of
+            specific periods by contacting support.
+          </p>
+        </div>
+      </div>
+
+      {/* Privacy Policy Generator */}
+      <div className="border-t border-gray-100 pt-6">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5">
+          <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900">
+            Privacy policy generator
+          </h3>
+          <p className="mb-4 text-xs text-gray-500">
+            Generate a tailored privacy policy for your business (auto-filled with your business name and Malawi jurisdiction).
+          </p>
+
+          <button
+            onClick={() => {
+              const bizName = currentBusiness?.business?.name || 'Your Business';
+              const policy = `# Privacy Policy for ${bizName}
+
+**Effective Date:** ${new Date().toLocaleDateString('en-GB')}
+
+${bizName} ("we", "us", "our") operates the Ledgr accounting platform in Malawi.
+
+## Information We Collect
+We collect account information, business financial records, and usage data as described in the in-app Privacy settings.
+
+## How We Use Your Data
+- To provide and improve the Ledgr service
+- To comply with Malawi Revenue Authority (MRA) requirements
+- For security, audit logging, and fraud prevention
+
+## Data Retention
+Financial records are retained for 7 years as required by law, then archived to cold storage.
+
+## Your Rights
+You have the right to access, portability, and erasure of your personal data (see Settings → Privacy).
+
+## Contact
+For privacy requests, email privacy@ledgr.app or use the in-app tools.
+
+*This policy was generated for ${bizName} (Malawi).*
+`;
+              const blob = new Blob([policy], { type: 'text/markdown' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${bizName.toLowerCase().replace(/\s+/g, '-')}-privacy-policy.md`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+            }}
+            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 transition-colors"
+          >
+            Generate &amp; Download Privacy Policy
+          </button>
+        </div>
       </div>
     </div>
   );

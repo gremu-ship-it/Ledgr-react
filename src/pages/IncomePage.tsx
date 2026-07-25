@@ -7,6 +7,7 @@ import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
+import { CurrencySelector } from '@/components/CurrencySelector';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -186,6 +187,7 @@ interface QuickEntryForm {
   issue_date: string;
   description: string;
   amount: string;
+  currency: string;
   payment_method: string;
   reference: string;
   notes: string;
@@ -256,11 +258,12 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 
 function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: branches = [] } = useBranches(businessId);
   const { data: products = [] } = useAllProducts(businessId);
 
   const [form, setForm] = useState<QuickEntryForm>({
-    issue_date: today(), description: '', amount: '', payment_method: 'cash',
+    issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', payment_method: 'cash',
     reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -362,7 +365,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
-        issue_date: today(), description: '', amount: '', payment_method: 'cash',
+        issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', payment_method: 'cash',
         reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['income'] });
@@ -399,9 +402,16 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Amount (MWK)</label>
-              <input type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <label className="mb-1 block text-sm font-medium text-gray-700">Amount</label>
+              <div className="flex gap-2">
+                <input type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)}
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                <CurrencySelector
+                  value={form.currency || currentBusiness?.business?.base_currency || 'MWK'}
+                  onChange={(c) => set('currency', c)}
+                  className="w-28"
+                />
+              </div>
             </div>
           </div>
 

@@ -302,6 +302,7 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
   const { data: products = [] }  = useAllProducts(businessId);
@@ -340,7 +341,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           expense_type:    'receipt',
           status:          'paid',
           expense_date:    values.expense_date,
-          currency:        'MWK',
+          currency:        currentBusiness?.business?.base_currency || 'MWK',
           exchange_rate:   1,
           subtotal:        netAmount,
           vat_amount:      vatAmount,

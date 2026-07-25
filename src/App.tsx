@@ -6,6 +6,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
+import { useAppStore } from '@/store/useAppStore';
 
 // Auth pages
 import { LoginPage } from '@/pages/LoginPage';
@@ -25,6 +26,10 @@ import { AccountsPage } from '@/pages/AccountsPage';
 import { AssetsPage } from '@/pages/AssetsPage';
 import { CapitalPage } from '@/pages/CapitalPage';
 import { TaxPage } from '@/pages/TaxPage';
+import { BankReconciliation } from '@/components/bank/BankReconciliation';
+import { ApiDocumentationPage } from '@/pages/ApiDocumentationPage';
+import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { ZapierIntegrationPage } from '@/pages/ZapierIntegrationPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -51,6 +56,7 @@ const queryClient = new QueryClient({
 
 function App() {
   useAuthListener();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
 
   return (
     <ErrorBoundary>
@@ -89,6 +95,10 @@ function App() {
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/capital" element={<CapitalPage />} />
                 <Route path="/tax" element={<TaxPage />} />
+                <Route path="/bank-reconcile" element={<BankReconciliation businessId={currentBusiness?.business?.id || ''} />} />
+                <Route path="/api-docs" element={<ApiDocumentationPage />} />
+                <Route path="/api-keys" element={<ApiKeysPage />} />
+                <Route path="/zapier" element={<ZapierIntegrationPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/journals" element={<JournalsPage />} />
                 <Route path="/periods" element={<PeriodManagementPage />} />

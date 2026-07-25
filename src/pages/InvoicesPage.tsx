@@ -95,6 +95,7 @@ function RecordPaymentModal({
   onSuccess: () => void;
 }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const amountDue =
     invoice.amount_due !== null
       ? Number(invoice.amount_due)
@@ -136,7 +137,7 @@ function RecordPaymentModal({
         invoice_id: invoice.id,
         payment_date: form.payment_date,
         amount,
-        currency: 'MWK',
+        currency: currentBusiness?.business?.base_currency || 'MWK',
         exchange_rate: 1,
         payment_method: form.payment_method as Row<'invoice_payments'>['payment_method'],
         reference: form.reference || null,

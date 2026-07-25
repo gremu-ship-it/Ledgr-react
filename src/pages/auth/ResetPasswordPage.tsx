@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { PasswordInput, PasswordStrengthMeter, measureStrength, FormField, AuthAlert, SubmitButton } from '@/components/auth/AuthUI';
@@ -7,6 +8,7 @@ import { PasswordInput, PasswordStrengthMeter, measureStrength, FormField, AuthA
 type ResetState = 'awaiting_session' | 'form' | 'success' | 'invalid_link';
 
 export function ResetPasswordPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [pageState, setPageState] = useState<ResetState>('awaiting_session');
   const [password, setPassword] = useState('');
@@ -27,8 +29,8 @@ export function ResetPasswordPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (measureStrength(password).score < 2) { setError('Password is too weak. Use at least 8 characters.'); return; }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
+    if (measureStrength(password).score < 2) { setError(t('auth.weakPasswordShort')); return; }
+    if (password !== confirmPassword) { setError(t('auth.passwordsDoNotMatch')); return; }
     setLoading(true);
     const { error: updateError } = await supabase.auth.updateUser({ password });
     setLoading(false);
@@ -39,34 +41,34 @@ export function ResetPasswordPage() {
   }
 
   if (pageState === 'awaiting_session') {
-    return <AuthShell title="Verifying link…"><div className="py-6 text-center text-sm text-gray-500">Validating your reset link…</div></AuthShell>;
+    return <AuthShell title={t('auth.verifyingLink')}><div className="py-6 text-center text-sm text-gray-500">{t('auth.validatingResetLink')}</div></AuthShell>;
   }
   if (pageState === 'invalid_link') {
     return (
-      <AuthShell title="Link expired or invalid">
-        <AuthAlert type="error" message="This password reset link is invalid or has expired. Please request a new one." />
+      <AuthShell title={t('auth.linkExpired')}>
+        <AuthAlert type="error" message={t('auth.resetLinkInvalid')} />
         <p className="mt-4 text-center text-sm text-gray-500">
-          <a href="/forgot-password" className="font-medium text-brand-600 hover:text-brand-700">Request a new link</a>
+          <a href="/forgot-password" className="font-medium text-brand-600 hover:text-brand-700">{t('auth.requestNewLink')}</a>
         </p>
       </AuthShell>
     );
   }
   if (pageState === 'success') {
-    return <AuthShell title="Password updated"><AuthAlert type="success" message="Your password has been updated. Redirecting you to sign in…" /></AuthShell>;
+    return <AuthShell title={t('auth.passwordUpdated')}><AuthAlert type="success" message={t('auth.passwordUpdatedRedirect')} /></AuthShell>;
   }
 
   return (
-    <AuthShell title="Set a new password" subtitle="Choose a strong password for your Ledgr account">
+    <AuthShell title={t('auth.setNewPassword')} subtitle={t('auth.setNewPasswordSubtitle')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <AuthAlert type="error" message={error} />}
-        <FormField id="password" label="New password">
-          <PasswordInput id="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="New password" />
+        <FormField id="password" label={t('auth.newPassword')}>
+          <PasswordInput id="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('auth.newPassword')} />
           <PasswordStrengthMeter password={password} />
         </FormField>
-        <FormField id="confirmPassword" label="Confirm new password">
-          <PasswordInput id="confirmPassword" autoComplete="new-password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Same password again" />
+        <FormField id="confirmPassword" label={t('auth.confirmNewPassword')}>
+          <PasswordInput id="confirmPassword" autoComplete="new-password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder={t('auth.samePasswordAgain')} />
         </FormField>
-        <SubmitButton loading={loading} label="Update password" loadingLabel="Updating…" />
+        <SubmitButton loading={loading} label={t('auth.updatePassword')} loadingLabel={t('auth.updating')} />
       </form>
     </AuthShell>
   );

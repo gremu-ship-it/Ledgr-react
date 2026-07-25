@@ -1,0 +1,49 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Ledgr Public API",
+    "version": "1.0.0",
+    "description": "REST API for Ledgr accounting platform"
+  },
+  "servers": [
+    {
+      "url": "https://api.ledgr.app/v1"
+    }
+  ],
+  "paths": {
+    "/invoices": {
+      "get": {
+        "summary": "List invoices",
+        "responses": {
+          "200": {
+            "description": "List of invoices"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create invoice",
+        "responses": {
+          "201": {
+            "description": "Invoice created"
+          }
+        }
+      }
+    },
+    "/expenses": {
+      "get": {
+        "summary": "List expenses"
+      },
+      "post": {
+        "summary": "Create expense"
+      }
+    },
+    "/journal-entries": {
+      "get": {
+        "summary": "List journal entries"
+      },
+      "post": {
+        "summary": "Create journal entry"
+      }
+    }
+  }
+}

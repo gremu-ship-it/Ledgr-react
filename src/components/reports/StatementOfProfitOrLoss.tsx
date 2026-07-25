@@ -1,14 +1,14 @@
-import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { StatementSection } from '@/dal/repositories/FinancialStatementRepository';
+import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
 
-function formatMwk(amount: number): string {
-  const abs = Math.abs(amount);
-  const formatted = abs.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
+  const formatted = formatCurrency(Math.abs(amount));
   return amount < 0 ? `(${formatted})` : formatted;
 }
 
@@ -24,34 +24,44 @@ interface Props {
   preparerName?: string;
 }
 
-function SectionRows({ section, showComparative, negateForDisplay }: {
-  section: StatementSection; showComparative: boolean; negateForDisplay?: boolean;
+function SectionRows({
+  section,
+  showComparative,
+  negateForDisplay,
+  formatCurrency,
+  totalLabel,
+}: {
+  section: StatementSection;
+  showComparative: boolean;
+  negateForDisplay?: boolean;
+  formatCurrency: (value: number) => string;
+  totalLabel: string;
 }) {
   const sign = negateForDisplay ? -1 : 1;
   return (
     <>
       <tr>
-        <td colSpan={showComparative ? 3 : 2} className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+        <td colSpan={showComparative ? 3 : 2} className="pb-1 pt-4 text-xs font-semibold uppercase tracking-wider text-gray-400">
           {section.label}
         </td>
       </tr>
       {section.lines.map((line) => (
         <tr key={line.code}>
-          <td className="py-1 pl-4 text-sm text-gray-600">{line.name}</td>
-          <td className="py-1 text-right text-sm text-gray-600">{formatMwk(sign * line.amount)}</td>
+          <td className="py-1 ps-4 text-sm text-gray-600">{line.name}</td>
+          <td className="py-1 text-end text-sm text-gray-600">{formatAccounting(sign * line.amount, formatCurrency)}</td>
           {showComparative && (
-            <td className="py-1 text-right text-sm text-gray-400">
-              {line.comparativeAmount !== null ? formatMwk(sign * line.comparativeAmount) : '—'}
+            <td className="py-1 text-end text-sm text-gray-400">
+              {line.comparativeAmount !== null ? formatAccounting(sign * line.comparativeAmount, formatCurrency) : '—'}
             </td>
           )}
         </tr>
       ))}
       <tr className="border-t border-gray-100">
-        <td className="py-1.5 text-sm font-semibold text-gray-900">Total {section.label}</td>
-        <td className="py-1.5 text-right text-sm font-semibold text-gray-900">{formatMwk(sign * section.subtotal)}</td>
+        <td className="py-1.5 text-sm font-semibold text-gray-900">{totalLabel} {section.label}</td>
+        <td className="py-1.5 text-end text-sm font-semibold text-gray-900">{formatAccounting(sign * section.subtotal, formatCurrency)}</td>
         {showComparative && (
-          <td className="py-1.5 text-right text-sm font-semibold text-gray-500">
-            {section.comparativeSubtotal !== null ? formatMwk(sign * section.comparativeSubtotal) : '—'}
+          <td className="py-1.5 text-end text-sm font-semibold text-gray-500">
+            {section.comparativeSubtotal !== null ? formatAccounting(sign * section.comparativeSubtotal, formatCurrency) : '—'}
           </td>
         )}
       </tr>
@@ -60,19 +70,29 @@ function SectionRows({ section, showComparative, negateForDisplay }: {
 }
 
 function SubtotalRow({
-  label, amount, comparativeAmount, showComparative, highlight,
+  label,
+  amount,
+  comparativeAmount,
+  showComparative,
+  highlight,
+  formatCurrency,
 }: {
-  label: string; amount: number; comparativeAmount: number | null; showComparative: boolean; highlight?: boolean;
+  label: string;
+  amount: number;
+  comparativeAmount: number | null;
+  showComparative: boolean;
+  highlight?: boolean;
+  formatCurrency: (value: number) => string;
 }) {
   return (
     <tr className={highlight ? 'bg-brand-50' : 'border-t border-gray-200'}>
       <td className="py-2 text-sm font-bold text-gray-900">{label}</td>
-      <td className={`py-2 text-right text-sm font-bold ${amount < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-        {formatMwk(amount)}
+      <td className={`py-2 text-end text-sm font-bold ${amount < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+        {formatAccounting(amount, formatCurrency)}
       </td>
       {showComparative && (
-        <td className={`py-2 text-right text-sm font-bold ${(comparativeAmount ?? 0) < 0 ? 'text-red-500' : 'text-gray-600'}`}>
-          {comparativeAmount !== null ? formatMwk(comparativeAmount) : '—'}
+        <td className={`py-2 text-end text-sm font-bold ${(comparativeAmount ?? 0) < 0 ? 'text-red-500' : 'text-gray-600'}`}>
+          {comparativeAmount !== null ? formatAccounting(comparativeAmount, formatCurrency) : '—'}
         </td>
       )}
     </tr>
@@ -82,8 +102,10 @@ function SubtotalRow({
 export function StatementOfProfitOrLoss({
   businessId, periodStart, periodEnd,
   comparativePeriodStart = null, comparativePeriodEnd = null,
-  businessName: _businessName, preparerName,
+  preparerName,
 }: Props) {
+  const { t } = useTranslation();
+  const format = useLocaleFormat();
   const { data: pl, isLoading, error } = useQuery({
     queryKey: ['profit_or_loss', businessId, periodStart, periodEnd, comparativePeriodStart, comparativePeriodEnd],
     queryFn: () => financialStatementRepo.getProfitOrLoss(
@@ -93,19 +115,13 @@ export function StatementOfProfitOrLoss({
   });
 
   const showComparative = Boolean(comparativePeriodStart && comparativePeriodEnd);
-
-  const periodLabel = useMemo(() => {
-    const from = new Date(periodStart).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const to = new Date(periodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    return `${from} to ${to}`;
-  }, [periodStart, periodEnd]);
-
-  const comparativeLabel = useMemo(() => {
-    if (!comparativePeriodStart || !comparativePeriodEnd) return '';
-    const from = new Date(comparativePeriodStart).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    const to = new Date(comparativePeriodEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-    return `${from} to ${to}`;
-  }, [comparativePeriodStart, comparativePeriodEnd]);
+  const formatMwk = (value: number) => format.currency(value, 'MWK');
+  const periodLabel = t('reports.period', { start: format.date(periodStart), end: format.date(periodEnd) });
+  const comparativeLabel = comparativePeriodStart && comparativePeriodEnd
+    ? t('reports.period', { start: format.date(comparativePeriodStart), end: format.date(comparativePeriodEnd) })
+    : '';
+  const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
+  const subtotalProps = { showComparative, formatCurrency: formatMwk };
 
   if (isLoading) {
     return <div className="space-y-3">{[...Array(12)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
@@ -115,75 +131,54 @@ export function StatementOfProfitOrLoss({
     return (
       <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
         <AlertTriangle className="h-8 w-8 text-red-400" />
-        <p className="text-sm text-gray-500">Could not load Statement of Profit or Loss.</p>
+        <p className="text-sm text-gray-500">{t('reports.couldNotLoadProfitOrLoss')}</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-3xl">
+    <div className="max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <ReportHeader
-        title="Statement of Profit or Loss"
-        subtitle={`For the period ${periodLabel} · Currency: MWK`}
+        title={t('reports.statementOfProfitOrLoss')}
+        subtitle={`${t('reports.forPeriod', { period: periodLabel })} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
         preparerName={preparerName}
       />
 
       <table className="w-full">
         <thead>
           <tr>
-            <th className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-gray-400"></th>
-            <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400">{periodLabel}</th>
+            <th className="pb-2 text-start text-xs font-medium uppercase tracking-wide text-gray-400"></th>
+            <th className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-400">{periodLabel}</th>
             {showComparative && (
-              <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-gray-400">{comparativeLabel}</th>
+              <th className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-400">{comparativeLabel}</th>
             )}
           </tr>
         </thead>
         <tbody>
-          <SectionRows section={pl.revenue} showComparative={showComparative} />
-          <SectionRows section={pl.costOfSales} showComparative={showComparative} negateForDisplay />
+          <SectionRows section={pl.revenue} {...sectionProps} />
+          <SectionRows section={pl.costOfSales} negateForDisplay {...sectionProps} />
 
-          <SubtotalRow
-            label="Gross Profit"
-            amount={pl.grossProfit}
-            comparativeAmount={pl.comparativeGrossProfit}
-            showComparative={showComparative}
-          />
+          <SubtotalRow label={t('reports.grossProfit')} amount={pl.grossProfit} comparativeAmount={pl.comparativeGrossProfit} {...subtotalProps} />
 
           <tr><td colSpan={3} className="pt-4" /></tr>
 
-          <SectionRows section={pl.otherIncome} showComparative={showComparative} />
-          <SectionRows section={pl.operatingExpenses} showComparative={showComparative} negateForDisplay />
-          <SectionRows section={pl.depreciationAmortisation} showComparative={showComparative} negateForDisplay />
+          <SectionRows section={pl.otherIncome} {...sectionProps} />
+          <SectionRows section={pl.operatingExpenses} negateForDisplay {...sectionProps} />
+          <SectionRows section={pl.depreciationAmortisation} negateForDisplay {...sectionProps} />
 
-          <SubtotalRow
-            label="Operating Profit"
-            amount={pl.operatingProfit}
-            comparativeAmount={pl.comparativeOperatingProfit}
-            showComparative={showComparative}
-          />
+          <SubtotalRow label={t('reports.operatingProfit')} amount={pl.operatingProfit} comparativeAmount={pl.comparativeOperatingProfit} {...subtotalProps} />
 
           <tr><td colSpan={3} className="pt-4" /></tr>
 
-          <SectionRows section={pl.financeCosts} showComparative={showComparative} negateForDisplay />
+          <SectionRows section={pl.financeCosts} negateForDisplay {...sectionProps} />
 
-          <SubtotalRow
-            label="Profit Before Tax"
-            amount={pl.profitBeforeTax}
-            comparativeAmount={pl.comparativeProfitBeforeTax}
-            showComparative={showComparative}
-          />
+          <SubtotalRow label={t('reports.profitBeforeTax')} amount={pl.profitBeforeTax} comparativeAmount={pl.comparativeProfitBeforeTax} {...subtotalProps} />
 
           <tr><td colSpan={3} className="pt-4" /></tr>
 
-          <SectionRows section={pl.taxExpense} showComparative={showComparative} negateForDisplay />
+          <SectionRows section={pl.taxExpense} negateForDisplay {...sectionProps} />
 
-          <SubtotalRow
-            label="Net Profit / (Loss)"
-            amount={pl.netProfit}
-            comparativeAmount={pl.comparativeNetProfit}
-            showComparative={showComparative}
-            highlight
-          />
+          <SubtotalRow label={t('reports.netProfitLoss')} amount={pl.netProfit} comparativeAmount={pl.comparativeNetProfit} highlight {...subtotalProps} />
         </tbody>
       </table>
     </div>

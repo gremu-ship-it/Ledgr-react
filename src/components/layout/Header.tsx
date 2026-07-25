@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Bell, Menu, LogOut, Settings, User } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+import { LanguageSwitcher } from '@/components/i18n/LanguageSwitcher';
 import { BusinessSwitcher } from './BusinessSwitcher';
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {
@@ -19,6 +21,7 @@ function getInitials(name: string | null | undefined, email: string | null | und
 
 export function Header() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const currentUser = useAppStore((s) => s.currentUser);
 
@@ -56,7 +59,7 @@ export function Header() {
         <button
           onClick={toggleSidebar}
           className="rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 lg:hidden"
-          aria-label="Toggle sidebar"
+          aria-label={t('common.toggleSidebar')}
         >
           <Menu className="h-5 w-5" />
         </button>
@@ -64,29 +67,31 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
+        <LanguageSwitcher />
+
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => setNotificationsOpen((v) => !v)}
             className="relative rounded-xl p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
-            aria-label="Notifications"
+            aria-label={t('common.notifications')}
           >
             <Bell className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white" />
+              <span className="absolute end-2 top-2 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-white" />
             )}
           </button>
 
           {notificationsOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-80 rounded-2xl border border-gray-100 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="absolute end-0 top-full z-40 mt-2 w-80 rounded-2xl border border-gray-100 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
               <div className="px-3 py-2.5">
-                <p className="text-xs font-black uppercase tracking-widest text-gray-900">Notifications</p>
+                <p className="text-xs font-black uppercase tracking-widest text-gray-900">{t('common.notifications')}</p>
               </div>
               <div className="px-3 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
                   <Bell className="h-6 w-6 text-gray-200" />
                 </div>
-                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">All caught up</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-gray-400">{t('common.allCaughtUp')}</p>
               </div>
             </div>
           )}
@@ -103,10 +108,10 @@ export function Header() {
           </button>
 
           {userMenuOpen && (
-            <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-2xl border border-gray-100 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
+            <div className="absolute end-0 top-full z-40 mt-2 w-64 rounded-2xl border border-gray-100 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl">
               <div className="px-4 py-3">
                 <p className="truncate text-xs font-black uppercase tracking-widest text-gray-900">
-                  {currentUser?.profile?.full_name ?? 'Account'}
+                  {currentUser?.profile?.full_name ?? t('common.account')}
                 </p>
                 <p className="truncate text-[10px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">{currentUser?.email}</p>
               </div>
@@ -121,7 +126,7 @@ export function Header() {
                 )}
               >
                 <User className="h-4 w-4" />
-                Profile
+                {t('common.profile')}
               </button>
               <button
                 onClick={() => {
@@ -131,7 +136,7 @@ export function Header() {
                 className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-50 hover:text-brand-600"
               >
                 <Settings className="h-4 w-4" />
-                Settings
+                {t('common.settings')}
               </button>
               <div className="my-1 border-t border-gray-100/50" />
               <button
@@ -139,7 +144,7 @@ export function Header() {
                 className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-red-600 transition-colors hover:bg-red-50"
               >
                 <LogOut className="h-4 w-4" />
-                Log Out
+                {t('auth.signOut')}
               </button>
             </div>
           )}
