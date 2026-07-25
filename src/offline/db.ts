@@ -65,7 +65,7 @@ export interface QueueItem {
    * depends on `operationType` — see `OfflinePayloads` in payloads.ts for
    * the exact discriminated union.
    */
-  payload: unknown;
+  payload: any;
 
   /** If this item depends on another queued item's server-generated id. */
   dependsOnLocalId?: number;

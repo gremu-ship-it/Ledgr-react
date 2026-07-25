@@ -150,7 +150,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
-  const set = (k: keyof typeof form, v: unknown) =>
+  const set = (k: keyof typeof form, v: any) =>
     setForm(f => ({ ...f, [k]: v }));
 
   // Auto-set normal_balance when type changes
@@ -203,7 +203,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
         is_active:       form.is_active,
       } as any);
       onClose();
-    } catch (e: unknown) {
+    } catch (e: any) {
       setError((e as Error).message ?? 'Save failed.');
     } finally {
       setSaving(false);
@@ -437,7 +437,7 @@ export function AccountsPage() {
   });
 
   useEffect(() => {
-    if (businessTemplate) setSelectedTemplate(businessTemplate);
+    if (businessTemplate && selectedTemplate !== businessTemplate) { setSelectedTemplate(businessTemplate); }
   }, [businessTemplate]);
 
   const templateChanged = businessTemplate != null && selectedTemplate !== businessTemplate;
@@ -518,7 +518,7 @@ export function AccountsPage() {
           ? `Added ${inserted} missing accounts (${skipped} already existed).`
           : `Chart of Accounts is already complete — nothing to add.`,
       });
-    } catch (e: unknown) {
+    } catch (e: any) {
       setSeedMsg({ type: 'error', text: (e as Error).message });
     } finally {
       setSeeding(false);
@@ -547,7 +547,7 @@ export function AccountsPage() {
         type: 'success',
         text: `Switched to ${selectedTemplate.toUpperCase()}. Added ${added} account(s), deactivated ${deactivated}.`,
       });
-    } catch (e: unknown) {
+    } catch (e: any) {
       setSeedMsg({ type: 'error', text: (e as Error).message });
     } finally {
       setSeeding(false);

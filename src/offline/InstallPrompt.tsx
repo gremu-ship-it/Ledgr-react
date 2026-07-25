@@ -56,7 +56,7 @@ export function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    if (isIos()) {
+    if (isIos() && !sessionStorage.getItem('ledgr_ios_prompt_shown')) {
       setShowIosInstructions(true);
     }
 

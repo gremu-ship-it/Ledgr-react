@@ -37,6 +37,7 @@ serve(async (req) => {
       const { data } = await supabase.from("invoices").select("*").eq("business_id", businessId);
       return jsonResponse(data);
     }
+
     if (path === "/invoices" && method === "POST") {
       const body = await req.json();
       const { data, error } = await supabase.from("invoices").insert({ ...body, business_id: businessId }).select().single();
@@ -49,6 +50,7 @@ serve(async (req) => {
       const { data } = await supabase.from("expenses").select("*").eq("business_id", businessId);
       return jsonResponse(data);
     }
+
     if (path === "/expenses" && method === "POST") {
       const body = await req.json();
       const { data, error } = await supabase.from("expenses").insert({ ...body, business_id: businessId }).select().single();
@@ -61,6 +63,7 @@ serve(async (req) => {
       const { data } = await supabase.from("journal_entries").select("*").eq("business_id", businessId);
       return jsonResponse(data);
     }
+
     if (path === "/journal-entries" && method === "POST") {
       const body = await req.json();
       const { data, error } = await supabase.from("journal_entries").insert({ ...body, business_id: businessId }).select().single();

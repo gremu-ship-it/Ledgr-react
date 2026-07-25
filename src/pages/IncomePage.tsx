@@ -518,7 +518,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     repos.business.reserveNextInvoiceNumber(businessId).then((num) => {
       setForm((f) => ({ ...f, invoice_number: num }));
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [businessId]);
 
   function setField(field: keyof Omit<InvoiceForm, 'lines'>, value: string) {
