@@ -10,6 +10,15 @@ export interface ApiKey {
   revoked_at: string | null;
 }
 
+type UntypedSupabase = typeof supabase & {
+  from: (relation: string) => {
+    select: (columns?: string) => unknown;
+    update: (values: Record<string, unknown>) => unknown;
+  };
+};
+
+const db = supabase as UntypedSupabase;
+
 export class ApiKeyService {
   async createApiKey(businessId: string, name: string): Promise<{ key: string; record: ApiKey }> {
     const { data, error } = await supabase.functions.invoke('create-api-key', {
@@ -20,9 +29,15 @@ export class ApiKeyService {
   }
 
   async listApiKeys(businessId: string): Promise<ApiKey[]> {
-    const { data, error } = await supabase
-      .from('api_keys')
-      .select('*')
+    const query = db.from('api_keys').select('*') as {
+      eq: (column: string, value: unknown) => {
+        is: (column: string, value: unknown) => {
+          order: (column: string, options: { ascending: boolean }) => Promise<{ data: ApiKey[] | null; error: unknown }>;
+        };
+      };
+    };
+
+    const { data, error } = await query
       .eq('business_id', businessId)
       .is('revoked_at', null)
       .order('created_at', { ascending: false });
@@ -31,10 +46,11 @@ export class ApiKeyService {
   }
 
   async revokeApiKey(keyId: string): Promise<void> {
-    const { error } = await supabase
-      .from('api_keys')
-      .update({ revoked_at: new Date().toISOString() })
-      .eq('id', keyId);
+    const query = db.from('api_keys').update({ revoked_at: new Date().toISOString() }) as {
+      eq: (column: string, value: unknown) => Promise<{ error: unknown }>;
+    };
+
+    const { error } = await query.eq('id', keyId);
     if (error) throw error;
   }
 }

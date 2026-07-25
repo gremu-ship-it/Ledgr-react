@@ -1,14 +1,33 @@
 import { supabase } from '@/lib/supabase';
 
-export async function triggerWebhook(businessId: string, event: string, payload: any) {
-  const { data: webhooks } = await supabase
+interface WebhookRow {
+  id: string;
+  url: string;
+  secret: string;
+}
+
+type WebhookQuery = {
+  select: (columns?: string) => WebhookQuery;
+  eq: (column: string, value: unknown) => WebhookQuery;
+  contains: (column: string, value: unknown[]) => Promise<{ data: WebhookRow[] | null }>;
+  insert: (values: Record<string, unknown>) => Promise<{ error: unknown }>;
+};
+
+type UntypedSupabase = typeof supabase & {
+  from: (relation: string) => WebhookQuery;
+};
+
+const db = supabase as UntypedSupabase;
+
+export async function triggerWebhook(businessId: string, event: string, payload: unknown) {
+  const { data: webhooks } = await db
     .from('webhooks')
     .select('*')
     .eq('business_id', businessId)
     .eq('is_active', true)
     .contains('events', [event]);
 
-  for (const webhook of webhooks || []) {
+  for (const webhook of (webhooks || []) as WebhookRow[]) {
     try {
       const res = await fetch(webhook.url, {
         method: 'POST',
@@ -23,7 +42,7 @@ export async function triggerWebhook(businessId: string, event: string, payload:
         }),
       });
 
-      await supabase.from('webhook_deliveries').insert({
+      await db.from('webhook_deliveries').insert({
         webhook_id: webhook.id,
         event,
         payload,
@@ -38,7 +57,7 @@ export async function triggerWebhook(businessId: string, event: string, payload:
   }
 }
 
-async function createSignature(secret: string, payload: any): Promise<string> {
+async function createSignature(secret: string, payload: unknown): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw',

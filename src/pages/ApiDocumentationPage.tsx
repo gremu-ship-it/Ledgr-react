@@ -1,15 +1,17 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Copy, Check } from 'lucide-react';
 
 const endpoints = [
-  { method: 'GET', path: '/api/v1/invoices', desc: 'List invoices' },
-  { method: 'POST', path: '/api/v1/invoices', desc: 'Create invoice' },
-  { method: 'GET', path: '/api/v1/expenses', desc: 'List expenses' },
-  { method: 'POST', path: '/api/v1/journal-entries', desc: 'Create journal entry' },
-  { method: 'GET', path: '/api/v1/accounts', desc: 'List chart of accounts' },
+  { method: 'GET', path: '/api/v1/invoices', descKey: 'api.listInvoices' },
+  { method: 'POST', path: '/api/v1/invoices', descKey: 'api.createInvoice' },
+  { method: 'GET', path: '/api/v1/expenses', descKey: 'api.listExpenses' },
+  { method: 'POST', path: '/api/v1/journal-entries', descKey: 'api.createJournalEntry' },
+  { method: 'GET', path: '/api/v1/accounts', descKey: 'api.listChartOfAccounts' },
 ];
 
 export function ApiDocumentationPage() {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const copySpec = () => {
@@ -29,44 +31,42 @@ export function ApiDocumentationPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-2">Ledgr Public API</h1>
-      <p className="text-gray-600 mb-8">REST API + Webhooks for third-party integrations</p>
+    <div className="mx-auto max-w-4xl p-8">
+      <h1 className="mb-2 text-3xl font-bold">{t('api.publicApi')}</h1>
+      <p className="mb-8 text-gray-600">{t('api.publicApiSubtitle')}</p>
 
       <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Authentication</h2>
-        <div className="bg-gray-50 p-4 rounded-lg text-sm">
-          All requests require an <code>Authorization: Bearer ledgr_sk_...</code> header.
+        <h2 className="mb-4 text-xl font-semibold">{t('api.authentication')}</h2>
+        <div className="rounded-lg bg-gray-50 p-4 text-sm">
+          {t('api.authRequired')}
         </div>
       </div>
 
       <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Endpoints</h2>
+        <h2 className="mb-4 text-xl font-semibold">{t('api.endpoints')}</h2>
         <div className="space-y-2">
-          {endpoints.map((ep, i) => (
-            <div key={i} className="flex items-center gap-4 p-3 border rounded">
-              <span className="font-mono text-xs px-2 py-0.5 bg-gray-200 rounded">{ep.method}</span>
+          {endpoints.map((ep) => (
+            <div key={`${ep.method}-${ep.path}`} className="flex items-center gap-4 rounded border p-3">
+              <span className="rounded bg-gray-200 px-2 py-0.5 font-mono text-xs">{ep.method}</span>
               <code className="flex-1">{ep.path}</code>
-              <span className="text-sm text-gray-600">{ep.desc}</span>
+              <span className="text-sm text-gray-600">{t(ep.descKey)}</span>
             </div>
           ))}
         </div>
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xl font-semibold">OpenAPI Spec</h2>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl font-semibold">{t('api.openApiSpec')}</h2>
           <button
             onClick={copySpec}
-            className="flex items-center gap-2 text-sm px-3 py-1.5 border rounded hover:bg-gray-50"
+            className="flex items-center gap-2 rounded border px-3 py-1.5 text-sm hover:bg-gray-50"
           >
             {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            {copied ? 'Copied!' : 'Copy swagger.json'}
+            {copied ? t('api.copied') : t('api.copySwagger')}
           </button>
         </div>
-        <p className="text-sm text-gray-500">
-          Full OpenAPI 3.0 specification is available at <code>/api/v1/openapi.json</code>
-        </p>
+        <p className="text-sm text-gray-500">{t('api.openApiAvailable')}</p>
       </div>
     </div>
   );

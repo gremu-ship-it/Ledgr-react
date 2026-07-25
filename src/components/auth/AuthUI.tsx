@@ -1,4 +1,5 @@
 import { useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -51,6 +52,7 @@ export function PasswordInput({
   id,
   ...props
 }: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> & { id: string }) {
+  const { t } = useTranslation();
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
@@ -59,7 +61,7 @@ export function PasswordInput({
         type="button"
         onClick={() => setShow((v) => !v)}
         className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600"
-        aria-label={show ? 'Hide password' : 'Show password'}
+        aria-label={show ? t('auth.hidePassword') : t('auth.showPassword')}
         tabIndex={-1}
       >
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -74,6 +76,8 @@ interface StrengthResult {
   color: string;
 }
 
+// Shared by register/reset validation as well as the visual meter.
+// eslint-disable-next-line react-refresh/only-export-components
 export function measureStrength(password: string): StrengthResult {
   if (!password) return { score: 0, label: '', color: 'bg-gray-200' };
   let score = 0;
@@ -85,15 +89,16 @@ export function measureStrength(password: string): StrengthResult {
   const clamped = Math.min(4, score) as StrengthResult['score'];
   const map: Record<StrengthResult['score'], Omit<StrengthResult, 'score'>> = {
     0: { label: '', color: 'bg-gray-200' },
-    1: { label: 'Very weak', color: 'bg-red-400' },
-    2: { label: 'Weak', color: 'bg-orange-400' },
-    3: { label: 'Good', color: 'bg-yellow-400' },
-    4: { label: 'Strong', color: 'bg-brand-500' },
+    1: { label: 'auth.strengthVeryWeak', color: 'bg-red-400' },
+    2: { label: 'auth.strengthWeak', color: 'bg-orange-400' },
+    3: { label: 'auth.strengthGood', color: 'bg-yellow-400' },
+    4: { label: 'auth.strengthStrong', color: 'bg-brand-500' },
   };
   return { score: clamped, ...map[clamped] };
 }
 
 export function PasswordStrengthMeter({ password }: { password: string }) {
+  const { t } = useTranslation();
   const { score, label, color } = measureStrength(password);
   if (!password) return null;
   return (
@@ -111,7 +116,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
       </div>
       <p className={clsx('mt-1 text-xs font-medium',
         score <= 2 ? 'text-red-500' : score === 3 ? 'text-yellow-600' : 'text-brand-600')}>
-        {label}
+        {label ? t(label) : ''}
       </p>
     </div>
   );

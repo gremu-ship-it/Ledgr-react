@@ -1,10 +1,15 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Copy, Check } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { apiKeyService, ApiKey } from '@/services/api/ApiKeyService';
+import { apiKeyService } from '@/services/api/ApiKeyService';
+import type { ApiKey } from '@/services/api/ApiKeyService';
+import { useLocaleFormat } from '@/i18n';
 
 export function ApiKeysPage() {
+  const { t } = useTranslation();
+  const format = useLocaleFormat();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const queryClient = useQueryClient();
@@ -40,70 +45,70 @@ export function ApiKeysPage() {
     }
   };
 
-  if (!businessId) return <div className="p-8">No business selected.</div>;
+  if (!businessId) return <div className="p-8">{t('api.noBusinessSelected')}</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-8">
-      <h1 className="text-2xl font-semibold mb-6">API Keys</h1>
+    <div className="mx-auto max-w-4xl p-8">
+      <h1 className="mb-6 text-2xl font-semibold">{t('api.apiKeys')}</h1>
 
       {/* Generate new key */}
-      <div className="mb-8 p-6 border rounded-2xl bg-white">
-        <h3 className="font-medium mb-3">Create New API Key</h3>
+      <div className="mb-8 rounded-2xl border bg-white p-6">
+        <h3 className="mb-3 font-medium">{t('api.createNewApiKey')}</h3>
         <div className="flex gap-3">
           <input
             type="text"
-            placeholder="Key name (e.g. Zapier Integration)"
+            placeholder={t('api.keyNamePlaceholder')}
             value={newKeyName}
             onChange={(e) => setNewKeyName(e.target.value)}
-            className="flex-1 border rounded-lg px-4 py-2"
+            className="flex-1 rounded-lg border px-4 py-2"
           />
           <button
             onClick={() => createMutation.mutate()}
             disabled={!newKeyName.trim() || createMutation.isPending}
-            className="bg-brand-500 text-white px-6 rounded-lg flex items-center gap-2 disabled:opacity-60"
+            className="flex items-center gap-2 rounded-lg bg-brand-500 px-6 text-white disabled:opacity-60"
           >
-            <Plus className="h-4 w-4" /> Generate
+            <Plus className="h-4 w-4" /> {t('api.generate')}
           </button>
         </div>
 
         {generatedKey && (
-          <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-medium text-emerald-700">Your new API key</span>
-              <button onClick={copyKey} className="text-xs flex items-center gap-1 text-emerald-700">
+          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-medium text-emerald-700">{t('api.yourNewApiKey')}</span>
+              <button onClick={copyKey} className="flex items-center gap-1 text-xs text-emerald-700">
                 {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('api.copied') : t('api.copy')}
               </button>
             </div>
-            <code className="font-mono text-sm break-all">{generatedKey}</code>
-            <p className="text-xs text-emerald-600 mt-2">Save this key now — it will not be shown again.</p>
+            <code className="break-all font-mono text-sm">{generatedKey}</code>
+            <p className="mt-2 text-xs text-emerald-600">{t('api.saveKeyWarning')}</p>
           </div>
         )}
       </div>
 
       {/* Existing keys */}
       <div>
-        <h3 className="font-medium mb-3">Active Keys</h3>
+        <h3 className="mb-3 font-medium">{t('api.activeKeys')}</h3>
         {isLoading ? (
-          <div className="text-sm text-gray-500">Loading…</div>
+          <div className="text-sm text-gray-500">{t('common.loading')}</div>
         ) : keys.length === 0 ? (
-          <p className="text-sm text-gray-500">No API keys yet.</p>
+          <p className="text-sm text-gray-500">{t('api.noApiKeys')}</p>
         ) : (
           <div className="space-y-3">
             {keys.map((key: ApiKey) => (
-              <div key={key.id} className="flex items-center justify-between border rounded-xl p-4">
+              <div key={key.id} className="flex items-center justify-between rounded-xl border p-4">
                 <div>
                   <div className="font-medium">{key.name}</div>
-                  <div className="text-xs text-gray-500 font-mono">{key.key_prefix}••••••••</div>
+                  <div className="font-mono text-xs text-gray-500">{key.key_prefix}••••••••</div>
                   {key.last_used_at && (
-                    <div className="text-xs text-gray-400">Last used: {new Date(key.last_used_at).toLocaleDateString()}</div>
+                    <div className="text-xs text-gray-400">{t('api.lastUsed', { date: format.date(key.last_used_at) })}</div>
                   )}
                 </div>
                 <button
                   onClick={() => revokeMutation.mutate(key.id)}
-                  className="text-red-600 hover:text-red-700 flex items-center gap-1 text-sm"
+                  className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
                 >
-                  <Trash2 className="h-4 w-4" /> Revoke
+                  <Trash2 className="h-4 w-4" /> {t('api.revoke')}
                 </button>
               </div>
             ))}
