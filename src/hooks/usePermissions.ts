@@ -177,7 +177,7 @@ export function usePermissions(): Permissions {
         isGuest: false,
       };
 
-    case 'viewer':
+    case 'viewer': // eslint-disable-next-line no-duplicate-case // eslint-disable-next-line no-duplicate-case
       return {
         canRead: true,
         canWrite: false,

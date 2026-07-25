@@ -5,9 +5,9 @@ import { UnsupportedOperationError, toRepositoryError } from '../errors/Reposito
 
 export interface BalanceWithProduct {
   id: string;
-  business_id: string;
-  product_id: string;
-  location_id: string;
+  businessid: string;
+  productid: string;
+  locationid: string;
   quantity_on_hand: number;
   quantity_reserved: number;
   quantity_available: number | null;
