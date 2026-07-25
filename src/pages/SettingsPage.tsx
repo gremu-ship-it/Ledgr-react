@@ -1389,6 +1389,7 @@ function ToggleRow({
 
 function PrivacyTab() {
   const { consent, updateConsent, hasDecided } = useCookieConsent();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const analytics = consent?.analytics ?? false;
   const marketing = consent?.marketing ?? false;
 
@@ -1488,7 +1489,7 @@ function PrivacyTab() {
 
           <button
             onClick={() => {
-              const bizName = business?.name || 'Your Business';
+              const bizName = currentBusiness?.business?.name || 'Your Business';
               const policy = `# Privacy Policy for ${bizName}
 
 **Effective Date:** ${new Date().toLocaleDateString('en-GB')}

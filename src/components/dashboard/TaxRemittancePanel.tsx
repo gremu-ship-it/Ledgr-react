@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { getMraDueDates, useVatSummary, usePayeSummary } from '@/hooks/useTaxData';
 
@@ -13,6 +14,7 @@ interface TaxRemittancePanelProps {
 }
 
 export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
+  const { t } = useTranslation();
   const dueDates = getMraDueDates();
   const vat = useVatSummary(businessId);
   const paye = usePayeSummary(businessId);
@@ -41,7 +43,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
             <Calendar className="h-5 w-5 text-brand-500" />
           )}
           <h2 className="text-base font-semibold text-gray-900">
-            MRA Tax Remittance
+            {t('dashboard.mraTaxRemittance')}
           </h2>
           {hasUrgent && (
             <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -50,8 +52,8 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
                 : 'bg-amber-100 text-amber-700'
             }`}>
               {overdueDates.length > 0
-                ? `${overdueDates.length} overdue`
-                : `${dueSoonDates.length} due soon`}
+                ? t('dashboard.overdue', { count: overdueDates.length })
+                : t('dashboard.dueSoon', { count: dueSoonDates.length })}
             </span>
           )}
         </div>
@@ -64,7 +66,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
         {/* VAT Summary */}
         <div className="rounded-xl border border-white/60 bg-white p-4 shadow-sm">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            VAT Position (Last Month)
+            {t('dashboard.vatPositionLastMonth')}
           </p>
           {vat.isLoading ? (
             <div className="space-y-2">
@@ -75,11 +77,11 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
           ) : (
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600">
-                <span>Output VAT (Sales)</span>
+                <span>{t('dashboard.outputVatSales')}</span>
                 <span className="font-medium">{formatMwk(vat.data?.outputVat ?? 0)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
-                <span>Input VAT (Expenses)</span>
+                <span>{t('dashboard.inputVatExpenses')}</span>
                 <span className="font-medium text-brand-600">
                   − {formatMwk(vat.data?.inputVat ?? 0)}
                 </span>
@@ -87,10 +89,10 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
               <div className={`flex justify-between border-t border-gray-100 pt-1.5 font-semibold ${
                 (vat.data?.vatPayable ?? 0) > 0 ? 'text-red-600' : 'text-brand-600'
               }`}>
-                <span>VAT Payable to MRA</span>
+                <span>{t('dashboard.vatPayableToMra')}</span>
                 <span>{formatMwk(vat.data?.vatPayable ?? 0)}</span>
               </div>
-              <p className="text-xs text-gray-400">Period: {vat.data?.period ?? '—'}</p>
+              <p className="text-xs text-gray-400">{t('dashboard.period', { period: vat.data?.period ?? '—' })}</p>
             </div>
           )}
         </div>
@@ -98,19 +100,19 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
         {/* PAYE Summary */}
         <div className="rounded-xl border border-white/60 bg-white p-4 shadow-sm">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            PAYE Due (Last Month)
+            {t('dashboard.payeDueLastMonth')}
           </p>
           {paye.isLoading ? (
             <div className="h-4 animate-pulse rounded bg-gray-100" />
           ) : (
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between font-semibold text-red-600">
-                <span>Total PAYE to Remit</span>
+                <span>{t('dashboard.totalPayeToRemit')}</span>
                 <span>{formatMwk(paye.data?.totalPaye ?? 0)}</span>
               </div>
-              <p className="text-xs text-gray-400">Period: {paye.data?.period ?? '—'}</p>
+              <p className="text-xs text-gray-400">{t('dashboard.period', { period: paye.data?.period ?? '—' })}</p>
               <p className="text-xs text-gray-400">
-                Due: 14th of current month
+                {t('dashboard.due14th')}
               </p>
             </div>
           )}
@@ -119,7 +121,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
         {/* Due Dates */}
         <div className="rounded-xl border border-white/60 bg-white p-4 shadow-sm">
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Upcoming Due Dates
+            {t('dashboard.upcomingDueDates')}
           </p>
           <div className="space-y-2">
             {dueDates.slice(0, 4).map((d) => (
@@ -143,10 +145,10 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
                     d.isOverdue ? 'text-red-600' : d.isDueSoon ? 'text-amber-600' : 'text-gray-500'
                   }`}>
                     {d.isOverdue
-                      ? `${Math.abs(d.daysUntilDue)}d overdue`
+                      ? t('dashboard.daysOverdueShort', { count: Math.abs(d.daysUntilDue) })
                       : d.daysUntilDue === 0
-                      ? 'Due today!'
-                      : `${d.daysUntilDue}d left`}
+                      ? t('dashboard.dueTodayBang')
+                      : t('dashboard.daysLeft', { count: d.daysUntilDue })}
                   </p>
                   <p className="text-xs text-gray-400">{d.dueDateStr}</p>
                 </div>

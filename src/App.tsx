@@ -6,6 +6,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
+import { useAppStore } from '@/store/useAppStore';
 
 // Auth pages
 import { LoginPage } from '@/pages/LoginPage';
@@ -55,6 +56,7 @@ const queryClient = new QueryClient({
 
 function App() {
   useAuthListener();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
 
   return (
     <ErrorBoundary>
@@ -95,6 +97,8 @@ function App() {
                 <Route path="/tax" element={<TaxPage />} />
                 <Route path="/bank-reconcile" element={<BankReconciliation businessId={currentBusiness?.business?.id || ''} />} />
                 <Route path="/api-docs" element={<ApiDocumentationPage />} />
+                <Route path="/api-keys" element={<ApiKeysPage />} />
+                <Route path="/zapier" element={<ZapierIntegrationPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/journals" element={<JournalsPage />} />
                 <Route path="/periods" element={<PeriodManagementPage />} />

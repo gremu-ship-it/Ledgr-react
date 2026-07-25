@@ -36,7 +36,7 @@ export function AppLayout() {
         className={clsx(
           'flex min-h-screen flex-col transition-all duration-200',
           // Desktop: offset by sidebar width
-          sidebarOpen ? 'lg:pl-64' : 'lg:pl-[72px]',
+          sidebarOpen ? 'lg:ps-64' : 'lg:ps-[72px]',
         )}
       >
         {(!isMobile || showMobileHeader) && <Header />}

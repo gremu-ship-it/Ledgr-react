@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
+import { i18n, normalizeLanguage } from '@/i18n';
 
 // Module-level flag — survives re-renders and effect re-runs
 let isHydrating = false;
@@ -24,7 +25,18 @@ export function useAuthListener() {
 
         if (!isMountedRef.current) return;
 
-        useAppStore.getState().setCurrentUser({ id: userId, email, profile });
+        const preferredLanguage = normalizeLanguage(
+          (profile as { preferred_language?: string | null } | null)?.preferred_language,
+        );
+        const normalizedProfile = profile
+          ? { ...profile, preferred_language: preferredLanguage }
+          : null;
+
+        useAppStore.getState().setCurrentUser({ id: userId, email, profile: normalizedProfile });
+
+        if (i18n.language !== preferredLanguage) {
+          void i18n.changeLanguage(preferredLanguage);
+        }
 
         let memberships = useAppStore.getState().businesses;
         try {

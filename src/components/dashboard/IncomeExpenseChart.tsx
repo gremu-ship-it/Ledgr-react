@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   XAxis,
   YAxis,
@@ -54,6 +55,7 @@ function fmtShort(v: number) {
 }
 
 export function IncomeExpenseChart({ data, isLoading, isError, compact }: IncomeExpenseChartProps) {
+  const { t } = useTranslation();
   if (isLoading) {
     return (
       <div className={compact ? 'flex h-52 items-center justify-center' : 'flex h-72 items-center justify-center'}>
@@ -65,7 +67,7 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
   if (isError) {
     return (
       <div className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}>
-        <p className="text-sm font-medium text-red-500">Failed to load chart data</p>
+        <p className="text-sm font-medium text-red-500">{t('dashboard.failedChart')}</p>
       </div>
     );
   }
@@ -75,8 +77,8 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
   if (isEmpty) {
     return (
       <div className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}>
-        <p className="text-sm font-medium text-gray-400">No transactions yet</p>
-        <p className="text-xs text-gray-300">Income and expenses will appear here once recorded</p>
+        <p className="text-sm font-medium text-gray-400">{t('dashboard.noTransactionsYet')}</p>
+        <p className="text-xs text-gray-300">{t('dashboard.transactionsWillAppear')}</p>
       </div>
     );
   }
@@ -121,7 +123,7 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
           <Area
             type="monotone"
             dataKey="income"
-            name="Income"
+            name={t('dashboard.income')}
             stroke="#0a7c5a"
             strokeWidth={3}
             fill="url(#incomeGradient)"
@@ -131,7 +133,7 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
           <Area
             type="monotone"
             dataKey="expenses"
-            name="Expenses"
+            name={t('dashboard.expenses')}
             stroke="#e3342f"
             strokeWidth={3}
             strokeDasharray="6 4"

@@ -258,6 +258,7 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 
 function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: branches = [] } = useBranches(businessId);
   const { data: products = [] } = useAllProducts(businessId);
 
@@ -364,7 +365,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
-        issue_date: today(), description: '', amount: '', payment_method: 'cash',
+        issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', payment_method: 'cash',
         reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['income'] });

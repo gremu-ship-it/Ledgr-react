@@ -302,6 +302,7 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
   const { data: products = [] }  = useAllProducts(businessId);

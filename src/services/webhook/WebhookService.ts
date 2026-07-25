@@ -14,16 +14,34 @@ export interface WebhookDelivery {
   id: string;
   webhook_id: string;
   event: string;
-  payload: any;
+  payload: unknown;
   status_code: number | null;
   response_body: string | null;
   attempts: number;
   delivered_at: string | null;
 }
 
+type QueryResult<T> = Promise<{ data: T | null; error: unknown }>;
+type UntypedQuery = {
+  select: (columns?: string) => UntypedQuery;
+  insert: (values: Record<string, unknown>) => UntypedQuery;
+  delete: () => UntypedQuery;
+  eq: (column: string, value: unknown) => UntypedQuery;
+  order: (column: string, options: { ascending: boolean }) => UntypedQuery;
+  limit: (count: number) => QueryResult<WebhookDelivery[]>;
+  single: () => QueryResult<Webhook>;
+  then: Promise<{ data: unknown; error: unknown }>['then'];
+};
+
+type UntypedSupabase = typeof supabase & {
+  from: (relation: string) => UntypedQuery;
+};
+
+const db = supabase as UntypedSupabase;
+
 export class WebhookService {
   async registerWebhook(businessId: string, url: string, events: string[]): Promise<Webhook> {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('webhooks')
       .insert({
         business_id: businessId,
@@ -36,21 +54,22 @@ export class WebhookService {
       .single();
 
     if (error) throw error;
+    if (!data) throw new Error('Failed to create webhook');
     return data;
   }
 
   async listWebhooks(businessId: string): Promise<Webhook[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('webhooks')
       .select('*')
       .eq('business_id', businessId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false }) as { data: Webhook[] | null; error: unknown };
     if (error) throw error;
     return data || [];
   }
 
   async getDeliveries(webhookId: string): Promise<WebhookDelivery[]> {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from('webhook_deliveries')
       .select('*')
       .eq('webhook_id', webhookId)
@@ -61,7 +80,7 @@ export class WebhookService {
   }
 
   async deleteWebhook(id: string): Promise<void> {
-    const { error } = await supabase.from('webhooks').delete().eq('id', id);
+    const { error } = await db.from('webhooks').delete().eq('id', id) as { error: unknown };
     if (error) throw error;
   }
 }

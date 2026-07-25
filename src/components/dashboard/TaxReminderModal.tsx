@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Clock, X, ExternalLink } from 'lucide-react';
 import { getMraDueDates, type TaxDueDate } from '@/hooks/useTaxData';
 
 export function TaxReminderModal() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [urgentDates, setUrgentDates] = useState<TaxDueDate[]>([]);
 
@@ -14,6 +16,8 @@ export function TaxReminderModal() {
     const urgent = dueDates.filter((d) => d.isOverdue || d.isDueSoon);
 
     if (urgent.length > 0) {
+      // One-time session reminder state is intentionally initialized from sessionStorage.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setUrgentDates(urgent);
       setOpen(true);
       sessionStorage.setItem('ledgr_tax_reminder_shown', '1');
@@ -37,7 +41,7 @@ export function TaxReminderModal() {
                 ? <AlertTriangle className="h-5 w-5 text-white" />
                 : <Clock className="h-5 w-5 text-white" />}
               <h2 className="text-base font-semibold text-white">
-                {hasOverdue ? 'Tax Payment Overdue!' : 'Tax Payment Due Soon'}
+                {hasOverdue ? t('dashboard.taxPaymentOverdue') : t('dashboard.taxPaymentDueSoon')}
               </h2>
             </div>
             <button
@@ -49,8 +53,8 @@ export function TaxReminderModal() {
           </div>
           <p className="mt-1 text-sm text-white/80">
             {hasOverdue
-              ? 'You have overdue MRA tax payments. Failure to remit attracts penalties.'
-              : 'The following MRA tax payments are due within 7 days.'}
+              ? t('dashboard.overdueTaxBody')
+              : t('dashboard.dueSoonTaxBody')}
           </p>
         </div>
 
@@ -71,17 +75,17 @@ export function TaxReminderModal() {
                     }`}>
                       {d.taxType}
                     </p>
-                    <p className="text-xs text-gray-500">Period: {d.period}</p>
+                    <p className="text-xs text-gray-500">{t('dashboard.period', { period: d.period })}</p>
                   </div>
                   <div className="text-right">
                     <p className={`text-sm font-bold ${
                       d.isOverdue ? 'text-red-600' : 'text-amber-600'
                     }`}>
                       {d.isOverdue
-                        ? `${Math.abs(d.daysUntilDue)} days overdue`
+                        ? t('dashboard.daysOverdue', { count: Math.abs(d.daysUntilDue) })
                         : d.daysUntilDue === 0
-                        ? 'Due TODAY'
-                        : `Due in ${d.daysUntilDue} days`}
+                        ? t('dashboard.dueToday')
+                        : t('dashboard.dueInDays', { count: d.daysUntilDue })}
                     </p>
                     <p className="text-xs text-gray-500">{d.dueDateStr}</p>
                   </div>
@@ -93,7 +97,7 @@ export function TaxReminderModal() {
           {/* MRA penalty warning */}
           {hasOverdue && (
             <div className="mt-3 rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs text-red-700">
-              ⚠ Failure to remit PAYE/WHT/VAT on time attracts a <strong>20% penalty</strong> on the unpaid amount per MRA regulations.
+              {t('dashboard.mraPenaltyWarning')}
             </div>
           )}
 
@@ -107,7 +111,7 @@ export function TaxReminderModal() {
                   : 'bg-amber-500 hover:bg-amber-600'
               }`}
             >
-              Acknowledge
+              {t('dashboard.acknowledge')}
             </button>
             <a
               href="https://mra.mw"
@@ -115,13 +119,13 @@ export function TaxReminderModal() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
-              MRA Portal
+              {t('dashboard.mraPortal')}
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>
 
           <p className="mt-3 text-center text-xs text-gray-400">
-            This reminder shows once per session
+            {t('dashboard.reminderOnce')}
           </p>
         </div>
       </div>

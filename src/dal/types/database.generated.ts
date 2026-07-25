@@ -3875,6 +3875,7 @@ export type Database = {
           full_name: string
           id: string
           phone: string | null
+          preferred_language: string | null
           preferred_currency:
             | Database["public"]["Enums"]["currency_code"]
             | null
@@ -3888,6 +3889,7 @@ export type Database = {
           full_name: string
           id: string
           phone?: string | null
+          preferred_language?: string | null
           preferred_currency?:
             | Database["public"]["Enums"]["currency_code"]
             | null
@@ -3901,6 +3903,7 @@ export type Database = {
           full_name?: string
           id?: string
           phone?: string | null
+          preferred_language?: string | null
           preferred_currency?:
             | Database["public"]["Enums"]["currency_code"]
             | null

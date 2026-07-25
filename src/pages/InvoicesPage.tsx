@@ -13,7 +13,6 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
-import { INVOICE_TEMPLATES, InvoiceTemplate } from '@/components/invoice/InvoiceTemplates';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -96,6 +95,7 @@ function RecordPaymentModal({
   onSuccess: () => void;
 }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const amountDue =
     invoice.amount_due !== null
       ? Number(invoice.amount_due)

@@ -8,6 +8,12 @@ export interface BankTransaction {
   type: 'debit' | 'credit';
 }
 
+type CsvRow = Record<string, string | number | null | undefined>;
+
+function stringValue(value: string | number | null | undefined): string {
+  return value === null || value === undefined ? '' : String(value);
+}
+
 export async function parseBankStatement(file: File, bankFormat: string): Promise<BankTransaction[]> {
   const text = await file.text();
   const ext = file.name.split('.').pop()?.toLowerCase();
@@ -25,22 +31,24 @@ export async function parseBankStatement(file: File, bankFormat: string): Promis
 }
 
 function parseCSV(text: string, bankFormat: string): BankTransaction[] {
-  const { data } = Papa.parse(text, { header: true, skipEmptyLines: true });
+  void bankFormat; // Reserved for bank-specific column mappings.
+  const { data } = Papa.parse<CsvRow>(text, { header: true, skipEmptyLines: true });
 
-  return (data as any[]).map((row) => {
-    const date = row.date || row.Date || row['Transaction Date'] || '';
-    const desc = row.description || row.Description || row.Narrative || '';
-    const amount = parseFloat(row.amount || row.Amount || row['Transaction Amount'] || '0');
-    const ref = row.reference || row.Reference || row['Cheque No'] || '';
+  return data.map((row) => {
+    const date = stringValue(row.date || row.Date || row['Transaction Date']);
+    const desc = stringValue(row.description || row.Description || row.Narrative);
+    const amount = parseFloat(stringValue(row.amount || row.Amount || row['Transaction Amount']) || '0');
+    const ref = stringValue(row.reference || row.Reference || row['Cheque No']);
+    const type: BankTransaction['type'] = amount < 0 ? 'debit' : 'credit';
 
     return {
       date,
       description: desc,
       amount: Math.abs(amount),
       reference: ref,
-      type: amount < 0 ? 'debit' : 'credit',
+      type,
     };
-  }).filter(t => t.date && t.description);
+  }).filter((t) => t.date && t.description);
 }
 
 function parseOFX(text: string): BankTransaction[] {

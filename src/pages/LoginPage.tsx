@@ -1,5 +1,6 @@
 import { useState, type FormEvent, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
 import {
@@ -14,6 +15,7 @@ import {
 type LoginStep = 'credentials' | 'mfa';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -67,9 +69,9 @@ export function LoginPage() {
     if (signInError) {
       setLoading(false);
       if (signInError.message.toLowerCase().includes('email not confirmed')) {
-        setError('Your email address is not yet verified. Check your inbox for the confirmation link.');
+        setError(t('auth.emailNotVerified'));
       } else {
-        setError('Incorrect email or password. Please try again.');
+        setError(t('auth.incorrectCredentials'));
       }
       return;
     }
@@ -109,7 +111,7 @@ export function LoginPage() {
   async function handleMfa(e: FormEvent) {
     e.preventDefault();
     if (mfaCode.length !== 6) {
-      setError('Enter the 6-digit code from your authenticator app.');
+      setError(t('auth.enterMfaCode'));
       return;
     }
     setError(null);
@@ -135,7 +137,7 @@ export function LoginPage() {
     setLoading(false);
 
     if (verifyError) {
-      setError('Invalid code. Check your authenticator app and try again.');
+      setError(t('auth.invalidMfaCode'));
       setMfaCode('');
       return;
     }
@@ -147,15 +149,15 @@ export function LoginPage() {
   if (step === 'mfa') {
     return (
       <AuthShell
-        title="Two-factor authentication"
-        subtitle="Enter the 6-digit code from your authenticator app"
+        title={t('auth.twoFactor')}
+        subtitle={t('auth.twoFactorSubtitle')}
       >
         <form onSubmit={handleMfa} className="space-y-5">
           {error && <AuthAlert type="error" message={error} />}
 
           <OTPInput value={mfaCode} onChange={setMfaCode} disabled={loading} />
 
-          <SubmitButton loading={loading} label="Verify" loadingLabel="Verifying…" />
+          <SubmitButton loading={loading} label={t('auth.verify')} loadingLabel={t('auth.verifying')} />
 
           <button
             type="button"
@@ -166,7 +168,7 @@ export function LoginPage() {
             }}
             className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
           >
-            ← Back to sign in
+            {t('auth.backToSignIn')}
           </button>
         </form>
       </AuthShell>
@@ -175,17 +177,17 @@ export function LoginPage() {
 
   // ── Credentials step UI ──────────────────────────────────────────────────
   return (
-    <AuthShell title="Welcome back to Ledgr" subtitle="Sign in to your account">
+    <AuthShell title={t('auth.welcomeBack')} subtitle={t('auth.signInSubtitle')}>
       <form onSubmit={handleCredentials} className="space-y-4">
         {inactivityLogout && (
           <AuthAlert
             type="info"
-            message="You were signed out after 60 minutes of inactivity. Please sign in again."
+            message={t('auth.signedOutInactivity')}
           />
         )}
         {error && <AuthAlert type="error" message={error} />}
 
-        <FormField id="email" label="Email">
+        <FormField id="email" label={t('common.email')}>
           <Input
             id="email"
             type="email"
@@ -197,7 +199,7 @@ export function LoginPage() {
           />
         </FormField>
 
-        <FormField id="password" label="Password">
+        <FormField id="password" label={t('auth.password')}>
           <PasswordInput
             id="password"
             autoComplete="current-password"
@@ -216,23 +218,23 @@ export function LoginPage() {
               onChange={(e) => setRememberMe(e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
             />
-            Remember me (30 days)
+            {t('auth.rememberMe')}
           </label>
           <Link to="/forgot-password" className="font-medium text-brand-600 hover:text-brand-700">
-            Forgot password?
+            {t('auth.forgotPassword')}
           </Link>
         </div>
 
-        <SubmitButton loading={loading} label="Sign in" loadingLabel="Signing in…" />
+        <SubmitButton loading={loading} label={t('auth.signIn')} loadingLabel={t('auth.signingIn')} />
       </form>
 
       <p className="mt-5 text-center text-sm text-gray-500">
-        Don't have an account?{' '}
+        {t('auth.dontHaveAccount')}{' '}
         <Link
           to={safeReturnTo ? `/register?returnTo=${encodeURIComponent(safeReturnTo)}` : '/register'}
           className="font-medium text-brand-600 hover:text-brand-700"
         >
-          Create one
+          {t('auth.createOne')}
         </Link>
       </p>
     </AuthShell>

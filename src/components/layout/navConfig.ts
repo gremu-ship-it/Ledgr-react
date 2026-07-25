@@ -17,57 +17,69 @@ import {
   GitBranch,
   Lock,
   ScrollText,
-  ShieldCheck
+  ShieldCheck,
+  type LucideIcon,
 } from 'lucide-react';
 
-export const NAV_SECTIONS = [
+export interface NavItemConfig {
+  labelKey: string;
+  path: string;
+  icon: LucideIcon;
+}
+
+export interface NavSectionConfig {
+  labelKey: string;
+  items: NavItemConfig[];
+}
+
+export const NAV_SECTIONS: NavSectionConfig[] = [
   {
-    label: 'AI',
+    labelKey: 'navigation.sections.ai',
     items: [
-      { label: 'Ledgr AI',   path: '/chat',      icon: Sparkles },
+      { labelKey: 'navigation.items.ledgrAi', path: '/chat', icon: Sparkles },
     ],
   },
   {
-    label: 'Overview',
+    labelKey: 'navigation.sections.overview',
     items: [
-      { label: 'Dashboard',  path: '/dashboard', icon: LayoutDashboard },
+      { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
     ],
   },
   {
-    label: 'Finance',
+    labelKey: 'navigation.sections.finance',
     items: [
-      { label: 'Income',     path: '/income',    icon: DollarSign },
-      { label: 'Expenses',   path: '/expenses',  icon: Receipt },
-      { label: 'Invoices',   path: '/invoices',  icon: FileText },
-      { label: 'Payroll',    path: '/payroll',   icon: Users },
+      { labelKey: 'navigation.items.income', path: '/income', icon: DollarSign },
+      { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt },
+      { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText },
+      { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users },
     ],
   },
   {
-    label: 'Inventory',
+    labelKey: 'navigation.sections.inventory',
     items: [
-      { label: 'Products',   path: '/products',  icon: Package },
-      { label: 'Warehouse',  path: '/warehouse', icon: Warehouse },
-      { label: 'Transfers',  path: '/transfers', icon: ArrowLeftRight },
+      { labelKey: 'navigation.items.products', path: '/products', icon: Package },
+      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse },
+      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight },
     ],
   },
   {
-    label: 'Accounting',
+    labelKey: 'navigation.sections.accounting',
     items: [
-      { label: 'Accounts',   path: '/accounts',  icon: BookOpen },
-      { label: 'Tax',        path: '/tax',       icon: Percent },
-      { label: 'Assets',     path: '/assets',    icon: Landmark },
-      { label: 'Capital',    path: '/capital',   icon: Coins },
-      { label: 'Reports',    path: '/reports',   icon: BarChart2 },
-      { label: 'Journals',   path: '/journals',  icon: ScrollText },
-      { label: 'Periods',    path: '/periods',   icon: Lock },
-      { label: 'Audit Log', path: '/audit', icon: ShieldCheck }
+      { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen },
+      { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent },
+      { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark },
+      { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins },
+      { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
+      { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText },
+      { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock },
+      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck },
     ],
   },
   {
-    label: 'Organisation',
+    labelKey: 'navigation.sections.organisation',
     items: [
-      { label: 'Contacts',   path: '/contacts',  icon: BookUser },
-      { label: 'Branches',   path: '/branches',  icon: GitBranch },
+      { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser },
+      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch },
     ],
   },
 ];

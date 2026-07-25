@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { supabase } from '@/lib/supabase';
 import { callArenaAgent, isArenaConfigured } from '@/lib/arenaAgent';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -20,6 +23,23 @@ interface Action {
   variant: 'primary' | 'secondary';
 }
 
+type JournalAnomalyRow = {
+  status: string;
+  entry_date: string;
+  total_debits?: number | string | null;
+};
+
+type ForecastMovementRow = {
+  total_debits?: number | string | null;
+  total_credits?: number | string | null;
+};
+
+let messageSequence = 0;
+function nextMessageId(): string {
+  messageSequence += 1;
+  return `msg-${messageSequence}`;
+}
+
 // ── Formatters ────────────────────────────────────────────────────────────────
 
 function formatMwk(amount: number): string {
@@ -29,44 +49,47 @@ function formatMwk(amount: number): string {
 // ── Suggested Questions ───────────────────────────────────────────────────────
 
 const SUGGESTED_QUESTIONS = [
-  { icon: TrendingUp, text: 'How is my business performing this month?' },
-  { icon: AlertCircle, text: 'Which invoices are overdue?' },
-  { icon: Receipt, text: 'What are my biggest expenses this month?' },
-  { icon: Users, text: 'Who are my top customers by revenue?' },
+  { icon: TrendingUp, textKey: 'ai.suggestPerformance' },
+  { icon: AlertCircle, textKey: 'ai.suggestOverdue' },
+  { icon: Receipt, textKey: 'ai.suggestExpenses' },
+  { icon: Users, textKey: 'ai.suggestCustomers' },
 ];
 
 // ── Anomaly Detection (runs on load) ─────────────────────────────────────────
 async function detectAnomalies(businessId: string): Promise<string[]> {
   const anomalies: string[] = [];
   try {
-    const [journals, expenses] = await Promise.all([
-      repos.journal.findByBusiness(businessId),
-      repos.expense.findByBusiness(businessId),
-    ]);
+    const { data } = await supabase
+      .from('journal_entries')
+      .select('status,entry_date,total_debits')
+      .eq('business_id', businessId)
+      .eq('status', 'posted');
 
-    const posted = journals.filter(j => j.status === 'posted');
+    const posted = (data ?? []) as unknown as JournalAnomalyRow[];
     if (posted.length > 5) {
-      const amounts = posted.map(j => Number(j.total_debits));
+      const amounts = posted.map((j) => Number(j.total_debits ?? 0));
       const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
-      const large = posted.filter(j => Number(j.total_debits) > avg * 2);
+      const large = posted.filter((j) => Number(j.total_debits ?? 0) > avg * 2);
       if (large.length) anomalies.push(`${large.length} unusually large journal(s) (>2× average)`);
     }
 
     // Duplicate amounts same day
     const byDay: Record<string, number[]> = {};
-    posted.forEach(j => {
+    posted.forEach((j) => {
       const d = j.entry_date;
       if (!byDay[d]) byDay[d] = [];
-      byDay[d].push(Number(j.total_debits));
+      byDay[d].push(Number(j.total_debits ?? 0));
     });
     Object.entries(byDay).forEach(([d, arr]) => {
-      const seen = new Set();
-      arr.forEach(a => {
+      const seen = new Set<number>();
+      arr.forEach((a) => {
         if (seen.has(a)) anomalies.push(`Duplicate amount ${formatMwk(a)} on ${d}`);
         seen.add(a);
       });
     });
-  } catch {}
+  } catch {
+    return anomalies;
+  }
   return anomalies;
 }
 
@@ -89,14 +112,17 @@ async function buildCashForecast(businessId: string): Promise<{ dates: string[];
     .gte('entry_date', start.toISOString().slice(0,10))
     .eq('status','posted');
 
-  const netDaily = (movements || []).reduce((sum: number, m: any) => sum + (Number(m.total_credits) - Number(m.total_debits)), 0) / 90;
+  const netDaily = ((movements || []) as unknown as ForecastMovementRow[]).reduce(
+    (sum, m) => sum + (Number(m.total_credits ?? 0) - Number(m.total_debits ?? 0)),
+    0,
+  ) / 90;
   let balance = 500000; // placeholder opening cash
 
   for (let i = 0; i < 60; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() + i);
     dates.push(d.toISOString().slice(0,10));
-    balance += netDaily * (0.9 + Math.random() * 0.2);
+    balance += netDaily;
     projected.push(Math.round(balance));
     lower.push(Math.round(balance * 0.85));
     upper.push(Math.round(balance * 1.15));
@@ -206,30 +232,30 @@ ${cashAccounts.length > 0 ? cashAccounts.map((a) => `${a.name}: ${formatMwk(Numb
 `.trim();
 
     return context;
-  } catch (err) {
+  } catch {
     return `Business: ${businessName}\nDate: ${today}\nNote: Some data could not be loaded.`;
   }
 }
 
 // ── Parse Actions from AI Response ───────────────────────────────────────────
 
-function parseActions(content: string): Action[] {
+function parseActions(content: string, t: TFunction): Action[] {
   const actions: Action[] = [];
 
   if (content.toLowerCase().includes('overdue') || content.toLowerCase().includes('invoice')) {
-    actions.push({ label: 'View Invoices', path: '/invoices', variant: 'primary' });
+    actions.push({ label: t('ai.viewInvoices'), path: '/invoices', variant: 'primary' });
   }
   if (content.toLowerCase().includes('expense')) {
-    actions.push({ label: 'View Expenses', path: '/expenses', variant: 'secondary' });
+    actions.push({ label: t('ai.viewExpenses'), path: '/expenses', variant: 'secondary' });
   }
   if (content.toLowerCase().includes('payroll') || content.toLowerCase().includes('employee')) {
-    actions.push({ label: 'View Payroll', path: '/payroll', variant: 'secondary' });
+    actions.push({ label: t('ai.viewPayroll'), path: '/payroll', variant: 'secondary' });
   }
   if (content.toLowerCase().includes('report') || content.toLowerCase().includes('profit') || content.toLowerCase().includes('loss')) {
-    actions.push({ label: 'View Reports', path: '/reports', variant: 'secondary' });
+    actions.push({ label: t('ai.viewReports'), path: '/reports', variant: 'secondary' });
   }
   if (content.toLowerCase().includes('customer') || content.toLowerCase().includes('supplier') || content.toLowerCase().includes('contact')) {
-    actions.push({ label: 'View Contacts', path: '/contacts', variant: 'secondary' });
+    actions.push({ label: t('ai.viewContacts'), path: '/contacts', variant: 'secondary' });
   }
 
   return actions.slice(0, 3);
@@ -293,12 +319,14 @@ function MessageBubble({ message, onAction }: { message: Message; onAction: (pat
 // ── Main AiInsight Page────────────────────────────────────────────────────
 
 export function AiInsightsPage() {
+  const { t } = useTranslation();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
-  const businessName = currentBusiness?.business?.name ?? 'your business';
+  const businessName = currentBusiness?.business?.name ?? t('ai.yourBusiness');
 
   const [anomalies, setAnomalies] = useState<string[]>([]);
-  const [forecast, setForecast] = useState<any>(null);
+  const [forecast, setForecast] = useState<unknown>(null);
+  void forecast;
 
   useEffect(() => {
     if (businessId) {
@@ -311,7 +339,7 @@ export function AiInsightsPage() {
     {
       id: '0',
       role: 'assistant',
-      content: `Hello! I'm your Ledgr AI assistant for ${businessName}. I have access to your live financial data — invoices, expenses, payroll, and more.\n\nAsk me anything about your business, or try one of the suggestions below.`,
+      content: t('ai.hello', { business: businessName }),
       actions: [],
       timestamp: new Date(),
     },
@@ -330,7 +358,7 @@ export function AiInsightsPage() {
     if (!text.trim() || isLoading || !businessId) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: nextMessageId(),
       role: 'user',
       content: text.trim(),
       timestamp: new Date(),
@@ -351,26 +379,26 @@ export function AiInsightsPage() {
 
       const { content } = await callArenaAgent(
         history,
-        `You are Ledgr AI, a financial assistant for small and medium businesses in Malawi. You have access to live business data shown below. Be concise, friendly, and specific — always reference actual numbers from the data. When you identify issues (overdue invoices, high expenses, etc.), suggest concrete actions. Use MWK currency. Never make up data not in the context.`,
+        t('ai.systemPrompt'),
         context
       );
 
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: nextMessageId(),
         role: 'assistant',
         content,
-        actions: parseActions(content),
+        actions: parseActions(content, t),
         timestamp: new Date(),
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
-          id: (Date.now() + 1).toString(),
+          id: nextMessageId(),
           role: 'assistant',
-          content: 'Sorry, something went wrong. Please check your connection and try again.',
+          content: t('ai.error'),
           timestamp: new Date(),
         },
       ]);
@@ -389,7 +417,7 @@ export function AiInsightsPage() {
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <p className="text-sm text-gray-500">No business selected.</p>
+        <p className="text-sm text-gray-500">{t('ai.noBusinessSelected')}</p>
       </div>
     );
   }
@@ -402,13 +430,13 @@ export function AiInsightsPage() {
           <Sparkles className="h-5 w-5 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Ledgr AI</h1>
-          <p className="text-xs text-gray-500">Live data from {businessName} · Powered by Claude</p>
+          <h1 className="text-xl font-semibold text-gray-900">{t('ai.title')}</h1>
+          <p className="text-xs text-gray-500">{t('ai.liveDataFrom', { business: businessName })}</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1">
           <div className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
           <span className="text-xs font-medium text-brand-700">
-            {isArenaConfigured() ? 'Arena Agent' : 'Connected'}
+            {isArenaConfigured() ? t('ai.arenaAgent') : t('ai.connected')}
           </span>
         </div>
       </div>
@@ -430,7 +458,7 @@ export function AiInsightsPage() {
             </div>
             <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-gray-200 bg-white px-4 py-3 shadow-sm">
               <Loader2 className="h-4 w-4 animate-spin text-brand-500" />
-              <span className="text-sm text-gray-500">Analysing your data…</span>
+              <span className="text-sm text-gray-500">{t('ai.analysing')}</span>
             </div>
           </div>
         )}
@@ -441,7 +469,7 @@ export function AiInsightsPage() {
       {/* Anomaly banner */}
       {anomalies.length > 0 && (
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          ⚠️ {anomalies.length} anomaly{anomalies.length > 1 ? 'ies' : ''} detected — {anomalies.slice(0,2).join(', ')}
+          {t('ai.anomaliesDetected', { count: anomalies.length, items: anomalies.slice(0, 2).join(', ') })}
         </div>
       )}
 
@@ -452,12 +480,12 @@ export function AiInsightsPage() {
             const Icon = q.icon;
             return (
               <button
-                key={q.text}
-                onClick={() => sendMessage(q.text)}
+                key={q.textKey}
+                onClick={() => sendMessage(t(q.textKey))}
                 className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-left text-xs font-medium text-gray-700 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 transition-colors shadow-sm"
               >
                 <Icon className="h-4 w-4 shrink-0 text-brand-500" />
-                {q.text}
+                {t(q.textKey)}
               </button>
             );
           })}
@@ -477,7 +505,7 @@ export function AiInsightsPage() {
               e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything about your business…"
+            placeholder={t('ai.placeholder')}
             className="w-full resize-none rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none"
             disabled={isLoading}
           />
@@ -490,7 +518,7 @@ export function AiInsightsPage() {
           <Send className="h-4 w-4" />
         </button>
       </div>
-      <p className="mt-2 text-center text-xs text-gray-400">Press Enter to send · Shift+Enter for new line</p>
+      <p className="mt-2 text-center text-xs text-gray-400">{t('ai.enterHint')}</p>
     </div>
   );
 }

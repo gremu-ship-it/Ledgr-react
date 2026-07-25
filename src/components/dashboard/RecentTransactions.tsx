@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useLocaleFormat } from '@/i18n';
 import { ArrowUpRight, ArrowDownLeft, RefreshCw, Search } from 'lucide-react';
 import type { Row } from '@/dal/types/database';
 import { LockedPeriodBadge } from '@/components/ui/LockedPeriodBadge';
@@ -10,13 +12,15 @@ interface RecentTransactionsProps {
   isError?: boolean;
 }
 
-const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
-  posted:   { label: 'Posted',   bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  draft:    { label: 'Draft',    bg: 'bg-amber-50',   text: 'text-amber-600'  },
-  reversed: { label: 'Reversed', bg: 'bg-gray-100',   text: 'text-gray-500'   },
+const statusConfig: Record<string, { labelKey: string; bg: string; text: string }> = {
+  posted:   { labelKey: 'dashboard.posted',   bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  draft:    { labelKey: 'dashboard.draft',    bg: 'bg-amber-50',   text: 'text-amber-600'  },
+  reversed: { labelKey: 'dashboard.reversed', bg: 'bg-gray-100',   text: 'text-gray-500'   },
 };
 
 export function RecentTransactions({ entries, isLoading, isError }: RecentTransactionsProps) {
+  const { t } = useTranslation();
+  const format = useLocaleFormat();
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey]   = useState<'entry_date' | 'description' | 'status'>('entry_date');
   const [sortDir, setSortDir]   = useState<'asc' | 'desc'>('desc');
@@ -48,15 +52,15 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   }
 
   if (isError) {
-    return <p className="text-sm text-red-500">Failed to load recent transactions.</p>;
+    return <p className="text-sm text-red-500">{t('dashboard.failedRecent')}</p>;
   }
 
   if (!entries || entries.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
         <RefreshCw size={28} className="text-gray-200" />
-        <p className="text-sm font-medium text-gray-400">No journal entries yet</p>
-        <p className="text-xs text-gray-300">Transactions will appear here once recorded</p>
+        <p className="text-sm font-medium text-gray-400">{t('dashboard.noJournalEntries')}</p>
+        <p className="text-xs text-gray-300">{t('dashboard.transactionsAppearRecorded')}</p>
       </div>
     );
   }
@@ -67,8 +71,8 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   );
 
   const sorted = [...filtered].sort((a, b) => {
-    let x: string = a[sortKey] ?? '';
-    let y: string = b[sortKey] ?? '';
+    const x: string = a[sortKey] ?? '';
+    const y: string = b[sortKey] ?? '';
     return sortDir === 'asc' ? x.localeCompare(y) : y.localeCompare(x);
   });
 
@@ -77,15 +81,16 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   const safePage = Math.min(page, pages);
   const rows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  function SortTh({ col, label }: { col: typeof sortKey; label: string }) {
+  function renderSortTh(col: typeof sortKey, label: string) {
     const active = sortKey === col;
     return (
       <th
-        className="cursor-pointer select-none px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400 hover:text-brand-600"
+        key={col}
+        className="cursor-pointer select-none px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-gray-400 hover:text-brand-600"
         onClick={() => handleSort(col)}
       >
         {label}
-        <span className="ml-1 opacity-50">{active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+        <span className="ms-1 opacity-50">{active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
       </th>
     );
   }
@@ -96,7 +101,7 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
         <Search className="h-4 w-4 text-gray-400 shrink-0" />
         <input
           type="text"
-          placeholder="Search transactions…"
+          placeholder={t('dashboard.searchTransactions')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
@@ -107,26 +112,24 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
         <table className="w-full min-w-[480px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-100">
-              <SortTh col="entry_date"   label="Date" />
-              <SortTh col="description"  label="Description" />
-              <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Type</th>
-              <SortTh col="status"       label="Status" />
+              {renderSortTh('entry_date', t('dashboard.date'))}
+              {renderSortTh('description', t('dashboard.description'))}
+              <th className="px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-gray-400">{t('dashboard.type')}</th>
+              {renderSortTh('status', t('dashboard.status'))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
-                  No transactions match your search.
+                  {t('dashboard.noTransactionsMatch')}
                 </td>
               </tr>
             ) : rows.map((entry) => {
               const status = statusConfig[entry.status] ?? statusConfig.posted;
               const isIncome  = entry.source_type === 'invoice';
               const isExpense = entry.source_type === 'expense' || entry.source_type === 'payroll';
-              const date = new Date(entry.entry_date).toLocaleDateString('en-GB', {
-                day: '2-digit', month: 'short',
-              });
+              const date = format.date(entry.entry_date, { day: '2-digit', month: 'short' });
 
               return (
                 <tr
@@ -145,13 +148,13 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
                     <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-500">
                       {isIncome  && <ArrowUpRight className="h-3 w-3 text-brand-500" />}
                       {isExpense && <ArrowDownLeft className="h-3 w-3 text-red-400" />}
-                      {entry.source_type ?? 'journal'}
+                      {entry.source_type ?? t('dashboard.journal')}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${status.bg} ${status.text}`}>
-                        {status.label}
+                        {t(status.labelKey)}
                       </span>
                       {entry.isLocked && <LockedPeriodBadge />}
                     </div>
@@ -166,7 +169,7 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
       {total > pageSize && (
         <div className="mt-3 flex items-center justify-between">
           <p className="text-xs text-gray-400">
-            Showing {total ? (safePage - 1) * pageSize + 1 : 0}–{Math.min(safePage * pageSize, total)} of {total}
+            {t('dashboard.showing', { from: total ? (safePage - 1) * pageSize + 1 : 0, to: Math.min(safePage * pageSize, total), total })}
           </p>
           <div className="flex gap-1">
             <button

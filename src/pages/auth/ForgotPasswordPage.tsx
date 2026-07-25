@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { FormField, Input, AuthAlert, SubmitButton } from '@/components/auth/AuthUI';
 import { CheckCircle2 } from 'lucide-react';
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,18 +27,17 @@ export function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <AuthShell title="Check your inbox">
+      <AuthShell title={t('auth.checkInbox')}>
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
             <CheckCircle2 className="h-7 w-7 text-brand-500" />
           </div>
           <p className="text-sm text-gray-600">
-            If <span className="font-semibold">{email}</span> is registered with Ledgr, you'll
-            receive a password reset link shortly.
+            {t('auth.resetEmailSent', { email })}
           </p>
-          <p className="text-xs text-gray-400">Check your spam folder if it doesn't arrive.</p>
+          <p className="text-xs text-gray-400">{t('auth.checkSpam')}</p>
           <Link to="/login" className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700">
-            Back to sign in
+            {t('auth.backToSignIn')}
           </Link>
         </div>
       </AuthShell>
@@ -44,10 +45,10 @@ export function ForgotPasswordPage() {
   }
 
   return (
-    <AuthShell title="Reset your password" subtitle="Enter your email and we'll send you a reset link">
+    <AuthShell title={t('auth.resetPassword')} subtitle={t('auth.resetPasswordSubtitle')}>
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <AuthAlert type="error" message={error} />}
-        <FormField id="email" label="Email">
+        <FormField id="email" label={t('common.email')}>
           <Input
             id="email"
             type="email"
@@ -58,12 +59,12 @@ export function ForgotPasswordPage() {
             placeholder="you@business.mw"
           />
         </FormField>
-        <SubmitButton loading={loading} label="Send reset link" loadingLabel="Sending…" />
+        <SubmitButton loading={loading} label={t('auth.sendResetLink')} loadingLabel={t('auth.sending')} />
       </form>
       <p className="mt-5 text-center text-sm text-gray-500">
-        Remembered it?{' '}
+        {t('auth.rememberedIt')}{' '}
         <Link to="/login" className="font-medium text-brand-600 hover:text-brand-700">
-          Sign in
+          {t('auth.signIn')}
         </Link>
       </p>
     </AuthShell>
