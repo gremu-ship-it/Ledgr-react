@@ -1,4 +1,3 @@
-import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 interface ExportOptions {
   title: string;
@@ -13,7 +12,8 @@ interface ExportOptions {
 
 // Professional PDF export with business letterhead
 export function exportReportAsPDF(opts: ExportOptions) {
-  const { businessName, logoUrl } = useBrandTheme.getState?.() || { businessName: opts.businessName, logoUrl: null };
+  const businessName = opts.businessName;
+  const logoUrl = null;
 
   const printWindow = window.open('', '_blank');
   if (!printWindow) {

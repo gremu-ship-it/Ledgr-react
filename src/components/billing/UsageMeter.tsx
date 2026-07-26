@@ -3,7 +3,7 @@ import { AlertTriangle, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function UsageMeter() {
-  const { usage, plan, planTier } = useUsage();
+  const { usage, plan } = useUsage();
 
   if (usage.isUnlimited) {
     return (

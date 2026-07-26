@@ -142,6 +142,7 @@ export function StatementOfProfitOrLoss({
   };
 
   const handleExportXBRL = () => {
+    if (!pl) return;
     const facts = [
       { concept: 'Revenue', value: pl.revenue.subtotal },
       { concept: 'GrossProfit', value: pl.grossProfit },

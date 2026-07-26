@@ -50,7 +50,7 @@ export async function buildRichBusinessContext(
   const start3M = threeMonthsAgo.toISOString().slice(0, 10);
 
   try {
-    const [invoices, expenses, journalEntries, accounts] = await Promise.all([
+    const [invoices, expenses, , accounts] = await Promise.all([
       repos.invoice.findByBusiness(businessId),
       repos.expense.findByBusiness(businessId),
       supabase.from('journal_entries').select('*').eq('business_id', businessId).eq('status', 'posted').gte('entry_date', start3M),
@@ -118,21 +118,21 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
 
   try {
     const { data: entries } = await supabase
-      .from('journal_entries')
+      .from('journal_entries' as any)
       .select('id, entry_date, total_debits, description, status')
       .eq('business_id', businessId)
       .eq('status', 'posted')
       .gte('entry_date', thirtyDaysAgo.toISOString().slice(0, 10))
       .order('entry_date', { ascending: false });
 
-    if (!entries || entries.length < 5) return anomalies;
+    const entryList = entries as any[];
+    if (!entryList || entryList.length < 5) return anomalies;
 
-    const amounts = entries.map(e => Number(e.total_debits || 0));
+    const amounts = entryList.map(e => Number(e.total_debits || 0));
     const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
-    const stdDev = Math.sqrt(amounts.reduce((sq, n) => sq + Math.pow(n - avg, 2), 0) / amounts.length);
 
     // 1. Unusually large transactions
-    const largeTx = entries.filter(e => Number(e.total_debits || 0) > avg * 2.5);
+    const largeTx = entryList.filter(e => Number(e.total_debits || 0) > avg * 2.5);
     largeTx.forEach(tx => {
       anomalies.push({
         type: 'large_transaction',
@@ -145,7 +145,7 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
 
     // 2. Duplicate amounts on same day
     const byDay: Record<string, number[]> = {};
-    entries.forEach(e => {
+    entryList.forEach(e => {
       const d = e.entry_date;
       if (!byDay[d]) byDay[d] = [];
       byDay[d].push(Number(e.total_debits || 0));
@@ -168,7 +168,7 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
     });
 
     // 3. Income gap (no revenue for 5+ days)
-    const incomeEntries = entries.filter(e => 
+    const incomeEntries = entryList.filter(e => 
       e.description?.toLowerCase().includes('income') || 
       e.description?.toLowerCase().includes('sale') ||
       e.description?.toLowerCase().includes('revenue')
@@ -176,7 +176,7 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
     
     if (incomeEntries.length > 0) {
       const sortedDates = [...new Set(incomeEntries.map(e => e.entry_date))].sort();
-      let gapStart: string | null = null;
+
       
       for (let i = 1; i < sortedDates.length; i++) {
         const prev = new Date(sortedDates[i-1]);
@@ -209,7 +209,7 @@ export async function generateCashFlowForecast(businessId: string): Promise<Cash
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
   const { data: movements } = await supabase
-    .from('journal_entries')
+    .from('journal_entries' as any)
     .select('entry_date, total_debits, total_credits')
     .eq('business_id', businessId)
     .eq('status', 'posted')
@@ -220,7 +220,7 @@ export async function generateCashFlowForecast(businessId: string): Promise<Cash
   }, 0) / 90;
 
   // Get current cash
-  const { data: accounts } = await repos.account.findByBusiness(businessId);
+  const accounts = await repos.account.findByBusiness(businessId);
   const currentCash = accounts
     .filter(a => a.is_bank_account)
     .reduce((s, a) => s + Number(a.opening_balance || 0), 0);
@@ -261,12 +261,12 @@ export async function getTaxPlanningSuggestions(businessId: string): Promise<Tax
 
   try {
     const { data: plData } = await supabase
-      .from('v_profit_loss_summary')
+      .from('v_profit_loss_summary' as any)
       .select('*')
       .eq('business_id', businessId)
       .single();
 
-    const currentProfit = Number(plData?.net_profit || 0);
+    const currentProfit = Number((plData as any)?.net_profit || 0);
 
     const suggestions: TaxPlanningSuggestion[] = [];
 
@@ -305,7 +305,7 @@ export async function getTaxPlanningSuggestions(businessId: string): Promise<Tax
 // 5. Natural Language Report Generator
 // ──────────────────────────────────────────────────────────────
 export async function generateNarrativeReport(
-  businessId: string,
+  _businessId: string,
   question: string,
   businessContext: BusinessContext
 ): Promise<string> {

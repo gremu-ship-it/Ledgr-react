@@ -9,7 +9,7 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ isOpen, onClose, onUpgrade }: UpgradeModalProps) {
-  const { usage, plan, planTier } = useUsage();
+  const { usage, planTier } = useUsage();
 
   if (!isOpen) return null;
 

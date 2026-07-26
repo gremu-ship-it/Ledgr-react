@@ -99,7 +99,7 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy';
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing';
 
 const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'business', label: 'Business Profile', icon: Building2 },

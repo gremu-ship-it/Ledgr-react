@@ -28,7 +28,7 @@ export class WebhookService {
   async registerWebhook(businessId: string, url: string, events: string[]): Promise<Webhook> {
     const secret = crypto.randomUUID();
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('webhooks')
       .insert({
         business_id: businessId,
@@ -46,7 +46,7 @@ export class WebhookService {
 
   // List active webhooks
   async listWebhooks(businessId: string): Promise<Webhook[]> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('webhooks')
       .select('*')
       .eq('business_id', businessId)
@@ -59,7 +59,7 @@ export class WebhookService {
 
   // Delete (deactivate) a webhook
   async deleteWebhook(webhookId: string): Promise<void> {
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('webhooks')
       .update({ is_active: false })
       .eq('id', webhookId);
@@ -76,7 +76,7 @@ export class WebhookService {
     responseBody: string | null,
     attempt: number
   ): Promise<void> {
-    await supabase.from('webhook_deliveries').insert({
+    await (supabase as any).from('webhook_deliveries').insert({
       webhook_id: webhookId,
       event,
       payload,
@@ -89,7 +89,7 @@ export class WebhookService {
 
   // Get delivery history for a webhook
   async getDeliveries(webhookId: string, limit = 20): Promise<WebhookDelivery[]> {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('webhook_deliveries')
       .select('*')
       .eq('webhook_id', webhookId)

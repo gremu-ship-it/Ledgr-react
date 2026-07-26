@@ -131,6 +131,7 @@ export function StatementOfFinancialPosition({
 
   // XBRL export handler
   const handleExportXBRL = () => {
+    if (!sofp) return;
     const facts = [
       { concept: 'TotalAssets', value: sofp.totalAssets },
       { concept: 'TotalLiabilities', value: sofp.totalLiabilities },

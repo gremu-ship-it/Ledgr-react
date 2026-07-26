@@ -67,6 +67,7 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
   };
 
   const handleExportXBRL = () => {
+    if (!soce) return;
     exportReportAsXBRL({
       title: t('reports.statementOfChangesInEquity'),
       dateLabel: periodLabel,

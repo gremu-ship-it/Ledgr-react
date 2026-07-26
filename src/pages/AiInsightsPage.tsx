@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2, Calendar } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { repos } from '@/lib/repositories';
-import { supabase } from '@/lib/supabase';
 import { callArenaAgent, isArenaConfigured } from '@/lib/arenaAgent';
 import {
   buildRichBusinessContext,
@@ -33,16 +31,7 @@ interface Action {
   variant: 'primary' | 'secondary';
 }
 
-type JournalAnomalyRow = {
-  status: string;
-  entry_date: string;
-  total_debits?: number | string | null;
-};
 
-type ForecastMovementRow = {
-  total_debits?: number | string | null;
-  total_credits?: number | string | null;
-};
 
 let messageSequence = 0;
 function nextMessageId(): string {
@@ -52,9 +41,6 @@ function nextMessageId(): string {
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-function formatMwk(amount: number): string {
-  return `MK ${Number(amount).toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 // ── Suggested Questions ───────────────────────────────────────────────────────
 
