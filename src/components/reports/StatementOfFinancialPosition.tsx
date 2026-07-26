@@ -114,6 +114,20 @@ export function StatementOfFinancialPosition({
   const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
   const totalProps = { showComparative, formatCurrency: formatMwk };
 
+  // Always call useEffect at the top level (Rules of Hooks).
+  // Only push the warning when we have unbalanced data.
+  // We intentionally omit formatMwk from deps because it is a stable derived formatter
+  // (useLocaleFormat is expected to be stable across renders) and we only want this
+  // side-effect to fire when the report data changes.
+  useEffect(() => {
+    if (sofp && !sofp.isBalanced) {
+      pushSofpBalanceWarning(
+        formatAccounting(sofp.netAssets, formatMwk),
+        formatAccounting(sofp.totalEquity, formatMwk)
+      );
+    }
+  }, [sofp]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Professional PDF export handler
   const handleExportPDF = () => {
     const htmlContent = document.querySelector('.max-w-3xl')?.outerHTML || '';
@@ -161,17 +175,6 @@ export function StatementOfFinancialPosition({
         <p className="text-sm text-gray-500">{t('reports.couldNotLoadSofp')}</p>
       </div>
     );
-  }
-
-  // Push the SOFP imbalance warning to the notification bell (only once per render when unbalanced)
-  if (!sofp.isBalanced) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    useEffect(() => {
-      pushSofpBalanceWarning(
-        formatAccounting(sofp.netAssets, formatMwk),
-        formatAccounting(sofp.totalEquity, formatMwk)
-      );
-    }, [sofp.netAssets, sofp.totalEquity]);
   }
 
   return (

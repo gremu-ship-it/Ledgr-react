@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X, Lock } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { NAV_SECTIONS, planMeetsMin } from './navConfig';
+import { NAV_SECTIONS, isItemLocked } from './navConfig';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
-import { hasCapability } from '@/lib/billing/plans';
+import { pushUpgradeRequired } from '@/lib/notifications';
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -15,9 +15,8 @@ export function Sidebar() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
-  const visibleSections = NAV_SECTIONS.filter((section) =>
-    planMeetsMin(planTier, section.minPlan),
-  );
+  // Always show all sections. Gating is now per-item (Accounting + Organisation are visible on Free).
+  const visibleSections = NAV_SECTIONS;
 
   return (
     <>
@@ -77,22 +76,31 @@ export function Sidebar() {
               <ul className="space-y-1">
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  const isLocked = item.requiresCapability
-                    ? !hasCapability(planTier, item.requiresCapability)
-                    : false;
+                  const locked = isItemLocked(item, planTier, section.minPlan);
+
+                  const handleClick = (e: React.MouseEvent) => {
+                    if (locked) {
+                      e.preventDefault();
+                      const feature = t(item.labelKey);
+                      pushUpgradeRequired(feature);
+                      // Close mobile sidebar anyway
+                      if (window.innerWidth < 1024) setSidebarOpen(false);
+                      return;
+                    }
+                    // Close sidebar on mobile after navigation
+                    if (window.innerWidth < 1024) setSidebarOpen(false);
+                  };
+
                   return (
                     <li key={item.path}>
                       <NavLink
                         to={item.path}
                         title={
                           !sidebarOpen
-                            ? `${t(item.labelKey)}${isLocked ? ' (upgrade required)' : ''}`
+                            ? `${t(item.labelKey)}${locked ? ' (upgrade required)' : ''}`
                             : undefined
                         }
-                        onClick={() => {
-                          // Close sidebar on mobile after navigation
-                          if (window.innerWidth < 1024) setSidebarOpen(false);
-                        }}
+                        onClick={handleClick}
                         className={({ isActive }) =>
                           clsx(
                             'relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
@@ -100,6 +108,7 @@ export function Sidebar() {
                               ? 'bg-brand-50 text-brand-700'
                               : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
                             !sidebarOpen && 'justify-center',
+                            locked && 'opacity-70 cursor-not-allowed'
                           )
                         }
                       >
@@ -107,12 +116,12 @@ export function Sidebar() {
                         {sidebarOpen && (
                           <span className="flex flex-1 items-center justify-between gap-2 truncate">
                             <span className="truncate">{t(item.labelKey)}</span>
-                            {isLocked && (
+                            {locked && (
                               <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Upgrade required" />
                             )}
                           </span>
                         )}
-                        {!sidebarOpen && isLocked && (
+                        {!sidebarOpen && locked && (
                           <Lock className="absolute right-1.5 top-1.5 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
                         )}
                       </NavLink>

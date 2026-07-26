@@ -10,7 +10,8 @@ export type PlanCapability =
   | 'ai_insights'
   | 'api_access'
   | 'webhooks'
-  | 'custom_branding';
+  | 'custom_branding'
+  | 'accounting_organisation';   // Accounting + Organisation modules (Growth+)
 
 export interface Plan {
   tier: PlanTier;
@@ -44,10 +45,11 @@ export const PLANS: Record<PlanTier, Plan> = {
     priceMWK: 100000,
     annualDiscount: 20,
     transactionLimit: 500,
-    capabilities: ['bank_reconciliation'],
+    capabilities: ['bank_reconciliation', 'accounting_organisation'],
     features: [
       'Everything in Free',
       'Bank reconciliation',
+      'Accounting & Organisation (full access)',
       'Basic financial reports',
       'Up to 500 transactions/month',
       'Email support',

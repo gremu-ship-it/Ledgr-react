@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
-import { PlanGuard } from '@/routes/PlanGuard';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
@@ -138,20 +137,63 @@ function App() {
                 <Route path="/api-keys" element={<ApiKeysPage />} />
                 <Route path="/zapier" element={<ZapierIntegrationPage />} />
 
-                {/* Gated: Accounting & Organisation — requires Growth plan or above */}
-                <Route element={<PlanGuard minPlan="growth" />}>
-                  <Route path="/contacts" element={<ContactsPage />} />
-                  <Route path="/branches" element={<BranchesPage />} />
-                  <Route path="/accounts" element={<AccountsPage />} />
-                  <Route path="/assets" element={<AssetsPage />} />
-                  <Route path="/capital" element={<CapitalPage />} />
-                  <Route path="/tax" element={<TaxPage />} />
-                  <Route path="/bank-reconcile" element={<BankReconciliation businessId={currentBusiness?.business?.id || ''} />} />
-                  <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/journals" element={<JournalsPage />} />
-                  <Route path="/periods" element={<PeriodManagementPage />} />
-                  <Route path="/audit" element={<AuditLogPage />} />
-                </Route>
+                {/* Accounting & Organisation — always visible in nav on Free tier,
+                    but content is soft-gated (shows upgrade prompt + sidebar click also notifies) */}
+                <Route path="/contacts" element={
+                  <PlanGate capability="accounting_organisation" featureName="Contacts">
+                    <ContactsPage />
+                  </PlanGate>
+                } />
+                <Route path="/branches" element={
+                  <PlanGate capability="accounting_organisation" featureName="Branches">
+                    <BranchesPage />
+                  </PlanGate>
+                } />
+                <Route path="/accounts" element={
+                  <PlanGate capability="accounting_organisation" featureName="Chart of Accounts">
+                    <AccountsPage />
+                  </PlanGate>
+                } />
+                <Route path="/assets" element={
+                  <PlanGate capability="accounting_organisation" featureName="Assets">
+                    <AssetsPage />
+                  </PlanGate>
+                } />
+                <Route path="/capital" element={
+                  <PlanGate capability="accounting_organisation" featureName="Capital">
+                    <CapitalPage />
+                  </PlanGate>
+                } />
+                <Route path="/tax" element={
+                  <PlanGate capability="accounting_organisation" featureName="Tax">
+                    <TaxPage />
+                  </PlanGate>
+                } />
+                <Route path="/bank-reconcile" element={
+                  <PlanGate capability="bank_reconciliation" featureName="Bank Reconciliation">
+                    <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
+                  </PlanGate>
+                } />
+                <Route path="/reports" element={
+                  <PlanGate capability="accounting_organisation" featureName="Reports">
+                    <ReportsPage />
+                  </PlanGate>
+                } />
+                <Route path="/journals" element={
+                  <PlanGate capability="accounting_organisation" featureName="Journals">
+                    <JournalsPage />
+                  </PlanGate>
+                } />
+                <Route path="/periods" element={
+                  <PlanGate capability="accounting_organisation" featureName="Period Management">
+                    <PeriodManagementPage />
+                  </PlanGate>
+                } />
+                <Route path="/audit" element={
+                  <PlanGate capability="accounting_organisation" featureName="Audit Log">
+                    <AuditLogPage />
+                  </PlanGate>
+                } />
               </Route>
             </Route>
 

@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, ShieldCheck, CheckCircle2, Loader2 } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Search, ShieldCheck, CheckCircle2, Loader2, KeyRound, Clock } from 'lucide-react';
+import { pushSuccess, pushError } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { subscriptionPaymentService, type ManualPaymentMethod } from '@/services/billing/SubscriptionPaymentService';
 import { PLANS, type PlanTier } from '@/lib/billing/plans';
@@ -30,7 +32,10 @@ const PAYMENT_METHODS: { value: ManualPaymentMethod; label: string }[] = [
  */
 export function AdminBillingPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [search, setSearch] = useState('');
+  const [directId, setDirectId] = useState('');
   const [selected, setSelected] = useState<BusinessSearchResult | null>(null);
   const [targetTier, setTargetTier] = useState<Exclude<PlanTier, 'free'>>('growth');
   const [durationDays, setDurationDays] = useState(31);
@@ -39,6 +44,29 @@ export function AdminBillingPage() {
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Support deep linking: /admin/billing?business=UUID or ?id=UUID
+  useEffect(() => {
+    const businessId = searchParams.get('business') || searchParams.get('id');
+    if (businessId && !selected) {
+      (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('businesses')
+            .select('id, name, plan_tier, plan_expires_at')
+            .eq('id', businessId)
+            .maybeSingle();
+          if (data && !error) {
+            setSelected(data as BusinessSearchResult);
+            setDirectId('');
+            setSearchParams({}, { replace: true });
+          }
+        } catch {
+          // ignore — user can still paste the ID manually
+        }
+      })();
+    }
+  }, [searchParams, selected, setSearchParams]);
 
   const { data: results = [], isFetching } = useQuery({
     queryKey: ['admin-business-search', search],
@@ -81,6 +109,32 @@ export function AdminBillingPage() {
     },
   });
 
+  // Quick grant helpers (for the selected business)
+  const quickGrant = async (tier: Exclude<PlanTier, 'free'>, days: number) => {
+    if (!selected) return;
+
+    const planName = PLANS[tier].name;
+
+    try {
+      await subscriptionPaymentService.grantManualSubscription({
+        business_id: selected.id,
+        target_plan_tier: tier,
+        duration_days: days,
+        amount: PLANS[tier].priceMWK,
+        payment_method: 'cash',
+        notes: `Quick ${planName} grant (${days} days)`,
+      });
+
+      pushSuccess(`${planName} granted`, `${planName} activated for ${days} days`);
+      queryClient.invalidateQueries({ queryKey: ['admin-business-search'] });
+      queryClient.invalidateQueries({ queryKey: ['business', selected.id] });
+      queryClient.invalidateQueries({ queryKey: ['usage', selected.id] });
+      setSelected(null);
+    } catch (e: any) {
+      pushError('Grant failed', e?.message || 'Could not grant plan');
+    }
+  };
+
   return (
     <div className="mx-auto max-w-3xl p-6">
       <div className="mb-6 flex items-center gap-2">
@@ -101,42 +155,93 @@ export function AdminBillingPage() {
       )}
 
       {!selected && (
-        <div className="rounded-2xl border bg-white p-6">
-          <label className="mb-2 block text-sm font-medium text-gray-700">Search business by name</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Start typing a business name…"
-              className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
+        <div className="space-y-6">
+          {/* Search by name */}
+          <div className="rounded-2xl border bg-white p-6">
+            <label className="mb-2 block text-sm font-medium text-gray-700">Search business by name</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setDirectId(''); }}
+                placeholder="Start typing a business name…"
+                className="w-full rounded-lg border border-gray-300 py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+
+            {isFetching && <p className="mt-3 text-xs text-gray-400">Searching…</p>}
+
+            {results.length > 0 && (
+              <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-100">
+                {results.map((b) => (
+                  <li key={b.id}>
+                    <button
+                      onClick={() => setSelected(b)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-gray-50"
+                    >
+                      <span className="font-medium text-gray-900">{b.name}</span>
+                      <span className="text-xs text-gray-400">
+                        Current: <span className="capitalize">{b.plan_tier}</span>
+                        {b.plan_expires_at ? ` · expires ${new Date(b.plan_expires_at).toLocaleDateString()}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {search.trim().length >= 2 && !isFetching && results.length === 0 && (
+              <p className="mt-3 text-xs text-gray-400">No businesses matched "{search}".</p>
+            )}
           </div>
 
-          {isFetching && <p className="mt-3 text-xs text-gray-400">Searching…</p>}
+          {/* Direct ID input — very useful for known UUIDs (e.g. from support tickets) */}
+          <div className="rounded-2xl border bg-white p-6">
+            <label className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+              <KeyRound className="h-4 w-4" />
+              Load business directly by ID (UUID)
+            </label>
+            <div className="flex gap-2">
+              <input
+                value={directId}
+                onChange={(e) => {
+                  setDirectId(e.target.value.trim());
+                  setSearch('');
+                }}
+                placeholder="0fa55867-dee3-4b9b-9d4d-131d1c3aa3d8"
+                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              <button
+                onClick={async () => {
+                  if (!directId) return;
+                  try {
+                    const { data, error } = await supabase
+                      .from('businesses')
+                      .select('id, name, plan_tier, plan_expires_at')
+                      .eq('id', directId)
+                      .maybeSingle();
 
-          {results.length > 0 && (
-            <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-100">
-              {results.map((b) => (
-                <li key={b.id}>
-                  <button
-                    onClick={() => setSelected(b)}
-                    className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-gray-50"
-                  >
-                    <span className="font-medium text-gray-900">{b.name}</span>
-                    <span className="text-xs text-gray-400">
-                      Current: <span className="capitalize">{b.plan_tier}</span>
-                      {b.plan_expires_at ? ` · expires ${new Date(b.plan_expires_at).toLocaleDateString()}` : ''}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {search.trim().length >= 2 && !isFetching && results.length === 0 && (
-            <p className="mt-3 text-xs text-gray-400">No businesses matched "{search}".</p>
-          )}
+                    if (error) throw error;
+                    if (data) {
+                      setSelected(data as BusinessSearchResult);
+                      setDirectId('');
+                    } else {
+                      alert('No business found with that ID.');
+                    }
+                  } catch (err) {
+                    alert('Failed to load business: ' + (err instanceof Error ? err.message : 'Unknown error'));
+                  }
+                }}
+                disabled={!directId}
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                Load
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              Paste the exact business UUID (useful when you have the ID from logs, support, or the business owner).
+            </p>
+          </div>
         </div>
       )}
 
@@ -145,11 +250,20 @@ export function AdminBillingPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <div className="text-lg font-semibold text-gray-900">{selected.name}</div>
-              <div className="text-xs text-gray-400">
-                Current plan: <span className="capitalize">{selected.plan_tier}</span>
+              <div className="font-mono text-[10px] text-gray-400 break-all">{selected.id}</div>
+              <div className="mt-0.5 text-xs text-gray-400">
+                Current plan: <span className="capitalize font-medium text-gray-600">{selected.plan_tier}</span>
+                {selected.plan_expires_at ? ` · expires ${new Date(selected.plan_expires_at).toLocaleDateString()}` : ''}
               </div>
             </div>
-            <button onClick={() => setSelected(null)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
+            <button 
+              onClick={() => {
+                setSelected(null);
+                setDirectId('');
+                setSearch('');
+              }} 
+              className="text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
               Change business
             </button>
           </div>
@@ -159,7 +273,14 @@ export function AdminBillingPage() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Grant plan</label>
               <select
                 value={targetTier}
-                onChange={(e) => setTargetTier(e.target.value as Exclude<PlanTier, 'free'>)}
+                onChange={(e) => {
+                  const newTier = e.target.value as Exclude<PlanTier, 'free'>;
+                  setTargetTier(newTier);
+                  // Auto-fill suggested amount when plan changes
+                  if (!amount || amount === String(PLANS[targetTier].priceMWK)) {
+                    setAmount(String(PLANS[newTier].priceMWK));
+                  }
+                }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
               >
                 <option value="growth">Growth</option>
@@ -247,10 +368,96 @@ export function AdminBillingPage() {
               `Grant ${PLANS[targetTier].name} for ${durationDays} days`
             )}
           </button>
+
+          {/* Quick grant shortcuts for the selected business */}
+          <div className="mt-6 border-t pt-4">
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <Clock className="h-3.5 w-3.5" /> Quick grants
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {(['growth', 'pro', 'enterprise'] as const).map((tier) => (
+                <div key={tier} className="space-y-1">
+                  <div className="text-xs font-medium text-gray-600">{PLANS[tier].name}</div>
+                  <div className="flex gap-1">
+                    {[31, 90, 365].map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => quickGrant(tier, d)}
+                        disabled={grantMutation.isPending}
+                        className="flex-1 rounded-lg border border-gray-300 bg-white py-1 text-xs font-medium hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50"
+                      >
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick deep link for support / future reference */}
+          <div className="mt-4 text-center">
+            <a
+              href={`/admin/billing?business=${selected.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-brand-600 hover:underline"
+            >
+              Bookmarkable link for this business →
+            </a>
+          </div>
+
+          {/* Helpful diagnostic SQL for this business */}
+          <div className="mt-4 rounded-lg bg-gray-50 p-3 text-xs">
+            <div className="mb-1 font-medium text-gray-500">
+              Quick diagnostic SQL (copy-paste into Supabase SQL editor)
+            </div>
+            <div className="space-y-2">
+              <div>
+                <div className="text-[10px] text-gray-500 mb-0.5">Business + plan status</div>
+                <code className="block font-mono text-[10px] bg-white border p-2 rounded text-gray-700 break-all">
+                  {`SELECT id, name, plan_tier, plan_expires_at, plan_updated_at FROM businesses WHERE id = '${selected.id}';`}
+                </code>
+                <button
+                  onClick={() => {
+                    const sql = `SELECT id, name, plan_tier, plan_expires_at, plan_updated_at FROM businesses WHERE id = '${selected.id}';`;
+                    navigator.clipboard.writeText(sql);
+                  }}
+                  className="mt-1 text-[10px] text-brand-600 hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+
+              <div>
+                <div className="text-[10px] text-gray-500 mb-0.5">Payment / grant history</div>
+                <code className="block font-mono text-[10px] bg-white border p-2 rounded text-gray-700 break-all">
+                  {`SELECT tx_ref, gateway, target_plan_tier, status, amount, plan_expires_at, created_at FROM subscription_payments WHERE business_id = '${selected.id}' ORDER BY created_at DESC;`}
+                </code>
+                <button
+                  onClick={() => {
+                    const sql = `SELECT tx_ref, gateway, target_plan_tier, status, amount, plan_expires_at, created_at FROM subscription_payments WHERE business_id = '${selected.id}' ORDER BY created_at DESC;`;
+                    navigator.clipboard.writeText(sql);
+                  }}
+                  className="mt-1 text-[10px] text-brand-600 hover:underline"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <p className="mt-2 text-[10px] text-red-600 font-medium">
+              ⚠️ <strong>Important:</strong> UUIDs <strong>must</strong> be in single quotes. Example of the correct syntax:
+              <br />
+              <code className="font-mono">WHERE id = '655ad01b-ea0c-45fb-8387-c30f5b0ab12d';</code>
+            </p>
+          </div>
         </div>
       )}
 
-      <p className="mt-6 text-xs text-gray-400">Ledgr internal tool — not linked from normal navigation.</p>
+      <p className="mt-6 text-xs text-gray-400">
+        Ledgr internal tool — platform admins only. You can also open directly with <code className="font-mono">/admin/billing?business=UUID</code>
+      </p>
     </div>
   );
 }

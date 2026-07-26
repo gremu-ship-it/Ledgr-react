@@ -16,6 +16,7 @@ import {
   BookUser,
   Sparkles,
   Settings,
+  Lock,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -27,6 +28,7 @@ import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
 import { GATED_PATHS, planMeetsMin } from '@/components/layout/navConfig';
+import { pushUpgradeRequired } from '@/lib/notifications';
 
 const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -57,15 +59,9 @@ export function BottomNav() {
   const businessId = currentBusiness?.business?.id;
   const { planTier } = useUsage();
 
-  // Filter nav items based on plan tier — free users can't see gated paths
-  const bottomItems = BOTTOM_NAV_ITEMS.filter((item) => {
-    if (GATED_PATHS.has(item.path)) return planMeetsMin(planTier, 'growth');
-    return true;
-  });
-  const moreItems = ALL_MORE_MENU_ITEMS.filter((item) => {
-    if (GATED_PATHS.has(item.path)) return planMeetsMin(planTier, 'growth');
-    return true;
-  });
+  // Always show all nav items. Free users see Accounting/Organisation items but get upgrade prompt on click.
+  const bottomItems = BOTTOM_NAV_ITEMS;
+  const moreItems = ALL_MORE_MENU_ITEMS;
 
   return (
     <>
@@ -82,17 +78,37 @@ export function BottomNav() {
         <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{t('common.more')}</p>
           <div className="grid grid-cols-3 gap-2">
-            {moreItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                onClick={() => setMoreOpen(false)}
-                className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50"
-              >
-                <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-xs font-medium text-gray-600">{t(item.labelKey)}</span>
-              </NavLink>
-            ))}
+            {moreItems.map((item) => {
+              // Reconstruct enough for isItemLocked (minPlan / requiresCapability not present on these items)
+              const locked = GATED_PATHS.has(item.path) ? !planMeetsMin(planTier, 'growth') : false;
+              // Note: GATED_PATHS is still exported from navConfig for compatibility with other code
+              const handleMoreClick = (e: React.MouseEvent) => {
+                if (locked) {
+                  e.preventDefault();
+                  pushUpgradeRequired(t(item.labelKey));
+                  setMoreOpen(false);
+                  return;
+                }
+                setMoreOpen(false);
+              };
+
+              return (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={handleMoreClick}
+                  className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50"
+                >
+                  <div className="relative">
+                    <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
+                    {locked && (
+                      <Lock className="absolute -right-0.5 -top-0.5 h-3 w-3 text-gray-400" />
+                    )}
+                  </div>
+                  <span className="text-xs font-medium text-gray-600">{t(item.labelKey)}</span>
+                </NavLink>
+              );
+            })}
           </div>
         </div>
       )}
