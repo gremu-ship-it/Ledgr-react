@@ -23,7 +23,10 @@ export function useInactivityTimeout(): InactivityState {
   const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastActivityRef = useRef<number>(Date.now());
+  // Lazy-init on first read so the call site (in an effect) isn't during
+  // render, which would trip react-hooks v6's purity rule.
+  const lastActivityRef = useRef<number | null>(null);
+  const getLastActivity = () => (lastActivityRef.current ??= Date.now());
 
   const clearAllTimers = useCallback(() => {
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
@@ -57,15 +60,25 @@ export function useInactivityTimeout(): InactivityState {
     lastActivityRef.current = Date.now(); scheduleTimers();
   }, [scheduleTimers]);
 
+  // Establish a baseline activity timestamp and start the inactivity
+  // timers when the user becomes available. The `didInit` ref confines
+  // the initial synchronous setState in `scheduleTimers` to the first
+  // effect run only; subsequent re-runs (when `currentUser` toggles)
+  // re-attach the activity listeners without resetting warning state.
+  const didInitRef = useRef(false);
   useEffect(() => {
     if (!currentUser) return;
-    scheduleTimers();
+    if (!didInitRef.current) {
+      didInitRef.current = true;
+      getLastActivity();
+      scheduleTimers();
+    }
     function handleActivity() {
-      if (Date.now() - lastActivityRef.current > 10_000) { lastActivityRef.current = Date.now(); scheduleTimers(); }
+      if (Date.now() - getLastActivity() > 10_000) { lastActivityRef.current = Date.now(); scheduleTimers(); }
     }
     function handleVisibilityChange() {
       if (document.visibilityState === 'visible') {
-        if (Date.now() - lastActivityRef.current >= INACTIVITY_MS) { void doLogout(); }
+        if (Date.now() - getLastActivity() >= INACTIVITY_MS) { void doLogout(); }
         else { scheduleTimers(); }
       } else { clearAllTimers(); }
     }

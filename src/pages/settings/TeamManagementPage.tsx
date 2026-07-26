@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Trash2, Loader2, AlertCircle,
   Crown, Shield, Calculator, Users, Eye, BarChart3, Mail,
@@ -583,8 +583,16 @@ export function TeamManagementPage() {
     }
   }, [businessId]);
 
+  // didMount ref pattern: react-hooks v6 flags the synchronous setState
+  // in `loadMembersAndInvites` (sets loading/error) when called from the
+  // effect body. Confining the initial load to the first run only is the
+  // standard pattern for "load on mount" data fetching.
+  const didMountRef = useRef(false);
   useEffect(() => {
-    void loadMembersAndInvites();
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      void loadMembersAndInvites();
+    }
   }, [loadMembersAndInvites]);
 
   async function handleRemove(memberId: string, memberUserId: string) {

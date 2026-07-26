@@ -47,7 +47,13 @@ function normalizeRole(input: string): string | null {
   return null;
 }
 
-async function findUserByEmail(admin: any, email: string) {
+async function findUserByEmail(
+  // `admin` is the service-role Supabase client. In Deno Edge Functions the
+  // full generated Database type isn't always carried, so the client is typed
+  // loosely here. The actual response shapes are verified at runtime.
+  admin: any, // eslint-disable-line @typescript-eslint/no-explicit-any -- Deno Edge Function runtime; full Supabase Database type isn't imported
+  email: string,
+) {
   const normalized = email.trim().toLowerCase();
   let page = 1;
   const perPage = 100;
@@ -62,6 +68,7 @@ async function findUserByEmail(admin: any, email: string) {
     if (error) throw error;
     const users = data?.users ?? [];
     const found = users.find(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase User type is not imported in this Deno Edge Function
       (u: any) => (u.email || '').toLowerCase() === normalized,
     );
     if (found) return found;

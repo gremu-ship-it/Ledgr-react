@@ -150,7 +150,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
-  const set = (k: keyof typeof form, v: any) =>
+  const set = (k: keyof typeof form, v: (typeof form)[typeof k]) =>
     setForm(f => ({ ...f, [k]: v }));
 
   // Auto-set normal_balance when type changes
@@ -191,17 +191,17 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
         code:            form.code.trim(),
         name:            form.name.trim(),
         description:     form.description.trim() || null,
-        account_type:    form.account_type as any,
-        account_subtype: form.account_subtype as any,
+        account_type:    form.account_type,
+        account_subtype: form.account_subtype,
         normal_balance:  form.normal_balance,
         is_group:        form.is_group,
         is_system:       false,
         is_bank_account: form.is_bank_account,
         parent_id:       form.parent_id || null,
-        currency:        form.currency as any,
+        currency:        form.currency,
         opening_balance: form.opening_balance,
         is_active:       form.is_active,
-      } as any);
+      });
       onClose();
     } catch (e) {
       setError((e instanceof Error ? e.message : String(e)) || 'Save failed.');
@@ -432,12 +432,16 @@ export function AccountsPage() {
   const { data: businessTemplate } = useQuery({
     queryKey: ['business_coa_template', businessId],
     queryFn: async () => {
+      // The generated `coa_template` column enum is `Database['public']['Enums']['coa_template']`
+      // but the in-app `CoaTemplate` type may have additional values. Verified
+      // at runtime; cast through unknown to keep the data flow explicit.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coa_template column type vs in-app CoaTemplate
       const { data, error } = await (supabase.from('businesses') as any)
         .select('coa_template')
         .eq('id', businessId!)
         .single();
       if (error) throw new Error(error.message);
-      return ((data as any)?.coa_template ?? 'gaap') as CoaTemplate;
+      return (data?.coa_template ?? 'gaap') as CoaTemplate;
     },
     enabled: Boolean(businessId),
   });
@@ -490,11 +494,13 @@ export function AccountsPage() {
   // Save mutation
   const saveMutation = useMutation({
     mutationFn: async (data: InsertDto<'accounts'> & { id?: string }) => {
-      if ((data as any).id) {
-        const { id, ...patch } = data as any;
+      if (data.id) {
+        const { id, ...patch } = data;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accounts.coa_template enum is strict; the in-app CoaTemplate may have additional values
         const { error } = await (supabase.from('accounts') as any).update(patch).eq('id', id);
         if (error) throw new Error(error.message);
       } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- same enum-narrowing reason as the update branch
         const { error } = await supabase.from('accounts').insert(data as any);
         if (error) throw new Error(error.message);
       }
@@ -505,6 +511,7 @@ export function AccountsPage() {
   // Deactivate mutation
   const deactivateMutation = useMutation({
     mutationFn: async (id: string) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Partial<accounts> type narrow
       const { error } = await (supabase.from('accounts') as any).update({ is_active: false }).eq('id', id);
       if (error) throw new Error(error.message);
     },

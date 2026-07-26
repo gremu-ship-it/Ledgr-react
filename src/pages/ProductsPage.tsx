@@ -485,7 +485,7 @@ function StockTab({ businessId }: { businessId: string }) {
   }
 
   function isLowStock(productId: string) {
-    return (alerts as any[]).some((a) => a.product_id === productId);
+    return alerts.some((a) => a.product_id === productId);
   }
 
   if (isLoading) return <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
