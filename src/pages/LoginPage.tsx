@@ -61,6 +61,11 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
 
+    // Set this before Supabase writes the session so the storage adapter can
+    // keep an unchecked “Remember me” login in sessionStorage.
+    if (!rememberMe) sessionStorage.setItem('ledgr-session-only', '1');
+    else sessionStorage.removeItem('ledgr-session-only');
+
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,

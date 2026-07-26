@@ -34,6 +34,7 @@ export function RegisterPage() {
     }
   }, [returnToParam]);
 
+  const [businessName, setBusinessName] = useState('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,7 +64,7 @@ export function RegisterPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: { data: { full_name: fullName, business_name: businessName } },
     });
     setLoading(false);
 
@@ -116,6 +117,18 @@ export function RegisterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <AuthAlert type="error" message={error} />}
+
+        <FormField id="businessName" label="Business name">
+          <Input
+            id="businessName"
+            type="text"
+            required
+            autoComplete="organization"
+            value={businessName}
+            onChange={(e) => setBusinessName(e.target.value)}
+            placeholder="Your business name"
+          />
+        </FormField>
 
         <FormField id="fullName" label={t('auth.fullName')}>
           <Input

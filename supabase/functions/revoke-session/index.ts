@@ -1,0 +1,2 @@
+import { admin, user, json, preflight } from '../_shared/session.ts';
+Deno.serve(async req => { const options=preflight(req); if(options) return options; try { const u=await user(req); const {id}=await req.json(); const {error}=await admin.from('user_sessions').update({revoked_at:new Date().toISOString()}).eq('id',id).eq('user_id',u.id); if(error) throw error; return json({ok:true}); } catch(e) { return json({error:String(e.message??e)},401); } });

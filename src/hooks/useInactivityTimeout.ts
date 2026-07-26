@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'pointerdown'];
-const DEFAULT_INACTIVITY_MINUTES = 60;
+// Ledgr's security default is intentionally shorter than Supabase's token lifetime.
+const DEFAULT_INACTIVITY_MINUTES = 20;
 const WARNING_BEFORE_MS = 2 * 60 * 1000; // Always warn 2 minutes before logout
 
 export interface InactivityState {
