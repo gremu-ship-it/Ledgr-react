@@ -15,6 +15,9 @@ export function Sidebar() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
+  const visibleSections = NAV_SECTIONS.filter((section) =>
+    planMeetsMin(planTier, section.minPlan),
+  );
 
   return (
     <>
