@@ -95,7 +95,16 @@ serve(async (req) => {
       });
     }
 
-    const userIds = (members ?? []).map((m: any) => m.user_id);
+    type BusinessUserRow = {
+      id: string;
+      user_id: string;
+      role: string;
+      is_active: boolean;
+      invited_at: string | null;
+      accepted_at: string | null;
+      created_at: string;
+    };
+    const userIds = (members ?? []).map((m: BusinessUserRow) => m.user_id);
     if (userIds.length === 0) {
       return new Response(JSON.stringify({ members: [] }), {
         status: 200,
@@ -109,7 +118,8 @@ serve(async (req) => {
       .select('id, full_name, avatar_url')
       .in('id', userIds);
 
-    const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
+    type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null };
+    const profileMap = new Map((profiles ?? []).map((p: ProfileRow) => [p.id, p]));
 
     // Fetch emails via Auth Admin — batch lookup by listing? We'll paginate and filter to needed ids for efficiency.
     // For small teams (< 20) it's cheap to list up to 100 users and match.
@@ -135,7 +145,7 @@ serve(async (req) => {
     }
 
     // Build enriched members
-    const enriched = (members ?? []).map((m: any) => ({
+    const enriched = (members ?? []).map((m: BusinessUserRow) => ({
       id: m.id,
       user_id: m.user_id,
       role: m.role,

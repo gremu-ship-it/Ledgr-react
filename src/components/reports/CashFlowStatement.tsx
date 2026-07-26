@@ -8,6 +8,7 @@ interface Props {
   businessId: string;
   periodStart: string;
   periodEnd: string;
+  businessName?: string;
 }
 
 export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props) {

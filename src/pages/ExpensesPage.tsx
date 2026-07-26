@@ -36,7 +36,7 @@ function useBranches(businessId?: string) {
   return useQuery({
     queryKey: ['branches', businessId],
     queryFn: async () => {
-      const { data, error } = await (repos.inventory as any).client
+      const { data, error } = await repos.inventory.db
         .from('branches')
         .select('id, name, code')
         .eq('business_id', businessId!)
@@ -71,7 +71,7 @@ async function addStockForBranchPurchase(
   if (linesWithProducts.length === 0) return;
 
   const locations = await repos.inventory.findLocations(businessId);
-  const branchLocation = (locations as any[]).find((l) => l.branch_id === branchId);
+  const branchLocation = locations.find((l) => l.branch_id === branchId);
   if (!branchLocation) {
     console.warn(`No inventory location linked to branch ${branchId} — stock not adjusted for this purchase.`);
     return;
@@ -93,7 +93,7 @@ async function addStockForBranchPurchase(
   }));
 
   try {
-    await repos.inventory.recordMovements(movements as any);
+    await repos.inventory.recordMovements(movements);
   } catch (err) {
     console.error('Stock addition failed for purchase', reference, err);
   }
@@ -391,7 +391,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           vatAmount,
           values.branch_id || null,
         );
-        await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+        await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
         // NEW: if a branch + product were selected, add stock at that
         // branch's linked location.
@@ -408,6 +408,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         throw new Error(
           `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
           `It will show as "Needs Posting" — you can retry from the expense list.`,
+          { cause: err },
         );
       }
     },
@@ -710,7 +711,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           vatAmount,
           form.branch_id || null,
         );
-        await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+        await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
         // NEW: add stock for every line that has a product selected.
         await addStockForBranchPurchase(
@@ -732,6 +733,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         throw new Error(
           `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
           `It will show as "Needs Posting" — you can retry from the expense list.`,
+          { cause: err },
         );
       }
     },
@@ -906,7 +908,7 @@ function useRetryPosting(businessId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (expense: Row<'expenses'>) => {
-      const { data: lines, error } = await (repos.expense as any).client
+      const { data: lines, error } = await repos.expense.db
         .from('expense_lines')
         .select('*')
         .eq('expense_id', expense.id);
@@ -928,9 +930,9 @@ function useRetryPosting(businessId: string) {
         expense,
         allocations,
         Number(expense.vat_amount),
-        (expense as any).branch_id ?? null,
+        expense.branch_id ?? null,
       );
-      await (repos.expense as any).update(expense.id, { journal_entry_id: journalEntryId });
+      await repos.expense.update(expense.id, { journal_entry_id: journalEntryId });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
   });

@@ -116,6 +116,9 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
       const salary = parseFloat(form.gross_salary);
       if (isNaN(salary) || salary <= 0) throw new Error('Enter a valid gross salary');
 
+      // `repos.payroll.client` is the base Supabase client; the in-app wrapper
+      // type doesn't expose `.client`, hence the cast.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- base client accessor on repos.payroll
       const { data, error } = await (repos.payroll as any).client
         .from('employees')
         .insert({

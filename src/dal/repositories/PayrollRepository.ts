@@ -339,7 +339,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       amount_base: totalNetPay,
       currency: 'MWK',
       exchange_rate: 1,
-      line_number: lineNum++,
+      line_number: lineNum + 1,
       tax_code: 'none',
       tax_amount: 0,
     });

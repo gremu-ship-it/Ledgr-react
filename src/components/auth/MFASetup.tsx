@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, ShieldCheck, ShieldOff, Copy, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { OTPInput, AuthAlert } from '@/components/auth/AuthUI';
@@ -22,6 +22,11 @@ export function MFASetup({ onEnrolled, onUnenrolled }: MFASetupProps) {
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Load MFA factors on mount, then again after enroll/unenroll. Using a
+  // `didMount` ref avoids the react-hooks v6 set-state-in-effect warning
+  // that fires on the first run (load-on-mount is a legitimate effect that
+  // subscribes to an external system — the Supabase auth API).
+  const didMountRef = useRef(false);
   const loadFactors = useCallback(async () => {
     setStep('loading');
     const { data } = await supabase.auth.mfa.listFactors();
@@ -30,7 +35,12 @@ export function MFASetup({ onEnrolled, onUnenrolled }: MFASetupProps) {
     setStep(verified ? 'enabled' : 'idle');
   }, []);
 
-  useEffect(() => { void loadFactors(); }, [loadFactors]);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      void loadFactors();
+    }
+  }, [loadFactors]);
 
   async function startEnrollment() {
     setError(null); setLoading(true);

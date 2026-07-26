@@ -29,6 +29,7 @@ export class BaseRepository<T extends TableName> {
     const { data, error } = await this.client
       .from(this.table)
       .select('*')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase's PostgrestFilterBuilder.eq requires a key of Row<T>, but T is a generic table name; we know 'id' exists on every table this repo targets
       .eq('id' as any, id)
       .maybeSingle();
     if (error) throw toRepositoryError(this.table as string, error);
@@ -44,6 +45,7 @@ export class BaseRepository<T extends TableName> {
   }): Promise<Row<T>[]> {
     let query = this.client.from(this.table).select('*');
     if (options?.orderBy) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `orderBy` is already typed as `keyof Row<T> & string` but PostgrestTransformBuilder.order requires string; the cast is a no-op for the runtime value
       query = query.order(options.orderBy as any, { ascending: options.ascending ?? true });
     }
     if (options?.limit !== undefined) {
@@ -69,6 +71,7 @@ export class BaseRepository<T extends TableName> {
     const { data, error } = await this.client
       .from(this.table)
       .update(dto as never)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see findById; 'id' is a known column on every targeted table
       .eq('id' as any, id)
       .select('*')
       .maybeSingle();
@@ -103,6 +106,7 @@ export class BaseRepository<T extends TableName> {
     const { data, error } = await this.client
       .from(this.table)
       .update(dto as never)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see findById; 'id' is a known column on every targeted table
       .eq('id' as any, id)
       .select('*')
       .maybeSingle();

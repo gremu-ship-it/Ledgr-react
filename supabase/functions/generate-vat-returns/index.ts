@@ -7,6 +7,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- supabase invoke sends an empty body; we read everything from the DB
 Deno.serve(async (req) => {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,

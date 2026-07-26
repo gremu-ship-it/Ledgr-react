@@ -404,7 +404,7 @@ export async function seedChartOfAccounts(
     }));
 
     const { data: createdRaw, error: insertErr } = await supabase
-      .from('accounts').insert(rows as any).select('id, code');
+      .from('accounts').insert(rows).select('id, code');
     if (insertErr) throw new Error(`Insert failed: ${insertErr.message}`);
 
     const created = createdRaw as { id: string; code: string }[] | null;
@@ -432,7 +432,8 @@ export async function ensureChartOfAccounts(
   const { inserted } = await seedChartOfAccounts(supabase, businessId, template);
 
   if (wasEmpty) {
-    await (supabase.from('businesses') as any)
+    await supabase
+      .from('businesses')
       .update({ coa_template: template })
       .eq('id', businessId);
   }
@@ -465,7 +466,7 @@ export async function switchCoaTemplate(
     .single();
   if (bizErr) throw new Error(`Failed to read business template: ${bizErr.message}`);
 
-  const previousTemplate = ((biz as any)?.coa_template ?? 'gaap') as CoaTemplate;
+  const previousTemplate = (biz?.coa_template ?? 'gaap') as CoaTemplate;
   if (previousTemplate === newTemplate) {
     return { added: 0, deactivated: 0, previousTemplate };
   }
@@ -483,7 +484,8 @@ export async function switchCoaTemplate(
 
   let deactivated = 0;
   if (codesToDeactivate.length > 0) {
-    const { data, error } = await (supabase.from('accounts') as any)
+    const { data, error } = await supabase
+      .from('accounts')
       .update({ is_active: false })
       .eq('business_id', businessId)
       .in('code', codesToDeactivate)
@@ -492,7 +494,8 @@ export async function switchCoaTemplate(
     deactivated = (data ?? []).length;
   }
 
-  const { error: updateErr } = await (supabase.from('businesses') as any)
+  const { error: updateErr } = await supabase
+    .from('businesses')
     .update({ coa_template: newTemplate })
     .eq('id', businessId);
   if (updateErr) throw new Error(`Failed to update business template: ${updateErr.message}`);

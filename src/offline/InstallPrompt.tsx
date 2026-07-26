@@ -41,7 +41,13 @@ function isInStandaloneMode(): boolean {
  */
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosInstructions, setShowIosInstructions] = useState(false);
+  // Lazy initialiser so we don't run `isIos()` / sessionStorage reads on
+  // every render, and so the setState inside the effect below is treated
+  // as a user/event-driven update rather than a synchronous effect body.
+  // The setter is used by the dismiss flow to clear the prompt state.
+  const [showIosInstructions, setShowIosInstructions] = useState(
+    () => isIos() && !sessionStorage.getItem('ledgr_ios_prompt_shown'),
+  );
   const [dismissed, setDismissed] = useState(
     () => window.localStorage.getItem(DISMISSED_KEY) === 'true',
   );
@@ -56,10 +62,6 @@ export function InstallPrompt() {
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    if (isIos() && !sessionStorage.getItem('ledgr_ios_prompt_shown')) {
-      setShowIosInstructions(true);
-    }
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
@@ -68,6 +70,7 @@ export function InstallPrompt() {
   function handleDismiss() {
     window.localStorage.setItem(DISMISSED_KEY, 'true');
     setDismissed(true);
+    setShowIosInstructions(false);
   }
 
   async function handleInstallClick() {

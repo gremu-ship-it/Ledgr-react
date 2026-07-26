@@ -6,7 +6,7 @@ type CsvRow = Record<string, string | number | null | undefined>;
 const clean = (v: unknown) => String(v ?? '').trim();
 const key = (row: CsvRow, names: string[]) => { const found = Object.keys(row).find(k => names.includes(k.toLowerCase().replace(/[^a-z]/g, ''))); return found ? clean(row[found]) : ''; };
 const money = (value: string) => Number(value.replace(/[\s,]/g, '').replace(/\((.*)\)/, '-$1').replace(/[^0-9.-]/g, '')) || 0;
-function date(value: string) { const v = value.trim(); if (/^\d{4}-\d\d-\d\d/.test(v)) return v.slice(0, 10); const m = v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/); if (!m) return v; const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+function date(value: string) { const v = value.trim(); if (/^\d{4}-\d\d-\d\d/.test(v)) return v.slice(0, 10); const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/); if (!m) return v; const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
 
 /** Parses exports from NBS, FDH, Standard Bank, National Bank, Airtel Money and TNM Mpamba. */
 export async function parseBankStatement(file: File, bankFormat = 'auto'): Promise<ParsedStatement> {
@@ -40,7 +40,7 @@ function parseOFX(text: string): ParsedStatement {
 function parseMT940(text: string): ParsedStatement {
   const balance = (marker: string) => { const v = text.match(new RegExp(`:${marker}:([CD])(\\d{6})[A-Z]{3}([0-9,]+)`)); return v ? { amount: money(v[3]), sign: v[1] } : undefined; };
   const chunks = text.split(/(?=:61:)/).slice(1); const transactions: BankTransaction[] = [];
-  for (const chunk of chunks) { const line = chunk.split(/\r?\n/)[0]; const m = line.match(/^:61:(\d{6})(?:\d{4})?([CD])(?:R?)([0-9,]+)/); if (!m) continue; const desc = chunk.match(/:86:([\s\S]*?)(?=\r?\n:\d{2}|$)/)?.[1].replace(/\r?\n/g, ' ').trim() || 'Bank transaction'; transactions.push({ date: `20${m[1].slice(0,2)}-${m[1].slice(2,4)}-${m[1].slice(4,6)}`, amount: money(m[3]), type: m[2] === 'D' ? 'debit' : 'credit', description: desc, reference: desc.match(/(?:REF|NONREF|//)([\w/-]+)/i)?.[1] }); }
+  for (const chunk of chunks) { const line = chunk.split(/\r?\n/)[0]; const m = line.match(/^:61:(\d{6})(?:\d{4})?([CD])(?:R?)([0-9,]+)/); if (!m) continue; const desc = chunk.match(/:86:([\s\S]*?)(?=\r?\n:\d{2}|$)/)?.[1].replace(/\r?\n/g, ' ').trim() || 'Bank transaction'; transactions.push({ date: `20${m[1].slice(0,2)}-${m[1].slice(2,4)}-${m[1].slice(4,6)}`, amount: money(m[3]), type: m[2] === 'D' ? 'debit' : 'credit', description: desc, reference: desc.match(/(?:REF|NONREF|[/])([\w/-]+)/i)?.[1] }); }
   const opening = balance('60[FM]'), closing = balance('62[FM]');
   return { transactions, source: 'MT940', openingBalance: opening ? (opening.sign === 'D' ? -opening.amount : opening.amount) : undefined, closingBalance: closing ? (closing.sign === 'D' ? -closing.amount : closing.amount) : undefined };
 }

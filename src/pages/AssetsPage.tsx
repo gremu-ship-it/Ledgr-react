@@ -8,6 +8,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto, DepreciationMethod, AssetStatus } from '@/dal/types/database';
+import type { Database } from '@/dal/types/database.generated';
 import {
   postAssetDepreciation, disposeAsset, revalueAsset,
   type DepreciationRunResult,
@@ -1039,7 +1040,7 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                       acquisition_date: cols[idx('acquisition_date')] || today(),
                       acquisition_cost: parseFloat(cols[idx('acquisition_cost')] || '0'),
                       residual_value: parseFloat(cols[idx('residual_value')] || '0'),
-                      depreciation_method: (cols[idx('depreciation_method')] || 'straight_line') as any,
+                      depreciation_method: (cols[idx('depreciation_method')] || 'straight_line') as Database['public']['Enums']['depreciation_method'],
                       useful_life_years: parseInt(cols[idx('useful_life_years')] || '5'),
                       depreciation_start_date: cols[idx('depreciation_start_date')] || cols[idx('acquisition_date')] || today(),
                       status: 'active',

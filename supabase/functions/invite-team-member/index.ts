@@ -15,7 +15,7 @@
 // Returns: { success, member, message }
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -31,6 +31,10 @@ const ALLOWED_ROLES = new Set([
   'admin',
   'accountant',
   'payroll_manager',
+  'supervisor',
+  'data_entry',
+  'inventory_manager',
+  'sales_clerk',
   'auditor',
   'viewer',
 ]);
@@ -47,7 +51,10 @@ function normalizeRole(input: string): string | null {
   return null;
 }
 
-async function findUserByEmail(admin: any, email: string) {
+async function findUserByEmail(
+  admin: SupabaseClient,
+  email: string,
+): Promise<User | null> {
   const normalized = email.trim().toLowerCase();
   let page = 1;
   const perPage = 100;
@@ -62,7 +69,7 @@ async function findUserByEmail(admin: any, email: string) {
     if (error) throw error;
     const users = data?.users ?? [];
     const found = users.find(
-      (u: any) => (u.email || '').toLowerCase() === normalized,
+      (u) => (u.email || '').toLowerCase() === normalized,
     );
     if (found) return found;
     if (users.length < perPage) break;
@@ -173,7 +180,7 @@ serve(async (req) => {
       });
     }
 
-    const callerRole = (callerMembership as any).role as string;
+    const callerRole = callerMembership.role;
 
     // Only owners can assign owner or admin
     if ((role === 'owner' && callerRole !== 'owner') || (role === 'admin' && callerRole !== 'owner')) {
@@ -238,12 +245,12 @@ serve(async (req) => {
     const now = new Date().toISOString();
 
     if (existing) {
-      if ((existing as any).is_active) {
+      if (existing.is_active) {
         return new Response(
           JSON.stringify({
             error: 'Already a member',
             code: 'ALREADY_MEMBER',
-            message: `${email} is already an active member with role '${(existing as any).role}'.`,
+            message: `${email} is already an active member with role '${existing.role}'.`,
           }),
           {
             status: 409,
@@ -264,7 +271,7 @@ serve(async (req) => {
             invitation_token: null,
             invitation_expires_at: null,
           })
-          .eq('id', (existing as any).id);
+          .eq('id', existing.id);
 
         if (updateErr) {
           return new Response(JSON.stringify({ error: `Failed to reactivate member: ${updateErr.message}` }), {
@@ -324,10 +331,10 @@ serve(async (req) => {
         success: true,
         message: `${email} has been added to the business as ${role}.`,
         member: {
-          id: (inserted as any)?.id,
+          id: inserted?.id,
           user_id: targetUser.id,
           email: targetUser.email,
-          full_name: (profile as any)?.full_name ?? null,
+          full_name: profile?.full_name ?? null,
           role,
           business_id: businessId,
         },

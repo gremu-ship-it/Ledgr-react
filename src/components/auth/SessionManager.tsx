@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Monitor, LogOut, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { AuthAlert } from '@/components/auth/AuthUI';
@@ -69,7 +69,17 @@ export function SessionManager() {
     }
   }, []);
 
-  useEffect(() => { void loadSession(); }, [loadSession]);
+  // didMount ref pattern: react-hooks v6 flags effects that synchronously
+  // call setState during the first render. The mount-only load here is
+  // legitimate (it subscribes to the supabase auth API), so the ref
+  // confines the call to "first run only".
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      void loadSession();
+    }
+  }, [loadSession]);
 
   async function handleSignOut(scope: 'local' | 'global') {
     if (scope === 'global' && !window.confirm('This will sign you out of all devices. Continue?')) return;

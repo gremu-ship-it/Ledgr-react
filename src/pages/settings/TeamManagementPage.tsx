@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Trash2, Loader2, AlertCircle,
   Crown, Shield, Calculator, Users, Eye, BarChart3, Mail,
@@ -190,14 +190,15 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
       });
 
       if (fnError) {
-        const legacyMsg = (data as any)?.message || (data as any)?.error || fnError.message;
+        const respData = data as { message?: string; error?: string } | null;
+        const legacyMsg = respData?.message || respData?.error || fnError.message;
         if (legacyMsg.toLowerCase().includes('no account found') || legacyMsg.toLowerCase().includes('user not found')) {
           throw new Error(legacyMsg);
         }
 
         // Attempt legacy RPC as fallback (token-based)
         try {
-          const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('invite_member', {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('invite_member', {
             p_business_id: businessId,
             p_email: directEmail.trim().toLowerCase(),
             p_role: directRole,
@@ -215,11 +216,12 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         }
       }
 
-      if ((data as any)?.error) {
-        throw new Error((data as any).message || (data as any).error);
+      const okData = data as { error?: string; message?: string } | null;
+      if (okData?.error) {
+        throw new Error(okData.message || okData.error);
       }
 
-      setSuccess((data as any)?.message || `Added ${directEmail} as ${directRole} successfully.`);
+      setSuccess(okData?.message || `Added ${directEmail} as ${directRole} successfully.`);
       setDirectEmail('');
       setDirectRole('viewer');
       onInvited();
@@ -491,8 +493,8 @@ export function TeamManagementPage() {
       const { data, error } = await supabase.functions.invoke('list-team-members', {
         body: { business_id: businessId },
       });
-      if (!error && data && !(data as any).error && (data as any).members) {
-        const enriched = (data as any).members as Array<{
+      if (!error && data && typeof data === 'object' && data !== null && !('error' in data) && 'members' in data) {
+        const enriched = (data as { members: Array<{
           id: string;
           user_id: string;
           role: UserRole;
@@ -501,7 +503,7 @@ export function TeamManagementPage() {
           accepted_at: string | null;
           email: string | null;
           full_name: string | null;
-        }>;
+        }> }).members;
         setMembers(
           enriched.map((m) => ({
             id: m.id,
@@ -519,43 +521,49 @@ export function TeamManagementPage() {
         // Fallback Client-side query
         const { data: directMembers, error: fetchError } = await supabase
           .from('business_users')
-          .select(`
-            id,
-            user_id,
-            role,
-            is_active,
-            invited_at,
-            accepted_at,
-            invitation_token,
-            user_profiles (
-              full_name
-            )
-          `)
+          .select('id, user_id, role, is_active, invited_at, accepted_at, invitation_token')
           .eq('business_id', businessId)
           .order('created_at', { ascending: true });
 
         if (fetchError) throw fetchError;
 
-        const mapped: Member[] = (directMembers ?? []).map((row: any) => ({
-          id: row.id as string,
-          user_id: row.user_id as string,
+        type DirectMemberRow = {
+          id: string;
+          user_id: string;
+          role: string;
+          is_active: boolean;
+          invited_at: string | null;
+          accepted_at: string | null;
+          invitation_token: string | null;
+        };
+        const userIds = (directMembers ?? []).map((r) => r.user_id);
+        const { data: profiles } = userIds.length === 0
+          ? { data: [] as Array<{ id: string; full_name: string | null }> }
+          : await supabase
+              .from('user_profiles')
+              .select('id, full_name')
+              .in('id', userIds);
+        const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+        const mapped: Member[] = (directMembers ?? []).map((row: DirectMemberRow) => ({
+          id: row.id,
+          user_id: row.user_id,
           role: row.role as UserRole,
-          is_active: row.is_active as boolean,
-          invited_at: row.invited_at as string | null,
-          accepted_at: row.accepted_at as string | null,
-          invitation_token: row.invitation_token as string | null,
+          is_active: row.is_active,
+          invited_at: row.invited_at,
+          accepted_at: row.accepted_at,
+          invitation_token: row.invitation_token,
           email: null,
-          full_name: (row.user_profiles as { full_name?: string } | null)?.full_name ?? null,
+          full_name: profileMap.get(row.user_id) ?? null,
         }));
         setMembers(mapped);
       }
-    } catch (err: any) {
-      setError(err.message || 'Error loading team members');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error loading team members');
     }
 
     // 2. Fetch active shareable invite links from business_invitations
     try {
-      const { data: invitesData, error: invitesError } = await (supabase as any)
+      const { data: invitesData, error: invitesError } = await supabase
         .from('business_invitations')
         .select('*')
         .is('accepted_at', null)
@@ -563,16 +571,24 @@ export function TeamManagementPage() {
         .eq('business_id', businessId);
 
       if (invitesError) throw invitesError;
-      setActiveLinks((invitesData || []) as any as InvitationLink[]);
-    } catch (err: any) {
+      setActiveLinks((invitesData ?? []) as InvitationLink[]);
+    } catch (err) {
       console.error('Error loading invite links:', err);
     } finally {
       setLoading(false);
     }
   }, [businessId]);
 
+  // didMount ref pattern: react-hooks v6 flags the synchronous setState
+  // in `loadMembersAndInvites` (sets loading/error) when called from the
+  // effect body. Confining the initial load to the first run only is the
+  // standard pattern for "load on mount" data fetching.
+  const didMountRef = useRef(false);
   useEffect(() => {
-    void loadMembersAndInvites();
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      void loadMembersAndInvites();
+    }
   }, [loadMembersAndInvites]);
 
   async function handleRemove(memberId: string, memberUserId: string) {
@@ -587,7 +603,7 @@ export function TeamManagementPage() {
 
     const { error: removeError } = await supabase
       .from('business_users')
-      .update({ is_active: false, updated_at: new Date().toISOString() } as any)
+      .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -602,9 +618,13 @@ export function TeamManagementPage() {
   }
 
   async function handleChangeRole(memberId: string, newRole: UserRole) {
+    // The granular values (supervisor, data_entry, inventory_manager,
+    // sales_clerk) are now part of the user_role enum (see migration
+    // 20260723000001_expanded_roles_and_invitations.sql), so no cast is
+    // needed and the values round-trip cleanly through the DB.
     const { error: updateError } = await supabase
       .from('business_users')
-      .update({ role: newRole, updated_at: new Date().toISOString() } as any)
+      .update({ role: newRole, updated_at: new Date().toISOString() })
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -622,7 +642,7 @@ export function TeamManagementPage() {
     if (!window.confirm('Are you sure you want to revoke this invitation link? It will immediately stop working.')) return;
     setRevoking(inviteId);
 
-    const { error: revokeError } = await (supabase as any)
+    const { error: revokeError } = await supabase
       .from('business_invitations')
       .delete()
       .eq('id', inviteId);

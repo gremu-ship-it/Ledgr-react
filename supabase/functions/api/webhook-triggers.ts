@@ -1,6 +1,6 @@
 import { supabase } from "../_shared/supabase.ts";
 
-export async function triggerWebhook(businessId: string, event: string, payload: any) {
+export async function triggerWebhook(businessId: string, event: string, payload: unknown) {
   const { data: webhooks } = await supabase
     .from("webhooks")
     .select("*")
@@ -34,7 +34,7 @@ export async function triggerWebhook(businessId: string, event: string, payload:
   }
 }
 
-async function createSignature(secret: string, payload: any): Promise<string> {
+async function createSignature(secret: string, payload: unknown): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",

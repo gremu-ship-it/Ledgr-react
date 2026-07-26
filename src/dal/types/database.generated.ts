@@ -275,7 +275,7 @@ export type Database = {
           entry_hash: string | null
           event_type: string
           id: number
-          ip_address: any
+          ip_address: unknown
           new_values: Json | null
           notes: string | null
           occurred_at: string
@@ -295,7 +295,7 @@ export type Database = {
           entry_hash?: string | null
           event_type: string
           id?: number
-          ip_address?: any
+          ip_address?: unknown
           new_values?: Json | null
           notes?: string | null
           occurred_at?: string
@@ -315,7 +315,7 @@ export type Database = {
           entry_hash?: string | null
           event_type?: string
           id?: number
-          ip_address?: any
+          ip_address?: unknown
           new_values?: Json | null
           notes?: string | null
           occurred_at?: string
@@ -647,6 +647,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "budgets_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          business_id: string
+          email: string | null
+          expires_at: string
+          id: string
+          invited_at: string
+          invited_by: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          business_id: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          business_id?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_invitations_business_id_fkey"
             columns: ["business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
@@ -4129,6 +4176,25 @@ export type Database = {
           },
         ]
       }
+      v_cash_flow: {
+        Row: {
+          business_id: string | null
+          financing: number | null
+          investing: number | null
+          net_change: number | null
+          operating: number | null
+          period: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_reorder_alerts: {
         Row: {
           average_cost: number | null
@@ -4349,6 +4415,10 @@ export type Database = {
         | "admin"
         | "accountant"
         | "payroll_manager"
+        | "supervisor"
+        | "data_entry"
+        | "inventory_manager"
+        | "sales_clerk"
         | "auditor"
         | "viewer"
     }
@@ -4574,6 +4644,10 @@ export const Constants = {
         "admin",
         "accountant",
         "payroll_manager",
+        "supervisor",
+        "data_entry",
+        "inventory_manager",
+        "sales_clerk",
         "auditor",
         "viewer",
       ],

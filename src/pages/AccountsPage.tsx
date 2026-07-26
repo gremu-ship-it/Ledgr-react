@@ -9,7 +9,7 @@
  *   - Repair / seed missing accounts
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, ChevronDown, AlertTriangle,
@@ -150,7 +150,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
-  const set = (k: keyof typeof form, v: any) =>
+  const set = (k: keyof typeof form, v: (typeof form)[typeof k]) =>
     setForm(f => ({ ...f, [k]: v }));
 
   // Auto-set normal_balance when type changes
@@ -191,20 +191,20 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
         code:            form.code.trim(),
         name:            form.name.trim(),
         description:     form.description.trim() || null,
-        account_type:    form.account_type as any,
-        account_subtype: form.account_subtype as any,
+        account_type:    form.account_type,
+        account_subtype: form.account_subtype,
         normal_balance:  form.normal_balance,
         is_group:        form.is_group,
         is_system:       false,
         is_bank_account: form.is_bank_account,
         parent_id:       form.parent_id || null,
-        currency:        form.currency as any,
+        currency:        form.currency,
         opening_balance: form.opening_balance,
         is_active:       form.is_active,
-      } as any);
+      });
       onClose();
-    } catch (e: any) {
-      setError((e as Error).message ?? 'Save failed.');
+    } catch (e) {
+      setError((e instanceof Error ? e.message : String(e)) || 'Save failed.');
     } finally {
       setSaving(false);
     }
@@ -409,9 +409,15 @@ export function AccountsPage() {
   const [typeFilter, setType]   = useState<AccountType | 'all'>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modal,    setModal]    = useState<{ open: boolean; account?: Account }>({ open: false });
-  const [selectedTemplate, setSelectedTemplate] = useState<CoaTemplate>('gaap');
+  // `pendingTemplate` holds the user's pick in the template toggle before they
+  // confirm the switch. It stays `null` while the user hasn't picked anything
+  // different from the business's current template; the toggle then mirrors
+  // `businessTemplate` directly — no useEffect is needed to sync prop -> state,
+  // satisfying the react-hooks v6 set-state-in-effect rule.
+  const [pendingTemplate, setPendingTemplate] = useState<CoaTemplate | null>(null);
   const [seeding,  setSeeding]  = useState(false);
   const [seedMsg,  setSeedMsg]  = useState<{ type: 'success'|'error'; text: string } | null>(null);
+  const setSelectedTemplate = (t: CoaTemplate) => setPendingTemplate(t);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts', businessId],
@@ -426,20 +432,25 @@ export function AccountsPage() {
   const { data: businessTemplate } = useQuery({
     queryKey: ['business_coa_template', businessId],
     queryFn: async () => {
-      const { data, error } = await (supabase.from('businesses') as any)
+      // `coa_template` is typed as `string` in the generated schema (the
+      // database column is free-form text). Cast to the in-app CoaTemplate
+      // union, which is a strict subset of the values the app recognises.
+      const { data, error } = await supabase
+        .from('businesses')
         .select('coa_template')
         .eq('id', businessId!)
         .single();
       if (error) throw new Error(error.message);
-      return ((data as any)?.coa_template ?? 'gaap') as CoaTemplate;
+      return (data?.coa_template ?? 'gaap') as CoaTemplate;
     },
     enabled: Boolean(businessId),
   });
 
-  useEffect(() => {
-    if (businessTemplate && selectedTemplate !== businessTemplate) { setSelectedTemplate(businessTemplate); }
-  }, [businessTemplate]);
-
+  // The template actually stored on the business — the source of truth.
+  // The toggle reads from `pendingTemplate` (override) when the user is
+  // picking a different one to switch to; otherwise it mirrors
+  // `businessTemplate` directly.
+  const selectedTemplate = pendingTemplate ?? businessTemplate ?? 'gaap';
   const templateChanged = businessTemplate != null && selectedTemplate !== businessTemplate;
 
   // Build tree & flatten with expansion state
@@ -474,7 +485,8 @@ export function AccountsPage() {
   function toggleExpand(id: string) {
     setExpanded(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -482,12 +494,12 @@ export function AccountsPage() {
   // Save mutation
   const saveMutation = useMutation({
     mutationFn: async (data: InsertDto<'accounts'> & { id?: string }) => {
-      if ((data as any).id) {
-        const { id, ...patch } = data as any;
-        const { error } = await (supabase.from('accounts') as any).update(patch).eq('id', id);
+      if (data.id) {
+        const { id, ...patch } = data;
+        const { error } = await supabase.from('accounts').update(patch).eq('id', id);
         if (error) throw new Error(error.message);
       } else {
-        const { error } = await supabase.from('accounts').insert(data as any);
+        const { error } = await supabase.from('accounts').insert(data);
         if (error) throw new Error(error.message);
       }
     },
@@ -497,7 +509,7 @@ export function AccountsPage() {
   // Deactivate mutation
   const deactivateMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase.from('accounts') as any).update({ is_active: false }).eq('id', id);
+      const { error } = await supabase.from('accounts').update({ is_active: false }).eq('id', id);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', businessId] }),
@@ -518,8 +530,8 @@ export function AccountsPage() {
           ? `Added ${inserted} missing accounts (${skipped} already existed).`
           : `Chart of Accounts is already complete — nothing to add.`,
       });
-    } catch (e: any) {
-      setSeedMsg({ type: 'error', text: (e as Error).message });
+    } catch (e) {
+      setSeedMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     } finally {
       setSeeding(false);
     }
@@ -547,8 +559,8 @@ export function AccountsPage() {
         type: 'success',
         text: `Switched to ${selectedTemplate.toUpperCase()}. Added ${added} account(s), deactivated ${deactivated}.`,
       });
-    } catch (e: any) {
-      setSeedMsg({ type: 'error', text: (e as Error).message });
+    } catch (e) {
+      setSeedMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     } finally {
       setSeeding(false);
     }

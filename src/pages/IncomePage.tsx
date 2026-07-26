@@ -24,7 +24,7 @@ function useBranches(businessId?: string) {
   return useQuery({
     queryKey: ['branches', businessId],
     queryFn: async () => {
-      const { data, error } = await (repos.inventory as any).client
+      const { data, error } = await repos.inventory.db
         .from('branches')
         .select('id, name, code')
         .eq('business_id', businessId!)
@@ -68,7 +68,7 @@ async function deductStockForBranchSale(
   if (linesWithProducts.length === 0) return;
 
   const locations = await repos.inventory.findLocations(businessId);
-  const branchLocation = (locations as any[]).find((l) => l.branch_id === branchId);
+  const branchLocation = locations.find((l) => l.branch_id === branchId);
   if (!branchLocation) {
     console.warn(`No inventory location linked to branch ${branchId} — stock not adjusted for this sale.`);
     return;
@@ -94,7 +94,7 @@ async function deductStockForBranchSale(
   }
 
   try {
-    await repos.inventory.recordMovements(movements as any);
+    await repos.inventory.recordMovements(movements);
   } catch (err) {
     // Same philosophy as journal posting: don't block the sale, but don't
     // pretend it worked either.

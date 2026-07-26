@@ -282,7 +282,7 @@ serve(async (req) => {
         success: true,
         business_id: invitation.business_id,
         role: invitation.role,
-        business_name: (business as any).name,
+        business_name: business?.name ?? null,
       }),
       {
         status: 200,

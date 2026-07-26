@@ -50,7 +50,7 @@ export function PeriodManagementPage() {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] });
     },
-    onError: (err: any) => {
+    onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to lock period.');
     },
   });
@@ -62,7 +62,7 @@ export function PeriodManagementPage() {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] });
     },
-    onError: (err: any) => {
+    onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to unlock period.');
     },
   });

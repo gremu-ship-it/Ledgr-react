@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
+import type { Json } from '../types/database.generated';
 import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
@@ -378,10 +379,11 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     resource_type: string;
     resource_id: string;
     resource_ref?: string | null;
-    old_values?: any;
-    new_values?: any;
+    old_values?: Json;
+    new_values?: Json;
     notes?: string | null;
   }): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the generated `rpc` signature doesn't include 'log_manual_audit_event' (the function exists in the DB but isn't surfaced by supabase gen types); verified against the live DB
     const { error } = await (this.client.rpc as any)('log_manual_audit_event', {
       p_business_id: entry.business_id,
       p_event_type: entry.event_type,

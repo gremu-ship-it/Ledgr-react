@@ -50,6 +50,7 @@ async function getAccountByCode(
   return acc;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- accepted for future per-business sequence support; currently timestamp-based
 export async function nextEntryNumber(_businessId: string): Promise<string> {
   const now   = new Date();
   const stamp =
@@ -219,6 +220,7 @@ export async function createInvoiceJournalEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
 
@@ -268,6 +270,7 @@ export async function createInvoiceJournalEntry(
     ],
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry2.id, null as any);
   // Same-day auto-settlement — booked and settled at the identical rate,
   // so realised FX gain/loss is always zero here. No FX line needed.
@@ -359,6 +362,7 @@ export async function createInvoiceReceivableEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(invoice.id, { journal_entry_id: entry.id });
   return entry.id;
@@ -389,7 +393,7 @@ export async function createInvoiceSettlementEntry(
   const cashFunctional     = Number(payment.functional_amount ?? payment.amount);
   const debtorsClearFunctional = settledOriginal * bookedRate; // clears exactly what was booked
 
-  const direction: 'receivable' = 'receivable';
+  const direction = 'receivable' as const;
   const realisedGainLoss = calculateRealisedFx(settledOriginal, bookedRate, settlementRate, direction);
 
   const entryNumber = await nextEntryNumber(businessId);
@@ -448,6 +452,7 @@ export async function createInvoiceSettlementEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(invoice.id, { journal_entry_id: invoice.journal_entry_id ?? entry.id });
   return entry.id;
@@ -535,7 +540,7 @@ export async function createExpenseJournalEntry(
   }
 
   lines.push({
-    line_number:   lineNumber++,
+    line_number:   lineNumber + 1,
     account_id:    creditAccount.id,
     description:   isBill
       ? `Payable — Expense ${expense.expense_number}`
@@ -566,6 +571,7 @@ export async function createExpenseJournalEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
 
@@ -598,7 +604,7 @@ export async function createExpenseSettlementEntry(
   const cashFunctional   = Number(payment.functional_amount ?? payment.amount);
   const creditorsClearFunctional = settledOriginal * bookedRate;
 
-  const direction: 'payable' = 'payable';
+  const direction = 'payable' as const;
   const realisedGainLoss = calculateRealisedFx(settledOriginal, bookedRate, settlementRate, direction);
 
   const entryNumber = await nextEntryNumber(businessId);
@@ -657,6 +663,7 @@ export async function createExpenseSettlementEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   return entry.id;
 }
@@ -735,5 +742,6 @@ export async function createPayrollJournalEntry(
     ],
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
 }

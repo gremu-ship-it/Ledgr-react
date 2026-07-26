@@ -458,6 +458,9 @@ export function CreateBusinessPage() {
     setError(null);
     setLoading(true);
 
+    // `create_business_with_owner` RPC isn't in the generated Database['public']['Functions']
+    // (it returns a string id and the args are positional). Verified at runtime.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC signature not in generated types
     const { data: businessId, error: rpcError } = await (supabase as any).rpc(
       'create_business_with_owner',
       {
@@ -507,18 +510,18 @@ export function CreateBusinessPage() {
         const mapped = (memberships as unknown as JoinRow[])
           .map((row) => {
             const business = Array.isArray(row.business) ? row.business[0] : row.business;
-            if (!business) return null;
-            return { business, role: row.role };
+            if (!business || !('id' in business) || !('name' in business)) return null;
+            return { business: business as { id: string; name: string; base_currency?: string | null }, role: row.role };
           })
           .filter((m): m is NonNullable<typeof m> => m !== null);
 
-        setBusinesses(mapped as any);
+        setBusinesses(mapped);
 
         // Select the newly created business
         const newBiz = mapped.find(
-          (m) => (m.business as { id: string }).id === businessId,
+          (m) => m.business.id === businessId,
         );
-        if (newBiz) setCurrentBusiness(newBiz as any);
+        if (newBiz) setCurrentBusiness(newBiz);
       }
     }
 
