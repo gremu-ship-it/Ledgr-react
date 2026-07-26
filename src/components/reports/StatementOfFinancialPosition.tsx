@@ -123,7 +123,8 @@ export function StatementOfFinancialPosition({
     if (sofp && !sofp.isBalanced) {
       pushSofpBalanceWarning(
         formatAccounting(sofp.netAssets, formatMwk),
-        formatAccounting(sofp.totalEquity, formatMwk)
+        formatAccounting(sofp.totalEquity, formatMwk),
+        businessId,
       );
     }
   }, [sofp]); // eslint-disable-line react-hooks/exhaustive-deps

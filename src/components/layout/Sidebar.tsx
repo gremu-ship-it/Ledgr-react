@@ -13,6 +13,7 @@ export function Sidebar() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
+  const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
   // Always show all sections. Gating is now per-item (Accounting + Organisation are visible on Free).
@@ -82,7 +83,7 @@ export function Sidebar() {
                     if (locked) {
                       e.preventDefault();
                       const feature = t(item.labelKey);
-                      pushUpgradeRequired(feature);
+                      pushUpgradeRequired(feature, 'Growth', businessId);
                       // Close mobile sidebar anyway
                       if (window.innerWidth < 1024) setSidebarOpen(false);
                       return;

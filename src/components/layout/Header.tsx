@@ -26,6 +26,7 @@ export function Header() {
   const { t } = useTranslation();
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const currentUser = useAppStore((s) => s.currentUser);
+  const currentBusinessId = useAppStore((s) => s.currentBusiness?.business?.id ?? null);
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -40,7 +41,18 @@ export function Header() {
     clearAll,
   } = useNotificationStore();
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const scopedNotifications = currentBusinessId
+    ? notifications.filter((n) => n.businessId === currentBusinessId)
+    : [];
+  const unreadCount = scopedNotifications.filter((n) => !n.read).length;
+
+  function handleMarkAllAsRead() {
+    if (currentBusinessId) markAllAsRead(currentBusinessId);
+  }
+
+  function handleClearAll() {
+    if (currentBusinessId) clearAll(currentBusinessId);
+  }
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -116,9 +128,9 @@ export function Header() {
                 <p className="text-sm font-black uppercase tracking-widest text-gray-900">
                   {t('common.notifications')}
                 </p>
-                {notifications.length > 0 && (
+                {scopedNotifications.length > 0 && (
                   <button
-                    onClick={markAllAsRead}
+                    onClick={handleMarkAllAsRead}
                     className="text-xs font-medium text-brand-600 hover:text-brand-700"
                   >
                     Mark all read
@@ -127,7 +139,7 @@ export function Header() {
               </div>
 
               <div className="max-h-[380px] overflow-y-auto">
-                {notifications.length === 0 ? (
+                {scopedNotifications.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
                       <Bell className="h-6 w-6 text-gray-200" />
@@ -137,7 +149,7 @@ export function Header() {
                     </p>
                   </div>
                 ) : (
-                  notifications.map((notif) => {
+                  scopedNotifications.map((notif) => {
                     const Icon = notif.type === 'warning' ? AlertTriangle :
                                  notif.type === 'success' ? CheckCircle2 : Bell;
 
@@ -195,10 +207,10 @@ export function Header() {
                 )}
               </div>
 
-              {notifications.length > 0 && (
+              {scopedNotifications.length > 0 && (
                 <div className="border-t bg-white/90 px-4 py-2 text-center">
                   <button
-                    onClick={clearAll}
+                    onClick={handleClearAll}
                     className="text-xs font-medium text-gray-400 hover:text-gray-600"
                   >
                     Clear all notifications

@@ -82,16 +82,21 @@ function (see below) from being invoked by anyone other than your scheduler.
 ### 3. Deploy the Edge Functions
 
 ```bash
-supabase functions deploy initiate-subscription-payment
+supabase functions deploy initiate-subscription-payment --no-verify-jwt
+supabase functions deploy verify-subscription-payment --no-verify-jwt
+supabase functions deploy grant-manual-subscription --no-verify-jwt
 supabase functions deploy paychangu-webhook --no-verify-jwt
-supabase functions deploy verify-subscription-payment
 supabase functions deploy expire-subscriptions --no-verify-jwt
 ```
 
-`paychangu-webhook` and `expire-subscriptions` must be deployed with
-`--no-verify-jwt` since PayChangu and your cron scheduler can't send a
-Supabase user JWT — both are protected by their own mechanism instead
-(HMAC signature verification, and `CRON_SECRET` respectively).
+These functions are deployed with `--no-verify-jwt` so CORS preflight and
+server-to-server calls are never blocked by the Supabase gateway. The
+client-facing functions (`initiate-subscription-payment`,
+`verify-subscription-payment`, and `grant-manual-subscription`) still require
+and verify the caller's Supabase JWT inside the function before doing any
+work. `paychangu-webhook` and `expire-subscriptions` are protected by their
+own mechanisms instead (HMAC signature verification, and `CRON_SECRET`
+respectively).
 
 ### 4. Point PayChangu's webhook at your function
 
@@ -203,10 +208,10 @@ set is_platform_admin = true
 where id = (select id from auth.users where email = 'you@example.com');
 ```
 
-Then deploy the function:
+Then deploy the function if you did not already deploy it in the payment setup step:
 
 ```bash
-supabase functions deploy grant-manual-subscription
+supabase functions deploy grant-manual-subscription --no-verify-jwt
 ```
 
 Log in, visit `/admin/billing`, search for the business by name, choose the

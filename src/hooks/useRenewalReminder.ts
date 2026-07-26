@@ -77,7 +77,7 @@ export function useRenewalReminder() {
       month: 'long',
       day: 'numeric',
     });
-    pushSubscriptionRenewalReminder(planName, threshold, expiresOn);
+    pushSubscriptionRenewalReminder(planName, threshold, expiresOn, businessId);
     markShown(key);
   }, [businessId, business]);
 }

@@ -51,7 +51,7 @@ export function PeriodManagementPage() {
       setError(null);
       const period = data?.find(p => p.period.id === periodId)?.period;
       if (period) {
-        pushPeriodClosed(period.name);
+        pushPeriodClosed(period.name, businessId);
       }
       queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] });
     },
@@ -59,7 +59,7 @@ export function PeriodManagementPage() {
       const period = data?.find(p => p.period.id === periodId)?.period;
       const reason = err instanceof Error ? err.message : 'Failed to lock period.';
       if (period) {
-        pushPeriodCloseFailed(period.name, reason);
+        pushPeriodCloseFailed(period.name, reason, businessId);
       }
       setError(reason);
     },

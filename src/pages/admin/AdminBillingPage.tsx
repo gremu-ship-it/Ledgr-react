@@ -125,13 +125,14 @@ export function AdminBillingPage() {
         notes: `Quick ${planName} grant (${days} days)`,
       });
 
-      pushSuccess(`${planName} granted`, `${planName} activated for ${days} days`);
+      pushSuccess(`${planName} granted`, `${planName} activated for ${days} days`, { businessId: selected.id });
       queryClient.invalidateQueries({ queryKey: ['admin-business-search'] });
       queryClient.invalidateQueries({ queryKey: ['business', selected.id] });
       queryClient.invalidateQueries({ queryKey: ['usage', selected.id] });
       setSelected(null);
-    } catch (e: any) {
-      pushError('Grant failed', e?.message || 'Could not grant plan');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not grant plan';
+      pushError('Grant failed', message, { businessId: selected.id });
     }
   };
 
