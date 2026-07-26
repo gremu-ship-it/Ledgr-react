@@ -733,7 +733,9 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       .eq('business_id', businessId)
       .is('deleted_at', null);
     if (accountsRes.error) throw toRepositoryError('accounts', accountsRes.error);
-    const accountMap = new Map((accountsRes.data ?? []).map((a: any) => [a.id, a]));
+    const accountMap = new Map(
+      ((accountsRes.data ?? []) as Row<'accounts'>[]).map((a) => [a.id, a]),
+    );
 
     const linesRes = await this.client
       .from('journal_lines')
@@ -768,7 +770,10 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
         .select('id, source_type')
         .in('id', reversalOfIds);
       if (originalsRes.error) throw toRepositoryError('journal_entries', originalsRes.error);
-      originalSourceTypes = new Map((originalsRes.data ?? []).map((e: any) => [e.id, e.source_type]));
+      originalSourceTypes = new Map(
+        ((originalsRes.data ?? []) as Array<{ id: string; source_type: string | null }>)
+          .map((e) => [e.id, e.source_type]),
+      );
     }
 
     let assetPurchases = 0;

@@ -154,6 +154,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           throw new Error(
             'Expense saved, but posting to the ledger failed. ' +
             'It will show as "Needs Posting" on the Expenses page — you can retry from there.',
+            { cause: err },
           );
         }
       }

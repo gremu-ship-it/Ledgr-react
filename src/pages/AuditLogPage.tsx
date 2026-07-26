@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Shield, CheckCircle2, XCircle, AlertTriangle, Download,
@@ -279,9 +279,14 @@ export function AuditLogPage() {
     staleTime: 5 * 60_000,
   });
 
-  // Chain lookup map for O(1) access
-  const chainMap = new Map<number, ChainVerificationResult>(
-    (chainData ?? []).map((r) => [r.id, r]),
+  // Chain lookup map for O(1) access — memoised so its identity is stable
+  // across renders and downstream useCallback dependencies don't change on
+  // every render.
+  const chainMap = useMemo(
+    () => new Map<number, ChainVerificationResult>(
+      (chainData ?? []).map((r) => [r.id, r]),
+    ),
+    [chainData],
   );
 
   const totalPages = Math.ceil((logData?.count ?? 0) / PAGE_SIZE);

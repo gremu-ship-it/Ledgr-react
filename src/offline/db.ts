@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
+import type { QueuePayloadFor } from './payloads';
 
 /**
  * The seven financial write operations that must work offline, per the
@@ -62,10 +63,10 @@ export interface QueueItem {
 
   /**
    * The payload to send to the repository's create/record method. Shape
-   * depends on `operationType` — see `OfflinePayloads` in payloads.ts for
-   * the exact discriminated union.
+   * is determined by `operationType` via the discriminated union in
+   * `QueuePayloadFor` (see ./payloads.ts).
    */
-  payload: any;
+  payload: QueuePayloadFor<QueueOperationType>;
 
   /** If this item depends on another queued item's server-generated id. */
   dependsOnLocalId?: number;

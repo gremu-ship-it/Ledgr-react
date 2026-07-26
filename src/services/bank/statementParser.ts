@@ -6,7 +6,7 @@ type CsvRow = Record<string, string | number | null | undefined>;
 const clean = (v: unknown) => String(v ?? '').trim();
 const key = (row: CsvRow, names: string[]) => { const found = Object.keys(row).find(k => names.includes(k.toLowerCase().replace(/[^a-z]/g, ''))); return found ? clean(row[found]) : ''; };
 const money = (value: string) => Number(value.replace(/[\s,]/g, '').replace(/\((.*)\)/, '-$1').replace(/[^0-9.-]/g, '')) || 0;
-function date(value: string) { const v = value.trim(); if (/^\d{4}-\d\d-\d\d/.test(v)) return v.slice(0, 10); const m = v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/); if (!m) return v; const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
+function date(value: string) { const v = value.trim(); if (/^\d{4}-\d\d-\d\d/.test(v)) return v.slice(0, 10); const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/); if (!m) return v; const y = m[3].length === 2 ? `20${m[3]}` : m[3]; return `${y}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`; }
 
 /** Parses exports from NBS, FDH, Standard Bank, National Bank, Airtel Money and TNM Mpamba. */
 export async function parseBankStatement(file: File, bankFormat = 'auto'): Promise<ParsedStatement> {

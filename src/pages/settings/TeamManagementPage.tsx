@@ -549,8 +549,8 @@ export function TeamManagementPage() {
         }));
         setMembers(mapped);
       }
-    } catch (err: any) {
-      setError(err.message || 'Error loading team members');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error loading team members');
     }
 
     // 2. Fetch active shareable invite links from business_invitations
@@ -564,7 +564,7 @@ export function TeamManagementPage() {
 
       if (invitesError) throw invitesError;
       setActiveLinks((invitesData || []) as any as InvitationLink[]);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error loading invite links:', err);
     } finally {
       setLoading(false);

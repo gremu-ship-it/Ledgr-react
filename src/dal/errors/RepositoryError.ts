@@ -1,7 +1,7 @@
 export abstract class RepositoryError extends Error {
   public readonly resource: string;
-  public readonly cause?: any;
-  constructor(message: string, resource: string, cause?: any) {
+  public override readonly cause?: unknown;
+  constructor(message: string, resource: string, cause?: unknown) {
     super(message);
     this.name = this.constructor.name;
     this.resource = resource;
@@ -9,22 +9,22 @@ export abstract class RepositoryError extends Error {
   }
 }
 export class NotFoundError extends RepositoryError {
-  constructor(resource: string, id: string, cause?: any) {
+  constructor(resource: string, id: string, cause?: unknown) {
     super(`${resource} with id "${id}" was not found.`, resource, cause);
   }
 }
 export class ValidationError extends RepositoryError {
-  constructor(resource: string, message: string, cause?: any) {
+  constructor(resource: string, message: string, cause?: unknown) {
     super(`Validation failed for ${resource}: ${message}`, resource, cause);
   }
 }
 export class UnauthorizedError extends RepositoryError {
-  constructor(resource: string, message = 'Not authorized.', cause?: any) {
+  constructor(resource: string, message = 'Not authorized.', cause?: unknown) {
     super(`${resource}: ${message}`, resource, cause);
   }
 }
 export class DatabaseError extends RepositoryError {
-  constructor(resource: string, message: string, cause?: any) {
+  constructor(resource: string, message: string, cause?: unknown) {
     super(`Database error in ${resource}: ${message}`, resource, cause);
   }
 }
@@ -34,7 +34,7 @@ export class UnsupportedOperationError extends RepositoryError {
     super(`${operation}() is not supported on '${resource}'.`, resource);
   }
 }
-export function toRepositoryError(resource: string, error: any): RepositoryError {
+export function toRepositoryError(resource: string, error: unknown): RepositoryError {
   const err = error as { code?: string; message?: string; details?: string } | null;
   const message = err?.message ?? 'Unknown error';
   const code = err?.code;

@@ -1,5 +1,5 @@
 // This function can be called from other Edge Functions or database triggers
-export async function fireWebhook(businessId: string, event: string, payload: any) {
+export async function fireWebhook(businessId: string, event: string, payload: unknown) {
   const { data: webhooks } = await supabase
     .from("webhooks")
     .select("*")

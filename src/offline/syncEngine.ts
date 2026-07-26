@@ -21,7 +21,7 @@ export type SyncProgressListener = (progress: SyncProgress) => void;
 
 function resolveForeignKey(item: QueueItem, parentServerId: string): void {
   if (!item.dependentFkField) return;
-  const payload = item.payload as Record<string, unknown>;
+  const payload = item.payload as unknown as Record<string, unknown>;
 
   for (const key of Object.keys(payload)) {
     const inner = payload[key];

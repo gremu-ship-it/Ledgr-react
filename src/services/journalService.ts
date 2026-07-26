@@ -50,6 +50,7 @@ async function getAccountByCode(
   return acc;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- accepted for future per-business sequence support; currently timestamp-based
 export async function nextEntryNumber(_businessId: string): Promise<string> {
   const now   = new Date();
   const stamp =
@@ -389,7 +390,7 @@ export async function createInvoiceSettlementEntry(
   const cashFunctional     = Number(payment.functional_amount ?? payment.amount);
   const debtorsClearFunctional = settledOriginal * bookedRate; // clears exactly what was booked
 
-  const direction: 'receivable' = 'receivable';
+  const direction = 'receivable' as const;
   const realisedGainLoss = calculateRealisedFx(settledOriginal, bookedRate, settlementRate, direction);
 
   const entryNumber = await nextEntryNumber(businessId);
@@ -535,7 +536,7 @@ export async function createExpenseJournalEntry(
   }
 
   lines.push({
-    line_number:   lineNumber++,
+    line_number:   lineNumber + 1,
     account_id:    creditAccount.id,
     description:   isBill
       ? `Payable — Expense ${expense.expense_number}`
@@ -598,7 +599,7 @@ export async function createExpenseSettlementEntry(
   const cashFunctional   = Number(payment.functional_amount ?? payment.amount);
   const creditorsClearFunctional = settledOriginal * bookedRate;
 
-  const direction: 'payable' = 'payable';
+  const direction = 'payable' as const;
   const realisedGainLoss = calculateRealisedFx(settledOriginal, bookedRate, settlementRate, direction);
 
   const entryNumber = await nextEntryNumber(businessId);

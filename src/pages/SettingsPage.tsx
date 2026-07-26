@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
@@ -128,12 +128,13 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
     country: business.country ?? 'Malawi',
     brand_color: business.brand_color ?? '#1D9E75',
   });
-  const [logoUrl, setLogoUrl] = useState<string | null>(business.logo_url ?? null);
-
-  // Sync logo URL when business data refreshes (e.g. after save or query invalidation)
-  useEffect(() => {
-    if (business.logo_url !== logoUrl) { setLogoUrl(business.logo_url ?? null); }
-  }, [business.logo_url]);
+  // `pendingLogoUrl` overrides the business.logo_url only between upload and save.
+  // While pendingLogoUrl is undefined we mirror the server value directly, so we
+  // don't need a useEffect to sync prop -> state (which would violate the
+  // react-hooks v6 set-state-in-effect rule).
+  const [pendingLogoUrl, setPendingLogoUrl] = useState<string | null | undefined>(undefined);
+  const logoUrl = pendingLogoUrl !== undefined ? pendingLogoUrl : (business.logo_url ?? null);
+  const setLogoUrl = (next: string | null) => setPendingLogoUrl(next);
 
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -181,9 +182,9 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       setLogoUrl(publicUrl);
       setAlert({ type: 'success', message: 'Logo uploaded successfully.' });
       setTimeout(() => setAlert(null), 3000);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Logo upload error:', err);
-      setAlert({ type: 'error', message: err.message || 'Failed to upload logo.' });
+      setAlert({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload logo.' });
       setTimeout(() => setAlert(null), 3000);
     } finally {
       setLogoUploading(false);

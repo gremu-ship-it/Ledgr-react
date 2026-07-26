@@ -113,7 +113,7 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
     // so local/dev environments still work.
     const { error: incrementError } = await (
       this.client as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: any }>;
+        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string; code?: string } | null }>;
       }
     ).rpc('increment_amount_paid', {
       p_table: 'invoices',

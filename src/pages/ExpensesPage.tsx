@@ -408,6 +408,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         throw new Error(
           `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
           `It will show as "Needs Posting" — you can retry from the expense list.`,
+          { cause: err },
         );
       }
     },
@@ -732,6 +733,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         throw new Error(
           `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
           `It will show as "Needs Posting" — you can retry from the expense list.`,
+          { cause: err },
         );
       }
     },

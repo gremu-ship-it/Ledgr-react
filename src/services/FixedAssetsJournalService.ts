@@ -393,7 +393,7 @@ export async function disposeAsset(
 
   if (gainLoss > 0) {
     lines.push({
-      line_number: lineNumber++,
+      line_number: lineNumber + 1,
       account_id: gainLossAccount.id,
       description: `${description} — gain on disposal`,
       is_debit: false,

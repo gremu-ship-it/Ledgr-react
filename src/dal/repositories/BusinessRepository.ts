@@ -136,16 +136,16 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
       throw toRepositoryError('business_users', error);
     }
 
+    type MembershipRow = { role: string; business: Row<'businesses'> | Row<'businesses'>[] };
     const memberships = (data ?? [])
-      .map((row: any) => {
-        const business = Array.isArray(row.business)
-          ? row.business[0]
-          : row.business;
+      .map((row: MembershipRow) => {
+        const business = Array.isArray(row.business) ? row.business[0] : row.business;
         return { role: row.role, business };
       })
-      .filter((m: any) => m?.business?.id && m.business.name);
+      .filter((m): m is { role: string; business: Row<'businesses'> } =>
+        Boolean(m.business?.id && m.business.name),
+      );
 
-    console.log('findMembershipsWithRole result:', memberships);
     return memberships;
   }
 }

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
+import type { Json } from '../types/database.generated';
 import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
@@ -11,8 +12,8 @@ interface AuditLogEntry {
   resource_type: string;
   resource_id: string;
   resource_ref?: string | null;
-  old_values?: any;
-  new_values?: any;
+  old_values?: Json;
+  new_values?: Json;
   notes?: string | null;
 }
 

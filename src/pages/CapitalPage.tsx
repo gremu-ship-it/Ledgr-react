@@ -306,7 +306,7 @@ function openRepaymentSchedule(
   <script>
     // Auto-focus the print button for keyboard accessibility
     document.querySelector('button')?.focus();
-  <\/script>
+  </script>
 </body>
 </html>`);
   win.document.close();

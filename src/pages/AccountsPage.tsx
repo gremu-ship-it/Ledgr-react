@@ -9,7 +9,7 @@
  *   - Repair / seed missing accounts
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, ChevronDown, AlertTriangle,
@@ -203,8 +203,8 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
         is_active:       form.is_active,
       } as any);
       onClose();
-    } catch (e: any) {
-      setError((e as Error).message ?? 'Save failed.');
+    } catch (e) {
+      setError((e instanceof Error ? e.message : String(e)) || 'Save failed.');
     } finally {
       setSaving(false);
     }
@@ -409,9 +409,15 @@ export function AccountsPage() {
   const [typeFilter, setType]   = useState<AccountType | 'all'>('all');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modal,    setModal]    = useState<{ open: boolean; account?: Account }>({ open: false });
-  const [selectedTemplate, setSelectedTemplate] = useState<CoaTemplate>('gaap');
+  // `pendingTemplate` holds the user's pick in the template toggle before they
+  // confirm the switch. It stays `null` while the user hasn't picked anything
+  // different from the business's current template; the toggle then mirrors
+  // `businessTemplate` directly — no useEffect is needed to sync prop -> state,
+  // satisfying the react-hooks v6 set-state-in-effect rule.
+  const [pendingTemplate, setPendingTemplate] = useState<CoaTemplate | null>(null);
   const [seeding,  setSeeding]  = useState(false);
   const [seedMsg,  setSeedMsg]  = useState<{ type: 'success'|'error'; text: string } | null>(null);
+  const setSelectedTemplate = (t: CoaTemplate) => setPendingTemplate(t);
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts', businessId],
@@ -436,10 +442,11 @@ export function AccountsPage() {
     enabled: Boolean(businessId),
   });
 
-  useEffect(() => {
-    if (businessTemplate && selectedTemplate !== businessTemplate) { setSelectedTemplate(businessTemplate); }
-  }, [businessTemplate]);
-
+  // The template actually stored on the business — the source of truth.
+  // The toggle reads from `pendingTemplate` (override) when the user is
+  // picking a different one to switch to; otherwise it mirrors
+  // `businessTemplate` directly.
+  const selectedTemplate = pendingTemplate ?? businessTemplate ?? 'gaap';
   const templateChanged = businessTemplate != null && selectedTemplate !== businessTemplate;
 
   // Build tree & flatten with expansion state
@@ -474,7 +481,8 @@ export function AccountsPage() {
   function toggleExpand(id: string) {
     setExpanded(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
@@ -518,8 +526,8 @@ export function AccountsPage() {
           ? `Added ${inserted} missing accounts (${skipped} already existed).`
           : `Chart of Accounts is already complete — nothing to add.`,
       });
-    } catch (e: any) {
-      setSeedMsg({ type: 'error', text: (e as Error).message });
+    } catch (e) {
+      setSeedMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     } finally {
       setSeeding(false);
     }
@@ -547,8 +555,8 @@ export function AccountsPage() {
         type: 'success',
         text: `Switched to ${selectedTemplate.toUpperCase()}. Added ${added} account(s), deactivated ${deactivated}.`,
       });
-    } catch (e: any) {
-      setSeedMsg({ type: 'error', text: (e as Error).message });
+    } catch (e) {
+      setSeedMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     } finally {
       setSeeding(false);
     }

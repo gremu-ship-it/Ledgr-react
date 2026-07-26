@@ -29,6 +29,7 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
     super(client, 'inventory_balances');
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- inventory balances are never soft-deleted
   override async softDelete(_id: string): Promise<Row<'inventory_balances'>> {
     throw new UnsupportedOperationError('inventory_balances', 'softDelete');
   }
