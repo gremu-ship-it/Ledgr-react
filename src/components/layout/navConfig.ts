@@ -21,13 +21,16 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
+import { hasCapability } from '@/lib/billing/plans';
 
 export interface NavItemConfig {
   labelKey: string;
   path: string;
   icon: LucideIcon;
-  /** If set, the item is soft-gated: still visible/clickable, but shows a small lock badge when the current plan doesn't include this capability. */
+  /** If set, the item is soft-gated: still visible/clickable, but shows a small lock badge + onClick toast when the current plan doesn't include this capability. */
   requiresCapability?: PlanCapability;
+  /** Per-item minimum plan (for Accounting/Organisation items). Falls back to section minPlan. */
+  minPlan?: PlanTier;
 }
 
 export interface NavSectionConfig {
@@ -69,25 +72,23 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   },
   {
     labelKey: 'navigation.sections.accounting',
-    minPlan: 'growth',
     items: [
-      { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen },
-      { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent },
-      { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark },
-      { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins },
-      { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
-      { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText },
-      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark, requiresCapability: 'bank_reconciliation' },
-      { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock },
-      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck },
+      { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, minPlan: 'growth' },
+      { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, minPlan: 'growth' },
+      { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, minPlan: 'growth' },
+      { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, minPlan: 'growth' },
+      { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, minPlan: 'growth' },
+      { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
+      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth' },
     ],
   },
   {
     labelKey: 'navigation.sections.organisation',
-    minPlan: 'growth',
     items: [
-      { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser },
-      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch },
+      { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
+      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth' },
     ],
   },
 ];
@@ -105,9 +106,29 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
-/** Set of all paths gated behind a paid plan (minPlan !== undefined). */
+/** Set of all paths gated behind a paid plan (item has minPlan or requiresCapability). */
 export const GATED_PATHS: Set<string> = new Set(
-  NAV_SECTIONS
-    .filter((s) => s.minPlan)
-    .flatMap((s) => s.items.map((i) => i.path)),
+  NAV_SECTIONS.flatMap((s) =>
+    s.items
+      .filter((i) => i.minPlan || i.requiresCapability)
+      .map((i) => i.path)
+  ),
 );
+
+/**
+ * Returns true if the given item should be considered locked for the current plan tier.
+ */
+export function isItemLocked(
+  item: NavItemConfig,
+  currentTier: PlanTier,
+  sectionMinPlan?: PlanTier
+): boolean {
+  const effectiveMin = item.minPlan ?? sectionMinPlan;
+  if (effectiveMin && !planMeetsMin(currentTier, effectiveMin)) {
+    return true;
+  }
+  if (item.requiresCapability && !hasCapability(currentTier, item.requiresCapability)) {
+    return true;
+  }
+  return false;
+}

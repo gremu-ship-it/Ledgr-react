@@ -161,3 +161,14 @@ export function pushError(title: string, message: string, link?: string) {
   const { addNotification } = useNotificationStore.getState();
   addNotification({ type: 'error', title, message, link });
 }
+
+// ── Plan / Upgrade upsell ─────────────────────────────────────────────────────
+export function pushUpgradeRequired(featureName: string, requiredPlan = 'Growth') {
+  const { addNotification } = useNotificationStore.getState();
+  addNotification({
+    type: 'warning',
+    title: `${featureName} requires ${requiredPlan}`,
+    message: `Upgrade your plan to access ${featureName}.`,
+    link: '/settings?tab=billing',
+  });
+}

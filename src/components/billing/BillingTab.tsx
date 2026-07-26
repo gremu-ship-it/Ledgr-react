@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
-import { CheckCircle2, XCircle, Loader2, X, Check, Star, Lock } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, X, Check, Star, Lock, ShieldCheck, ExternalLink } from 'lucide-react';
+import { pushSuccess, pushError } from '@/lib/notifications';
 import { useUsage } from '@/hooks/useUsage';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useAppStore } from '@/store/useAppStore';
 import { usePaymentReturnStatus } from '@/hooks/usePaymentReturnStatus';
+import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { repos } from '@/lib/repositories';
 import { subscriptionPaymentService } from '@/services/billing/SubscriptionPaymentService';
 import { PLANS, PLAN_TIER_ORDER, type PlanTier } from '@/lib/billing/plans';
@@ -17,6 +19,7 @@ export function BillingTab() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const queryClient = useQueryClient();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const [pendingDowngradeTier, setPendingDowngradeTier] = useState<PlanTier | null>(null);
   const [checkoutTier, setCheckoutTier] = useState<Exclude<PlanTier, 'free'> | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,8 +60,40 @@ export function BillingTab() {
     onSettled: () => setPendingDowngradeTier(null),
   });
 
-  const isMoreExpensive = (target: PlanTier) =>
+  const isMoreExpensive = (target: PlanTier) => 
     PLAN_TIER_ORDER.indexOf(target) > PLAN_TIER_ORDER.indexOf(planTier);
+
+  // Platform admin quick grant helper (used in the manual grant box)
+  const quickGrant = async (tier: Exclude<PlanTier, 'free'>, days: number) => {
+    if (!businessId) return;
+
+    const planName = PLANS[tier].name;
+    const amount = PLANS[tier].priceMWK;
+
+    if (!confirm(`Grant ${planName} for ${days} days?`)) return;
+
+    try {
+      await subscriptionPaymentService.grantManualSubscription({
+        business_id: businessId,
+        target_plan_tier: tier,
+        duration_days: days,
+        amount,
+        payment_method: 'cash',
+        notes: `Quick ${planName} grant (${days} days) from Billing tab`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['business', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['usage', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-payments', businessId] });
+
+      pushSuccess(
+        `${planName} granted`,
+        `${planName} plan activated for ${days} days.`
+      );
+    } catch (e: any) {
+      pushError('Grant failed', e?.message || 'Could not grant plan.');
+    }
+  };
 
   const handlePlanClick = (targetTier: PlanTier) => {
     if (targetTier === planTier || !canManageBilling) return;
@@ -144,6 +179,68 @@ export function BillingTab() {
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           <Lock className="h-4 w-4 flex-shrink-0" />
           Only the business owner can change the subscription plan.
+        </div>
+      )}
+
+      {/* Platform Admin: Quick manual grant access (for cash/offline payments) */}
+      {isPlatformAdmin && businessId && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5">
+              <ShieldCheck className="h-5 w-5 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <div className="font-semibold text-amber-900">Platform Admin — Manual Grant</div>
+              <p className="mt-1 text-sm text-amber-700">
+                This business paid via cash, bank transfer, or mobile money? Grant paid access manually.
+                This is recorded in payment history.
+              </p>
+
+              <div className="mt-3">
+                <div className="mb-2 text-xs font-medium uppercase tracking-wider text-amber-700">Quick manual grants</div>
+
+                <div className="space-y-3">
+                  {/* Growth */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-20 text-sm font-medium text-amber-800">Growth</span>
+                    <button onClick={() => quickGrant('growth', 31)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">31 days</button>
+                    <button onClick={() => quickGrant('growth', 90)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">90 days</button>
+                    <button onClick={() => quickGrant('growth', 365)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">1 year</button>
+                  </div>
+
+                  {/* Pro */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-20 text-sm font-medium text-amber-800">Pro</span>
+                    <button onClick={() => quickGrant('pro', 31)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">31 days</button>
+                    <button onClick={() => quickGrant('pro', 90)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">90 days</button>
+                    <button onClick={() => quickGrant('pro', 365)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">1 year</button>
+                  </div>
+
+                  {/* Enterprise */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-20 text-sm font-medium text-amber-800">Enterprise</span>
+                    <button onClick={() => quickGrant('enterprise', 31)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">31 days</button>
+                    <button onClick={() => quickGrant('enterprise', 90)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">90 days</button>
+                    <button onClick={() => quickGrant('enterprise', 365)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">1 year</button>
+                  </div>
+
+                  <a
+                    href={`/admin/billing?business=${businessId}`}
+                    className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:underline"
+                  >
+                    Open full grant form (custom amount / notes) <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="mt-2 text-[11px] text-amber-700">
+                Direct link: <code className="font-mono text-amber-800">/admin/billing?business={businessId}</code>
+              </div>
+              <p className="mt-2 text-[11px] text-amber-600">
+                Full form available at <span className="font-mono">/admin/billing?business={businessId}</span>
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
