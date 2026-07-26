@@ -131,6 +131,13 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
               const isExpense = entry.source_type === 'expense' || entry.source_type === 'payroll';
               const date = format.date(entry.entry_date, { day: '2-digit', month: 'short' });
 
+              // Highlight income/expense descriptions for easy identification
+              const descColor = isIncome
+                ? 'text-emerald-700'
+                : isExpense
+                  ? 'text-red-600'
+                  : 'text-gray-800';
+
               return (
                 <tr
                   key={entry.id}
@@ -139,9 +146,14 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
                 >
                   <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{date}</td>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-gray-800 truncate max-w-[180px]">{entry.description}</p>
+                    <p className={`font-medium truncate max-w-[180px] ${descColor}`}>{entry.description}</p>
                     {entry.reference && (
                       <p className="text-xs text-gray-400">{entry.reference}</p>
+                    )}
+                    {!entry.branch_id && !entry.department_id && (
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        ⚠ Assign cost center
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3">

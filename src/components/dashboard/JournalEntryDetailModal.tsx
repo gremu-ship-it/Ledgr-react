@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, RotateCcw, Lock, AlertCircle } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { X, RotateCcw, Lock, AlertCircle, MapPin, Loader2 } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 import { nextEntryNumber } from '@/services/journalService';
@@ -25,6 +25,9 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAssignCenter, setShowAssignCenter] = useState(false);
+  const [assignBranchId, setAssignBranchId] = useState('');
+  const [assignDeptId, setAssignDeptId] = useState('');
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['journal_entry_detail', entryId],
@@ -41,6 +44,28 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
     queryKey: ['period_for_entry', data?.entry.period_id],
     queryFn: () => repos.period.findById(data!.entry.period_id!),
     enabled: Boolean(data?.entry.period_id),
+  });
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', data?.entry.business_id],
+    queryFn: () => repos.branch.findActive(data!.entry.business_id),
+    enabled: Boolean(data?.entry.business_id),
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', data?.entry.business_id],
+    queryFn: async () => {
+      const { data: depts, error } = await (repos as any).account.client
+        .from('departments')
+        .select('*')
+        .eq('business_id', data!.entry.business_id)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return depts ?? [];
+    },
+    enabled: Boolean(data?.entry.business_id),
   });
 
   const accountMap = useMemo(
@@ -78,6 +103,59 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
     data?.entry.status === 'posted' &&
     !data.entry.reversal_of &&
     !data.entry.reversed_by;
+
+  const needsCostCenter = data?.entry && !data.entry.branch_id && !data.entry.department_id;
+  const canAssignCenter = data?.entry && (role === 'owner' || role === 'admin' || role === 'accountant');
+
+  const assignCenterMutation = useMutation({
+    mutationFn: async () => {
+      if (!data) return;
+      const entry = data.entry;
+
+      // Update the journal entry
+      await repos.journal.update(entry.id, {
+        branch_id: assignBranchId || null,
+        department_id: assignDeptId || null,
+      });
+
+      // Also update all journal lines
+      for (const line of data.lines) {
+        await (repos as any).account.client
+          .from('journal_lines')
+          .update({
+            branch_id: assignBranchId || null,
+            department_id: assignDeptId || null,
+          })
+          .eq('id', line.id);
+      }
+
+      // Update linked source record if any
+      if (entry.source_id && entry.source_type) {
+        const tableMap: Record<string, string> = {
+          invoice: 'invoices',
+          expense: 'expenses',
+          payroll: 'payroll_runs',
+        };
+        const table = tableMap[entry.source_type];
+        if (table) {
+          await (repos as any).account.client
+            .from(table)
+            .update({ branch_id: assignBranchId || null, department_id: assignDeptId || null })
+            .eq('id', entry.source_id);
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['journal'] });
+      queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] });
+      setShowAssignCenter(false);
+      setAssignBranchId('');
+      setAssignDeptId('');
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to assign cost center.');
+    },
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -156,6 +234,92 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                   </tbody>
                 </table>
               </div>
+
+              {/* Cost/Revenue center assignment */}
+              {needsCostCenter && canAssignCenter && !showAssignCenter && (
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                  <MapPin className="h-4 w-4 text-amber-600 shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-amber-800">No cost center assigned</p>
+                    <p className="text-[11px] text-amber-600">Assign a branch or department for reporting purposes.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAssignCenter(true)}
+                    className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+                  >
+                    Assign
+                  </button>
+                </div>
+              )}
+
+              {!needsCostCenter && data.entry.status === 'posted' && (
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  {data.entry.branch_id && branches.find((b) => b.id === data.entry.branch_id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-brand-700">
+                      <MapPin className="h-3 w-3" />
+                      {branches.find((b) => b.id === data.entry.branch_id)?.name}
+                    </span>
+                  )}
+                  {data.entry.department_id && (departments as any[]).find((d) => d.id === data.entry.department_id) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
+                      {(departments as any[]).find((d) => d.id === data.entry.department_id)?.name}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {showAssignCenter && (
+                <div className="mt-3 rounded-xl border border-gray-200 p-3">
+                  <p className="mb-2 text-xs font-semibold text-gray-600">Assign Cost / Revenue Center</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-gray-500">Branch</label>
+                      <select
+                        value={assignBranchId}
+                        onChange={(e) => setAssignBranchId(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                      >
+                        <option value="">None</option>
+                        {branches.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-gray-500">Department</label>
+                      <select
+                        value={assignDeptId}
+                        onChange={(e) => setAssignDeptId(e.target.value)}
+                        className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
+                      >
+                        <option value="">None</option>
+                        {(departments as any[]).map((d: any) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}{d.cost_centre ? ` [${d.cost_centre}]` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button
+                      onClick={() => { setShowAssignCenter(false); setAssignBranchId(''); setAssignDeptId(''); setError(null); }}
+                      disabled={assignCenterMutation.isPending}
+                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => assignCenterMutation.mutate()}
+                      disabled={assignCenterMutation.isPending || (!assignBranchId && !assignDeptId)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      {assignCenterMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* View-only notice: no edit action is offered for posted entries.
                   Per product decision, editing a posted entry is never exposed —

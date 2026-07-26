@@ -25,6 +25,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
+import { useUsage } from '@/hooks/useUsage';
+import { GATED_PATHS, planMeetsMin } from '@/components/layout/navConfig';
 
 const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -33,7 +35,7 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
 ];
 
-const MORE_MENU_ITEMS: { labelKey: string; path: string; icon: LucideIcon; tone: IconTone }[] = [
+const ALL_MORE_MENU_ITEMS: { labelKey: string; path: string; icon: LucideIcon; tone: IconTone }[] = [
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral' },
@@ -53,6 +55,17 @@ export function BottomNav() {
   const [showIncome, setShowIncome] = useState(false);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
+  const { planTier } = useUsage();
+
+  // Filter nav items based on plan tier — free users can't see gated paths
+  const bottomItems = BOTTOM_NAV_ITEMS.filter((item) => {
+    if (GATED_PATHS.has(item.path)) return planMeetsMin(planTier, 'growth');
+    return true;
+  });
+  const moreItems = ALL_MORE_MENU_ITEMS.filter((item) => {
+    if (GATED_PATHS.has(item.path)) return planMeetsMin(planTier, 'growth');
+    return true;
+  });
 
   return (
     <>
@@ -69,7 +82,7 @@ export function BottomNav() {
         <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{t('common.more')}</p>
           <div className="grid grid-cols-3 gap-2">
-            {MORE_MENU_ITEMS.map((item) => (
+            {moreItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -118,7 +131,7 @@ export function BottomNav() {
       <div className="fixed bottom-6 left-6 right-6 z-30 lg:hidden">
         <nav className="flex h-16 items-center justify-around rounded-3xl border border-white/20 bg-white/80 px-2 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
           {/* First 2 nav items */}
-          {BOTTOM_NAV_ITEMS.slice(0, 2).map((item) => (
+          {bottomItems.slice(0, 2).map((item) => (
             <NavTab key={item.path} {...item} />
           ))}
 
@@ -136,7 +149,7 @@ export function BottomNav() {
           </button>
 
           {/* Last 2 nav items */}
-          {BOTTOM_NAV_ITEMS.slice(2).map((item) => (
+          {bottomItems.slice(2).map((item) => (
             <NavTab key={item.path} {...item} />
           ))}
 

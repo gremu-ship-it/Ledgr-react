@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X, Lock } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { NAV_SECTIONS } from './navConfig';
+import { NAV_SECTIONS, planMeetsMin } from './navConfig';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
 import { hasCapability } from '@/lib/billing/plans';
@@ -64,7 +64,7 @@ export function Sidebar() {
         </div>
 
         <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4">
-          {NAV_SECTIONS.map((section) => (
+          {visibleSections.map((section) => (
             <div key={section.labelKey} className="mb-6">
               {sidebarOpen && (
                 <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">

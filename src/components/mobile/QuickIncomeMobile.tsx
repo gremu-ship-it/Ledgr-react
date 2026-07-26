@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, ChevronRight, ArrowLeft } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
@@ -19,7 +19,7 @@ const CATEGORIES = [
   { label: 'Other', emoji: '💰' },
 ];
 
-type Step = 'amount' | 'category' | 'description' | 'confirm' | 'success';
+type Step = 'amount' | 'category' | 'description' | 'costCenter' | 'confirm' | 'success';
 
 interface QuickIncomeMobileProps {
   businessId: string;
@@ -33,12 +33,21 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
+  const [branchId, setBranchId] = useState<string>('');
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', businessId],
+    queryFn: () => repos.branch.findActive(businessId),
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
 
   function reset() {
     setStep('amount');
     setAmount('');
     setCategory('');
     setDescription('');
+    setBranchId('');
   }
 
   function handleClose() {
@@ -79,6 +88,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           amount_paid: rawAmount,
           notes: desc,
           created_by: null,
+          branch_id: branchId || null,
         } as InsertDto<'invoices'>,
         [{
           line_number: 1,
@@ -98,7 +108,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       if (created) {
         try {
           await createInvoiceJournalEntry(
-            businessId, created, rawAmount, 0, null,
+            businessId, created, rawAmount, 0, branchId || null,
           );
         } catch (err) {
           console.warn('Journal entry failed:', err);
@@ -118,6 +128,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       case 'amount': return 'How much received?';
       case 'category': return 'What for?';
       case 'description': return 'Add details';
+      case 'costCenter': return 'Revenue Center';
       case 'confirm': return 'Confirm';
       default: return 'Record Income';
     }
@@ -205,6 +216,55 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
             />
           </div>
           <button
+            onClick={() => setStep('costCenter')}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white transition-all active:scale-95"
+          >
+            Next <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Step: Cost Center */}
+      {step === 'costCenter' && (
+        <div className="flex flex-col gap-4">
+          <button onClick={() => setStep('description')} className="flex items-center gap-1 text-sm text-gray-500">
+            <ArrowLeft className="h-4 w-4" /> Back
+          </button>
+
+          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
+            <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
+            {' · '}
+            <span>{category}</span>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">
+              Assign to Branch / Revenue Center
+              <span className="text-gray-400"> (optional)</span>
+            </label>
+            {branches.length === 0 ? (
+              <p className="text-xs text-gray-400">No branches configured. You can assign later.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {branches.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setBranchId(branchId === b.id ? '' : b.id)}
+                    className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                      branchId === b.id
+                        ? 'border-brand-500 bg-brand-50 shadow-sm'
+                        : 'border-gray-100 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-gray-800 truncate">{b.name}</p>
+                    {b.code && <p className="text-[10px] text-gray-400">{b.code}</p>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
             onClick={() => setStep('confirm')}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white transition-all active:scale-95"
           >
@@ -216,7 +276,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       {/* Step: Confirm */}
       {step === 'confirm' && (
         <div className="flex flex-col gap-4">
-          <button onClick={() => setStep('description')} className="flex items-center gap-1 text-sm text-gray-500">
+          <button onClick={() => setStep('costCenter')} className="flex items-center gap-1 text-sm text-gray-500">
             <ArrowLeft className="h-4 w-4" /> Back
           </button>
           <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
@@ -232,6 +292,12 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Description</span>
                 <span className="text-gray-700">{description}</span>
+              </div>
+            )}
+            {branchId && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Branch / Revenue Center</span>
+                <span className="text-gray-700">{branches.find((b) => b.id === branchId)?.name ?? '—'}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">

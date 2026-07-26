@@ -95,7 +95,6 @@ function App() {
                 <Route path="/expenses" element={<ExpensesPage />} />
                 <Route path="/invoices" element={<InvoicesPage />} />
                 <Route path="/payroll" element={<PayrollPage />} />
-                <Route path="/contacts" element={<ContactsPage />} />
                 <Route path="/products" element={<ProductsPage />} />
                 <Route path="/inventory" element={<InventoryPage />} />
                 <Route path="/accounts" element={<AccountsPage />} />
@@ -133,9 +132,25 @@ function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />
-                <Route path="/branches" element={<BranchesPage />} />
                 <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
-                <Route path="/audit" element={<AuditLogPage />} />
+                <Route path="/api-docs" element={<ApiDocumentationPage />} />
+                <Route path="/api-keys" element={<ApiKeysPage />} />
+                <Route path="/zapier" element={<ZapierIntegrationPage />} />
+
+                {/* Gated: Accounting & Organisation — requires Growth plan or above */}
+                <Route element={<PlanGuard minPlan="growth" />}>
+                  <Route path="/contacts" element={<ContactsPage />} />
+                  <Route path="/branches" element={<BranchesPage />} />
+                  <Route path="/accounts" element={<AccountsPage />} />
+                  <Route path="/assets" element={<AssetsPage />} />
+                  <Route path="/capital" element={<CapitalPage />} />
+                  <Route path="/tax" element={<TaxPage />} />
+                  <Route path="/bank-reconcile" element={<BankReconciliation businessId={currentBusiness?.business?.id || ''} />} />
+                  <Route path="/reports" element={<ReportsPage />} />
+                  <Route path="/journals" element={<JournalsPage />} />
+                  <Route path="/periods" element={<PeriodManagementPage />} />
+                  <Route path="/audit" element={<AuditLogPage />} />
+                </Route>
               </Route>
             </Route>
 

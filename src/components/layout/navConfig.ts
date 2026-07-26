@@ -33,6 +33,8 @@ export interface NavItemConfig {
 export interface NavSectionConfig {
   labelKey: string;
   items: NavItemConfig[];
+  /** Minimum plan tier required to see this section. Omit for free (visible to all). */
+  minPlan?: PlanTier;
 }
 
 export const NAV_SECTIONS: NavSectionConfig[] = [
@@ -67,6 +69,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   },
   {
     labelKey: 'navigation.sections.accounting',
+    minPlan: 'growth',
     items: [
       { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen },
       { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent },
@@ -81,9 +84,30 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   },
   {
     labelKey: 'navigation.sections.organisation',
+    minPlan: 'growth',
     items: [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser },
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch },
     ],
   },
 ];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const PLAN_TIER_ORDER: PlanTier[] = ['free', 'growth', 'pro', 'enterprise'];
+
+/**
+ * Returns true if `actual` tier meets or exceeds `required`.
+ * If required is undefined the section is open to everyone.
+ */
+export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
+  if (!required) return true;
+  return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
+}
+
+/** Set of all paths gated behind a paid plan (minPlan !== undefined). */
+export const GATED_PATHS: Set<string> = new Set(
+  NAV_SECTIONS
+    .filter((s) => s.minPlan)
+    .flatMap((s) => s.items.map((i) => i.path)),
+);
