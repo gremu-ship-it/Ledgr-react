@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
-import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';
+import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
@@ -44,6 +44,7 @@ import { JournalsPage } from '@/pages/JournalsPage';
 import { RepairCoaPage } from '@/pages/RepairCoaPage';
 import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
 import { AuditLogPage } from '@/pages/AuditLogPage';
+import { AdminBillingPage } from '@/pages/admin/AdminBillingPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -79,6 +80,11 @@ function App() {
             {/* Protected, no AppLayout */}
             <Route element={<ProtectedRoute />}>
               <Route path="/create-business" element={<CreateBusinessPage />} />
+            </Route>
+
+            {/* Internal admin tools — platform admins only, doesn't need a business selected */}
+            <Route element={<PlatformAdminRoute />}>
+              <Route path="/admin/billing" element={<AdminBillingPage />} />
             </Route>
 
             {/* Protected with AppLayout */}

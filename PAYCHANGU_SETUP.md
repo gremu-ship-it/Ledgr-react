@@ -148,3 +148,67 @@ secrets are read at request time).
   (server-side amount validation — this is the one that's actually
   charged). This mirrors the existing duplication pattern documented in
   `generate-vat-returns/index.ts` for the same Deno/Vite boundary reason.
+
+## Renewal reminders
+
+Since there's no recurring/tokenized billing, owners must manually renew
+before `plan_expires_at` passes. Two reminder channels cover this:
+
+- **Email** — `send-renewal-reminders` (Edge Function) runs daily via
+  pg_cron and emails the business owner when `plan_expires_at` is exactly
+  7, 3, or 1 day(s) away, using the same SendGrid setup as invoice
+  emails (`SENDGRID_API_KEY` / `SENDGRID_FROM_EMAIL`). Sends are
+  deduplicated in `subscription_reminders_sent` so re-running the cron
+  (or a slightly-off trigger) never double-emails the same reminder.
+- **In-app bell** — `useRenewalReminder()` (wired into `AppLayout`) checks
+  the current business's `plan_expires_at` on load and pushes a
+  notification-bell entry at the same 7/3/1-day thresholds, deduplicated
+  per browser via `localStorage`. This only reaches someone actively using
+  the app, which is why email is the channel of record.
+
+Deploy + schedule it the same way as `expire-subscriptions`:
+
+```bash
+supabase functions deploy send-renewal-reminders --no-verify-jwt
+```
+
+Then apply `supabase/migrations/20260726000005_schedule_send_renewal_reminders.sql`,
+filling in the same `<PROJECT_REF>` / `<CRON_SECRET>` placeholders as the
+`expire-subscriptions` schedule.
+
+## Manually granting a plan (cash / bank transfer payments)
+
+Before PayChangu is fully wired up — or any time a customer simply pays you
+directly (cash, bank transfer, mobile money sent straight to your own
+account) — you can activate their plan by hand at **`/admin/billing`**,
+without touching the database directly. This records the same audit trail
+(`subscription_payments`, tagged `gateway: 'manual'`) and goes through the
+same `apply_subscription_payment()` activation function real PayChangu
+payments use, so it shows up identically in the business's payment history.
+
+This page is intentionally not linked from anywhere in normal navigation
+and is gated behind `user_profiles.is_platform_admin = true`, enforced both
+client-side (hides the page) and server-side (the
+`grant-manual-subscription` Edge Function re-checks the flag — a UI bypass
+alone would never work).
+
+### Give yourself admin access
+
+Run this once, as the service role, in the Supabase SQL editor (replace the
+email):
+
+```sql
+update public.user_profiles
+set is_platform_admin = true
+where id = (select id from auth.users where email = 'you@example.com');
+```
+
+Then deploy the function:
+
+```bash
+supabase functions deploy grant-manual-subscription
+```
+
+Log in, visit `/admin/billing`, search for the business by name, choose the
+plan/duration/amount/payment method, and submit. The business's plan
+activates immediately — no payment gateway involved.

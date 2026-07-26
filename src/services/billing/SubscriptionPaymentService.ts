@@ -33,6 +33,25 @@ export interface VerifyPaymentResult {
   message?: string;
 }
 
+export type ManualPaymentMethod = 'cash' | 'bank_transfer' | 'mobile_money' | 'other';
+
+export interface ManualGrantParams {
+  business_id: string;
+  target_plan_tier: Exclude<PlanTier, 'free'>;
+  duration_days: number;
+  amount: number;
+  payment_method: ManualPaymentMethod;
+  reference?: string;
+  notes?: string;
+}
+
+export interface ManualGrantResult {
+  success: true;
+  plan_tier: PlanTier;
+  plan_expires_at: string;
+  business_name: string;
+}
+
 /**
  * Client-side wrapper around the payment-related Edge Functions.
  * The real work (talking to PayChangu, writing to businesses.plan_tier)
@@ -70,6 +89,21 @@ export class SubscriptionPaymentService {
       .order('created_at', { ascending: false });
     if (error) throw error;
     return (data ?? []) as SubscriptionPayment[];
+  }
+
+  /**
+   * Platform-admin only: activates a plan for a business that paid outside
+   * PayChangu (cash, bank transfer, etc.). Enforced server-side by
+   * grant-manual-subscription — this call will fail for non-admins
+   * regardless of what the client shows.
+   */
+  async grantManualSubscription(params: ManualGrantParams): Promise<ManualGrantResult> {
+    const { data, error } = await supabase.functions.invoke('grant-manual-subscription', {
+      body: params,
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data as ManualGrantResult;
   }
 }
 

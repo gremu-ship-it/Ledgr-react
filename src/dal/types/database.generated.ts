@@ -3995,6 +3995,7 @@ export type Database = {
           deletion_requested_at: string | null
           full_name: string
           id: string
+          is_platform_admin: boolean
           phone: string | null
           preferred_language: string | null
           preferred_currency:
@@ -4009,6 +4010,7 @@ export type Database = {
           deletion_requested_at?: string | null
           full_name: string
           id: string
+          is_platform_admin?: boolean
           phone?: string | null
           preferred_language?: string | null
           preferred_currency?:
@@ -4023,6 +4025,7 @@ export type Database = {
           deletion_requested_at?: string | null
           full_name?: string
           id?: string
+          is_platform_admin?: boolean
           phone?: string | null
           preferred_language?: string | null
           preferred_currency?:
