@@ -876,10 +876,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
   const { data: activeInvites = [], refetch: refetchInvites } = useQuery<InvitationLink[]>({
     queryKey: ['team-invites', businessId],
     queryFn: async () => {
-      // `business_invitations` isn't in the generated types (table lives outside
-      // the committed migrations); cast through `unknown` to keep type safety.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `business_invitations` table exists in the live DB but isn't in database.generated.ts
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('business_invitations')
         .select('*')
         .is('accepted_at', null)
@@ -997,9 +994,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
   const revokeInviteMutation = useMutation({
     mutationFn: async (inviteId: string) => {
-      // `business_invitations` table exists in the live DB but isn't in database.generated.ts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('business_invitations')
         .delete()
         .eq('id', inviteId);

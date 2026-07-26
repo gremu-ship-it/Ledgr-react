@@ -15,7 +15,7 @@
 // Returns: { success, member, message }
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -31,6 +31,10 @@ const ALLOWED_ROLES = new Set([
   'admin',
   'accountant',
   'payroll_manager',
+  'supervisor',
+  'data_entry',
+  'inventory_manager',
+  'sales_clerk',
   'auditor',
   'viewer',
 ]);
@@ -48,12 +52,9 @@ function normalizeRole(input: string): string | null {
 }
 
 async function findUserByEmail(
-  // `admin` is the service-role Supabase client. In Deno Edge Functions the
-  // full generated Database type isn't always carried, so the client is typed
-  // loosely here. The actual response shapes are verified at runtime.
-  admin: any, // eslint-disable-line @typescript-eslint/no-explicit-any -- Deno Edge Function runtime; full Supabase Database type isn't imported
+  admin: SupabaseClient,
   email: string,
-) {
+): Promise<User | null> {
   const normalized = email.trim().toLowerCase();
   let page = 1;
   const perPage = 100;
@@ -68,8 +69,7 @@ async function findUserByEmail(
     if (error) throw error;
     const users = data?.users ?? [];
     const found = users.find(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase User type is not imported in this Deno Edge Function
-      (u: any) => (u.email || '').toLowerCase() === normalized,
+      (u) => (u.email || '').toLowerCase() === normalized,
     );
     if (found) return found;
     if (users.length < perPage) break;

@@ -198,9 +198,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
 
         // Attempt legacy RPC as fallback (token-based)
         try {
-          // `invite_member` RPC is from an older schema and isn't in the generated types
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- legacy RPC, verified at runtime
-          const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('invite_member', {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('invite_member', {
             p_business_id: businessId,
             p_email: directEmail.trim().toLowerCase(),
             p_role: directRole,
@@ -565,9 +563,7 @@ export function TeamManagementPage() {
 
     // 2. Fetch active shareable invite links from business_invitations
     try {
-      // `business_invitations` table exists in the live DB but isn't in database.generated.ts
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-      const { data: invitesData, error: invitesError } = await (supabase as any)
+      const { data: invitesData, error: invitesError } = await supabase
         .from('business_invitations')
         .select('*')
         .is('accepted_at', null)
@@ -575,7 +571,7 @@ export function TeamManagementPage() {
         .eq('business_id', businessId);
 
       if (invitesError) throw invitesError;
-      setActiveLinks((invitesData || []) as InvitationLink[]);
+      setActiveLinks((invitesData ?? []) as InvitationLink[]);
     } catch (err) {
       console.error('Error loading invite links:', err);
     } finally {
@@ -622,13 +618,13 @@ export function TeamManagementPage() {
   }
 
   async function handleChangeRole(memberId: string, newRole: UserRole) {
-    // The local UserRole has more granular values (supervisor, data_entry,
-    // inventory_manager, sales_clerk) than the DB enum. The DB stores those
-    // as their broader bucket; verified at runtime.
+    // The granular values (supervisor, data_entry, inventory_manager,
+    // sales_clerk) are now part of the user_role enum (see migration
+    // 20260723000001_expanded_roles_and_invitations.sql), so no cast is
+    // needed and the values round-trip cleanly through the DB.
     const { error: updateError } = await supabase
       .from('business_users')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- local UserRole is a superset of the DB enum
-      .update({ role: newRole, updated_at: new Date().toISOString() } as any)
+      .update({ role: newRole, updated_at: new Date().toISOString() })
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -646,9 +642,7 @@ export function TeamManagementPage() {
     if (!window.confirm('Are you sure you want to revoke this invitation link? It will immediately stop working.')) return;
     setRevoking(inviteId);
 
-    // `business_invitations` table not in generated types
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
-    const { error: revokeError } = await (supabase as any)
+    const { error: revokeError } = await supabase
       .from('business_invitations')
       .delete()
       .eq('id', inviteId);

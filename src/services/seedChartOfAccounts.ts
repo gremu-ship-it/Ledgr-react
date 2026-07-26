@@ -404,8 +404,7 @@ export async function seedChartOfAccounts(
     }));
 
     const { data: createdRaw, error: insertErr } = await supabase
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `rows` is the verified COA shape; PostgrestInsertBuilder's narrowing on `accounts` rejects it without this cast
-      .from('accounts').insert(rows as any).select('id, code');
+      .from('accounts').insert(rows).select('id, code');
     if (insertErr) throw new Error(`Insert failed: ${insertErr.message}`);
 
     const created = createdRaw as { id: string; code: string }[] | null;
@@ -433,8 +432,8 @@ export async function ensureChartOfAccounts(
   const { inserted } = await seedChartOfAccounts(supabase, businessId, template);
 
   if (wasEmpty) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgrestUpdateBuilder rejects unknown enum values on `coa_template`; verified against the live DB
-    await (supabase.from('businesses') as any)
+    await supabase
+      .from('businesses')
       .update({ coa_template: template })
       .eq('id', businessId);
   }
@@ -485,8 +484,8 @@ export async function switchCoaTemplate(
 
   let deactivated = 0;
   if (codesToDeactivate.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgrestUpdateBuilder rejects unknown enum values on `coa_template`; verified against the live DB
-    const { data, error } = await (supabase.from('accounts') as any)
+    const { data, error } = await supabase
+      .from('accounts')
       .update({ is_active: false })
       .eq('business_id', businessId)
       .in('code', codesToDeactivate)
@@ -495,8 +494,8 @@ export async function switchCoaTemplate(
     deactivated = (data ?? []).length;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- PostgrestUpdateBuilder rejects unknown enum values on `coa_template`; verified against the live DB
-  const { error: updateErr } = await (supabase.from('businesses') as any)
+  const { error: updateErr } = await supabase
+    .from('businesses')
     .update({ coa_template: newTemplate })
     .eq('id', businessId);
   if (updateErr) throw new Error(`Failed to update business template: ${updateErr.message}`);

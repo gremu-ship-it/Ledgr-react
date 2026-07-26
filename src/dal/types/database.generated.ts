@@ -654,6 +654,53 @@ export type Database = {
           },
         ]
       }
+      business_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          business_id: string
+          email: string | null
+          expires_at: string
+          id: string
+          invited_at: string
+          invited_by: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          business_id: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          business_id?: string
+          email?: string | null
+          expires_at?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_invitations_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       business_users: {
         Row: {
           accepted_at: string | null
@@ -4368,6 +4415,10 @@ export type Database = {
         | "admin"
         | "accountant"
         | "payroll_manager"
+        | "supervisor"
+        | "data_entry"
+        | "inventory_manager"
+        | "sales_clerk"
         | "auditor"
         | "viewer"
     }
@@ -4593,6 +4644,10 @@ export const Constants = {
         "admin",
         "accountant",
         "payroll_manager",
+        "supervisor",
+        "data_entry",
+        "inventory_manager",
+        "sales_clerk",
         "auditor",
         "viewer",
       ],

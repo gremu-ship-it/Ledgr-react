@@ -432,11 +432,11 @@ export function AccountsPage() {
   const { data: businessTemplate } = useQuery({
     queryKey: ['business_coa_template', businessId],
     queryFn: async () => {
-      // The generated `coa_template` column enum is `Database['public']['Enums']['coa_template']`
-      // but the in-app `CoaTemplate` type may have additional values. Verified
-      // at runtime; cast through unknown to keep the data flow explicit.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coa_template column type vs in-app CoaTemplate
-      const { data, error } = await (supabase.from('businesses') as any)
+      // `coa_template` is typed as `string` in the generated schema (the
+      // database column is free-form text). Cast to the in-app CoaTemplate
+      // union, which is a strict subset of the values the app recognises.
+      const { data, error } = await supabase
+        .from('businesses')
         .select('coa_template')
         .eq('id', businessId!)
         .single();
@@ -496,12 +496,10 @@ export function AccountsPage() {
     mutationFn: async (data: InsertDto<'accounts'> & { id?: string }) => {
       if (data.id) {
         const { id, ...patch } = data;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accounts.coa_template enum is strict; the in-app CoaTemplate may have additional values
-        const { error } = await (supabase.from('accounts') as any).update(patch).eq('id', id);
+        const { error } = await supabase.from('accounts').update(patch).eq('id', id);
         if (error) throw new Error(error.message);
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- same enum-narrowing reason as the update branch
-        const { error } = await supabase.from('accounts').insert(data as any);
+        const { error } = await supabase.from('accounts').insert(data);
         if (error) throw new Error(error.message);
       }
     },
@@ -511,8 +509,7 @@ export function AccountsPage() {
   // Deactivate mutation
   const deactivateMutation = useMutation({
     mutationFn: async (id: string) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Partial<accounts> type narrow
-      const { error } = await (supabase.from('accounts') as any).update({ is_active: false }).eq('id', id);
+      const { error } = await supabase.from('accounts').update({ is_active: false }).eq('id', id);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', businessId] }),
