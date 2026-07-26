@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ReportHeader } from './ReportHeader';
+import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
 import type { Row } from '@/dal/types/database';
 
 interface Props {
@@ -13,6 +15,7 @@ interface Props {
 
 export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props) {
   const { t } = useTranslation();
+  const [notes, setNotes] = useState('');
 
   const { data: cashFlowData, isLoading } = useQuery({
     queryKey: ['cash_flow', businessId, periodStart, periodEnd],
@@ -30,6 +33,38 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
     },
   });
 
+  const periodLabel = `${periodStart} – ${periodEnd}`;
+
+  const handleExportPDF = () => {
+    const htmlContent = document.querySelector('.space-y-6')?.outerHTML || '';
+    exportReportAsPDF({
+      title: t('reports.cash_flow.title'),
+      subtitle: periodLabel,
+      dateLabel: periodLabel,
+      currency: 'MWK',
+      notes,
+      businessName: '',
+      htmlContent,
+    });
+  };
+
+  const handleExportXBRL = () => {
+    const facts = (cashFlowData ?? []).flatMap((row: any) => ([
+      { concept: 'OperatingCashFlow', value: Number(row.operating || 0), date: row.period },
+      { concept: 'InvestingCashFlow', value: Number(row.investing || 0), date: row.period },
+      { concept: 'FinancingCashFlow', value: Number(row.financing || 0), date: row.period },
+    ]));
+    exportReportAsXBRL({
+      title: t('reports.cash_flow.title'),
+      dateLabel: periodLabel,
+      currency: 'MWK',
+      notes,
+      businessName: '',
+      htmlContent: '',
+      facts,
+    });
+  };
+
   if (isLoading) {
     return <div className="p-8 text-center">Loading cash flow statement...</div>;
   }
@@ -38,7 +73,11 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
     <div className="space-y-6">
       <ReportHeader
         title={t('reports.cash_flow.title')}
-        subtitle={`${periodStart} – ${periodEnd}`}
+        subtitle={periodLabel}
+        notes={notes}
+        onNotesChange={setNotes}
+        onExportPDF={handleExportPDF}
+        onExportXBRL={handleExportXBRL}
       />
 
       <div className="rounded-2xl border border-gray-200 bg-white p-6">

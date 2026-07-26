@@ -27,6 +27,10 @@ interface AppState {
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 
+  // ── Inactivity timeout (minutes) ────────────────────────────────
+  inactivityTimeoutMinutes: number; // default 60
+  setInactivityTimeoutMinutes: (minutes: number) => void;
+
   // ── Reset (on logout) ───────────────────────────────────────────
   reset: () => void;
 }
@@ -94,6 +98,10 @@ export const useAppStore = create<AppState>()(
         const next = get().theme === 'light' ? 'dark' : 'light';
         get().setTheme(next);
       },
+
+      // Inactivity timeout (default 60 minutes)
+      inactivityTimeoutMinutes: 60,
+      setInactivityTimeoutMinutes: (minutes) => set({ inactivityTimeoutMinutes: minutes }),
 
       reset: () =>
         set({

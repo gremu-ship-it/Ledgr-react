@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { StatementSection } from '@/dal/repositories/FinancialStatementRepository';
 import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
+import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -106,6 +108,8 @@ export function StatementOfProfitOrLoss({
 }: Props) {
   const { t } = useTranslation();
   const format = useLocaleFormat();
+  const [notes, setNotes] = useState('');
+
   const { data: pl, isLoading, error } = useQuery({
     queryKey: ['profit_or_loss', businessId, periodStart, periodEnd, comparativePeriodStart, comparativePeriodEnd],
     queryFn: () => financialStatementRepo.getProfitOrLoss(
@@ -122,6 +126,40 @@ export function StatementOfProfitOrLoss({
     : '';
   const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
   const subtotalProps = { showComparative, formatCurrency: formatMwk };
+
+  const handleExportPDF = () => {
+    const htmlContent = document.querySelector('.max-w-3xl')?.outerHTML || '';
+    exportReportAsPDF({
+      title: t('reports.statementOfProfitOrLoss'),
+      subtitle: periodLabel,
+      dateLabel: periodLabel,
+      currency: 'MWK',
+      preparerName,
+      notes,
+      businessName: '',
+      htmlContent,
+    });
+  };
+
+  const handleExportXBRL = () => {
+    const facts = [
+      { concept: 'Revenue', value: pl.revenue.subtotal },
+      { concept: 'GrossProfit', value: pl.grossProfit },
+      { concept: 'OperatingProfit', value: pl.operatingProfit },
+      { concept: 'ProfitBeforeTax', value: pl.profitBeforeTax },
+      { concept: 'NetProfit', value: pl.netProfit },
+    ];
+    exportReportAsXBRL({
+      title: t('reports.statementOfProfitOrLoss'),
+      dateLabel: periodLabel,
+      currency: 'MWK',
+      preparerName,
+      notes,
+      businessName: '',
+      htmlContent: '',
+      facts,
+    });
+  };
 
   if (isLoading) {
     return <div className="space-y-3">{[...Array(12)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
@@ -142,6 +180,10 @@ export function StatementOfProfitOrLoss({
         title={t('reports.statementOfProfitOrLoss')}
         subtitle={`${t('reports.forPeriod', { period: periodLabel })} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
         preparerName={preparerName}
+        notes={notes}
+        onNotesChange={setNotes}
+        onExportPDF={handleExportPDF}
+        onExportXBRL={handleExportXBRL}
       />
 
       <table className="w-full">

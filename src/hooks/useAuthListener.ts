@@ -4,8 +4,9 @@ import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 import { i18n, normalizeLanguage } from '@/i18n';
 
-// Module-level flag — survives re-renders and effect re-runs
+// Module-level flags — survives re-renders and effect re-runs
 let isHydrating = false;
+let hasInitialHydrated = false;
 
 export function useAuthListener() {
   const isMountedRef = useRef(true);
@@ -13,8 +14,13 @@ export function useAuthListener() {
   useEffect(() => {
     isMountedRef.current = true;
 
-    async function hydrateUser(userId: string, email: string | null) {
+    async function hydrateUser(userId: string, email: string | null, force = false) {
+      // Prevent multiple simultaneous hydrations
       if (isHydrating) return;
+      
+      // Skip if already hydrated and not forced (prevents re-loading on route changes)
+      if (hasInitialHydrated && !force) return;
+
       isHydrating = true;
       useAppStore.getState().setBusinessesLoading(true);
 
@@ -38,13 +44,15 @@ export function useAuthListener() {
           void i18n.changeLanguage(preferredLanguage);
         }
 
+        // Only fetch memberships if we don't already have them (performance optimization)
         let memberships = useAppStore.getState().businesses;
-        try {
-          const fetched = await repos.business.findMembershipsWithRole(userId);
-          console.log('findMembershipsWithRole result:', fetched);
-          memberships = fetched;
-        } catch (err) {
-          console.warn('Failed to load memberships, using cached values.', err);
+        if (!memberships.length || force) {
+          try {
+            const fetched = await repos.business.findMembershipsWithRole(userId);
+            memberships = fetched;
+          } catch (err) {
+            console.warn('Failed to load memberships, using cached values.', err);
+          }
         }
 
         if (!isMountedRef.current) return;
@@ -62,9 +70,10 @@ export function useAuthListener() {
 
         if (!stillValid) {
           const firstValid = validMemberships[0] ?? null;
-          console.log('Setting current business:', firstValid);
           useAppStore.getState().setCurrentBusiness(firstValid);
         }
+
+        hasInitialHydrated = true;
       } catch (err) {
         console.error('Failed to hydrate user:', err);
       } finally {
@@ -79,7 +88,7 @@ export function useAuthListener() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!isMountedRef.current) return;
       if (session?.user) {
-        hydrateUser(session.user.id, session.user.email ?? null).finally(() => {
+        hydrateUser(session.user.id, session.user.email ?? null, true).finally(() => {
           if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
         });
       } else {
@@ -110,7 +119,7 @@ export function useAuthListener() {
       }
 
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-        hydrateUser(session.user.id, session.user.email ?? null).finally(() => {
+        hydrateUser(session.user.id, session.user.email ?? null, true).finally(() => {
           if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
         });
       }

@@ -38,6 +38,9 @@
 
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
+import { webhookService } from '@/services/webhook/WebhookService';
+import { usageService } from '@/lib/billing/UsageService';
+import { getPlan } from '@/lib/billing/plans';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -132,6 +135,22 @@ async function buildFxLines(
 // Now currency-aware: uses the invoice's actual original_amount/currency/
 // exchange_rate/functional_amount rather than assuming MWK 1:1.
 
+// ── Usage Limit Guard ───────────────────────────────────────────────────────
+async function checkUsageLimit(businessId: string): Promise<void> {
+  // In a real implementation, fetch the business's current plan tier from subscriptions table
+  const planTier = 'free'; // TODO: Replace with real plan from database
+  const plan = getPlan(planTier);
+
+  if (plan.transactionLimit === null) return; // unlimited
+
+  const currentUsage = await usageService.getCurrentMonthUsage(businessId);
+  if (currentUsage >= plan.transactionLimit) {
+    throw new Error(`Monthly transaction limit reached (${plan.transactionLimit}). Please upgrade your plan.`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function createInvoiceJournalEntry(
   businessId: string,
   invoice: Row<'invoices'>,
@@ -155,6 +174,8 @@ export async function createInvoiceJournalEntry(
   const totalFunctional  = Number(invoice.functional_amount ?? invoice.total_amount);
   const subtotalFunctional = subtotal * exchangeRate;
   const vatFunctional    = vatAmount * exchangeRate;
+
+  await checkUsageLimit(businessId);
 
   const entryNumber = await nextEntryNumber(businessId);
 
@@ -224,6 +245,18 @@ export async function createInvoiceJournalEntry(
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
 
+  // Record usage
+  await usageService.recordTransaction(businessId, 'journal');
+
+  // Trigger webhook
+  try {
+    await webhookService.triggerWebhooks(businessId, 'invoice.created', {
+      invoice_id: sourceId,
+      invoice_number: invoiceNumber,
+      total_amount: invoice.total_amount,
+    });
+  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
+
   const entryNumber2 = await nextEntryNumber(businessId);
   await new Promise((r) => setTimeout(r, 100));
 
@@ -272,8 +305,15 @@ export async function createInvoiceJournalEntry(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry2.id, null as any);
-  // Same-day auto-settlement — booked and settled at the identical rate,
-  // so realised FX gain/loss is always zero here. No FX line needed.
+
+  // Trigger webhook for paid invoice
+  try {
+    await webhookService.triggerWebhooks(businessId, 'invoice.paid', {
+      invoice_id: sourceId,
+      invoice_number: invoiceNumber,
+      total_amount: invoice.total_amount,
+    });
+  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
 }
 
 // ── Invoice-Builder: Receivable Entry (draft creation, no cash line) ─────────
@@ -488,6 +528,8 @@ export async function createExpenseJournalEntry(
     );
   }
 
+  await checkUsageLimit(businessId);
+
   const currency      = expense.original_currency ?? expense.currency;
   const exchangeRate   = Number(expense.exchange_rate);
   const vatFunctional  = vatAmount * exchangeRate;
@@ -574,6 +616,15 @@ export async function createExpenseJournalEntry(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
+
+  // Trigger webhook
+  try {
+    await webhookService.triggerWebhooks(businessId, 'expense.created', {
+      expense_id: expense.id,
+      expense_number: expense.expense_number,
+      total_amount: expense.total_amount,
+    });
+  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
 
   return entry.id;
 }
@@ -744,4 +795,14 @@ export async function createPayrollJournalEntry(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
+
+  // Trigger webhook
+  try {
+    await webhookService.triggerWebhooks(businessId, 'payroll.run', {
+      payroll_run_id: sourceId,
+      run_number: runNumber,
+      total_gross: totalGross,
+      total_net: totalNet,
+    });
+  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
 }

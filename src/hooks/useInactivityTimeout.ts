@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 
-const INACTIVITY_MS = 60 * 60 * 1000;
-const WARNING_BEFORE_MS = 2 * 60 * 1000;
-const WARNING_MS = INACTIVITY_MS - WARNING_BEFORE_MS;
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'pointerdown'];
+const DEFAULT_INACTIVITY_MINUTES = 60;
+const WARNING_BEFORE_MS = 2 * 60 * 1000; // Always warn 2 minutes before logout
 
 export interface InactivityState {
   showWarning: boolean;
@@ -18,14 +17,18 @@ export function useInactivityTimeout(): InactivityState {
   const navigate = useNavigate();
   const currentUser = useAppStore((s) => s.currentUser);
   const reset = useAppStore((s) => s.reset);
+  const inactivityTimeoutMinutes = useAppStore((s) => s.inactivityTimeoutMinutes);
+
   const [showWarning, setShowWarning] = useState(false);
   const [secondsRemaining, setSecondsRemaining] = useState(WARNING_BEFORE_MS / 1000);
+
   const warningTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Lazy-init on first read so the call site (in an effect) isn't during
-  // render, which would trip react-hooks v6's purity rule.
   const lastActivityRef = useRef<number | null>(null);
+
+  // Dynamic inactivity timeout in milliseconds
+  const getInactivityMs = () => (inactivityTimeoutMinutes || DEFAULT_INACTIVITY_MINUTES) * 60 * 1000;
   const getLastActivity = () => (lastActivityRef.current ??= Date.now());
 
   const clearAllTimers = useCallback(() => {
@@ -50,11 +53,14 @@ export function useInactivityTimeout(): InactivityState {
 
   const scheduleTimers = useCallback(() => {
     clearAllTimers(); setShowWarning(false);
+    const inactivityMs = getInactivityMs();
+    const warningMs = inactivityMs - WARNING_BEFORE_MS;
+
     warningTimerRef.current = setTimeout(() => {
       startCountdown();
       logoutTimerRef.current = setTimeout(() => { void doLogout(); }, WARNING_BEFORE_MS);
-    }, WARNING_MS);
-  }, [clearAllTimers, startCountdown, doLogout]);
+    }, warningMs);
+  }, [clearAllTimers, startCountdown, doLogout, inactivityTimeoutMinutes]);
 
   const extendSession = useCallback(() => {
     lastActivityRef.current = Date.now(); scheduleTimers();
@@ -77,10 +83,16 @@ export function useInactivityTimeout(): InactivityState {
       if (Date.now() - getLastActivity() > 10_000) { lastActivityRef.current = Date.now(); scheduleTimers(); }
     }
     function handleVisibilityChange() {
+      const inactivityMs = getInactivityMs();
       if (document.visibilityState === 'visible') {
-        if (Date.now() - getLastActivity() >= INACTIVITY_MS) { void doLogout(); }
-        else { scheduleTimers(); }
-      } else { clearAllTimers(); }
+        if (Date.now() - getLastActivity() >= inactivityMs) { 
+          void doLogout(); 
+        } else { 
+          scheduleTimers(); 
+        }
+      } else { 
+        clearAllTimers(); 
+      }
     }
     ACTIVITY_EVENTS.forEach((ev) => window.addEventListener(ev, handleActivity, { passive: true }));
     document.addEventListener('visibilitychange', handleVisibilityChange);

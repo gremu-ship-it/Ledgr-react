@@ -17,6 +17,7 @@ import {
   ImageIcon,
   Copy,
   ExternalLink,
+  Key,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -25,6 +26,9 @@ import type { Row } from '@/dal/types/database';
 import { useCookieConsent } from '@/lib/cookieConsent';
 import { DataExportButton } from '@/components/DataExportButton';
 import { DeleteAccountSection } from '@/components/DeleteAccountSection';
+import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
+import { WebhookSettings } from '@/components/settings/WebhookSettings';
+import { BillingTab } from '@/components/billing/BillingTab';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,6 +107,8 @@ const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'profile', label: 'User Profile', icon: User },
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'team', label: 'Team Members', icon: Users },
+  { value: 'api', label: 'API & Webhooks', icon: Key },
+  { value: 'billing', label: 'Billing & Plans', icon: DollarSign },
   { value: 'privacy', label: 'Privacy', icon: Cookie },
 ];
 
@@ -758,6 +764,9 @@ function SecurityTab() {
           Sign Out Everywhere
         </button>
       </div>
+
+      {/* Custom Inactivity Timeout */}
+      <InactivityTimeoutSetting />
     </div>
   );
 }
@@ -1639,6 +1648,8 @@ export function SettingsPage() {
                 {activeTab === 'profile' && <UserProfileTab />}
                 {activeTab === 'security' && <SecurityTab />}
                 {activeTab === 'team' && <TeamMembersTab businessId={businessId} />}
+                {activeTab === 'api' && <WebhookSettings />}
+                {activeTab === 'billing' && <BillingTab />}
                 {activeTab === 'privacy' && <PrivacyTab />}
               </>
             )}
