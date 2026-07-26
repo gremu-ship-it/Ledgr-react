@@ -791,6 +791,8 @@ export type Database = {
           payroll_next_number: number
           payroll_prefix: string | null
           phone: string | null
+          plan_tier: string
+          plan_updated_at: string | null
           registration_number: string | null
           timezone: string
           tpin: string | null
@@ -827,6 +829,8 @@ export type Database = {
           payroll_next_number?: number
           payroll_prefix?: string | null
           phone?: string | null
+          plan_tier?: string
+          plan_updated_at?: string | null
           registration_number?: string | null
           timezone?: string
           tpin?: string | null
@@ -863,6 +867,8 @@ export type Database = {
           payroll_next_number?: number
           payroll_prefix?: string | null
           phone?: string | null
+          plan_tier?: string
+          plan_updated_at?: string | null
           registration_number?: string | null
           timezone?: string
           tpin?: string | null

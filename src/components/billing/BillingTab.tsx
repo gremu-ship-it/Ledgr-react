@@ -1,16 +1,52 @@
+import { useState } from 'react';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { useUsage } from '@/hooks/useUsage';
-import { PLANS, type PlanTier } from '@/lib/billing/plans';
-import { Check, Star } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { useAppStore } from '@/store/useAppStore';
+import { repos } from '@/lib/repositories';
+import { PLANS, PLAN_TIER_ORDER, type PlanTier } from '@/lib/billing/plans';
+import { Check, Star, Lock } from 'lucide-react';
 import { UsageHistoryChart } from './UsageHistoryChart';
 
 export function BillingTab() {
   const { usage, plan, planTier } = useUsage();
+  const { canManageBilling } = usePermissions();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const businessId = currentBusiness?.business?.id;
+  const queryClient = useQueryClient();
+  const [pendingTier, setPendingTier] = useState<PlanTier | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const handleUpgrade = (targetTier: PlanTier) => {
-    // In a real app this would open a payment modal or redirect to payment provider
-    alert(`Redirecting to payment for ${PLANS[targetTier].name} plan (MWK ${PLANS[targetTier].priceMWK}/mo)`);
-    // Future: integrate with PayChangu, Pesapal, or Flutterwave
-  };
+  // NOTE: There is no payment gateway wired up yet (PayChangu / Pesapal /
+  // Flutterwave to be integrated). Until then, the business owner can
+  // self-serve switch plans here directly — this should only be used once
+  // payment has actually been arranged with us out-of-band. This still
+  // records the change (plan_updated_at) for later reconciliation.
+  const changePlanMutation = useMutation({
+    mutationFn: async (targetTier: PlanTier) => {
+      if (!businessId) throw new Error('No business selected');
+      await repos.business.update(businessId, {
+        plan_tier: targetTier,
+        plan_updated_at: new Date().toISOString(),
+      });
+      return targetTier;
+    },
+    onMutate: (targetTier) => setPendingTier(targetTier),
+    onSuccess: (targetTier) => {
+      queryClient.invalidateQueries({ queryKey: ['business', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['usage', businessId] });
+      setNotice(`Plan changed to ${PLANS[targetTier].name}.`);
+      setTimeout(() => setNotice(null), 4000);
+    },
+    onError: (err) => {
+      setNotice(err instanceof Error ? err.message : 'Failed to change plan.');
+      setTimeout(() => setNotice(null), 4000);
+    },
+    onSettled: () => setPendingTier(null),
+  });
+
+  const isMoreExpensive = (target: PlanTier) =>
+    PLAN_TIER_ORDER.indexOf(target) > PLAN_TIER_ORDER.indexOf(planTier);
 
   return (
     <div className="space-y-8">
@@ -34,22 +70,37 @@ export function BillingTab() {
           </div>
 
           <div className="text-sm text-gray-600">
-            {usage.isUnlimited 
-              ? 'Unlimited transactions' 
+            {usage.isUnlimited
+              ? 'Unlimited transactions'
               : `${usage.currentMonth} of ${usage.limit} transactions used this month`}
           </div>
         </div>
       </div>
 
+      {!canManageBilling && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <Lock className="h-4 w-4 flex-shrink-0" />
+          Only the business owner can change the subscription plan.
+        </div>
+      )}
+
+      {notice && (
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-3 text-sm text-brand-800">
+          {notice}
+        </div>
+      )}
+
       {/* Upgrade Plans */}
       <div>
         <h3 className="text-lg font-semibold mb-4">Upgrade Your Plan</h3>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {Object.values(PLANS).map((p) => {
             const isCurrent = p.tier === planTier;
+            const isBusy = pendingTier === p.tier;
+            const disabled = isCurrent || !canManageBilling || changePlanMutation.isPending;
             return (
-              <div 
+              <div
                 key={p.tier}
                 className={`rounded-2xl border p-5 flex flex-col ${isCurrent ? 'border-brand-600 bg-brand-50' : 'hover:border-gray-300'}`}
               >
@@ -64,8 +115,8 @@ export function BillingTab() {
                 </div>
 
                 <div className="text-xs text-gray-500 mb-4">
-                  {p.transactionLimit === null 
-                    ? 'Unlimited transactions' 
+                  {p.transactionLimit === null
+                    ? 'Unlimited transactions'
                     : `${p.transactionLimit.toLocaleString()} transactions/month`}
                 </div>
 
@@ -79,20 +130,33 @@ export function BillingTab() {
                 </ul>
 
                 <button
-                  onClick={() => handleUpgrade(p.tier)}
-                  disabled={isCurrent}
+                  onClick={() => changePlanMutation.mutate(p.tier)}
+                  disabled={disabled}
                   className={`mt-auto w-full rounded-xl py-2.5 text-sm font-semibold transition-all ${
-                    isCurrent 
-                      ? 'bg-gray-200 text-gray-500 cursor-default' 
-                      : 'bg-brand-600 text-white hover:bg-brand-700'
+                    isCurrent
+                      ? 'bg-gray-200 text-gray-500 cursor-default'
+                      : disabled
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-brand-600 text-white hover:bg-brand-700'
                   }`}
                 >
-                  {isCurrent ? 'Current Plan' : 'Upgrade'}
+                  {isCurrent
+                    ? 'Current Plan'
+                    : isBusy
+                      ? 'Saving…'
+                      : isMoreExpensive(p.tier)
+                        ? 'Upgrade'
+                        : 'Downgrade'}
                 </button>
               </div>
             );
           })}
         </div>
+
+        <p className="mt-4 text-xs text-gray-400">
+          Payment processing isn't automated yet — please confirm payment with our team before
+          switching plans. Plan changes take effect immediately.
+        </p>
       </div>
 
       {/* Usage History */}

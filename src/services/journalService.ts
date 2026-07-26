@@ -40,7 +40,7 @@ import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
 import { webhookService } from '@/services/webhook/WebhookService';
 import { usageService } from '@/lib/billing/UsageService';
-import { getPlan } from '@/lib/billing/plans';
+import { getPlan, normalizePlanTier } from '@/lib/billing/plans';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -137,8 +137,8 @@ async function buildFxLines(
 
 // ── Usage Limit Guard ───────────────────────────────────────────────────────
 async function checkUsageLimit(businessId: string): Promise<void> {
-  // In a real implementation, fetch the business's current plan tier from subscriptions table
-  const planTier = 'free'; // TODO: Replace with real plan from database
+  const business = await repos.business.findById(businessId);
+  const planTier = normalizePlanTier(business.plan_tier);
   const plan = getPlan(planTier);
 
   if (plan.transactionLimit === null) return; // unlimited

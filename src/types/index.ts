@@ -18,7 +18,9 @@ export interface Business {
   id: string;
   name: string;
   base_currency?: string | null;
+  plan_tier?: string | null;
 }
+
 
 export interface BusinessMembership {
   id?: string;
