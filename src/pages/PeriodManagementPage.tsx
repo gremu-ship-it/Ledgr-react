@@ -6,6 +6,7 @@ import { repos } from '@/lib/repositories';
 import { formatMwk } from '@/lib/formatters';
 import type { Row } from '@/dal/types/database';
 import { CreatePeriodModal } from '@/components/periods/CreatePeriodModal';
+import { pushPeriodClosed, pushPeriodCloseFailed } from '@/lib/notifications';
 
 interface PeriodWithSummary {
   period: Row<'accounting_periods'>;
@@ -46,12 +47,21 @@ export function PeriodManagementPage() {
   const lockMutation = useMutation({
     mutationFn: (periodId: string) =>
       repos.period.lock(periodId, currentUser!.id, currentUser?.email),
-    onSuccess: () => {
+    onSuccess: (_, periodId) => {
       setError(null);
+      const period = data?.find(p => p.period.id === periodId)?.period;
+      if (period) {
+        pushPeriodClosed(period.name);
+      }
       queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] });
     },
-    onError: (err) => {
-      setError(err instanceof Error ? err.message : 'Failed to lock period.');
+    onError: (err, periodId) => {
+      const period = data?.find(p => p.period.id === periodId)?.period;
+      const reason = err instanceof Error ? err.message : 'Failed to lock period.';
+      if (period) {
+        pushPeriodCloseFailed(period.name, reason);
+      }
+      setError(reason);
     },
   });
 

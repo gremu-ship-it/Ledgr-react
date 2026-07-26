@@ -42,7 +42,7 @@ export function ReportHeader({
           {businessName && <p className="text-xs text-gray-400">{businessName}</p>}
         </div>
 
-        <div className="flex items-center gap-4 text-end text-xs text-gray-500">
+          <div className="flex items-center gap-4 text-end text-xs text-gray-500">
           <div className="space-y-0.5">
             {asOf && (
               <div className="flex items-center justify-end gap-1">

@@ -1,11 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { StatementSection } from '@/dal/repositories/FinancialStatementRepository';
 import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
+import { pushSofpBalanceWarning } from '@/lib/notifications';
+import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -97,6 +100,8 @@ export function StatementOfFinancialPosition({
 }: Props) {
   const { t } = useTranslation();
   const format = useLocaleFormat();
+  const [notes, setNotes] = useState('');
+
   const { data: sofp, isLoading, error } = useQuery({
     queryKey: ['sofp', businessId, asOfDate, comparativeDate],
     queryFn: () => financialStatementRepo.getSOFP(businessId, asOfDate, comparativeDate),
@@ -108,6 +113,41 @@ export function StatementOfFinancialPosition({
   const formatMwk = (value: number) => format.currency(value, 'MWK');
   const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
   const totalProps = { showComparative, formatCurrency: formatMwk };
+
+  // Professional PDF export handler
+  const handleExportPDF = () => {
+    const htmlContent = document.querySelector('.max-w-3xl')?.outerHTML || '';
+    exportReportAsPDF({
+      title: t('reports.statementOfFinancialPosition'),
+      subtitle: `${t('reports.asAt', { date: dateLabel })}`,
+      dateLabel,
+      currency: 'MWK',
+      preparerName,
+      notes,
+      businessName: '', // ReportHeader handles branding
+      htmlContent,
+    });
+  };
+
+  // XBRL export handler
+  const handleExportXBRL = () => {
+    const facts = [
+      { concept: 'TotalAssets', value: sofp.totalAssets },
+      { concept: 'TotalLiabilities', value: sofp.totalLiabilities },
+      { concept: 'NetAssets', value: sofp.netAssets },
+      { concept: 'TotalEquity', value: sofp.totalEquity },
+    ];
+    exportReportAsXBRL({
+      title: t('reports.statementOfFinancialPosition'),
+      dateLabel,
+      currency: 'MWK',
+      preparerName,
+      notes,
+      businessName: '',
+      htmlContent: '',
+      facts,
+    });
+  };
 
   if (isLoading) {
     return <div className="space-y-3">{[...Array(10)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
@@ -122,12 +162,27 @@ export function StatementOfFinancialPosition({
     );
   }
 
+  // Push the SOFP imbalance warning to the notification bell (only once per render when unbalanced)
+  if (!sofp.isBalanced) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    useEffect(() => {
+      pushSofpBalanceWarning(
+        formatAccounting(sofp.netAssets, formatMwk),
+        formatAccounting(sofp.totalEquity, formatMwk)
+      );
+    }, [sofp.netAssets, sofp.totalEquity]);
+  }
+
   return (
     <div className="max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <ReportHeader
         title={t('reports.statementOfFinancialPosition')}
         subtitle={`${t('reports.asAt', { date: dateLabel })} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
         preparerName={preparerName}
+        notes={notes}
+        onNotesChange={setNotes}
+        onExportPDF={handleExportPDF}
+        onExportXBRL={handleExportXBRL}
       />
 
       {!sofp.isBalanced && (

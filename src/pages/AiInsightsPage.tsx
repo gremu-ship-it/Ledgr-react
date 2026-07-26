@@ -1,11 +1,21 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2, Calendar } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import { callArenaAgent, isArenaConfigured } from '@/lib/arenaAgent';
+import {
+  buildRichBusinessContext,
+  detectAdvancedAnomalies,
+  generateCashFlowForecast,
+  getTaxPlanningSuggestions,
+  generateNarrativeReport,
+  type BusinessContext,
+  type Anomaly,
+  type TaxPlanningSuggestion,
+} from '@/lib/aiFinancial';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -55,186 +65,37 @@ const SUGGESTED_QUESTIONS = [
   { icon: Users, textKey: 'ai.suggestCustomers' },
 ];
 
-// ── Anomaly Detection (runs on load) ─────────────────────────────────────────
-async function detectAnomalies(businessId: string): Promise<string[]> {
-  const anomalies: string[] = [];
-  try {
-    const { data } = await supabase
-      .from('journal_entries')
-      .select('status,entry_date,total_debits')
-      .eq('business_id', businessId)
-      .eq('status', 'posted');
-
-    const posted = (data ?? []) as unknown as JournalAnomalyRow[];
-    if (posted.length > 5) {
-      const amounts = posted.map((j) => Number(j.total_debits ?? 0));
-      const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
-      const large = posted.filter((j) => Number(j.total_debits ?? 0) > avg * 2);
-      if (large.length) anomalies.push(`${large.length} unusually large journal(s) (>2× average)`);
-    }
-
-    // Duplicate amounts same day
-    const byDay: Record<string, number[]> = {};
-    posted.forEach((j) => {
-      const d = j.entry_date;
-      if (!byDay[d]) byDay[d] = [];
-      byDay[d].push(Number(j.total_debits ?? 0));
-    });
-    Object.entries(byDay).forEach(([d, arr]) => {
-      const seen = new Set<number>();
-      arr.forEach((a) => {
-        if (seen.has(a)) anomalies.push(`Duplicate amount ${formatMwk(a)} on ${d}`);
-        seen.add(a);
-      });
-    });
-  } catch {
-    return anomalies;
-  }
-  return anomalies;
-}
-
-// ── Cash Flow Forecast (simple 60-day projection) ─────────────────────────────
-async function buildCashForecast(businessId: string): Promise<{ dates: string[]; projected: number[]; lower: number[]; upper: number[] }> {
-  // Very lightweight projection — real implementation would use regression
-  const today = new Date();
-  const dates: string[] = [];
-  const projected: number[] = [];
-  const lower: number[] = [];
-  const upper: number[] = [];
-
-  // Pull last 3 months cash movement
-  const start = new Date(today);
-  start.setMonth(start.getMonth() - 3);
-  const { data: movements } = await supabase
-    .from('journal_entries')
-    .select('entry_date,total_debits,total_credits')
-    .eq('business_id', businessId)
-    .gte('entry_date', start.toISOString().slice(0,10))
-    .eq('status','posted');
-
-  const netDaily = ((movements || []) as unknown as ForecastMovementRow[]).reduce(
-    (sum, m) => sum + (Number(m.total_credits ?? 0) - Number(m.total_debits ?? 0)),
-    0,
-  ) / 90;
-  let balance = 500000; // placeholder opening cash
-
-  for (let i = 0; i < 60; i++) {
-    const d = new Date(today);
-    d.setDate(d.getDate() + i);
-    dates.push(d.toISOString().slice(0,10));
-    balance += netDaily;
-    projected.push(Math.round(balance));
-    lower.push(Math.round(balance * 0.85));
-    upper.push(Math.round(balance * 1.15));
-  }
-  return { dates, projected, lower, upper };
-}
-
-// ── Build Business Context ────────────────────────────────────────────────────
-
+// ── Build Business Context (uses new rich context) ───────────────────────────
 async function buildBusinessContext(businessId: string, businessName: string): Promise<string> {
-  const today = new Date().toISOString().slice(0, 10);
-  const startOfMonth = `${today.slice(0, 7)}-01`;
-  const startOfYear = `${today.slice(0, 4)}-01-01`;
-
-  try {
-    const [invoices, expenses, payrollRuns, contacts, accounts] = await Promise.all([
-      repos.invoice.findByBusiness(businessId),
-      repos.expense.findByBusiness(businessId),
-      repos.payroll.findByBusiness(businessId),
-      repos.contact.findByBusiness(businessId),
-      repos.account.findByBusiness(businessId),
-    ]);
-
-    // Invoice analysis
-    const allInvoices = invoices.filter((i) => i.invoice_type === 'invoice');
-    const overdueInvoices = allInvoices.filter((i) =>
-      i.status !== 'paid' && i.due_date && i.due_date < today
-    );
-    const monthInvoices = allInvoices.filter((i) => i.issue_date >= startOfMonth);
-    const yearInvoices = allInvoices.filter((i) => i.issue_date >= startOfYear);
-    const totalRevenue = yearInvoices.reduce((s, i) => s + Number(i.total_amount), 0);
-    const monthRevenue = monthInvoices.reduce((s, i) => s + Number(i.total_amount), 0);
-    const overdueAmount = overdueInvoices.reduce((s, i) => s + (Number(i.total_amount) - Number(i.amount_paid)), 0);
-
-    // Expense analysis
-    const monthExpenses = expenses.filter((e) => e.expense_date >= startOfMonth);
-    const yearExpenses = expenses.filter((e) => e.expense_date >= startOfYear);
-    const monthExpenseTotal = monthExpenses.reduce((s, e) => s + Number(e.total_amount), 0);
-    const yearExpenseTotal = yearExpenses.reduce((s, e) => s + Number(e.total_amount), 0);
-
-    // Payroll
-    const lastPayroll = payrollRuns[0];
-
-    // Cash position (bank accounts)
-    const bankAccounts = accounts.filter((a) => a.is_bank_account);
-    const cashAccounts = accounts.filter((a) =>
-      a.account_subtype === 'current_asset' && !a.is_group && (a.code === '1110' || a.code === '1111')
-    );
-
-    // Top customers
-    const customerRevenue: Record<string, { name: string; total: number }> = {};
-    for (const inv of allInvoices) {
-      if (!inv.contact_id) continue;
-      const contact = contacts.find((c) => c.id === inv.contact_id);
-      if (!contact) continue;
-      if (!customerRevenue[inv.contact_id]) customerRevenue[inv.contact_id] = { name: contact.name, total: 0 };
-      customerRevenue[inv.contact_id].total += Number(inv.total_amount);
-    }
-    const topCustomers = Object.values(customerRevenue)
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-
-    // Net profit this month
-    const netProfitMonth = monthRevenue - monthExpenseTotal;
-
-    const context = `
-BUSINESS CONTEXT FOR AI ASSISTANT
+  const ctx = await buildRichBusinessContext(businessId, businessName);
+  
+  return `BUSINESS CONTEXT FOR AI ASSISTANT
 ===================================
-Business: ${businessName}
-Date: ${today}
-Currency: Malawian Kwacha (MWK)
+Business: ${ctx.businessName}
+Date: ${ctx.today}
+Currency: ${ctx.currency}
 
-INCOME & INVOICES
------------------
-Total invoices this month: ${monthInvoices.length} (${formatMwk(monthRevenue)})
-Total invoices this year: ${yearInvoices.length} (${formatMwk(totalRevenue)})
-Overdue invoices: ${overdueInvoices.length} totalling ${formatMwk(overdueAmount)}
-${overdueInvoices.length > 0 ? `Overdue details:\n${overdueInvoices.map((i) => `  - Invoice ${i.invoice_number}: ${formatMwk(Number(i.total_amount) - Number(i.amount_paid))} due ${i.due_date}`).join('\n')}` : ''}
+FINANCIAL SUMMARY (Last 3 Months)
+---------------------------------
+${ctx.last3MonthsPL}
 
-EXPENSES
---------
-Total expenses this month: ${monthExpenses.length} (${formatMwk(monthExpenseTotal)})
-Total expenses this year: ${yearExpenses.length} (${formatMwk(yearExpenseTotal)})
-
-PROFITABILITY
+CASH POSITION
 -------------
-Net profit this month: ${formatMwk(netProfitMonth)} (${netProfitMonth >= 0 ? 'PROFIT' : 'LOSS'})
-Net profit this year: ${formatMwk(totalRevenue - yearExpenseTotal)} (${totalRevenue - yearExpenseTotal >= 0 ? 'PROFIT' : 'LOSS'})
+Current Cash: ${ctx.cashBalance}
 
-PAYROLL
--------
-${lastPayroll ? `Last payroll run: ${lastPayroll.run_number} (${lastPayroll.payroll_period}) — Gross: ${formatMwk(Number(lastPayroll.total_gross))}, Net: ${formatMwk(Number(lastPayroll.total_net))}` : 'No payroll runs recorded yet.'}
+OUTSTANDING INVOICES
+--------------------
+${ctx.outstandingInvoices}
 
-TOP CUSTOMERS (by revenue)
---------------------------
-${topCustomers.length > 0 ? topCustomers.map((c, i) => `${i + 1}. ${c.name}: ${formatMwk(c.total)}`).join('\n') : 'No customer data yet.'}
+UPCOMING TAX DEADLINES (MRA)
+----------------------------
+${ctx.upcomingTaxDeadlines}
 
-CONTACTS
---------
-Total customers: ${contacts.filter((c) => c.contact_type === 'customer').length}
-Total suppliers: ${contacts.filter((c) => c.contact_type === 'supplier').length}
+ANOMALIES DETECTED
+------------------
+${ctx.anomalies.length > 0 ? ctx.anomalies.join('\n') : 'No anomalies detected.'}
 
-BANK ACCOUNTS
--------------
-${bankAccounts.length > 0 ? bankAccounts.map((a) => `${a.name} (${a.code}): Opening balance ${formatMwk(Number(a.opening_balance))}`).join('\n') : 'No bank accounts configured.'}
-${cashAccounts.length > 0 ? cashAccounts.map((a) => `${a.name}: ${formatMwk(Number(a.opening_balance))}`).join('\n') : ''}
-`.trim();
-
-    return context;
-  } catch {
-    return `Business: ${businessName}\nDate: ${today}\nNote: Some data could not be loaded.`;
-  }
+Use the data above to give specific, actionable financial advice.`.trim();
 }
 
 // ── Parse Actions from AI Response ───────────────────────────────────────────
@@ -324,16 +185,31 @@ export function AiInsightsPage() {
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name ?? t('ai.yourBusiness');
 
-  const [anomalies, setAnomalies] = useState<string[]>([]);
-  const [forecast, setForecast] = useState<unknown>(null);
-  void forecast;
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
+  const [taxSuggestions, setTaxSuggestions] = useState<TaxPlanningSuggestion[]>([]);
+  const [cashForecast, setCashForecast] = useState<any>(null);
+  const [richContext, setRichContext] = useState<BusinessContext | null>(null);
 
+  // Load advanced AI intelligence on mount
   useEffect(() => {
-    if (businessId) {
-      detectAnomalies(businessId).then(setAnomalies);
-      buildCashForecast(businessId).then(setForecast);
-    }
-  }, [businessId]);
+    if (!businessId) return;
+
+    const loadIntelligence = async () => {
+      const [anoms, tax, forecastData, context] = await Promise.all([
+        detectAdvancedAnomalies(businessId),
+        getTaxPlanningSuggestions(businessId),
+        generateCashFlowForecast(businessId),
+        buildRichBusinessContext(businessId, businessName),
+      ]);
+
+      setAnomalies(anoms);
+      setTaxSuggestions(tax);
+      setCashForecast(forecastData);
+      setRichContext(context);
+    };
+
+    loadIntelligence();
+  }, [businessId, businessName]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -369,10 +245,9 @@ export function AiInsightsPage() {
     setIsLoading(true);
 
     try {
-      // Build context
+      // Use rich context
       const context = await buildBusinessContext(businessId, businessName);
 
-      // Build conversation history for the API
       const history = messages
         .filter((m) => m.id !== '0')
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
@@ -383,10 +258,19 @@ export function AiInsightsPage() {
         context
       );
 
+      // Special handling for natural language report requests
+      let finalContent = content;
+      if (text.toLowerCase().includes('report') || text.toLowerCase().includes('perform') || text.toLowerCase().includes('q1')) {
+        if (richContext) {
+          const narrative = await generateNarrativeReport(businessId, text, richContext);
+          finalContent = `${content}\n\n---\n**Structured Narrative Report**\n\n${narrative}`;
+        }
+      }
+
       const assistantMessage: Message = {
         id: nextMessageId(),
         role: 'assistant',
-        content,
+        content: finalContent,
         actions: parseActions(content, t),
         timestamp: new Date(),
       };
@@ -466,10 +350,38 @@ export function AiInsightsPage() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Anomaly banner */}
+      {/* Anomaly banner (enhanced) */}
       {anomalies.length > 0 && (
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {t('ai.anomaliesDetected', { count: anomalies.length, items: anomalies.slice(0, 2).join(', ') })}
+          <div className="flex items-center gap-2 font-semibold mb-1">
+            <AlertCircle className="h-4 w-4" /> {anomalies.length} Financial Anomaly{anomalies.length > 1 ? 's' : ''} Detected
+          </div>
+          <div className="text-xs">
+            {anomalies.slice(0, 3).map((a, i) => (
+              <div key={i}>• {a.description}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tax Planning Banner */}
+      {taxSuggestions.length > 0 && (
+        <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <div className="flex items-center gap-2 font-semibold mb-1">
+            <Calendar className="h-4 w-4" /> Year-End Tax Planning
+          </div>
+          {taxSuggestions.map((s, i) => (
+            <div key={i} className="text-xs mb-1">
+              <strong>{s.title}</strong>: {s.description} — Potential saving: {s.potentialSaving}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Cash Flow Negative Alert */}
+      {cashForecast?.negativeAlert && (
+        <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          ⚠️ Cash flow forecast shows negative balance within 60 days. Review expenses or accelerate collections.
         </div>
       )}
 

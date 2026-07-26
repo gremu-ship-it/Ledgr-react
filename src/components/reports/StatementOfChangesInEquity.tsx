@@ -1,11 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import type { EquityRollForwardLine } from '@/dal/repositories/FinancialStatementRepository';
 import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
+import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -40,6 +42,8 @@ function EquityRow({ row, formatCurrency }: { row: EquityRollForwardLine; format
 export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd }: Props) {
   const { t } = useTranslation();
   const format = useLocaleFormat();
+  const [notes, setNotes] = useState('');
+
   const { data: soce, isLoading, error } = useQuery({
     queryKey: ['changes_in_equity', businessId, periodStart, periodEnd],
     queryFn: () => financialStatementRepo.getChangesInEquity(businessId, periodStart, periodEnd),
@@ -48,6 +52,35 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
 
   const formatMwk = (value: number) => format.currency(value, 'MWK');
   const periodLabel = t('reports.period', { start: format.date(periodStart), end: format.date(periodEnd) });
+
+  const handleExportPDF = () => {
+    const htmlContent = document.querySelector('.overflow-x-auto')?.outerHTML || '';
+    exportReportAsPDF({
+      title: t('reports.statementOfChangesInEquity'),
+      subtitle: periodLabel,
+      dateLabel: periodLabel,
+      currency: 'MWK',
+      notes,
+      businessName: '',
+      htmlContent,
+    });
+  };
+
+  const handleExportXBRL = () => {
+    exportReportAsXBRL({
+      title: t('reports.statementOfChangesInEquity'),
+      dateLabel: periodLabel,
+      currency: 'MWK',
+      notes,
+      businessName: '',
+      htmlContent: '',
+      facts: [
+        { concept: 'ShareCapital', value: soce.shareCapital.closingBalance },
+        { concept: 'RetainedEarnings', value: soce.retainedEarnings.closingBalance },
+        { concept: 'TotalEquity', value: soce.totalClosingEquity },
+      ],
+    });
+  };
 
   if (isLoading) return <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-8 animate-pulse rounded bg-gray-100" />)}</div>;
 
@@ -65,6 +98,10 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
       <ReportHeader
         title={t('reports.statementOfChangesInEquity')}
         subtitle={`${periodLabel} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
+        notes={notes}
+        onNotesChange={setNotes}
+        onExportPDF={handleExportPDF}
+        onExportXBRL={handleExportXBRL}
       />
 
       {!soce.reconciles && (

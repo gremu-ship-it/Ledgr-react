@@ -10,6 +10,8 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useLocation } from 'react-router-dom';
+import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
+import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 
 export function AppLayout() {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
@@ -18,6 +20,9 @@ export function AppLayout() {
 
   // Apply brand colors globally based on current business settings
   useBrandTheme();
+
+  // Inactivity timeout (customizable)
+  const { showWarning, secondsRemaining, extendSession } = useInactivityTimeout();
 
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const showMobileHeader = isMobile && !isDashboard;
@@ -51,8 +56,20 @@ export function AppLayout() {
         </main>
       </div>
 
-      {/* Bottom nav — mobile only */}
+        {/* Bottom nav — mobile only */}
       <BottomNav />
+
+      {/* Inactivity warning modal */}
+      {showWarning && (
+        <InactivityWarningModal
+          secondsRemaining={secondsRemaining}
+          onExtend={extendSession}
+          onLogoutNow={() => {
+            // The hook handles logout, this just closes the modal
+            window.location.href = '/login';
+          }}
+        />
+      )}
     </div>
   );
 }

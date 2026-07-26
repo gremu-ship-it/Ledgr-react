@@ -18,6 +18,9 @@ import { TaxReminderModal } from '@/components/dashboard/TaxReminderModal';
 import { formatMwk, formatMwkCompact } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
+import { UsageMeter } from '@/components/billing/UsageMeter';
+import { UpgradeModal } from '@/components/billing/UpgradeModal';
+import { useState } from 'react';
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
 
@@ -134,6 +137,8 @@ export function DashboardPage() {
   const businessName    = currentBusiness?.business.name;
   const isMobile        = useIsMobile();
 
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
   const income        = useMonthlyIncome(businessId);
   const expenses      = useMonthlyExpenses(businessId);
   const expenseVat    = useMonthlyExpenseVat(businessId);
@@ -182,6 +187,9 @@ export function DashboardPage() {
 
       {/* Tax remittance panel */}
       <TaxRemittancePanel businessId={businessId} />
+
+      {/* Usage Meter */}
+      <UsageMeter />
 
       {/* Page header + Quick Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -285,6 +293,17 @@ export function DashboardPage() {
           isError={recentEntries.isError}
         />
       </div>
+
+      {/* Upgrade Modal */}
+      <UpgradeModal 
+        isOpen={showUpgradeModal} 
+        onClose={() => setShowUpgradeModal(false)} 
+        onUpgrade={(tier) => {
+          // In real app: redirect to payment
+          alert(`Redirecting to payment for ${tier} plan`);
+          setShowUpgradeModal(false);
+        }} 
+      />
     </div>
   );
 }

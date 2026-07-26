@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Shield, CheckCircle2, XCircle, AlertTriangle, Download,
@@ -9,6 +9,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
+import { pushAuditChainWarning, pushAuditVerified } from '@/lib/notifications';
 import type { AuditLogEntry, ChainVerificationResult } from '@/dal/repositories/AuditLogRepository';
 
 const auditRepo = new AuditLogRepository(supabase);
@@ -294,6 +295,17 @@ export function AuditLogPage() {
     ? (chainData ?? []).filter((r) => !r.chain_valid).length
     : 0;
 
+  // Push notifications when chain verification finishes
+  useEffect(() => {
+    if (!showVerify || !chainData) return;
+
+    if (tamperCount > 0) {
+      pushAuditChainWarning(tamperCount);
+    } else if (chainData.length > 0) {
+      pushAuditVerified();
+    }
+  }, [chainData, tamperCount, showVerify]);
+
   // ── PDF Export (Signed for auditors) ─────────────────────────
   const handleExportPDF = useCallback(() => {
     if (!logData?.data.length) return;
@@ -417,26 +429,6 @@ export function AuditLogPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-900">Audit Log</h1>
-            <div>
-  <h1 className="text-2xl font-extrabold text-gray-900">Audit Log</h1>
-  <button
-    onClick={async () => {
-      const { data, error } = await supabase.from('audit_log').insert({
-        business_id: businessId!,
-        event_type: 'FAKE',
-        resource_type: 'journal_entries',
-      });
-      console.log('INSERT TEST — data:', data);
-      console.log('INSERT TEST — error:', error);
-    }}
-    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white"
-  >
-    TEST: Direct Insert (temporary)
-  </button>
-  <p className="mt-0.5 text-sm text-gray-500">
-    Immutable, hash-chained record of all financial changes · IFRS compliant
-  </p>
-</div>
             <p className="mt-0.5 text-sm text-gray-500">
               Immutable, hash-chained record of all financial changes · IFRS compliant
             </p>
