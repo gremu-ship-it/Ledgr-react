@@ -1,15 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '@/store/useAppStore';
+import { repos } from '@/lib/repositories';
 import { usageService, type UsageStats } from '@/lib/billing/UsageService';
-import { getPlan, type PlanTier } from '@/lib/billing/plans';
+import { getPlan, normalizePlanTier, type PlanTier } from '@/lib/billing/plans';
 
 export function useUsage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
 
-  // In a real app, the plan tier would come from a subscription table.
-  // For now we default to 'free' unless the business has a subscription record.
-  const planTier: PlanTier = 'free'; // TODO: Replace with real subscription data
+  // Plan tier is persisted on businesses.plan_tier. We fetch it directly
+  // (rather than trusting the possibly-stale copy in the Zustand store)
+  // so that an upgrade/downgrade is reflected as soon as it's saved —
+  // this query key matches the one used by SettingsPage/useBrandTheme so
+  // an upgrade mutation there also refreshes usage limits here.
+  const { data: business } = useQuery({
+    queryKey: ['business', businessId],
+    queryFn: () => repos.business.findById(businessId!),
+    enabled: !!businessId,
+    staleTime: 1000 * 60, // 1 minute
+  });
+
+  const planTier: PlanTier = normalizePlanTier(
+    business?.plan_tier ?? currentBusiness?.business?.plan_tier,
+  );
 
   const { data: usage, isLoading } = useQuery({
     queryKey: ['usage', businessId, planTier],

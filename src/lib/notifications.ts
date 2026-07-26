@@ -123,6 +123,23 @@ export function pushTaxRemittanceDue(amount: string, dueDate: string) {
 }
 
 // ──────────────────────────────────────────────────────────────
+// Billing / Subscription
+// ──────────────────────────────────────────────────────────────
+export function pushSubscriptionRenewalReminder(planName: string, daysLeft: number, expiresOn: string) {
+  const { addNotification } = useNotificationStore.getState();
+
+  addNotification({
+    type: daysLeft <= 1 ? 'error' : 'warning',
+    title: daysLeft <= 1 ? `${planName} plan expires tomorrow` : `${planName} plan renews soon`,
+    message:
+      daysLeft <= 1
+        ? `Your subscription expires on ${expiresOn}. Renew now to avoid being moved back to the Free plan.`
+        : `${daysLeft} days left until your subscription renews on ${expiresOn}.`,
+    link: '/settings?tab=billing',
+  });
+}
+
+// ──────────────────────────────────────────────────────────────
 // General / System
 // ──────────────────────────────────────────────────────────────
 export function pushSuccess(title: string, message: string, link?: string) {

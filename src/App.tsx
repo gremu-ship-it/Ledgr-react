@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
-import { ProtectedRoute, PublicOnlyRoute } from '@/routes/ProtectedRoute';
+import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
@@ -33,6 +33,7 @@ import { ZapierIntegrationPage } from '@/pages/ZapierIntegrationPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { PlanGate } from '@/components/billing/PlanGate';
 import { WarehousePage } from './pages/WarehousePage';
 import { TransfersPage } from './pages/TransfersPage';
 import { BranchesPage } from './pages/BranchesPage';
@@ -43,6 +44,7 @@ import { JournalsPage } from '@/pages/JournalsPage';
 import { RepairCoaPage } from '@/pages/RepairCoaPage';
 import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
 import { AuditLogPage } from '@/pages/AuditLogPage';
+import { AdminBillingPage } from '@/pages/admin/AdminBillingPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -80,6 +82,11 @@ function App() {
               <Route path="/create-business" element={<CreateBusinessPage />} />
             </Route>
 
+            {/* Internal admin tools — platform admins only, doesn't need a business selected */}
+            <Route element={<PlatformAdminRoute />}>
+              <Route path="/admin/billing" element={<AdminBillingPage />} />
+            </Route>
+
             {/* Protected with AppLayout */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
@@ -95,14 +102,34 @@ function App() {
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/capital" element={<CapitalPage />} />
                 <Route path="/tax" element={<TaxPage />} />
-                <Route path="/bank-reconcile" element={<BankReconciliation businessId={currentBusiness?.business?.id || ''} />} />
-                <Route path="/api-docs" element={<ApiDocumentationPage />} />
-                <Route path="/api-keys" element={<ApiKeysPage />} />
-                <Route path="/zapier" element={<ZapierIntegrationPage />} />
+                <Route path="/bank-reconcile" element={(
+                  <PlanGate capability="bank_reconciliation" featureName="Bank Reconciliation">
+                    <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
+                  </PlanGate>
+                )} />
+                <Route path="/api-docs" element={(
+                  <PlanGate capability="api_access" featureName="Public API">
+                    <ApiDocumentationPage />
+                  </PlanGate>
+                )} />
+                <Route path="/api-keys" element={(
+                  <PlanGate capability="api_access" featureName="API Keys">
+                    <ApiKeysPage />
+                  </PlanGate>
+                )} />
+                <Route path="/zapier" element={(
+                  <PlanGate capability="webhooks" featureName="Zapier Integration">
+                    <ZapierIntegrationPage />
+                  </PlanGate>
+                )} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/journals" element={<JournalsPage />} />
                 <Route path="/periods" element={<PeriodManagementPage />} />
-                <Route path="/ai" element={<AiInsightsPage />} />
+                <Route path="/ai" element={(
+                  <PlanGate capability="ai_insights" featureName="AI Insights">
+                    <AiInsightsPage />
+                  </PlanGate>
+                )} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />
