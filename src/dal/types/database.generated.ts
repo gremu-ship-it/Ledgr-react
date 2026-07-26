@@ -4129,6 +4129,25 @@ export type Database = {
           },
         ]
       }
+      v_cash_flow: {
+        Row: {
+          business_id: string | null
+          financing: number | null
+          investing: number | null
+          net_change: number | null
+          operating: number | null
+          period: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journal_entries_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_reorder_alerts: {
         Row: {
           average_cost: number | null

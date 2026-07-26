@@ -40,7 +40,7 @@ function parseOFX(text: string): ParsedStatement {
 function parseMT940(text: string): ParsedStatement {
   const balance = (marker: string) => { const v = text.match(new RegExp(`:${marker}:([CD])(\\d{6})[A-Z]{3}([0-9,]+)`)); return v ? { amount: money(v[3]), sign: v[1] } : undefined; };
   const chunks = text.split(/(?=:61:)/).slice(1); const transactions: BankTransaction[] = [];
-  for (const chunk of chunks) { const line = chunk.split(/\r?\n/)[0]; const m = line.match(/^:61:(\d{6})(?:\d{4})?([CD])(?:R?)([0-9,]+)/); if (!m) continue; const desc = chunk.match(/:86:([\s\S]*?)(?=\r?\n:\d{2}|$)/)?.[1].replace(/\r?\n/g, ' ').trim() || 'Bank transaction'; transactions.push({ date: `20${m[1].slice(0,2)}-${m[1].slice(2,4)}-${m[1].slice(4,6)}`, amount: money(m[3]), type: m[2] === 'D' ? 'debit' : 'credit', description: desc, reference: desc.match(/(?:REF|NONREF|\/)([\w/-]+)/i)?.[1] }); }
+  for (const chunk of chunks) { const line = chunk.split(/\r?\n/)[0]; const m = line.match(/^:61:(\d{6})(?:\d{4})?([CD])(?:R?)([0-9,]+)/); if (!m) continue; const desc = chunk.match(/:86:([\s\S]*?)(?=\r?\n:\d{2}|$)/)?.[1].replace(/\r?\n/g, ' ').trim() || 'Bank transaction'; transactions.push({ date: `20${m[1].slice(0,2)}-${m[1].slice(2,4)}-${m[1].slice(4,6)}`, amount: money(m[3]), type: m[2] === 'D' ? 'debit' : 'credit', description: desc, reference: desc.match(/(?:REF|NONREF|[/])([\w/-]+)/i)?.[1] }); }
   const opening = balance('60[FM]'), closing = balance('62[FM]');
   return { transactions, source: 'MT940', openingBalance: opening ? (opening.sign === 'D' ? -opening.amount : opening.amount) : undefined, closingBalance: closing ? (closing.sign === 'D' ? -closing.amount : closing.amount) : undefined };
 }
