@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { repos } from '@/lib/repositories';
-import type { Row } from '@/dal/types/database';
+import { supabase } from '@/lib/supabase';
 import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
 import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitOrLoss';
 import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
@@ -75,13 +74,13 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ['trial_balance', businessId],
     queryFn: async () => {
-      const { data, error } = await repos.journal['client']
-        .from('v_trial_balance')
+      const { data, error } = await supabase
+        .from('v_trial_balance' as any)
         .select('*')
         .eq('business_id', businessId)
         .order('code', { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []) as Row<'v_trial_balance'>[];
+      return (data ?? []) as any[];
     },
     enabled: Boolean(businessId),
   });
