@@ -791,6 +791,7 @@ export type Database = {
           payroll_next_number: number
           payroll_prefix: string | null
           phone: string | null
+          plan_expires_at: string | null
           plan_tier: string
           plan_updated_at: string | null
           registration_number: string | null
@@ -829,6 +830,7 @@ export type Database = {
           payroll_next_number?: number
           payroll_prefix?: string | null
           phone?: string | null
+          plan_expires_at?: string | null
           plan_tier?: string
           plan_updated_at?: string | null
           registration_number?: string | null
@@ -867,6 +869,7 @@ export type Database = {
           payroll_next_number?: number
           payroll_prefix?: string | null
           phone?: string | null
+          plan_expires_at?: string | null
           plan_tier?: string
           plan_updated_at?: string | null
           registration_number?: string | null
@@ -886,6 +889,71 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "currencies"
             referencedColumns: ["code"]
+          },
+        ]
+      }
+      subscription_payments: {
+        Row: {
+          amount: number
+          billing_cycle: string
+          business_id: string
+          checkout_url: string | null
+          created_at: string
+          currency: string
+          gateway: string
+          gateway_reference: string | null
+          id: string
+          initiated_by: string | null
+          plan_expires_at: string | null
+          raw_response: Json | null
+          status: string
+          target_plan_tier: string
+          tx_ref: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          billing_cycle: string
+          business_id: string
+          checkout_url?: string | null
+          created_at?: string
+          currency?: string
+          gateway?: string
+          gateway_reference?: string | null
+          id?: string
+          initiated_by?: string | null
+          plan_expires_at?: string | null
+          raw_response?: Json | null
+          status?: string
+          target_plan_tier: string
+          tx_ref: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          billing_cycle?: string
+          business_id?: string
+          checkout_url?: string | null
+          created_at?: string
+          currency?: string
+          gateway?: string
+          gateway_reference?: string | null
+          id?: string
+          initiated_by?: string | null
+          plan_expires_at?: string | null
+          raw_response?: Json | null
+          status?: string
+          target_plan_tier?: string
+          tx_ref?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_payments_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
           },
         ]
       }

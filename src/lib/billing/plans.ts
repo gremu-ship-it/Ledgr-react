@@ -122,3 +122,17 @@ export function isValidPlanTier(value: unknown): value is PlanTier {
 export function normalizePlanTier(value: unknown): PlanTier {
   return isValidPlanTier(value) ? value : 'free';
 }
+
+export type BillingCycle = 'monthly' | 'annual';
+
+/**
+ * Total amount due for one billing cycle, in MWK. Mirrors the
+ * `computeAmount` logic in supabase/functions/initiate-subscription-payment
+ * — keep both in sync if pricing changes.
+ */
+export function computePriceMWK(tier: PlanTier, cycle: BillingCycle): number {
+  const monthly = PLANS[tier].priceMWK;
+  if (cycle === 'monthly') return monthly;
+  const discount = PLANS[tier].annualDiscount;
+  return Math.round(monthly * 12 * (1 - discount / 100));
+}
