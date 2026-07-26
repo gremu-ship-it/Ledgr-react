@@ -20,7 +20,7 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
-import type { PlanCapability } from '@/lib/billing/plans';
+import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
 
 export interface NavItemConfig {
   labelKey: string;

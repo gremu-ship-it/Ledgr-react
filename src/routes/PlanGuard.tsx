@@ -65,7 +65,7 @@ export function PlanGuard({ minPlan }: PlanGuardProps) {
         </div>
 
         <button
-          onClick={() => navigate('/settings', { state: { tab: 'billing' } })}
+          onClick={() => navigate('/settings?tab=billing')}
           className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-brand-500/20 transition-all hover:bg-brand-700 active:scale-95"
         >
           View Plans &amp; Upgrade
