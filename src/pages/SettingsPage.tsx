@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
   Building2,
   DollarSign,
@@ -30,7 +30,7 @@ import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BillingTab } from '@/components/billing/BillingTab';
-import { useUsage } from '@/hooks/useUsage';
+import { PlanGate } from '@/components/billing/PlanGate';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +102,7 @@ function Input({
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
 type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing';
+const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing'];
 
 const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'business', label: 'Business Profile', icon: Building2 },
@@ -281,29 +282,43 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
           <Input value={form.country} onChange={(v) => set('country', v)} placeholder="Malawi" />
         </Field>
         <Field label="Brand Color" hint="Used for invoices, receipts, and app accents">
-          <div className="flex items-center gap-3">
-            <input
-              type="color"
-              value={form.brand_color}
-              onChange={(e) => set('brand_color', e.target.value)}
-              className="h-9 w-16 cursor-pointer rounded-lg border border-gray-300 p-1"
-            />
-            <Input value={form.brand_color} onChange={(v) => set('brand_color', v)} placeholder="#1D9E75" />
-          </div>
-          {/* Brand color preview */}
-          <div className="mt-2 flex items-center gap-2">
-            <span className="text-xs text-gray-500">Preview:</span>
-            <div className="flex gap-1">
-              {[50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((shade) => (
-                <div
-                  key={shade}
-                  className="h-6 w-5 rounded-sm"
-                  style={{ backgroundColor: `var(--color-brand-${shade}, #ccc)` }}
-                  title={`${shade}`}
-                />
-              ))}
+          <PlanGate
+            capability="custom_branding"
+            featureName="Custom Branding"
+            fallback={
+              <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
+                Custom brand color is an Enterprise feature.{' '}
+                <a href="/settings?tab=billing" className="font-medium text-brand-600 hover:underline">
+                  Upgrade to unlock
+                </a>
+                .
+              </div>
+            }
+          >
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={form.brand_color}
+                onChange={(e) => set('brand_color', e.target.value)}
+                className="h-9 w-16 cursor-pointer rounded-lg border border-gray-300 p-1"
+              />
+              <Input value={form.brand_color} onChange={(v) => set('brand_color', v)} placeholder="#1D9E75" />
             </div>
-          </div>
+            {/* Brand color preview */}
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-xs text-gray-500">Preview:</span>
+              <div className="flex gap-1">
+                {[50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map((shade) => (
+                  <div
+                    key={shade}
+                    className="h-6 w-5 rounded-sm"
+                    style={{ backgroundColor: `var(--color-brand-${shade}, #ccc)` }}
+                    title={`${shade}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </PlanGate>
         </Field>
       </div>
 
@@ -314,50 +329,64 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
           Upload your business logo to display on invoices, receipts, and the app sidebar.
           Accepted formats: PNG, JPEG, SVG, WebP (max 2MB).
         </p>
-        <div className="flex items-start gap-4">
-          {/* Logo preview */}
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-            {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Business logo"
-                className="h-full w-full object-contain"
-              />
-            ) : (
-              <ImageIcon className="h-8 w-8 text-gray-300" />
-            )}
-          </div>
+        <PlanGate
+          capability="custom_branding"
+          featureName="Custom Branding"
+          fallback={
+            <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-xs text-gray-500">
+              Business logo upload is an Enterprise feature.{' '}
+              <a href="/settings?tab=billing" className="font-medium text-brand-600 hover:underline">
+                Upgrade to unlock
+              </a>
+              .
+            </div>
+          }
+        >
+          <div className="flex items-start gap-4">
+            {/* Logo preview */}
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Business logo"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <ImageIcon className="h-8 w-8 text-gray-300" />
+              )}
+            </div>
 
-          {/* Upload / remove buttons */}
-          <div className="flex flex-col gap-2">
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/png,image/jpeg,image/svg+xml,image/webp"
-              onChange={handleLogoUpload}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={logoUploading}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
-            >
-              <Upload className="h-4 w-4" />
-              {logoUploading ? 'Uploading…' : logoUrl ? 'Change Logo' : 'Upload Logo'}
-            </button>
-            {logoUrl && (
+            {/* Upload / remove buttons */}
+            <div className="flex flex-col gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                onChange={handleLogoUpload}
+                className="hidden"
+              />
               <button
                 type="button"
-                onClick={handleRemoveLogo}
-                className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={logoUploading}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-60 transition-colors"
               >
-                <Trash2 className="h-4 w-4" />
-                Remove Logo
+                <Upload className="h-4 w-4" />
+                {logoUploading ? 'Uploading…' : logoUrl ? 'Change Logo' : 'Upload Logo'}
               </button>
-            )}
+              {logoUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemoveLogo}
+                  className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove Logo
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        </PlanGate>
       </div>
 
       <div className="flex justify-end border-t border-gray-100 pt-4">
@@ -1580,26 +1609,24 @@ For privacy requests, email privacy@ledgr.app or use the in-app tools.
 export function SettingsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
-  const location = useLocation();
-  const { planTier } = useUsage();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as Tab | null;
+  const [activeTab, setActiveTab] = useState<Tab>(
+    tabParam && TAB_VALUES.includes(tabParam) ? tabParam : 'business',
+  );
 
-  // Default free-tier users to the billing tab; honour ?tab= query or state
-  const initialTab = (() => {
-    const stateTab = (location.state as { tab?: string } | null)?.tab;
-    if (stateTab && TABS.some((t) => t.value === stateTab)) return stateTab as Tab;
-    if (planTier === 'free') return 'billing';
-    return 'business';
-  })();
-
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
-
-  // Sync if navigated with new state (e.g. from PlanGuard upgrade CTA)
-  useEffect(() => {
-    const stateTab = (location.state as { tab?: string } | null)?.tab;
-    if (stateTab && TABS.some((t) => t.value === stateTab)) {
-      setActiveTab(stateTab as Tab);
+  // Keep the active tab in sync if the ?tab= query param changes after mount
+  // (e.g. navigating here again from a different "Upgrade plan" link, which
+  // doesn't remount this component since the pathname is unchanged).
+  // Adjusting state directly during render (rather than in a useEffect) per
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [lastSeenTabParam, setLastSeenTabParam] = useState(tabParam);
+  if (tabParam !== lastSeenTabParam) {
+    setLastSeenTabParam(tabParam);
+    if (tabParam && TAB_VALUES.includes(tabParam)) {
+      setActiveTab(tabParam);
     }
-  }, [location.state]);
+  }
 
   const { data: business, isLoading } = useQuery({
     queryKey: ['business', businessId],
@@ -1669,7 +1696,11 @@ export function SettingsPage() {
                 {activeTab === 'profile' && <UserProfileTab />}
                 {activeTab === 'security' && <SecurityTab />}
                 {activeTab === 'team' && <TeamMembersTab businessId={businessId} />}
-                {activeTab === 'api' && <WebhookSettings />}
+                {activeTab === 'api' && (
+                  <PlanGate capability="webhooks" featureName="API & Webhooks" fallback="lock">
+                    <WebhookSettings />
+                  </PlanGate>
+                )}
                 {activeTab === 'billing' && <BillingTab />}
                 {activeTab === 'privacy' && <PrivacyTab />}
               </>

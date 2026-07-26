@@ -7,6 +7,13 @@ import { i18n, normalizeLanguage } from '@/i18n';
 // Module-level flags — survives re-renders and effect re-runs
 let isHydrating = false;
 let hasInitialHydrated = false;
+// Tracks which user we last successfully hydrated, so we can recognize
+// Supabase's "SIGNED_IN" event re-firing for the *same* user when the
+// browser tab/app regains focus (a known supabase-js quirk — it isn't a
+// real new sign-in, just a session recovery check). Without this guard,
+// every tab switch would flip isBusinessesLoading back to true and blank
+// the whole app behind the "Checking your session…" spinner.
+let lastHydratedUserId: string | null = null;
 
 export function useAuthListener() {
   const isMountedRef = useRef(true);
@@ -74,6 +81,7 @@ export function useAuthListener() {
         }
 
         hasInitialHydrated = true;
+        lastHydratedUserId = userId;
       } catch (err) {
         console.error('Failed to hydrate user:', err);
       } finally {
@@ -103,6 +111,8 @@ export function useAuthListener() {
 
       if (event === 'SIGNED_OUT' || !session?.user) {
         isHydrating = false;
+        hasInitialHydrated = false;
+        lastHydratedUserId = null;
         useAppStore.getState().reset();
         useAppStore.getState().setAuthLoading(false);
         return;
@@ -119,6 +129,20 @@ export function useAuthListener() {
       }
 
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const isSameUserReSignIn =
+          event === 'SIGNED_IN' &&
+          hasInitialHydrated &&
+          lastHydratedUserId === session.user.id;
+
+        // Supabase re-emits SIGNED_IN when the tab/window regains focus even
+        // though the session hasn't actually changed. If we already hydrated
+        // this exact user, treat it as a no-op instead of re-fetching
+        // everything and flashing the loading screen.
+        if (isSameUserReSignIn) {
+          useAppStore.getState().setAuthLoading(false);
+          return;
+        }
+
         hydrateUser(session.user.id, session.user.email ?? null, true).finally(() => {
           if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
         });

@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 
 export function ProtectedRoute() {
   const currentUser        = useAppStore((s) => s.currentUser);
@@ -39,6 +40,33 @@ export function PublicOnlyRoute() {
   }
 
   if (currentUser) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Outlet />;
+}
+
+/**
+ * Gates internal admin-only tools (e.g. /admin/billing) behind
+ * user_profiles.is_platform_admin. This is a UX convenience only — the
+ * real enforcement is server-side (RLS policies + the
+ * grant-manual-subscription Edge Function re-checking the same flag), so
+ * there's no security risk even if this check were somehow bypassed.
+ */
+export function PlatformAdminRoute() {
+  const currentUser = useAppStore((s) => s.currentUser);
+  const isAuthLoading = useAppStore((s) => s.isAuthLoading);
+  const isPlatformAdmin = useIsPlatformAdmin();
+
+  if (isAuthLoading) {
+    return <LoadingSpinner fullScreen label="Loading…" />;
+  }
+
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isPlatformAdmin) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -11,6 +11,7 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useLocation } from 'react-router-dom';
 import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
+import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 
 export function AppLayout() {
@@ -23,6 +24,10 @@ export function AppLayout() {
 
   // Inactivity timeout (customizable)
   const { showWarning, secondsRemaining, extendSession } = useInactivityTimeout();
+
+  // In-app bell notification when the paid plan is about to expire
+  // (7/3/1 days out) — companion to the daily email reminder.
+  useRenewalReminder();
 
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const showMobileHeader = isMobile && !isDashboard;

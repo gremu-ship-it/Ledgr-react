@@ -132,6 +132,7 @@ function QuickActions() {
 
 export function DashboardPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId      = currentBusiness?.business.id;
   const businessName    = currentBusiness?.business.name;
@@ -298,10 +299,9 @@ export function DashboardPage() {
       <UpgradeModal 
         isOpen={showUpgradeModal} 
         onClose={() => setShowUpgradeModal(false)} 
-        onUpgrade={(tier) => {
-          // In real app: redirect to payment
-          alert(`Redirecting to payment for ${tier} plan`);
+        onUpgrade={() => {
           setShowUpgradeModal(false);
+          navigate('/settings?tab=billing');
         }} 
       />
     </div>

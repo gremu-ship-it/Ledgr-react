@@ -20,12 +20,14 @@ import {
   ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
-import type { PlanTier } from '@/lib/billing/plans';
+import type { PlanCapability } from '@/lib/billing/plans';
 
 export interface NavItemConfig {
   labelKey: string;
   path: string;
   icon: LucideIcon;
+  /** If set, the item is soft-gated: still visible/clickable, but shows a small lock badge when the current plan doesn't include this capability. */
+  requiresCapability?: PlanCapability;
 }
 
 export interface NavSectionConfig {
@@ -75,7 +77,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins },
       { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText },
-      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark },
+      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark, requiresCapability: 'bank_reconciliation' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock },
       { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck },
     ],
