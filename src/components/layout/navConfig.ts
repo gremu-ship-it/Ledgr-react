@@ -71,6 +71,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins },
       { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText },
+      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock },
       { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck },
     ],

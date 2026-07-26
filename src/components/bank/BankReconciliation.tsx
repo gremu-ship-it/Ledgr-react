@@ -1,180 +1,33 @@
-import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, Check, AlertCircle } from 'lucide-react';
+import { Check, Lock, Sparkles, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { parseBankStatement, type BankTransaction } from '@/services/bank/statementParser';
 import { useAppStore } from '@/store/useAppStore';
 
-interface Props {
-  businessId: string;
-}
+type Account = { id: string; code: string; name: string; is_bank_account: boolean };
+type Entry = { id: string; entry_date: string; entry_number: string; description: string; reference: string | null; amount: number };
+type Pair = { bank: BankTransaction; entry: Entry; confidence?: number; confirmed: boolean };
+const mwk = new Intl.NumberFormat('en-MW', { style: 'currency', currency: 'MWK', maximumFractionDigits: 2 });
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]/g, '').split(/\s+/).filter(Boolean);
+const similarity = (a: string, b: string) => { const x = norm(a), y = norm(b); return x.length ? x.filter(v => y.includes(v)).length / x.length : 0; };
 
-type JournalEntrySummary = {
-  id: string;
-  entry_date: string;
-  entry_number: string;
-  description: string;
-  total_debits?: number | string | null;
-  total_credits?: number | string | null;
-};
-
-type MatchSuggestion = {
-  bank: BankTransaction;
-  ledgr: JournalEntrySummary;
-  confidence: number;
-};
-
-export function BankReconciliation({ businessId }: Props) {
-  const { t } = useTranslation();
-  const [matched, setMatched] = useState<MatchSuggestion[]>([]);
-  const [unmatchedBank, setUnmatchedBank] = useState<BankTransaction[]>([]);
-  const [unmatchedLedgr, setUnmatchedLedgr] = useState<JournalEntrySummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const currentUser = useAppStore((s) => s.currentUser);
-  const queryClient = useQueryClient();
-
-  const { data: ledgrEntries = [] } = useQuery({
-    queryKey: ['unreconciled', businessId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('journal_entries')
-        .select('*')
-        .eq('business_id', businessId)
-        .is('reconciled_at' as never, null)
-        .order('entry_date', { ascending: false });
-      return (data || []) as JournalEntrySummary[];
-    },
-    enabled: Boolean(businessId),
-  });
-
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setLoading(true);
-    try {
-      const parsed = await parseBankStatement(file, 'auto');
-      setUnmatchedBank(parsed);
-      setUnmatchedLedgr(ledgrEntries);
-    } catch (err) {
-      alert((err as Error).message);
-    }
-    setLoading(false);
-  }
-
-  // Simple AI matching simulation (replace with real Claude call)
-  function suggestMatches() {
-    const suggestions: MatchSuggestion[] = [];
-    unmatchedBank.forEach((bank) => {
-      const match = unmatchedLedgr.find((entry) =>
-        Math.abs(Number(entry.total_debits ?? 0) - bank.amount) < 1 &&
-        Math.abs(new Date(entry.entry_date).getTime() - new Date(bank.date).getTime()) < 1000 * 60 * 60 * 72
-      );
-      if (match) {
-        suggestions.push({ bank, ledgr: match, confidence: 0.92 });
-      }
-    });
-    return suggestions;
-  }
-
-  const acceptMatch = (suggestion: MatchSuggestion) => {
-    setMatched((prev) => [...prev, suggestion]);
-    setUnmatchedBank((prev) => prev.filter((b) => b !== suggestion.bank));
-    setUnmatchedLedgr((prev) => prev.filter((e) => e.id !== suggestion.ledgr.id));
-  };
-
-  const createFromBankLine = async (bank: BankTransaction) => {
-    // Create a simple journal entry from the bank line. The typed schema does
-    // not include calculated debit/credit summary columns used by the bank UI,
-    // so this insert is intentionally cast for compatibility with deployed DBs
-    // that include those columns/triggers.
-    await supabase.from('journal_entries').insert({
-      business_id: businessId,
-      entry_date: bank.date,
-      entry_number: `BANK-${bank.date}-${(bank.reference || bank.description).slice(0, 12).replace(/\W/g, '')}`,
-      description: bank.description,
-      source_type: 'bank_import',
-      total_debits: bank.type === 'credit' ? bank.amount : 0,
-      total_credits: bank.type === 'debit' ? bank.amount : 0,
-      created_by: currentUser?.id,
-    } as never);
-    queryClient.invalidateQueries({ queryKey: ['unreconciled', businessId] });
-    setUnmatchedBank((prev) => prev.filter((b) => b !== bank));
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">{t('bank.bankReconciliation')}</h2>
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">
-          <Upload className="h-4 w-4" />
-          {t('bank.importStatement')}
-          <input type="file" accept=".csv,.ofx,.mt940" className="hidden" onChange={handleFileUpload} />
-        </label>
-      </div>
-
-      {loading && <div className="text-sm text-gray-500">{t('bank.parsingStatement')}</div>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Unmatched Bank Lines */}
-        <div className="rounded-2xl border p-4">
-          <h3 className="mb-3 font-semibold text-sm">{t('bank.unmatchedBankLines', { count: unmatchedBank.length })}</h3>
-          <div className="space-y-2 max-h-[420px] overflow-auto text-sm">
-            {unmatchedBank.map((line, i) => (
-              <div key={i} className="flex items-center justify-between rounded border p-2">
-                <div>
-                  <div>{line.description}</div>
-                  <div className="text-xs text-gray-500">{line.date} • {line.reference}</div>
-                </div>
-                <div className="text-right">
-                  <div className={line.type === 'credit' ? 'text-emerald-600' : 'text-red-600'}>
-                    {line.type === 'credit' ? '+' : '-'}{line.amount.toLocaleString()}
-                  </div>
-                  <button onClick={() => createFromBankLine(line)} className="text-xs text-brand-600">{t('bank.createTransaction')}</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* {t('bank.aiSuggestions')} */}
-        <div className="rounded-2xl border p-4">
-          <h3 className="mb-3 font-semibold text-sm flex items-center gap-2">
-            {t('bank.aiSuggestions')} <span className="text-xs text-gray-400">(Claude)</span>
-          </h3>
-          <button onClick={() => {
-            const suggestions = suggestMatches();
-            suggestions.forEach(acceptMatch);
-          }} className="mb-3 text-xs text-brand-600">{t('bank.runAiMatching')}</button>
-
-          <div className="space-y-2 text-sm">
-            {matched.map((m, i) => (
-              <div key={i} className="flex items-center gap-2 rounded bg-emerald-50 p-2">
-                <Check className="h-4 w-4 text-emerald-600" />
-                <div className="flex-1 text-xs">{m.bank.description} → {m.ledgr.description}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Unmatched Ledgr Entries */}
-        <div className="rounded-2xl border p-4">
-          <h3 className="mb-3 font-semibold text-sm">{t('bank.unmatchedLedgrEntries', { count: unmatchedLedgr.length })}</h3>
-          <div className="space-y-2 max-h-[420px] overflow-auto text-sm">
-            {unmatchedLedgr.map((entry) => (
-              <div key={entry.id} className="rounded border p-2">
-                <div>{entry.description}</div>
-                <div className="text-xs text-gray-500">{entry.entry_date} • {entry.entry_number}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="text-xs text-gray-500 flex items-center gap-2">
-        <AlertCircle className="h-4 w-4" /> {t('bank.reconciledLocked')}
-      </div>
-    </div>
-  );
+export function BankReconciliation({ businessId }: { businessId: string }) {
+  const user = useAppStore(s => s.currentUser); const qc = useQueryClient();
+  const [lines, setLines] = useState<BankTransaction[]>([]), [entries, setEntries] = useState<Entry[]>([]), [pairs, setPairs] = useState<Pair[]>([]);
+  const [bankAccount, setBankAccount] = useState(''), [contraAccount, setContraAccount] = useState(''), [opening, setOpening] = useState<number | undefined>();
+  const [closing, setClosing] = useState<number | undefined>(), [source, setSource] = useState(''), [busy, setBusy] = useState(false), [dragged, setDragged] = useState<BankTransaction | null>(null);
+  const { data: accounts = [] } = useQuery({ queryKey: ['bank-accounts', businessId], enabled: !!businessId, queryFn: async () => (await supabase.from('accounts').select('id,code,name,is_bank_account').eq('business_id', businessId).eq('is_active', true)).data as Account[] || [] });
+  const { data: rawEntries = [] } = useQuery({ queryKey: ['reconciliation-entries', businessId], enabled: !!businessId, queryFn: async () => (await supabase.from('journal_entries').select('id,entry_date,entry_number,description,reference,journal_lines(amount,is_debit,reconciled)').eq('business_id', businessId).order('entry_date', { ascending: false }).limit(250)).data || [] });
+  const ledger = useMemo(() => rawEntries.map((e: any) => ({ ...e, amount: (e.journal_lines || []).filter((l: any) => !l.reconciled).reduce((sum: number, l: any) => sum + Number(l.amount || 0), 0) })).filter((e: Entry) => e.amount > 0), [rawEntries]);
+  const unmatchedEntries = entries.length ? entries : ledger;
+  const suggested = useMemo(() => lines.map(bank => { const candidates = unmatchedEntries.map(entry => { const days = Math.abs(new Date(entry.entry_date).getTime() - new Date(bank.date).getTime()) / 86400000; const amountScore = Math.abs(entry.amount - bank.amount) < .01 ? .55 : 0; const dateScore = days <= 3 ? .2 * (1 - days / 4) : 0; const textScore = .2 * similarity(bank.description, entry.description); const refScore = bank.reference && entry.reference && bank.reference.toLowerCase() === entry.reference.toLowerCase() ? .15 : 0; return { entry, confidence: amountScore + dateScore + textScore + refScore }; }).sort((a,b) => b.confidence-a.confidence); return candidates[0]?.confidence >= .55 ? { bank, ...candidates[0] } : null; }).filter(Boolean) as Array<{bank: BankTransaction; entry: Entry; confidence: number}>, [lines, unmatchedEntries]);
+  async function upload(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; if (!file) return; setBusy(true); try { const parsed = await parseBankStatement(file); setLines(parsed.transactions); setEntries(ledger); setOpening(parsed.openingBalance); setClosing(parsed.closingBalance); setSource(parsed.source); setPairs([]); } catch (e) { alert((e as Error).message); } finally { setBusy(false); event.target.value = ''; } }
+  function accept(bank: BankTransaction, entry: Entry, confidence?: number) { setPairs(p => [...p, { bank, entry, confidence, confirmed: true }]); setLines(x => x.filter(v => v !== bank)); setEntries(x => x.filter(v => v.id !== entry.id)); }
+  async function runAiMatching() { setBusy(true); try { const { data, error } = await supabase.functions.invoke('suggest-bank-matches', { body: { bankLines: lines, ledgerEntries: unmatchedEntries } }); if (error) throw error; const matches = data?.matches || []; if (!matches.length) return alert('Claude found no high-confidence matches.'); matches.forEach((m: { bankIndex: number; entryId: string; confidence: number }) => { const bank = lines[m.bankIndex]; const entry = unmatchedEntries.find(e => e.id === m.entryId); if (bank && entry) accept(bank, entry, m.confidence); }); } catch { suggested.forEach(s => accept(s.bank, s.entry, s.confidence)); alert('Claude is unavailable; amount/date/payee/reference matching was used instead.'); } finally { setBusy(false); } }
+  async function createTransaction(bank: BankTransaction) { if (!bankAccount || !contraAccount) return alert('Select the bank/mobile-money account and a balancing account first.'); setBusy(true); try { const number = `BANK-${bank.date.replaceAll('-', '')}-${Math.random().toString(36).slice(2,7).toUpperCase()}`; const { data: entry, error } = await supabase.from('journal_entries').insert({ business_id: businessId, entry_date: bank.date, entry_number: number, description: bank.description, reference: bank.reference || null, source_type: 'bank_import', created_by: user?.id }).select('id').single(); if (error || !entry) throw error || new Error('Unable to create journal entry'); const debitBank = bank.type === 'credit'; const { error: lineError } = await supabase.from('journal_lines').insert([{ business_id: businessId, journal_entry_id: entry.id, account_id: bankAccount, line_number: 1, amount: bank.amount, amount_base: bank.amount, is_debit: debitBank }, { business_id: businessId, journal_entry_id: entry.id, account_id: contraAccount, line_number: 2, amount: bank.amount, amount_base: bank.amount, is_debit: !debitBank }] as never); if (lineError) throw lineError; setLines(x => x.filter(v => v !== bank)); qc.invalidateQueries({ queryKey: ['reconciliation-entries', businessId] }); } catch (e) { alert((e as Error).message); } finally { setBusy(false); } }
+  async function finalize() { if (!bankAccount || !lines.length && !pairs.length) return alert('Choose an account and import a statement first.'); setBusy(true); try { const date = pairs.at(-1)?.bank.date || new Date().toISOString().slice(0,10); const { data: statement, error } = await supabase.from('bank_statements').insert({ business_id: businessId, account_id: bankAccount, statement_date: date, opening_balance: opening || 0, closing_balance: closing ?? (opening || 0) + pairs.reduce((n,p) => n + (p.bank.type === 'credit' ? p.bank.amount : -p.bank.amount), 0), source, uploaded_by: user?.id } as never).select('id').single(); if (error || !statement) throw error || new Error('Unable to save reconciliation'); if (pairs.length) { const { error: linesError } = await supabase.from('bank_statement_lines').insert(pairs.map(p => ({ business_id: businessId, statement_id: statement.id, transaction_date: p.bank.date, description: p.bank.description, reference: p.bank.reference || null, debit_amount: p.bank.type === 'debit' ? p.bank.amount : 0, credit_amount: p.bank.type === 'credit' ? p.bank.amount : 0, is_reconciled: true })) as never); if (linesError) throw linesError; } const { error: lockError } = await supabase.from('bank_statements').update({ is_locked: true, reconciled_at: new Date().toISOString(), reconciled_by: user?.id, locked_at: new Date().toISOString() } as never).eq('id', statement.id); if (lockError) throw lockError; alert('Reconciliation saved and its matched bank lines are locked.'); } catch (e) { alert((e as Error).message); } finally { setBusy(false); } }
+  const movement = pairs.reduce((n,p) => n + (p.bank.type === 'credit' ? p.bank.amount : -p.bank.amount), 0); const calculated = (opening || 0) + movement;
+  const Card = ({ bank }: {bank: BankTransaction}) => <div draggable onDragStart={() => setDragged(bank)} className="rounded-lg border bg-white p-3 shadow-sm"><b>{bank.description}</b><div className="text-xs text-gray-500">{bank.date} · {bank.reference || 'No reference'}</div><div className={bank.type === 'credit' ? 'text-emerald-600' : 'text-red-600'}>{bank.type === 'credit' ? '+' : '-'}{mwk.format(bank.amount)}</div><button className="mt-1 text-xs text-brand-600" onClick={() => createTransaction(bank)}>Create transaction</button></div>;
+  return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Bank reconciliation</h2><p className="text-sm text-gray-500">NBS, FDH, Standard Bank, National Bank, Airtel Money and TNM Mpamba</p></div><label className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm text-white"><Upload size={16}/>Import CSV / OFX / MT940<input className="hidden" type="file" accept=".csv,.ofx,.mt940,.sta" onChange={upload}/></label></div><div className="grid gap-3 md:grid-cols-2"><select value={bankAccount} onChange={e=>setBankAccount(e.target.value)} className="rounded border p-2"><option value="">Select bank or mobile-money account</option>{accounts.filter(a=>a.is_bank_account).map(a=><option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</select><select value={contraAccount} onChange={e=>setContraAccount(e.target.value)} className="rounded border p-2"><option value="">Balancing account for new transactions</option>{accounts.map(a=><option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}</select></div>{busy && <p className="text-sm text-gray-500">Working…</p>}<div className="grid gap-4 lg:grid-cols-3"><section className="rounded-xl border p-3"><h3 className="mb-3 font-semibold">Unmatched bank lines ({lines.length})</h3><div className="space-y-2">{lines.map((b,i)=><Card key={`${b.date}-${i}`} bank={b}/>)}</div></section><section className="rounded-xl border border-emerald-200 bg-emerald-50/30 p-3" onDragOver={e=>e.preventDefault()} onDrop={()=>{ if (dragged && unmatchedEntries[0]) accept(dragged, unmatchedEntries[0]); }}><h3 className="mb-3 flex items-center gap-2 font-semibold"><Sparkles size={16}/>Matched pairs</h3><button className="mb-3 text-sm text-brand-600" onClick={runAiMatching}>Accept AI suggestions ({suggested.length})</button><div className="space-y-2">{pairs.map((p,i)=><div key={i} className="rounded border border-emerald-200 bg-white p-2 text-sm"><Check className="mr-1 inline text-emerald-600" size={15}/><b>{p.bank.description}</b> → {p.entry.description}{p.confidence && <span className="float-right text-xs">{Math.round(p.confidence*100)}%</span>}</div>)}<p className="text-xs text-gray-500">Drag a bank line here to manually match the next ledger entry.</p></div></section><section className="rounded-xl border p-3"><h3 className="mb-3 font-semibold">Unmatched Ledgr entries ({unmatchedEntries.length})</h3><div className="space-y-2">{unmatchedEntries.map(e=><div key={e.id} onDragOver={ev=>ev.preventDefault()} onDrop={()=>{ if (dragged) accept(dragged, e); }} className="rounded border p-3 text-sm"><b>{e.description}</b><div className="text-xs text-gray-500">{e.entry_date} · {e.entry_number}</div><div>{mwk.format(e.amount)}</div></div>)}</div></section></div><section className="rounded-xl border p-4"><div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="font-semibold">Reconciliation report</h3><p className="text-sm">Opening: {mwk.format(opening || 0)} · Matched movement: {mwk.format(movement)} · Closing: {mwk.format(closing ?? calculated)}</p><p className={(closing === undefined || Math.abs(closing-calculated)<.01) ? 'text-sm text-emerald-600' : 'text-sm text-red-600'}>Difference: {mwk.format((closing ?? calculated)-calculated)}</p><details className="mt-2 text-xs text-gray-600"><summary>Reconciled transactions ({pairs.length})</summary>{pairs.map((p, i) => <div key={i}>{p.bank.date} · {p.bank.description} · {mwk.format(p.bank.amount)}</div>)}</details></div><button onClick={finalize} className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm text-white"><Lock size={15}/>Save & lock period</button></div></section></div>;
 }

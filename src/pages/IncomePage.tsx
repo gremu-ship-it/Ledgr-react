@@ -200,6 +200,8 @@ interface InvoiceLine {
   description: string;
   quantity: string;
   unit_price: string;
+  /** Percentage discount is calculated before line tax. */
+  discount_percent: string;
   tax_code: string;
   product_id: string;   // NEW
 }
@@ -211,6 +213,11 @@ interface InvoiceForm {
   due_date: string;
   notes: string;
   terms: string;
+  template: 'professional' | 'minimal' | 'ngo' | 'government';
+  project_code: string;
+  lpo_number: string;
+  payment_provider: '' | 'airtel_money' | 'tnm_mpamba';
+  payment_reference: string;
   branch_id: string;    // NEW
   lines: InvoiceLine[];
 }
@@ -504,8 +511,8 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [form, setForm] = useState<InvoiceForm>({
     contact_id: '', invoice_number: '', issue_date: today(), due_date: '',
-    notes: '', terms: 'Payment due within 30 days.', branch_id: '',
-    lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', product_id: '' }],
+    notes: '', terms: 'Payment due within 30 days.', template: 'professional', project_code: '', lpo_number: '', payment_provider: '', payment_reference: '', branch_id: '',
+    lines: [{ description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', product_id: '' }],
   });
 
   const { data: contacts = [], refetch: refetchContacts } = useQuery({
@@ -547,7 +554,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   function addLine() {
     setForm((f) => ({
       ...f,
-      lines: [...f.lines, { description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', product_id: '' }],
+      lines: [...f.lines, { description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', product_id: '' }],
     }));
   }
 
@@ -558,7 +565,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const lineCalcs = form.lines.map((l) => {
     const qty      = parseFloat(l.quantity) || 0;
     const price    = parseFloat(l.unit_price) || 0;
-    const subtotal = qty * price;
+    const subtotal = qty * price * (1 - (parseFloat(l.discount_percent) || 0) / 100);
     const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
     const taxAmount = subtotal * taxRate;
     return { subtotal, taxRate, taxAmount, lineTotal: subtotal + taxAmount };
@@ -596,13 +603,18 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           amount_paid:      0,
           notes:            form.notes || null,
           terms:            form.terms || null,
+          template:         form.template,
+          project_code:     form.project_code || null,
+          lpo_number:       form.lpo_number || null,
+          payment_provider: form.payment_provider || null,
+          payment_reference: form.payment_reference || null,
           branch_id:        form.branch_id || null,  // NEW
           created_by:       null,
         } as InsertDto<'invoices'>,
         validLines.map((l, idx) => {
           const qty      = parseFloat(l.quantity) || 1;
           const price    = parseFloat(l.unit_price) || 0;
-          const lineSub  = qty * price;
+          const lineSub  = qty * price * (1 - (parseFloat(l.discount_percent) || 0) / 100);
           const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
           const taxAmt   = lineSub * taxRate;
           const product  = l.product_id ? products.find((p) => p.id === l.product_id) : undefined;
@@ -611,7 +623,8 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             description:      l.description,
             quantity:         qty,
             unit_price:       price,
-            discount_percent: 0,
+            discount_percent: parseFloat(l.discount_percent) || 0,
+            discount_amount: qty * price * ((parseFloat(l.discount_percent) || 0) / 100),
             tax_code:         l.tax_code,
             tax_rate:         taxRate,
             tax_amount:       taxAmt,
@@ -710,6 +723,15 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <label className="text-sm font-medium text-gray-700">Template<select value={form.template} onChange={e => setField('template', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="professional">Professional</option><option value="minimal">Minimal</option><option value="ngo">NGO / Donor</option><option value="government">Government</option></select></label>
+            <label className="text-sm font-medium text-gray-700">Payment terms<select value={form.terms} onChange={e => setField('terms', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"><option>Net 7</option><option>Net 14</option><option>Net 30</option><option>Net 60</option></select></label>
+            {form.template === 'ngo' && <label className="text-sm font-medium text-gray-700">Project code<input value={form.project_code} onChange={e => setField('project_code', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>}
+            {form.template === 'government' && <label className="text-sm font-medium text-gray-700">LPO number<input value={form.lpo_number} onChange={e => setField('lpo_number', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>}
+            <label className="text-sm font-medium text-gray-700">Mobile money<select value={form.payment_provider} onChange={e => setField('payment_provider', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="">None</option><option value="airtel_money">Airtel Money</option><option value="tnm_mpamba">TNM Mpamba</option></select></label>
+            {form.payment_provider && <label className="text-sm font-medium text-gray-700">Till / payment reference<input value={form.payment_reference} onChange={e => setField('payment_reference', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>}
+          </div>
+
           {/* NEW: Branch selector at invoice level */}
           {branches.length > 0 && (
             <div>
@@ -739,6 +761,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                     <th className="px-3 py-2 text-left">Description</th>
                     <th className="px-3 py-2 text-right w-20">Qty</th>
                     <th className="px-3 py-2 text-right w-32">Unit Price</th>
+                    <th className="px-3 py-2 text-right w-20">Disc. %</th>
                     <th className="px-3 py-2 text-center w-36">Tax</th>
                     <th className="px-3 py-2 text-right w-32">Total</th>
                     <th className="w-8" />
@@ -772,6 +795,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                           onChange={(e) => setLine(idx, 'unit_price', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
                       </td>
+                      <td className="px-3 py-2"><input aria-label="Line discount percentage" type="number" min="0" max="100" value={line.discount_percent} onChange={(e) => setLine(idx, 'discount_percent', e.target.value)} className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" /></td>
                       <td className="px-3 py-2">
                         <select value={line.tax_code} onChange={(e) => setLine(idx, 'tax_code', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">

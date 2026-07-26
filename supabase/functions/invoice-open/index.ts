@@ -1,0 +1,4 @@
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const pixel=Uint8Array.from(atob('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='),c=>c.charCodeAt(0));
+serve(async req=>{ const id=new URL(req.url).searchParams.get('invoice'); if(id){const db=createClient(Deno.env.get('SUPABASE_URL')!,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!); const {data}=await db.from('invoices').select('business_id,viewed_at').eq('id',id).single(); if(data){await db.from('invoices').update({viewed_at:data.viewed_at||new Date().toISOString(),status:'viewed'} as never).eq('id',id); await db.from('invoice_delivery_events').insert({invoice_id:id,business_id:data.business_id,event_type:'opened'} as never)}} return new Response(pixel,{headers:{'content-type':'image/gif','cache-control':'no-store'}})});
