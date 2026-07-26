@@ -41,6 +41,8 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
   const [reference, setReference] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([newLine(), newLine()]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [branchId, setBranchId] = useState<string>('');
+  const [departmentId, setDepartmentId] = useState<string>('');
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['posting_accounts', businessId],
@@ -51,6 +53,28 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
   const { data: periods = [] } = useQuery({
     queryKey: ['periods', businessId],
     queryFn: () => repos.period.findByBusiness(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', businessId],
+    queryFn: () => repos.branch.findActive(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', businessId],
+    queryFn: async () => {
+      const { data, error } = await (repos as any).account.client
+        .from('departments')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
     enabled: Boolean(businessId),
   });
 
@@ -140,8 +164,14 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
           currency: 'MWK',
           exchange_rate: 1,
           status: 'draft',
+          branch_id: branchId || null,
+          department_id: departmentId || null,
         },
-        entryLines,
+        entryLines.map((l) => ({
+          ...l,
+          branch_id: branchId || null,
+          department_id: departmentId || null,
+        })),
       );
 
       await repos.journal.post(entry.id, currentUser.id);
@@ -199,6 +229,44 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
               placeholder="e.g. Loan drawdown from NBS Bank"
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
+          </div>
+
+          {/* Branch / Department (cost center) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-600">
+                Branch / Cost Center
+                <span className="ml-1 text-xs text-gray-400">(optional)</span>
+              </label>
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">None</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-600">
+                Department
+                <span className="ml-1 text-xs text-gray-400">(optional)</span>
+              </label>
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">None</option>
+                {departments.map((d: any) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}{d.cost_centre ? ` [${d.cost_centre}]` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {isDateLocked && (

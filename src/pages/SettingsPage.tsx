@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import {
   Building2,
   DollarSign,
@@ -29,6 +30,7 @@ import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BillingTab } from '@/components/billing/BillingTab';
+import { useUsage } from '@/hooks/useUsage';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1578,7 +1580,26 @@ For privacy requests, email privacy@ledgr.app or use the in-app tools.
 export function SettingsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
-  const [activeTab, setActiveTab] = useState<Tab>('business');
+  const location = useLocation();
+  const { planTier } = useUsage();
+
+  // Default free-tier users to the billing tab; honour ?tab= query or state
+  const initialTab = (() => {
+    const stateTab = (location.state as { tab?: string } | null)?.tab;
+    if (stateTab && TABS.some((t) => t.value === stateTab)) return stateTab as Tab;
+    if (planTier === 'free') return 'billing';
+    return 'business';
+  })();
+
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+
+  // Sync if navigated with new state (e.g. from PlanGuard upgrade CTA)
+  useEffect(() => {
+    const stateTab = (location.state as { tab?: string } | null)?.tab;
+    if (stateTab && TABS.some((t) => t.value === stateTab)) {
+      setActiveTab(stateTab as Tab);
+    }
+  }, [location.state]);
 
   const { data: business, isLoading } = useQuery({
     queryKey: ['business', businessId],
