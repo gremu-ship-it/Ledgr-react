@@ -383,6 +383,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     new_values?: Json;
     notes?: string | null;
   }): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the generated `rpc` signature doesn't include 'log_manual_audit_event' (the function exists in the DB but isn't surfaced by supabase gen types); verified against the live DB
     const { error } = await (this.client.rpc as any)('log_manual_audit_event', {
       p_business_id: entry.business_id,
       p_event_type: entry.event_type,

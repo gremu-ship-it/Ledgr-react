@@ -177,7 +177,7 @@ serve(async (req) => {
       errors.push({ table: 'business_users', message: ownerErr.message });
     }
 
-    const ownedBusinessIds = (ownerLinks ?? []).map((r: any) => r.business_id as string);
+    const ownedBusinessIds = (ownerLinks ?? []).map((r: { business_id: string }) => r.business_id);
 
     const businessSummaries: { id: string; name: string; folder: string }[] = [];
 

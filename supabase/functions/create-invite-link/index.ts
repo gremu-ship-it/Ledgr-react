@@ -137,7 +137,7 @@ serve(async (req) => {
       });
     }
 
-    const callerRole = (callerMembership as any).role as string;
+    const callerRole = callerMembership.role;
 
     // 2. Only owners can assign owner or admin
     if ((role === 'owner' && callerRole !== 'owner') || (role === 'admin' && callerRole !== 'owner')) {
@@ -212,7 +212,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         invite_url: inviteUrl,
-        business_name: (business as any).name,
+        business_name: business?.name ?? null,
         role,
         email,
         expires_at: expiresAt,

@@ -173,7 +173,7 @@ serve(async (req) => {
       });
     }
 
-    const callerRole = (callerMembership as any).role as string;
+    const callerRole = callerMembership.role;
 
     // Only owners can assign owner or admin
     if ((role === 'owner' && callerRole !== 'owner') || (role === 'admin' && callerRole !== 'owner')) {
@@ -238,12 +238,12 @@ serve(async (req) => {
     const now = new Date().toISOString();
 
     if (existing) {
-      if ((existing as any).is_active) {
+      if (existing.is_active) {
         return new Response(
           JSON.stringify({
             error: 'Already a member',
             code: 'ALREADY_MEMBER',
-            message: `${email} is already an active member with role '${(existing as any).role}'.`,
+            message: `${email} is already an active member with role '${existing.role}'.`,
           }),
           {
             status: 409,
@@ -264,7 +264,7 @@ serve(async (req) => {
             invitation_token: null,
             invitation_expires_at: null,
           })
-          .eq('id', (existing as any).id);
+          .eq('id', existing.id);
 
         if (updateErr) {
           return new Response(JSON.stringify({ error: `Failed to reactivate member: ${updateErr.message}` }), {
@@ -324,10 +324,10 @@ serve(async (req) => {
         success: true,
         message: `${email} has been added to the business as ${role}.`,
         member: {
-          id: (inserted as any)?.id,
+          id: inserted?.id,
           user_id: targetUser.id,
           email: targetUser.email,
-          full_name: (profile as any)?.full_name ?? null,
+          full_name: profile?.full_name ?? null,
           role,
           business_id: businessId,
         },

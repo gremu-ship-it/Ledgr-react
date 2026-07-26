@@ -220,6 +220,7 @@ export async function createInvoiceJournalEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
 
@@ -269,6 +270,7 @@ export async function createInvoiceJournalEntry(
     ],
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry2.id, null as any);
   // Same-day auto-settlement — booked and settled at the identical rate,
   // so realised FX gain/loss is always zero here. No FX line needed.
@@ -360,6 +362,7 @@ export async function createInvoiceReceivableEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(invoice.id, { journal_entry_id: entry.id });
   return entry.id;
@@ -449,6 +452,7 @@ export async function createInvoiceSettlementEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.invoice.update(invoice.id, { journal_entry_id: invoice.journal_entry_id ?? entry.id });
   return entry.id;
@@ -567,6 +571,7 @@ export async function createExpenseJournalEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
 
@@ -658,6 +663,7 @@ export async function createExpenseSettlementEntry(
     lines,
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
   return entry.id;
 }
@@ -736,5 +742,6 @@ export async function createPayrollJournalEntry(
     ],
   );
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
   await repos.journal.post(entry.id, null as any);
 }

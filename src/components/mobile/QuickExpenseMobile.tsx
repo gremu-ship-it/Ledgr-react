@@ -145,6 +145,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           );
           // NOTE: same assumption as ExpensesPage.tsx — repos.expense.update
           // must exist via BaseRepository. Adjust if your method name differs.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- repos.expense is typed as an expense-specific repo but exposes BaseRepository.update via inheritance
           await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
         } catch (err) {
           // The expense is still saved, but stays unlinked (journal_entry_id

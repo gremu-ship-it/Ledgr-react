@@ -795,40 +795,68 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
   const currentUser = useAppStore((s) => s.currentUser);
 
-  const { data: members = [], isLoading } = useQuery({
+  type TeamMember = {
+    id: string;
+    user_id: string;
+    role: string;
+    is_active: boolean;
+    invited_at: string | null;
+    accepted_at: string | null;
+    created_at: string;
+    email: string | null;
+    full_name: string | null;
+    avatar_url: string | null;
+    profile?: { full_name: string | null } | null;
+  };
+
+  type InvitationLink = {
+    id: string;
+    email: string | null;
+    role: string;
+    token: string;
+    expires_at: string;
+  };
+
+  type InviteResponse = { success: boolean; message: string; error?: string; member?: unknown };
+
+  const { data: members = [], isLoading } = useQuery<TeamMember[]>({
     queryKey: ['team', businessId],
     queryFn: async () => {
       try {
         const { data, error } = await supabase.functions.invoke('list-team-members', {
           body: { business_id: businessId },
         });
-        if (!error && data && !(data as any).error && (data as any).members) {
-          return (data as any).members as Array<{
-            id: string;
-            user_id: string;
-            role: string;
-            is_active: boolean;
-            invited_at: string | null;
-            accepted_at: string | null;
-            created_at: string;
-            email: string | null;
-            full_name: string | null;
-            avatar_url: string | null;
-            profile?: { full_name: string | null } | null;
-          }>;
+        if (!error && data && typeof data === 'object' && data !== null && !('error' in data) && 'members' in data) {
+          return (data as { members: TeamMember[] }).members;
         }
       } catch {
         // fallback
       }
 
-      const { data, error } = await supabase
+      const { data: rows, error } = await supabase
         .from('business_users')
-        .select('*, profile:user_profiles(full_name)')
+        .select('id, user_id, role, invited_at, accepted_at, created_at')
         .eq('business_id', businessId)
         .eq('is_active', true)
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []).map((row: any) => ({
+      type FallbackRow = {
+        id: string;
+        user_id: string;
+        role: string;
+        invited_at: string | null;
+        accepted_at: string | null;
+        created_at: string;
+      };
+      const userIds = (rows ?? []).map((r) => r.user_id);
+      const { data: profiles } = userIds.length === 0
+        ? { data: [] as Array<{ id: string; full_name: string | null }> }
+        : await supabase
+            .from('user_profiles')
+            .select('id, full_name')
+            .in('id', userIds);
+      const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+      return (rows ?? []).map((row: FallbackRow) => ({
         id: row.id,
         user_id: row.user_id,
         role: row.role,
@@ -837,17 +865,20 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
         accepted_at: row.accepted_at ?? null,
         created_at: row.created_at,
         email: null as string | null,
-        full_name: row.profile?.full_name ?? row.user_profiles?.full_name ?? null,
+        full_name: profileMap.get(row.user_id) ?? null,
         avatar_url: null,
-        profile: row.profile ?? null,
+        profile: null,
       }));
     },
     enabled: Boolean(businessId),
   });
 
-  const { data: activeInvites = [], refetch: refetchInvites } = useQuery({
+  const { data: activeInvites = [], refetch: refetchInvites } = useQuery<InvitationLink[]>({
     queryKey: ['team-invites', businessId],
     queryFn: async () => {
+      // `business_invitations` isn't in the generated types (table lives outside
+      // the committed migrations); cast through `unknown` to keep type safety.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `business_invitations` table exists in the live DB but isn't in database.generated.ts
       const { data, error } = await (supabase as any)
         .from('business_invitations')
         .select('*')
@@ -855,7 +886,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
         .gt('expires_at', new Date().toISOString())
         .eq('business_id', businessId);
       if (error) throw new Error(error.message);
-      return data || [];
+      return (data ?? []) as InvitationLink[];
     },
     enabled: Boolean(businessId),
   });
@@ -867,7 +898,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
       if (!email.includes('@')) throw new Error('Enter a valid email address');
       const normalizedRole = (directForm.role === 'staff' ? 'accountant' : directForm.role) as string;
 
-      const { data, error } = await supabase.functions.invoke('invite-team-member', {
+      const { data, error } = await supabase.functions.invoke<InviteResponse>('invite-team-member', {
         body: {
           business_id: businessId,
           email,
@@ -876,13 +907,13 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
       });
 
       if (error) {
-        const msg = (data as any)?.message || (data as any)?.error || error.message;
+        const msg = (data && (data.message || data.error)) || error.message;
         throw new Error(msg);
       }
-      if ((data as any)?.error) {
-        throw new Error((data as any).message || (data as any).error);
+      if (data?.error) {
+        throw new Error(data.message || data.error);
       }
-      return data as { success: boolean; message: string; member: any };
+      return data as InviteResponse;
     },
     onSuccess: (data) => {
       setAlert({ type: 'success', message: data?.message || 'Team member added successfully.' });
@@ -966,6 +997,8 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
   const revokeInviteMutation = useMutation({
     mutationFn: async (inviteId: string) => {
+      // `business_invitations` table exists in the live DB but isn't in database.generated.ts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not in generated types
       const { error } = await (supabase as any)
         .from('business_invitations')
         .delete()
@@ -1190,7 +1223,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {activeInvites.map((lnk: any) => (
+                {activeInvites.map((lnk) => (
                   <tr key={lnk.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3 text-gray-900 font-medium">
                       {lnk.email ? lnk.email : 'Anyone with link'}
@@ -1250,7 +1283,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {members.map((member: any) => {
+              {members.map((member) => {
                 const isSelf = member.user_id === currentUser?.id;
                 const displayName = member.full_name || member.profile?.full_name || member.email || 'Unknown User';
                 const initialsSource = member.full_name || member.profile?.full_name || member.email || member.user_id || '?';
@@ -1279,7 +1312,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                         onChange={(e) =>
                           updateRoleMutation.mutate({ userId: member.user_id, role: e.target.value })
                         }
-                        disabled={member.role === 'owner' && currentUser?.id !== member.user_id && !members.some((m: any) => m.user_id === currentUser?.id && m.role === 'owner')}
+                        disabled={member.role === 'owner' && currentUser?.id !== member.user_id && !members.some((m) => m.user_id === currentUser?.id && m.role === 'owner')}
                         className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-transparent disabled:border-transparent disabled:font-medium disabled:text-brand-700"
                       >
                         {ROLES.map((r) => (

@@ -11,9 +11,12 @@ serve(async (req) => {
     const { bankLines, ledgerEntries } = await req.json();
     if (!Array.isArray(bankLines) || !Array.isArray(ledgerEntries)) throw new Error('bankLines and ledgerEntries are required');
     // Only send the minimum transaction data to the AI provider; never account numbers or user details.
-    const prompt = `Match Malawi bank statement lines to Ledgr journal entries. Match only when amount is exact, date is within 3 days, and payee/reference supports it. Return JSON only: {"matches":[{"bankIndex":0,"entryId":"id","confidence":0-1,"reason":"short"}]}. Bank lines: ${JSON.stringify(bankLines.map((x: any, i: number) => ({ i, date:x.date, amount:x.amount, type:x.type, description:x.description, reference:x.reference })))}. Entries: ${JSON.stringify(ledgerEntries.map((x: any) => ({ id:x.id, date:x.entry_date, amount:x.amount, description:x.description, reference:x.reference })))}.`;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- bankLines are user-supplied objects from a private RPC; the prompt serialisation only needs the listed fields
+    const prompt = `Match Malawi bank statement lines to Ledgr journal entries. Match only when amount is exact, date is within 3 days, and payee/reference supports it. Return JSON only: {"matches":[{"bankIndex":0,"entryId":"id","confidence":0-1,"reason":"short"}]}. Bank lines: ${JSON.stringify(bankLines.map((x: any, i: number) => ({ i, date:x.date, amount:x.amount, type:x.type, description:x.description, reference:x.reference })))}. Entries: ${JSON.stringify(ledgerEntries.map(// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same as above; user-supplied ledger entry shape
+ (x: any) => ({ id:x.id, date:x.entry_date, amount:x.amount, description:x.description, reference:x.reference })))}.`;
     const response = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'content-type':'application/json', 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY')!, 'anthropic-version':'2023-06-01' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }) });
     if (!response.ok) throw new Error(`Claude matching request failed (${response.status})`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Claude API response shape; the .text field is what we need
     const payload = await response.json(); const text = payload.content?.find((x: any) => x.type === 'text')?.text || '{"matches":[]}';
     const json = JSON.parse(text.replace(/^```json\s*|\s*```$/g, ''));
     return new Response(JSON.stringify(json), { headers: { ...cors, 'content-type':'application/json' } });
