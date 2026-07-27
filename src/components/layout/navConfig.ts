@@ -44,7 +44,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.ai',
     items: [
-      { labelKey: 'navigation.items.ledgrAi', path: '/chat', icon: Sparkles },
+      { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, requiresCapability: 'ai_insights' },
     ],
   },
   {

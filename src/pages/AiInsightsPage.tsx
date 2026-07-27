@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2, Calendar } from 'lucide-react';
@@ -12,6 +13,7 @@ import {
   generateNarrativeReport,
   type BusinessContext,
   type Anomaly,
+  type CashForecast,
   type TaxPlanningSuggestion,
 } from '@/lib/aiFinancial';
 
@@ -173,7 +175,7 @@ export function AiInsightsPage() {
 
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [taxSuggestions, setTaxSuggestions] = useState<TaxPlanningSuggestion[]>([]);
-  const [cashForecast, setCashForecast] = useState<any>(null);
+  const [cashForecast, setCashForecast] = useState<CashForecast | null>(null);
   const [richContext, setRichContext] = useState<BusinessContext | null>(null);
 
   // Load advanced AI intelligence on mount
@@ -181,20 +183,29 @@ export function AiInsightsPage() {
     if (!businessId) return;
 
     const loadIntelligence = async () => {
-      const [anoms, tax, forecastData, context] = await Promise.all([
-        detectAdvancedAnomalies(businessId),
-        getTaxPlanningSuggestions(businessId),
-        generateCashFlowForecast(businessId),
-        buildRichBusinessContext(businessId, businessName),
-      ]);
+      try {
+        const [anoms, tax, forecastData, context] = await Promise.all([
+          detectAdvancedAnomalies(businessId),
+          getTaxPlanningSuggestions(businessId),
+          generateCashFlowForecast(businessId),
+          buildRichBusinessContext(businessId, businessName),
+        ]);
 
-      setAnomalies(anoms);
-      setTaxSuggestions(tax);
-      setCashForecast(forecastData);
-      setRichContext(context);
+        setAnomalies(anoms);
+        setTaxSuggestions(tax);
+        setCashForecast(forecastData);
+        setRichContext(context);
+      } catch (err) {
+        console.warn('[AiInsights] Failed to load full intelligence context:', err);
+        setAnomalies([]);
+        setTaxSuggestions([]);
+        setCashForecast(null);
+        const fallbackContext = await buildRichBusinessContext(businessId, businessName);
+        setRichContext(fallbackContext);
+      }
     };
 
-    loadIntelligence();
+    void loadIntelligence();
   }, [businessId, businessName]);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -210,7 +221,7 @@ export function AiInsightsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const navigate = useNavigateShim();
+  const navigate = useNavigate();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -234,9 +245,12 @@ export function AiInsightsPage() {
       // Use rich context
       const context = await buildBusinessContext(businessId, businessName);
 
-      const history = messages
-        .filter((m) => m.id !== '0')
-        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+      const history = [
+        ...messages
+          .filter((m) => m.id !== '0')
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        { role: 'user' as const, content: userMessage.content },
+      ];
 
       const { content } = await callArenaAgent(
         history,
@@ -419,11 +433,4 @@ export function AiInsightsPage() {
       <p className="mt-2 text-center text-xs text-gray-400">{t('ai.enterHint')}</p>
     </div>
   );
-}
-
-// ── Navigate shim (avoids importing useNavigate at top level) ─────────────────
-function useNavigateShim() {
-  return (path: string) => {
-    window.location.href = path;
-  };
 }
