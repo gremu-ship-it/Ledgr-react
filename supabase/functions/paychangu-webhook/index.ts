@@ -30,6 +30,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const PAYCHANGU_SECRET_KEY = Deno.env.get('PAYCHANGU_SECRET_KEY');
 const PAYCHANGU_WEBHOOK_SECRET = Deno.env.get('PAYCHANGU_WEBHOOK_SECRET');
+const RAW_APP_URL = Deno.env.get('APP_URL');
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -57,7 +58,38 @@ function timingSafeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+function normalizeAppUrl(raw: string | undefined | null): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+
+  // Be forgiving if APP_URL was accidentally pasted as Markdown, e.g.
+  // [https://ledgr-react.vercel.app](https://ledgr-react.vercel.app).
+  const markdownUrl = trimmed.match(/\((https?:\/\/[^)]+)\)/)?.[1];
+  const plainUrl = markdownUrl ?? trimmed.match(/https?:\/\/[^\s\])]+/)?.[0] ?? trimmed;
+  const withoutTrailingSlash = plainUrl.replace(/\/+$/, '');
+
+  try {
+    const url = new URL(withoutTrailingSlash);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return withoutTrailingSlash;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
+  if (req.method === 'GET') {
+    // Older checkout attempts used this endpoint as PayChangu's browser
+    // success redirect. Send the customer back to the app, where the
+    // payment verifier can resolve the tx_ref safely.
+    const txRef = new URL(req.url).searchParams.get('tx_ref');
+    const appUrl = normalizeAppUrl(RAW_APP_URL);
+    if (txRef && appUrl) {
+      return Response.redirect(`${appUrl}/settings?tab=billing&payment=${encodeURIComponent(txRef)}`, 302);
+    }
+    return json({ error: 'Method not allowed' }, 405);
+  }
+
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const rawBody = await req.text();

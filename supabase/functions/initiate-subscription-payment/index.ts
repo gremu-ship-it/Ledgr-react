@@ -199,7 +199,10 @@ serve(async (req) => {
         first_name: firstName || 'Ledgr',
         last_name: rest.join(' ') || 'Customer',
         tx_ref: txRef,
-        callback_url: `${SUPABASE_URL}/functions/v1/paychangu-webhook`,
+        // PayChangu redirects successful checkouts to callback_url and
+        // failed/cancelled checkouts to return_url. Server-to-server webhook
+        // delivery is configured separately in the PayChangu dashboard.
+        callback_url: `${appUrl}/settings?tab=billing&payment=${txRef}`,
         return_url: `${appUrl}/settings?tab=billing&payment=${txRef}`,
         customization: {
           title: `Ledgr ${targetTier[0].toUpperCase()}${targetTier.slice(1)} Plan`,
