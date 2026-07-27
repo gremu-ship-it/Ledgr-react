@@ -250,11 +250,12 @@
     "vatPayableToMra": "VAT yolipira ku MRA",
     "payeDueLastMonth": "PAYE Due (Last Month)",
     "totalPayeToRemit": "Total PAYE to Remit",
-    "due14th": "Due: 14th of current month",
+    "dueOn": "Malire: {{date}}",
     "upcomingDueDates": "Masiku olipira akubwera",
     "daysOverdueShort": "{{count}}d overdue",
     "daysLeft": "{{count}}d left",
-    "dueTodayBang": "Due today!"
+    "dueTodayBang": "Due today!",
+    "taxPortal": "Tsamba la {{authority}}"
   },
   "finance": {
     "income": "Ndalama zolowa",

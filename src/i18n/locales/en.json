@@ -251,11 +251,12 @@
     "vatPayableToMra": "VAT Payable to MRA",
     "payeDueLastMonth": "PAYE Due (Last Month)",
     "totalPayeToRemit": "Total PAYE to Remit",
-    "due14th": "Due: 14th of current month",
+    "dueOn": "Due: {{date}}",
     "upcomingDueDates": "Upcoming Due Dates",
     "daysOverdueShort": "{{count}}d overdue",
     "daysLeft": "{{count}}d left",
-    "dueTodayBang": "Due today!"
+    "dueTodayBang": "Due today!",
+    "taxPortal": "{{authority}} Portal"
   },
   "finance": {
     "income": "Income",

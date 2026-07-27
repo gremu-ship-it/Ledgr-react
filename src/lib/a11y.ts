@@ -16,10 +16,16 @@ import { useId } from 'react';
  * Trims trailing whitespace, clears after a short delay so the same
  * message can be re-announced.
  */
-export function announce(message: string, _politeness: 'polite' | 'assertive' = 'polite'): void {
+export function announce(message: string, politeness: 'polite' | 'assertive' = 'polite'): void {
   if (typeof document === 'undefined') return;
   const region = document.getElementById('ledgr-live-region');
   if (!region) return;
+
+  // Apply the requested urgency. Callers pass 'assertive' for errors so the
+  // message interrupts rather than queueing behind other announcements;
+  // previously this argument was accepted and then discarded, so every
+  // announcement was polite regardless.
+  region.setAttribute('aria-live', politeness);
 
   // Clear first so the announcement is re-triggered even if the text
   // is identical to the previous one.

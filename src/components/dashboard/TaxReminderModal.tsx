@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Clock, X, ExternalLink } from 'lucide-react';
-import { getMraDueDates, type TaxDueDate } from '@/hooks/useTaxData';
+import { getTaxDueDates, type TaxDueDate } from '@/hooks/useTaxData';
+import { useAppStore } from '@/store/useAppStore';
+import { getJurisdictionRules, resolveJurisdiction } from '@/lib/taxRules';
 
 export function TaxReminderModal() {
   const { t } = useTranslation();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const country = currentBusiness?.business?.country ?? null;
+  const rules = getJurisdictionRules(resolveJurisdiction(country));
   const [open, setOpen] = useState(false);
   const [urgentDates, setUrgentDates] = useState<TaxDueDate[]>([]);
 
@@ -12,7 +17,7 @@ export function TaxReminderModal() {
     // Only show once per session
     if (sessionStorage.getItem('ledgr_tax_reminder_shown')) return;
 
-    const dueDates = getMraDueDates();
+    const dueDates = getTaxDueDates(country);
     const urgent = dueDates.filter((d) => d.isOverdue || d.isDueSoon);
 
     if (urgent.length > 0) {
@@ -22,7 +27,7 @@ export function TaxReminderModal() {
       setOpen(true);
       sessionStorage.setItem('ledgr_tax_reminder_shown', '1');
     }
-  }, []);
+  }, [country]);
 
   if (!open) return null;
 
@@ -114,12 +119,12 @@ export function TaxReminderModal() {
               {t('dashboard.acknowledge')}
             </button>
             <a
-              href="https://mra.mw"
+              href={rules.portalUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
             >
-              {t('dashboard.mraPortal')}
+              {t('dashboard.taxPortal', { authority: rules.authority })}
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
           </div>

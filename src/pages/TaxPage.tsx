@@ -3,27 +3,51 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, AlertCircle, CheckCircle,
-  X, Percent, Calculator,
+  X, Percent, Calculator, CalendarClock, Archive,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto, TaxCode } from '@/dal/types/database';
+import { TaxObligationsTab } from '@/components/tax/TaxObligationsTab';
+import { TaxFilingHistoryTab } from '@/components/tax/TaxFilingHistoryTab';
+import { useBusinessJurisdiction } from '@/hooks/useTaxObligations';
+import { getJurisdictionRules, defaultVatRate } from '@/lib/taxRules';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const TAX_CODES: { value: TaxCode; label: string }[] = [
-  { value: 'vat_standard', label: 'VAT Standard (17.5%)' },
+  { value: 'vat_standard', label: 'VAT Standard' },
   { value: 'vat_zero',     label: 'VAT Zero Rated (0%)' },
   { value: 'vat_exempt',   label: 'VAT Exempt' },
   { value: 'wht_10',       label: 'WHT 10%' },
   { value: 'wht_15',       label: 'WHT 15%' },
   { value: 'wht_20',       label: 'WHT 20%' },
   { value: 'paye',         label: 'PAYE' },
-  { value: 'tpr_pension',  label: 'TPR Pension (10% employer / 5% employee)' },
+  { value: 'tpr_pension',  label: 'Pension (employer / employee split)' },
   { value: 'cit',          label: 'Corporate Income Tax' },
   { value: 'fbt',          label: 'Fringe Benefits Tax' },
   { value: 'none',         label: 'None / Not Applicable' },
 ];
+
+/** Accounts a tax liability or credit can be posted to. */
+function useLedgerAccounts(businessId: string) {
+  return useQuery({
+    queryKey: ['accounts', 'postable', businessId],
+    queryFn: async () => {
+      const { data, error } = await repos.account.db
+        .from('accounts')
+        .select('id, code, name, account_type')
+        .eq('business_id', businessId)
+        .eq('is_group', false)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('code');
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+    enabled: Boolean(businessId),
+  });
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -54,6 +78,8 @@ interface TaxConfigForm {
   effective_from: string;
   effective_to: string;
   is_active: boolean;
+  tax_payable_account_id: string;
+  tax_receivable_account_id: string;
 }
 
 function TaxConfigModal({
@@ -64,6 +90,7 @@ function TaxConfigModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { data: accounts = [] } = useLedgerAccounts(businessId);
   const [form, setForm] = useState<TaxConfigForm>(
     existing ? {
       tax_code: existing.tax_code as TaxCode,
@@ -76,6 +103,8 @@ function TaxConfigModal({
       effective_from: existing.effective_from ?? today(),
       effective_to: existing.effective_to ?? '',
       is_active: existing.is_active ?? true,
+      tax_payable_account_id: existing.tax_payable_account_id ?? '',
+      tax_receivable_account_id: existing.tax_receivable_account_id ?? '',
     } : {
       tax_code: 'vat_standard',
       name: '',
@@ -87,11 +116,14 @@ function TaxConfigModal({
       effective_from: today(),
       effective_to: '',
       is_active: true,
+      tax_payable_account_id: '',
+      tax_receivable_account_id: '',
     },
   );
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const isPension = form.tax_code === 'tpr_pension';
+  const isVat = form.tax_code.startsWith('vat');
 
   function set(field: keyof TaxConfigForm, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -127,6 +159,8 @@ function TaxConfigModal({
         effective_from: form.effective_from,
         effective_to: form.effective_to || null,
         is_active: form.is_active,
+        tax_payable_account_id: form.tax_payable_account_id || null,
+        tax_receivable_account_id: form.tax_receivable_account_id || null,
       };
 
       if (existing) {
@@ -234,6 +268,57 @@ function TaxConfigModal({
               <input type="date" value={form.effective_to} onChange={(e) => set('effective_to', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
+
+            {/* Ledger links. Without a payable account, payroll approval and
+                period-close journal posting both fail with a hard error. */}
+            <div className="col-span-2 border-t border-gray-100 pt-4">
+              <h3 className="text-sm font-semibold text-gray-900">Ledger accounts</h3>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Required before this tax can be posted to the journal or paid.
+              </p>
+            </div>
+
+            <div className="col-span-2">
+              <label htmlFor="tc-payable" className="mb-1 block text-sm font-medium text-gray-700">
+                Tax payable account {isPension || form.tax_code === 'paye' ? '*' : ''}
+              </label>
+              <select id="tc-payable" value={form.tax_payable_account_id}
+                onChange={(e) => set('tax_payable_account_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">Not linked</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {isPension
+                  ? 'Usually 2132 Pension Payable.'
+                  : form.tax_code === 'paye'
+                  ? 'Usually 2122 PAYE Payable.'
+                  : isVat
+                  ? 'Usually 2121 VAT Payable (Output Tax).'
+                  : 'The liability account this tax accrues to.'}
+              </p>
+            </div>
+
+            {isVat && (
+              <div className="col-span-2">
+                <label htmlFor="tc-receivable" className="mb-1 block text-sm font-medium text-gray-700">
+                  Tax receivable account
+                </label>
+                <select id="tc-receivable" value={form.tax_receivable_account_id}
+                  onChange={(e) => set('tax_receivable_account_id', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                  <option value="">Not linked</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Usually 1135 VAT Receivable (Input Tax). Needed to clear input tax at period close.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -685,10 +770,20 @@ function PayeBandsTab({ businessId }: { businessId: string }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+type TabKey = 'obligations' | 'history' | 'configs' | 'paye';
+
+const TABS: { key: TabKey; label: string; icon: typeof Percent }[] = [
+  { key: 'obligations', label: 'Obligations',        icon: CalendarClock },
+  { key: 'history',     label: 'Filing History',     icon: Archive },
+  { key: 'configs',     label: 'Tax Configurations', icon: Percent },
+  { key: 'paye',        label: 'PAYE Bands',         icon: Calculator },
+];
+
 export function TaxPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
-  const [tab, setTab] = useState<'configs' | 'paye'>('configs');
+  const jurisdiction = useBusinessJurisdiction();
+  const [tab, setTab] = useState<TabKey>('obligations');
 
   if (!businessId) {
     return (
@@ -698,30 +793,36 @@ export function TaxPage() {
     );
   }
 
+  const rules = getJurisdictionRules(jurisdiction);
+
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Tax</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage tax configurations and PAYE bands for {currentBusiness.business.name}</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {rules.authorityName} compliance for {currentBusiness.business.name}
+          </p>
         </div>
+        <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+          {rules.name} · {rules.authority} · VAT {defaultVatRate(jurisdiction)}%
+        </span>
       </div>
 
-      <div className="mb-6 flex w-fit gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
-        <button onClick={() => setTab('configs')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'configs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}>
-          <Percent className="h-4 w-4" />Tax Configurations
-        </button>
-        <button onClick={() => setTab('paye')}
-          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'paye' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}>
-          <Calculator className="h-4 w-4" />PAYE Bands
-        </button>
+      <div className="mb-6 flex w-fit max-w-full gap-1 overflow-x-auto rounded-xl border border-gray-200 bg-gray-50 p-1">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setTab(key)}
+            aria-current={tab === key ? 'page' : undefined}
+            className={`flex shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+              tab === key ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            <Icon className="h-4 w-4" aria-hidden="true" />{label}
+          </button>
+        ))}
       </div>
 
+      {tab === 'obligations' && <TaxObligationsTab businessId={businessId} />}
+      {tab === 'history' && <TaxFilingHistoryTab businessId={businessId} />}
       {tab === 'configs' && <TaxConfigsTab businessId={businessId} />}
       {tab === 'paye' && <PayeBandsTab businessId={businessId} />}
     </div>

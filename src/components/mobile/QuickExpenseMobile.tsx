@@ -4,6 +4,7 @@ import { CheckCircle, ChevronRight, ArrowLeft } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
+import { useVatRate } from '@/hooks/useVatRate';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 
@@ -36,6 +37,7 @@ interface QuickExpenseMobileProps {
 }
 
 export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMobileProps) {
+  const { rate: vatRate, grossDivisor, ratePercent } = useVatRate();
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
@@ -105,7 +107,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
   const today = new Date().toISOString().slice(0, 10);
 
   const rawAmount = parseFloat(amount) || 0;
-  const netAmount = includeVat ? rawAmount / 1.175 : rawAmount;
+  const netAmount = includeVat ? rawAmount / grossDivisor : rawAmount;
   const vatAmount = includeVat ? rawAmount - netAmount : 0;
 
   const mutation = useMutation({
@@ -146,7 +148,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           quantity: 1,
           unit_price: netAmount,
           tax_code: includeVat ? 'vat_standard' : 'none',
-          tax_rate: includeVat ? 0.175 : 0,
+          tax_rate: includeVat ? vatRate : 0,
           tax_amount: vatAmount,
           line_total: rawAmount,
           account_id: account.id,
@@ -223,10 +225,10 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           {/* VAT toggle */}
           <div className="flex items-center justify-between rounded-3xl bg-gray-50/50 px-5 py-4 ring-1 ring-gray-100">
             <div>
-              <p className="text-xs font-black uppercase tracking-wider text-gray-700">Include VAT (17.5%)</p>
+              <p className="text-xs font-black uppercase tracking-wider text-gray-700">Include VAT ({ratePercent}%)</p>
               {amount && includeVat && (
                 <p className="text-[10px] font-bold text-gray-400 uppercase mt-1">
-                  Net: MK {(parseFloat(amount) / 1.175).toFixed(0)} · VAT: MK {(parseFloat(amount) - parseFloat(amount) / 1.175).toFixed(0)}
+                  Net: MK {(parseFloat(amount) / grossDivisor).toFixed(0)} · VAT: MK {(parseFloat(amount) - parseFloat(amount) / grossDivisor).toFixed(0)}
                 </p>
               )}
             </div>
@@ -418,7 +420,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                   <span className="text-gray-700">MK {netAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">VAT (17.5%)</span>
+                  <span className="text-gray-500">VAT ({ratePercent}%)</span>
                   <span className="text-gray-700">MK {vatAmount.toFixed(2)}</span>
                 </div>
               </>

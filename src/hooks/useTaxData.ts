@@ -1,7 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { repos } from '@/lib/repositories';
+import { useAppStore } from '@/store/useAppStore';
+import { daysUntilDue, formatDueDate, formatPeriodLabel, lastDayOfMonth, todayIso } from '@/lib/taxDates';
+import {
+  getJurisdictionRules,
+  resolveJurisdiction,
+  dueDateFor,
+  type TaxKind,
+} from '@/lib/taxRules';
 
-// ── MRA Due Date Calculator ───────────────────────────────────────────────────
+// ── Due dates ─────────────────────────────────────────────────────────────────
 
 export interface TaxDueDate {
   taxType: string;
@@ -10,144 +18,105 @@ export interface TaxDueDate {
   daysUntilDue: number;
   isOverdue: boolean;
   isDueSoon: boolean; // within 7 days
-  period: string;     // e.g. "June 2026"
-}
-
-function getDaysUntil(date: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleDateString('en-MW', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-/**
- * Calculate MRA tax due dates for the current month.
- * Based on official MRA Malawi schedule:
- * - PAYE:  14th of each month (for previous month)
- * - WHT:   14th of each month (for previous month)
- * - VAT:   25th of each month (for previous month)
- * - TEVET: 1st April annually
- */
-export function getMraDueDates(): TaxDueDate[] {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-indexed
-
-  // Previous month label (what we're paying for)
-  const prevMonth = new Date(year, month - 1, 1);
-  const prevMonthLabel = prevMonth.toLocaleDateString('en-MW', {
-    month: 'long',
-    year: 'numeric',
-  });
-
-  const dueDates: TaxDueDate[] = [];
-
-  // PAYE — 14th of current month (for previous month's payroll)
-  const payeDue = new Date(year, month, 14);
-  const payeDays = getDaysUntil(payeDue);
-  dueDates.push({
-    taxType: 'PAYE',
-    dueDate: payeDue,
-    dueDateStr: formatDate(payeDue),
-    daysUntilDue: payeDays,
-    isOverdue: payeDays < 0,
-    isDueSoon: payeDays >= 0 && payeDays <= 7,
-    period: prevMonthLabel,
-  });
-
-  // WHT — 14th of current month
-  const whtDue = new Date(year, month, 14);
-  const whtDays = getDaysUntil(whtDue);
-  dueDates.push({
-    taxType: 'Withholding Tax (WHT)',
-    dueDate: whtDue,
-    dueDateStr: formatDate(whtDue),
-    daysUntilDue: whtDays,
-    isOverdue: whtDays < 0,
-    isDueSoon: whtDays >= 0 && whtDays <= 7,
-    period: prevMonthLabel,
-  });
-
-  // VAT — 25th of current month
-  const vatDue = new Date(year, month, 25);
-  const vatDays = getDaysUntil(vatDue);
-  dueDates.push({
-    taxType: 'VAT Return',
-    dueDate: vatDue,
-    dueDateStr: formatDate(vatDue),
-    daysUntilDue: vatDays,
-    isOverdue: vatDays < 0,
-    isDueSoon: vatDays >= 0 && vatDays <= 7,
-    period: prevMonthLabel,
-  });
-
-  // TEVET Levy — 1st April annually
-  const tevetYear = month >= 3 ? year + 1 : year; // if past April, next year
-  const tevetDue = new Date(tevetYear, 3, 1); // April 1st
-  const tevetDays = getDaysUntil(tevetDue);
-  dueDates.push({
-    taxType: 'TEVET Levy',
-    dueDate: tevetDue,
-    dueDateStr: formatDate(tevetDue),
-    daysUntilDue: tevetDays,
-    isOverdue: tevetDays < 0,
-    isDueSoon: tevetDays >= 0 && tevetDays <= 30, // 30 days for annual
-    period: `${tevetYear}/${String(tevetYear + 1).slice(2)}`,
-  });
-
-  return dueDates.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-}
-
-// ── VAT Summary Hook ──────────────────────────────────────────────────────────
-
-export interface VatSummary {
-  outputVat: number;   // VAT collected on sales (owed to MRA)
-  inputVat: number;    // VAT paid on expenses (claimable from MRA)
-  vatPayable: number;  // outputVat - inputVat (positive = pay MRA, negative = MRA owes you)
   period: string;
 }
 
-export function useVatSummary(businessId?: string) {
-  const now = new Date();
-  const from = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    .toISOString().slice(0, 10);
-  const to = new Date(now.getFullYear(), now.getMonth(), 0)
-    .toISOString().slice(0, 10);
+/** Previous calendar month bounds — the period most returns are filed for. */
+function previousMonthBounds(): { start: string; end: string; label: string } {
+  const [y, m] = todayIso().split('-').map(Number);
+  const prevStart = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);
+  return {
+    start: prevStart,
+    end: lastDayOfMonth(prevStart),
+    label: prevStart.slice(0, 7),
+  };
+}
 
-  const period = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    .toLocaleDateString('en-MW', { month: 'long', year: 'numeric' });
+/**
+ * Statutory due dates for the current filing cycle, derived from the
+ * jurisdiction rules rather than hardcoded.
+ *
+ * The previous implementation hardcoded "PAYE and WHT on the 14th, VAT on
+ * the 25th" and contradicted TaxReturnRepository, which used a different
+ * PAYE rule again. Both now resolve through taxRules.ts.
+ */
+export function getTaxDueDates(country?: string | null): TaxDueDate[] {
+  const jurisdiction = resolveJurisdiction(country);
+  const rules = getJurisdictionRules(jurisdiction);
+  const { end, label } = previousMonthBounds();
+  const periodLabel = formatPeriodLabel(label);
+
+  const kinds: TaxKind[] = ['vat', 'paye', 'pension'];
+  return kinds
+    .map((kind) => {
+      const rule = rules.taxes.find((t) => t.taxKind === kind);
+      if (!rule) return null;
+      const due = dueDateFor(jurisdiction, kind, end);
+      const days = daysUntilDue(due);
+      const [dy, dm, dd] = due.split('-').map(Number);
+      return {
+        taxType: rule.label,
+        dueDate: new Date(Date.UTC(dy, dm - 1, dd)),
+        dueDateStr: formatDueDate(due),
+        daysUntilDue: days,
+        isOverdue: days < 0,
+        isDueSoon: days >= 0 && days <= 7,
+        period: periodLabel,
+      } as TaxDueDate;
+    })
+    .filter((d): d is TaxDueDate => d !== null)
+    .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+}
+
+/** Backwards-compatible alias. Malawi remains the default jurisdiction. */
+export function getMraDueDates(): TaxDueDate[] {
+  return getTaxDueDates('MW');
+}
+
+/** Due dates for the currently selected business's jurisdiction. */
+export function useTaxDueDates(): TaxDueDate[] {
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
+  return getTaxDueDates(currentBusiness?.business?.country);
+}
+
+// ── VAT summary ───────────────────────────────────────────────────────────────
+
+export interface VatSummary {
+  outputVat: number;
+  inputVat: number;
+  vatPayable: number;
+  period: string;
+}
+
+/**
+ * VAT position for the previous month.
+ *
+ * Now delegates to TaxReturnRepository.computeVatBreakdown() so the dashboard
+ * figure matches the generated return exactly. The old implementation summed
+ * invoices.vat_amount and expenses.vat_amount directly, which included quotes
+ * and proformas and so disagreed with the VAT return for the same period.
+ */
+export function useVatSummary(businessId?: string) {
+  const { start, end, label } = previousMonthBounds();
+  const period = formatPeriodLabel(label);
 
   return useQuery({
-    queryKey: ['vat', 'summary', businessId, from, to],
+    queryKey: ['vat', 'summary', businessId, start, end],
     queryFn: async () => {
-      const [incomeTotals, expenseRows] = await Promise.all([
-        repos.income.getTotals(businessId!, from, to),
-        repos.expense.findByDateRange(businessId!, from, to),
-      ]);
-
-      const outputVat = incomeTotals.vatAmount;
-      const inputVat = expenseRows
-        .filter((r) => r.status !== 'void')
-        .reduce((sum, r) => sum + Number(r.vat_amount), 0);
-      const vatPayable = outputVat - inputVat;
-
-      return { outputVat, inputVat, vatPayable, period } as VatSummary;
+      const b = await repos.taxReturn.computeVatBreakdown(businessId!, start, end);
+      return {
+        outputVat: b.outputTax,
+        inputVat: b.inputTax,
+        vatPayable: b.outputTax - b.inputTax,
+        period,
+      } as VatSummary;
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
   });
 }
 
-// ── PAYE Summary Hook ─────────────────────────────────────────────────────────
+// ── PAYE summary ──────────────────────────────────────────────────────────────
 
 export interface PayeSummary {
   totalPaye: number;
@@ -155,29 +124,15 @@ export interface PayeSummary {
 }
 
 export function usePayeSummary(businessId?: string) {
-  const now = new Date();
-  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const period = prevMonth.toLocaleDateString('en-MW', {
-    month: 'long', year: 'numeric',
-  });
+  const { start, end, label } = previousMonthBounds();
+  const period = formatPeriodLabel(label);
 
   return useQuery({
-    queryKey: ['paye', 'summary', businessId],
+    queryKey: ['paye', 'summary', businessId, start, end],
     queryFn: async () => {
       const runs = await repos.payroll.findByBusiness(businessId!);
-      // Sum PAYE from last month's payroll runs
-      const from = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10);
-      const to = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10);
-
-      const lastMonthRuns = runs.filter((r) => {
-        const payDate = r.pay_date;
-        return payDate >= from && payDate <= to;
-      });
-
-      const totalPaye = lastMonthRuns.reduce(
-        (sum, r) => sum + Number(r.total_paye), 0,
-      );
-
+      const lastMonthRuns = runs.filter((r) => r.pay_date >= start && r.pay_date <= end);
+      const totalPaye = lastMonthRuns.reduce((sum, r) => sum + Number(r.total_paye), 0);
       return { totalPaye, period } as PayeSummary;
     },
     enabled: Boolean(businessId),

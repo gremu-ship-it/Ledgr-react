@@ -198,7 +198,7 @@ function Step1({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
           />
           <div>
             <p className="text-sm font-medium text-gray-700">VAT registered</p>
-            <p className="text-xs text-gray-500">VAT rate in Malawi is 17.5%. Tick if your business is registered with MRA for VAT.</p>
+            <p className="text-xs text-gray-500">Tick if your business is registered for VAT. The standard rate is set from your tax configuration.</p>
           </div>
         </label>
 
@@ -317,7 +317,7 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
       <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
         <p className="text-xs font-medium text-brand-700">MRA Tax defaults</p>
         <ul className="mt-1.5 space-y-0.5 text-xs text-brand-600">
-          <li>• VAT: 17.5% (standard rate)</li>
+          <li>• VAT: standard rate per your jurisdiction</li>
           <li>• WHT: 10% / 15% / 20% depending on payment type</li>
           <li>• PAYE: graduated bands per MRA schedule</li>
           <li>• CIT: 30% (standard) / 20% (SME)</li>

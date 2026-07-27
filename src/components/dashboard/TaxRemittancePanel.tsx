@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle, Clock, Calendar } from 'lucide-react';
-import { getMraDueDates, useVatSummary, usePayeSummary } from '@/hooks/useTaxData';
+import { useTaxDueDates, useVatSummary, usePayeSummary } from '@/hooks/useTaxData';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', {
@@ -15,9 +15,10 @@ interface TaxRemittancePanelProps {
 
 export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
   const { t } = useTranslation();
-  const dueDates = getMraDueDates();
+  const dueDates = useTaxDueDates();
   const vat = useVatSummary(businessId);
   const paye = usePayeSummary(businessId);
+  const payeDue = dueDates.find((d) => d.taxType.toLowerCase().includes('pay as you earn'));
 
   const overdueDates = dueDates.filter((d) => d.isOverdue);
   const dueSoonDates = dueDates.filter((d) => !d.isOverdue && d.isDueSoon);
@@ -112,7 +113,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
               </div>
               <p className="text-xs text-gray-600">{t('dashboard.period', { period: paye.data?.period ?? '—' })}</p>
               <p className="text-xs text-gray-600">
-                {t('dashboard.due14th')}
+                {payeDue ? t('dashboard.dueOn', { date: payeDue.dueDateStr }) : null}
               </p>
             </div>
           )}

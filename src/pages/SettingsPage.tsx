@@ -497,7 +497,7 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
               className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
             />
             <label htmlFor="vat_registered" className="text-sm text-gray-700">
-              Business is VAT registered (17.5% MRA standard rate)
+              Business is VAT registered
             </label>
           </div>
         </Field>

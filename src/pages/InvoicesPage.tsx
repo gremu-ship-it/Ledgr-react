@@ -561,7 +561,7 @@ function InvoiceDetail({
                   <span>{formatMwk(Number(invoice.subtotal))}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>VAT (17.5%)</span>
+                  <span>VAT</span>
                   <span>{formatMwk(Number(invoice.vat_amount))}</span>
                 </div>
                 {Number(invoice.wht_amount) > 0 && (

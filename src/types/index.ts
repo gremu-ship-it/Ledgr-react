@@ -21,6 +21,11 @@ export interface Business {
   name: string;
   base_currency?: string | null;
   plan_tier?: string | null;
+  /** ISO country code or name — drives tax jurisdiction (MW / ZM). */
+  country?: string | null;
+  /** Taxpayer identification number, shown on statutory returns. */
+  tpin?: string | null;
+  vat_registered?: boolean | null;
 }
 
 

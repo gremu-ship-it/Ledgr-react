@@ -250,11 +250,12 @@
     "vatPayableToMra": "IVA a pagar à MRA",
     "payeDueLastMonth": "PAYE Due (Last Month)",
     "totalPayeToRemit": "Total PAYE to Remit",
-    "due14th": "Due: 14th of current month",
+    "dueOn": "Vencimento: {{date}}",
     "upcomingDueDates": "Próximas datas de vencimento",
     "daysOverdueShort": "{{count}}d overdue",
     "daysLeft": "{{count}}d left",
-    "dueTodayBang": "Due today!"
+    "dueTodayBang": "Due today!",
+    "taxPortal": "Portal {{authority}}"
   },
   "finance": {
     "income": "Receitas",

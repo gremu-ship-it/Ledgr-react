@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { useVatRate } from '@/hooks/useVatRate';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
@@ -259,8 +260,6 @@ function ProductSelect({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const VAT_RATE = 0.175;
-
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -271,7 +270,7 @@ const PAYMENT_METHODS = [
 ];
 
 const TAX_OPTIONS = [
-  { value: 'vat_standard', label: 'VAT 17.5%' },
+  { value: 'vat_standard', label: 'VAT (standard)' },
   { value: 'vat_exempt',   label: 'VAT Exempt' },
   { value: 'vat_zero',     label: 'VAT Zero Rated' },
   { value: 'none',         label: 'No Tax' },
@@ -363,6 +362,7 @@ function EmptyState({ onRecord }: { onRecord: () => void }) {
 // ── Quick Expense Tab ─────────────────────────────────────────────────────────
 
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
+  const { rate: VAT_RATE, grossDivisor, ratePercent } = useVatRate();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
@@ -385,7 +385,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       if (!values.description.trim()) throw new Error('Description is required');
       if (!values.account_id) throw new Error('Please select an expense category');
 
-      const netAmount   = values.include_vat ? rawAmount / 1.175 : rawAmount;
+      const netAmount   = values.include_vat ? rawAmount / grossDivisor : rawAmount;
       const vatAmount   = values.include_vat ? rawAmount - netAmount : 0;
       const totalAmount = rawAmount;
       const qty         = parseFloat(values.quantity) || 1;
@@ -628,14 +628,14 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               onChange={(e) => set('include_vat', e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-brand-500" />
             <label htmlFor="include_vat" className="text-sm text-gray-700">
-              Amount includes VAT (17.5%) — split automatically
+              Amount includes VAT ({ratePercent}%) — split automatically
             </label>
           </div>
 
           {form.include_vat && form.amount && (
             <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500">
-              Net: MK {(parseFloat(form.amount) / 1.175).toFixed(2)} ·{' '}
-              VAT: MK {(parseFloat(form.amount) - parseFloat(form.amount) / 1.175).toFixed(2)}
+              Net: MK {(parseFloat(form.amount) / grossDivisor).toFixed(2)} ·{' '}
+              VAT: MK {(parseFloat(form.amount) - parseFloat(form.amount) / grossDivisor).toFixed(2)}
             </div>
           )}
 
@@ -682,6 +682,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
 // ── Expense Builder Tab ───────────────────────────────────────────────────────
 
 function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
+  const { rate: VAT_RATE, ratePercent } = useVatRate();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
@@ -1051,7 +1052,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwk(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwk(vatAmount)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>VAT ({ratePercent}%)</span><span>{formatMwk(vatAmount)}</span></div>
               <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwk(total)}</span></div>
             </div>
           </div>

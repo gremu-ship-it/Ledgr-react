@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { useVatRate } from '@/hooks/useVatRate';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
@@ -211,8 +212,6 @@ function ProductSelect({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const VAT_RATE = 0.175;
-
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -223,7 +222,7 @@ const PAYMENT_METHODS = [
 ];
 
 const TAX_OPTIONS = [
-  { value: 'vat_standard', label: 'VAT 17.5%' },
+  { value: 'vat_standard', label: 'VAT (standard)' },
   { value: 'vat_exempt', label: 'VAT Exempt' },
   { value: 'vat_zero', label: 'VAT Zero Rated' },
   { value: 'none', label: 'No Tax' },
@@ -609,6 +608,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
 // ── Invoice Builder Tab ───────────────────────────────────────────────────────
 
 function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
+  const { rate: VAT_RATE, ratePercent } = useVatRate();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: branches = [] } = useBranches(businessId);
@@ -991,7 +991,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwk(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwk(vatAmount)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>VAT ({ratePercent}%)</span><span>{formatMwk(vatAmount)}</span></div>
               <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwk(total)}</span></div>
             </div>
           </div>

@@ -166,11 +166,10 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
    *   Pension Contributions Payable for the Ledgr Technologies test
    *   business) or this throws.
    * - Pension EXPENSE account (employer's 10% only): hard-coded lookup by
-   *   account code '6112' (Employer Pension Contributions), confirmed
-   *   against the Ledgr Technologies chart of accounts — distinct from the
-   *   near-duplicate '6130' account, which appears to be an unused stray.
-   *   If a business doesn't have a 6112 account, approve() throws with a
-   *   clear message rather than silently posting to the wrong place.
+   *   account code '6112' (Employer Pension Contributions), which is what
+   *   seedChartOfAccounts.ts actually seeds. If a business doesn't have a
+   *   6112 account, approve() throws with a clear message rather than
+   *   silently posting to the wrong place.
    * - Net pay payable: assumes a bank/net-pay-clearing account is passed in
    *   by the caller (bankAccountId param) rather than inferred, since no
    *   default "payroll bank account" field exists on payroll_runs or
@@ -303,11 +302,12 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     }
 
     if (totalPensionEmployer > 0) {
-      const pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6130');
+      const pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6112');
       if (!pensionExpenseAccountId) {
         throw new ValidationError(
           'payroll_runs',
-          `No account found with code '6130' (Employer Pension Contributions) for business ${run.business_id}.`,
+          `No account found with code '6112' (Employer Pension Contributions) for business ${run.business_id}. ` +
+          `Seed the chart of accounts (Accounts > Repair CoA) before approving payroll.`,
         );
       }
       lines.push({

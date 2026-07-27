@@ -4,27 +4,28 @@ import { BaseRepository } from './BaseRepository';
 import { JournalRepository } from './JournalRepository';
 import { TaxRepository } from './TaxRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
+import { lastDayOfMonth, todayIso, addDays, periodLabel as toPeriodLabel } from '@/lib/taxDates';
+import { dueDateFor, resolveJurisdiction, type Jurisdiction } from '@/lib/taxRules';
 
 /**
- * NOTE ON ASSUMPTIONS (please verify before relying on this in production):
- *
- * 1. Account resolution for journal postings (getRequiredAccountId) reads
- *    tax_configurations.tax_payable_account_id. For tpr_pension this is
- *    seeded NULL (see migration) — callers MUST link the Pension Payable
- *    account before generateTprReturn()'s postToJournal step will work.
- *    A clear ValidationError is thrown if the account is missing, rather
- *    than silently posting to a wrong/default account.
- *
- * 2. VAT input/output tax is derived from invoice_lines / expense_lines
- *    tax_amount where tax_code = 'vat_standard'. This assumes those
- *    columns are always populated correctly at line-entry time (they are,
- *    per the schema you shared — tax_amount is NOT NULL with default 0).
- *    Lines with vat_zero / vat_exempt are correctly excluded (0% impact).
- *
- * 3. "period close" for VAT is NOT tied to accounting_periods — it is a
- *    calendar-month rollup, generated automatically. This was your stated
- *    preference (auto-generate), matching businesses.vat_period.
+ * Invoice types that are revenue recognition events and therefore carry
+ * output VAT. Quotes and proformas are NOT supplies — including them
+ * overstates output tax on the VAT return. Mirrors REVENUE_INVOICE_TYPES
+ * in IncomeRepository.
  */
+const VATABLE_INVOICE_TYPES = ['invoice', 'credit_note', 'debit_note'] as const;
+
+/** Invoice/expense statuses that must never contribute to a VAT return. */
+const EXCLUDED_STATUSES = ['void', 'draft'] as const;
+
+export interface VatReturnBreakdown {
+  outputTax: number;
+  inputTax: number;
+  netPayable: number;
+  /** Positive when MRA owes the business (input > output). */
+  refundDue: number;
+}
+
 export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
   private journalRepo: JournalRepository;
   private taxConfigRepo: TaxRepository;
@@ -83,59 +84,84 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
     return data ?? [];
   }
 
+  /**
+   * Flip pending/filed returns past their due date to 'overdue'.
+   * Nothing previously performed this transition, so returns sat at
+   * 'pending' forever and the 'overdue' enum value was unreachable.
+   * Called on dashboard load; also safe to run from a cron job.
+   */
+  async markOverdueReturns(businessId: string): Promise<number> {
+    const today = todayIso();
+    const { data, error } = await this.client
+      .from('tax_returns')
+      .update({ status: 'overdue' } as never)
+      .eq('business_id', businessId)
+      .in('status', ['pending', 'filed'])
+      .lt('due_date', today)
+      .select('id');
+    if (error) throw toRepositoryError('tax_returns', error);
+    return (data ?? []).length;
+  }
+
   // --------------------------------------------------------------------
   // Generation: VAT
   // --------------------------------------------------------------------
 
   /**
+   * Compute output/input VAT for a period without persisting anything.
+   * Exposed so the UI can preview a VAT 3 before generating the return.
+   */
+  async computeVatBreakdown(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<VatReturnBreakdown> {
+    const [outputTax, inputTax] = await Promise.all([
+      this.sumInvoiceTax(businessId, periodStart, periodEnd),
+      this.sumExpenseTax(businessId, periodStart, periodEnd),
+    ]);
+    const net = Math.round((outputTax - inputTax) * 100) / 100;
+    return {
+      outputTax,
+      inputTax,
+      netPayable: net > 0 ? net : 0,
+      refundDue: net < 0 ? Math.abs(net) : 0,
+    };
+  }
+
+  /**
    * Generate (or return existing) VAT return for a calendar-month period.
-   * Idempotent — relies on the unique (business_id, tax_code, period_label)
-   * constraint; if a return for this period already exists, it is returned
-   * unchanged rather than duplicated.
-   *
-   * periodStart/periodEnd: ISO date strings, e.g. '2026-06-01' / '2026-06-30'.
+   * Idempotent via the unique (business_id, tax_code, period_label) index.
    */
   async generateVatReturn(
     businessId: string,
     periodStart: string,
     periodEnd: string,
+    jurisdiction?: Jurisdiction,
   ): Promise<Row<'tax_returns'>> {
-    const periodLabel = periodStart.slice(0, 7); // 'YYYY-MM'
+    const label = toPeriodLabel(periodStart);
 
-    const existing = await this.findByPeriod(businessId, 'vat_standard', periodLabel);
+    const existing = await this.findByPeriod(businessId, 'vat_standard', label);
     if (existing) return existing;
 
-    const config = await this.taxConfigRepo.findByCode(businessId, 'vat_standard', periodEnd);
-    if (!config) {
-      throw new ValidationError(
-        'tax_returns',
-        `No active vat_standard tax_configuration found for business ${businessId} as of ${periodEnd}.`,
-      );
-    }
-
-    const outputTax = await this.sumLineTax(
-      businessId, 'invoice_lines', 'invoice_id', 'invoices', 'issue_date', periodStart, periodEnd,
-    );
-    const inputTax = await this.sumLineTax(
-      businessId, 'expense_lines', 'expense_id', 'expenses', 'expense_date' as never, periodStart, periodEnd,
-    ).catch(() => 0); // FLAGGED: expenses.expense_date column name not confirmed in shared schema — verify.
-
-    const netPayable = Math.round((outputTax - inputTax) * 100) / 100;
-
-    // MRA VAT 3 due date: 25th of the month following the period end.
-    const dueDate = this.addMonthsSetDay(periodEnd, 1, 25);
+    const juris = jurisdiction ?? (await this.resolveBusinessJurisdiction(businessId));
+    const breakdown = await this.computeVatBreakdown(businessId, periodStart, periodEnd);
+    const dueDate = dueDateFor(juris, 'vat', periodEnd);
 
     const dto: InsertDto<'tax_returns'> = {
       business_id: businessId,
       tax_code: 'vat_standard',
-      period_label: periodLabel,
+      period_label: label,
       period_start: periodStart,
       period_end: periodEnd,
       due_date: dueDate,
-      output_tax: outputTax,
-      input_tax: inputTax,
+      output_tax: breakdown.outputTax,
+      input_tax: breakdown.inputTax,
       gross_amount: 0,
-      amount_due: Math.max(netPayable, 0),
+      // A credit position is stored as a negative amount_due rather than
+      // being clamped to zero, so refunds/carry-forwards survive. Form
+      // VAT 3 has a repayment box that needs this figure.
+      amount_due: breakdown.refundDue > 0 ? -breakdown.refundDue : breakdown.netPayable,
       amount_paid: 0,
       status: 'pending',
       source_type: 'vat_period',
@@ -153,19 +179,23 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
 
   async generatePayeReturn(
     payrollRun: Row<'payroll_runs'>,
+    jurisdiction?: Jurisdiction,
   ): Promise<Row<'tax_returns'>> {
-    const periodLabel = payrollRun.period_start.slice(0, 7);
+    const label = toPeriodLabel(payrollRun.period_start);
 
-    const existing = await this.findByPeriod(payrollRun.business_id, 'paye', periodLabel);
+    const existing = await this.findByPeriod(payrollRun.business_id, 'paye', label);
     if (existing) return existing;
 
-    // Due: last day of the month the payroll period falls in.
-    const dueDate = this.lastDayOfMonth(payrollRun.period_end);
+    const juris = jurisdiction ?? (await this.resolveBusinessJurisdiction(payrollRun.business_id));
+    // Was: lastDayOfMonth(period_end) — the last day of the period's OWN
+    // month, i.e. due the same day the period closed. MRA allows 14 days
+    // after month end; the rule now lives in taxRules.ts.
+    const dueDate = dueDateFor(juris, 'paye', payrollRun.period_end);
 
     const dto: InsertDto<'tax_returns'> = {
       business_id: payrollRun.business_id,
       tax_code: 'paye',
-      period_label: periodLabel,
+      period_label: label,
       period_start: payrollRun.period_start,
       period_end: payrollRun.period_end,
       due_date: dueDate,
@@ -191,25 +221,24 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
   async generateTprReturn(
     payrollRun: Row<'payroll_runs'>,
     lines: Row<'payroll_employee_lines'>[],
+    jurisdiction?: Jurisdiction,
   ): Promise<Row<'tax_returns'>> {
-    const periodLabel = payrollRun.period_start.slice(0, 7);
+    const label = toPeriodLabel(payrollRun.period_start);
 
-    const existing = await this.findByPeriod(payrollRun.business_id, 'tpr_pension', periodLabel);
+    const existing = await this.findByPeriod(payrollRun.business_id, 'tpr_pension', label);
     if (existing) return existing;
 
+    const juris = jurisdiction ?? (await this.resolveBusinessJurisdiction(payrollRun.business_id));
     const totalEmployer = lines.reduce((sum, l) => sum + Number(l.pension_employer), 0);
     const totalEmployee = lines.reduce((sum, l) => sum + Number(l.pension_employee), 0);
     const total = Math.round((totalEmployer + totalEmployee) * 100) / 100;
 
-    // TPR remittance due date: MRA/pension regulator practice is 15 days
-    // after month end. FLAGGED: not independently confirmed — verify
-    // against current Pension Act guidance before relying on this date.
-    const dueDate = this.addDays(this.lastDayOfMonth(payrollRun.period_end), 15);
+    const dueDate = dueDateFor(juris, 'pension', payrollRun.period_end);
 
     const dto: InsertDto<'tax_returns'> = {
       business_id: payrollRun.business_id,
       tax_code: 'tpr_pension',
-      period_label: periodLabel,
+      period_label: label,
       period_start: payrollRun.period_start,
       period_end: payrollRun.period_end,
       due_date: dueDate,
@@ -232,30 +261,43 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
   // Filing + journal posting
   // --------------------------------------------------------------------
 
-  /** Record MRA filing acknowledgement. Does not move money — see recordPayment. */
+  /**
+   * Record filing acknowledgement. Does not move money — see recordPayment.
+   * 'paid' is accepted because paying before filing is routine for VAT;
+   * previously that combination locked filing out permanently.
+   */
   async markFiled(id: string, filedRef: string): Promise<Row<'tax_returns'>> {
     const current = await this.findById(id);
-    if (current.status !== 'pending' && current.status !== 'overdue') {
+    if (current.status === 'void') {
+      throw new ValidationError('tax_returns', `Cannot file a voided tax return.`);
+    }
+    if (current.filed_at) {
       throw new ValidationError(
         'tax_returns',
-        `Cannot file tax_return ${id}: current status is '${current.status}'.`,
+        `Tax return ${id} was already filed on ${current.filed_at.slice(0, 10)}${current.filed_ref ? ` (ref ${current.filed_ref})` : ''}.`,
       );
     }
+    // Paying before filing must not demote a 'paid' return back to 'filed'.
+    const nextStatus = current.status === 'paid' ? 'paid' : 'filed';
     return this.update(id, {
-      status: 'filed',
+      status: nextStatus,
       filed_ref: filedRef,
       filed_at: new Date().toISOString(),
     });
   }
 
   /**
-   * Post the tax liability to the journal. Dr [Expense or n/a for VAT] /
-   * Cr [tax_payable_account_id from tax_configurations].
+   * Post the tax liability to the journal.
    *
-   * VAT: Dr Output VAT clearing not modelled separately — this posts the
-   * NET liability only (output − input already reflected in amount_due).
-   * If you need gross output/input tracked as separate journal lines
-   * (common for VAT reconciliation), flag it — this is a simplification.
+   * VAT close: Dr Output VAT (2121) / Cr Input VAT (1135) / Cr-or-Dr net.
+   * Invoices already credit 2121 and expenses already debit 1135 at
+   * transaction time, so this entry CLEARS both control accounts and
+   * recognises the single net balance owed to (or recoverable from) the
+   * revenue authority. The previous implementation posted the net amount
+   * twice over the same two accounts, which double-counted the liability
+   * and left the control accounts uncleared.
+   *
+   * PAYE / TPR: Dr Expense / Cr Tax Payable, unchanged in shape.
    */
   async postToJournal(
     taxReturnId: string,
@@ -267,44 +309,35 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
     if (taxReturn.journal_entry_id) {
       throw new ValidationError('tax_returns', `Tax return ${taxReturnId} already has a journal entry posted.`);
     }
-    if (taxReturn.amount_due <= 0) {
-      throw new ValidationError('tax_returns', `Tax return ${taxReturnId} has no liability to post.`);
-    }
 
-    const config = await this.taxConfigRepo.findByCode(taxReturn.business_id, taxReturn.tax_code, taxReturn.period_end);
+    const config = await this.taxConfigRepo.findByCode(
+      taxReturn.business_id,
+      taxReturn.tax_code,
+      taxReturn.period_end,
+    );
     if (!config?.tax_payable_account_id) {
       throw new ValidationError(
         'tax_returns',
-        `No tax_payable_account_id configured for ${taxReturn.tax_code} on business ${taxReturn.business_id}. ` +
-        `Link the liability account in tax settings before posting.`,
+        `No tax payable account configured for ${taxReturn.tax_code}. ` +
+        `Link it in Tax > Tax Configurations before posting.`,
       );
     }
 
-    const amount = Number(taxReturn.amount_due);
-    const lines = expenseAccountId
-      ? [
-          { account_id: expenseAccountId, description: `${taxReturn.tax_code} liability — ${taxReturn.period_label}`, is_debit: true, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 1, tax_code: 'none' as const, tax_amount: 0 },
-          { account_id: config.tax_payable_account_id, description: `${taxReturn.tax_code} payable — ${taxReturn.period_label}`, is_debit: false, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 2, tax_code: 'none' as const, tax_amount: 0 },
-        ]
-      : // VAT case: liability already sits in the VAT clearing accounts from
-        // each invoice/expense posting; this just reclassifies net-due into
-        // a payable. FLAGGED: confirm whether your invoice/expense postings
-        // already credit a VAT payable account — if so, this second posting
-        // would double-count. Verify against how invoices currently post VAT.
-        [
-          { account_id: config.tax_receivable_account_id ?? config.tax_payable_account_id, description: `Net VAT reclass — ${taxReturn.period_label}`, is_debit: true, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 1, tax_code: 'none' as const, tax_amount: 0 },
-          { account_id: config.tax_payable_account_id, description: `VAT payable — ${taxReturn.period_label}`, is_debit: false, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 2, tax_code: 'none' as const, tax_amount: 0 },
-        ];
+    const currency = await this.resolveBusinessCurrency(taxReturn.business_id);
+    const lines =
+      taxReturn.tax_code === 'vat_standard'
+        ? this.buildVatCloseLines(taxReturn, config, currency)
+        : this.buildLiabilityLines(taxReturn, config, expenseAccountId, currency);
 
     const { entry } = await this.journalRepo.createBalancedEntry(
       {
         business_id: taxReturn.business_id,
         entry_number: entryNumber,
-        entry_date: new Date().toISOString().slice(0, 10),
+        entry_date: taxReturn.period_end,
         description: `${taxReturn.tax_code} liability — ${taxReturn.period_label}`,
         source_type: 'tax_return',
         source_id: taxReturn.id,
-        currency: 'MWK',
+        currency,
         exchange_rate: 1,
         status: 'draft',
         created_by: createdBy,
@@ -317,109 +350,276 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
   }
 
   // --------------------------------------------------------------------
+  // Journal line builders
+  // --------------------------------------------------------------------
+
+  private buildVatCloseLines(
+    taxReturn: Row<'tax_returns'>,
+    config: Row<'tax_configurations'>,
+    currency: string,
+  ): Omit<InsertDto<'journal_lines'>, 'journal_entry_id' | 'business_id'>[] {
+    const outputTax = Math.round(Number(taxReturn.output_tax) * 100) / 100;
+    const inputTax = Math.round(Number(taxReturn.input_tax) * 100) / 100;
+    const net = Math.round((outputTax - inputTax) * 100) / 100;
+
+    if (outputTax === 0 && inputTax === 0) {
+      throw new ValidationError('tax_returns', `VAT return ${taxReturn.id} is nil — nothing to post.`);
+    }
+
+    const outputAccount = config.tax_payable_account_id!;
+    const inputAccount = config.tax_receivable_account_id;
+    if (inputTax > 0 && !inputAccount) {
+      throw new ValidationError(
+        'tax_returns',
+        `Input VAT of ${inputTax} cannot be cleared: no VAT receivable account is linked. ` +
+        `Set it in Tax > Tax Configurations.`,
+      );
+    }
+
+    const base = {
+      currency,
+      exchange_rate: 1,
+      tax_code: 'none' as const,
+      tax_amount: 0,
+    };
+    const lines: Omit<InsertDto<'journal_lines'>, 'journal_entry_id' | 'business_id'>[] = [];
+    let n = 1;
+
+    // Clear the output VAT control account (normally credit balance).
+    if (outputTax > 0) {
+      lines.push({
+        ...base,
+        account_id: outputAccount,
+        description: `Output VAT cleared — ${taxReturn.period_label}`,
+        is_debit: true,
+        amount: outputTax,
+        amount_base: outputTax,
+        line_number: n++,
+      });
+    }
+
+    // Clear the input VAT control account (normally debit balance).
+    if (inputTax > 0) {
+      lines.push({
+        ...base,
+        account_id: inputAccount!,
+        description: `Input VAT cleared — ${taxReturn.period_label}`,
+        is_debit: false,
+        amount: inputTax,
+        amount_base: inputTax,
+        line_number: n++,
+      });
+    }
+
+    // Recognise the net position.
+    const netAmount = Math.abs(net);
+    if (netAmount > 0) {
+      lines.push({
+        ...base,
+        account_id: net > 0 ? outputAccount : inputAccount!,
+        description:
+          net > 0
+            ? `Net VAT payable — ${taxReturn.period_label}`
+            : `Net VAT recoverable — ${taxReturn.period_label}`,
+        is_debit: net < 0,
+        amount: netAmount,
+        amount_base: netAmount,
+        line_number: n,
+      });
+    }
+
+    return lines;
+  }
+
+  private buildLiabilityLines(
+    taxReturn: Row<'tax_returns'>,
+    config: Row<'tax_configurations'>,
+    expenseAccountId: string | null,
+    currency: string,
+  ): Omit<InsertDto<'journal_lines'>, 'journal_entry_id' | 'business_id'>[] {
+    const amount = Math.round(Number(taxReturn.amount_due) * 100) / 100;
+    if (amount <= 0) {
+      throw new ValidationError('tax_returns', `Tax return ${taxReturn.id} has no liability to post.`);
+    }
+    if (!expenseAccountId) {
+      throw new ValidationError(
+        'tax_returns',
+        `An expense account is required to post a ${taxReturn.tax_code} liability.`,
+      );
+    }
+
+    const base = {
+      currency,
+      exchange_rate: 1,
+      tax_code: 'none' as const,
+      tax_amount: 0,
+    };
+    return [
+      {
+        ...base,
+        account_id: expenseAccountId,
+        description: `${taxReturn.tax_code} liability — ${taxReturn.period_label}`,
+        is_debit: true,
+        amount,
+        amount_base: amount,
+        line_number: 1,
+      },
+      {
+        ...base,
+        account_id: config.tax_payable_account_id!,
+        description: `${taxReturn.tax_code} payable — ${taxReturn.period_label}`,
+        is_debit: false,
+        amount,
+        amount_base: amount,
+        line_number: 2,
+      },
+    ];
+  }
+
+  // --------------------------------------------------------------------
   // Internals
   // --------------------------------------------------------------------
 
   private async findByPeriod(
     businessId: string,
     taxCode: Row<'tax_returns'>['tax_code'],
-    periodLabel: string,
+    label: string,
   ): Promise<Row<'tax_returns'> | null> {
     const { data, error } = await this.client
       .from('tax_returns')
       .select('*')
       .eq('business_id', businessId)
       .eq('tax_code', taxCode)
-      .eq('period_label', periodLabel)
+      .eq('period_label', label)
       .maybeSingle();
     if (error) throw toRepositoryError('tax_returns', error);
     return data ?? null;
   }
 
+  private async resolveBusinessJurisdiction(businessId: string): Promise<Jurisdiction> {
+    const { data, error } = await this.client
+      .from('businesses')
+      .select('country')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (error) throw toRepositoryError('businesses', error);
+    return resolveJurisdiction(data?.country);
+  }
+
+  private async resolveBusinessCurrency(businessId: string): Promise<string> {
+    const { data, error } = await this.client
+      .from('businesses')
+      .select('base_currency')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (error) throw toRepositoryError('businesses', error);
+    return data?.base_currency ?? 'MWK';
+  }
+
   /**
-   * Sums tax_amount from a lines table joined to its parent, filtered by
-   * the parent's date column within [periodStart, periodEnd], for
-   * tax_code = 'vat_standard'. Generic to reuse for invoice_lines and
-   * expense_lines. FLAGGED: parent date column name for expenses was not
-   * confirmed — adjust 'expense_date' if your actual column differs
-   * (e.g. it may be named differently; check expenses table schema).
+   * Output VAT: sum of tax_amount on lines of revenue invoices issued in
+   * the period. Excludes quotes/proformas (not supplies), soft-deleted
+   * invoices, and void/draft documents — none of which were filtered
+   * before, all of which overstate output tax.
    */
-  private async sumLineTax(
+  private async sumInvoiceTax(
     businessId: string,
-    linesTable: 'invoice_lines' | 'expense_lines',
-    fkColumn: string,
-    parentTable: 'invoices' | 'expenses',
-    parentDateColumn: string,
     periodStart: string,
     periodEnd: string,
   ): Promise<number> {
-    // Two-step (not a single joined query) to stay within the generic
-    // BaseRepository/typed-client pattern rather than hand-rolling PostgREST
-    // embedded filters on nested columns, which the typed client doesn't
-    // support cleanly for filtering by a joined table's column.
     const { data: parents, error: parentErr } = await this.client
-      .from(parentTable)
+      .from('invoices')
       .select('id')
       .eq('business_id', businessId)
-      .gte(parentDateColumn as never, periodStart)
-      .lte(parentDateColumn as never, periodEnd);
-    if (parentErr) throw toRepositoryError(parentTable, parentErr);
-    const parentIds = (parents ?? []).map((p: { id: string }) => p.id);
+      .in('invoice_type', VATABLE_INVOICE_TYPES)
+      .not('status', 'in', `(${EXCLUDED_STATUSES.join(',')})`)
+      .is('deleted_at', null)
+      .gte('issue_date', periodStart)
+      .lte('issue_date', periodEnd);
+    if (parentErr) throw toRepositoryError('invoices', parentErr);
+
+    return this.sumLineTaxFor(businessId, 'invoice_lines', 'invoice_id', (parents ?? []).map((p) => p.id));
+  }
+
+  /**
+   * Input VAT: sum of tax_amount on lines of expenses dated in the period.
+   *
+   * The previous implementation wrapped this in `.catch(() => 0)` to hedge
+   * against an unconfirmed column name — which silently reported input VAT
+   * as zero on ANY failure (RLS denial, network error), overstating VAT
+   * payable to the revenue authority. expenses.expense_date is correct, so
+   * the catch is gone and errors now surface.
+   */
+  private async sumExpenseTax(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<number> {
+    const { data: parents, error: parentErr } = await this.client
+      .from('expenses')
+      .select('id')
+      .eq('business_id', businessId)
+      .not('status', 'in', `(${EXCLUDED_STATUSES.join(',')})`)
+      .is('deleted_at', null)
+      .gte('expense_date', periodStart)
+      .lte('expense_date', periodEnd);
+    if (parentErr) throw toRepositoryError('expenses', parentErr);
+
+    return this.sumLineTaxFor(businessId, 'expense_lines', 'expense_id', (parents ?? []).map((p) => p.id));
+  }
+
+  private async sumLineTaxFor(
+    businessId: string,
+    linesTable: 'invoice_lines' | 'expense_lines',
+    fkColumn: string,
+    parentIds: string[],
+  ): Promise<number> {
     if (parentIds.length === 0) return 0;
 
-    const { data: lines, error: linesErr } = await this.client
-      .from(linesTable)
-      .select('tax_amount')
-      .eq('business_id', businessId)
-      .eq('tax_code', 'vat_standard')
-      .in(fkColumn as never, parentIds);
-    if (linesErr) throw toRepositoryError(linesTable, linesErr);
-
-    return (lines ?? []).reduce((sum: number, l: { tax_amount: number }) => sum + Number(l.tax_amount), 0);
+    // Chunked to stay clear of PostgREST URL length limits on busy months.
+    const CHUNK = 200;
+    let total = 0;
+    for (let i = 0; i < parentIds.length; i += CHUNK) {
+      const chunk = parentIds.slice(i, i + CHUNK);
+      const { data, error } = await this.client
+        .from(linesTable)
+        .select('tax_amount')
+        .eq('business_id', businessId)
+        .eq('tax_code', 'vat_standard')
+        .in(fkColumn as never, chunk);
+      if (error) throw toRepositoryError(linesTable, error);
+      total += (data ?? []).reduce((sum: number, l: { tax_amount: number }) => sum + Number(l.tax_amount), 0);
+    }
+    return Math.round(total * 100) / 100;
   }
 
   private async scheduleAlerts(taxReturn: Row<'tax_returns'>): Promise<void> {
-    const due = new Date(taxReturn.due_date);
     const offsets: { days: number; type: 'due_date' | '1_day' | '7_day' | '14_day' }[] = [
-      { days: 0, type: 'due_date' },
-      { days: -1, type: '1_day' },
-      { days: -7, type: '7_day' },
       { days: -14, type: '14_day' },
+      { days: -7, type: '7_day' },
+      { days: -1, type: '1_day' },
+      { days: 0, type: 'due_date' },
     ];
+    const today = todayIso();
     const rows: InsertDto<'tax_alerts'>[] = offsets
-      .map((o) => {
-        const d = new Date(due);
-        d.setDate(d.getDate() + o.days);
-        return {
-          business_id: taxReturn.business_id,
-          tax_return_id: taxReturn.id,
-          alert_type: o.type,
-          scheduled_for: d.toISOString().slice(0, 10),
-          channel: 'email' as const,
-          status: 'pending' as const,
-        };
-      })
-      .filter((r) => r.scheduled_for >= new Date().toISOString().slice(0, 10)); // don't schedule past dates
+      .map((o) => ({
+        business_id: taxReturn.business_id,
+        tax_return_id: taxReturn.id,
+        alert_type: o.type,
+        scheduled_for: addDays(taxReturn.due_date, o.days),
+        channel: 'email' as const,
+        status: 'pending' as const,
+      }))
+      .filter((r) => r.scheduled_for >= today);
 
     if (rows.length === 0) return;
     const { error } = await this.client.from('tax_alerts').insert(rows as never);
     if (error) console.error('Failed to schedule tax_alerts:', error);
   }
 
-  private lastDayOfMonth(dateStr: string): string {
-    const d = new Date(dateStr);
-    return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
-  }
-
-  private addDays(dateStr: string, days: number): string {
-    const d = new Date(dateStr);
-    d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-  }
-
-  private addMonthsSetDay(dateStr: string, months: number, day: number): string {
-    const d = new Date(dateStr);
-    d.setMonth(d.getMonth() + months, day);
-    return d.toISOString().slice(0, 10);
+  /** Calendar-month period bounds for a 'YYYY-MM' label. */
+  static periodBounds(label: string): { start: string; end: string } {
+    const start = `${label}-01`;
+    return { start, end: lastDayOfMonth(start) };
   }
 }
