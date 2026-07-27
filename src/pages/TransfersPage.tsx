@@ -80,10 +80,10 @@ function printDeliveryNote(
 </div>
 ${transfer.notes ? `<p style="background:#f9fafb;padding:10px 14px;border-radius:8px;color:#6b7280;font-size:12px;">${transfer.notes}</p>` : ''}
 <table><thead><tr>
-  <th>Product</th><th style="text-align:center">SKU</th>
-  <th style="text-align:right">Requested</th>
-  <th style="text-align:right">Dispatched</th>
-  <th style="text-align:right">Received</th>
+  <th scope="col">Product</th><th scope="col" style="text-align:center">SKU</th>
+  <th scope="col" style="text-align:right">Requested</th>
+  <th scope="col" style="text-align:right">Dispatched</th>
+  <th scope="col" style="text-align:right">Received</th>
 </tr></thead><tbody>${lineRows}</tbody></table>
 <div class="footer">
   <div style="width:200px"><div class="sig-line">Dispatched by</div></div>
@@ -279,7 +279,7 @@ function TransferDrawer({
       <div className="relative w-full max-w-lg overflow-y-auto bg-white shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
           <div>
-            <p className="text-xs text-gray-400">Transfer</p>
+            <p className="text-xs text-gray-600">Transfer</p>
             <p className="font-semibold text-gray-900">{transfer.transfer_number}</p>
           </div>
           <div className="flex items-center gap-3">
@@ -303,32 +303,32 @@ function TransferDrawer({
 
           <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
             <div className="text-center">
-              <p className="text-xs text-gray-400">From</p>
+              <p className="text-xs text-gray-600">From</p>
               <p className="text-sm font-semibold text-gray-800">{fromLoc}</p>
             </div>
             <ArrowRight size={16} className="mx-auto flex-1 flex-shrink-0 text-gray-300" />
             <div className="text-center">
-              <p className="text-xs text-gray-400">To</p>
+              <p className="text-xs text-gray-600">To</p>
               <p className="text-sm font-semibold text-gray-800">{toLoc}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="mb-1 text-xs text-gray-400">Status</p>
+              <p className="mb-1 text-xs text-gray-600">Status</p>
               <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${status.bg} ${status.text}`}>
                 {status.label}
               </span>
             </div>
             {transfer.dispatched_at && (
               <div>
-                <p className="mb-1 text-xs text-gray-400">Dispatched</p>
+                <p className="mb-1 text-xs text-gray-600">Dispatched</p>
                 <p className="text-sm text-gray-700">{new Date(transfer.dispatched_at).toLocaleDateString('en-GB')}</p>
               </div>
             )}
             {transfer.received_at && (
               <div>
-                <p className="mb-1 text-xs text-gray-400">Received</p>
+                <p className="mb-1 text-xs text-gray-600">Received</p>
                 <p className="text-sm text-gray-700">{new Date(transfer.received_at).toLocaleDateString('en-GB')}</p>
               </div>
             )}
@@ -618,7 +618,7 @@ export function TransfersPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-12 text-center">
             <Truck size={28} className="mb-2 text-gray-200" />
-            <p className="text-sm text-gray-400">No transfers yet</p>
+            <p className="text-sm text-gray-600">No transfers yet</p>
             <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
           </div>
         ) : (
@@ -641,7 +641,7 @@ export function TransfersPage() {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 {['Transfer #', 'From', 'To', 'Date', 'Status', ''].map((h) => (
-                  <th key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${h === 'Status' ? 'text-center' : 'text-left'}`}>{h}</th>
+                  <th scope="col" key={h} className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 ${h === 'Status' ? 'text-center' : 'text-left'}`}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -659,7 +659,7 @@ export function TransfersPage() {
                   <td colSpan={6} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Truck size={28} className="text-gray-200" />
-                      <p className="text-sm text-gray-400">No transfers yet</p>
+                      <p className="text-sm text-gray-600">No transfers yet</p>
                       <p className="text-xs text-gray-300">Create a transfer to dispatch stock to a branch</p>
                     </div>
                   </td>

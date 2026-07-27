@@ -240,7 +240,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
                 placeholder="e.g. 6910"
                 className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500 ${codeExists ? 'border-red-300' : 'border-gray-300'}`}
               />
-              {codeExists && <p className="mt-1 text-xs text-red-500">Code already in use</p>}
+              {codeExists && <p className="mt-1 text-xs text-red-700">Code already in use</p>}
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-gray-500">
@@ -295,7 +295,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
                 <option value="credit">Credit</option>
               </select>
               {debitCreditWarning && (
-                <p className="mt-1 flex items-center gap-1 text-xs text-amber-600">
+                <p className="mt-1 flex items-center gap-1 text-xs text-amber-800">
                   <AlertTriangle size={11} />{debitCreditWarning}
                 </p>
               )}
@@ -649,7 +649,7 @@ export function AccountsPage() {
           )}
         </div>
         {businessTemplate && (
-          <p className="mt-2 text-xs text-gray-400">
+          <p className="mt-2 text-xs text-gray-600">
             Current template: <span className="font-medium text-gray-600">{businessTemplate.toUpperCase()}</span>
             {templateChanged && ' — select "Switch" above to change it, or click the current template to cancel.'}
           </p>
@@ -715,13 +715,13 @@ export function AccountsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Code</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Name</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Type</th>
-                <th className="hidden md:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-400">Balance</th>
-                <th className="hidden md:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Postable</th>
-                <th className="hidden sm:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-400">Status</th>
-                <th className="px-4 py-3" />
+                <th scope="col" className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-700">Code</th>
+                <th scope="col" className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-700">Name</th>
+                <th scope="col" className="hidden sm:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-700">Type</th>
+                <th scope="col" className="hidden md:table-cell px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-700">Balance</th>
+                <th scope="col" className="hidden md:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-700">Postable</th>
+                <th scope="col" className="hidden sm:table-cell px-5 py-3 text-center text-xs font-semibold uppercase tracking-wide text-gray-700">Status</th>
+                <th scope="col" className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -764,7 +764,7 @@ export function AccountsPage() {
                         </span>
                       )}
                       {a.description && (
-                        <p className="mt-0.5 text-xs text-gray-400 truncate max-w-xs">{a.description}</p>
+                        <p className="mt-0.5 text-xs text-gray-600 truncate max-w-xs">{a.description}</p>
                       )}
                     </td>
 
@@ -783,9 +783,9 @@ export function AccountsPage() {
                     {/* Postable indicator */}
                     <td className="hidden md:table-cell px-5 py-3 text-center">
                       {a.is_group ? (
-                        <span className="text-xs text-gray-300">—</span>
+                        <span className="text-xs text-gray-500" aria-label="Group account (not postable)">—</span>
                       ) : (
-                        <CheckCircle size={14} className="mx-auto text-emerald-500" />
+                        <CheckCircle size={14} className="mx-auto text-emerald-700" aria-label="Postable" />
                       )}
                     </td>
 

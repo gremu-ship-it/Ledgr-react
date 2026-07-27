@@ -69,7 +69,7 @@ function Field({
     <div>
       <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-gray-600">{hint}</p>}
     </div>
   );
 }
@@ -765,7 +765,7 @@ function SecurityTab() {
               </button>
             </div>
             {form.confirm_password && form.new_password !== form.confirm_password && (
-              <p className="mt-1 text-xs text-red-500">Passwords do not match</p>
+              <p className="mt-1 text-xs text-red-700">Passwords do not match</p>
             )}
           </Field>
 
@@ -1253,10 +1253,10 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 text-left">Restriction</th>
-                  <th className="px-4 py-3 text-left">Role</th>
-                  <th className="px-4 py-3 text-left">Expires</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th scope="col" className="px-4 py-3 text-left">Restriction</th>
+                  <th scope="col" className="px-4 py-3 text-left">Role</th>
+                  <th scope="col" className="px-4 py-3 text-left">Expires</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1313,10 +1313,10 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left">Member</th>
-                <th className="px-4 py-3 text-left">Role</th>
-                <th className="px-4 py-3 text-left">Joined</th>
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left">Member</th>
+                <th scope="col" className="px-4 py-3 text-left">Role</th>
+                <th scope="col" className="px-4 py-3 text-left">Joined</th>
+                <th scope="col" className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1339,7 +1339,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">you</span>
                             )}
                           </p>
-                          <p className="truncate text-xs text-gray-400">{subText}{member.email && ` • ${member.user_id.slice(0, 8)}…`}</p>
+                          <p className="truncate text-xs text-gray-600">{subText}{member.email && ` • ${member.user_id.slice(0, 8)}…`}</p>
                         </div>
                       </div>
                     </td>
@@ -1541,7 +1541,7 @@ function PrivacyTab() {
             records are automatically archived to cold storage (read-only, encrypted). Personal data is
             handled according to your deletion request above.
           </p>
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-gray-700">
             Archiving is performed nightly by a secure background job. You can request early archival of
             specific periods by contacting support.
           </p>

@@ -90,7 +90,7 @@ export function BottomNav() {
       {/* More menu — icon tiles, matching app-wide badge treatment */}
       {moreOpen && (
         <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">{t('common.more')}</p>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-700">{t('common.more')}</p>
           <div className="grid grid-cols-3 gap-2">
             {moreItems.map((item) => {
               // Reconstruct enough for isItemLocked (minPlan / requiresCapability not present on these items)
@@ -167,15 +167,18 @@ export function BottomNav() {
 
           {/* FAB center button */}
           <button
+            type="button"
             onClick={() => setFabOpen((v) => !v)}
+            aria-expanded={fabOpen}
+            aria-label={fabOpen ? t('common.closeAddMenu') : t('common.openAddMenu')}
             className={clsx(
               'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-2xl shadow-xl transition-all active:scale-90',
-              fabOpen 
-                ? 'bg-gray-900 rotate-45' 
-                : 'bg-gradient-to-br from-brand-400 to-brand-600 ring-4 ring-white shadow-brand-500/30',
+              fabOpen
+                ? 'bg-gray-900 rotate-45'
+                : 'bg-gradient-to-br from-brand-600 to-brand-700 ring-4 ring-white shadow-brand-500/30',
             )}
           >
-            <Plus className="h-7 w-7 text-white" />
+            <Plus className="h-7 w-7 text-white" aria-hidden="true" />
           </button>
 
           {/* Last 2 nav items */}
@@ -185,15 +188,18 @@ export function BottomNav() {
 
           {/* More button */}
           <button
+            type="button"
             onClick={() => setMoreOpen((v) => !v)}
+            aria-expanded={moreOpen}
+            aria-label={t('common.more')}
             className="group flex flex-col items-center gap-1 rounded-xl px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors"
           >
             {moreOpen ? (
               <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
             ) : (
               <div className="flex flex-col items-center">
-                <MoreHorizontal className="h-5 w-5 text-gray-400 transition-colors group-active:text-brand-500" />
-                <span className="text-gray-400 group-active:text-brand-500">{t('common.more')}</span>
+                <MoreHorizontal className="h-5 w-5 text-gray-700 transition-colors group-active:text-brand-600" aria-hidden="true" />
+                <span className="text-gray-700 group-active:text-brand-600" aria-hidden="true">{t('common.more')}</span>
               </div>
             )}
           </button>
@@ -231,20 +237,24 @@ function NavTab({
   const { t } = useTranslation();
 
   return (
-    <NavLink to={path} className="group flex flex-col items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider">
+    <NavLink
+      to={path}
+      aria-label={t(labelKey)}
+      className="group flex flex-col items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+    >
       {({ isActive }) =>
         isActive ? (
           <>
             <div className="relative">
               <div className="absolute -inset-1 rounded-full bg-brand-500/20 blur-sm" />
-              <Icon className="relative h-5 w-5 text-brand-600" />
+              <Icon className="relative h-5 w-5 text-brand-700" aria-hidden="true" />
             </div>
-            <span className="text-brand-600">{t(labelKey)}</span>
+            <span className="text-brand-700" aria-hidden="true">{t(labelKey)}</span>
           </>
         ) : (
           <>
-            <Icon className="h-5 w-5 text-gray-400 transition-colors group-active:text-brand-500" />
-            <span className="text-gray-400 group-active:text-brand-500">{t(labelKey)}</span>
+            <Icon className="h-5 w-5 text-gray-600 transition-colors group-active:text-brand-600" aria-hidden="true" />
+            <span className="text-gray-700 group-active:text-brand-600" aria-hidden="true">{t(labelKey)}</span>
           </>
         )
       }

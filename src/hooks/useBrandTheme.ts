@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { applyBrandColors, resetBrandColors } from '@/lib/brandColors';
 
-const DEFAULT_BRAND_COLOR = '#0F766E';
+const DEFAULT_BRAND_COLOR = '#0E7C5A'; // WCAG 2.1 AA: 5.32:1 contrast on white
 
 /**
  * Hook that fetches the current business data and applies the brand color

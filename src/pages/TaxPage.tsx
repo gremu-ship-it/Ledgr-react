@@ -490,14 +490,14 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left">Tax Code</th>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-right">Rate</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left">MRA Reference</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left">Effective To</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left">Tax Code</th>
+                <th scope="col" className="px-4 py-3 text-left">Name</th>
+                <th scope="col" className="px-4 py-3 text-right">Rate</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">MRA Reference</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Effective To</th>
+                <th scope="col" className="px-4 py-3 text-center">Status</th>
+                <th scope="col" className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -627,12 +627,12 @@ function PayeBandsTab({ businessId }: { businessId: string }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left">Label</th>
-                <th className="px-4 py-3 text-right">From (MWK)</th>
-                <th className="px-4 py-3 text-right">To (MWK)</th>
-                <th className="px-4 py-3 text-right">Rate</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left">Label</th>
+                <th scope="col" className="px-4 py-3 text-right">From (MWK)</th>
+                <th scope="col" className="px-4 py-3 text-right">To (MWK)</th>
+                <th scope="col" className="px-4 py-3 text-right">Rate</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
+                <th scope="col" className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

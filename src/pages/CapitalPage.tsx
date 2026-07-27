@@ -280,12 +280,12 @@ function openRepaymentSchedule(
   <table>
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Type</th>
-        <th class="num">Principal</th>
-        <th class="num">Interest</th>
-        <th class="num">Total</th>
-        <th class="num">Balance</th>
+        <th scope="col">Date</th>
+        <th scope="col">Type</th>
+        <th scope="col" class="num">Principal</th>
+        <th scope="col" class="num">Interest</th>
+        <th scope="col" class="num">Total</th>
+        <th scope="col" class="num">Balance</th>
       </tr>
     </thead>
     <tbody>
@@ -722,14 +722,14 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Lender</th>
-              <th className="px-4 py-3 text-right">Principal</th>
-              <th className="px-4 py-3 text-right">Repaid</th>
-              <th className="px-4 py-3 text-right">Outstanding</th>
-              <th className="px-4 py-3">Rate</th>
-              <th className="px-4 py-3">Start</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 text-right">Action</th>
+              <th scope="col" className="px-4 py-3">Lender</th>
+              <th scope="col" className="px-4 py-3 text-right">Principal</th>
+              <th scope="col" className="px-4 py-3 text-right">Repaid</th>
+              <th scope="col" className="px-4 py-3 text-right">Outstanding</th>
+              <th scope="col" className="px-4 py-3">Rate</th>
+              <th scope="col" className="px-4 py-3">Start</th>
+              <th scope="col" className="px-4 py-3">Status</th>
+              <th scope="col" className="px-4 py-3 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -780,7 +780,7 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
           <div className="overflow-x-auto rounded-xl border border-gray-200">
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
-                <tr><th className="px-4 py-3">Date</th><th className="px-4 py-3">Loan</th><th className="px-4 py-3 text-right">Principal</th><th className="px-4 py-3 text-right">Interest</th><th className="px-4 py-3 text-right">Total</th></tr>
+                <tr><th scope="col" className="px-4 py-3">Date</th><th scope="col" className="px-4 py-3">Loan</th><th scope="col" className="px-4 py-3 text-right">Principal</th><th scope="col" className="px-4 py-3 text-right">Interest</th><th scope="col" className="px-4 py-3 text-right">Total</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {repayments.slice(0, 10).map((r) => {
@@ -868,12 +868,12 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Shareholder</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3 text-right">Shares</th>
-              <th className="px-4 py-3 text-right">Amount</th>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Reference</th>
+              <th scope="col" className="px-4 py-3">Shareholder</th>
+              <th scope="col" className="px-4 py-3">Type</th>
+              <th scope="col" className="px-4 py-3 text-right">Shares</th>
+              <th scope="col" className="px-4 py-3 text-right">Amount</th>
+              <th scope="col" className="px-4 py-3">Date</th>
+              <th scope="col" className="px-4 py-3">Reference</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

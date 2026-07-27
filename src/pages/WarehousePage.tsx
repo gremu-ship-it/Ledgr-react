@@ -217,7 +217,7 @@ function StockCard({ balance }: { balance: BalanceRow }) {
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-gray-900">{balance.products?.name ?? '—'}</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-600">
             {balance.products?.sku ?? '—'} · {balance.inventory_locations?.name ?? '—'}
           </p>
         </div>
@@ -393,7 +393,7 @@ export function WarehousePage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-12 text-center">
             <Warehouse size={28} className="mb-2 text-gray-200" />
-            <p className="text-sm text-gray-400">No stock records found</p>
+            <p className="text-sm text-gray-600">No stock records found</p>
             <p className="text-xs text-gray-300">Receive stock to start tracking inventory</p>
           </div>
         ) : (
@@ -408,8 +408,9 @@ export function WarehousePage() {
               <tr className="border-b border-gray-100 bg-gray-50">
                 {['Product', 'Location', 'On Hand', 'Reserved', 'Available', 'Avg Cost', 'Stock Value', 'Status'].map((h, i) => (
                   <th
+                    scope="col"
                     key={h}
-                    className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-400 ${
+                    className={`px-5 py-3 text-xs font-semibold uppercase tracking-wide text-gray-600 ${
                       i >= 2 && i <= 6 ? 'text-right' : i === 7 ? 'text-center' : 'text-left'
                     }`}
                   >
@@ -434,7 +435,7 @@ export function WarehousePage() {
                   <td colSpan={8} className="py-16 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Warehouse size={28} className="text-gray-200" />
-                      <p className="text-sm text-gray-400">No stock records found</p>
+                      <p className="text-sm text-gray-600">No stock records found</p>
                       <p className="text-xs text-gray-300">Receive stock to start tracking inventory</p>
                     </div>
                   </td>
@@ -450,7 +451,7 @@ export function WarehousePage() {
                     <tr key={b.id} className="transition-colors hover:bg-gray-50/50">
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-gray-800">{b.products?.name ?? '—'}</p>
-                        {b.products?.sku && <p className="text-xs text-gray-400">{b.products.sku}</p>}
+                        {b.products?.sku && <p className="text-xs text-gray-600">{b.products.sku}</p>}
                       </td>
                       <td className="px-5 py-3.5 text-gray-500">{b.inventory_locations?.name ?? '—'}</td>
                       <td className="px-5 py-3.5 text-right font-medium text-gray-800">{Number(b.quantity_on_hand).toLocaleString()}</td>

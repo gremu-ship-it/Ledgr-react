@@ -73,7 +73,7 @@ function DepartmentModal({
               maxLength={10}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
-            <p className="mt-1 text-xs text-gray-400">Up to 10 characters. Auto-generated if blank.</p>
+            <p className="mt-1 text-xs text-gray-600">Up to 10 characters. Auto-generated if blank.</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Cost Centre</label>
@@ -83,7 +83,7 @@ function DepartmentModal({
               placeholder="e.g. CC-100"
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
-            <p className="mt-1 text-xs text-gray-400">Optional reference code used in ledger reporting.</p>
+            <p className="mt-1 text-xs text-gray-600">Optional reference code used in ledger reporting.</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Branch (optional)</label>
@@ -97,7 +97,7 @@ function DepartmentModal({
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-400">Link this department to a branch, or leave unassigned for a company-wide department.</p>
+            <p className="mt-1 text-xs text-gray-600">Link this department to a branch, or leave unassigned for a company-wide department.</p>
           </div>
         </div>
 
@@ -222,7 +222,7 @@ export function DepartmentsPage() {
             <Users2 size={22} className="text-gray-300" />
           </div>
           <p className="text-sm font-medium text-gray-500">No departments yet</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-600">
             Create a department to start allocating income and expenses to it
           </p>
           <button
@@ -288,7 +288,7 @@ export function DepartmentsPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{dept.name}</p>
-                    {dept.code && <p className="text-xs text-gray-400">{dept.code}</p>}
+                    {dept.code && <p className="text-xs text-gray-600">{dept.code}</p>}
                   </div>
                 </div>
 

@@ -72,7 +72,7 @@ export function CheckoutModal({ businessId, targetTier, onClose }: CheckoutModal
               <span className="text-2xl font-bold text-brand-700">MWK {price.toLocaleString()}</span>
             </div>
             {cycle === 'annual' && (
-              <p className="mt-1 text-xs text-emerald-600">
+              <p className="mt-1 text-xs text-emerald-800">
                 Save {plan.annualDiscount}% vs. paying monthly (MWK {(plan.priceMWK * 12).toLocaleString()}/year)
               </p>
             )}
@@ -98,7 +98,7 @@ export function CheckoutModal({ businessId, targetTier, onClose }: CheckoutModal
             )}
           </button>
 
-          <p className="text-center text-[10px] text-gray-400">
+          <p className="text-center text-[10px] text-gray-700">
             Secure payment powered by PayChangu · Mobile money &amp; card accepted
           </p>
         </div>

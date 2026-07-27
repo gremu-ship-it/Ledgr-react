@@ -54,14 +54,14 @@ export function PartnerClientsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-5 py-3">Business</th>
-                <th className="px-5 py-3">Plan</th>
-                <th className="px-5 py-3">Users</th>
-                <th className="px-5 py-3">Invoices</th>
-                <th className="px-5 py-3">Entries</th>
-                <th className="px-5 py-3">Onboarded</th>
-                <th className="px-5 py-3">Last activity</th>
-                <th className="px-5 py-3">Status</th>
+                <th scope="col" className="px-5 py-3">Business</th>
+                <th scope="col" className="px-5 py-3">Plan</th>
+                <th scope="col" className="px-5 py-3">Users</th>
+                <th scope="col" className="px-5 py-3">Invoices</th>
+                <th scope="col" className="px-5 py-3">Entries</th>
+                <th scope="col" className="px-5 py-3">Onboarded</th>
+                <th scope="col" className="px-5 py-3">Last activity</th>
+                <th scope="col" className="px-5 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

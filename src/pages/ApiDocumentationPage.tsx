@@ -96,9 +96,9 @@ export function ApiDocumentationPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left">Method</th>
-                <th className="px-4 py-3 text-left">Endpoint</th>
-                <th className="px-4 py-3 text-left">Description</th>
+                <th scope="col" className="px-4 py-3 text-left">Method</th>
+                <th scope="col" className="px-4 py-3 text-left">Endpoint</th>
+                <th scope="col" className="px-4 py-3 text-left">Description</th>
               </tr>
             </thead>
             <tbody className="divide-y">

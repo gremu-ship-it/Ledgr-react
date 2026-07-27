@@ -57,7 +57,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
             </span>
           )}
         </div>
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-600">
           {new Date().toLocaleDateString('en-MW', { month: 'long', year: 'numeric' })}
         </span>
       </div>
@@ -92,7 +92,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
                 <span>{t('dashboard.vatPayableToMra')}</span>
                 <span>{formatMwk(vat.data?.vatPayable ?? 0)}</span>
               </div>
-              <p className="text-xs text-gray-400">{t('dashboard.period', { period: vat.data?.period ?? '—' })}</p>
+              <p className="text-xs text-gray-600">{t('dashboard.period', { period: vat.data?.period ?? '—' })}</p>
             </div>
           )}
         </div>
@@ -110,8 +110,8 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
                 <span>{t('dashboard.totalPayeToRemit')}</span>
                 <span>{formatMwk(paye.data?.totalPaye ?? 0)}</span>
               </div>
-              <p className="text-xs text-gray-400">{t('dashboard.period', { period: paye.data?.period ?? '—' })}</p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-600">{t('dashboard.period', { period: paye.data?.period ?? '—' })}</p>
+              <p className="text-xs text-gray-600">
                 {t('dashboard.due14th')}
               </p>
             </div>
@@ -150,7 +150,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
                       ? t('dashboard.dueTodayBang')
                       : t('dashboard.daysLeft', { count: d.daysUntilDue })}
                   </p>
-                  <p className="text-xs text-gray-400">{d.dueDateStr}</p>
+                  <p className="text-xs text-gray-600">{d.dueDateStr}</p>
                 </div>
               </div>
             ))}

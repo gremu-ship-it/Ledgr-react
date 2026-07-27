@@ -315,7 +315,7 @@ export function BillingTab() {
           })}
         </div>
 
-        <p className="mt-4 text-xs text-gray-400">
+        <p className="mt-4 text-xs text-gray-600">
           Upgrades are processed securely through PayChangu (mobile money &amp; card). Downgrades take effect
           immediately with no charge.
         </p>
@@ -343,11 +343,11 @@ export function BillingTab() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wider text-gray-400">
-                  <th className="pb-2 pr-4">Date</th>
-                  <th className="pb-2 pr-4">Plan</th>
-                  <th className="pb-2 pr-4">Cycle</th>
-                  <th className="pb-2 pr-4">Amount</th>
-                  <th className="pb-2">Status</th>
+                  <th scope="col" className="pb-2 pr-4">Date</th>
+                  <th scope="col" className="pb-2 pr-4">Plan</th>
+                  <th scope="col" className="pb-2 pr-4">Cycle</th>
+                  <th scope="col" className="pb-2 pr-4">Amount</th>
+                  <th scope="col" className="pb-2">Status</th>
                 </tr>
               </thead>
               <tbody>

@@ -69,7 +69,10 @@ export function Sidebar() {
           )}
         </div>
 
-        <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4">
+        <nav
+          aria-label={t('common.primaryNavigation')}
+          className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4"
+        >
           {visibleSections.map((section) => (
             <div key={section.labelKey} className="mb-6">
               {sidebarOpen && (
@@ -116,17 +119,22 @@ export function Sidebar() {
                           )
                         }
                       >
-                        <Icon className="h-[18px] w-[18px] shrink-0" />
-                        {sidebarOpen && (
-                          <span className="flex flex-1 items-center justify-between gap-2 truncate">
-                            <span className="truncate">{t(item.labelKey)}</span>
-                            {locked && (
-                              <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Upgrade required" />
+                        {({ isActive }) => (
+                          <>
+                            <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                            {sidebarOpen && (
+                              <span className="flex flex-1 items-center justify-between gap-2 truncate">
+                                <span className="truncate">{t(item.labelKey)}</span>
+                                {locked && (
+                                  <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Upgrade required" />
+                                )}
+                              </span>
                             )}
-                          </span>
-                        )}
-                        {!sidebarOpen && locked && (
-                          <Lock className="absolute right-1.5 top-1.5 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
+                            {!sidebarOpen && locked && (
+                              <Lock className="absolute right-1.5 top-1.5 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
+                            )}
+                            {isActive && <span className="sr-only"> (current page)</span>}
+                          </>
                         )}
                       </NavLink>
                     </li>

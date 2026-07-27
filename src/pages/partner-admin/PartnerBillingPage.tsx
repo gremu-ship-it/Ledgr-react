@@ -141,13 +141,13 @@ export function PartnerBillingPage() {
           <table className="w-full text-sm">
             <thead className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="py-2">Invoice</th>
-                <th className="py-2">Period</th>
-                <th className="py-2">Clients</th>
-                <th className="py-2">Amount</th>
-                <th className="py-2">Due</th>
-                <th className="py-2">Status</th>
-                {isPlatformAdmin && <th className="py-2" />}
+                <th scope="col" className="py-2">Invoice</th>
+                <th scope="col" className="py-2">Period</th>
+                <th scope="col" className="py-2">Clients</th>
+                <th scope="col" className="py-2">Amount</th>
+                <th scope="col" className="py-2">Due</th>
+                <th scope="col" className="py-2">Status</th>
+                {isPlatformAdmin && <th scope="col" className="py-2" />}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">

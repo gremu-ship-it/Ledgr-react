@@ -455,11 +455,11 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <tr>
-                    <th className="px-4 py-2.5 text-left">Employee</th>
-                    <th className="px-4 py-2.5 text-right">Gross Pay</th>
-                    <th className="px-4 py-2.5 text-right">PAYE</th>
-                    <th className="px-4 py-2.5 text-right">Pension (5%)</th>
-                    <th className="px-4 py-2.5 text-right">Net Pay</th>
+                    <th scope="col" className="px-4 py-2.5 text-left">Employee</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Gross Pay</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">PAYE</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Pension (5%)</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Net Pay</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -467,7 +467,7 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
                     <tr key={line.employee.id}>
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{line.employee.first_name} {line.employee.last_name}</p>
-                        <p className="text-xs text-gray-400">{line.employee.job_title ?? line.employee.employee_number}</p>
+                        <p className="text-xs text-gray-600">{line.employee.job_title ?? line.employee.employee_number}</p>
                       </td>
                       <td className="px-4 py-3 text-right">{formatMwk(line.gross_pay)}</td>
                       <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.paye_deduction)}</td>
@@ -578,7 +578,7 @@ function ApprovePayrollModal({
             ))}
           </select>
           {bankAccounts.length === 0 && (
-            <p className="mt-1 text-xs text-amber-600">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
+            <p className="mt-1 text-xs text-amber-800">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
           )}
         </div>
 
@@ -639,12 +639,12 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-2.5 text-left">Employee</th>
-                  <th className="px-4 py-2.5 text-right">Gross Pay</th>
-                  <th className="px-4 py-2.5 text-right">PAYE</th>
-                  <th className="px-4 py-2.5 text-right">Pension (Employee)</th>
-                  <th className="px-4 py-2.5 text-right">Other Deductions</th>
-                  <th className="px-4 py-2.5 text-right">Net Pay</th>
+                  <th scope="col" className="px-4 py-2.5 text-left">Employee</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Gross Pay</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">PAYE</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Pension (Employee)</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Other Deductions</th>
+                  <th scope="col" className="px-4 py-2.5 text-right">Net Pay</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -715,14 +715,14 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
       <table className="w-full text-sm">
         <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
           <tr>
-            <th className="px-4 py-3 text-left">Run #</th>
-            <th className="px-4 py-3 text-left">Period</th>
-            <th className="px-4 py-3 text-left">Pay Date</th>
-            <th className="px-4 py-3 text-right">Total Gross</th>
-            <th className="px-4 py-3 text-right">Total PAYE</th>
-            <th className="px-4 py-3 text-right">Total Net</th>
-            <th className="px-4 py-3 text-center">Status</th>
-            <th className="w-8" />
+            <th scope="col" className="px-4 py-3 text-left">Run #</th>
+            <th scope="col" className="px-4 py-3 text-left">Period</th>
+            <th scope="col" className="px-4 py-3 text-left">Pay Date</th>
+            <th scope="col" className="px-4 py-3 text-right">Total Gross</th>
+            <th scope="col" className="px-4 py-3 text-right">Total PAYE</th>
+            <th scope="col" className="px-4 py-3 text-right">Total Net</th>
+            <th scope="col" className="px-4 py-3 text-center">Status</th>
+            <th scope="col" className="w-8" />
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -789,14 +789,14 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Employee</th>
-              <th className="px-4 py-3 text-left">Employee #</th>
-              <th className="px-4 py-3 text-left">Job Title</th>
-              <th className="px-4 py-3 text-left">Type</th>
-              <th className="px-4 py-3 text-right">Gross Salary</th>
-              <th className="px-4 py-3 text-right">Est. PAYE</th>
-              <th className="px-4 py-3 text-right">Est. Net</th>
-              {canEdit && <th className="w-10" />}
+              <th scope="col" className="px-4 py-3 text-left">Employee</th>
+              <th scope="col" className="px-4 py-3 text-left">Employee #</th>
+              <th scope="col" className="px-4 py-3 text-left">Job Title</th>
+              <th scope="col" className="px-4 py-3 text-left">Type</th>
+              <th scope="col" className="px-4 py-3 text-right">Gross Salary</th>
+              <th scope="col" className="px-4 py-3 text-right">Est. PAYE</th>
+              <th scope="col" className="px-4 py-3 text-right">Est. Net</th>
+              {canEdit && <th scope="col" className="w-10" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -812,7 +812,7 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
                 >
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
-                    <p className="text-xs text-gray-400">{emp.payment_method.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-gray-600">{emp.payment_method.replace(/_/g, ' ')}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
                   <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>

@@ -53,7 +53,7 @@ function SectionRows({
           <td className="py-1 ps-4 text-sm text-gray-600">{line.name}</td>
           <td className="py-1 text-end text-sm text-gray-600">{formatAccounting(line.amount, formatCurrency)}</td>
           {showComparative && (
-            <td className="py-1 text-end text-sm text-gray-400">
+            <td className="py-1 text-end text-sm text-gray-600">
               {line.comparativeAmount !== null ? formatAccounting(line.comparativeAmount, formatCurrency) : '—'}
             </td>
           )}
@@ -205,12 +205,12 @@ export function StatementOfFinancialPosition({
       <table className="w-full">
         <thead>
           <tr>
-            <th className="pb-2 text-start text-xs font-medium uppercase tracking-wide text-gray-400">{t('reports.assets')}</th>
-            <th className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-400">
+            <th scope="col" className="pb-2 text-start text-xs font-medium uppercase tracking-wide text-gray-700">{t('reports.assets')}</th>
+            <th scope="col" className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-700">
               {dateLabel}
             </th>
             {showComparative && (
-              <th className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-400">
+              <th scope="col" className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-700">
                 {comparativeDate ? format.date(comparativeDate, { day: 'numeric', month: 'short', year: 'numeric' }) : ''}
               </th>
             )}

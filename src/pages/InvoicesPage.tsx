@@ -313,7 +313,7 @@ function RecordPaymentModal({
                 placeholder={`1 ${invoice.original_currency ?? invoice.currency} = ? ${currentBusiness?.business?.base_currency || 'MWK'}`}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              <p className="mt-1 text-xs text-gray-400">Leave blank to use the cached closing/transaction-date rate if available.</p>
+              <p className="mt-1 text-xs text-gray-600">Leave blank to use the cached closing/transaction-date rate if available.</p>
             </div>
           )}
 
@@ -521,11 +521,11 @@ function InvoiceDetail({
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                     <tr>
-                      <th className="px-4 py-2.5 text-left">Description</th>
-                      <th className="px-4 py-2.5 text-right">Qty</th>
-                      <th className="px-4 py-2.5 text-right">Unit Price</th>
-                      <th className="px-4 py-2.5 text-right">Tax</th>
-                      <th className="px-4 py-2.5 text-right">Total</th>
+                      <th scope="col" className="px-4 py-2.5 text-left">Description</th>
+                      <th scope="col" className="px-4 py-2.5 text-right">Qty</th>
+                      <th scope="col" className="px-4 py-2.5 text-right">Unit Price</th>
+                      <th scope="col" className="px-4 py-2.5 text-right">Tax</th>
+                      <th scope="col" className="px-4 py-2.5 text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -628,7 +628,7 @@ function InvoiceDetail({
                   }}
                 />
               </div>
-              <p className="mt-1.5 text-xs text-gray-400">
+              <p className="mt-1.5 text-xs text-gray-600">
                 {Math.round(
                   (Number(invoice.amount_paid) /
                     Number(invoice.total_amount)) *
@@ -664,13 +664,13 @@ function InvoiceDetail({
                       <p className="font-medium text-gray-900">
                         {formatMwk(Number(p.amount))}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-600">
                         {formatDate(p.payment_date)} ·{' '}
                         {p.payment_method.replace(/_/g, ' ')}
                       </p>
                     </div>
                     {p.reference && (
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-600">
                         {p.reference}
                       </span>
                     )}
@@ -793,12 +793,12 @@ function InvoiceList({
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="hidden sm:table-cell px-4 py-3 text-left">Issue Date</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-left">Due Date</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-right">Outstanding</th>
-                  <th className="px-4 py-3 text-center">Status</th>
-                  <th className="w-8" />
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Issue Date</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Due Date</th>
+                  <th scope="col" className="px-4 py-3 text-right">Total</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Outstanding</th>
+                  <th scope="col" className="px-4 py-3 text-center">Status</th>
+                  <th scope="col" className="w-8" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

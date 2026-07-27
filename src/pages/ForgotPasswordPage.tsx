@@ -46,7 +46,7 @@ export function ForgotPasswordPage() {
             If <span className="font-semibold">{email}</span> is registered with Ledgr, you'll
             receive a password reset link shortly.
           </p>
-          <p className="text-xs text-gray-400">Check your spam folder if it doesn't arrive.</p>
+          <p className="text-xs text-gray-600">Check your spam folder if it doesn't arrive.</p>
           <Link to="/login" className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             Back to sign in
           </Link>

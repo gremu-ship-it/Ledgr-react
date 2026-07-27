@@ -121,7 +121,7 @@ export function SessionManager() {
         <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span>Per-session revocation across other devices requires a server-side Admin API call. Use <strong>Sign out everywhere</strong> to terminate all active sessions.</span>
       </div>
-      {user && <div className="text-xs text-gray-400">User ID: <code className="font-mono">{user.id}</code></div>}
+      {user && <div className="text-xs text-gray-600">User ID: <code className="font-mono">{user.id}</code></div>}
       <div className="flex flex-col gap-2 sm:flex-row">
         <button onClick={() => void loadSession()} disabled={loading || !!signingOut}
           className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">

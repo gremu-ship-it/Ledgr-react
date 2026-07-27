@@ -134,18 +134,18 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="hidden sm:table-cell px-4 py-3 text-left">Code</th>
-              <th className="px-4 py-3 text-left">Account</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right">Debits</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right">Credits</th>
-              <th className="px-4 py-3 text-right">Balance</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Code</th>
+              <th scope="col" className="px-4 py-3 text-left">Account</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Debits</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Credits</th>
+              <th scope="col" className="px-4 py-3 text-right">Balance</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {rows.map((row, i) => (
               <tr key={i} className="hover:bg-gray-50 transition-colors">
-                <td className="hidden sm:table-cell px-4 py-2.5 font-mono text-xs text-gray-400">{row.code}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 font-mono text-xs text-gray-600">{row.code}</td>
                 <td className="px-4 py-2.5 font-medium text-gray-900">{row.name}</td>
                 <td className="hidden sm:table-cell px-4 py-2.5">
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-600">
@@ -208,13 +208,13 @@ function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: s
         <table className="w-full min-w-[760px] text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Date</th>
-              <th className="px-4 py-3 text-left">Entry</th>
-              <th className="px-4 py-3 text-left">Description</th>
-              <th className="px-4 py-3 text-right">Transaction amount</th>
-              <th className="px-4 py-3 text-right">Functional amount</th>
-              <th className="px-4 py-3 text-right">Rate used</th>
-              <th className="px-4 py-3 text-left">Rate date</th>
+              <th scope="col" className="px-4 py-3 text-left">Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Entry</th>
+              <th scope="col" className="px-4 py-3 text-left">Description</th>
+              <th scope="col" className="px-4 py-3 text-right">Transaction amount</th>
+              <th scope="col" className="px-4 py-3 text-right">Functional amount</th>
+              <th scope="col" className="px-4 py-3 text-right">Rate used</th>
+              <th scope="col" className="px-4 py-3 text-left">Rate date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

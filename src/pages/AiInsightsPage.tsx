@@ -157,7 +157,7 @@ function MessageBubble({ message, onAction }: { message: Message; onAction: (pat
           </div>
         )}
 
-        <span className="text-xs text-gray-400">
+        <span className="text-xs text-gray-600">
           {message.timestamp.toLocaleTimeString('en-MW', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
@@ -442,7 +442,7 @@ export function AiInsightsPage() {
           <Send className="h-4 w-4" />
         </button>
       </div>
-      <p className="mt-2 text-center text-xs text-gray-400">{t('ai.enterHint')}</p>
+      <p className="mt-2 text-center text-xs text-gray-600">{t('ai.enterHint')}</p>
     </div>
   );
 }

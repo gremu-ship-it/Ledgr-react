@@ -13,9 +13,9 @@ interface RecentTransactionsProps {
 }
 
 const statusConfig: Record<string, { labelKey: string; bg: string; text: string }> = {
-  posted:   { labelKey: 'dashboard.posted',   bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  draft:    { labelKey: 'dashboard.draft',    bg: 'bg-amber-50',   text: 'text-amber-600'  },
-  reversed: { labelKey: 'dashboard.reversed', bg: 'bg-gray-100',   text: 'text-gray-500'   },
+  posted:   { labelKey: 'dashboard.posted',   bg: 'bg-emerald-50', text: 'text-emerald-800' },
+  draft:    { labelKey: 'dashboard.draft',    bg: 'bg-amber-50',   text: 'text-amber-800'  },
+  reversed: { labelKey: 'dashboard.reversed', bg: 'bg-gray-100',   text: 'text-gray-700'   },
 };
 
 export function RecentTransactions({ entries, isLoading, isError }: RecentTransactionsProps) {
@@ -52,15 +52,19 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   }
 
   if (isError) {
-    return <p className="text-sm text-red-500">{t('dashboard.failedRecent')}</p>;
+    return (
+      <p className="flex items-center gap-2 text-sm text-red-700" role="alert">
+        <span aria-hidden="true">⚠</span> {t('dashboard.failedRecent')}
+      </p>
+    );
   }
 
   if (!entries || entries.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-        <RefreshCw size={28} className="text-gray-200" />
-        <p className="text-sm font-medium text-gray-400">{t('dashboard.noJournalEntries')}</p>
-        <p className="text-xs text-gray-300">{t('dashboard.transactionsAppearRecorded')}</p>
+      <div className="flex flex-col items-center justify-center gap-2 py-10 text-center" role="status">
+        <RefreshCw size={28} className="text-gray-300" aria-hidden="true" />
+        <p className="text-sm font-medium text-gray-500">{t('dashboard.noJournalEntries')}</p>
+        <p className="text-xs text-gray-600">{t('dashboard.transactionsAppearRecorded')}</p>
       </div>
     );
   }
@@ -86,11 +90,19 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
     return (
       <th
         key={col}
-        className="cursor-pointer select-none px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-gray-400 hover:text-brand-600"
+        scope="col"
+        aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+        className="cursor-pointer select-none px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-gray-600 hover:text-brand-700"
         onClick={() => handleSort(col)}
       >
-        {label}
-        <span className="ms-1 opacity-50">{active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+        <button
+          type="button"
+          onClick={() => handleSort(col)}
+          className="inline-flex items-center gap-1 font-bold uppercase tracking-wide text-gray-600 hover:text-brand-700"
+        >
+          {label}
+          <span className="opacity-50" aria-hidden="true">{active ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+        </button>
       </th>
     );
   }
@@ -98,13 +110,17 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
   return (
     <div>
       <div className="mb-3 flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
-        <Search className="h-4 w-4 text-gray-400 shrink-0" />
+        <Search className="h-4 w-4 text-gray-500 shrink-0" aria-hidden="true" />
+        <label htmlFor="recent-tx-search" className="sr-only">
+          {t('dashboard.searchTransactions')}
+        </label>
         <input
-          type="text"
+          id="recent-tx-search"
+          type="search"
           placeholder={t('dashboard.searchTransactions')}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+          className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-500"
         />
       </div>
 
@@ -114,14 +130,14 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
             <tr className="border-b border-gray-100">
               {renderSortTh('entry_date', t('dashboard.date'))}
               {renderSortTh('description', t('dashboard.description'))}
-              <th className="px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-gray-400">{t('dashboard.type')}</th>
+              <th scope="col" className="px-4 py-3 text-start text-xs font-bold uppercase tracking-wide text-gray-600">{t('dashboard.type')}</th>
               {renderSortTh('status', t('dashboard.status'))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-400">
+                <td colSpan={4} className="px-4 py-8 text-center text-sm text-gray-500">
                   {t('dashboard.noTransactionsMatch')}
                 </td>
               </tr>
@@ -133,33 +149,40 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
 
               // Highlight income/expense descriptions for easy identification
               const descColor = isIncome
-                ? 'text-emerald-700'
+                ? 'text-emerald-800'
                 : isExpense
-                  ? 'text-red-600'
-                  : 'text-gray-800';
+                  ? 'text-red-800'
+                  : 'text-gray-900';
 
               return (
                 <tr
                   key={entry.id}
                   onClick={() => setSelectedEntryId(entry.id)}
-                  className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-[#e6f4ef]/40 last:border-0"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedEntryId(entry.id);
+                    }
+                  }}
+                  tabIndex={0}
+                  className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-[#e6f4ef]/40 focus-visible:bg-[#e6f4ef]/40 last:border-0"
                 >
-                  <td className="px-4 py-3 text-gray-400 whitespace-nowrap">{date}</td>
+                  <th scope="row" className="px-4 py-3 font-normal text-gray-600 whitespace-nowrap">{date}</th>
                   <td className="px-4 py-3">
                     <p className={`font-medium truncate max-w-[180px] ${descColor}`}>{entry.description}</p>
                     {entry.reference && (
-                      <p className="text-xs text-gray-400">{entry.reference}</p>
+                      <p className="text-xs text-gray-500">{entry.reference}</p>
                     )}
                     {!entry.branch_id && !entry.department_id && (
-                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                        ⚠ Assign cost center
+                      <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                        <span aria-hidden="true">⚠</span> Assign cost center
                       </span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-500">
-                      {isIncome  && <ArrowUpRight className="h-3 w-3 text-brand-500" />}
-                      {isExpense && <ArrowDownLeft className="h-3 w-3 text-red-400" />}
+                    <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold text-gray-700">
+                      {isIncome  && <ArrowUpRight className="h-3 w-3 text-brand-700" aria-hidden="true" />}
+                      {isExpense && <ArrowDownLeft className="h-3 w-3 text-red-700" aria-hidden="true" />}
                       {entry.source_type ?? t('dashboard.journal')}
                     </span>
                   </td>
@@ -180,30 +203,37 @@ export function RecentTransactions({ entries, isLoading, isError }: RecentTransa
 
       {total > pageSize && (
         <div className="mt-3 flex items-center justify-between">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-600" aria-live="polite">
             {t('dashboard.showing', { from: total ? (safePage - 1) * pageSize + 1 : 0, to: Math.min(safePage * pageSize, total), total })}
           </p>
-          <div className="flex gap-1">
+          <div className="flex gap-1" role="group" aria-label="Pagination">
             <button
+              type="button"
               disabled={safePage === 1}
               onClick={() => setPage((p) => p - 1)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-semibold text-gray-500 transition-colors hover:border-brand-500 hover:bg-brand-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Previous page"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 transition-colors hover:border-brand-600 hover:bg-brand-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
             >‹</button>
             {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
               <button
                 key={p}
+                type="button"
                 onClick={() => setPage(p)}
+                aria-label={`Page ${p}`}
+                aria-current={p === safePage ? 'page' : undefined}
                 className={`flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-bold transition-colors ${
                   p === safePage
-                    ? 'border-brand-500 bg-brand-500 text-white'
-                    : 'border-gray-200 text-gray-500 hover:border-brand-500 hover:bg-brand-500 hover:text-white'
+                    ? 'border-brand-600 bg-brand-600 text-white'
+                    : 'border-gray-200 text-gray-700 hover:border-brand-600 hover:bg-brand-600 hover:text-white'
                 }`}
               >{p}</button>
             ))}
             <button
+              type="button"
               disabled={safePage === pages}
               onClick={() => setPage((p) => p + 1)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-semibold text-gray-500 transition-colors hover:border-brand-500 hover:bg-brand-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="Next page"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 transition-colors hover:border-brand-600 hover:bg-brand-600 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
             >›</button>
           </div>
         </div>

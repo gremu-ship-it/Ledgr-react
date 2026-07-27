@@ -70,7 +70,7 @@ function BranchModal({
               maxLength={6}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
-            <p className="mt-1 text-xs text-gray-400">Up to 6 characters. Auto-generated if blank.</p>
+            <p className="mt-1 text-xs text-gray-600">Up to 6 characters. Auto-generated if blank.</p>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">Location / Address</label>
@@ -227,7 +227,7 @@ export function BranchesPage() {
             <Building2 size={22} className="text-gray-300" />
           </div>
           <p className="text-sm font-medium text-gray-500">No branches yet</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-600">
             Create a branch to start dispatching stock from the warehouse
           </p>
           <button
@@ -292,7 +292,7 @@ export function BranchesPage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{branch.name}</p>
-                    {branch.code && <p className="text-xs text-gray-400">{branch.code}</p>}
+                    {branch.code && <p className="text-xs text-gray-600">{branch.code}</p>}
                   </div>
                 </div>
 
