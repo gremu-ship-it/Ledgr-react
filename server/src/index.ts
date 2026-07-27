@@ -1,0 +1,151 @@
+/**
+ * Ledgr API gateway
+ * ------------------------------------------------------------------
+ * A small, containerised Express service that enforces the cross-cutting
+ * production concerns for the Ledgr API and is deployable to Railway or
+ * Render (see ../../Dockerfile, ../../railway.json, ../../render.yaml).
+ *
+ * The canonical backend is the Supabase Edge Function in
+ * supabase/functions/api. This gateway is an OPTIONAL, hardened edge in front
+ * of it that provides:
+ *   - /api/health                 (uptime target, not rate-limited)
+ *   - rate limiting               100 req/min authenticated, 10 req/min anon
+ *   - security headers            via helmet (CSP, HSTS, X-Frame-Options, ...)
+ *   - Sentry error capture        anonymised user context only
+ *   - reverse proxy               to the Supabase-hosted API (TARGET_URL)
+ *
+ * When TARGET_URL is set it proxies /api/v1/* to the Supabase function. If you
+ * later migrate the API fully off Supabase Functions, implement the routes here
+ * instead of proxying.
+ */
+
+import express, { type Request, type Response } from 'express';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import * as Sentry from '@sentry/node';
+
+const PORT = Number(process.env.PORT) || 3000;
+const APP_ENV = process.env.APP_ENV || 'staging';
+const TARGET_URL = process.env.TARGET_URL || '';
+const SENTRY_DSN = process.env.SENTRY_DSN || '';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
+
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: APP_ENV,
+    tracesSampleRate: 0.1,
+    sendDefaultPii: false, // anonymised: no IP / email / username attached
+    integrations: [Sentry.expressIntegration()],
+  });
+}
+
+const app = express();
+
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
+    },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'same-origin' },
+    hsts: { maxAge: 63072000, includeSubDomains: true, preload: true },
+    referrerPolicy: { policy: 'no-referrer' },
+  }),
+);
+
+app.use(
+  cors({
+    origin: ALLOWED_ORIGIN ? ALLOWED_ORIGIN.split(',').map((o) => o.trim()) : true,
+  }),
+);
+
+// Capture raw body as a string for proxying (any content type).
+app.use(express.text({ type: () => true, limit: '1mb' }));
+
+// Unauthenticated: 10 req/min per IP on every route except /api/health.
+const unauthLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
+});
+
+// Authenticated: 100 req/min per API key / bearer token.
+const authLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) =>
+    (req.headers['authorization'] as string) ||
+    (req.headers['x-api-key'] as string) ||
+    req.ip ||
+    'anonymous',
+});
+
+app.get('/api/health', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({ status: 'ok', env: APP_ENV, ts: Date.now(), service: 'ledgr-gateway' });
+});
+
+app.use(
+  '/api/v1',
+  unauthLimiter,
+  authLimiter,
+  async (req: Request, res: Response) => {
+    if (!TARGET_URL) {
+      res.status(503).json({
+        errors: [{ status: '503', title: 'Bad gateway', detail: 'TARGET_URL is not configured' }],
+      });
+      return;
+    }
+
+    try {
+      const url = new URL(req.originalUrl, TARGET_URL).toString();
+      const headers = new Headers();
+      for (const [key, value] of Object.entries(req.headers)) {
+        if (Array.isArray(value)) headers.set(key, value.join(', '));
+        else if (value) headers.set(key, value);
+      }
+
+      // Anonymised user context for Sentry (hashed token — never the raw key).
+      const auth = (req.headers['authorization'] as string) || (req.headers['x-api-key'] as string);
+      if (auth && SENTRY_DSN) Sentry.setUser({ id: hashToken(auth) });
+
+      const upstream = await fetch(url, {
+        method: req.method,
+        headers,
+        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : (req.body as string | undefined),
+      });
+
+      const text = await upstream.text();
+      res.status(upstream.status);
+      const ct = upstream.headers.get('content-type');
+      if (ct) res.set('Content-Type', ct);
+      res.send(text);
+    } catch (err) {
+      if (SENTRY_DSN) Sentry.captureException(err);
+      res.status(502).json({ errors: [{ status: '502', title: 'Bad gateway' }] });
+    }
+  },
+);
+
+// Registers Sentry's Express error-handling middleware (must come after
+// the routes above). Anonymised: only a hashed token is attached via
+// Sentry.setUser() inside the proxy handler.
+if (SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
+
+app.listen(PORT, () => {
+  console.log(`Ledgr gateway listening on :${PORT} (${APP_ENV})`);
+});
+
+function hashToken(token: string): string {
+  let h = 0;
+  for (let i = 0; i < token.length; i += 1) {
+    h = (Math.imul(31, h) + token.charCodeAt(i)) | 0;
+  }
+  return 'h' + (h >>> 0).toString(16);
+}

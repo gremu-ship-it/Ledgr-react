@@ -1,0 +1,84 @@
+name: Backup Verification
+
+# ---------------------------------------------------------------------------
+# Weekly automated backup-restore test.
+#
+# Restores the latest Supabase database dump into a *throwaway* Postgres
+# container, then compares row counts of core tables between the live source
+# and the restored copy. Any mismatch (or failure to restore) fails the run so
+# we know the backups are actually usable before we ever need them.
+#
+# Runs every Monday 03:17 UTC and can be triggered manually (choose the
+# environment to verify). Requires a SUPABASE_DB_URL_* secret containing the
+# direct Postgres connection string, e.g.
+#   postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment's backup to verify
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  verify-backup:
+    name: Restore & verify backup
+    runs-on: ubuntu-latest
+
+    # Throwaway Postgres instance used only for the duration of this job.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: throwaway
+          POSTGRES_PASSWORD: throwaway
+          POSTGRES_DB: restore
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U throwaway"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Pick the source DB URL based on the chosen environment.
+      SOURCE_DB_URL: >-
+        ${{
+          (github.event.inputs.environment == 'staging' && secrets.SUPABASE_DB_URL_STAGING)
+          || secrets.SUPABASE_DB_URL_PRODUCTION
+        }}
+      RESTORE_DB_URL: "postgresql://throwaway:throwaway@localhost:5432/restore"
+      # Core tables whose row counts must match exactly. Comma-separated,
+      # override with the TABLES input if the schema changes.
+      TABLES: >-
+        businesses,business_users,contacts,accounts,invoices,expenses,
+        journal_entries,journal_lines,payroll_employees,tax_returns,
+        inventory_items,branches,departments,api_keys,webhooks,subscriptions
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Verify source connection string is configured
+        run: |
+          test -n "$SOURCE_DB_URL" || {
+            echo "::error::SUPABASE_DB_URL_${ENV} secret is not set."
+            exit 1
+          }
+
+      - name: Restore backup and compare row counts
+        run: bash scripts/verify-backup.sh

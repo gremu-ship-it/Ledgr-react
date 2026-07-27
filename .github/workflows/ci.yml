@@ -1,15 +1,19 @@
 name: CI
 
-# Replaces the old "NodeJS with Webpack" workflow, which ran `npx webpack` on a
-# Vite project with no webpack dependency and no webpack config — it failed on
-# every push and told us nothing about the code. This runs the checks the
-# project actually has, via the `verify` script in package.json so CI and local
-# development stay in sync.
+# Runs on every pull request (and on pushes to main) and verifies the code the
+# way a developer would locally, via the `verify` script plus the new unit
+# tests. This replaces the old "NodeJS with Webpack" workflow, which ran
+# `npx webpack` on a Vite project with no webpack dependency and failed on
+# every push.
+#
+# Gate policy (see deploy.yml for the deployment half of the pipeline):
+#   * pull_request  -> typecheck + lint + unit tests + build
+#   * push main     -> same checks (acts as the pre-deploy safety net)
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
+    branches: ["main"]
+  push:
     branches: ["main"]
 
 permissions:
@@ -21,7 +25,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck, lint and build
+    name: Typecheck, lint, test & build
     runs-on: ubuntu-latest
 
     strategy:
@@ -43,12 +47,23 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck, lint and build
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
         # Vite reads these at build time and bakes them into the client bundle.
         # They are publishable values, not secrets, but CI has no project to
         # point at — placeholders keep the build honest without wiring up an
-        # environment. src/lib/supabase.ts throws if they are absent.
+        # environment. src/lib/supabase.ts throws if they are absent. The real
+        # values for each environment are injected at deploy time (see
+        # deploy.yml) and configured in the Vercel project.
         env:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
-        run: npm run verify
+        run: npm run build

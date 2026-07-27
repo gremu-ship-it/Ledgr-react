@@ -1,11 +1,12 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 
-export default defineConfig({
-  plugins: [
+export default defineConfig(({ mode }) => {
+  const plugins: PluginOption[] = [
     react(),
     tailwindcss(),
     VitePWA({
@@ -88,18 +89,42 @@ export default defineConfig({
         type: 'module',
       },
     }),
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
+  ];
+
+  // Upload source maps to Sentry in CI so production stack traces are readable.
+  // Guarded by SENTRY_AUTH_TOKEN so local/dev builds skip it entirely and the
+  // @sentry/vite-plugin dependency is never required to produce a build.
+  if (process.env.SENTRY_AUTH_TOKEN) {
+    plugins.push(
+      sentryVitePlugin({
+        org: process.env.SENTRY_ORG || '',
+        project: process.env.SENTRY_PROJECT || '',
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        release: { name: process.env.VITE_APP_VERSION || mode },
+      }),
+    );
+  }
+
+  return {
+    plugins,
+    define: {
+      // Stable release tag for Sentry (git sha in CI, otherwise a local stamp).
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(
+        process.env.VITE_APP_VERSION || `local-${new Date().toISOString()}`,
+      ),
     },
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 5173,
-    strictPort: true,
-    hmr: {
-      clientPort: 443,
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+      },
     },
-  },
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      strictPort: true,
+      hmr: {
+        clientPort: 443,
+      },
+    },
+  };
 });

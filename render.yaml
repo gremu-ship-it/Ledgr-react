@@ -1,0 +1,40 @@
+# Render Blueprint — optional containerised Ledgr API gateway.
+# Two services (staging + production) sharing the same Dockerfile.
+# Set TARGET_URL / SENTRY_DSN / ALLOWED_ORIGIN in the Render dashboard
+# (sync: false) so the two environments point at their own Supabase project.
+services:
+  - type: web
+    name: ledgr-gateway-staging
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: PORT
+        value: "3000"
+      - key: TARGET_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false
+
+  - type: web
+    name: ledgr-gateway-prod
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: standard
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: TARGET_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false
