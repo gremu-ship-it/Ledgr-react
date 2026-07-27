@@ -52,13 +52,15 @@ left in place for a human to decide.
 
 ## To install
 
-Either grant the Arena GitHub App the `workflows` permission and ask for the
-change to be pushed, or apply it locally:
+See `INSTALL.md` in this directory for a step-by-step guide (web UI, command
+line, or granting the app permission).
+
+Short version, if you have the repo cloned:
 
     git switch arena/019fa41c-ledgr-react
     git rm .github/workflows/webpack.yml
     git mv ci-proposed/ci.yml .github/workflows/ci.yml
-    git rm ci-proposed/README.md
+    git rm ci-proposed/README.md ci-proposed/INSTALL.md
     git commit -m "Replace broken webpack CI with typecheck/lint/build"
     git push
 
