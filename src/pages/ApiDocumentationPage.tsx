@@ -8,49 +8,54 @@ const endpoints = [
   { method: 'GET', path: '/api/v1/expenses', desc: 'List all expenses' },
   { method: 'POST', path: '/api/v1/expenses', desc: 'Create a new expense' },
   { method: 'GET', path: '/api/v1/accounts', desc: 'List chart of accounts' },
+  { method: 'GET', path: '/api/v1/journal-entries', desc: 'List journal entries' },
   { method: 'POST', path: '/api/v1/journal-entries', desc: 'Create journal entry' },
+  { method: 'GET', path: '/api/v1/openapi.json', desc: 'OpenAPI 3.0 specification' },
 ];
 
-export function ApiDocumentationPage() {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
+function buildOpenApiSpec() {
+  const paths: Record<string, unknown> = {};
+  for (const endpoint of endpoints.filter((e) => !e.path.endsWith('openapi.json'))) {
+    const path = endpoint.path.replace('/api/v1', '');
+    paths[path] ??= {};
+    (paths[path] as Record<string, unknown>)[endpoint.method.toLowerCase()] = {
+      summary: endpoint.desc,
+      security: [{ ApiKeyAuth: [] }],
+      responses: {
+        '200': { description: 'JSON:API success response' },
+        '201': { description: 'JSON:API created response' },
+        '401': { description: 'Unauthorized' },
+        '429': { description: 'Rate limit exceeded' },
+      },
+    };
+  }
 
-  const openApiSpec = {
+  return {
     openapi: '3.0.0',
     info: {
       title: 'Ledgr Public API',
       version: '1.0.0',
-      description: 'REST API for integrating with Ledgr accounting platform (Malawi)',
+      description: 'JSON:API REST API for integrating with Ledgr accounting platform (Malawi).',
     },
-    servers: [{ url: 'https://api.ledgr.app/v1' }],
+    servers: [{ url: 'https://hsuhuvuxfuufrlejsatw.supabase.co/functions/v1/api/api/v1' }],
     components: {
       securitySchemes: {
         ApiKeyAuth: {
-          type: 'apiKey',
-          in: 'header',
-          name: 'Authorization',
-          description: 'API Key in format: Bearer ledgr_sk_xxx',
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'ledgr_sk_*',
+          description: 'Authorization: Bearer ledgr_sk_...',
         },
       },
     },
-    security: [{ ApiKeyAuth: [] }],
-    paths: {
-      '/invoices': {
-        get: { summary: 'List invoices', responses: { '200': { description: 'Success' } } },
-        post: { summary: 'Create invoice', responses: { '201': { description: 'Created' } } },
-      },
-      '/expenses': {
-        get: { summary: 'List expenses' },
-        post: { summary: 'Create expense' },
-      },
-      '/journal-entries': {
-        post: { summary: 'Create journal entry' },
-      },
-      '/accounts': {
-        get: { summary: 'List chart of accounts' },
-      },
-    },
+    paths,
   };
+}
+
+export function ApiDocumentationPage() {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  const openApiSpec = buildOpenApiSpec();
 
   const copySpec = () => {
     navigator.clipboard.writeText(JSON.stringify(openApiSpec, null, 2));
@@ -73,19 +78,21 @@ export function ApiDocumentationPage() {
       <h1 className="mb-2 text-3xl font-bold">{t('api.publicApi')}</h1>
       <p className="mb-8 text-gray-600">{t('api.publicApiSubtitle')}</p>
 
-      {/* Authentication */}
       <div className="mb-8 rounded-2xl border bg-white p-6">
         <h2 className="mb-3 text-xl font-semibold">{t('api.authentication')}</h2>
-        <div className="text-sm text-gray-600">
-          All requests require an <code className="bg-gray-100 px-1">Authorization: Bearer ledgr_sk_...</code> header.
-          Generate API keys in <strong>Settings → API &amp; Webhooks</strong>.
+        <div className="space-y-2 text-sm text-gray-600">
+          <p>
+            All requests require an <code className="bg-gray-100 px-1">Authorization: Bearer ledgr_sk_...</code> header.
+            Generate API keys in <strong>Settings → API &amp; Webhooks</strong>.
+          </p>
+          <p>Responses follow JSON:API: resources are returned as <code className="bg-gray-100 px-1">data.type</code>, <code className="bg-gray-100 px-1">data.id</code>, and <code className="bg-gray-100 px-1">data.attributes</code>.</p>
+          <p>Rate limit: <strong>100 requests per minute per API key</strong>.</p>
         </div>
       </div>
 
-      {/* Endpoints */}
       <div className="mb-8">
         <h2 className="mb-4 text-xl font-semibold">{t('api.endpoints')}</h2>
-        <div className="rounded-2xl border bg-white overflow-hidden">
+        <div className="overflow-hidden rounded-2xl border bg-white">
           <table className="w-full text-sm">
             <thead className="bg-gray-50">
               <tr>
@@ -95,10 +102,10 @@ export function ApiDocumentationPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {endpoints.map((ep, i) => (
-                <tr key={i}>
+              {endpoints.map((ep) => (
+                <tr key={`${ep.method}-${ep.path}`}>
                   <td className="px-4 py-3">
-                    <span className={`font-mono text-xs px-2 py-0.5 rounded ${ep.method === 'GET' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    <span className={`rounded px-2 py-0.5 font-mono text-xs ${ep.method === 'GET' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
                       {ep.method}
                     </span>
                   </td>
@@ -111,7 +118,6 @@ export function ApiDocumentationPage() {
         </div>
       </div>
 
-      {/* OpenAPI Spec */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xl font-semibold">{t('api.openApiSpec')}</h2>
@@ -125,9 +131,9 @@ export function ApiDocumentationPage() {
             </button>
           </div>
         </div>
-        <p className="text-sm text-gray-500 mb-4">{t('api.openApiAvailable')}</p>
+        <p className="mb-4 text-sm text-gray-500">{t('api.openApiAvailable')}</p>
 
-        <pre className="rounded-xl border bg-gray-900 p-4 text-xs text-emerald-400 overflow-auto max-h-[400px]">
+        <pre className="max-h-[400px] overflow-auto rounded-xl border bg-gray-900 p-4 text-xs text-emerald-400">
           {JSON.stringify(openApiSpec, null, 2)}
         </pre>
       </div>

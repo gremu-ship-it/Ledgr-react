@@ -85,7 +85,7 @@ export function BottomNav() {
               const handleMoreClick = (e: React.MouseEvent) => {
                 if (locked) {
                   e.preventDefault();
-                  pushUpgradeRequired(t(item.labelKey));
+                  pushUpgradeRequired(t(item.labelKey), 'Growth', businessId);
                   setMoreOpen(false);
                   return;
                 }

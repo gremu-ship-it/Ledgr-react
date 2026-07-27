@@ -6,6 +6,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
+import { CurrencySelector } from '@/components/CurrencySelector';
+import { resolveTransactionRate } from '@/lib/currency';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -227,6 +229,8 @@ interface QuickExpenseForm {
   expense_date:    string;
   description:     string;
   amount:          string;
+  currency:        string;
+  exchange_rate:   string;
   account_id:      string;
   payment_method:  string;
   reference:       string;
@@ -253,6 +257,8 @@ interface ExpenseForm {
   due_date:       string;
   notes:          string;
   branch_id:      string;   // NEW
+  currency:       string;
+  exchange_rate:  string;
   lines:          ExpenseLine[];
 }
 
@@ -310,6 +316,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
   const [form, setForm] = useState<QuickExpenseForm>({
     expense_date: today(), description: '', amount: '', account_id: '',
     payment_method: 'cash', reference: '', notes: '', include_vat: false,
+    currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
     product_id: '', branch_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -325,6 +332,17 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       const vatAmount   = values.include_vat ? rawAmount - netAmount : 0;
       const totalAmount = rawAmount;
       const qty         = parseFloat(values.quantity) || 1;
+      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
+      const originalCurrency = values.currency || functionalCurrency;
+      const manualRate = values.exchange_rate ? parseFloat(values.exchange_rate) : null;
+      const rate = await resolveTransactionRate({
+        businessId,
+        originalCurrency,
+        functionalCurrency,
+        date: values.expense_date,
+        manualRate,
+      });
+      const functionalAmount = totalAmount * rate.rate;
 
       const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
 
@@ -341,8 +359,14 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           expense_type:    'receipt',
           status:          'paid',
           expense_date:    values.expense_date,
-          currency:        currentBusiness?.business?.base_currency || 'MWK',
-          exchange_rate:   1,
+          currency:        originalCurrency,
+          exchange_rate:   rate.rate,
+          original_currency: originalCurrency,
+          original_amount:   totalAmount,
+          functional_currency: functionalCurrency,
+          functional_amount: functionalAmount,
+          rate_date:       rate.rateDate,
+          rate_is_stale:   rate.isStale,
           subtotal:        netAmount,
           vat_amount:      vatAmount,
           wht_amount:      0,
@@ -417,6 +441,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       setForm({
         expense_date: today(), description: '', amount: '', account_id: '',
         payment_method: 'cash', reference: '', notes: '', include_vat: false,
+        currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
         product_id: '', branch_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
@@ -454,6 +479,32 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               <input type="number" min="0" step="0.01" placeholder="0.00" value={form.amount} onChange={(e) => set('amount', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Currency</label>
+              <CurrencySelector
+                value={form.currency || currentBusiness?.business?.base_currency || 'MWK'}
+                onChange={(c) => set('currency', c)}
+              />
+            </div>
+            {(form.currency || currentBusiness?.business?.base_currency || 'MWK') !== (currentBusiness?.business?.base_currency || 'MWK') && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Exchange rate ({form.currency} → {currentBusiness?.business?.base_currency || 'MWK'})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={form.exchange_rate}
+                  onChange={(e) => set('exchange_rate', e.target.value)}
+                  placeholder={`1 ${form.currency} = ? ${currentBusiness?.business?.base_currency || 'MWK'}`}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* NEW: Product / service selector */}
@@ -566,6 +617,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
 
 function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
   const { data: products = [] }  = useAllProducts(businessId);
@@ -573,7 +625,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm]   = useState<ExpenseForm>({
     contact_id: '', expense_number: '', expense_date: today(), due_date: '', notes: '',
-    branch_id: '',
+    branch_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
     lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', account_id: '', product_id: '' }],
   });
 
@@ -644,6 +696,18 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       if (validLines.length === 0) throw new Error('Add at least one line item');
       if (validLines.some((l) => !l.account_id)) throw new Error('Every line needs an expense category');
 
+      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
+      const originalCurrency = form.currency || functionalCurrency;
+      const manualRate = form.exchange_rate ? parseFloat(form.exchange_rate) : null;
+      const rate = await resolveTransactionRate({
+        businessId,
+        originalCurrency,
+        functionalCurrency,
+        date: form.expense_date,
+        manualRate,
+      });
+      const functionalTotal = total * rate.rate;
+
       await repos.expense.createWithLines(
         {
           business_id:    businessId,
@@ -653,8 +717,14 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           contact_id:     form.contact_id || null,
           expense_date:   form.expense_date,
           due_date:       form.due_date || null,
-          currency:       'MWK',
-          exchange_rate:  1,
+          currency:       originalCurrency,
+          exchange_rate:  rate.rate,
+          original_currency: originalCurrency,
+          original_amount:   total,
+          functional_currency: functionalCurrency,
+          functional_amount: functionalTotal,
+          rate_date:      rate.rateDate,
+          rate_is_stale:  rate.isStale,
           subtotal,
           vat_amount:     vatAmount,
           wht_amount:     0,
@@ -788,6 +858,32 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               <input type="date" value={form.due_date} onChange={(e) => setField('due_date', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Expense Currency</label>
+              <CurrencySelector
+                value={form.currency || currentBusiness?.business?.base_currency || 'MWK'}
+                onChange={(c) => setField('currency', c)}
+              />
+            </div>
+            {(form.currency || currentBusiness?.business?.base_currency || 'MWK') !== (currentBusiness?.business?.base_currency || 'MWK') && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Exchange rate ({form.currency} → {currentBusiness?.business?.base_currency || 'MWK'})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={form.exchange_rate}
+                  onChange={(e) => setField('exchange_rate', e.target.value)}
+                  placeholder={`1 ${form.currency} = ? ${currentBusiness?.business?.base_currency || 'MWK'}`}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* NEW: Cost centre selector at bill header level */}

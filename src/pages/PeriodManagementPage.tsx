@@ -7,6 +7,7 @@ import { formatMwk } from '@/lib/formatters';
 import type { Row } from '@/dal/types/database';
 import { CreatePeriodModal } from '@/components/periods/CreatePeriodModal';
 import { pushPeriodClosed, pushPeriodCloseFailed } from '@/lib/notifications';
+import { runFxRevaluation } from '@/services/FxRevaluationService';
 
 interface PeriodWithSummary {
   period: Row<'accounting_periods'>;
@@ -51,7 +52,7 @@ export function PeriodManagementPage() {
       setError(null);
       const period = data?.find(p => p.period.id === periodId)?.period;
       if (period) {
-        pushPeriodClosed(period.name);
+        pushPeriodClosed(period.name, businessId);
       }
       queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] });
     },
@@ -59,7 +60,7 @@ export function PeriodManagementPage() {
       const period = data?.find(p => p.period.id === periodId)?.period;
       const reason = err instanceof Error ? err.message : 'Failed to lock period.';
       if (period) {
-        pushPeriodCloseFailed(period.name, reason);
+        pushPeriodCloseFailed(period.name, reason, businessId);
       }
       setError(reason);
     },
@@ -74,6 +75,23 @@ export function PeriodManagementPage() {
     },
     onError: (err) => {
       setError(err instanceof Error ? err.message : 'Failed to unlock period.');
+    },
+  });
+
+  const fxRevaluationMutation = useMutation({
+    mutationFn: (period: Row<'accounting_periods'>) =>
+      runFxRevaluation(businessId!, period.period_end, currentUser?.id ?? null),
+    onSuccess: (result) => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ['journal'] });
+      alert(
+        result.lineCount === 0
+          ? 'FX revaluation complete: no open foreign-currency balances required adjustment.'
+          : `FX revaluation posted (${result.lineCount} lines). Unrealised gains: ${formatMwk(result.totalUnrealisedGain)}; losses: ${formatMwk(result.totalUnrealisedLoss)}.`,
+      );
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : 'Failed to run FX revaluation.');
     },
   });
 
@@ -201,23 +219,35 @@ export function PeriodManagementPage() {
                       </td>
                       {canManage && (
                         <td className="px-4 py-3 text-right">
-                          {period.is_closed ? (
-                            <button
-                              onClick={() => handleUnlock(period)}
-                              disabled={isPending}
-                              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
-                            >
-                              <Unlock className="h-3.5 w-3.5" /> Unlock
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleLock(period)}
-                              disabled={isPending}
-                              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-                            >
-                              <Lock className="h-3.5 w-3.5" /> Lock
-                            </button>
-                          )}
+                          <div className="flex justify-end gap-2">
+                            {!period.is_closed && (
+                              <button
+                                onClick={() => fxRevaluationMutation.mutate(period)}
+                                disabled={isPending || fxRevaluationMutation.isPending}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 px-3 py-1.5 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-50"
+                                title="Revalue open foreign-currency receivables/payables at the period-end closing rate"
+                              >
+                                FX Revalue
+                              </button>
+                            )}
+                            {period.is_closed ? (
+                              <button
+                                onClick={() => handleUnlock(period)}
+                                disabled={isPending || fxRevaluationMutation.isPending}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                              >
+                                <Unlock className="h-3.5 w-3.5" /> Unlock
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleLock(period)}
+                                disabled={isPending || fxRevaluationMutation.isPending}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                              >
+                                <Lock className="h-3.5 w-3.5" /> Lock
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>

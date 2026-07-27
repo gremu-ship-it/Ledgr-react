@@ -62,7 +62,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     annualDiscount: 20,
     transactionLimit: 2000,
     popular: true,
-    capabilities: ['bank_reconciliation', 'ai_insights', 'api_access', 'webhooks'],
+    capabilities: ['bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks'],
     features: [
       'Everything in Growth',
       'AI Insights & forecasting',
@@ -78,7 +78,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     priceMWK: 500000,
     annualDiscount: 25,
     transactionLimit: null,
-    capabilities: ['bank_reconciliation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding'],
+    capabilities: ['bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding'],
     features: [
       'Everything in Pro',
       'Unlimited transactions',

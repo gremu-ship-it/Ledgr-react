@@ -129,6 +129,7 @@ function App() {
                     <AiInsightsPage />
                   </PlanGate>
                 )} />
+                <Route path="/chat" element={<Navigate to="/ai" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/warehouse" element={<WarehousePage />} />
                 <Route path="/transfers" element={<TransfersPage />} />

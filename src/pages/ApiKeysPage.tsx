@@ -7,7 +7,7 @@ import { apiKeyService } from '@/services/api/ApiKeyService';
 import type { ApiKey } from '@/services/api/ApiKeyService';
 import { useLocaleFormat } from '@/i18n';
 
-export function ApiKeysPage() {
+export function ApiKeysPage({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const format = useLocaleFormat();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
@@ -48,7 +48,7 @@ export function ApiKeysPage() {
   if (!businessId) return <div className="p-8">{t('api.noBusinessSelected')}</div>;
 
   return (
-    <div className="mx-auto max-w-4xl p-8">
+    <div className={compact ? 'space-y-6' : 'mx-auto max-w-4xl p-8'}>
       <h1 className="mb-6 text-2xl font-semibold">{t('api.apiKeys')}</h1>
 
       {/* Generate new key */}

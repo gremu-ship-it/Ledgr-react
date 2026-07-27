@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2 } from 'lucide-react';
+import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2, Coins } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
@@ -9,6 +9,7 @@ import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
 import { StatementOfChangesInEquity } from '@/components/reports/StatementOfChangesInEquity';
 import { BranchPerformanceReport } from '@/components/reports/BranchPerformanceReport';
 import { ReportHeader } from '@/components/reports/ReportHeader';
+import type { Row } from '@/dal/types/database';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,33 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity' | 'branches';
+type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity' | 'branches' | 'currency';
+
+type TrialBalanceRow = Row<'v_trial_balance'>;
+
+interface MultiCurrencyRow {
+  id: string;
+  created_at: string;
+  description: string | null;
+  amount: number;
+  amount_base: number;
+  currency: string;
+  original_currency: string | null;
+  original_amount: number | null;
+  exchange_rate: number;
+  rate_date: string | null;
+  journal_entries: {
+    entry_date: string;
+    entry_number: string;
+    description: string;
+    status: string;
+  } | Array<{
+    entry_date: string;
+    entry_number: string;
+    description: string;
+    status: string;
+  }>;
+}
 
 // ── Date Filter ───────────────────────────────────────────────────────────────
 
@@ -71,16 +98,16 @@ function DateFilter({ range, onChange }: { range: DateRange; onChange: (r: DateR
 // ── Trial Balance ─────────────────────────────────────────────────────────────
 
 function TrialBalanceReport({ businessId }: { businessId: string }) {
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading } = useQuery<TrialBalanceRow[]>({
     queryKey: ['trial_balance', businessId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('v_trial_balance' as any)
+        .from('v_trial_balance')
         .select('*')
         .eq('business_id', businessId)
         .order('code', { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []) as any[];
+      return (data ?? []) as TrialBalanceRow[];
     },
     enabled: Boolean(businessId),
   });
@@ -150,6 +177,71 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
   );
 }
 
+
+function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: string; functionalCurrency: string }) {
+  const { data: rows = [], isLoading, isError } = useQuery({
+    queryKey: ['multi_currency_report', businessId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('journal_lines')
+        .select('id, created_at, description, amount, amount_base, currency, original_currency, original_amount, exchange_rate, rate_date, journal_entries!inner(entry_date, entry_number, description, status)')
+        .eq('business_id', businessId)
+        .eq('journal_entries.status', 'posted')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      return (data ?? []) as unknown as MultiCurrencyRow[];
+    },
+    enabled: Boolean(businessId),
+  });
+
+  if (isLoading) return <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-gray-100" />)}</div>;
+  if (isError) return <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Failed to load multi-currency report.</div>;
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+      <ReportHeader
+        title="Multi-currency Transaction Report"
+        subtitle={`Original transaction currency alongside functional currency (${functionalCurrency})`}
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-4 py-3 text-left">Date</th>
+              <th className="px-4 py-3 text-left">Entry</th>
+              <th className="px-4 py-3 text-left">Description</th>
+              <th className="px-4 py-3 text-right">Transaction amount</th>
+              <th className="px-4 py-3 text-right">Functional amount</th>
+              <th className="px-4 py-3 text-right">Rate used</th>
+              <th className="px-4 py-3 text-left">Rate date</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {rows.map((row) => {
+              const entry = Array.isArray(row.journal_entries) ? row.journal_entries[0] : row.journal_entries;
+              const txCurrency = row.original_currency ?? row.currency ?? functionalCurrency;
+              const txAmount = Number(row.original_amount ?? row.amount ?? 0);
+              const functionalAmount = Number(row.amount_base ?? 0);
+              return (
+                <tr key={row.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 text-gray-500">{entry?.entry_date ?? '—'}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-gray-500">{entry?.entry_number ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-700">{row.description ?? entry?.description ?? '—'}</td>
+                  <td className="px-4 py-3 text-right font-medium">{txCurrency} {txAmount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right font-medium text-brand-700">{functionalCurrency} {functionalAmount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td className="px-4 py-3 text-right text-gray-500">{Number(row.exchange_rate ?? 1).toFixed(6)}</td>
+                  <td className="px-4 py-3 text-gray-500">{row.rate_date ?? entry?.entry_date ?? '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function ReportsPage() {
@@ -202,10 +294,14 @@ export function ReportsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'branches' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <Building2 className="h-4 w-4" />Branch Performance
         </button>
+        <button onClick={() => setTab('currency')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'currency' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <Coins className="h-4 w-4" />Multi-currency
+        </button>
       </div>
 
       {/* Date filter — not shown for trial balance */}
-      {tab !== 'trial' && <DateFilter range={range} onChange={setRange} />}
+      {tab !== 'trial' && tab !== 'currency' && <DateFilter range={range} onChange={setRange} />}
 
       {/* Comparative toggle — only relevant for SOFP and P&L (IFRS) tabs */}
       {(tab === 'sofp' || tab === 'pl-ifrs') && (
@@ -260,6 +356,12 @@ export function ReportsPage() {
           businessId={businessId}
           periodStart={range.from}
           periodEnd={range.to}
+        />
+      )}
+      {tab === 'currency' && (
+        <MultiCurrencyReport
+          businessId={businessId}
+          functionalCurrency={currentBusiness.business.base_currency || 'MWK'}
         />
       )}
     </div>

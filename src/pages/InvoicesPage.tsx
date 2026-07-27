@@ -13,6 +13,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { createInvoiceSettlementEntry } from '@/services/journalService';
+import { resolveTransactionRate } from '@/lib/currency';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -96,6 +98,7 @@ function RecordPaymentModal({
 }) {
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const currentUser = useAppStore((s) => s.currentUser);
   const amountDue =
     invoice.amount_due !== null
       ? Number(invoice.amount_due)
@@ -107,6 +110,7 @@ function RecordPaymentModal({
     payment_method: 'bank_transfer',
     reference: '',
     notes: '',
+    exchange_rate: '',
   });
   const [alert, setAlert] = useState<{
     type: 'success' | 'error';
@@ -132,19 +136,44 @@ function RecordPaymentModal({
           `Amount cannot exceed the outstanding balance of ${formatMwk(amountDue)}`,
         );
 
-      await repos.invoice.recordPayment({
+      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
+      const paymentCurrency = invoice.original_currency ?? invoice.currency ?? functionalCurrency;
+      const manualRate = form.exchange_rate ? parseFloat(form.exchange_rate) : null;
+      const rate = await resolveTransactionRate({
+        businessId,
+        originalCurrency: paymentCurrency,
+        functionalCurrency,
+        date: form.payment_date,
+        manualRate,
+        userId: currentUser?.id ?? null,
+      });
+
+      const { payment } = await repos.invoice.recordPayment({
         business_id: businessId,
         invoice_id: invoice.id,
         payment_date: form.payment_date,
         amount,
-        currency: currentBusiness?.business?.base_currency || 'MWK',
-        exchange_rate: 1,
+        currency: paymentCurrency,
+        exchange_rate: rate.rate,
+        original_currency: paymentCurrency,
+        original_amount: amount,
+        functional_currency: functionalCurrency,
+        functional_amount: amount * rate.rate,
+        rate_date: rate.rateDate,
+        rate_is_stale: rate.isStale,
         payment_method: form.payment_method as Row<'invoice_payments'>['payment_method'],
         reference: form.reference || null,
         bank_account_id: bankAccountId || null,
         notes: form.notes || null,
-        created_by: null,
+        created_by: currentUser?.id ?? null,
       } as InsertDto<'invoice_payments'>);
+
+      await createInvoiceSettlementEntry(
+        businessId,
+        invoice,
+        payment,
+        functionalCurrency,
+      );
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Payment recorded successfully.' });
@@ -267,6 +296,24 @@ function RecordPaymentModal({
               ))}
             </select>
           </div>
+
+          {(invoice.original_currency ?? invoice.currency) !== (currentBusiness?.business?.base_currency || 'MWK') && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Settlement exchange rate ({invoice.original_currency ?? invoice.currency} → {currentBusiness?.business?.base_currency || 'MWK'})
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.000001"
+                value={form.exchange_rate}
+                onChange={(e) => setForm((f) => ({ ...f, exchange_rate: e.target.value }))}
+                placeholder={`1 ${invoice.original_currency ?? invoice.currency} = ? ${currentBusiness?.business?.base_currency || 'MWK'}`}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              <p className="mt-1 text-xs text-gray-400">Leave blank to use the cached closing/transaction-date rate if available.</p>
+            </div>
+          )}
 
           {bankAccounts.length > 0 && (
             <div>

@@ -28,7 +28,7 @@ export function usePaymentReturnStatus(businessId: string | undefined) {
   const attemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const txRef = searchParams.get('payment');
+    const txRef = searchParams.get('payment') || searchParams.get('tx_ref');
     if (!txRef || !businessId) return;
     if (attemptedRef.current === txRef) return; // already handling this tx_ref
     attemptedRef.current = txRef;
@@ -51,6 +51,9 @@ export function usePaymentReturnStatus(businessId: string | undefined) {
       // re-trigger verification.
       const next = new URLSearchParams(searchParams);
       next.delete('payment');
+      next.delete('tx_ref');
+      next.delete('status');
+      next.delete('transaction_id');
       setSearchParams(next, { replace: true });
     };
 

@@ -52,6 +52,66 @@ export interface ManualGrantResult {
   business_name: string;
 }
 
+type EdgeFunctionErrorBody = {
+  error?: string;
+  message?: string;
+};
+
+function getFunctionDisplayName(functionName: string): string {
+  if (functionName === 'initiate-subscription-payment') return 'payments checkout service';
+  if (functionName === 'verify-subscription-payment') return 'payment verification service';
+  if (functionName === 'grant-manual-subscription') return 'manual subscription grant service';
+  return functionName;
+}
+
+async function readEdgeFunctionError(response: Response, fallback: string): Promise<string> {
+  const text = await response.text().catch(() => '');
+  if (!text) return fallback;
+
+  try {
+    const parsed = JSON.parse(text) as EdgeFunctionErrorBody;
+    return parsed.error || parsed.message || fallback;
+  } catch {
+    return text || fallback;
+  }
+}
+
+function getNetworkErrorMessage(functionName: string, error: unknown): string {
+  const displayName = getFunctionDisplayName(functionName);
+  const cause =
+    typeof error === 'object' && error !== null && 'context' in error
+      ? (error as { context?: unknown }).context
+      : undefined;
+  const causeMessage = cause instanceof Error ? cause.message : undefined;
+
+  return [
+    `Could not reach the ${displayName}.`,
+    `Please make sure the Supabase Edge Function "${functionName}" is deployed and reachable, then try again.`,
+    causeMessage ? `Details: ${causeMessage}` : null,
+  ].filter(Boolean).join(' ');
+}
+
+async function invokeEdgeFunction<T>(
+  functionName: string,
+  body: Record<string, unknown>,
+): Promise<T> {
+  const { data, error, response } = await supabase.functions.invoke(functionName, { body });
+
+  if (error) {
+    if (response) {
+      const message = await readEdgeFunctionError(response, error.message);
+      throw new Error(message);
+    }
+
+    throw new Error(getNetworkErrorMessage(functionName, error));
+  }
+
+  const maybeError = data as EdgeFunctionErrorBody | null;
+  if (maybeError?.error) throw new Error(maybeError.error);
+
+  return data as T;
+}
+
 /**
  * Client-side wrapper around the payment-related Edge Functions.
  * The real work (talking to PayChangu, writing to businesses.plan_tier)
@@ -64,21 +124,17 @@ export class SubscriptionPaymentService {
     targetPlanTier: Exclude<PlanTier, 'free'>,
     billingCycle: BillingCycle,
   ): Promise<InitiateCheckoutResult> {
-    const { data, error } = await supabase.functions.invoke('initiate-subscription-payment', {
-      body: { business_id: businessId, target_plan_tier: targetPlanTier, billing_cycle: billingCycle },
+    return invokeEdgeFunction<InitiateCheckoutResult>('initiate-subscription-payment', {
+      business_id: businessId,
+      target_plan_tier: targetPlanTier,
+      billing_cycle: billingCycle,
     });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data as InitiateCheckoutResult;
   }
 
   async verifyPayment(txRef: string): Promise<VerifyPaymentResult> {
-    const { data, error } = await supabase.functions.invoke('verify-subscription-payment', {
-      body: { tx_ref: txRef },
+    return invokeEdgeFunction<VerifyPaymentResult>('verify-subscription-payment', {
+      tx_ref: txRef,
     });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data as VerifyPaymentResult;
   }
 
   async listPayments(businessId: string): Promise<SubscriptionPayment[]> {
@@ -98,12 +154,9 @@ export class SubscriptionPaymentService {
    * regardless of what the client shows.
    */
   async grantManualSubscription(params: ManualGrantParams): Promise<ManualGrantResult> {
-    const { data, error } = await supabase.functions.invoke('grant-manual-subscription', {
-      body: params,
+    return invokeEdgeFunction<ManualGrantResult>('grant-manual-subscription', {
+      ...params,
     });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data as ManualGrantResult;
   }
 }
 

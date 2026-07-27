@@ -8,6 +8,7 @@ import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
 import { CurrencySelector } from '@/components/CurrencySelector';
+import { resolveTransactionRate } from '@/lib/currency';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -188,6 +189,7 @@ interface QuickEntryForm {
   description: string;
   amount: string;
   currency: string;
+  exchange_rate: string;
   payment_method: string;
   reference: string;
   notes: string;
@@ -219,6 +221,8 @@ interface InvoiceForm {
   payment_provider: '' | 'airtel_money' | 'tnm_mpamba';
   payment_reference: string;
   branch_id: string;    // NEW
+  currency: string;
+  exchange_rate: string;
   lines: InvoiceLine[];
 }
 
@@ -270,7 +274,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
   const { data: products = [] } = useAllProducts(businessId);
 
   const [form, setForm] = useState<QuickEntryForm>({
-    issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', payment_method: 'cash',
+    issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
     reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -290,6 +294,18 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         );
       }
 
+      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
+      const originalCurrency = values.currency || functionalCurrency;
+      const manualRate = values.exchange_rate ? parseFloat(values.exchange_rate) : null;
+      const rate = await resolveTransactionRate({
+        businessId,
+        originalCurrency,
+        functionalCurrency,
+        date: values.issue_date,
+        manualRate,
+      });
+      const functionalAmount = amount * rate.rate;
+
       const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
       const accounts      = await repos.account.findByBusiness(businessId);
       const arAccount     = accounts.find((a) => a.account_type === 'asset' && a.is_bank_account);
@@ -308,8 +324,14 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           contact_id:       walkIn.id,
           issue_date:       values.issue_date,
           due_date:         values.issue_date,
-          currency:         'MWK',
-          exchange_rate:    1,
+          currency:         originalCurrency,
+          exchange_rate:    rate.rate,
+          original_currency: originalCurrency,
+          original_amount:   amount,
+          functional_currency: functionalCurrency,
+          functional_amount: functionalAmount,
+          rate_date:        rate.rateDate,
+          rate_is_stale:    rate.isStale,
           subtotal:         amount,
           discount_amount:  0,
           discount_percent: 0,
@@ -372,7 +394,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
-        issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', payment_method: 'cash',
+        issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
         reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['income'] });
@@ -421,6 +443,24 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
               </div>
             </div>
           </div>
+
+          {(form.currency || currentBusiness?.business?.base_currency || 'MWK') !== (currentBusiness?.business?.base_currency || 'MWK') && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Exchange rate ({form.currency} → {currentBusiness?.business?.base_currency || 'MWK'})
+              </label>
+              <input
+                type="number"
+                min="0"
+                step="0.000001"
+                placeholder={`1 ${form.currency} = ? ${currentBusiness?.business?.base_currency || 'MWK'}`}
+                value={form.exchange_rate}
+                onChange={(e) => set('exchange_rate', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+              <p className="mt-1 text-xs text-gray-400">Leave blank to use a cached/Frankfurter rate where available. Enter the bank rate for MWK/ZMW/TZS/MZN pairs.</p>
+            </div>
+          )}
 
           {/* NEW: Product selector */}
           <div>
@@ -504,6 +544,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
 
 function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: branches = [] } = useBranches(businessId);
   const { data: products = [] } = useAllProducts(businessId);
 
@@ -511,7 +552,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [form, setForm] = useState<InvoiceForm>({
     contact_id: '', invoice_number: '', issue_date: today(), due_date: '',
-    notes: '', terms: 'Payment due within 30 days.', template: 'professional', project_code: '', lpo_number: '', payment_provider: '', payment_reference: '', branch_id: '',
+    notes: '', terms: 'Payment due within 30 days.', template: 'professional', project_code: '', lpo_number: '', payment_provider: '', payment_reference: '', branch_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
     lines: [{ description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', product_id: '' }],
   });
 
@@ -582,6 +623,18 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       const validLines = form.lines.filter((l) => l.description.trim() && parseFloat(l.unit_price) > 0);
       if (validLines.length === 0) throw new Error('Add at least one line item');
 
+      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
+      const originalCurrency = form.currency || functionalCurrency;
+      const manualRate = form.exchange_rate ? parseFloat(form.exchange_rate) : null;
+      const rate = await resolveTransactionRate({
+        businessId,
+        originalCurrency,
+        functionalCurrency,
+        date: form.issue_date,
+        manualRate,
+      });
+      const functionalTotal = total * rate.rate;
+
       await repos.invoice.createWithLines(
         {
           business_id:      businessId,
@@ -591,8 +644,14 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           contact_id:       form.contact_id,
           issue_date:       form.issue_date,
           due_date:         form.due_date || null,
-          currency:         'MWK',
-          exchange_rate:    1,
+          currency:         originalCurrency,
+          exchange_rate:    rate.rate,
+          original_currency: originalCurrency,
+          original_amount:   total,
+          functional_currency: functionalCurrency,
+          functional_amount: functionalTotal,
+          rate_date:        rate.rateDate,
+          rate_is_stale:    rate.isStale,
           subtotal,
           discount_amount:  0,
           discount_percent: 0,
@@ -730,6 +789,32 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             {form.template === 'government' && <label className="text-sm font-medium text-gray-700">LPO number<input value={form.lpo_number} onChange={e => setField('lpo_number', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>}
             <label className="text-sm font-medium text-gray-700">Mobile money<select value={form.payment_provider} onChange={e => setField('payment_provider', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="">None</option><option value="airtel_money">Airtel Money</option><option value="tnm_mpamba">TNM Mpamba</option></select></label>
             {form.payment_provider && <label className="text-sm font-medium text-gray-700">Till / payment reference<input value={form.payment_reference} onChange={e => setField('payment_reference', e.target.value)} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" /></label>}
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Invoice Currency</label>
+              <CurrencySelector
+                value={form.currency || currentBusiness?.business?.base_currency || 'MWK'}
+                onChange={(c) => setField('currency', c)}
+              />
+            </div>
+            {(form.currency || currentBusiness?.business?.base_currency || 'MWK') !== (currentBusiness?.business?.base_currency || 'MWK') && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">
+                  Exchange rate ({form.currency} → {currentBusiness?.business?.base_currency || 'MWK'})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={form.exchange_rate}
+                  onChange={(e) => setField('exchange_rate', e.target.value)}
+                  placeholder={`1 ${form.currency} = ? ${currentBusiness?.business?.base_currency || 'MWK'}`}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* NEW: Branch selector at invoice level */}

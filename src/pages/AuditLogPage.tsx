@@ -297,14 +297,14 @@ export function AuditLogPage() {
 
   // Push notifications when chain verification finishes
   useEffect(() => {
-    if (!showVerify || !chainData) return;
+    if (!showVerify || !chainData || !businessId) return;
 
     if (tamperCount > 0) {
-      pushAuditChainWarning(tamperCount);
+      pushAuditChainWarning(tamperCount, businessId);
     } else if (chainData.length > 0) {
-      pushAuditVerified();
+      pushAuditVerified(businessId);
     }
-  }, [chainData, tamperCount, showVerify]);
+  }, [businessId, chainData, tamperCount, showVerify]);
 
   // ── PDF Export (Signed for auditors) ─────────────────────────
   const handleExportPDF = useCallback(() => {

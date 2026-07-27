@@ -88,10 +88,12 @@ export function BillingTab() {
 
       pushSuccess(
         `${planName} granted`,
-        `${planName} plan activated for ${days} days.`
+        `${planName} plan activated for ${days} days.`,
+        { businessId },
       );
-    } catch (e: any) {
-      pushError('Grant failed', e?.message || 'Could not grant plan.');
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Could not grant plan.';
+      pushError('Grant failed', message, { businessId });
     }
   };
 
