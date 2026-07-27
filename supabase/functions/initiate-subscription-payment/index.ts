@@ -26,7 +26,7 @@ const PAYCHANGU_SECRET_KEY = Deno.env.get('PAYCHANGU_SECRET_KEY');
 // Where the app is hosted — used to build callback_url/return_url. Falls
 // back to a placeholder so the function still deploys before this is set;
 // initiation will fail loudly with a clear error if it's missing.
-const APP_URL = Deno.env.get('APP_URL');
+const RAW_APP_URL = Deno.env.get('APP_URL');
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -77,6 +77,25 @@ function computeAmount(tier: PlanTier, cycle: BillingCycle): number {
   return Math.round(annualBeforeDiscount * (1 - discount / 100));
 }
 
+function normalizeAppUrl(raw: string | undefined | null): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+
+  // Be forgiving if APP_URL was accidentally pasted as Markdown, e.g.
+  // [https://ledgr-react.vercel.app](https://ledgr-react.vercel.app).
+  const markdownUrl = trimmed.match(/\((https?:\/\/[^)]+)\)/)?.[1];
+  const plainUrl = markdownUrl ?? trimmed.match(/https?:\/\/[^\s\])]+/)?.[0] ?? trimmed;
+  const withoutTrailingSlash = plainUrl.replace(/\/+$/, '');
+
+  try {
+    const url = new URL(withoutTrailingSlash);
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
+    return withoutTrailingSlash;
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -85,8 +104,9 @@ serve(async (req) => {
     if (!PAYCHANGU_SECRET_KEY) {
       return json({ error: 'Payments are not configured yet. Set PAYCHANGU_SECRET_KEY.' }, 503);
     }
-    if (!APP_URL) {
-      return json({ error: 'Payments are not configured yet. Set APP_URL.' }, 503);
+    const appUrl = normalizeAppUrl(RAW_APP_URL);
+    if (!appUrl) {
+      return json({ error: 'Payments are not configured yet. Set APP_URL to your app URL, for example https://ledgr-react.vercel.app.' }, 503);
     }
 
     const authHeader = req.headers.get('Authorization');
@@ -180,7 +200,7 @@ serve(async (req) => {
         last_name: rest.join(' ') || 'Customer',
         tx_ref: txRef,
         callback_url: `${SUPABASE_URL}/functions/v1/paychangu-webhook`,
-        return_url: `${APP_URL}/settings?tab=billing&payment=${txRef}`,
+        return_url: `${appUrl}/settings?tab=billing&payment=${txRef}`,
         customization: {
           title: `Ledgr ${targetTier[0].toUpperCase()}${targetTier.slice(1)} Plan`,
           description: `${billingCycle === 'annual' ? 'Annual' : 'Monthly'} subscription for ${business.name}`,
