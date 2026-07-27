@@ -182,86 +182,11 @@ create policy tax_alerts_business_access on tax_alerts
   );
 
 -- ----------------------------------------------------------------------------
--- 9. Seed: TPR pension config for every existing business.
---    tax_payable_account_id is resolved to account code '2132'
---    (Pension Payable) from the seeded chart of accounts. Businesses whose
---    CoA has not been seeded yet get NULL and can be linked later from
---    Tax > Tax Configurations, which now exposes the account pickers.
---    PayrollRepository.approve() throws a clear error if it is still NULL.
--- ----------------------------------------------------------------------------
-insert into tax_configurations (
-  business_id, tax_code, name, rate, employer_rate, employee_rate,
-  description, mra_reference, effective_from, tax_payable_account_id
-)
-select
-  b.id, 'tpr_pension', 'TPR Pension', 0, 10, 5,
-  'Pension Act mandatory contribution — 10% employer, 5% employee',
-  'Pension Act 2011', '2011-01-01',
-  (select a.id from accounts a
-    where a.business_id = b.id and a.code = '2132' limit 1)
-from businesses b
-where not exists (
-  select 1 from tax_configurations tc
-  where tc.business_id = b.id and tc.tax_code = 'tpr_pension'
-);
-
--- Backfill: link any pre-existing tpr_pension rows that were seeded with a
--- NULL payable account by the original version of this migration.
-update tax_configurations tc
-set tax_payable_account_id = (
-  select a.id from accounts a
-  where a.business_id = tc.business_id and a.code = '2132' limit 1
-)
-where tc.tax_code = 'tpr_pension'
-  and tc.tax_payable_account_id is null;
-
--- ----------------------------------------------------------------------------
--- 10. Seed: PAYE config, so payroll can resolve a PAYE payable account
---     without falling back to per-employee overrides. Account 2122
---     (PAYE Payable) per the seeded chart of accounts.
--- ----------------------------------------------------------------------------
-insert into tax_configurations (
-  business_id, tax_code, name, rate, description, mra_reference,
-  effective_from, tax_payable_account_id
-)
-select
-  b.id, 'paye', 'PAYE', 0,
-  'Pay As You Earn — progressive bands per MRA, see paye_bands',
-  'Taxation Act', '2011-01-01',
-  (select a.id from accounts a
-    where a.business_id = b.id and a.code = '2122' limit 1)
-from businesses b
-where not exists (
-  select 1 from tax_configurations tc
-  where tc.business_id = b.id and tc.tax_code = 'paye'
-);
-
--- ----------------------------------------------------------------------------
--- 11. Seed: VAT standard config, linking both the output (2121) and input
---     (1135) VAT accounts so the VAT period-close journal can post
---     Dr Output VAT / Cr Input VAT / Cr VAT Payable.
--- ----------------------------------------------------------------------------
-insert into tax_configurations (
-  business_id, tax_code, name, rate, description, mra_reference,
-  effective_from, tax_payable_account_id, tax_receivable_account_id
-)
-select
-  b.id, 'vat_standard', 'VAT Standard', 17.5,
-  'Standard-rated VAT per MRA. 17.5% from 1 Jan 2026 (was 16.5%).',
-  'VAT Act', '2026-01-01',
-  (select a.id from accounts a
-    where a.business_id = b.id and a.code = '2121' limit 1),
-  (select a.id from accounts a
-    where a.business_id = b.id and a.code = '1135' limit 1)
-from businesses b
-where not exists (
-  select 1 from tax_configurations tc
-  where tc.business_id = b.id and tc.tax_code = 'vat_standard'
-);
-
--- ----------------------------------------------------------------------------
--- AFTER RUNNING THIS MIGRATION:
---   1. Regenerate types: supabase gen types typescript --local > src/dal/types/database.generated.ts
---   2. Businesses created before their CoA was seeded may still have NULL
---      account links — set them from Tax > Tax Configurations.
+-- NOTE: seeding of tax_configurations rows (and the 'tpr_pension' enum value
+-- they depend on) lives in the later migrations
+--   20260727000012_tax_code_add_tpr_pension.sql
+--   20260727000013_tax_config_seed_and_account_links.sql
+-- This file was already applied in production, so edits here never re-run
+-- there; anything that must reach an existing database has to be a NEW
+-- forward migration. Keeping this file schema-only makes that boundary clear.
 -- ----------------------------------------------------------------------------

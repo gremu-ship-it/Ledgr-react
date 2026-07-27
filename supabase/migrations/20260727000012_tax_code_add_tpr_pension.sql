@@ -1,0 +1,28 @@
+-- ============================================================================
+-- Migration: ensure 'tpr_pension' exists on the tax_code enum
+--
+-- WHY THIS IS ITS OWN FILE, AND WHY IT IS DATED LATE:
+--
+-- 1. Postgres allows ALTER TYPE ... ADD VALUE inside a transaction (PG12+)
+--    but forbids *using* the new value in that same transaction. The Supabase
+--    CLI wraps each migration file in one transaction, so adding the value
+--    and then INSERTing a row that uses it in a single file fails with:
+--        ERROR: unsafe use of new value "tpr_pension" of enum type tax_code
+--    Reproduced against real Postgres. Hence: enum here, seed in the next
+--    migration.
+--
+-- 2. 20260708000000_tax_compliance_module.sql is ALREADY APPLIED on the
+--    production database (tax_returns / tax_payments / tax_alerts and the
+--    tpr_pension enum value are all present in database.generated.ts, which
+--    is dumped from the live schema). Supabase tracks migrations by version,
+--    so a file dated before the latest applied migration is never executed
+--    and `supabase db push` rejects out-of-order versions outright.
+--
+--    Anything that must reach an existing database therefore has to be a NEW
+--    forward migration, dated after everything already applied.
+--
+-- Idempotent: safe on databases where the value already exists (production)
+-- and on a fresh database built from scratch.
+-- ============================================================================
+
+alter type tax_code add value if not exists 'tpr_pension';

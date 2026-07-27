@@ -55,6 +55,34 @@ tpr_pension   TPR Pension   0      10        5         true            false
 vat_standard  VAT Standard  17.5   null      null      true            true
 ```
 
+### B2a. The fix had to be a *forward* migration (caught pre-merge)
+
+My first attempt fixed B2 by editing `20260708000000_tax_compliance_module.sql`.
+That would have silently done nothing in production.
+
+`database.generated.ts` is dumped from the live schema and already contains
+`tax_returns`, `tax_payments`, `tax_alerts` and `tpr_pension` — so that
+migration is **already applied**. Supabase tracks migrations by version:
+editing an applied file never re-runs it, and a *new* file dated before the
+latest applied version makes `supabase db push` fail outright.
+
+So the original file is now schema-only, and the seeding/linking moved to two
+new forward migrations dated after everything already applied:
+`20260727000012` (enum) and `20260727000013` (seed + backfill).
+
+**Verified against a simulated production database** (old migration
+pre-applied, then only the new files pushed):
+
+```
+BEFORE   tpr_pension   payable_linked: false     <- payroll approval throws
+AFTER    paye          payable_linked: true
+         tpr_pension   payable_linked: true      <- unblocked
+         vat_standard  payable + receivable: true
+re-run row count (must stay 3): 3
+```
+
+Fresh-database path also passes, twice through, all three configs linked.
+
 ### B3. Migration failed on a clean `supabase db push`
 Line 19 added `tpr_pension` to the enum; line 176 used it — same transaction. Postgres forbids this.
 
@@ -64,7 +92,7 @@ ORIGINAL migration (enum ADD VALUE + seed in ONE transaction)
   FAILED as predicted:
     unsafe use of new value "tpr_pension" of enum type tax_code
 ```
-→ Split into `20260707000000_tax_code_add_tpr_pension.sql`. Whole module made idempotent (`if not exists`, guarded `create type`, `drop policy if exists`).
+→ Enum addition split into its own file (`20260727000012`), seeding into `20260727000013`. Whole module made idempotent (`if not exists`, guarded `create type`, `drop policy if exists`).
 
 ```
 FIRST APPLY (clean database)     PASS  PASS
