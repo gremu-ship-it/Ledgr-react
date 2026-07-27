@@ -74,11 +74,13 @@ const MALAWI_CITIES = [
 
 const CURRENCIES = [
   { code: 'MWK', label: 'Malawian Kwacha (MWK)' },
-  { code: 'USD', label: 'US Dollar (USD)' },
-  { code: 'GBP', label: 'British Pound (GBP)' },
-  { code: 'EUR', label: 'Euro (EUR)' },
-  { code: 'ZAR', label: 'South African Rand (ZAR)' },
   { code: 'ZMW', label: 'Zambian Kwacha (ZMW)' },
+  { code: 'TZS', label: 'Tanzanian Shilling (TZS)' },
+  { code: 'MZN', label: 'Mozambican Metical (MZN)' },
+  { code: 'USD', label: 'US Dollar (USD)' },
+  { code: 'EUR', label: 'Euro (EUR)' },
+  { code: 'GBP', label: 'British Pound (GBP)' },
+  { code: 'ZAR', label: 'South African Rand (ZAR)' },
 ];
 
 const FINANCIAL_YEAR_OPTIONS = [

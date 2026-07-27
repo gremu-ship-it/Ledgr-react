@@ -94,7 +94,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     if (Math.abs(totalDebits - totalCredits) > 0.005) {
       throw new ValidationError(
         'journal_entries',
-        `Journal entry does not balance in functional currency (MWK): ` +
+        `Journal entry does not balance in functional currency: ` +
         `debits ${totalDebits.toFixed(2)} ≠ credits ${totalCredits.toFixed(2)}.`,
       );
     }
@@ -243,6 +243,10 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       amount_base: line.amount_base,
       currency: line.currency,
       exchange_rate: line.exchange_rate,
+      original_currency: line.original_currency,
+      original_amount: line.original_amount,
+      rate_date: line.rate_date,
+      rate_is_stale: line.rate_is_stale,
       tax_code: line.tax_code,
       tax_amount: line.tax_amount,
       branch_id: line.branch_id,

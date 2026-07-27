@@ -8,15 +8,29 @@ interface Props {
   className?: string;
 }
 
+const FALLBACK_CURRENCIES = [
+  { code: 'MWK', name: 'Malawian Kwacha', is_primary: true },
+  { code: 'ZMW', name: 'Zambian Kwacha', is_primary: true },
+  { code: 'TZS', name: 'Tanzanian Shilling', is_primary: true },
+  { code: 'MZN', name: 'Mozambican Metical', is_primary: true },
+  { code: 'USD', name: 'US Dollar', is_primary: true },
+  { code: 'EUR', name: 'Euro', is_primary: true },
+  { code: 'GBP', name: 'British Pound', is_primary: true },
+  { code: 'ZAR', name: 'South African Rand', is_primary: true },
+];
+
 export function CurrencySelector({ value, onChange, disabled, className }: Props) {
-  const { data: currencies = [] } = useQuery({
+  const { data: currencies = FALLBACK_CURRENCIES } = useQuery({
     queryKey: ['currencies'],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('currencies')
-        .select('code, name')
+        .select('code, name, is_primary')
+        .eq('is_active', true)
+        .order('is_primary', { ascending: false })
         .order('code');
-      return data || [];
+      if (error) return FALLBACK_CURRENCIES;
+      return data?.length ? data : FALLBACK_CURRENCIES;
     },
     staleTime: 1000 * 60 * 60, // 1 hour
   });

@@ -13,7 +13,7 @@
  *   4112  Service Revenue
  *   4230  Foreign Exchange Gain (realised)
  *   6110  Basic Salaries
- *   7193  Foreign Exchange Loss (realised)
+ *   7300  Foreign Exchange Loss (realised)
  *
  * ─────────────────────────────────────────────────────────────────────────
  * MULTI-CURRENCY / IAS 21 NOTE
@@ -80,7 +80,7 @@ export async function nextEntryNumber(_businessId: string): Promise<string> {
  *   currency at settlement is a GAIN on a receivable but a LOSS on a
  *   payable (you owe more functional currency to clear the same debt).
  *
- * @returns positive = gain (credit 4230), negative = loss (debit 7193),
+ * @returns positive = gain (credit 4230), negative = loss (debit 7300),
  *   zero = no FX movement (rates matched, or same-currency transaction).
  */
 function calculateRealisedFx(
@@ -112,7 +112,7 @@ async function buildFxLines(
   if (Math.abs(rounded) < 0.005) return [];
 
   const isGain = rounded > 0;
-  const account = await getAccountByCode(businessId, isGain ? '4230' : '7193');
+  const account = await getAccountByCode(businessId, isGain ? '4230' : '7300');
 
   return [
     {

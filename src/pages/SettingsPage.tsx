@@ -451,11 +451,12 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
       {alert && <Alert type={alert.type} message={alert.message} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Base Currency">
+        <Field label="Functional Currency" hint="Locked after onboarding for IAS 21 consistency. Create a new business if your functional currency changes.">
           <select
             value={form.base_currency}
+            disabled
             onChange={(e) => set('base_currency', e.target.value)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm text-gray-500 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           >
             <option value="MWK">MWK — Malawian Kwacha</option>
             <option value="USD">USD — US Dollar</option>
@@ -465,6 +466,7 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
             <option value="KES">KES — Kenyan Shilling</option>
             <option value="TZS">TZS — Tanzanian Shilling</option>
             <option value="ZMW">ZMW — Zambian Kwacha</option>
+            <option value="MZN">MZN — Mozambican Metical</option>
           </select>
         </Field>
 

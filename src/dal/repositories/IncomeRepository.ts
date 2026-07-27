@@ -92,15 +92,15 @@ export class IncomeRepository extends BaseRepository<'invoices'> {
 
     const totals = active.reduce(
       (acc, inv) => ({
-        totalAmount:  acc.totalAmount  + Number(inv.total_amount),
-        vatAmount:    acc.vatAmount    + Number(inv.vat_amount),
-        whtAmount:    acc.whtAmount    + Number(inv.wht_amount),
-        amountPaid:   acc.amountPaid   + Number(inv.amount_paid),
+        totalAmount:  acc.totalAmount  + Number(inv.functional_amount ?? inv.total_amount),
+        vatAmount:    acc.vatAmount    + Number(inv.vat_amount) * Number(inv.exchange_rate || 1),
+        whtAmount:    acc.whtAmount    + Number(inv.wht_amount) * Number(inv.exchange_rate || 1),
+        amountPaid:   acc.amountPaid   + Number(inv.amount_paid) * Number(inv.exchange_rate || 1),
         // amount_due is a generated column (nullable) — derive safely
         amountOutstanding: acc.amountOutstanding + (
           inv.amount_due !== null
-            ? Number(inv.amount_due)
-            : Number(inv.total_amount) - Number(inv.amount_paid)
+            ? Number(inv.amount_due) * Number(inv.exchange_rate || 1)
+            : Number(inv.functional_amount ?? inv.total_amount) - (Number(inv.amount_paid) * Number(inv.exchange_rate || 1))
         ),
       }),
       { totalAmount: 0, vatAmount: 0, whtAmount: 0, amountPaid: 0, amountOutstanding: 0 },

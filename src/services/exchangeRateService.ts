@@ -129,8 +129,11 @@ export class ExchangeRateService {
     toCurrency: string,
     rate: number,
     rateDate: string,
-    userId: string,
+    userId?: string | null,
   ): Promise<Row<'exchange_rates'>> {
+    const existing = await this.rates.findExact(businessId, fromCurrency, toCurrency, rateDate);
+    if (existing) return existing; // preserve the historical rate already used for that date
+
     return this.rates.recordRate({
       business_id: businessId,
       from_currency: fromCurrency,
@@ -138,7 +141,7 @@ export class ExchangeRateService {
       rate,
       rate_date: rateDate,
       source: 'manual',
-      created_by: userId,
+      created_by: userId || null,
     } as InsertDto<'exchange_rates'>);
   }
 

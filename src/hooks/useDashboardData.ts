@@ -113,7 +113,7 @@ export function useMonthlyExpenses(businessId?: string) {
       const rows = await repos.expense.findByDateRange(businessId!, from, to);
       return rows
         .filter((r) => r.status !== 'void')
-        .reduce((sum, r) => sum + Number(r.total_amount), 0);
+        .reduce((sum, r) => sum + Number(r.functional_amount ?? r.total_amount), 0);
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
@@ -139,7 +139,7 @@ export function useMonthlyExpenseVat(businessId?: string) {
       const rows = await repos.expense.findByDateRange(businessId!, from, to);
       return rows
         .filter((r) => r.status !== 'void')
-        .reduce((sum, r) => sum + Number(r.vat_amount), 0);
+        .reduce((sum, r) => sum + Number(r.vat_amount) * Number(r.exchange_rate || 1), 0);
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
@@ -153,8 +153,8 @@ export function useOutstandingInvoices(businessId?: string) {
       const rows = await repos.income.findOutstanding(businessId!);
       const total = rows.reduce(
         (sum, r) => sum + (r.amount_due !== null
-          ? Number(r.amount_due)
-          : Number(r.total_amount) - Number(r.amount_paid)),
+          ? Number(r.amount_due) * Number(r.exchange_rate || 1)
+          : Number(r.functional_amount ?? r.total_amount) - (Number(r.amount_paid) * Number(r.exchange_rate || 1))),
         0,
       );
       return { total, count: rows.length };
@@ -180,7 +180,7 @@ export function useIncomeExpenseTrend(businessId?: string, months = 6) {
 
           const expenses = expenseRows
             .filter((r) => r.status !== 'void')
-            .reduce((sum, r) => sum + Number(r.total_amount), 0);
+            .reduce((sum, r) => sum + Number(r.functional_amount ?? r.total_amount), 0);
 
           return { month: label, income: incomeTotals.totalAmount, expenses };
         }),

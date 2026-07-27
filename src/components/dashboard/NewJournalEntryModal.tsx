@@ -3,6 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
+import { CurrencySelector } from '@/components/CurrencySelector';
+import { resolveTransactionRate } from '@/lib/currency';
+
+interface DepartmentOption {
+  id: string;
+  name: string;
+  cost_centre: string | null;
+}
 
 interface LineDraft {
   id: string; // client-side key only
@@ -34,11 +42,15 @@ interface Props {
 
 export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) {
   const currentUser = useAppStore((s) => s.currentUser);
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
   const queryClient = useQueryClient();
 
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [description, setDescription] = useState('');
   const [reference, setReference] = useState('');
+  const [currency, setCurrency] = useState(functionalCurrency);
+  const [exchangeRate, setExchangeRate] = useState('');
   const [lines, setLines] = useState<LineDraft[]>([newLine(), newLine()]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [branchId, setBranchId] = useState<string>('');
@@ -62,18 +74,18 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
     enabled: Boolean(businessId),
   });
 
-  const { data: departments = [] } = useQuery({
+  const { data: departments = [] } = useQuery<DepartmentOption[]>({
     queryKey: ['departments', businessId],
     queryFn: async () => {
-      const { data, error } = await (repos as any).account.client
+      const { data, error } = await repos.account.db
         .from('departments')
-        .select('*')
+        .select('id, name, cost_centre')
         .eq('business_id', businessId)
         .eq('is_active', true)
         .is('deleted_at', null)
         .order('name', { ascending: true });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as DepartmentOption[];
     },
     enabled: Boolean(businessId),
   });
@@ -124,6 +136,16 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
     mutationFn: async () => {
       if (!currentUser) throw new Error('You must be signed in to post a journal entry.');
 
+      const manualRate = exchangeRate ? parseFloat(exchangeRate) : null;
+      const rate = await resolveTransactionRate({
+        businessId,
+        originalCurrency: currency,
+        functionalCurrency,
+        date: entryDate,
+        manualRate,
+        userId: currentUser.id,
+      });
+
       const entryLines = lines
         .filter((l) => {
           const debit = parseFloat(l.debit) || 0;
@@ -141,9 +163,13 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
             description: l.description || description,
             is_debit: isDebit,
             amount,
-            amount_base: amount, // MWK-only manual entries — no FX conversion needed
-            currency: 'MWK',
-            exchange_rate: 1,
+            amount_base: amount * rate.rate,
+            currency,
+            exchange_rate: rate.rate,
+            original_currency: currency,
+            original_amount: amount,
+            rate_date: rate.rateDate,
+            rate_is_stale: rate.isStale,
             tax_code: 'none' as const,
             tax_amount: 0,
             reconciled: false,
@@ -161,8 +187,8 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
           reference: reference.trim() || null,
           source_type: null,
           source_id: null,
-          currency: 'MWK',
-          exchange_rate: 1,
+          currency,
+          exchange_rate: rate.rate,
           status: 'draft',
           branch_id: branchId || null,
           department_id: departmentId || null,
@@ -220,6 +246,29 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
             </div>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-600">Transaction Currency</label>
+              <CurrencySelector value={currency} onChange={setCurrency} />
+            </div>
+            {currency !== functionalCurrency && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-600">
+                  Exchange rate ({currency} → {functionalCurrency})
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  value={exchangeRate}
+                  onChange={(e) => setExchangeRate(e.target.value)}
+                  placeholder={`1 ${currency} = ? ${functionalCurrency}`}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            )}
+          </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-600">Description</label>
             <input
@@ -260,7 +309,7 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="">None</option>
-                {departments.map((d: any) => (
+                {departments.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}{d.cost_centre ? ` [${d.cost_centre}]` : ''}
                   </option>
