@@ -3,7 +3,8 @@ name: CI
 # Replaces the old "NodeJS with Webpack" workflow, which ran `npx webpack` on a
 # Vite project with no webpack dependency and no webpack config — it failed on
 # every push and told us nothing about the code. This runs the checks the
-# project actually has: typecheck, lint and a production build.
+# project actually has, via the `verify` script in package.json so CI and local
+# development stay in sync.
 
 on:
   push:
@@ -19,7 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  verify:
     name: Typecheck, lint and build
     runs-on: ubuntu-latest
 
@@ -42,17 +43,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Typecheck
-        run: npx tsc -b
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
-        # Vite requires these at build time; the values are baked into the
-        # client bundle and are not secret, but CI has no project to point at,
-        # so placeholders keep the build honest without wiring up a real env.
+      - name: Typecheck, lint and build
+        # Vite reads these at build time and bakes them into the client bundle.
+        # They are publishable values, not secrets, but CI has no project to
+        # point at — placeholders keep the build honest without wiring up an
+        # environment. src/lib/supabase.ts throws if they are absent.
         env:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
-        run: npm run build
+        run: npm run verify

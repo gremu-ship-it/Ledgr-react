@@ -1,12 +1,8 @@
 # Proposed CI workflow (not yet installed)
 
-`ci.yml` here is meant to live at `.github/workflows/ci.yml`, replacing
+`ci.yml` here belongs at `.github/workflows/ci.yml`, replacing
 `.github/workflows/webpack.yml`. It could not be committed to that path from
-this session: the GitHub App pushing this branch lacks the `workflows`
-permission, and the push is rejected with
-
-    refusing to allow a GitHub App to create or update workflow
-    .github/workflows/ci.yml without `workflows` permission
+this session — see "Why this is not installed" below.
 
 ## Why the current workflow must go
 
@@ -17,21 +13,66 @@ permission, and the push is rejected with
 
 This is a Vite + TypeScript project. There is no `webpack` dependency, no
 `webpack.config.js` and no webpack entry point, so `npx webpack` downloads
-webpack on the fly and then fails with no config. Every run since it was added
-has failed. It also matrixes Node 18, which can never satisfy `vite@8`
-(`engines: ^20.19.0 || >=22.12.0`); that leg is what cancels the 20.x and 22.x
-legs. And it never runs `tsc`, `eslint` or `vite build`, so the checks that
-would catch real regressions are not gated at all.
+webpack on the fly and then fails with no config. **Every run since it was
+added has failed.**
 
-## To install (needs a human with repo write access)
+Two further problems in the same file:
 
+- It matrixes Node 18, which can never satisfy `vite@8`
+  (`engines: ^20.19.0 || >=22.12.0`). The 18.x leg is what cancels the 20.x
+  and 22.x legs — `The strategy configuration was canceled because
+  "build._18_x" failed`.
+- It never runs `tsc`, `eslint` or `vite build`, so the checks that would
+  catch real regressions are not gated at all.
+
+## What the replacement does
+
+Runs `npm run verify` (`typecheck && lint && build`) on Node 20 and 22.
+
+The `verify` script was added to `package.json` in the same commit as this
+file, so it is already usable locally and is **not** blocked by the permission
+issue. Running `npm run verify` before pushing reproduces CI exactly.
+
+Vercel already builds each PR, which covers typecheck and build (`npm run
+build` is `tsc -b && vite build`). The gap this workflow closes is **lint**,
+which nothing currently enforces, plus verification on two Node versions.
+
+## Why this is not installed
+
+The GitHub App backing this session lacks the `workflows` permission. Pushing a
+commit that adds this file is rejected:
+
+    refusing to allow a GitHub App to create or update workflow
+    .github/workflows/ci.yml without `workflows` permission
+
+Deleting `webpack.yml` *is* permitted — only creating/updating workflow files
+is blocked. Deleting it alone would turn CI green by removing the failing
+check, but that would leave the repository with no build gate at all, so it is
+left in place for a human to decide.
+
+## To install
+
+Either grant the Arena GitHub App the `workflows` permission and ask for the
+change to be pushed, or apply it locally:
+
+    git switch arena/019fa41c-ledgr-react
     git rm .github/workflows/webpack.yml
-    mv ci-proposed/ci.yml .github/workflows/ci.yml
-    rmdir ci-proposed 2>/dev/null || rm -rf ci-proposed
+    git mv ci-proposed/ci.yml .github/workflows/ci.yml
+    git rm ci-proposed/README.md
     git commit -m "Replace broken webpack CI with typecheck/lint/build"
+    git push
 
-Alternatively, grant the Arena GitHub App the `workflows` permission and the
-change can be pushed directly.
+## Verification already done
 
-Both `npm run lint` and `npx tsc -b` pass on this branch as of this commit, so
-the new workflow should be green immediately.
+The workflow was validated before being proposed:
+
+- YAML parses; triggers, matrix, env and steps all resolve as intended.
+- Simulated end to end from a **clean clone** of this branch with `npm ci` and
+  the placeholder env vars — `npm run verify` exits 0.
+- Confirmed it *fails* correctly: an injected type error exits 2, and an
+  injected `any` exits 1 on the lint step. It is not passing vacuously.
+
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` are set to placeholders in the
+workflow because `src/lib/supabase.ts` throws at import time when they are
+absent, which would break the build step. They are publishable client values,
+not secrets, and CI has no project to point at.
