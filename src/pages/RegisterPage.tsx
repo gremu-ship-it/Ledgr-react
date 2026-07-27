@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
-import { usePartner } from '@/hooks/usePartner';
+import { usePartner } from '@/partner/PartnerContext';
 import {
   AuthAlert,
   FormField,
@@ -17,7 +17,7 @@ import {
 
 export function RegisterPage() {
   const { t } = useTranslation();
-  const { partner } = usePartner();
+  const { partner, branding } = usePartner();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnToParam = searchParams.get('returnTo');
@@ -107,8 +107,14 @@ export function RegisterPage() {
 
   return (
     <AuthShell
-      title={partner ? `Create your ${partner.app_name || 'Ledgr'} account` : t('auth.createAccountTitle')}
-      subtitle={partner ? `Get started with ${partner.app_name || 'Ledgr'}` : (safeReturnTo ? t('auth.createAccountInviteSubtitle') : t('auth.createAccountSubtitle'))}
+      title={partner ? branding.onboardingTitle : t('auth.createAccountTitle')}
+      subtitle={
+        partner
+          ? branding.onboardingSubtitle ?? `Get started with ${branding.appName}`
+          : safeReturnTo
+            ? t('auth.createAccountInviteSubtitle')
+            : t('auth.createAccountSubtitle')
+      }
     >
       {safeReturnTo && (
         <div className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">

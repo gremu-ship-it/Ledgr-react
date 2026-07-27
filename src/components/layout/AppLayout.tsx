@@ -1,4 +1,3 @@
-import React from 'react';
 import { Outlet } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
@@ -8,7 +7,7 @@ import { BottomNav } from './BottomNav';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { OfflineBanner } from '@/offline/OfflineBanner';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
-import { usePartner } from '@/hooks/usePartner';
+import { usePartnerTheme } from '@/partner/usePartnerTheme';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useLocation } from 'react-router-dom';
@@ -24,8 +23,9 @@ export function AppLayout() {
   // Apply brand colors globally based on current business settings
   useBrandTheme();
 
-  // Load partner config for subdomain/custom domain theming + isolation
-  const { partner, loading: partnerLoading } = usePartner();
+  // Partner (white-label) branding — the business-level brand theme applied
+  // above still takes precedence once a business is selected.
+  usePartnerTheme();
 
   // Inactivity timeout (customizable)
   const { showWarning, secondsRemaining, extendSession } = useInactivityTimeout();
@@ -38,10 +38,7 @@ export function AppLayout() {
   const showMobileHeader = isMobile && !isDashboard;
 
   return (
-    <div
-      className="min-h-screen bg-gray-50"
-      style={partner ? { '--partner-primary': partner.primary_colour || '#1a3a5c' } as React.CSSProperties : undefined}
-    >
+    <div className="min-h-screen bg-gray-50">
       {/* Offline banner */}
       <div className="sticky top-0 z-40">
         <OfflineBanner />

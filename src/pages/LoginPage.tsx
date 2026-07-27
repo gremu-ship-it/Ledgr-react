@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
-import { usePartner } from '@/hooks/usePartner';
+import { usePartner } from '@/partner/PartnerContext';
 import {
   FormField,
   Input,
@@ -17,7 +17,7 @@ type LoginStep = 'credentials' | 'mfa';
 
 export function LoginPage() {
   const { t } = useTranslation();
-  const { partner } = usePartner();
+  const { partner, branding } = usePartner();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -179,7 +179,10 @@ export function LoginPage() {
 
   // ── Credentials step UI ──────────────────────────────────────────────────
   return (
-    <AuthShell title={partner ? `Sign in to ${partner.app_name || 'Ledgr'}` : t('auth.welcomeBack')} subtitle={partner ? `Access your ${partner.app_name || 'Ledgr'} account` : t('auth.signInSubtitle')}>
+    <AuthShell
+      title={partner ? `Sign in to ${branding.appName}` : t('auth.welcomeBack')}
+      subtitle={partner ? `Access your ${branding.appName} account` : t('auth.signInSubtitle')}
+    >
       <form onSubmit={handleCredentials} className="space-y-4">
         {inactivityLogout && (
           <AuthAlert

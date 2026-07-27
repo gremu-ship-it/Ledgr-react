@@ -28,6 +28,8 @@ import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
 import { GATED_PATHS, planMeetsMin } from '@/components/layout/navConfig';
+import { usePartner } from '@/partner/PartnerContext';
+import type { PartnerFeatureKey } from '@/types/partners';
 import { pushUpgradeRequired } from '@/lib/notifications';
 
 const BOTTOM_NAV_ITEMS = [
@@ -37,15 +39,21 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
 ];
 
-const ALL_MORE_MENU_ITEMS: { labelKey: string; path: string; icon: LucideIcon; tone: IconTone }[] = [
+const ALL_MORE_MENU_ITEMS: {
+  labelKey: string;
+  path: string;
+  icon: LucideIcon;
+  tone: IconTone;
+  partnerFeature?: PartnerFeatureKey;
+}[] = [
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
-  { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral' },
+  { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
   { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, tone: 'brand' },
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
   { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, tone: 'info' },
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
-  { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand' },
+  { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
   { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
 ];
 
@@ -60,8 +68,14 @@ export function BottomNav() {
   const { planTier } = useUsage();
 
   // Always show all nav items. Free users see Accounting/Organisation items but get upgrade prompt on click.
-  const bottomItems = BOTTOM_NAV_ITEMS;
-  const moreItems = ALL_MORE_MENU_ITEMS;
+  const { isFeatureEnabled } = usePartner();
+  // Hide modules the partner (bank/MFI) hasn't licensed for its clients.
+  const bottomItems = BOTTOM_NAV_ITEMS.filter(
+    (i) => i.path !== '/products' || isFeatureEnabled('inventory'),
+  );
+  const moreItems = ALL_MORE_MENU_ITEMS.filter(
+    (i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature),
+  );
 
   return (
     <>

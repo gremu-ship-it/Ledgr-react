@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X, Lock } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { NAV_SECTIONS, isItemLocked } from './navConfig';
+import { isItemLocked, visibleSectionsFor } from './navConfig';
+import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
 import { pushUpgradeRequired } from '@/lib/notifications';
@@ -16,8 +17,10 @@ export function Sidebar() {
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
-  // Always show all sections. Gating is now per-item (Accounting + Organisation are visible on Free).
-  const visibleSections = NAV_SECTIONS;
+  const { isFeatureEnabled } = usePartner();
+  // Plan gating is per-item (Accounting + Organisation stay visible on Free);
+  // partner feature flags remove modules from the nav entirely.
+  const visibleSections = visibleSectionsFor(isFeatureEnabled);
 
   return (
     <>

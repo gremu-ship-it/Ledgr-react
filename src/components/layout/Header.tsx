@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Bell, Menu, LogOut, Settings, User, X, AlertTriangle, CheckCircle2, Crown, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
+import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useUsage } from '@/hooks/useUsage';
 import { supabase } from '@/lib/supabase';
@@ -23,6 +24,7 @@ function getInitials(name: string | null | undefined, email: string | null | und
 
 export function Header() {
   const navigate = useNavigate();
+  const { canAccessPortal: canAccessPartnerPortal } = usePartnerAdminAccess();
   const { t } = useTranslation();
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const currentUser = useAppStore((s) => s.currentUser);
@@ -262,7 +264,7 @@ export function Header() {
                 <Settings className="h-4 w-4" />
                 {t('common.settings')}
               </button>
-              {(currentUser?.role === 'platform_admin' || currentUser?.role === 'partner_admin') && (
+              {canAccessPartnerPortal && (
                 <button
                   onClick={() => {
                     setUserMenuOpen(false);
