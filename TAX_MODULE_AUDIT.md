@@ -132,27 +132,15 @@ clamp 31 Jan + 1 month, day 31 -> 2026-02-28
 - `generate-vat-returns` — now secured with `x-cron-secret`, UTC-safe dates, jurisdiction-aware due dates, and the same document filtering as the repository.
 - `20260727000009_tax_receipts_storage.sql` — private `tax-receipts` bucket, RLS scoped by business folder.
 
-### ⚠️ One manual step required
+### Deployment
 
-Both new functions need adding to the CI deploy loop, but the GitHub App
-authenticating this branch lacks the `workflows` permission, so
-`.github/workflows/deploy-supabase.yml` could not be committed. Apply this
-two-line change by hand (or deploy the functions manually):
+Both functions are deployed manually with `--no-verify-jwt`, matching the
+convention your three existing cron functions already use. They are
+deliberately **not** added to the CI deploy loop: that loop leaves JWT
+verification on, and cron invokes these with an `x-cron-secret` header and no
+user JWT, so they would 401 on every scheduled run.
 
-```diff
-           for function in \
-             suggest-bank-matches \
-             send-invoice \
-             invoice-open \
--            process-invoice-automation
-+            process-invoice-automation \
-+            generate-vat-returns \
-+            send-tax-alerts
-           do
-```
-
-Until then: `supabase functions deploy generate-vat-returns` and
-`supabase functions deploy send-tax-alerts`.
+Full instructions: **TAX_MODULE_SETUP.md**
 
 ---
 
