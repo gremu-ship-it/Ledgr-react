@@ -1,0 +1,235 @@
+name: Deploy
+
+# ---------------------------------------------------------------------------
+# Deployment pipeline
+#
+#   * push to `main`           -> deploy to STAGING (automatic)
+#   * push of a tag `v*`       -> deploy to PRODUCTION (manual approval gate)
+#   * workflow_dispatch        -> manual re-deploy of staging or production
+#
+# Production uses a GitHub Environment named `production` that has a "Required
+# reviewers" protection rule, which gives the manual approval gate the prompt
+# asks for. Configure it under Settings > Environments in the repo
+# (see DEPLOYMENT.md).
+#
+# What gets deployed on each environment:
+#   1. Frontend  -> Vercel (staging = preview build, production = --prod)
+#   2. Backend   -> Supabase Edge Functions + DB migrations + function secrets
+#                   (separate staging and production Supabase projects)
+#   3. Optional  -> Containerised Express gateway to Railway, if RAILWAY_TOKEN
+#                   is configured (see server/ and DEPLOYMENT.md)
+# ---------------------------------------------------------------------------
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to deploy
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Shared Vercel org; project id is swapped per environment below.
+  VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+
+jobs:
+  # =========================================================================
+  # STAGING — automatic on merge to main (and manual dispatch)
+  # =========================================================================
+  deploy-staging:
+    name: Deploy to staging
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL }}
+    env:
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_STAGING }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      # Frontend build-time env (staging Supabase project)
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_STAGING }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_STAGING }}
+      VITE_ARENA_AGENT_URL: ${{ vars.VITE_ARENA_AGENT_URL_STAGING }}
+      VITE_ARENA_API_KEY: ${{ secrets.VITE_ARENA_API_KEY_STAGING }}
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN_STAGING }}
+
+      # Sentry source-map upload (frontend)
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_STAGING }}
+
+      # Supabase staging project
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_STAGING }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Deploy frontend to Vercel (staging)
+        # Builds on Vercel using the staging project's environment. All
+        # build-time VITE_* and Sentry vars are injected here.
+        run: |
+          npm i -g vercel@latest
+          vercel deploy \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --yes \
+            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+            --build-env VITE_ARENA_AGENT_URL="$VITE_ARENA_AGENT_URL" \
+            --build-env VITE_ARENA_API_KEY="$VITE_ARENA_API_KEY" \
+            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+            --build-env VITE_APP_VERSION="${{ github.sha }}" \
+            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
+            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
+            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}"
+      - name: Deploy Supabase backend (staging)
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.0
+      - name: Link & migrate staging database
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Set Edge Function secrets (staging)
+        run: |
+          supabase secrets set \
+            SENTRY_DSN="${{ secrets.SENTRY_DSN_BACKEND_STAGING }}" \
+            SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY_STAGING }}" \
+            SENDGRID_FROM_EMAIL="${{ secrets.SENDGRID_FROM_EMAIL_STAGING }}" \
+            ANTHROPIC_API_KEY="${{ secrets.ANTHROPIC_API_KEY_STAGING }}" \
+            PAYCHANGU_SECRET_KEY="${{ secrets.PAYCHANGU_SECRET_KEY_STAGING }}" \
+            PAYCHANGU_WEBHOOK_SECRET="${{ secrets.PAYCHANGU_WEBHOOK_SECRET_STAGING }}" \
+            APP_URL="${{ vars.APP_URL_STAGING }}" \
+            CRON_SECRET="${{ secrets.CRON_SECRET_STAGING }}" \
+            --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Deploy Edge Functions (staging)
+        run: |
+          for dir in supabase/functions/*/; do
+            fn="$(basename "$dir")"
+            echo "Deploying function: $fn"
+            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+          done
+      - name: Deploy Express gateway to Railway (if configured)
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID_STAGING }}
+        run: |
+          npm i -g @railway/cli
+          railway up --service ledgr-gateway --environment staging
+
+  # =========================================================================
+  # PRODUCTION — only on a `v*` tag, behind a manual approval gate
+  # (the `production` environment requires a reviewer before this job runs)
+  # =========================================================================
+  deploy-production:
+    name: Deploy to production
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+    runs-on: ubuntu-latest
+    environment:
+      name: production   # <- manual approval gate (required reviewers)
+      url: ${{ vars.PRODUCTION_URL }}
+    env:
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_PROD }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_PROD }}
+      VITE_ARENA_AGENT_URL: ${{ vars.VITE_ARENA_AGENT_URL_PROD }}
+      VITE_ARENA_API_KEY: ${{ secrets.VITE_ARENA_API_KEY_PROD }}
+      VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN_PROD }}
+
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_PROD }}
+
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+      - run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Deploy frontend to Vercel (production)
+        run: |
+          npm i -g vercel@latest
+          vercel deploy \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --yes \
+            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+            --build-env VITE_ARENA_AGENT_URL="$VITE_ARENA_AGENT_URL" \
+            --build-env VITE_ARENA_API_KEY="$VITE_ARENA_API_KEY" \
+            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+            --build-env VITE_APP_VERSION="${{ github.sha }}" \
+            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
+            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
+            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_PROD }}"
+      - name: Deploy Supabase backend (production)
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.109.0
+      - name: Link & migrate production database
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+      - name: Set Edge Function secrets (production)
+        run: |
+          supabase secrets set \
+            SENTRY_DSN="${{ secrets.SENTRY_DSN_BACKEND_PROD }}" \
+            SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY_PROD }}" \
+            SENDGRID_FROM_EMAIL="${{ secrets.SENDGRID_FROM_EMAIL_PROD }}" \
+            ANTHROPIC_API_KEY="${{ secrets.ANTHROPIC_API_KEY_PROD }}" \
+            PAYCHANGU_SECRET_KEY="${{ secrets.PAYCHANGU_SECRET_KEY_PROD }}" \
+            PAYCHANGU_WEBHOOK_SECRET="${{ secrets.PAYCHANGU_WEBHOOK_SECRET_PROD }}" \
+            APP_URL="${{ vars.APP_URL_PROD }}" \
+            CRON_SECRET="${{ secrets.CRON_SECRET_PROD }}" \
+            --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Deploy Edge Functions (production)
+        run: |
+          for dir in supabase/functions/*/; do
+            fn="$(basename "$dir")"
+            echo "Deploying function: $fn"
+            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+          done
+      - name: Deploy Express gateway to Railway (if configured)
+        if: ${{ secrets.RAILWAY_TOKEN != '' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID_PROD }}
+        run: |
+          npm i -g @railway/cli
+          railway up --service ledgr-gateway --environment production

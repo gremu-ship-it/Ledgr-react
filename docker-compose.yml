@@ -1,0 +1,15 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      APP_ENV: staging
+      PORT: "3000"
+      # Point this at your staging Supabase Edge Function base URL.
+      TARGET_URL: https://your-project-ref.supabase.co/functions/v1/api
+      SENTRY_DSN: ""
+      ALLOWED_ORIGIN: http://localhost:5173
+    restart: unless-stopped
