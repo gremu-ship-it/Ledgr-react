@@ -157,6 +157,7 @@ export async function createInvoiceJournalEntry(
   subtotal: number,
   vatAmount: number,
   branchId?: string | null,
+  departmentId?: string | null,
 ): Promise<void> {
   const invoiceNumber = invoice.invoice_number;
   const invoiceDate = invoice.issue_date;
@@ -237,6 +238,7 @@ export async function createInvoiceJournalEntry(
       exchange_rate: exchangeRate,
       status:        'draft',
       branch_id:     branchId ?? null,
+      department_id: departmentId ?? null,
     },
     lines,
   );
@@ -272,6 +274,7 @@ export async function createInvoiceJournalEntry(
       exchange_rate: exchangeRate,
       status:        'draft',
       branch_id:     branchId ?? null,
+      department_id: departmentId ?? null,
     },
     [
       {
@@ -324,6 +327,7 @@ export async function createInvoiceReceivableEntry(
   businessId: string,
   invoice: Row<'invoices'>,
   branchId?: string | null,
+  departmentId?: string | null,
 ): Promise<string> {
   const [debtors, revenue, vatPayable] = await Promise.all([
     getAccountByCode(businessId, '1131'),
@@ -398,6 +402,7 @@ export async function createInvoiceReceivableEntry(
       exchange_rate: exchangeRate,
       status:        'draft',
       branch_id:     branchId ?? null,
+      department_id: departmentId ?? null,
     },
     lines,
   );
@@ -418,6 +423,7 @@ export async function createInvoiceSettlementEntry(
   payment: Row<'invoice_payments'>,
   functionalCurrency: string,
   branchId?: string | null,
+  departmentId?: string | null,
 ): Promise<string> {
   const [debtors, cash] = await Promise.all([
     getAccountByCode(businessId, '1131'),
@@ -488,6 +494,7 @@ export async function createInvoiceSettlementEntry(
       exchange_rate: settlementRate,
       status:        'draft',
       branch_id:     branchId ?? null,
+      department_id: departmentId ?? null,
     },
     lines,
   );
@@ -513,6 +520,7 @@ export async function createExpenseJournalEntry(
   allocations: ExpenseAccountAllocation[],
   vatAmount: number,
   branchId?: string | null,
+  departmentId?: string | null,
 ): Promise<string> {
   if (allocations.length === 0) {
     throw new Error('At least one expense account allocation is required.');
@@ -609,6 +617,7 @@ export async function createExpenseJournalEntry(
       exchange_rate: exchangeRate,
       status:        'draft',
       branch_id:     branchId ?? null,
+      department_id: departmentId ?? null,
     },
     lines,
   );
@@ -640,6 +649,7 @@ export async function createExpenseSettlementEntry(
   payment: Row<'expense_payments'>,
   functionalCurrency: string,
   branchId?: string | null,
+  departmentId?: string | null,
 ): Promise<string> {
   const [creditors, cash] = await Promise.all([
     getAccountByCode(businessId, '2111'),
@@ -710,6 +720,7 @@ export async function createExpenseSettlementEntry(
       exchange_rate: settlementRate,
       status:        'draft',
       branch_id:     branchId ?? null,
+      department_id: departmentId ?? null,
     },
     lines,
   );

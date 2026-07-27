@@ -53,6 +53,25 @@ function useBranches(businessId?: string) {
   });
 }
 
+function useDepartments(businessId?: string) {
+  return useQuery({
+    queryKey: ['departments', businessId],
+    queryFn: async () => {
+      const { data, error } = await repos.inventory.db
+        .from('departments')
+        .select('id, name, code, cost_centre')
+        .eq('business_id', businessId!)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: string; name: string; code: string | null; cost_centre: string | null }[];
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
 // ── Stock addition on purchase ───────────────────────────────────────────────
 // Mirror of IncomePage.tsx's deductStockForBranchSale, but for buying stock
 // IN rather than selling it out. Non-blocking: if the branch has no linked
@@ -174,6 +193,41 @@ function BranchSelect({
   );
 }
 
+function DepartmentSelect({
+  value,
+  onChange,
+  departments,
+  label = 'Department',
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  departments: { id: string; name: string; code: string | null; cost_centre: string | null }[];
+  label?: string;
+  className?: string;
+}) {
+  if (departments.length === 0) return null;
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">
+        {label} <span className="font-normal text-gray-400">(optional)</span>
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+      >
+        <option value="">No department</option>
+        {departments.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}{d.code ? ` (${d.code})` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function ProductSelect({
   value,
   onChange,
@@ -238,6 +292,7 @@ interface QuickExpenseForm {
   include_vat:     boolean;
   product_id:      string;   // NEW
   branch_id:       string;   // NEW
+  department_id:   string;   // NEW
   quantity:        string;   // NEW: units purchased, for stock addition
 }
 
@@ -257,6 +312,7 @@ interface ExpenseForm {
   due_date:       string;
   notes:          string;
   branch_id:      string;   // NEW
+  department_id:  string;   // NEW
   currency:       string;
   exchange_rate:  string;
   lines:          ExpenseLine[];
@@ -311,13 +367,14 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
+  const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] }  = useAllProducts(businessId);
 
   const [form, setForm] = useState<QuickExpenseForm>({
     expense_date: today(), description: '', amount: '', account_id: '',
     payment_method: 'cash', reference: '', notes: '', include_vat: false,
     currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
-    product_id: '', branch_id: '', quantity: '1',
+    product_id: '', branch_id: '', department_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -377,6 +434,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           // NEW: cost centre / branch flows from form into expense header
           // and then into journal_entries.branch_id for branch P&L reporting
           branch_id:       values.branch_id || null,
+          department_id:   values.department_id || null,
           created_by:      null,
         } as InsertDto<'expenses'>,
         [{
@@ -414,6 +472,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           allocations,
           vatAmount,
           values.branch_id || null,
+          values.department_id || null,
         );
         await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
@@ -442,7 +501,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         expense_date: today(), description: '', amount: '', account_id: '',
         payment_method: 'cash', reference: '', notes: '', include_vat: false,
         currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
-        product_id: '', branch_id: '', quantity: '1',
+        product_id: '', branch_id: '', department_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['expenses'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
@@ -557,6 +616,13 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
             branches={branches}
           />
 
+          {/* NEW: Department selector */}
+          <DepartmentSelect
+            value={form.department_id}
+            onChange={(v) => set('department_id', v)}
+            departments={departments}
+          />
+
           <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
             <input type="checkbox" id="include_vat" checked={form.include_vat}
               onChange={(e) => set('include_vat', e.target.checked)}
@@ -620,12 +686,13 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
+  const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] }  = useAllProducts(businessId);
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm]   = useState<ExpenseForm>({
     contact_id: '', expense_number: '', expense_date: today(), due_date: '', notes: '',
-    branch_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
+    branch_id: '', department_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
     lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', account_id: '', product_id: '' }],
   });
 
@@ -732,6 +799,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           amount_paid:    0,
           notes:          form.notes || null,
           branch_id:      form.branch_id || null,  // NEW: cost centre
+          department_id:  form.department_id || null,  // NEW: cost centre
           created_by:     null,
         } as InsertDto<'expenses'>,
         validLines.map((l, idx) => {
@@ -780,6 +848,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           allocations,
           vatAmount,
           form.branch_id || null,
+          form.department_id || null,
         );
         await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
@@ -891,6 +960,13 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             value={form.branch_id}
             onChange={(v) => setField('branch_id', v)}
             branches={branches}
+          />
+
+          {/* NEW: Department selector at bill header level */}
+          <DepartmentSelect
+            value={form.department_id}
+            onChange={(v) => setField('department_id', v)}
+            departments={departments}
           />
 
           <div>
@@ -1027,6 +1103,7 @@ function useRetryPosting(businessId: string) {
         allocations,
         Number(expense.vat_amount),
         expense.branch_id ?? null,
+        expense.department_id ?? null,
       );
       await repos.expense.update(expense.id, { journal_entry_id: journalEntryId });
     },

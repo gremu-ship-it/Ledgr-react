@@ -40,6 +40,25 @@ function useBranches(businessId?: string) {
   });
 }
 
+function useDepartments(businessId?: string) {
+  return useQuery({
+    queryKey: ['departments', businessId],
+    queryFn: async () => {
+      const { data, error } = await repos.inventory.db
+        .from('departments')
+        .select('id, name, code, cost_centre')
+        .eq('business_id', businessId!)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name', { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: string; name: string; code: string | null; cost_centre: string | null }[];
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
 function useAllProducts(businessId?: string) {
   return useQuery({
     queryKey: ['products_all', businessId],
@@ -133,6 +152,34 @@ function BranchSelect({
   );
 }
 
+function DepartmentSelect({
+  value,
+  onChange,
+  departments,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  departments: { id: string; name: string; code: string | null; cost_centre: string | null }[];
+  className?: string;
+}) {
+  if (departments.length === 0) return null;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={className ?? 'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500'}
+    >
+      <option value="">No department</option>
+      {departments.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.name}{d.code ? ` (${d.code})` : ''}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function ProductSelect({
   value,
   onChange,
@@ -195,6 +242,7 @@ interface QuickEntryForm {
   notes: string;
   product_id: string;   // NEW
   branch_id: string;    // NEW
+  department_id: string; // NEW
   quantity: string;     // NEW: units sold, for stock deduction
 }
 
@@ -221,6 +269,7 @@ interface InvoiceForm {
   payment_provider: '' | 'airtel_money' | 'tnm_mpamba';
   payment_reference: string;
   branch_id: string;    // NEW
+  department_id: string; // NEW
   currency: string;
   exchange_rate: string;
   lines: InvoiceLine[];
@@ -271,11 +320,12 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: branches = [] } = useBranches(businessId);
+  const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] } = useAllProducts(businessId);
 
   const [form, setForm] = useState<QuickEntryForm>({
     issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
-    reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
+    reference: '', notes: '', product_id: '', branch_id: '', department_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -345,6 +395,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           // NEW: branch_id flows from the form into the invoice and then into
           // the journal entry (journal_entries.branch_id) for branch reporting
           branch_id:        values.branch_id || null,
+          department_id:    values.department_id || null,
           created_by:       null,
         } as InsertDto<'invoices'>,
         [{
@@ -374,6 +425,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             amount,
             0,
             values.branch_id || null,
+            values.department_id || null,
           );
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
@@ -395,7 +447,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
         issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
-        reference: '', notes: '', product_id: '', branch_id: '', quantity: '1',
+        reference: '', notes: '', product_id: '', branch_id: '', department_id: '', quantity: '1',
       });
       queryClient.invalidateQueries({ queryKey: ['income'] });
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
@@ -500,6 +552,20 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             </div>
           )}
 
+          {/* NEW: Department selector — only shown when business has departments */}
+          {departments.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Department <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <DepartmentSelect
+                value={form.department_id}
+                onChange={(v) => set('department_id', v)}
+                departments={departments}
+              />
+            </div>
+          )}
+
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Description</label>
             <input type="text" placeholder="e.g. 2 bags of maize — Lilongwe branch" value={form.description} onChange={(e) => set('description', e.target.value)}
@@ -546,13 +612,14 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { data: branches = [] } = useBranches(businessId);
+  const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] } = useAllProducts(businessId);
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
   const [form, setForm] = useState<InvoiceForm>({
     contact_id: '', invoice_number: '', issue_date: today(), due_date: '',
-    notes: '', terms: 'Payment due within 30 days.', template: 'professional', project_code: '', lpo_number: '', payment_provider: '', payment_reference: '', branch_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
+    notes: '', terms: 'Payment due within 30 days.', template: 'professional', project_code: '', lpo_number: '', payment_provider: '', payment_reference: '', branch_id: '', department_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
     lines: [{ description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', product_id: '' }],
   });
 
@@ -668,6 +735,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           payment_provider: form.payment_provider || null,
           payment_reference: form.payment_reference || null,
           branch_id:        form.branch_id || null,  // NEW
+          department_id:    form.department_id || null,  // NEW
           created_by:       null,
         } as InsertDto<'invoices'>,
         validLines.map((l, idx) => {
@@ -702,6 +770,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             businessId,
             created,
             form.branch_id || null,
+            form.department_id || null,
           );
         } catch (err) {
           console.warn('Journal entry failed (non-critical):', err);
@@ -827,6 +896,20 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                 value={form.branch_id}
                 onChange={(v) => setField('branch_id', v)}
                 branches={branches}
+              />
+            </div>
+          )}
+
+          {/* NEW: Department selector at invoice level */}
+          {departments.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Department <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <DepartmentSelect
+                value={form.department_id}
+                onChange={(v) => setField('department_id', v)}
+                departments={departments}
               />
             </div>
           )}
