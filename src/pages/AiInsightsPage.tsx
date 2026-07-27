@@ -176,6 +176,7 @@ export function AiInsightsPage() {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [taxSuggestions, setTaxSuggestions] = useState<TaxPlanningSuggestion[]>([]);
   const [cashForecast, setCashForecast] = useState<CashForecast | null>(null);
+  const [forecastFailed, setForecastFailed] = useState(false);
   const [richContext, setRichContext] = useState<BusinessContext | null>(null);
 
   // Load advanced AI intelligence on mount
@@ -183,25 +184,30 @@ export function AiInsightsPage() {
     if (!businessId) return;
 
     const loadIntelligence = async () => {
-      try {
-        const [anoms, tax, forecastData, context] = await Promise.all([
-          detectAdvancedAnomalies(businessId),
-          getTaxPlanningSuggestions(businessId),
-          generateCashFlowForecast(businessId),
-          buildRichBusinessContext(businessId, businessName),
-        ]);
+      // allSettled, not all: generateCashFlowForecast now propagates query
+      // failures rather than returning a fabricated flat forecast, and one
+      // failing panel must not blank out the other three.
+      const [anoms, tax, forecastData, context] = await Promise.allSettled([
+        detectAdvancedAnomalies(businessId),
+        getTaxPlanningSuggestions(businessId),
+        generateCashFlowForecast(businessId),
+        buildRichBusinessContext(businessId, businessName),
+      ]);
 
-        setAnomalies(anoms);
-        setTaxSuggestions(tax);
-        setCashForecast(forecastData);
-        setRichContext(context);
-      } catch (err) {
-        console.warn('[AiInsights] Failed to load full intelligence context:', err);
-        setAnomalies([]);
-        setTaxSuggestions([]);
+      setAnomalies(anoms.status === 'fulfilled' ? anoms.value : []);
+      setTaxSuggestions(tax.status === 'fulfilled' ? tax.value : []);
+      setRichContext(context.status === 'fulfilled' ? context.value : null);
+
+      if (forecastData.status === 'fulfilled') {
+        setCashForecast(forecastData.value);
+        setForecastFailed(false);
+      } else {
+        // Leave the forecast null and say so in the UI. Showing nothing is
+        // fine; showing an invented flat line as though it were a real
+        // projection is not.
+        console.error('[AiInsights] Cash-flow forecast failed:', forecastData.reason);
         setCashForecast(null);
-        const fallbackContext = await buildRichBusinessContext(businessId, businessName);
-        setRichContext(fallbackContext);
+        setForecastFailed(true);
       }
     };
 
@@ -382,6 +388,12 @@ export function AiInsightsPage() {
       {cashForecast?.negativeAlert && (
         <div className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           ⚠️ Cash flow forecast shows negative balance within 60 days. Review expenses or accelerate collections.
+        </div>
+      )}
+
+      {forecastFailed && (
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Cash flow forecast is unavailable right now, so no projection is shown. Other insights on this page are unaffected.
         </div>
       )}
 

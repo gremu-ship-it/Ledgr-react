@@ -49,11 +49,15 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
   };
 
   const handleExportXBRL = () => {
-    const facts = (cashFlowData ?? []).flatMap((row: any) => ([
-      { concept: 'OperatingCashFlow', value: Number(row.operating || 0), date: row.period },
-      { concept: 'InvestingCashFlow', value: Number(row.investing || 0), date: row.period },
-      { concept: 'FinancingCashFlow', value: Number(row.financing || 0), date: row.period },
-    ]));
+    // `period` is nullable on v_cash_flow, and an XBRL fact without a context
+    // date is meaningless — drop those rows rather than emitting `null` dates.
+    const facts = (cashFlowData ?? []).flatMap((row) => (
+      row.period === null ? [] : [
+        { concept: 'OperatingCashFlow', value: Number(row.operating || 0), date: row.period },
+        { concept: 'InvestingCashFlow', value: Number(row.investing || 0), date: row.period },
+        { concept: 'FinancingCashFlow', value: Number(row.financing || 0), date: row.period },
+      ]
+    ));
     exportReportAsXBRL({
       title: t('reports.cash_flow.title'),
       dateLabel: periodLabel,

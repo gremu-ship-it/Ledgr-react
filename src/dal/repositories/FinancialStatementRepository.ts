@@ -664,6 +664,19 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
   }
 
   /**
+   * Live cash and cash-equivalents balance as at a date: opening balances plus
+   * all posted movement, across bank accounts and non-bank cash accounts
+   * (petty cash, mobile money).
+   *
+   * Public wrapper over getCashAndEquivalentsBalance for callers outside the
+   * statement builders. Prefer this over summing `accounts.opening_balance`,
+   * which is a period-opening figure and ignores every transaction since.
+   */
+  async getCashPosition(businessId: string, asOfDate: string): Promise<number> {
+    return this.getCashAndEquivalentsBalance(businessId, asOfDate);
+  }
+
+  /**
    * Computes the change in non-cash working capital between period start
    * and period end: the balance-sheet-driven adjustment to Net Profit that
    * the indirect method requires.

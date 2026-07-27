@@ -11,7 +11,25 @@
  * If you add a new enum column to the schema, add its alias here after
  * regenerating database.generated.ts — this file won't pick it up automatically.
  */
-import type { Database } from './database.generated'
+import type { Database as GeneratedDatabase } from './database.generated'
+import type { SupplementalTables, SupplementalViews } from './database.supplement'
+
+/**
+ * The generated schema plus the relations `supabase gen types` hasn't picked
+ * up yet (partner/white-label tables, public API + webhook tables). See
+ * database.supplement.ts for why that gap exists and how to close it.
+ *
+ * Everything downstream — the `supabase` client, Row/InsertDto/UpdateDto,
+ * TableName — resolves through this merged type, so the supplemental tables
+ * are fully type-checked at call sites instead of being reached through an
+ * untyped client.
+ */
+export type Database = Omit<GeneratedDatabase, 'public'> & {
+  public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views'> & {
+    Tables: GeneratedDatabase['public']['Tables'] & SupplementalTables
+    Views: GeneratedDatabase['public']['Views'] & SupplementalViews
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Enum convenience aliases — exact members from live DB enum table
@@ -149,7 +167,7 @@ type PublicViews = Database['public']['Views']
 
 /** Writable tables only — views have no Insert/Update. */
 export type TableName = keyof PublicTables
-/** Read-only views (v_ar_ageing, v_asset_register, v_reorder_alerts, v_trial_balance). */
+/** Read-only views (v_ar_ageing, v_asset_register, v_cash_flow, v_reorder_alerts, v_trial_balance, v_partner_client_usage). */
 export type ViewName = keyof PublicViews
 
 /** Row works for both tables and views, since views are read-only but still queryable. */
@@ -163,6 +181,7 @@ export type Row<T extends TableName | ViewName> = T extends TableName
 export type InsertDto<T extends TableName> = PublicTables[T]['Insert']
 export type UpdateDto<T extends TableName> = PublicTables[T]['Update']
 
-// Re-export Database itself so existing `import { Database } from '.../database'`
-// call sites keep working without changing their import path.
-export type { Database } from './database.generated'
+// `Database` (the merged type) is exported at its definition above, so
+// existing `import { Database } from '.../database'` call sites keep working.
+// Re-export Json, which lives only in the generated file.
+export type { Json } from './database.generated'

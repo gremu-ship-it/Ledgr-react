@@ -1,7 +1,5 @@
 import { supabase } from '@/lib/supabase';
 
-const db = supabase as unknown as { from: (table: string) => any };
-
 export interface PartnerClientLink {
   partner_id: string;
   business_id: string;
@@ -10,20 +8,26 @@ export interface PartnerClientLink {
 
 export const PartnerClientRepository = {
   async getClientsForPartner(partnerId: string): Promise<PartnerClientLink[]> {
-    const { data } = await db
+    const { data, error } = await supabase
       .from('partner_clients')
       .select('partner_id, business_id, created_at')
       .eq('partner_id', partnerId);
-    return (data ?? []) as PartnerClientLink[];
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => ({
+      partner_id: row.partner_id,
+      business_id: row.business_id,
+      created_at: row.created_at ?? '',
+    }));
   },
 
   /** The partner a business is onboarded under, if any. */
   async getPartnerIdForBusiness(businessId: string): Promise<string | null> {
-    const { data } = await db
+    const { data, error } = await supabase
       .from('partner_clients')
       .select('partner_id')
       .eq('business_id', businessId)
       .maybeSingle();
+    if (error) throw new Error(error.message);
     return data?.partner_id ?? null;
   },
 
@@ -33,14 +37,14 @@ export const PartnerClientRepository = {
    * limit is already reached.
    */
   async addClientToPartner(partnerId: string, businessId: string): Promise<void> {
-    const { error } = await db
+    const { error } = await supabase
       .from('partner_clients')
       .upsert({ partner_id: partnerId, business_id: businessId }, { onConflict: 'partner_id,business_id' });
     if (error) throw new Error(error.message);
   },
 
   async removeClientFromPartner(partnerId: string, businessId: string): Promise<void> {
-    const { error } = await db
+    const { error } = await supabase
       .from('partner_clients')
       .delete()
       .eq('partner_id', partnerId)

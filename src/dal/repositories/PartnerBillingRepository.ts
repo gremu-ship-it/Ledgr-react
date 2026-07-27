@@ -1,23 +1,22 @@
 import { supabase } from '@/lib/supabase';
+import type { Row } from '@/dal/types/database';
 import type { PartnerInvoice } from '@/types/partners';
 
-const db = supabase as unknown as { from: (table: string) => any };
-
-function mapInvoice(row: any): PartnerInvoice {
+function mapInvoice(row: Row<'partner_invoices'>): PartnerInvoice {
   return {
     id: row.id,
-    partner_id: row.partner_id,
+    partner_id: row.partner_id ?? '',
     invoice_number: row.invoice_number ?? null,
     amount: Number(row.amount ?? 0),
     currency: row.currency ?? 'MWK',
-    status: row.status ?? 'draft',
+    status: (row.status ?? 'draft') as PartnerInvoice['status'],
     period_start: row.period_start ?? null,
     period_end: row.period_end ?? null,
     due_date: row.due_date ?? null,
     client_count: Number(row.client_count ?? 0),
     notes: row.notes ?? null,
-    created_at: row.created_at,
-    updated_at: row.updated_at ?? row.created_at,
+    created_at: row.created_at ?? '',
+    updated_at: row.updated_at ?? row.created_at ?? '',
   };
 }
 
@@ -39,16 +38,17 @@ export interface CreatePartnerInvoiceInput {
  */
 export const PartnerBillingRepository = {
   async getInvoicesForPartner(partnerId: string): Promise<PartnerInvoice[]> {
-    const { data } = await db
+    const { data, error } = await supabase
       .from('partner_invoices')
       .select('*')
       .eq('partner_id', partnerId)
       .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
     return (data ?? []).map(mapInvoice);
   },
 
   async createInvoice(input: CreatePartnerInvoiceInput): Promise<PartnerInvoice> {
-    const { data, error } = await db
+    const { data, error } = await supabase
       .from('partner_invoices')
       .insert({
         partner_id: input.partnerId,
@@ -69,7 +69,7 @@ export const PartnerBillingRepository = {
   },
 
   async updateStatus(id: string, status: PartnerInvoice['status']): Promise<void> {
-    const { error } = await db
+    const { error } = await supabase
       .from('partner_invoices')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', id);
