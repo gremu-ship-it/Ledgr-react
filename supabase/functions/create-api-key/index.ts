@@ -1,57 +1,89 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+  });
+}
+
+async function sha256(input: string): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function generateApiKey(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const secret = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+  return `ledgr_sk_${secret}`;
+}
 
 serve(async (req) => {
-  try {
-    const { business_id, name } = await req.json();
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-    if (!business_id || !name) {
-      return new Response(
-        JSON.stringify({ error: "business_id and name are required" }),
-        { status: 400 }
-      );
+  try {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) return json({ error: 'Missing Authorization header' }, 401);
+
+    const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const { data: callerData, error: callerErr } = await callerClient.auth.getUser();
+    if (callerErr || !callerData?.user) return json({ error: 'Invalid or expired session' }, 401);
+
+    const { business_id, name } = await req.json().catch(() => ({}));
+    if (!business_id || !name?.trim()) {
+      return json({ error: 'business_id and name are required' }, 400);
     }
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+    const { data: membership, error: membershipErr } = await admin
+      .from('business_users')
+      .select('role')
+      .eq('business_id', business_id)
+      .eq('user_id', callerData.user.id)
+      .eq('is_active', true)
+      .maybeSingle();
 
-    // Generate a secure API key
-    const rawKey = `ledgr_sk_${crypto.randomUUID().replace(/-/g, "")}`;
-    const encoder = new TextEncoder();
-    const data = encoder.encode(rawKey);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const keyHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    if (membershipErr) return json({ error: membershipErr.message }, 500);
+    if (!membership || !['owner', 'admin'].includes(membership.role)) {
+      return json({ error: 'Only business owners/admins can create API keys' }, 403);
+    }
 
-    const keyPrefix = rawKey.slice(0, 16);
+    const rawKey = generateApiKey();
+    const keyHash = await sha256(rawKey);
+    const keyPrefix = `${rawKey.slice(0, 18)}…`;
 
-    const { data: record, error } = await supabase
-      .from("api_keys")
+    const { data: record, error } = await admin
+      .from('api_keys')
       .insert({
         business_id,
-        name,
+        name: name.trim(),
         key_hash: keyHash,
         key_prefix: keyPrefix,
+        created_by: callerData.user.id,
       })
-      .select()
+      .select('id, business_id, name, key_prefix, last_used_at, created_at, revoked_at')
       .single();
 
-    if (error) {
-      console.error("Database error:", error);
-      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
-    }
+    if (error) return json({ error: error.message }, 400);
 
-    return new Response(
-      JSON.stringify({
-        key: rawKey,           // Only returned once
-        record,
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    return json({ key: rawKey, record });
   } catch (err) {
-    console.error("Unexpected error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), { status: 500 });
+    console.error('create-api-key error:', err);
+    return json({ error: err instanceof Error ? err.message : 'Internal server error' }, 500);
   }
 });

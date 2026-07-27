@@ -25,7 +25,8 @@ export class ApiKeyService {
       body: { business_id: businessId, name },
     });
     if (error) throw error;
-    return data;
+    if ((data as { error?: string } | null)?.error) throw new Error((data as { error: string }).error);
+    return data as { key: string; record: ApiKey };
   }
 
   async listApiKeys(businessId: string): Promise<ApiKey[]> {

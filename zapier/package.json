@@ -1,0 +1,15 @@
+{
+  "name": "ledgr-zapier-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zapier integration scaffold for Ledgr public API",
+  "main": "index.js",
+  "scripts": {
+    "test": "zapier test",
+    "validate": "zapier validate"
+  },
+  "dependencies": {
+    "zapier-platform-core": "^16.0.0"
+  },
+  "devDependencies": {}
+}

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { webhookService, type Webhook, type WebhookDelivery } from '@/services/webhook/WebhookService';
+import { ApiKeysPage } from '@/pages/ApiKeysPage';
 
 const AVAILABLE_EVENTS = [
   'invoice.created',
@@ -63,6 +64,8 @@ export function WebhookSettings() {
 
   return (
     <div className="space-y-8">
+      <ApiKeysPage compact />
+
       {/* Register new webhook */}
       <div className="rounded-2xl border border-gray-200 bg-white p-6">
         <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold">
