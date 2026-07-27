@@ -15,6 +15,7 @@ Migrations:
 | `20260727000004_white_label_partners_hardening.sql` | theming/onboarding/isolation columns, `partner_admins`, RLS, client-limit trigger, `v_partner_client_usage`, default-flag seeding |
 | `20260727000005_partner_invoice_dedupe.sql` | one-invoice-per-period unique index + auto invoice numbering |
 | `20260727000006_schedule_generate_partner_invoices.sql` | monthly pg_cron billing job |
+| `20260727000007_fix_partner_client_rls_recursion.sql` | recursion-safe partner/client and business visibility policies |
 
 Apply with `supabase db push` (or run the SQL in order against your project).
 
