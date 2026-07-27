@@ -8,18 +8,30 @@ interface FormFieldProps {
   label: string;
   error?: string;
   children: ReactNode;
+  hint?: string;
 }
 
-export function FormField({ id, label, error, children }: FormFieldProps) {
+export function FormField({ id, label, error, hint, children }: FormFieldProps) {
+  const errorId = error ? `${id}-error` : undefined;
+  const hintId = hint ? `${id}-hint` : undefined;
   return (
     <div>
       <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-gray-700">
         {label}
       </label>
+      {hint && (
+        <p id={hintId} className="mb-1.5 text-xs text-gray-600">
+          {hint}
+        </p>
+      )}
       {children}
       {error && (
-        <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+        <p
+          id={errorId}
+          role="alert"
+          className="mt-1.5 flex items-center gap-1 text-xs font-medium text-red-700"
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           {error}
         </p>
       )}
@@ -30,17 +42,20 @@ export function FormField({ id, label, error, children }: FormFieldProps) {
 export function Input({
   className,
   hasError,
+  'aria-invalid': ariaInvalid,
+  'aria-describedby': ariaDescribedBy,
   ...props
 }: InputHTMLAttributes<HTMLInputElement> & { hasError?: boolean }) {
   return (
     <input
+      aria-invalid={ariaInvalid ?? (hasError ? true : undefined)}
+      aria-describedby={ariaDescribedBy}
       className={clsx(
         'block w-full rounded-lg border px-3 py-2 text-sm text-gray-900',
-        'placeholder:text-gray-400',
-        'focus:outline-none focus:ring-1',
+        'placeholder:text-gray-500',
         hasError
-          ? 'border-red-300 focus:border-red-400 focus:ring-red-400'
-          : 'border-gray-300 focus:border-brand-500 focus:ring-brand-500',
+          ? 'border-red-400 focus:border-red-500 focus:ring-red-500'
+          : 'border-gray-300 focus:border-brand-600 focus:ring-brand-600',
         className,
       )}
       {...props}
@@ -102,11 +117,12 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
   const { score, label, color } = measureStrength(password);
   if (!password) return null;
   return (
-    <div className="mt-2">
-      <div className="flex gap-1">
+    <div className="mt-2" aria-label="Password strength">
+      <div className="flex gap-1" role="meter" aria-valuemin={0} aria-valuemax={4} aria-valuenow={score} aria-label="Password strength">
         {[1, 2, 3, 4].map((n) => (
           <div
             key={n}
+            aria-hidden="true"
             className={clsx(
               'h-1 flex-1 rounded-full transition-all duration-300',
               score >= n ? color : 'bg-gray-200',
@@ -114,8 +130,11 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
           />
         ))}
       </div>
-      <p className={clsx('mt-1 text-xs font-medium',
-        score <= 2 ? 'text-red-500' : score === 3 ? 'text-yellow-600' : 'text-brand-600')}>
+      <p
+        aria-live="polite"
+        className={clsx('mt-1 text-xs font-medium',
+          score <= 2 ? 'text-red-700' : score === 3 ? 'text-amber-800' : 'text-brand-700')}
+      >
         {label ? t(label) : ''}
       </p>
     </div>
@@ -129,14 +148,18 @@ interface AuthAlertProps {
 
 export function AuthAlert({ type, message }: AuthAlertProps) {
   const styles = {
-    error:   { bg: 'bg-red-50',    border: 'border-red-200',   icon: 'text-red-500',   text: 'text-red-700',   Icon: AlertCircle  },
-    success: { bg: 'bg-brand-50',  border: 'border-brand-200', icon: 'text-brand-500', text: 'text-brand-700', Icon: CheckCircle2 },
-    info:    { bg: 'bg-blue-50',   border: 'border-blue-200',  icon: 'text-blue-500',  text: 'text-blue-700',  Icon: AlertCircle  },
+    error:   { bg: 'bg-red-50',    border: 'border-red-200',   icon: 'text-red-700',   text: 'text-red-800',   Icon: AlertCircle,  role: 'alert' as const },
+    success: { bg: 'bg-brand-50',  border: 'border-brand-200', icon: 'text-brand-700', text: 'text-brand-800', Icon: CheckCircle2, role: 'status' as const },
+    info:    { bg: 'bg-blue-50',   border: 'border-blue-200',  icon: 'text-blue-800',  text: 'text-blue-800',  Icon: AlertCircle,  role: 'status' as const },
   };
-  const { bg, border, icon, text, Icon } = styles[type];
+  const { bg, border, icon, text, Icon, role } = styles[type];
   return (
-    <div className={clsx('flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm', bg, border)}>
-      <Icon className={clsx('mt-0.5 h-4 w-4 shrink-0', icon)} />
+    <div
+      role={role}
+      aria-live={type === 'error' ? 'assertive' : 'polite'}
+      className={clsx('flex items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm', bg, border)}
+    >
+      <Icon className={clsx('mt-0.5 h-4 w-4 shrink-0', icon)} aria-hidden="true" />
       <span className={text}>{message}</span>
     </div>
   );
@@ -153,9 +176,10 @@ export function SubmitButton({ loading, label, loadingLabel }: SubmitButtonProps
     <button
       type="submit"
       disabled={loading}
-      className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+      aria-busy={loading}
+      className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
     >
-      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
       {loading ? (loadingLabel ?? label) : label}
     </button>
   );
@@ -203,21 +227,27 @@ export function OTPInput({ value, onChange, disabled }: OTPInputProps) {
   }
 
   return (
-    <div className="flex justify-center gap-2">
+    <div
+      className="flex justify-center gap-2"
+      role="group"
+      aria-label="One-time passcode, 6 digits"
+    >
       {digits.map((digit, i) => (
         <input
           key={i}
           id={`otp-${i}`}
           type="text"
           inputMode="numeric"
+          autoComplete={i === 0 ? 'one-time-code' : 'off'}
           pattern="\d*"
           maxLength={1}
           value={digit}
           disabled={disabled}
+          aria-label={i === 0 ? 'One-time passcode. Digit 1 of 6.' : `Digit ${i + 1} of 6`}
           onChange={(e) => handleChange(i, e.target.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={i === 0 ? handlePaste : undefined}
-          className="h-12 w-10 rounded-lg border border-gray-300 text-center text-lg font-semibold text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-gray-50 disabled:text-gray-400"
+          className="h-12 w-10 rounded-lg border border-gray-300 text-center text-lg font-semibold text-gray-900 focus:border-brand-600 focus:outline-none focus:ring-1 focus:ring-brand-600 disabled:bg-gray-50 disabled:text-gray-500"
         />
       ))}
     </div>

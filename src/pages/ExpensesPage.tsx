@@ -587,7 +587,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               placeholder="Select product being purchased…"
             />
             {form.product_id && products.find((p) => p.id === form.product_id)?.cogs_account_id && (
-              <p className="mt-1 text-xs text-gray-400">
+              <p className="mt-1 text-xs text-gray-600">
                 COGS account auto-selected from product. Override below if needed.
               </p>
             )}
@@ -600,7 +600,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               <input type="number" min="0" step="1" value={form.quantity}
                 onChange={(e) => set('quantity', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-              <p className="mt-1 text-xs text-gray-400">Amount above is the total for all units — stock will increase by this quantity.</p>
+              <p className="mt-1 text-xs text-gray-600">Amount above is the total for all units — stock will increase by this quantity.</p>
             </div>
           )}
 
@@ -980,14 +980,14 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                   <tr>
-                    <th className="px-3 py-2 text-left">Product / Service</th>  {/* NEW */}
-                    <th className="px-3 py-2 text-left">Description</th>
-                    <th className="w-40 px-3 py-2 text-left">Category</th>
-                    <th className="w-20 px-3 py-2 text-right">Qty</th>
-                    <th className="w-32 px-3 py-2 text-right">Unit Price</th>
-                    <th className="w-36 px-3 py-2 text-center">Tax</th>
-                    <th className="w-32 px-3 py-2 text-right">Total</th>
-                    <th className="w-8" />
+                    <th scope="col" className="px-3 py-2 text-left">Product / Service</th>  {/* NEW */}
+                    <th scope="col" className="px-3 py-2 text-left">Description</th>
+                    <th scope="col" className="w-40 px-3 py-2 text-left">Category</th>
+                    <th scope="col" className="w-20 px-3 py-2 text-right">Qty</th>
+                    <th scope="col" className="w-32 px-3 py-2 text-right">Unit Price</th>
+                    <th scope="col" className="w-36 px-3 py-2 text-center">Tax</th>
+                    <th scope="col" className="w-32 px-3 py-2 text-right">Total</th>
+                    <th scope="col" className="w-8" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -1136,13 +1136,13 @@ function ExpenseList({ businessId }: { businessId: string }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Expense #</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
-              <th className="px-4 py-3 text-left">Description / Notes</th>
-              <th className="px-4 py-3 text-right">Amount</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
-              <th className="px-4 py-3 text-center">Posting</th>
+              <th scope="col" className="px-4 py-3 text-left">Expense #</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Description / Notes</th>
+              <th scope="col" className="px-4 py-3 text-right">Amount</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
+              <th scope="col" className="px-4 py-3 text-center">Posting</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

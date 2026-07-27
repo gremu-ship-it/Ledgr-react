@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -16,6 +17,7 @@ import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 
 export function AppLayout() {
+  const { t } = useTranslation();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const isMobile = useIsMobile();
   const location = useLocation();
@@ -39,6 +41,20 @@ export function AppLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Skip-to-main-content link (WCAG 2.4.1) — first focusable element */}
+      <a href="#main-content" className="skip-link">
+        {t('common.skipToMain')}
+      </a>
+
+      {/* Live region for screen-reader announcements of dynamic content
+          (e.g. "Saved", "Failed to load", "3 new notifications") */}
+      <div
+        id="ledgr-live-region"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      />
+
       {/* Offline banner */}
       <div className="sticky top-0 z-40">
         <OfflineBanner />
@@ -56,10 +72,15 @@ export function AppLayout() {
       >
         {(!isMobile || showMobileHeader) && <Header />}
 
-        <main className={clsx(
-          'flex-1 p-4 sm:p-6 pb-32 lg:pb-6',
-          isMobile && isDashboard && 'pt-6'
-        )}>
+        <main
+          id="main-content"
+          tabIndex={-1}
+          aria-label="Main content"
+          className={clsx(
+            'flex-1 p-4 sm:p-6 pb-32 lg:pb-6 outline-none',
+            isMobile && isDashboard && 'pt-6'
+          )}
+        >
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

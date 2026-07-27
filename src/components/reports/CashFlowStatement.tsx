@@ -84,11 +84,11 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b">
-              <th className="py-3 text-left">Period</th>
-              <th className="py-3 text-right">Operating</th>
-              <th className="py-3 text-right">Investing</th>
-              <th className="py-3 text-right">Financing</th>
-              <th className="py-3 text-right">Net Change</th>
+              <th scope="col" className="py-3 text-left">Period</th>
+              <th scope="col" className="py-3 text-right">Operating</th>
+              <th scope="col" className="py-3 text-right">Investing</th>
+              <th scope="col" className="py-3 text-right">Financing</th>
+              <th scope="col" className="py-3 text-right">Net Change</th>
             </tr>
           </thead>
           <tbody>

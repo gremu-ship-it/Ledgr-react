@@ -124,7 +124,7 @@ export function TaxReminderModal() {
             </a>
           </div>
 
-          <p className="mt-3 text-center text-xs text-gray-400">
+          <p className="mt-3 text-center text-xs text-gray-600">
             {t('dashboard.reminderOnce')}
           </p>
         </div>

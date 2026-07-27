@@ -298,19 +298,19 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 px-6 py-4">
         <h2 className="text-base font-semibold text-gray-900">Branch comparison</h2>
-        <p className="text-xs text-gray-400">Revenue, costs and profitability by branch</p>
+        <p className="text-xs text-gray-600">Revenue, costs and profitability by branch</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-4 py-3 text-left">Branch</th>
-              <th className="px-4 py-3 text-right">Revenue</th>
-              <th className="hidden md:table-cell px-4 py-3 text-right">Cost of Sales</th>
-              <th className="px-4 py-3 text-right">Gross Profit</th>
-              <th className="hidden lg:table-cell px-4 py-3 text-right">Expenses</th>
-              <th className="px-4 py-3 text-right">Net Profit</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right">Net Margin</th>
+              <th scope="col" className="px-4 py-3 text-left">Branch</th>
+              <th scope="col" className="px-4 py-3 text-right">Revenue</th>
+              <th scope="col" className="hidden md:table-cell px-4 py-3 text-right">Cost of Sales</th>
+              <th scope="col" className="px-4 py-3 text-right">Gross Profit</th>
+              <th scope="col" className="hidden lg:table-cell px-4 py-3 text-right">Expenses</th>
+              <th scope="col" className="px-4 py-3 text-right">Net Profit</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Net Margin</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -330,7 +330,7 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">{row.branchName}</p>
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                           {row.branchCode ? `${row.branchCode} · ` : ''}{row.location ?? 'No location'}
                           {!row.isActive && ' · inactive'}
                         </p>
@@ -372,10 +372,10 @@ function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4">
         <div>
           <h2 className="text-base font-semibold text-gray-900">{row.branchName} performance detail</h2>
-          <p className="mt-1 text-xs text-gray-400">Account-level profit or loss lines assigned to this branch.</p>
+          <p className="mt-1 text-xs text-gray-600">Account-level profit or loss lines assigned to this branch.</p>
         </div>
         <div className="rounded-xl bg-gray-50 px-3 py-2 text-right">
-          <p className="text-xs text-gray-400">Net Profit</p>
+          <p className="text-xs text-gray-600">Net Profit</p>
           <p className={`text-sm font-bold ${row.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMwk(row.netProfit)}</p>
         </div>
       </div>
@@ -395,7 +395,7 @@ function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
                   <tbody className="divide-y divide-gray-100">
                     {lines.map((line) => (
                       <tr key={line.key}>
-                        <td className="px-3 py-2 font-mono text-xs text-gray-400">{line.code}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-600">{line.code}</td>
                         <td className="px-3 py-2 text-gray-700">{line.name}</td>
                         <td className="px-3 py-2 text-right font-medium text-gray-900">{formatMwk(line.amount)}</td>
                       </tr>
@@ -536,14 +536,18 @@ export function BranchPerformanceReport({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Performance chart</h2>
-            <p className="text-xs text-gray-400">Compare revenue, gross profit and net profit side by side.</p>
+            <p className="text-xs text-gray-600">Compare revenue, gross profit and net profit side by side.</p>
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-600">
             <ChevronDown className="h-4 w-4 text-gray-400" />
             Sorted by net profit
           </div>
         </div>
-        <div className="h-80">
+        <div
+          className="h-80"
+          role="img"
+          aria-label={`Bar chart comparing branch performance across ${rows.length} branch${rows.length === 1 ? '' : 'es'}. Sorted by net profit. ${rows.map((r) => `${r.branchName}: revenue ${formatMwk(r.revenue)}, net profit ${formatMwk(r.netProfit)}`).join('. ')}`}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -552,7 +556,7 @@ export function BranchPerformanceReport({
               <Tooltip formatter={(value) => formatMwk(Number(value))} />
               <Legend />
               <Bar dataKey="Revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="Gross Profit" fill="#10b981" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="Gross Profit" fill="#0E7C5A" radius={[6, 6, 0, 0]} />
               <Bar dataKey="Net Profit" fill="#7c3aed" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

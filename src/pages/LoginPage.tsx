@@ -168,7 +168,7 @@ export function LoginPage() {
               setMfaCode('');
               setError(null);
             }}
-            className="w-full text-center text-sm text-gray-500 hover:text-gray-700"
+            className="w-full text-center text-sm text-gray-700 hover:text-gray-900 hover:underline"
           >
             {t('auth.backToSignIn')}
           </button>

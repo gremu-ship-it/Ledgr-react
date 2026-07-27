@@ -341,7 +341,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
               <span className="text-gray-400"> (optional)</span>
             </label>
             {branches.length === 0 ? (
-              <p className="text-xs text-gray-400">No branches configured. You can assign later.</p>
+              <p className="text-xs text-gray-600">No branches configured. You can assign later.</p>
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {branches.map((b) => (
@@ -355,7 +355,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                     }`}
                   >
                     <p className="text-xs font-bold text-gray-800 truncate">{b.name}</p>
-                    {b.code && <p className="text-[10px] text-gray-400">{b.code}</p>}
+                    {b.code && <p className="text-[10px] text-gray-700">{b.code}</p>}
                   </button>
                 ))}
               </div>
@@ -380,7 +380,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                     }`}
                   >
                     <p className="text-xs font-bold text-gray-800 truncate">{d.name}</p>
-                    {d.code && <p className="text-[10px] text-gray-400">{d.code}</p>}
+                    {d.code && <p className="text-[10px] text-gray-700">{d.code}</p>}
                   </button>
                 ))}
               </div>

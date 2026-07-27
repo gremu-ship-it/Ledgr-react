@@ -58,16 +58,27 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
   const { t } = useTranslation();
   if (isLoading) {
     return (
-      <div className={compact ? 'flex h-52 items-center justify-center' : 'flex h-72 items-center justify-center'}>
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+      <div
+        className={compact ? 'flex h-52 items-center justify-center' : 'flex h-72 items-center justify-center'}
+        role="status"
+        aria-live="polite"
+      >
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+        <span className="sr-only">{t('common.loading') ?? 'Loading chart…'}</span>
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}>
-        <p className="text-sm font-medium text-red-500">{t('dashboard.failedChart')}</p>
+      <div
+        className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}
+        role="alert"
+      >
+        <p className="text-sm font-medium text-red-700">
+          <span aria-hidden="true">⚠ </span>
+          {t('dashboard.failedChart')}
+        </p>
       </div>
     );
   }
@@ -76,15 +87,28 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
 
   if (isEmpty) {
     return (
-      <div className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}>
-        <p className="text-sm font-medium text-gray-400">{t('dashboard.noTransactionsYet')}</p>
-        <p className="text-xs text-gray-300">{t('dashboard.transactionsWillAppear')}</p>
+      <div
+        className={compact ? 'flex h-52 flex-col items-center justify-center gap-2 text-center' : 'flex h-72 flex-col items-center justify-center gap-2 text-center'}
+        role="status"
+      >
+        <p className="text-sm font-medium text-gray-500">{t('dashboard.noTransactionsYet')}</p>
+        <p className="text-xs text-gray-600">{t('dashboard.transactionsWillAppear')}</p>
       </div>
     );
   }
 
+  // Build a screen-reader description of the chart's data.
+  const totalIncome = data.reduce((sum, d) => sum + d.income, 0);
+  const totalExpenses = data.reduce((sum, d) => sum + d.expenses, 0);
+  const monthList = data.map((d) => `${d.month}: income ${formatMwk(d.income)}, expenses ${formatMwk(d.expenses)}`).join('. ');
+  const ariaLabel = `Area chart comparing monthly income and expenses over ${data.length} months. Total income ${formatMwk(totalIncome)}, total expenses ${formatMwk(totalExpenses)}. ${monthList}.`;
+
   return (
-      <div className={compact ? 'h-52' : 'h-72'}>
+      <div
+        className={compact ? 'h-52' : 'h-72'}
+        role="img"
+        aria-label={ariaLabel}
+      >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
           <defs>

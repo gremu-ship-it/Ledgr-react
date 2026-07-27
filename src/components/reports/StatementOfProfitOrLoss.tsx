@@ -52,7 +52,7 @@ function SectionRows({
           <td className="py-1 ps-4 text-sm text-gray-600">{line.name}</td>
           <td className="py-1 text-end text-sm text-gray-600">{formatAccounting(sign * line.amount, formatCurrency)}</td>
           {showComparative && (
-            <td className="py-1 text-end text-sm text-gray-400">
+            <td className="py-1 text-end text-sm text-gray-600">
               {line.comparativeAmount !== null ? formatAccounting(sign * line.comparativeAmount, formatCurrency) : '—'}
             </td>
           )}
@@ -190,10 +190,10 @@ export function StatementOfProfitOrLoss({
       <table className="w-full">
         <thead>
           <tr>
-            <th className="pb-2 text-start text-xs font-medium uppercase tracking-wide text-gray-400"></th>
-            <th className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-400">{periodLabel}</th>
+            <th scope="col" className="pb-2 text-start text-xs font-medium uppercase tracking-wide text-gray-700"></th>
+            <th scope="col" className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-700">{periodLabel}</th>
             {showComparative && (
-              <th className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-400">{comparativeLabel}</th>
+              <th scope="col" className="pb-2 text-end text-xs font-medium uppercase tracking-wide text-gray-700">{comparativeLabel}</th>
             )}
           </tr>
         </thead>

@@ -364,13 +364,13 @@ function ProductsTab({ businessId }: { businessId: string }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-left">SKU</th>
-                <th className="px-4 py-3 text-right">Sale Price</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-right">Purchase Price</th>
-                <th className="hidden sm:table-cell px-4 py-3 text-center">Inventory</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left">Name</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">SKU</th>
+                <th scope="col" className="px-4 py-3 text-right">Sale Price</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Purchase Price</th>
+                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center">Inventory</th>
+                <th scope="col" className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -378,7 +378,7 @@ function ProductsTab({ businessId }: { businessId: string }) {
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{p.name}</div>
-                    {p.description && <div className="text-xs text-gray-400 truncate max-w-xs">{p.description}</div>}
+                    {p.description && <div className="text-xs text-gray-600 truncate max-w-xs">{p.description}</div>}
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3">
                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -393,7 +393,7 @@ function ProductsTab({ businessId }: { businessId: string }) {
                   <td className="hidden sm:table-cell px-4 py-3 text-center">
                     {p.track_inventory
                       ? <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Tracked</span>
-                      : <span className="text-xs text-gray-400">—</span>}
+                      : <span className="text-xs text-gray-600">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
@@ -507,13 +507,13 @@ function StockTab({ businessId }: { businessId: string }) {
       <table className="w-full text-sm">
         <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
           <tr>
-            <th className="px-4 py-3 text-left">Product</th>
+            <th scope="col" className="px-4 py-3 text-left">Product</th>
             {locations.map((loc) => (
-              <th key={loc.id} className="px-4 py-3 text-right">{loc.name}</th>
+              <th scope="col" key={loc.id} className="px-4 py-3 text-right">{loc.name}</th>
             ))}
-            <th className="px-4 py-3 text-right">Total On Hand</th>
-            <th className="hidden sm:table-cell px-4 py-3 text-right">Avg Cost</th>
-            <th className="px-4 py-3 text-center">Status</th>
+            <th scope="col" className="px-4 py-3 text-right">Total On Hand</th>
+            <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Avg Cost</th>
+            <th scope="col" className="px-4 py-3 text-center">Status</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -528,7 +528,7 @@ function StockTab({ businessId }: { businessId: string }) {
               <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3">
                   <div className="font-medium text-gray-900">{p.name}</div>
-                  {p.sku && <div className="text-xs text-gray-400">{p.sku}</div>}
+                  {p.sku && <div className="text-xs text-gray-600">{p.sku}</div>}
                 </td>
                 {locations.map((loc) => {
                   const bal = getBalance(p.id, loc.id);
@@ -735,22 +735,22 @@ function MovementsTab({ businessId }: { businessId: string }) {
         </div>
 
         {!selectedProduct ? (
-          <div className="flex items-center justify-center py-12 text-sm text-gray-400">Select a product to view history</div>
+          <div className="flex items-center justify-center py-12 text-sm text-gray-600">Select a product to view history</div>
         ) : historyLoading ? (
           <div className="space-y-2 p-4">{[...Array(4)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-lg bg-gray-100" />)}</div>
         ) : (history as Row<'stock_movements'>[]).length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-sm text-gray-400">No movements recorded yet</div>
+          <div className="flex items-center justify-center py-12 text-sm text-gray-600">No movements recorded yet</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-left">Location</th>
-                  <th className="px-4 py-3 text-right">Qty</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-right">Unit Cost</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-left">Reference</th>
+                  <th scope="col" className="px-4 py-3 text-left">Date</th>
+                  <th scope="col" className="px-4 py-3 text-left">Type</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Location</th>
+                  <th scope="col" className="px-4 py-3 text-right">Qty</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Unit Cost</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Reference</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

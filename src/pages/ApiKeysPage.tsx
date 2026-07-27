@@ -81,7 +81,7 @@ export function ApiKeysPage({ compact = false }: { compact?: boolean }) {
               </button>
             </div>
             <code className="break-all font-mono text-sm">{generatedKey}</code>
-            <p className="mt-2 text-xs text-emerald-600">{t('api.saveKeyWarning')}</p>
+            <p className="mt-2 text-xs text-emerald-800">{t('api.saveKeyWarning')}</p>
           </div>
         )}
       </div>
@@ -101,7 +101,7 @@ export function ApiKeysPage({ compact = false }: { compact?: boolean }) {
                   <div className="font-medium">{key.name}</div>
                   <div className="font-mono text-xs text-gray-500">{key.key_prefix}••••••••</div>
                   {key.last_used_at && (
-                    <div className="text-xs text-gray-400">{t('api.lastUsed', { date: format.date(key.last_used_at) })}</div>
+                    <div className="text-xs text-gray-600">{t('api.lastUsed', { date: format.date(key.last_used_at) })}</div>
                   )}
                 </div>
                 <button

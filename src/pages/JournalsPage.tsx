@@ -144,7 +144,7 @@ export function JournalsPage() {
             placeholder="Search description, entry number, reference…"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
+            className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-600"
           />
         </div>
 
@@ -204,11 +204,11 @@ export function JournalsPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Entry #</th>
-                  <th className="px-4 py-3 text-left">Description</th>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left">Date</th>
+                  <th scope="col" className="px-4 py-3 text-left">Entry #</th>
+                  <th scope="col" className="px-4 py-3 text-left">Description</th>
+                  <th scope="col" className="px-4 py-3 text-left">Type</th>
+                  <th scope="col" className="px-4 py-3 text-left">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -221,10 +221,10 @@ export function JournalsPage() {
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
                       {new Date(entry.entry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-400">{entry.entry_number}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{entry.entry_number}</td>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-800 truncate max-w-[220px]">{entry.description}</p>
-                      {entry.reference && <p className="text-xs text-gray-400">{entry.reference}</p>}
+                      {entry.reference && <p className="text-xs text-gray-600">{entry.reference}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <span className="rounded-md border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs font-semibold capitalize text-gray-500">
@@ -252,7 +252,7 @@ export function JournalsPage() {
 
           {pages > 1 && (
             <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-600">
                 Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, total)} of {total}
               </p>
               <div className="flex gap-1">

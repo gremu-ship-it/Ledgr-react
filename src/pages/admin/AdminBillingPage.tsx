@@ -170,7 +170,7 @@ export function AdminBillingPage() {
               />
             </div>
 
-            {isFetching && <p className="mt-3 text-xs text-gray-400">Searching…</p>}
+            {isFetching && <p className="mt-3 text-xs text-gray-600">Searching…</p>}
 
             {results.length > 0 && (
               <ul className="mt-4 divide-y divide-gray-100 rounded-lg border border-gray-100">
@@ -181,7 +181,7 @@ export function AdminBillingPage() {
                       className="flex w-full items-center justify-between px-4 py-3 text-left text-sm hover:bg-gray-50"
                     >
                       <span className="font-medium text-gray-900">{b.name}</span>
-                      <span className="text-xs text-gray-400">
+                      <span className="text-xs text-gray-600">
                         Current: <span className="capitalize">{b.plan_tier}</span>
                         {b.plan_expires_at ? ` · expires ${new Date(b.plan_expires_at).toLocaleDateString()}` : ''}
                       </span>
@@ -192,7 +192,7 @@ export function AdminBillingPage() {
             )}
 
             {search.trim().length >= 2 && !isFetching && results.length === 0 && (
-              <p className="mt-3 text-xs text-gray-400">No businesses matched "{search}".</p>
+              <p className="mt-3 text-xs text-gray-600">No businesses matched "{search}".</p>
             )}
           </div>
 
@@ -251,8 +251,8 @@ export function AdminBillingPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <div className="text-lg font-semibold text-gray-900">{selected.name}</div>
-              <div className="font-mono text-[10px] text-gray-400 break-all">{selected.id}</div>
-              <div className="mt-0.5 text-xs text-gray-400">
+              <div className="font-mono text-[10px] text-gray-700 break-all">{selected.id}</div>
+              <div className="mt-0.5 text-xs text-gray-600">
                 Current plan: <span className="capitalize font-medium text-gray-600">{selected.plan_tier}</span>
                 {selected.plan_expires_at ? ` · expires ${new Date(selected.plan_expires_at).toLocaleDateString()}` : ''}
               </div>
@@ -416,7 +416,7 @@ export function AdminBillingPage() {
             </div>
             <div className="space-y-2">
               <div>
-                <div className="text-[10px] text-gray-500 mb-0.5">Business + plan status</div>
+                <div className="text-[10px] text-gray-700 mb-0.5">Business + plan status</div>
                 <code className="block font-mono text-[10px] bg-white border p-2 rounded text-gray-700 break-all">
                   {`SELECT id, name, plan_tier, plan_expires_at, plan_updated_at FROM businesses WHERE id = '${selected.id}';`}
                 </code>
@@ -432,7 +432,7 @@ export function AdminBillingPage() {
               </div>
 
               <div>
-                <div className="text-[10px] text-gray-500 mb-0.5">Payment / grant history</div>
+                <div className="text-[10px] text-gray-700 mb-0.5">Payment / grant history</div>
                 <code className="block font-mono text-[10px] bg-white border p-2 rounded text-gray-700 break-all">
                   {`SELECT tx_ref, gateway, target_plan_tier, status, amount, plan_expires_at, created_at FROM subscription_payments WHERE business_id = '${selected.id}' ORDER BY created_at DESC;`}
                 </code>
@@ -456,7 +456,7 @@ export function AdminBillingPage() {
         </div>
       )}
 
-      <p className="mt-6 text-xs text-gray-400">
+      <p className="mt-6 text-xs text-gray-600">
         Ledgr internal tool — platform admins only. You can also open directly with <code className="font-mono">/admin/billing?business=UUID</code>
       </p>
     </div>

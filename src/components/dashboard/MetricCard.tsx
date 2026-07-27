@@ -64,7 +64,7 @@ export function MetricCard({
           </div>
           <span className="text-sm text-gray-500">{label}</span>
         </div>
-        <p className="text-sm text-red-500 font-medium">Failed to load</p>
+        <p className="text-sm text-red-700 font-medium">Failed to load</p>
       </div>
     );
   }
@@ -84,7 +84,7 @@ export function MetricCard({
 
       {/* Subtext */}
       {subtext && (
-        <p className="mt-1 text-xs text-gray-400">{subtext}</p>
+        <p className="mt-1 text-xs text-gray-600">{subtext}</p>
       )}
     </div>
   );

@@ -510,7 +510,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
                 onChange={(e) => set('exchange_rate', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
-              <p className="mt-1 text-xs text-gray-400">Leave blank to use a cached/Frankfurter rate where available. Enter the bank rate for MWK/ZMW/TZS/MZN pairs.</p>
+              <p className="mt-1 text-xs text-gray-600">Leave blank to use a cached/Frankfurter rate where available. Enter the bank rate for MWK/ZMW/TZS/MZN pairs.</p>
             </div>
           )}
 
@@ -534,7 +534,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
               <input type="number" min="0" step="1" value={form.quantity}
                 onChange={(e) => set('quantity', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
-              <p className="mt-1 text-xs text-gray-400">Amount above is the total for all units — stock will reduce by this quantity.</p>
+              <p className="mt-1 text-xs text-gray-600">Amount above is the total for all units — stock will reduce by this quantity.</p>
             </div>
           )}
 
@@ -925,14 +925,14 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs font-medium text-gray-500">
                   <tr>
-                    <th className="px-3 py-2 text-left">Product / Service</th>  {/* NEW column */}
-                    <th className="px-3 py-2 text-left">Description</th>
-                    <th className="px-3 py-2 text-right w-20">Qty</th>
-                    <th className="px-3 py-2 text-right w-32">Unit Price</th>
-                    <th className="px-3 py-2 text-right w-20">Disc. %</th>
-                    <th className="px-3 py-2 text-center w-36">Tax</th>
-                    <th className="px-3 py-2 text-right w-32">Total</th>
-                    <th className="w-8" />
+                    <th scope="col" className="px-3 py-2 text-left">Product / Service</th>  {/* NEW column */}
+                    <th scope="col" className="px-3 py-2 text-left">Description</th>
+                    <th scope="col" className="px-3 py-2 text-right w-20">Qty</th>
+                    <th scope="col" className="px-3 py-2 text-right w-32">Unit Price</th>
+                    <th scope="col" className="px-3 py-2 text-right w-20">Disc. %</th>
+                    <th scope="col" className="px-3 py-2 text-center w-36">Tax</th>
+                    <th scope="col" className="px-3 py-2 text-right w-32">Total</th>
+                    <th scope="col" className="w-8" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -956,17 +956,20 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                       <td className="px-3 py-2">
                         <input type="number" min="1" value={line.quantity}
                           onChange={(e) => setLine(idx, 'quantity', e.target.value)}
-                          className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                          aria-label="Quantity"
+                          className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-600" />
                       </td>
                       <td className="px-3 py-2">
                         <input type="number" min="0" step="0.01" placeholder="0.00" value={line.unit_price}
                           onChange={(e) => setLine(idx, 'unit_price', e.target.value)}
-                          className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                          aria-label="Unit price"
+                          className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-600" />
                       </td>
-                      <td className="px-3 py-2"><input aria-label="Line discount percentage" type="number" min="0" max="100" value={line.discount_percent} onChange={(e) => setLine(idx, 'discount_percent', e.target.value)} className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" /></td>
+                      <td className="px-3 py-2"><input aria-label="Line discount percentage" type="number" min="0" max="100" value={line.discount_percent} onChange={(e) => setLine(idx, 'discount_percent', e.target.value)} className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-600" /></td>
                       <td className="px-3 py-2">
                         <select value={line.tax_code} onChange={(e) => setLine(idx, 'tax_code', e.target.value)}
-                          className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
+                          aria-label="Tax code"
+                          className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-600">
                           {TAX_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                       </td>
@@ -1055,12 +1058,12 @@ function IncomeList({ businessId }: { businessId: string }) {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <tr>
-              <th className="px-4 py-3 text-left">Invoice #</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
-              <th className="px-4 py-3 text-left">Description / Contact</th>
-              <th className="px-4 py-3 text-right">Amount</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
-              <th className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
+              <th scope="col" className="px-4 py-3 text-left">Invoice #</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
+              <th scope="col" className="px-4 py-3 text-left">Description / Contact</th>
+              <th scope="col" className="px-4 py-3 text-right">Amount</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
+              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

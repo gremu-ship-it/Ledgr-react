@@ -115,13 +115,13 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
       <table className="w-full min-w-[700px]">
         <thead>
           <tr className="text-xs font-medium uppercase tracking-wide text-gray-400">
-            <th className="pb-2 text-start"></th>
-            <th className="pb-2 text-end">{t('reports.opening')}</th>
-            <th className="pb-2 text-end">{t('reports.netProfit')}</th>
-            <th className="pb-2 text-end">{t('reports.contributions')}</th>
-            <th className="pb-2 text-end">{t('reports.drawingsDividends')}</th>
-            <th className="pb-2 text-end">{t('reports.other')}</th>
-            <th className="pb-2 text-end">{t('reports.closing')}</th>
+            <th scope="col" className="pb-2 text-start"></th>
+            <th scope="col" className="pb-2 text-end">{t('reports.opening')}</th>
+            <th scope="col" className="pb-2 text-end">{t('reports.netProfit')}</th>
+            <th scope="col" className="pb-2 text-end">{t('reports.contributions')}</th>
+            <th scope="col" className="pb-2 text-end">{t('reports.drawingsDividends')}</th>
+            <th scope="col" className="pb-2 text-end">{t('reports.other')}</th>
+            <th scope="col" className="pb-2 text-end">{t('reports.closing')}</th>
           </tr>
         </thead>
         <tbody>

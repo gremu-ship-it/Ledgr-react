@@ -38,7 +38,7 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
   if (isError) {
     return (
       <div className="flex items-center justify-center rounded-2xl border border-gray-200 bg-white p-5">
-        <p className="text-sm text-red-500">{t('dashboard.failedToLoad')}</p>
+        <p className="text-sm text-red-700">{t('dashboard.failedToLoad')}</p>
       </div>
     );
   }
@@ -54,10 +54,10 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
       </div>
 
       <div className="mb-5">
-        <p className="mb-0.5 text-xs text-gray-400">{t('dashboard.netThisMonth')}</p>
+        <p className="mb-0.5 text-xs text-gray-600">{t('dashboard.netThisMonth')}</p>
         <p className={`text-2xl font-extrabold ${config.color}`}>{formatMwk(Math.abs(net))}</p>
         {(income ?? 0) > 0 && (
-          <p className="mt-0.5 text-xs text-gray-400">
+          <p className="mt-0.5 text-xs text-gray-600">
             {Math.abs(margin)}% {status === 'profit' ? t('dashboard.profitMargin') : status === 'loss' ? t('dashboard.lossRate') : ''}
           </p>
         )}

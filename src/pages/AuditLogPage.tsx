@@ -48,8 +48,8 @@ function EventBadge({ type }: { type: string }) {
 }
 
 function ChainBadge({ valid, hash }: { valid?: boolean; hash?: string | null }) {
-  if (!hash) return <span className="text-xs text-gray-400">—</span>;
-  if (valid === undefined) return <span className="font-mono text-xs text-gray-400">{hash.slice(0, 8)}…</span>;
+  if (!hash) return <span className="text-xs text-gray-600">—</span>;
+  if (valid === undefined) return <span className="font-mono text-xs text-gray-600">{hash.slice(0, 8)}…</span>;
   return (
     <span className={cls(
       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
@@ -69,7 +69,7 @@ function JsonDiff({ old: oldVal, next: newVal, fields }: {
   next?: Record<string, unknown> | null;
   fields?: string[] | null;
 }) {
-  if (!oldVal && !newVal) return <p className="text-xs text-gray-400">No data</p>;
+  if (!oldVal && !newVal) return <p className="text-xs text-gray-600">No data</p>;
 
   const keys = Array.from(new Set([
     ...Object.keys(oldVal ?? {}),
@@ -83,9 +83,9 @@ function JsonDiff({ old: oldVal, next: newVal, fields }: {
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-gray-200 bg-gray-100">
-            <th className="px-3 py-1.5 text-left font-semibold text-gray-500">Field</th>
-            {oldVal && <th className="px-3 py-1.5 text-left font-semibold text-gray-500">Before</th>}
-            {newVal && <th className="px-3 py-1.5 text-left font-semibold text-gray-500">After</th>}
+            <th scope="col" className="px-3 py-1.5 text-left font-semibold text-gray-500">Field</th>
+            {oldVal && <th scope="col" className="px-3 py-1.5 text-left font-semibold text-gray-500">Before</th>}
+            {newVal && <th scope="col" className="px-3 py-1.5 text-left font-semibold text-gray-500">After</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -130,7 +130,7 @@ function AuditRow({
         className="cursor-pointer hover:bg-gray-50 transition-colors"
         onClick={() => setExpanded((v) => !v)}
       >
-        <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+        <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
           <div className="flex items-center gap-1.5">
             <Clock className="h-3 w-3" />
             {fmtDate(entry.occurred_at)}
@@ -142,7 +142,7 @@ function AuditRow({
             <span className="text-xs font-medium text-gray-700">{fmtTable(entry.resource_type)}</span>
           </div>
           {entry.resource_ref && (
-            <p className="mt-0.5 text-xs text-gray-400">{entry.resource_ref}</p>
+            <p className="mt-0.5 text-xs text-gray-600">{entry.resource_ref}</p>
           )}
         </td>
         <td className="px-4 py-3">
@@ -335,8 +335,8 @@ export function AuditLogPage() {
       <table>
         <thead>
           <tr>
-            <th>Timestamp</th><th>Resource</th><th>Action</th><th>User</th>
-            <th>Entry Hash</th><th>Chain</th>
+            <th scope="col">Timestamp</th><th scope="col">Resource</th><th scope="col">Action</th><th scope="col">User</th>
+            <th scope="col">Entry Hash</th><th scope="col">Chain</th>
           </tr>
         </thead>
         <tbody>
@@ -420,7 +420,7 @@ export function AuditLogPage() {
         <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
           <Shield className="h-10 w-10 text-gray-300" />
           <p className="text-sm font-medium text-gray-500">Access Restricted</p>
-          <p className="text-xs text-gray-400">You need at least Auditor role to view the audit log.</p>
+          <p className="text-xs text-gray-600">You need at least Auditor role to view the audit log.</p>
         </div>
       }
     >
@@ -642,19 +642,19 @@ export function AuditLogPage() {
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <Shield className="h-8 w-8 text-gray-200" />
               <p className="text-sm font-medium text-gray-500">No audit entries found</p>
-              <p className="text-xs text-gray-400">Try adjusting your filters</p>
+              <p className="text-xs text-gray-600">Try adjusting your filters</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[700px] text-sm">
                 <thead className="border-b border-gray-100 bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Timestamp</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Resource</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Action</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">User</th>
-                    <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-400">Hash</th>
-                    <th className="px-4 py-3" />
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-700">Timestamp</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-700">Resource</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-700">Action</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-700">User</th>
+                    <th scope="col" className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-gray-700">Hash</th>
+                    <th scope="col" className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">

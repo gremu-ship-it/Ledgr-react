@@ -92,7 +92,7 @@ export function RegisterPage() {
             {t('auth.confirmationEmailSent', { email })}
           </p>
           {safeReturnTo && (
-            <p className="text-xs text-gray-400">{t('auth.confirmInviteAfterEmail')}</p>
+            <p className="text-xs text-gray-600">{t('auth.confirmInviteAfterEmail')}</p>
           )}
           <Link
             to={safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : '/login'}

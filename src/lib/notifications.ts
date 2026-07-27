@@ -1,4 +1,5 @@
 import { useNotificationStore, type AppNotification } from '@/store/useNotificationStore';
+import { announce } from './a11y';
 
 type NotificationPayload = Omit<AppNotification, 'id' | 'timestamp' | 'read'>;
 type NotificationOptions = {
@@ -9,6 +10,12 @@ type NotificationOptions = {
 function pushNotification(notification: NotificationPayload) {
   const { addNotification } = useNotificationStore.getState();
   addNotification(notification);
+  // Mirror the notification to the screen-reader live region so users
+  // who don't have the bell in view still get a status update.
+  // For "error" / "warning" we use the polite channel so we don't
+  // interrupt whatever the user is doing; for "error" we use assertive.
+  const text = `${notification.title}. ${notification.message}`;
+  announce(text, notification.type === 'error' ? 'assertive' : 'polite');
 }
 
 function normalizeOptions(

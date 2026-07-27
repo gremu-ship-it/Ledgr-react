@@ -50,7 +50,7 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
   if (isError) {
     return (
       <div className="flex items-center justify-center rounded-2xl border border-red-100 bg-red-50 p-5">
-        <p className="text-xs text-red-500">{t('dashboard.failedToLoad')}</p>
+        <p className="text-xs text-red-700">{t('dashboard.failedToLoad')}</p>
       </div>
     );
   }
@@ -91,7 +91,7 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
       >
         {value}
       </p>
-      {sub && <p className="text-sm text-gray-400 truncate overflow-hidden">{sub}</p>}
+      {sub && <p className="text-sm text-gray-600 truncate overflow-hidden">{sub}</p>}
     </div>
   );
 }
@@ -259,7 +259,7 @@ export function DashboardPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-gray-900">{t('dashboard.incomeVsExpenses')}</h2>
-              <p className="text-xs text-gray-400">{t('dashboard.monthlyCashFlow')}</p>
+              <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')}</p>
             </div>
           </div>
           <IncomeExpenseChart
@@ -284,7 +284,7 @@ export function DashboardPage() {
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-base font-bold text-gray-900">{t('dashboard.recentTransactions')}</h2>
-            <p className="mt-0.5 text-xs text-gray-400">{t('dashboard.lastJournalEntries')}</p>
+            <p className="mt-0.5 text-xs text-gray-600">{t('dashboard.lastJournalEntries')}</p>
           </div>
           <FileText className="h-4 w-4 text-gray-300" />
         </div>

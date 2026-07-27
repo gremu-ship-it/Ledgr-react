@@ -35,7 +35,7 @@ export function ForgotPasswordPage() {
           <p className="text-sm text-gray-600">
             {t('auth.resetEmailSent', { email })}
           </p>
-          <p className="text-xs text-gray-400">{t('auth.checkSpam')}</p>
+          <p className="text-xs text-gray-600">{t('auth.checkSpam')}</p>
           <Link to="/login" className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700">
             {t('auth.backToSignIn')}
           </Link>

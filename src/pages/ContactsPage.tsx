@@ -254,7 +254,7 @@ function ContactCard({ contact, totalLabel, total, onEdit, onDelete }: {
           </div>
           <div className="min-w-0">
             <p className="truncate font-medium text-gray-900">{contact.name}</p>
-            {contact.trading_name && <p className="text-xs text-gray-400 truncate">{contact.trading_name}</p>}
+            {contact.trading_name && <p className="text-xs text-gray-600 truncate">{contact.trading_name}</p>}
           </div>
         </div>
         <div className="flex gap-1 shrink-0">
@@ -286,7 +286,7 @@ function ContactCard({ contact, totalLabel, total, onEdit, onDelete }: {
             <span className="truncate">{[contact.address_line1, contact.city].filter(Boolean).join(', ')}</span>
           </div>
         )}
-        {contact.tpin && <div className="text-xs text-gray-400">TPIN: {contact.tpin}</div>}
+        {contact.tpin && <div className="text-xs text-gray-600">TPIN: {contact.tpin}</div>}
       </div>
 
       <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 flex justify-between items-center">

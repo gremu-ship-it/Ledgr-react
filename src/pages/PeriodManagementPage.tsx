@@ -159,7 +159,7 @@ export function PeriodManagementPage() {
           ))}
         </div>
       ) : isError ? (
-        <p className="text-sm text-red-500">Failed to load periods.</p>
+        <p className="text-sm text-red-700">Failed to load periods.</p>
       ) : !data || data.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 py-12 text-center">
           <Calendar className="h-8 w-8 text-gray-300" />
@@ -179,13 +179,13 @@ export function PeriodManagementPage() {
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th className="px-4 py-3 text-left">Period</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-left">Date Range</th>
-                  <th className="px-4 py-3 text-right">Entries</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-right">Debits</th>
-                  <th className="hidden sm:table-cell px-4 py-3 text-right">Credits</th>
-                  <th className="px-4 py-3 text-left">Status</th>
-                  {canManage && <th className="px-4 py-3 text-right">Action</th>}
+                  <th scope="col" className="px-4 py-3 text-left">Period</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Date Range</th>
+                  <th scope="col" className="px-4 py-3 text-right">Entries</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Debits</th>
+                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Credits</th>
+                  <th scope="col" className="px-4 py-3 text-left">Status</th>
+                  {canManage && <th scope="col" className="px-4 py-3 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">

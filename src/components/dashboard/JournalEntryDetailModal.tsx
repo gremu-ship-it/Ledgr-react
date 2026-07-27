@@ -175,12 +175,12 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
               ))}
             </div>
           ) : isError || !data ? (
-            <p className="text-sm text-red-500">Failed to load this entry.</p>
+            <p className="text-sm text-red-700">Failed to load this entry.</p>
           ) : (
             <>
               <div className="mb-4 space-y-1">
                 <p className="text-sm font-medium text-gray-900">{data.entry.description}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-xs text-gray-600">
                   {data.entry.entry_number} · {new Date(data.entry.entry_date).toLocaleDateString('en-MW', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </p>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -209,9 +209,9 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                 <table className="w-full text-sm">
                   <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-400">
                     <tr>
-                      <th className="px-3 py-2 text-left">Account</th>
-                      <th className="px-3 py-2 text-right">Debit</th>
-                      <th className="px-3 py-2 text-right">Credit</th>
+                      <th scope="col" className="px-3 py-2 text-left">Account</th>
+                      <th scope="col" className="px-3 py-2 text-right">Debit</th>
+                      <th scope="col" className="px-3 py-2 text-right">Credit</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -325,7 +325,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                   Per product decision, editing a posted entry is never exposed —
                   only viewing and, where permitted, reversing. */}
               {data.entry.status === 'posted' && (
-                <p className="mt-3 text-xs text-gray-400">
+                <p className="mt-3 text-xs text-gray-600">
                   Posted entries are permanent and cannot be edited. To correct a mistake, reverse this entry instead.
                 </p>
               )}

@@ -39,7 +39,7 @@ export function ReportHeader({
         <div>
           <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
           {subtitle && <p className="mt-0.5 text-sm text-gray-500">{subtitle}</p>}
-          {businessName && <p className="text-xs text-gray-400">{businessName}</p>}
+          {businessName && <p className="text-xs text-gray-600">{businessName}</p>}
         </div>
 
           <div className="flex items-center gap-4 text-end text-xs text-gray-500">

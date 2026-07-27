@@ -285,7 +285,7 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-600">
                 Branch / Cost Center
-                <span className="ml-1 text-xs text-gray-400">(optional)</span>
+                <span className="ml-1 text-xs text-gray-600">(optional)</span>
               </label>
               <select
                 value={branchId}
@@ -301,7 +301,7 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-600">
                 Department
-                <span className="ml-1 text-xs text-gray-400">(optional)</span>
+                <span className="ml-1 text-xs text-gray-600">(optional)</span>
               </label>
               <select
                 value={departmentId}

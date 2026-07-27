@@ -337,7 +337,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
                 value={directEmail}
                 onChange={(e) => setDirectEmail(e.target.value)}
                 placeholder="colleague@business.mw"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
 
@@ -365,7 +365,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           </form>
           <div className="mt-3">
             <p className="text-xs font-medium text-gray-500">Role permissions:</p>
-            <p className="text-xs text-gray-400">{ROLE_CONFIG[directRole].description}</p>
+            <p className="text-xs text-gray-600">{ROLE_CONFIG[directRole].description}</p>
           </div>
         </div>
       ) : (
@@ -430,7 +430,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
                 value={linkEmailRestriction}
                 onChange={(e) => setLinkEmailRestriction(e.target.value)}
                 placeholder="Only this email can accept (Optional)"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
 
@@ -458,7 +458,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           </form>
           <div className="mt-3">
             <p className="text-xs font-medium text-gray-500">Role permissions:</p>
-            <p className="text-xs text-gray-400">{ROLE_CONFIG[linkRole].description}</p>
+            <p className="text-xs text-gray-600">{ROLE_CONFIG[linkRole].description}</p>
           </div>
         </div>
       )}
@@ -704,7 +704,7 @@ export function TeamManagementPage() {
             Loading members and invites…
           </div>
         ) : activeMembers.length === 0 ? (
-          <p className="py-4 text-sm text-gray-400">No active members found.</p>
+          <p className="py-4 text-sm text-gray-600">No active members found.</p>
         ) : (
           <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
             {activeMembers.map((member) => {
@@ -783,7 +783,7 @@ export function TeamManagementPage() {
                   <p className="text-sm font-medium text-gray-900">
                     {lnk.email ? `Restricted to: ${lnk.email}` : 'Anyone with the link can accept'}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-600">
                     Expires {new Date(lnk.expires_at).toLocaleDateString('en-GB', {
                       day: 'numeric', month: 'short', year: 'numeric',
                     })}
@@ -832,7 +832,7 @@ export function TeamManagementPage() {
                     {member.email ?? 'Invited user'}
                   </p>
                   {member.invited_at && (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-600">
                       Invited {new Date(member.invited_at).toLocaleDateString('en-GB', {
                         day: 'numeric', month: 'short', year: 'numeric',
                       })}
@@ -866,9 +866,9 @@ export function TeamManagementPage() {
           <table className="w-full min-w-[520px] text-xs">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
-                <th className="px-4 py-2.5 text-left font-semibold text-gray-600">Permission</th>
+                <th scope="col" className="px-4 py-2.5 text-left font-semibold text-gray-600">Permission</th>
                 {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => (
-                  <th key={r} className="px-3 py-2.5 text-center font-semibold text-gray-600">
+                  <th scope="col" key={r} className="px-3 py-2.5 text-center font-semibold text-gray-600">
                     {ROLE_CONFIG[r].label}
                   </th>
                 ))}

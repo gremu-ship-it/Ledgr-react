@@ -118,7 +118,7 @@ function Field({
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
       {children}
-      {hint && <p className="mt-1 text-xs text-gray-400">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-gray-600">{hint}</p>}
     </div>
   );
 }
@@ -143,7 +143,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+      className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
     />
   );
 }
@@ -322,7 +322,7 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
           <li>• PAYE: graduated bands per MRA schedule</li>
           <li>• CIT: 30% (standard) / 20% (SME)</li>
         </ul>
-        <p className="mt-2 text-xs text-brand-500">These are configured in the Tax module after setup.</p>
+        <p className="mt-2 text-xs text-brand-700">These are configured in the Tax module after setup.</p>
       </div>
     </div>
   );
@@ -356,7 +356,7 @@ function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
               className="h-9 w-9 cursor-pointer rounded-full border-2 border-gray-200 bg-white p-0.5"
               title="Custom colour"
             />
-            <span className="text-xs text-gray-400">Custom</span>
+            <span className="text-xs text-gray-600">Custom</span>
           </div>
         </div>
         <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
@@ -408,7 +408,7 @@ function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
             <p className="text-sm font-semibold text-gray-900">
               {form.trading_name || form.name || 'Your Business'}
             </p>
-            <p className="text-xs text-gray-400">{form.base_currency} · {form.city}, {form.country}</p>
+            <p className="text-xs text-gray-600">{form.base_currency} · {form.city}, {form.country}</p>
           </div>
         </div>
       </div>
@@ -652,7 +652,7 @@ export function CreateBusinessPage() {
         </div>
 
         {/* Skip link for users who already have a business */}
-        <p className="mt-4 text-center text-sm text-gray-400">
+        <p className="mt-4 text-center text-sm text-gray-600">
           <button
             type="button"
             onClick={() => navigate('/dashboard', { replace: true })}

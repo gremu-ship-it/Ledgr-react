@@ -637,7 +637,7 @@ function RunDepreciationModal({ businessId, userId, onClose }: {
                   {periods.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.period_start} – {p.period_end})</option>)}
                 </select>
                 {periods.length === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">No open periods found. Create or unlock a period first.</p>
+                  <p className="mt-1 text-xs text-amber-800">No open periods found. Create or unlock a period first.</p>
                 )}
               </div>
             </>
@@ -657,7 +657,7 @@ function RunDepreciationModal({ businessId, userId, onClose }: {
                 <div className="rounded-xl border border-gray-200">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-xs font-medium uppercase text-gray-500">
-                      <tr><th className="px-3 py-2 text-left">Asset</th><th className="px-3 py-2 text-right">Charge</th></tr>
+                      <tr><th scope="col" className="px-3 py-2 text-left">Asset</th><th scope="col" className="px-3 py-2 text-right">Charge</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {posted.map((r) => (
@@ -671,7 +671,7 @@ function RunDepreciationModal({ businessId, userId, onClose }: {
                 <div className="rounded-xl border border-gray-200">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-xs font-medium uppercase text-gray-500">
-                      <tr><th className="px-3 py-2 text-left">Asset</th><th className="px-3 py-2 text-left">Reason</th></tr>
+                      <tr><th scope="col" className="px-3 py-2 text-left">Asset</th><th scope="col" className="px-3 py-2 text-left">Reason</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 text-gray-500">
                       {skipped.map((r) => (
@@ -841,7 +841,7 @@ function RevalueAssetModal({ asset, businessId, userId, onClose }: {
                 Revaluing <span className="font-medium text-gray-700">{asset.name}</span> ({asset.asset_number}).
                 Current net book value: <span className="font-medium">{formatMwk(netBookValue)}</span>
               </p>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-600">
                 Only upward revaluations are supported, per IAS 16. The surplus is posted to equity (Revaluation Reserve), not through profit or loss.
               </p>
               <div>
@@ -902,7 +902,7 @@ function DepreciationScheduleModal({ asset, businessId, onClose }: {
         <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Depreciation Schedule</h2>
-            <p className="text-xs text-gray-400">{asset.name} ({asset.asset_number})</p>
+            <p className="text-xs text-gray-600">{asset.name} ({asset.asset_number})</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
         </div>
@@ -910,16 +910,16 @@ function DepreciationScheduleModal({ asset, businessId, onClose }: {
           {isLoading ? (
             <div className="space-y-2">{[...Array(6)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-gray-100" />)}</div>
           ) : chronological.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-400">No depreciation has been posted for this asset yet.</p>
+            <p className="py-8 text-center text-sm text-gray-600">No depreciation has been posted for this asset yet.</p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs font-medium uppercase text-gray-500">
                 <tr>
-                  <th className="px-3 py-2 text-left">Period</th>
-                  <th className="px-3 py-2 text-right">Charge</th>
-                  <th className="px-3 py-2 text-right">Accum. to Date</th>
-                  <th className="px-3 py-2 text-right">Net Book Value</th>
-                  <th className="px-3 py-2 text-center">Posted</th>
+                  <th scope="col" className="px-3 py-2 text-left">Period</th>
+                  <th scope="col" className="px-3 py-2 text-right">Charge</th>
+                  <th scope="col" className="px-3 py-2 text-right">Accum. to Date</th>
+                  <th scope="col" className="px-3 py-2 text-right">Net Book Value</th>
+                  <th scope="col" className="px-3 py-2 text-center">Posted</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -930,7 +930,7 @@ function DepreciationScheduleModal({ asset, businessId, onClose }: {
                     <td className="px-3 py-2 text-right text-red-600">{formatMwk(Number(s.accumulated_to_date))}</td>
                     <td className="px-3 py-2 text-right font-semibold">{formatMwk(Number(s.net_book_value))}</td>
                     <td className="px-3 py-2 text-center">
-                      {s.posted ? <CheckCircle className="mx-auto h-4 w-4 text-brand-500" /> : <span className="text-xs text-gray-400">—</span>}
+                      {s.posted ? <CheckCircle className="mx-auto h-4 w-4 text-brand-500" /> : <span className="text-xs text-gray-600">—</span>}
                     </td>
                   </tr>
                 ))}
@@ -1083,14 +1083,14 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="w-8 px-4 py-3" />
-                <th className="px-4 py-3 text-left">Asset</th>
-                <th className="px-4 py-3 text-left">Category</th>
-                <th className="px-4 py-3 text-right">Cost</th>
-                <th className="px-4 py-3 text-right">Accum. Dep.</th>
-                <th className="px-4 py-3 text-right">Net Book Value</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th scope="col" className="w-8 px-4 py-3" />
+                <th scope="col" className="px-4 py-3 text-left">Asset</th>
+                <th scope="col" className="px-4 py-3 text-left">Category</th>
+                <th scope="col" className="px-4 py-3 text-right">Cost</th>
+                <th scope="col" className="px-4 py-3 text-right">Accum. Dep.</th>
+                <th scope="col" className="px-4 py-3 text-right">Net Book Value</th>
+                <th scope="col" className="px-4 py-3 text-center">Status</th>
+                <th scope="col" className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -1105,7 +1105,7 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{asset.name}</div>
-                      <div className="text-xs text-gray-400">{asset.asset_number}</div>
+                      <div className="text-xs text-gray-600">{asset.asset_number}</div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">{categoryMap[asset.category_id] ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-medium">{formatMwk(Number(asset.acquisition_cost))}</td>
@@ -1285,12 +1285,12 @@ function CategoriesTab({ businessId }: { businessId: string }) {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 text-left">Name</th>
-                <th className="px-4 py-3 text-left">Method</th>
-                <th className="px-4 py-3 text-right">Useful Life</th>
-                <th className="px-4 py-3 text-right">Residual %</th>
-                <th className="px-4 py-3 text-right">MRA Rate %</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th scope="col" className="px-4 py-3 text-left">Name</th>
+                <th scope="col" className="px-4 py-3 text-left">Method</th>
+                <th scope="col" className="px-4 py-3 text-right">Useful Life</th>
+                <th scope="col" className="px-4 py-3 text-right">Residual %</th>
+                <th scope="col" className="px-4 py-3 text-right">MRA Rate %</th>
+                <th scope="col" className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
