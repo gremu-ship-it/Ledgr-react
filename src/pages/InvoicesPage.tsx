@@ -173,6 +173,8 @@ function RecordPaymentModal({
         invoice,
         payment,
         functionalCurrency,
+        invoice.branch_id ?? null,
+        invoice.department_id ?? null,
       );
     },
     onSuccess: () => {

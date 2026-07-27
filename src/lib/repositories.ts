@@ -16,6 +16,7 @@ import { InventoryRepository } from '@/dal/repositories/InventoryRepository';
 import { IncomeRepository } from '@/dal/repositories/IncomeRepository';
 import { ContactRepository } from '@/dal/repositories/ContactRepository';
 import { BranchRepository } from '@/dal/repositories/BranchRepository';
+import { DepartmentRepository } from '@/dal/repositories/DepartmentRepository';
 import { TransferRepository } from '@/dal/repositories/TransferRepository';
 import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
@@ -38,6 +39,7 @@ export const repos = {
   income:     new IncomeRepository(supabase),
   contact:    new ContactRepository(supabase),
   branch:     new BranchRepository(supabase),
+  department: new DepartmentRepository(supabase),
   transfer:   new TransferRepository(supabase),
   period: new PeriodRepository(supabase),
   auditLog: new AuditLogRepository(supabase),

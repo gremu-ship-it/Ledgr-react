@@ -34,10 +34,18 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [branchId, setBranchId] = useState<string>('');
+  const [departmentId, setDepartmentId] = useState<string>('');
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
     queryFn: () => repos.branch.findActive(businessId),
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', businessId],
+    queryFn: () => repos.department.findActive(businessId),
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 10,
   });
@@ -48,6 +56,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
     setCategory('');
     setDescription('');
     setBranchId('');
+    setDepartmentId('');
   }
 
   function handleClose() {
@@ -89,6 +98,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           notes: desc,
           created_by: null,
           branch_id: branchId || null,
+          department_id: departmentId || null,
         } as InsertDto<'invoices'>,
         [{
           line_number: 1,
@@ -108,7 +118,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       if (created) {
         try {
           await createInvoiceJournalEntry(
-            businessId, created, rawAmount, 0, branchId || null,
+            businessId, created, rawAmount, 0, branchId || null, departmentId || null,
           );
         } catch (err) {
           console.warn('Journal entry failed:', err);
@@ -264,6 +274,31 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
             )}
           </div>
 
+          {departments.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Assign to Department
+                <span className="text-gray-400"> (optional)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {departments.map((d) => (
+                  <button
+                    key={d.id}
+                    onClick={() => setDepartmentId(departmentId === d.id ? '' : d.id)}
+                    className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                      departmentId === d.id
+                        ? 'border-brand-500 bg-brand-50 shadow-sm'
+                        : 'border-gray-100 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-gray-800 truncate">{d.name}</p>
+                    {d.code && <p className="text-[10px] text-gray-400">{d.code}</p>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <button
             onClick={() => setStep('confirm')}
             className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white transition-all active:scale-95"
@@ -298,6 +333,12 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Branch / Revenue Center</span>
                 <span className="text-gray-700">{branches.find((b) => b.id === branchId)?.name ?? '—'}</span>
+              </div>
+            )}
+            {departmentId && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Department</span>
+                <span className="text-gray-700">{departments.find((d) => d.id === departmentId)?.name ?? '—'}</span>
               </div>
             )}
             <div className="flex justify-between text-sm">

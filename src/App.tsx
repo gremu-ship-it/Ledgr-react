@@ -37,6 +37,7 @@ import { PlanGate } from '@/components/billing/PlanGate';
 import { WarehousePage } from './pages/WarehousePage';
 import { TransfersPage } from './pages/TransfersPage';
 import { BranchesPage } from './pages/BranchesPage';
+import { DepartmentsPage } from './pages/DepartmentsPage';
 import { ForgotPasswordPage } from './pages/auth/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/auth/ResetPasswordPage';
 import { PeriodManagementPage } from '@/pages/PeriodManagementPage';
@@ -148,6 +149,11 @@ function App() {
                 <Route path="/branches" element={
                   <PlanGate capability="accounting_organisation" featureName="Branches">
                     <BranchesPage />
+                  </PlanGate>
+                } />
+                <Route path="/departments" element={
+                  <PlanGate capability="accounting_organisation" featureName="Departments">
+                    <DepartmentsPage />
                   </PlanGate>
                 } />
                 <Route path="/accounts" element={

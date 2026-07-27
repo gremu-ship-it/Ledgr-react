@@ -15,6 +15,7 @@ import {
   Warehouse,
   ArrowLeftRight,
   GitBranch,
+  Users2,
   Lock,
   ScrollText,
   ShieldCheck,
@@ -89,6 +90,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     items: [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth' },
+      { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth' },
     ],
   },
 ];
