@@ -16,8 +16,11 @@ export default function PartnerClientsPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">
-      <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Partner Clients</h1>
-      <p className="text-slate-500 mb-8">View clients under this partner. Data is isolated by default.</p>
+      <div className="flex items-center justify-between mb-2">
+        <h1 className="text-3xl font-extrabold text-slate-900">Partner Clients</h1>
+        <span className="inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200">Read-only (partner admin)</span>
+      </div>
+      <p className="text-slate-500 mb-8">View clients under this partner. Data is isolated by default. Partner admins cannot edit client data.</p>
 
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <table className="w-full text-sm">

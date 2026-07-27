@@ -30,7 +30,23 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
    * Fetch all active businesses the current user belongs to.
    * Filters pushed DB-side via !inner join — no in-memory filtering.
    */
-  async findByUser(userId: string): Promise<Row<'businesses'>[]> {
+  async findByUser(userId: string, partnerId?: string): Promise<Row<'businesses'>[]> {
+    if (partnerId) {
+      const { data, error } = await this.client
+        .from('partner_clients')
+        .select('business:businesses!inner(*)')
+        .eq('partner_id', partnerId)
+        .eq('businesses.is_active', true)
+        .is('businesses.deleted_at', null);
+      if (error) throw toRepositoryError('businesses', error);
+      type JoinRow = { business: Row<'businesses'> | Row<'businesses'>[] | null };
+      return (data ?? [])
+        .map((row) => {
+          const joined = (row as JoinRow).business;
+          return Array.isArray(joined) ? joined[0] : joined;
+        })
+        .filter((b): b is Row<'businesses'> => b !== null && b !== undefined);
+    }
     const { data, error } = await this.client
       .from('business_users')
       .select('business:businesses!inner(*)')
