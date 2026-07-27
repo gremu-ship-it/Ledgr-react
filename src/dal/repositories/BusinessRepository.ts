@@ -30,9 +30,20 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
    * Fetch all active businesses the current user belongs to.
    * Filters pushed DB-side via !inner join — no in-memory filtering.
    */
+  /**
+   * Fetch all active businesses the current user belongs to.
+   *
+   * When `partnerId` is supplied the listing is scoped to that partner's
+   * clients instead — used by the partner admin portal, where RLS already
+   * restricts the caller to partners they administer.
+   */
   async findByUser(userId: string, partnerId?: string): Promise<Row<'businesses'>[]> {
     if (partnerId) {
-      const { data, error } = await this.client
+      // partner_clients isn't in the generated Database type (it lives in the
+      // white-label layer), so this join goes through an untyped client.
+      const { data, error } = await (this.client as unknown as {
+        from: (t: string) => any;
+      })
         .from('partner_clients')
         .select('business:businesses!inner(*)')
         .eq('partner_id', partnerId)
@@ -40,11 +51,8 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
         .is('businesses.deleted_at', null);
       if (error) throw toRepositoryError('businesses', error);
       type JoinRow = { business: Row<'businesses'> | Row<'businesses'>[] | null };
-      return (data ?? [])
-        .map((row) => {
-          const joined = (row as JoinRow).business;
-          return Array.isArray(joined) ? joined[0] : joined;
-        })
+      return ((data ?? []) as JoinRow[])
+        .map((row) => (Array.isArray(row.business) ? row.business[0] : row.business))
         .filter((b): b is Row<'businesses'> => b !== null && b !== undefined);
     }
     const { data, error } = await this.client

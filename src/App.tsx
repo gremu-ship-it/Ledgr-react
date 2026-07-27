@@ -46,10 +46,16 @@ import { RepairCoaPage } from '@/pages/RepairCoaPage';
 import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
 import { AuditLogPage } from '@/pages/AuditLogPage';
 import { AdminBillingPage } from '@/pages/admin/AdminBillingPage';
+import { PartnerAdminLayout } from '@/pages/partner-admin/PartnerAdminLayout';
 import { PartnerAdminDashboard } from '@/pages/partner-admin/PartnerAdminDashboard';
+import { PartnerOverviewPage } from '@/pages/partner-admin/PartnerOverviewPage';
 import { PartnerSettingsPage } from '@/pages/partner-admin/PartnerSettingsPage';
 import { PartnerClientsPage } from '@/pages/partner-admin/PartnerClientsPage';
 import { PartnerBillingPage } from '@/pages/partner-admin/PartnerBillingPage';
+import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
+import { PartnerProvider } from '@/partner/PartnerProvider';
+import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
+import { isAdminPortalHost } from '@/lib/partnerDomain';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,10 +70,13 @@ const queryClient = new QueryClient({
 function App() {
   useAuthListener();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  // admin.ledgr.com is the partner admin portal; everything else is the app.
+  const homePath = isAdminPortalHost() ? '/partner-admin' : '/dashboard';
 
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
+        <PartnerProvider>
         <BrowserRouter>
           <Routes>
             {/* Public-only */}
@@ -92,12 +101,16 @@ function App() {
               <Route path="/admin/billing" element={<AdminBillingPage />} />
             </Route>
 
-            {/* Partner admin portal */}
-            <Route element={<PlatformAdminRoute />}>
-              <Route path="/partner-admin" element={<PartnerAdminDashboard />} />
-              <Route path="/partner-admin/partners/:id/settings" element={<PartnerSettingsPage />} />
-              <Route path="/partner-admin/partners/:id/clients" element={<PartnerClientsPage />} />
-              <Route path="/partner-admin/partners/:id/billing" element={<PartnerBillingPage />} />
+            {/* Partner admin portal — served at admin.ledgr.com, also reachable
+                at /partner-admin on the main app for convenience. */}
+            <Route element={<PartnerAdminRoute />}>
+              <Route element={<PartnerAdminLayout />}>
+                <Route path="/partner-admin" element={<PartnerAdminDashboard />} />
+                <Route path="/partner-admin/partners/:id" element={<PartnerOverviewPage />} />
+                <Route path="/partner-admin/partners/:id/settings" element={<PartnerSettingsPage />} />
+                <Route path="/partner-admin/partners/:id/clients" element={<PartnerClientsPage />} />
+                <Route path="/partner-admin/partners/:id/billing" element={<PartnerBillingPage />} />
+              </Route>
             </Route>
 
             {/* Protected with AppLayout */}
@@ -107,17 +120,29 @@ function App() {
                 <Route path="/income" element={<IncomePage />} />
                 <Route path="/expenses" element={<ExpensesPage />} />
                 <Route path="/invoices" element={<InvoicesPage />} />
-                <Route path="/payroll" element={<PayrollPage />} />
-                <Route path="/products" element={<ProductsPage />} />
-                <Route path="/inventory" element={<InventoryPage />} />
+                <Route path="/payroll" element={
+                  <PartnerPlanGate featureKey="payroll" featureName="Payroll">
+                    <PayrollPage />
+                  </PartnerPlanGate>
+                } />
+                <Route path="/products" element={
+                  <PartnerPlanGate featureKey="inventory" featureName="Products">
+                    <ProductsPage />
+                  </PartnerPlanGate>
+                } />
+                <Route path="/inventory" element={
+                  <PartnerPlanGate featureKey="inventory" featureName="Inventory">
+                    <InventoryPage />
+                  </PartnerPlanGate>
+                } />
                 <Route path="/accounts" element={<AccountsPage />} />
                 <Route path="/assets" element={<AssetsPage />} />
                 <Route path="/capital" element={<CapitalPage />} />
                 <Route path="/tax" element={<TaxPage />} />
                 <Route path="/bank-reconcile" element={(
-                  <PlanGate capability="bank_reconciliation" featureName="Bank Reconciliation">
+                  <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
                     <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
-                  </PlanGate>
+                  </PartnerPlanGate>
                 )} />
                 <Route path="/api-docs" element={(
                   <PlanGate capability="api_access" featureName="Public API">
@@ -138,14 +163,22 @@ function App() {
                 <Route path="/journals" element={<JournalsPage />} />
                 <Route path="/periods" element={<PeriodManagementPage />} />
                 <Route path="/ai" element={(
-                  <PlanGate capability="ai_insights" featureName="AI Insights">
+                  <PartnerPlanGate featureKey="ai_advisor" capability="ai_insights" featureName="AI Insights">
                     <AiInsightsPage />
-                  </PlanGate>
+                  </PartnerPlanGate>
                 )} />
                 <Route path="/chat" element={<Navigate to="/ai" replace />} />
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/warehouse" element={<WarehousePage />} />
-                <Route path="/transfers" element={<TransfersPage />} />
+                <Route path="/warehouse" element={
+                  <PartnerPlanGate featureKey="inventory" featureName="Warehouses">
+                    <WarehousePage />
+                  </PartnerPlanGate>
+                } />
+                <Route path="/transfers" element={
+                  <PartnerPlanGate featureKey="inventory" featureName="Stock transfers">
+                    <TransfersPage />
+                  </PartnerPlanGate>
+                } />
                 <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                 <Route path="/api-docs" element={<ApiDocumentationPage />} />
                 <Route path="/api-keys" element={<ApiKeysPage />} />
@@ -189,9 +222,9 @@ function App() {
                   </PlanGate>
                 } />
                 <Route path="/bank-reconcile" element={
-                  <PlanGate capability="bank_reconciliation" featureName="Bank Reconciliation">
+                  <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
                     <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
-                  </PlanGate>
+                  </PartnerPlanGate>
                 } />
                 <Route path="/reports" element={
                   <PlanGate capability="accounting_organisation" featureName="Reports">
@@ -217,13 +250,14 @@ function App() {
             </Route>
 
             {/* Fallbacks */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<Navigate to={homePath} replace />} />
+            <Route path="*" element={<Navigate to={homePath} replace />} />
           </Routes>
 
           <InstallPrompt />
           <CookieConsentBanner />
         </BrowserRouter>
+        </PartnerProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );

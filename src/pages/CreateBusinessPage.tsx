@@ -8,6 +8,9 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 import { clsx } from 'clsx';
+import { usePartner } from '@/partner/PartnerContext';
+import { usePartnerTheme } from '@/partner/usePartnerTheme';
+import { PartnerClientRepository } from '@/dal/repositories/PartnerClientRepository';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -420,6 +423,8 @@ export function CreateBusinessPage() {
   const setBusinesses = useAppStore((s) => s.setBusinesses);
   const setCurrentBusiness = useAppStore((s) => s.setCurrentBusiness);
   const currentUser = useAppStore((s) => s.currentUser);
+  const { partner } = usePartner();
+  const branding = usePartnerTheme();
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<BusinessForm>(DEFAULTS);
@@ -493,6 +498,23 @@ export function CreateBusinessPage() {
       return;
     }
 
+    // White-label: a business signing up through a partner's branded domain
+    // becomes that partner's client. Rejected server-side if the partner has
+    // already hit its client limit.
+    if (partner && businessId) {
+      try {
+        await PartnerClientRepository.addClientToPartner(partner.id, businessId as string);
+      } catch (linkErr) {
+        setLoading(false);
+        setError(
+          linkErr instanceof Error && /limit/i.test(linkErr.message)
+            ? `${partner.name} has reached its client limit. Please contact ${partner.support_email ?? 'your relationship manager'}.`
+            : 'Your business was created but could not be linked to your provider. Please contact support.',
+        );
+        return;
+      }
+    }
+
     // Reload memberships into the store
     if (currentUser) {
       const { data: memberships } = await supabase
@@ -539,9 +561,13 @@ export function CreateBusinessPage() {
 
         {/* Header */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-lg font-bold text-white">
-            L
-          </div>
+          {branding.logoUrl ? (
+            <img src={branding.logoUrl} alt={branding.appName} className="mb-3 h-12 max-w-[180px] object-contain" />
+          ) : (
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500 text-lg font-bold text-white">
+              {branding.appName.charAt(0).toUpperCase()}
+            </div>
+          )}
           <h1 className="text-xl font-semibold text-gray-900">
             {step === 1 ? 'Set up your business' : STEPS[step - 1].label}
           </h1>

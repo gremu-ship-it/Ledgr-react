@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
 import { hasCapability } from '@/lib/billing/plans';
+import type { PartnerFeatureKey } from '@/types/partners';
 
 export interface NavItemConfig {
   labelKey: string;
@@ -32,6 +33,12 @@ export interface NavItemConfig {
   requiresCapability?: PlanCapability;
   /** Per-item minimum plan (for Accounting/Organisation items). Falls back to section minPlan. */
   minPlan?: PlanTier;
+  /**
+   * White-label module switch. When the current partner (bank/MFI) has this
+   * feature disabled the item is hidden entirely — unlike plan gating there
+   * is no upsell, because the client buys from the partner, not from Ledgr.
+   */
+  partnerFeature?: PartnerFeatureKey;
 }
 
 export interface NavSectionConfig {
@@ -45,7 +52,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.ai',
     items: [
-      { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, requiresCapability: 'ai_insights' },
+      { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
     ],
   },
   {
@@ -60,15 +67,15 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.income', path: '/income', icon: DollarSign },
       { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt },
       { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText },
-      { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users },
+      { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, partnerFeature: 'payroll' },
     ],
   },
   {
     labelKey: 'navigation.sections.inventory',
     items: [
-      { labelKey: 'navigation.items.products', path: '/products', icon: Package },
-      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse },
-      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight },
+      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory' },
+      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory' },
+      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory' },
     ],
   },
   {
@@ -80,7 +87,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, minPlan: 'growth' },
       { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, minPlan: 'growth' },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
-      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
       { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth' },
     ],
@@ -106,6 +113,18 @@ const PLAN_TIER_ORDER: PlanTier[] = ['free', 'growth', 'pro', 'enterprise'];
 export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   if (!required) return true;
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
+}
+
+/** Nav sections filtered to the modules the current partner has enabled. */
+export function visibleSectionsFor(
+  isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
+): NavSectionConfig[] {
+  return NAV_SECTIONS
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature)),
+    }))
+    .filter((section) => section.items.length > 0);
 }
 
 /** Set of all paths gated behind a paid plan (item has minPlan or requiresCapability). */
