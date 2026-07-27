@@ -210,6 +210,9 @@ set original_currency = coalesce(p.original_currency, p.currency, b.base_currenc
 from public.businesses b
 where p.business_id = b.id;
 
+-- Posted journal lines are immutable in Ledgr. Backfill only draft/unposted
+-- lines; posted historical lines remain unchanged and reports coalesce their
+-- existing currency/amount_base fields.
 update public.journal_lines jl
 set original_currency = coalesce(jl.original_currency, jl.currency, b.base_currency),
     original_amount = coalesce(jl.original_amount, jl.amount),
@@ -217,4 +220,10 @@ set original_currency = coalesce(jl.original_currency, jl.currency, b.base_curre
     functional_amount = coalesce(jl.functional_amount, jl.amount_base),
     exchange_rate = coalesce(nullif(jl.exchange_rate, 0), 1)
 from public.businesses b
-where jl.business_id = b.id;
+where jl.business_id = b.id
+  and not exists (
+    select 1
+    from public.journal_entries je
+    where je.id = jl.journal_entry_id
+      and je.status = 'posted'
+  );
