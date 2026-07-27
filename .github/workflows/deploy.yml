@@ -118,6 +118,7 @@ jobs:
       - name: Set Edge Function secrets (staging)
         run: |
           supabase secrets set \
+            SB_ENV="staging" \
             SENTRY_DSN="${{ secrets.SENTRY_DSN_BACKEND_STAGING }}" \
             SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY_STAGING }}" \
             SENDGRID_FROM_EMAIL="${{ secrets.SENDGRID_FROM_EMAIL_STAGING }}" \
@@ -209,6 +210,7 @@ jobs:
       - name: Set Edge Function secrets (production)
         run: |
           supabase secrets set \
+            SB_ENV="production" \
             SENTRY_DSN="${{ secrets.SENTRY_DSN_BACKEND_PROD }}" \
             SENDGRID_API_KEY="${{ secrets.SENDGRID_API_KEY_PROD }}" \
             SENDGRID_FROM_EMAIL="${{ secrets.SENDGRID_FROM_EMAIL_PROD }}" \
