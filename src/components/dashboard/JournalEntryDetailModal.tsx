@@ -54,17 +54,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', data?.entry.business_id],
-    queryFn: async () => {
-      const { data: depts, error } = await (repos as any).account.client
-        .from('departments')
-        .select('*')
-        .eq('business_id', data!.entry.business_id)
-        .eq('is_active', true)
-        .is('deleted_at', null)
-        .order('name', { ascending: true });
-      if (error) throw error;
-      return depts ?? [];
-    },
+    queryFn: () => repos.department.findActive(data!.entry.business_id),
     enabled: Boolean(data?.entry.business_id),
   });
 
@@ -110,40 +100,13 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
   const assignCenterMutation = useMutation({
     mutationFn: async () => {
       if (!data) return;
-      const entry = data.entry;
-
-      // Update the journal entry
-      await repos.journal.update(entry.id, {
-        branch_id: assignBranchId || null,
-        department_id: assignDeptId || null,
-      });
-
-      // Also update all journal lines
-      for (const line of data.lines) {
-        await (repos as any).account.client
-          .from('journal_lines')
-          .update({
-            branch_id: assignBranchId || null,
-            department_id: assignDeptId || null,
-          })
-          .eq('id', line.id);
-      }
-
-      // Update linked source record if any
-      if (entry.source_id && entry.source_type) {
-        const tableMap: Record<string, string> = {
-          invoice: 'invoices',
-          expense: 'expenses',
-          payroll: 'payroll_runs',
-        };
-        const table = tableMap[entry.source_type];
-        if (table) {
-          await (repos as any).account.client
-            .from(table)
-            .update({ branch_id: assignBranchId || null, department_id: assignDeptId || null })
-            .eq('id', entry.source_id);
-        }
-      }
+      // Entry, lines and any linked source document are updated together by
+      // the repository, tenant-scoped by business_id.
+      await repos.journal.assignCostCentre(
+        data.entry.id,
+        assignBranchId || null,
+        assignDeptId || null,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal'] });
@@ -260,9 +223,9 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                       {branches.find((b) => b.id === data.entry.branch_id)?.name}
                     </span>
                   )}
-                  {data.entry.department_id && (departments as any[]).find((d) => d.id === data.entry.department_id) && (
+                  {data.entry.department_id && departments.find((d) => d.id === data.entry.department_id) && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
-                      {(departments as any[]).find((d) => d.id === data.entry.department_id)?.name}
+                      {departments.find((d) => d.id === data.entry.department_id)?.name}
                     </span>
                   )}
                 </div>
@@ -293,7 +256,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                         className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm focus:border-brand-500 focus:outline-none"
                       >
                         <option value="">None</option>
-                        {(departments as any[]).map((d: any) => (
+                        {departments.map((d) => (
                           <option key={d.id} value={d.id}>
                             {d.name}{d.cost_centre ? ` [${d.cost_centre}]` : ''}
                           </option>

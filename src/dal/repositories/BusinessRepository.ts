@@ -39,11 +39,7 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
    */
   async findByUser(userId: string, partnerId?: string): Promise<Row<'businesses'>[]> {
     if (partnerId) {
-      // partner_clients isn't in the generated Database type (it lives in the
-      // white-label layer), so this join goes through an untyped client.
-      const { data, error } = await (this.client as unknown as {
-        from: (t: string) => any;
-      })
+      const { data, error } = await this.client
         .from('partner_clients')
         .select('business:businesses!inner(*)')
         .eq('partner_id', partnerId)

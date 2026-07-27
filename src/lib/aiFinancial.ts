@@ -1,6 +1,16 @@
 import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
+import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import { formatMwk } from '@/lib/formatters';
+
+const financialStatements = new FinancialStatementRepository(repos.account.db);
+
+export interface BusinessContextRawData {
+  revenue3M: number;
+  expense3M: number;
+  cashBalance: number;
+  outstandingTotal: number;
+}
 
 export interface BusinessContext {
   businessName: string;
@@ -11,7 +21,91 @@ export interface BusinessContext {
   outstandingInvoices: string;
   upcomingTaxDeadlines: string;
   anomalies: string[];
-  rawData?: any;
+  rawData?: BusinessContextRawData;
+}
+
+/**
+ * A journal entry with its debit/credit totals rolled up from journal_lines.
+ *
+ * NOTE: `journal_entries` has NO total_debits / total_credits columns — those
+ * live on the v_trial_balance view and are keyed by account, not by entry.
+ * Earlier revisions of this file selected them straight off journal_entries via
+ * `.from('journal_entries' as any)`, which silently returned PostgREST error
+ * 42703 and left every downstream feature reading `null`. Totals must be
+ * aggregated from journal_lines.amount_base (the MWK functional-currency
+ * amount) exactly as JournalRepository.validateBalanced does.
+ */
+export interface EntryTotals {
+  id: string;
+  entry_date: string;
+  description: string;
+  totalDebits: number;
+  totalCredits: number;
+}
+
+interface JournalLineRow {
+  amount_base: number | string | null;
+  is_debit: boolean;
+  journal_entries: {
+    id: string;
+    entry_date: string;
+    description: string | null;
+    status: string;
+    business_id: string;
+  } | null;
+}
+
+/**
+ * Fetches posted journal entries in a date range with debit/credit totals
+ * aggregated from their lines.
+ *
+ * Throws on query failure — callers decide whether to degrade. Returning an
+ * empty array on error is what previously disguised a broken query as
+ * "this business has no activity".
+ */
+async function fetchEntryTotals(
+  businessId: string,
+  fromDate: string,
+  toDate?: string,
+): Promise<EntryTotals[]> {
+  let query = supabase
+    .from('journal_lines')
+    .select('amount_base, is_debit, journal_entries!inner(id, entry_date, description, status, business_id)')
+    .eq('business_id', businessId)
+    .eq('journal_entries.business_id', businessId)
+    .eq('journal_entries.status', 'posted')
+    .gte('journal_entries.entry_date', fromDate);
+
+  if (toDate) {
+    query = query.lte('journal_entries.entry_date', toDate);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  const byEntry = new Map<string, EntryTotals>();
+  for (const line of (data ?? []) as unknown as JournalLineRow[]) {
+    const entry = line.journal_entries;
+    if (!entry) continue;
+
+    let totals = byEntry.get(entry.id);
+    if (!totals) {
+      totals = {
+        id: entry.id,
+        entry_date: entry.entry_date,
+        description: entry.description ?? '',
+        totalDebits: 0,
+        totalCredits: 0,
+      };
+      byEntry.set(entry.id, totals);
+    }
+
+    const amount = Number(line.amount_base ?? 0);
+    if (line.is_debit) totals.totalDebits += amount;
+    else totals.totalCredits += amount;
+  }
+
+  return [...byEntry.values()].sort((a, b) => b.entry_date.localeCompare(a.entry_date));
 }
 
 export interface Anomaly {
@@ -50,11 +144,13 @@ export async function buildRichBusinessContext(
   const start3M = threeMonthsAgo.toISOString().slice(0, 10);
 
   try {
-    const [invoices, expenses, , accounts] = await Promise.all([
+    // Cash comes from the ledger (opening balance + posted movement), not from
+    // summing accounts.opening_balance — that is a period-opening figure and
+    // ignores every transaction since, which understated the AI's view of cash.
+    const [invoices, expenses, cashBalance] = await Promise.all([
       repos.invoice.findByBusiness(businessId),
       repos.expense.findByBusiness(businessId),
-      supabase.from('journal_entries').select('*').eq('business_id', businessId).eq('status', 'posted').gte('entry_date', start3M),
-      repos.account.findByBusiness(businessId),
+      financialStatements.getCashPosition(businessId, today),
     ]);
 
     // P&L last 3 months
@@ -62,10 +158,6 @@ export async function buildRichBusinessContext(
     const recentExpenses = expenses.filter(e => e.expense_date >= start3M);
     const revenue3M = recentInvoices.reduce((s, i) => s + Number(i.total_amount), 0);
     const expense3M = recentExpenses.reduce((s, e) => s + Number(e.total_amount), 0);
-
-    // Cash position
-    const bankAccounts = accounts.filter(a => a.is_bank_account);
-    const cashBalance = bankAccounts.reduce((s, a) => s + Number(a.opening_balance || 0), 0);
 
     // Outstanding invoices
     const outstanding = invoices.filter(i => i.status !== 'paid');
@@ -117,29 +209,25 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   try {
-    const { data: entries } = await supabase
-      .from('journal_entries' as any)
-      .select('id, entry_date, total_debits, description, status')
-      .eq('business_id', businessId)
-      .eq('status', 'posted')
-      .gte('entry_date', thirtyDaysAgo.toISOString().slice(0, 10))
-      .order('entry_date', { ascending: false });
+    const entryList = await fetchEntryTotals(
+      businessId,
+      thirtyDaysAgo.toISOString().slice(0, 10),
+    );
 
-    const entryList = entries as any[];
-    if (!entryList || entryList.length < 5) return anomalies;
+    if (entryList.length < 5) return anomalies;
 
-    const amounts = entryList.map(e => Number(e.total_debits || 0));
+    const amounts = entryList.map(e => e.totalDebits);
     const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
 
     // 1. Unusually large transactions
-    const largeTx = entryList.filter(e => Number(e.total_debits || 0) > avg * 2.5);
+    const largeTx = entryList.filter(e => e.totalDebits > avg * 2.5);
     largeTx.forEach(tx => {
       anomalies.push({
         type: 'large_transaction',
         severity: 'high',
-        description: `Unusually large transaction: ${formatMwk(Number(tx.total_debits))} on ${tx.entry_date}`,
+        description: `Unusually large transaction: ${formatMwk(tx.totalDebits)} on ${tx.entry_date}`,
         date: tx.entry_date,
-        amount: Number(tx.total_debits),
+        amount: tx.totalDebits,
       });
     });
 
@@ -148,7 +236,7 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
     entryList.forEach(e => {
       const d = e.entry_date;
       if (!byDay[d]) byDay[d] = [];
-      byDay[d].push(Number(e.total_debits || 0));
+      byDay[d].push(e.totalDebits);
     });
 
     Object.entries(byDay).forEach(([date, arr]) => {
@@ -168,11 +256,12 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
     });
 
     // 3. Income gap (no revenue for 5+ days)
-    const incomeEntries = entryList.filter(e => 
-      e.description?.toLowerCase().includes('income') || 
-      e.description?.toLowerCase().includes('sale') ||
-      e.description?.toLowerCase().includes('revenue')
-    );
+    const incomeEntries = entryList.filter(e => {
+      const description = e.description.toLowerCase();
+      return description.includes('income')
+        || description.includes('sale')
+        || description.includes('revenue');
+    });
     
     if (incomeEntries.length > 0) {
       const sortedDates = [...new Set(incomeEntries.map(e => e.entry_date))].sort();
@@ -195,7 +284,10 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
     }
 
     return anomalies.slice(0, 8); // Limit to most relevant
-  } catch {
+  } catch (e) {
+    // Degrade to "no anomalies" for the UI, but make the failure visible —
+    // a silent [] here is indistinguishable from a clean set of books.
+    console.error('[aiFinancial] Anomaly detection failed', e);
     return [];
   }
 }
@@ -207,23 +299,31 @@ export async function generateCashFlowForecast(businessId: string): Promise<Cash
   const today = new Date();
   const threeMonthsAgo = new Date(today);
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+  const windowStart = threeMonthsAgo.toISOString().slice(0, 10);
+  const todayStr = today.toISOString().slice(0, 10);
 
-  const { data: movements } = await supabase
-    .from('journal_entries' as any)
-    .select('entry_date, total_debits, total_credits')
-    .eq('business_id', businessId)
-    .eq('status', 'posted')
-    .gte('entry_date', threeMonthsAgo.toISOString().slice(0, 10));
+  // Any failure here propagates. This function previously swallowed a broken
+  // query and returned a flat line at the current cash balance with
+  // negativeAlert=false — a fabricated forecast rendered as though it were
+  // real. An empty chart is recoverable; a confident wrong number is not.
+  const [movements, currentCash] = await Promise.all([
+    fetchEntryTotals(businessId, windowStart, todayStr),
+    financialStatements.getCashPosition(businessId, todayStr),
+  ]);
 
-  const dailyNet = ((movements || []) as any[]).reduce((sum, m) => {
-    return sum + (Number(m.total_credits || 0) - Number(m.total_debits || 0));
-  }, 0) / 90;
+  // Actual number of days observed, rather than a hardcoded 90. A business
+  // with three weeks of history would otherwise have its daily run-rate
+  // diluted by ~4x against a 90-day denominator.
+  const observedDays = Math.max(
+    1,
+    Math.round((today.getTime() - threeMonthsAgo.getTime()) / (1000 * 3600 * 24)),
+  );
 
-  // Get current cash
-  const accounts = await repos.account.findByBusiness(businessId);
-  const currentCash = accounts
-    .filter(a => a.is_bank_account)
-    .reduce((s, a) => s + Number(a.opening_balance || 0), 0);
+  const netMovement = movements.reduce(
+    (sum, m) => sum + (m.totalCredits - m.totalDebits),
+    0,
+  );
+  const dailyNet = netMovement / observedDays;
 
   const dates: string[] = [];
   const projected: number[] = [];
@@ -240,8 +340,15 @@ export async function generateCashFlowForecast(businessId: string): Promise<Cash
 
     balance += dailyNet;
     projected.push(Math.round(balance));
-    lower.push(Math.round(balance * 0.82));
-    upper.push(Math.round(balance * 1.18));
+
+    // Confidence band. Scaling the balance itself (balance * 0.82 / 1.18)
+    // inverts once the balance goes negative — "lower" ends up above "upper",
+    // which is precisely the region a cash-flow warning matters. Anchor the
+    // band to the magnitude of projected movement instead, and widen it with
+    // the forecast horizon since uncertainty compounds.
+    const uncertainty = Math.abs(dailyNet) * (i + 1) * 0.18;
+    lower.push(Math.round(balance - uncertainty));
+    upper.push(Math.round(balance + uncertainty));
 
     if (balance < 0) negativeAlert = true;
   }
@@ -260,13 +367,19 @@ export async function getTaxPlanningSuggestions(businessId: string): Promise<Tax
   if (daysToYearEnd > 60) return []; // Only show within 60 days of year end
 
   try {
-    const { data: plData } = await supabase
-      .from('v_profit_loss_summary' as any)
-      .select('*')
-      .eq('business_id', businessId)
-      .single();
+    // Previously queried a `v_profit_loss_summary` view that exists in no
+    // migration and no generated type; the resulting error was swallowed by
+    // the catch below, so this function always returned []. Because of the
+    // 60-day guard above that only bit during Q4 — the one time of year the
+    // feature is meant to do anything. Use the P&L the reports pages use.
+    const yearStart = `${today.getFullYear()}-01-01`;
+    const pl = await financialStatements.getProfitOrLoss(
+      businessId,
+      yearStart,
+      today.toISOString().slice(0, 10),
+    );
 
-    const currentProfit = Number((plData as any)?.net_profit || 0);
+    const currentProfit = pl.profitBeforeTax;
 
     const suggestions: TaxPlanningSuggestion[] = [];
 
@@ -296,7 +409,8 @@ export async function getTaxPlanningSuggestions(businessId: string): Promise<Tax
     }
 
     return suggestions;
-  } catch {
+  } catch (e) {
+    console.error('[aiFinancial] Tax planning suggestions failed', e);
     return [];
   }
 }

@@ -324,6 +324,56 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    * not roll back or block the reversal itself, which has already been
    * committed to the ledger.
    */
+  /**
+   * Assigns a branch / department (cost or revenue centre) to an entry, all of
+   * its lines, and the linked source document if there is one.
+   *
+   * Lives here rather than in the modal so the writes are tenant-scoped and
+   * type-checked: the previous inline version reached through
+   * `(repos as any).account.client` to defeat BaseRepository's `protected`
+   * client, and updated journal_lines by id alone with no business_id filter.
+   */
+  async assignCostCentre(
+    entryId: string,
+    branchId: string | null,
+    departmentId: string | null,
+  ): Promise<void> {
+    const entry = await this.findById(entryId);
+    const assignment = { branch_id: branchId, department_id: departmentId };
+
+    const { error: entryError } = await this.client
+      .from('journal_entries')
+      .update(assignment as never)
+      .eq('id', entryId)
+      .eq('business_id', entry.business_id);
+    if (entryError) throw toRepositoryError('journal_entries', entryError);
+
+    // Single statement for every line, rather than a request per line.
+    const { error: linesError } = await this.client
+      .from('journal_lines')
+      .update(assignment as never)
+      .eq('journal_entry_id', entryId)
+      .eq('business_id', entry.business_id);
+    if (linesError) throw toRepositoryError('journal_lines', linesError);
+
+    if (!entry.source_id || !entry.source_type) return;
+
+    const tableMap: Record<string, 'invoices' | 'expenses' | 'payroll_runs'> = {
+      invoice: 'invoices',
+      expense: 'expenses',
+      payroll: 'payroll_runs',
+    };
+    const table = tableMap[entry.source_type];
+    if (!table) return; // unrecognised source_type — nothing to propagate to
+
+    const { error: sourceError } = await this.client
+      .from(table)
+      .update(assignment as never)
+      .eq('id', entry.source_id)
+      .eq('business_id', entry.business_id);
+    if (sourceError) throw toRepositoryError(table, sourceError);
+  }
+
   private async voidSourceRecord(
     sourceType: string,
     sourceId: string,

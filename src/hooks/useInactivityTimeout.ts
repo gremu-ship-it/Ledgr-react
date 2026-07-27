@@ -27,8 +27,14 @@ export function useInactivityTimeout(): InactivityState {
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastActivityRef = useRef<number | null>(null);
 
-  // Dynamic inactivity timeout in milliseconds
-  const getInactivityMs = () => (inactivityTimeoutMinutes || DEFAULT_INACTIVITY_MINUTES) * 60 * 1000;
+  // Dynamic inactivity timeout in milliseconds. Memoised on the setting it
+  // reads so it can be declared as a dependency: as a plain function it was
+  // recreated every render, so the effect below could not list it and went on
+  // reading a stale timeout after the user changed the setting.
+  const getInactivityMs = useCallback(
+    () => (inactivityTimeoutMinutes || DEFAULT_INACTIVITY_MINUTES) * 60 * 1000,
+    [inactivityTimeoutMinutes],
+  );
   const getLastActivity = () => (lastActivityRef.current ??= Date.now());
 
   const clearAllTimers = useCallback(() => {
@@ -60,7 +66,7 @@ export function useInactivityTimeout(): InactivityState {
       startCountdown();
       logoutTimerRef.current = setTimeout(() => { void doLogout(); }, WARNING_BEFORE_MS);
     }, warningMs);
-  }, [clearAllTimers, startCountdown, doLogout, inactivityTimeoutMinutes]);
+  }, [clearAllTimers, startCountdown, doLogout, getInactivityMs]);
 
   const extendSession = useCallback(() => {
     lastActivityRef.current = Date.now(); scheduleTimers();
@@ -101,7 +107,7 @@ export function useInactivityTimeout(): InactivityState {
       ACTIVITY_EVENTS.forEach((ev) => window.removeEventListener(ev, handleActivity));
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser, scheduleTimers, clearAllTimers, doLogout]);
+  }, [currentUser, scheduleTimers, clearAllTimers, doLogout, getInactivityMs]);
 
   return { showWarning, secondsRemaining, extendSession };
 }
