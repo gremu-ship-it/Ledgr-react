@@ -46,6 +46,10 @@ import { RepairCoaPage } from '@/pages/RepairCoaPage';
 import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
 import { AuditLogPage } from '@/pages/AuditLogPage';
 import { AdminBillingPage } from '@/pages/admin/AdminBillingPage';
+import { PartnerAdminDashboard } from '@/pages/partner-admin/PartnerAdminDashboard';
+import { PartnerSettingsPage } from '@/pages/partner-admin/PartnerSettingsPage';
+import { PartnerClientsPage } from '@/pages/partner-admin/PartnerClientsPage';
+import { PartnerBillingPage } from '@/pages/partner-admin/PartnerBillingPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -86,6 +90,14 @@ function App() {
             {/* Internal admin tools — platform admins only, doesn't need a business selected */}
             <Route element={<PlatformAdminRoute />}>
               <Route path="/admin/billing" element={<AdminBillingPage />} />
+            </Route>
+
+            {/* Partner admin portal */}
+            <Route element={<PlatformAdminRoute />}>
+              <Route path="/partner-admin" element={<PartnerAdminDashboard />} />
+              <Route path="/partner-admin/partners/:id/settings" element={<PartnerSettingsPage />} />
+              <Route path="/partner-admin/partners/:id/clients" element={<PartnerClientsPage />} />
+              <Route path="/partner-admin/partners/:id/billing" element={<PartnerBillingPage />} />
             </Route>
 
             {/* Protected with AppLayout */}
