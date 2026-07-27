@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Bell, Menu, LogOut, Settings, User, X, AlertTriangle, CheckCircle2, Crown } from 'lucide-react';
+import { Bell, Menu, LogOut, Settings, User, X, AlertTriangle, CheckCircle2, Crown, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -262,6 +262,18 @@ export function Header() {
                 <Settings className="h-4 w-4" />
                 {t('common.settings')}
               </button>
+              {(currentUser?.role === 'platform_admin' || currentUser?.role === 'partner_admin') && (
+                <button
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate('/partner-admin');
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-amber-600 transition-colors hover:bg-amber-50"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Partner Admin
+                </button>
+              )}
               <div className="my-1 border-t border-gray-100/50" />
               <button
                 onClick={handleSignOut}
