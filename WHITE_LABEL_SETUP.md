@@ -13,6 +13,8 @@ Migrations:
 | `20260727000002_white_label_partners.sql` | `partners`, `partner_feature_flags`, `partner_clients` |
 | `20260727000003_partner_billing.sql` | `partner_invoices` |
 | `20260727000004_white_label_partners_hardening.sql` | theming/onboarding/isolation columns, `partner_admins`, RLS, client-limit trigger, `v_partner_client_usage`, default-flag seeding |
+| `20260727000005_partner_invoice_dedupe.sql` | one-invoice-per-period unique index + auto invoice numbering |
+| `20260727000006_schedule_generate_partner_invoices.sql` | monthly pg_cron billing job |
 
 Apply with `supabase db push` (or run the SQL in order against your project).
 
@@ -131,3 +133,59 @@ select p.id, u.id
 4. Choose the **lite** or **full** module preset.
 5. Set the client limit and price per client, then raise the first invoice
    under **Billing**.
+
+## 8. Automated monthly billing
+
+`supabase/functions/generate-partner-invoices` raises one invoice per active
+partner for the month that just closed, following the same shape as
+`expire-subscriptions` and `send-renewal-reminders`:
+
+- **Schedule:** 02:00 UTC on the 1st of each month, via `pg_cron` + `pg_net`
+  (`20260727000006_schedule_generate_partner_invoices.sql`). This sits clear of
+  the 01:00 `expire-subscriptions` job and the 08:00 reminder job.
+- **Auth:** the shared `x-cron-secret` header, same as the other cron
+  functions — set `CRON_SECRET` with `supabase secrets set`.
+- **Amount:** `partners.price_per_client × clients onboarded on or before the
+  period end`. Partners with no clients, or with no price set (bespoke or
+  zero-rated deals), are skipped rather than sent a zero invoice.
+- **Idempotent:** the unique index `partner_invoices_period_key
+  (partner_id, period_start)` means a re-run, a double cron fire, or a manual
+  raise for the same period is skipped on a `23505` instead of double-billing.
+  Voided invoices are excluded from the index, so a mistake can be voided and
+  re-raised.
+- **Email:** if `SENDGRID_API_KEY` is set, the invoice is emailed to
+  `billing_email` (falling back to `support_email`) via SendGrid. **An email
+  failure never rolls back the invoice** — the row is the source of truth.
+- **Invoice numbers:** assigned by a DB trigger as `PINV-000001`, so they're
+  never null and always sequential.
+
+### Deploy
+
+```bash
+supabase functions deploy generate-partner-invoices
+supabase secrets set CRON_SECRET=...            # if not already set
+supabase secrets set SENDGRID_API_KEY=...       # optional, enables emails
+supabase secrets set PARTNER_ADMIN_URL=https://admin.ledgr.com
+```
+
+Then apply `20260727000006_…`, replacing `<PROJECT_REF>` and `<CRON_SECRET>`
+with real values (same placeholder dance as the existing schedule
+migrations).
+
+### Manual runs and backfills
+
+```bash
+# Preview what would be billed for the last closed month, writing nothing
+curl -X POST https://<ref>.supabase.co/functions/v1/generate-partner-invoices \
+  -H 'x-cron-secret: <secret>' -H 'content-type: application/json' \
+  -d '{"dryRun":true}'
+
+# Backfill a specific month
+curl -X POST https://<ref>.supabase.co/functions/v1/generate-partner-invoices \
+  -H 'x-cron-secret: <secret>' -H 'content-type: application/json' \
+  -d '{"period":"2026-06"}'
+```
+
+The portal's **Raise invoice manually** button targets the same period as the
+cron, so the two can't produce duplicate invoices — the second attempt shows
+"An invoice for last month already exists for this partner."

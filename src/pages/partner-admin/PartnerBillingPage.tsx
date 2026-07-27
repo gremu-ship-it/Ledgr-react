@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PartnerBillingRepository } from '@/dal/repositories/PartnerBillingRepository';
@@ -29,6 +30,7 @@ function formatDate(value: string | null) {
 export function PartnerBillingPage() {
   const { id = '' } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
   const { isPlatformAdmin } = usePartnerAdminAccess();
 
   const { data: partner } = useQuery({
@@ -52,12 +54,16 @@ export function PartnerBillingPage() {
   const currency = partner?.billing_currency ?? 'MWK';
   const monthly = (partner?.price_per_client ?? 0) * clientCount;
 
+  // Bills the month that just closed — the same period the monthly
+  // generate-partner-invoices cron uses, so a manual run and the automated
+  // run can't produce two invoices for the same period (the DB rejects the
+  // duplicate on partner_invoices_period_key).
   const { mutate: raiseInvoice, isPending } = useMutation({
     mutationFn: async () => {
       const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      const due = new Date(now.getFullYear(), now.getMonth() + 1, 14);
+      const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0));
+      const due = new Date(end.getTime() + 14 * 24 * 60 * 60 * 1000);
       await PartnerBillingRepository.createInvoice({
         partnerId: id,
         amount: monthly,
@@ -66,10 +72,19 @@ export function PartnerBillingPage() {
         periodEnd: end.toISOString().slice(0, 10),
         dueDate: due.toISOString().slice(0, 10),
         clientCount,
-        notes: `${clientCount} client${clientCount === 1 ? '' : 's'} @ ${money(partner?.price_per_client ?? 0, currency)}`,
+        notes: `${clientCount} client${clientCount === 1 ? '' : 's'} @ ${money(partner?.price_per_client ?? 0, currency)} per month`,
       });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['partner-invoices', id] }),
+    onSuccess: () => {
+      setError(null);
+      void queryClient.invalidateQueries({ queryKey: ['partner-invoices', id] });
+    },
+    onError: (e: Error) =>
+      setError(
+        /duplicate key|partner_invoices_period_key/i.test(e.message)
+          ? 'An invoice for last month already exists for this partner.'
+          : e.message,
+      ),
   });
 
   const { mutate: setStatus } = useMutation({
@@ -85,6 +100,9 @@ export function PartnerBillingPage() {
         <p className="mt-1 text-sm text-slate-500">
           Ledgr invoices {partner?.name ?? 'the partner'} directly. The partner sets its own pricing
           for its SME clients — those businesses are never billed by Ledgr.
+        </p>
+        <p className="mt-2 text-sm text-slate-400">
+          Invoices are raised automatically on the 1st of each month for the month just ended.
         </p>
       </div>
 
@@ -102,11 +120,16 @@ export function PartnerBillingPage() {
               onClick={() => raiseInvoice()}
               disabled={isPending}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+              title="Raises last month's invoice now, if the monthly job hasn't already"
             >
-              {isPending ? 'Raising…' : 'Raise invoice for this month'}
+              {isPending ? 'Raising…' : 'Raise invoice manually'}
             </button>
           )}
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+        )}
 
         {isLoading ? (
           <p className="text-slate-400">Loading invoices…</p>
