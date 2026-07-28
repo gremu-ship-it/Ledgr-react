@@ -137,7 +137,7 @@ COMMENT ON FUNCTION public.grant_user_business_access IS
   'Idempotently gives a user an active membership of one business with a role. '
   'Never deactivates other memberships. Service role only — run from the '
   'Supabase SQL editor. Example: '
-  'select * from grant_user_business_access(''peacemalamula@gmail.com'', ''<business-uuid>'', ''supervisor'');';
+  'select * from grant_user_business_access(''user@example.com'', ''b15238b7-2b36-4761-bc73-cf7e87a925bb'', ''supervisor'');';
 
 REVOKE ALL ON FUNCTION public.grant_user_business_access(TEXT, UUID, TEXT) FROM public;
 REVOKE ALL ON FUNCTION public.grant_user_business_access(TEXT, UUID, TEXT) FROM authenticated;
@@ -192,28 +192,28 @@ BEGIN
   -- dashboard-created user was never marked confirmed.
   RETURN QUERY SELECT
     'email_confirmed'::TEXT,
-    CASE WHEN v_confirmed_at IS NOT NULL THEN 'OK' ELSE 'FAIL' END,
-    CASE WHEN v_confirmed_at IS NOT NULL
-         THEN format('Confirmed at %s.', v_confirmed_at)
-         ELSE 'NOT confirmed — login fails with "Email not confirmed". '
-              'Tick "Auto Confirm User" in the dashboard, or run: '
-              'update auth.users set email_confirmed_at = now() where id = ''' || v_user_id || ''';'
-    END;
+    (CASE WHEN v_confirmed_at IS NOT NULL THEN 'OK' ELSE 'FAIL' END)::TEXT,
+    (CASE WHEN v_confirmed_at IS NOT NULL
+          THEN format('Confirmed at %s.', v_confirmed_at)
+          ELSE 'NOT confirmed — login fails with "Email not confirmed". '
+               'Tick "Auto Confirm User" in the dashboard, or run: '
+               'update auth.users set email_confirmed_at = now() where id = ''' || v_user_id || ''';'
+     END)::TEXT;
 
   RETURN QUERY SELECT
     'not_banned'::TEXT,
-    CASE WHEN v_banned_until IS NULL OR v_banned_until < now() THEN 'OK' ELSE 'FAIL' END,
-    COALESCE('Banned until ' || v_banned_until, 'Not banned.');
+    (CASE WHEN v_banned_until IS NULL OR v_banned_until < now() THEN 'OK' ELSE 'FAIL' END)::TEXT,
+    COALESCE('Banned until ' || v_banned_until, 'Not banned.')::TEXT;
 
   RETURN QUERY SELECT
     'user_profiles'::TEXT,
-    CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)
-         THEN 'OK' ELSE 'WARN' END,
-    CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)
-         THEN 'Profile row present.'
-         ELSE 'No user_profiles row. Not fatal, but name/language/admin flags '
-              'will be empty. grant_user_business_access() creates one.'
-    END;
+    (CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)
+          THEN 'OK' ELSE 'WARN' END)::TEXT,
+    (CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)
+          THEN 'Profile row present.'
+          ELSE 'No user_profiles row. Not fatal, but name/language/admin flags '
+               'will be empty. grant_user_business_access() creates one.'
+     END)::TEXT;
 
   SELECT count(*) INTO v_total_count
     FROM public.business_users WHERE user_id = v_user_id;
@@ -229,7 +229,7 @@ BEGIN
 
   RETURN QUERY SELECT
     'visible_memberships'::TEXT,
-    CASE WHEN v_visible_count > 0 THEN 'OK' ELSE 'FAIL' END,
+    (CASE WHEN v_visible_count > 0 THEN 'OK' ELSE 'FAIL' END)::TEXT,
     format(
       '%s of %s membership row(s) are visible to the app. %s',
       v_visible_count, v_total_count,
@@ -242,8 +242,8 @@ BEGIN
   RETURN QUERY
     SELECT
       'membership'::TEXT,
-      CASE WHEN bu.is_active AND b.is_active AND b.deleted_at IS NULL
-           THEN 'OK' ELSE 'HIDDEN' END,
+      (CASE WHEN bu.is_active AND b.is_active AND b.deleted_at IS NULL
+            THEN 'OK' ELSE 'HIDDEN' END)::TEXT,
       format(
         'business=%s (%s) role=%s bu.is_active=%s b.is_active=%s b.deleted_at=%s',
         b.name, b.id, bu.role, bu.is_active, b.is_active,
