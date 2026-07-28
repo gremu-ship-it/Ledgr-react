@@ -7,8 +7,20 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- supabase invoke sends an empty body; we read everything from the DB
+const CRON_SECRET = Deno.env.get('CRON_SECRET');
+
 Deno.serve(async (req) => {
+  // Shared-secret guard, matching expire-subscriptions, send-renewal-reminders
+  // and generate-partner-invoices. Without this the function was reachable by
+  // any signed-up user: Supabase's default verify_jwt only proves the caller
+  // holds *a* valid JWT, not that they are the scheduler. Since the body below
+  // runs with the service role across every VAT-registered business, that let
+  // any free-tier account trigger platform-wide VAT return generation.
+  const providedSecret = req.headers.get('x-cron-secret');
+  if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, // service role: bypasses RLS, runs for all businesses
@@ -167,11 +179,17 @@ Deno.serve(async (req) => {
  *   $$
  *   select net.http_post(
  *     url := 'https://<your-project-ref>.supabase.co/functions/v1/generate-vat-returns',
- *     headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+ *     headers := jsonb_build_object(
+ *       'Content-Type', 'application/json',
+ *       'Authorization', 'Bearer <service-role-key>',
+ *       'x-cron-secret', '<CRON_SECRET>'
+ *     )
  *   );
  *   $$
  * );
  *
- * This wiring is optional right now — the function works standalone via
- * manual invoke until you're ready to turn on the schedule.
+ * <CRON_SECRET> is the same value set via `supabase secrets set CRON_SECRET=...`
+ * and shared with expire-subscriptions / send-renewal-reminders. The function
+ * returns 401 without it, so a manual `supabase functions invoke` must pass
+ * `--header 'x-cron-secret: <CRON_SECRET>'` too.
  * ========================================================================= */

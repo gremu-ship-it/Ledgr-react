@@ -28,13 +28,22 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
 
+      // The raw error.message is deliberately not rendered: it is attacker- or
+      // backend-controlled text (Postgres/PostgREST errors leak column and
+      // constraint names) and it means nothing to an SME bookkeeper. The full
+      // error object still goes to the console and to Sentry in componentDidCatch.
       return (
-        <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <div
+          className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center"
+          role="alert"
+        >
           <h1 className="text-xl font-semibold text-gray-900">Something went wrong</h1>
-          <p className="text-sm text-gray-500">
-            {this.state.error?.message ?? 'An unexpected error occurred.'}
+          <p className="max-w-sm text-sm text-gray-500">
+            An unexpected error occurred while loading this page. You can try again, or refresh the
+            app if the problem persists.
           </p>
           <button
+            type="button"
             onClick={() => this.setState({ hasError: false, error: null })}
             className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600"
           >

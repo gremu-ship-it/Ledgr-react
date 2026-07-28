@@ -1,4 +1,5 @@
 import { currentFiscalYear } from '@/lib/fiscalYear';
+import { calculatePAYE, type PayeBand } from '@/lib/paye';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,31 +19,6 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-interface PayeBand {
-  band_from: number;
-  band_to: number | null;
-  rate: number;
-}
-
-function calculatePAYE(annualGross: number, bands: PayeBand[]): number {
-  if (bands.length === 0) {
-    const fallbackBands: PayeBand[] = [
-      { band_from: 0,         band_to: 1_200_000, rate: 0 },
-      { band_from: 1_200_000, band_to: 2_400_000, rate: 25 },
-      { band_from: 2_400_000, band_to: null,       rate: 35 },
-    ];
-    bands = fallbackBands;
-  }
-  let tax = 0;
-  for (const band of bands) {
-    if (annualGross <= band.band_from) break;
-    const upper = band.band_to ?? Infinity;
-    const taxable = Math.min(annualGross, upper) - band.band_from;
-    if (taxable <= 0) continue;
-    tax += taxable * (band.rate/100);
-  }
-  return tax / 12;
-}
 
 /**
  * TPR pension: 10% employer / 5% employee, applied to gross monthly salary.

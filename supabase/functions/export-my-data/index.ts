@@ -24,6 +24,7 @@
 // name "user-exports", Public = OFF).
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { withCors } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import JSZip from 'npm:jszip@3.10.1';
 
@@ -101,7 +102,7 @@ function toCsv(rows: Record<string, unknown>[]): string {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 
-serve(async (req) => {
+serve(withCors(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
   }
@@ -279,4 +280,4 @@ serve(async (req) => {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { withCors } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -29,7 +30,7 @@ function generateApiKey(): string {
   return `ledgr_sk_${secret}`;
 }
 
-serve(async (req) => {
+serve(withCors(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
@@ -86,4 +87,4 @@ serve(async (req) => {
     console.error('create-api-key error:', err);
     return json({ error: err instanceof Error ? err.message : 'Internal server error' }, 500);
   }
-});
+}));

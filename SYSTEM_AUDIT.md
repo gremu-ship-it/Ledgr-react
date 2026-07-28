@@ -14,27 +14,66 @@ The material risks are concentrated in three places: **four database tables ship
 
 ### Verification results
 
-| Check | Command | Result |
-|---|---|---|
-| Type check | `tsc -b` | ✅ Pass (0 errors) |
-| Lint | `eslint .` | ✅ Pass (0 warnings) |
-| Unit tests | `vitest run` | ✅ 16 tests / 2 files pass |
-| Production build | `vite build` | ✅ Pass — 1.29s, 2.4 MB `dist` |
-| Dependency audit | `npm audit` | ❌ 27 vulns (1 critical, 24 high, 2 moderate) |
+| Check | Command | Before | After remediation |
+|---|---|---|---|
+| Type check | `tsc -b` | ✅ Pass (0 errors) | ✅ Pass |
+| Lint | `eslint .` | ✅ Pass (0 warnings) | ✅ Pass |
+| Unit tests | `vitest run` | ✅ 16 tests / 2 files | ✅ **52 tests / 5 files** |
+| Production build | `vite build` | ✅ 1.29s, 2.4 MB | ✅ Pass |
+| Dependency audit | `npm audit` | ❌ 27 (1 crit, 24 high) | ⚠️ **6 (0 crit, 5 high)** |
 
 ### Risk register
 
-| # | Finding | Severity | Effort |
+| # | Finding | Severity | Status |
 |---|---|---|---|
-| F1 | 4 tables have no Row Level Security enabled | **Critical** | Low |
-| F2 | 1 critical + 24 high dependency vulnerabilities | **High** | Medium |
-| F3 | `generate-vat-returns` Edge Function has no auth guard | **High** | Low |
-| F4 | Test coverage ≈ 1% on a financial-calculation system | **High** | High |
-| F5 | Dead, buggy `api/middleware.ts` rate limiter | Medium | Low |
-| F6 | `Access-Control-Allow-Origin: *` on 15 authenticated functions | Medium | Low |
-| F7 | Hardcoded Supabase project ref in `vite.config.ts` / docs page | Low | Low |
-| F8 | Duplicate orphaned components (auth pages, ErrorBoundary) | Low | Low |
-| F9 | README is still the unmodified Vite template | Low | Low |
+| F1 | 4 tables have no Row Level Security enabled | **Critical** | ✅ **Fixed** |
+| F2 | 1 critical + 24 high dependency vulnerabilities | **High** | ✅ **Largely fixed** (27 → 6, critical cleared) |
+| F3 | `generate-vat-returns` Edge Function has no auth guard | **High** | ✅ **Fixed** |
+| F4 | Test coverage ≈ 1% on a financial-calculation system | **High** | 🟡 **Started** (16 → 52 tests) |
+| F5 | Dead, buggy `api/middleware.ts` rate limiter | Medium | ✅ **Fixed** (deleted) |
+| F6 | `Access-Control-Allow-Origin: *` on 15 authenticated functions | Medium | ✅ **Fixed** (allowlist) |
+| F7 | Hardcoded Supabase project ref in `vite.config.ts` / docs page | Low | ⬜ Open |
+| F8 | Duplicate orphaned components (auth pages, ErrorBoundary) | Low | ✅ **Fixed** (deleted) |
+| F9 | README is still the unmodified Vite template | Low | ⬜ Open |
+
+---
+
+## 1a. Remediation log
+
+Everything below was implemented and verified against the full pipeline
+(`typecheck → lint → test → build`, all green).
+
+| Finding | Change |
+|---|---|
+| F1 | New migration `20260728000005_enable_rls_on_unprotected_tables.sql`. Enables RLS on all four tables, with `<table>_business_access` policies scoped through `business_users` (matching the existing convention). `api_usage` gets RLS with **no** policy — service-role only by design. `currencies` gets a read-only policy. |
+| F2 | Removed `@vercel/node` (a devDependency used for **two type imports** in `api/health.ts`, but the root of the critical `tar` chain — types replaced with local structural interfaces). Upgraded `@sentry/vite-plugin` 2→5, `vite-plugin-pwa`, `react-router-dom`. **27 → 6 advisories; critical eliminated.** |
+| F3 | Added the `x-cron-secret` guard used by every sibling cron function, and corrected the in-file scheduling docs to pass the header. |
+| F4 | Extracted `calculatePAYE` out of `PayrollPage.tsx` into testable `src/lib/paye.ts`. Added 36 tests across three suites: PAYE bands, the double-entry invariant in `createBalancedEntry`, and depreciation. Fixed `vitest.config.ts` so importing a service no longer throws on the Supabase env check. |
+| F5 | Deleted `supabase/functions/api/middleware.ts`. |
+| F6 | New `supabase/functions/_shared/cors.ts` with an origin allowlist from `ALLOWED_ORIGINS`/`APP_URL`, applied to the 11 sensitive functions via a `withCors` wrapper. Falls back to `*` when unconfigured, so the change is non-breaking; localhost always allowed. |
+| F8 | Deleted the three orphaned components, first porting the better `role="alert"` markup and the error-message-suppression from the dead `ErrorBoundary` into the live one. |
+
+### Two things worth your attention
+
+**A latent unit-mismatch bug in depreciation (found by the new tests).**
+`calculateMonthlyDepreciation` treats `depreciationRate` as a **fraction**
+(`0.24` = 24%/yr) — that is what the derived fallback `1 / (monthsLife / 12)`
+produces. But the adjacent `asset_categories.mra_depreciation_rate` field is a
+**percentage**: the form input is `max="100"` with placeholder `"e.g. 25"`, and
+it renders as `25.0%`. Nothing currently writes `fixed_assets.depreciation_rate`,
+so this is not live — but the day someone wires the category rate into the asset
+rate, every asset depreciates ~100x too fast. I did **not** change the
+calculation (silently altering financial logic is not a safe unattended edit);
+instead the unit is now documented on the type and pinned by a test that fails
+loudly if the convention shifts. **This needs a product decision.**
+
+**The 6 remaining advisories are all low-exploitability here.** `react-router`'s
+is an **RSC-mode** CSRF bypass — this app is a Vite SPA using `BrowserRouter`,
+so the affected code path is not reachable, and the only "fix" npm offers is a
+downgrade to 7.11.0 or a major jump to 8.x. `postcss`, `brace-expansion`,
+`fast-uri` and `esbuild` are build/dev-time only. None warranted a risky major
+upgrade as part of a security fix pass; they are better handled as a deliberate
+dependency-upgrade task.
 
 ---
 
@@ -182,22 +221,19 @@ Worth recording, because a lot here is above average:
 
 ---
 
-## 5. Recommended sequence
+## 5. What remains
 
-**Immediate (this week)**
-1. F1 — RLS migration for the four tables. Highest severity, lowest effort.
-2. F3 — Add the cron-secret guard to `generate-vat-returns`; add `supabase/config.toml` with explicit `verify_jwt`.
-3. F5 — Delete `supabase/functions/api/middleware.ts`.
+**Requires a decision from you**
+1. **Depreciation rate units** (see §1a) — confirm whether `depreciation_rate` should be a fraction or a percentage, then align the type, the UI, and the test.
+2. **Deploy the RLS migration** and confirm against the live database. The four tables were unprotected in migrations, but it is possible policies were applied by hand via the dashboard; verify before assuming the leak was live.
+3. **Set `ALLOWED_ORIGINS`** in Supabase secrets. Until it is set, CORS still falls back to `*` — deliberately, so this change could not break a running deployment.
 
-**Short term (this sprint)**
-4. F2 — Bump `react-router-dom` first, then `@vercel/node` 3→5 and the Sentry packages; re-audit.
-5. F8 — Delete the four orphaned components.
-6. F6 — Replace wildcard CORS with an `APP_URL` allowlist.
-
-**Medium term**
-7. F4 — Start with a debits==credits invariant test and golden-file tests for the five financial statements, then the tax and FX services. Extend the vitest glob to cover `supabase/functions`.
-8. F7 — Derive the Supabase hostname from env.
-9. F9 — Rewrite the README.
+**Still open**
+4. F7 — Derive the Supabase hostname from `VITE_SUPABASE_URL` instead of hardcoding the project ref.
+5. F9 — Rewrite the README.
+6. F4 (continued) — The highest-value remaining targets are golden-file tests over the five financial statements, `FxRevaluationService` (IAS 21), and VAT return generation. The vitest glob also still excludes `supabase/functions`, so no Edge Function is covered.
+7. F2 (residual) — Schedule a deliberate major-upgrade pass for the 6 remaining advisories rather than forcing them through now.
+8. Add a `supabase/config.toml` pinning `verify_jwt` per function, so the auth posture is version-controlled rather than inherited from dashboard state.
 
 ---
 
