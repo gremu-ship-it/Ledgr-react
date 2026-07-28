@@ -172,7 +172,13 @@
     "passwordPlaceholder": "At least 8 characters",
     "createAccount": "Create account",
     "creatingAccount": "Creating account…",
-    "alreadyHaveAccount": "Already have an account?"
+    "alreadyHaveAccount": "Already have an account?",
+    "noBusinessTitle": "No business assigned yet",
+    "noBusinessBody": "You're signed in, but your account isn't linked to an active business yet. This usually means an administrator still needs to finish setting up your access.",
+    "signedInAs": "Signed in as",
+    "noBusinessCreate": "Create a business",
+    "noBusinessRetry": "Check again",
+    "noBusinessContactAdmin": "If you were expecting access to an existing business, ask your administrator to confirm your account has been added to it and that your membership is active."
   },
   "dashboard": {
     "title": "Dashboard",

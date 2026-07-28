@@ -273,7 +273,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           const { data: rpcData, error: rpcError } = await supabase.rpc('invite_member', {
             p_business_id: businessId,
             p_email: directEmail.trim().toLowerCase(),
-            p_role: directRole as any,
+            p_role: directRole,
           });
           if (rpcError) throw new Error(rpcError.message);
           const token = rpcData as string;
@@ -692,7 +692,7 @@ export function TeamManagementPage() {
   async function handleChangeRole(memberId: string, newRole: UserRole) {
     const { error: updateError } = await supabase
       .from('business_users')
-      .update({ role: newRole as any, updated_at: new Date().toISOString() })
+      .update({ role: newRole, updated_at: new Date().toISOString() })
       .eq('id', memberId)
       .eq('business_id', businessId!);
 

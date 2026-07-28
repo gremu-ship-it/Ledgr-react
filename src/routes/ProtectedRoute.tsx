@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
+import { NoBusinessAccess } from '@/routes/NoBusinessAccess';
 
 export function ProtectedRoute() {
   const currentUser        = useAppStore((s) => s.currentUser);
@@ -19,13 +20,15 @@ export function ProtectedRoute() {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Only redirect to /create-business when auth AND businesses have both
-  // finished loading and businesses is definitively empty
+  // Authenticated but with no business the app can see. Rather than silently
+  // bouncing to /create-business — which reads as a broken login to a user an
+  // admin provisioned — explain the state and offer both the "create one" and
+  // "ask your admin" paths. See NoBusinessAccess for the full rationale.
   if (
     businesses.length === 0 &&
     location.pathname !== '/create-business'
   ) {
-    return <Navigate to="/create-business" replace />;
+    return <NoBusinessAccess />;
   }
 
   return <Outlet />;

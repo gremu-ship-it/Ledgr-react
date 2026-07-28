@@ -171,7 +171,13 @@
     "passwordPlaceholder": "Osachepera zilembo 8",
     "createAccount": "Pangani akaunti",
     "creatingAccount": "Ikupanga akaunti…",
-    "alreadyHaveAccount": "Muli kale ndi akaunti?"
+    "alreadyHaveAccount": "Muli kale ndi akaunti?",
+    "noBusinessTitle": "Palibe bizinesi yomwe mwapatsidwa",
+    "noBusinessBody": "Mwalowa, koma akaunti yanu sinalumikizidwebe ndi bizinesi yogwira ntchito. Nthawi zambiri izi zikutanthauza kuti woyang'anira akufunikabe kumaliza kukonza mwayi wanu.",
+    "signedInAs": "Mwalowa ngati",
+    "noBusinessCreate": "Pangani bizinesi",
+    "noBusinessRetry": "Yang'ananinso",
+    "noBusinessContactAdmin": "Ngati munkayembekezera mwayi wa bizinesi yomwe ilipo, funsani woyang'anira wanu kuti atsimikizire kuti akaunti yanu yawonjezedwa ndikuti umembala wanu ukugwira ntchito."
   },
   "dashboard": {
     "title": "Dashboard",

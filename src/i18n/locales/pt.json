@@ -171,7 +171,13 @@
     "passwordPlaceholder": "Pelo menos 8 caracteres",
     "createAccount": "Criar conta",
     "creatingAccount": "A criar conta…",
-    "alreadyHaveAccount": "Já tem uma conta?"
+    "alreadyHaveAccount": "Já tem uma conta?",
+    "noBusinessTitle": "Nenhuma empresa atribuída",
+    "noBusinessBody": "Você entrou na sua conta, mas ela ainda não está associada a uma empresa ativa. Normalmente, isso significa que um administrador ainda precisa concluir a configuração do seu acesso.",
+    "signedInAs": "Sessão iniciada como",
+    "noBusinessCreate": "Criar uma empresa",
+    "noBusinessRetry": "Verificar novamente",
+    "noBusinessContactAdmin": "Se esperava ter acesso a uma empresa existente, peça ao seu administrador para confirmar que a sua conta foi adicionada e que a associação está ativa."
   },
   "dashboard": {
     "title": "Painel",
