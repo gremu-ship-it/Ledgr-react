@@ -5,6 +5,7 @@ import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
+import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 
@@ -111,6 +112,14 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       const categoryName = selectedAccount.name;
       const desc = description.trim() || selectedProduct?.name || categoryName;
 
+      // PERPETUAL INVENTORY: buying an inventory-tracked product capitalises
+      // to the inventory asset account rather than expensing to COGS. Cost is
+      // released on sale. Resolved once and used for both the expense line
+      // and the journal allocation so the two cannot disagree.
+      const resolvedAccountId = isOfflineNow
+        ? selectedAccount.id
+        : await resolveExpenseLineAccountId(businessId, selectedProduct ?? null, selectedAccount.id);
+
       const buildPayload = (num: string) => ({
         expense: {
           business_id: businessId,
@@ -139,7 +148,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           tax_rate: includeVat ? 0.175 : 0,
           tax_amount: vatAmount,
           line_total: rawAmount,
-          account_id: selectedAccount.id,
+          account_id: resolvedAccountId,
           product_id: selectedProduct?.id || null,
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
       });
@@ -162,7 +171,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         if (created) {
           try {
             const allocations: ExpenseAccountAllocation[] = [
-              { accountId: selectedAccount.id, amount: netAmount, description: desc },
+              { accountId: resolvedAccountId, amount: netAmount, description: desc },
             ];
             const journalEntryId = await createExpenseJournalEntry(
               businessId, created, allocations, vatAmount, branchId || null, departmentId || null,

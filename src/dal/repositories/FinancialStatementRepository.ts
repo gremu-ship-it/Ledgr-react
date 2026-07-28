@@ -238,15 +238,27 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     subtypes: Exclude<AccountSubtype, null>[],
     label: string,
   ): StatementSection {
-    const relevant = balances
-      .filter((b) => b.account.account_subtype !== null
-        && subtypes.includes(b.account.account_subtype)
-        && Math.abs(b.balance) > TOLERANCE)
-      .sort((a, b) => a.account.code.localeCompare(b.account.code));
-
     const comparativeMap = comparativeBalances
       ? new Map(comparativeBalances.map((b) => [b.account.id, b.balance]))
       : null;
+
+    // FIX [comparative column dropped closed accounts]:
+    // The filter previously tested the CURRENT balance only, so an account
+    // that held a balance last year and nil this year vanished from the
+    // report entirely — taking its prior-year figure with it. The
+    // comparative column then silently disagreed with the statement
+    // published last year (e.g. stock sold down to zero would erase last
+    // year's inventory line and understate prior-year Total Assets).
+    // An account is now shown when EITHER period has a balance.
+    const relevant = balances
+      .filter((b) => {
+        if (b.account.account_subtype === null) return false;
+        if (!subtypes.includes(b.account.account_subtype)) return false;
+        const current = Math.abs(b.balance);
+        const comparative = comparativeMap ? Math.abs(comparativeMap.get(b.account.id) ?? 0) : 0;
+        return current > TOLERANCE || comparative > TOLERANCE;
+      })
+      .sort((a, b) => a.account.code.localeCompare(b.account.code));
 
     const lines: StatementLineItem[] = relevant.map((b) => ({
       code: b.account.code,

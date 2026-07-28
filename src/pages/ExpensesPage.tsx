@@ -6,6 +6,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
+import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
@@ -406,11 +407,21 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       });
       const functionalAmount = totalAmount * rate.rate;
 
-      // Resolve COGS account from product if one is selected
+      // Resolve the GL account this purchase should debit.
+      //
+      // PERPETUAL INVENTORY: for an inventory-tracked product this returns
+      // the inventory ASSET account (1141), so buying stock capitalises it
+      // onto the balance sheet instead of expensing it straight to COGS.
+      // Cost is released later, on sale, by postCogsForSale. For anything
+      // else the previous behaviour is preserved exactly.
       const selectedProduct = values.product_id
         ? products.find((p) => p.id === values.product_id)
         : undefined;
-      const cogsAccountId = selectedProduct?.cogs_account_id ?? null;
+      const resolvedAccountId = await resolveExpenseLineAccountId(
+        businessId,
+        selectedProduct ?? null,
+        values.account_id,
+      );
 
       const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
       const buildPayload = (num: string) => ({
@@ -448,9 +459,8 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           tax_rate:     values.include_vat ? VAT_RATE : 0,
           tax_amount:   vatAmount,
           line_total:   totalAmount,
-          account_id:   values.account_id,
+          account_id:   resolvedAccountId,
           product_id:   values.product_id || null,
-          ...(cogsAccountId ? { account_id: cogsAccountId } : {}),
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
       });
 
@@ -472,7 +482,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         if (created) {
           try {
             const allocations: ExpenseAccountAllocation[] = [{
-              accountId:   cogsAccountId ?? values.account_id,
+              accountId:   resolvedAccountId,
               amount:      netAmount,
               description: values.description,
             }];
@@ -793,6 +803,19 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       });
       const functionalTotal = total * rate.rate;
 
+      // PERPETUAL INVENTORY: resolve every line's GL account ONCE, up front.
+      // Inventory-tracked products redirect to the inventory asset account
+      // (capitalise), everything else keeps its previous COGS/category
+      // behaviour. Resolved here rather than inline in both the line map and
+      // the allocation map below so the expense_lines and the journal entry
+      // can never disagree about which account a line hit.
+      const resolvedLineAccountIds = await Promise.all(
+        validLines.map((l) => {
+          const product = l.product_id ? products.find((p) => p.id === l.product_id) : undefined;
+          return resolveExpenseLineAccountId(businessId, product ?? null, l.account_id);
+        }),
+      );
+
       await repos.expense.createWithLines(
         {
           business_id:    businessId,
@@ -826,7 +849,6 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           const lineSub  = qty * price;
           const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
           const taxAmt   = lineSub * taxRate;
-          const product  = l.product_id ? products.find((p) => p.id === l.product_id) : undefined;
           return {
             line_number: idx + 1,
             description: l.description,
@@ -836,7 +858,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             tax_rate:    taxRate,
             tax_amount:  taxAmt,
             line_total:  lineSub + taxAmt,
-            account_id:  product?.cogs_account_id ?? l.account_id,  // COGS overrides if product has it
+            account_id:  resolvedLineAccountIds[idx],  // inventory asset for tracked stock, else COGS/category
             product_id:  l.product_id || null,   // NEW
           } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>;
         }),
@@ -847,16 +869,17 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       if (!created) return;
 
       try {
-        // Group allocations by effective account (COGS account takes priority)
+        // Group allocations by effective account — reusing the SAME resolved
+        // ids the expense lines were written with, so the ledger and the
+        // source document always agree.
         const allocationMap = new Map<string, number>();
-        for (const l of validLines) {
-          const qty     = parseFloat(l.quantity) || 1;
-          const price   = parseFloat(l.unit_price) || 0;
-          const net     = qty * price;
-          const product = l.product_id ? products.find((p) => p.id === l.product_id) : undefined;
-          const acctId  = product?.cogs_account_id ?? l.account_id;
+        validLines.forEach((l, idx) => {
+          const qty    = parseFloat(l.quantity) || 1;
+          const price  = parseFloat(l.unit_price) || 0;
+          const net    = qty * price;
+          const acctId = resolvedLineAccountIds[idx];
           allocationMap.set(acctId, (allocationMap.get(acctId) ?? 0) + net);
-        }
+        });
         const allocations: ExpenseAccountAllocation[] = Array.from(allocationMap.entries())
           .map(([accountId, amount]) => ({ accountId, amount }));
 

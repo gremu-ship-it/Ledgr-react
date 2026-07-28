@@ -19,6 +19,12 @@
  *   2131  Salaries & Wages Payable
  *   4112  Service Revenue        6110  Basic Salaries
  *
+ * Perpetual inventory codes (inventoryJournalService.ts):
+ *   1141  Trading Stock          — default inventory asset account
+ *   2114  Goods Received Not Invoiced — credit side of a warehouse receipt
+ *   5100  Cost of Goods Sold     — default COGS account
+ *   5180  Inventory Adjustments & Shrinkage — subledger/GL reconciliation
+ *
  * Template switching: `switchCoaTemplate()` adds accounts exclusive to the
  * target template and deactivates (never deletes) accounts exclusive to the
  * template being left. Deactivation is safe for template-restricted rows
@@ -180,6 +186,7 @@ const COA: AccountSeed[] = [
   { code:'2111', name:'Trade Creditors',               account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'2110', description:'Amounts owed to suppliers' },
   { code:'2112', name:'Accrued Liabilities',           account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2110', description:'Expenses incurred but not yet invoiced' },
   { code:'2113', name:'Customer Deposits & Advances',  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'2110' },
+  { code:'2114', name:'Goods Received Not Invoiced',   account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:false, is_system:true,  is_bank_account:false, parent_code:'2110', description:'Stock received into the warehouse but not yet invoiced by the supplier (GRNI)' },
 
   // Tax Payables
   { code:'2120', name:'Tax Payables',                  account_type:'liability', account_subtype:'current_liability', normal_balance:'credit', is_group:true,  is_system:true,  is_bank_account:false, parent_code:'2100' },
@@ -251,6 +258,7 @@ const COA: AccountSeed[] = [
   { code:'5150', name:'Direct Service Costs',          account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Subcontractors and direct costs of delivering services' },
   { code:'5160', name:'Freight & Delivery Inwards',    account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
   { code:'5170', name:'Purchase Returns & Allowances', account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5180', name:'Inventory Adjustments & Shrinkage', account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:true, is_bank_account:false, parent_code:'5000', description:'Stock write-offs, shrinkage and reconciliation of the stock subledger to the general ledger' },
 
   // ══════════════════════════════════════════════════
   // 6000s  OPERATING EXPENSES

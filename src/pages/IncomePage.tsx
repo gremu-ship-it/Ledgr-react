@@ -7,6 +7,7 @@ import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
+import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
@@ -70,62 +71,14 @@ function useAllProducts(businessId?: string) {
 }
 
 // ── Stock deduction on sale ──────────────────────────────────────────────────
-// When a branch is selected and a line has a product_id, reduce stock at
-// that branch's linked inventory location. Non-blocking: if no location is
-// linked to the branch, or a product isn't inventory-tracked, we skip
-// silently rather than failing the whole sale — stock tracking is a bonus
-// on top of the sale, not a precondition for it.
-
-async function deductStockForBranchSale(
-  businessId: string,
-  branchId: string | null,
-  saleLines: { productId: string; quantity: number }[],
-  sourceId: string,
-  reference: string,
-  createdBy: string | null,
-): Promise<void> {
-  const linesWithProducts = saleLines.filter((l) => l.productId && l.quantity > 0);
-  if (linesWithProducts.length === 0) return;
-
-  const locations = await repos.inventory.findLocations(businessId);
-  // Try branch location first if branchId is provided, otherwise fall back to default warehouse or primary location
-  let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
-  if (!targetLocation) {
-    targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
-  }
-
-  if (!targetLocation) {
-    console.warn(`No inventory location found for business ${businessId} — stock not adjusted for this sale.`);
-    return;
-  }
-
-  const movements = [];
-  for (const line of linesWithProducts) {
-    const balance = await repos.inventory.findBalance(businessId, line.productId, targetLocation.id);
-    movements.push({
-      business_id: businessId,
-      product_id: line.productId,
-      location_id: targetLocation.id,
-      movement_type: 'sale' as const,
-      movement_date: new Date().toISOString().slice(0, 10),
-      // Negative: stock is leaving this location as part of the sale.
-      quantity: -line.quantity,
-      unit_cost: balance ? Number(balance.average_cost) : 0,
-      source_type: 'invoice',
-      source_id: sourceId,
-      reference,
-      created_by: createdBy,
-    });
-  }
-
-  try {
-    await repos.inventory.recordMovements(movements);
-  } catch (err) {
-    // Same philosophy as journal posting: don't block the sale, but don't
-    // pretend it worked either.
-    console.error('Stock deduction failed for sale', reference, err);
-  }
-}
+// Reduces stock at the branch's linked inventory location (falling back to
+// the default warehouse) AND posts the matching perpetual-inventory entry
+// DR Cost of Sales / CR Inventory at weighted-average cost.
+//
+// Both halves live in inventoryJournalService.deductStockAndPostCogs so the
+// desktop page, the mobile quick-sale sheet and the offline sync engine all
+// value stock the same way. Non-blocking by design: stock tracking is a
+// bonus on top of the sale, never a precondition for recording it.
 
 // ── Reusable selectors ────────────────────────────────────────────────────────
 
@@ -445,12 +398,14 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             console.warn('Journal entry failed (non-critical):', err);
           }
 
-          await deductStockForBranchSale(
+          // Releases stock and posts DR Cost of Sales / CR Inventory in the
+          // same period as the revenue above (IAS 2.34).
+          await deductStockAndPostCogs(
             businessId,
-            values.branch_id || null,
+            created,
             [{ productId: values.product_id, quantity: qty }],
-            created.id,
-            invoiceNumber,
+            values.branch_id || null,
+            values.department_id || null,
             null,
           );
         }
@@ -796,15 +751,18 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           console.warn('Journal entry failed (non-critical):', err);
         }
 
-        // NEW: reduce stock for every line that has a product selected.
-        await deductStockForBranchSale(
+        // Reduce stock for every line that has a product selected, and post
+        // the cost of those goods. On issue rather than on settlement — the
+        // goods leave the shelf when the invoice is raised, regardless of
+        // when the customer pays.
+        await deductStockAndPostCogs(
           businessId,
-          form.branch_id || null,
+          created,
           validLines
             .filter((l) => l.product_id)
             .map((l) => ({ productId: l.product_id, quantity: parseFloat(l.quantity) || 0 })),
-          created.id,
-          form.invoice_number,
+          form.branch_id || null,
+          form.department_id || null,
           null,
         );
       }

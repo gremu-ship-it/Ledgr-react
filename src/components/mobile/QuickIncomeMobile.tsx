@@ -5,6 +5,7 @@ import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
 import { createInvoiceJournalEntry } from '@/services/journalService';
+import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 
@@ -170,33 +171,19 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               businessId, created, rawAmount, 0, branchId || null, departmentId || null,
             );
 
-            // Optional: deduct stock if product is inventory-tracked
+            // Perpetual inventory: release the stock and post
+            // DR Cost of Sales / CR Inventory at weighted-average cost.
+            // Shared with the desktop and offline-sync paths so all three
+            // value stock identically.
             if (selectedProduct && selectedProduct.track_inventory) {
-              try {
-                const locations = await repos.inventory.findLocations(businessId);
-                let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
-                if (!targetLocation) {
-                  targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
-                }
-                if (targetLocation) {
-                  const balance = await repos.inventory.findBalance(businessId, selectedProduct.id, targetLocation.id);
-                  await repos.inventory.recordMovements([{
-                    business_id: businessId,
-                    product_id: selectedProduct.id,
-                    location_id: targetLocation.id,
-                    movement_type: 'sale' as const,
-                    movement_date: today,
-                    quantity: -1,
-                    unit_cost: balance ? Number(balance.average_cost) : 0,
-                    source_type: 'invoice',
-                    source_id: created.id,
-                    reference: invoiceNumber,
-                    created_by: null,
-                  } as InsertDto<'stock_movements'>]);
-                }
-              } catch (stockErr) {
-                console.warn('Stock deduction failed (non-critical):', stockErr);
-              }
+              await deductStockAndPostCogs(
+                businessId,
+                created,
+                [{ productId: selectedProduct.id, quantity: 1 }],
+                branchId || null,
+                departmentId || null,
+                null,
+              );
             }
           } catch (err) {
             console.warn('Journal entry failed:', err);

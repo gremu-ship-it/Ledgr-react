@@ -1,13 +1,18 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle,
+  Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
+import {
+  postWarehouseReceipt,
+  reconcileInventoryToLedger,
+  postInventoryReconciliationAdjustment,
+} from '@/services/inventoryJournalService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -243,6 +248,123 @@ function StockCard({ balance }: { balance: BalanceRow }) {
   );
 }
 
+// ── Ledger reconciliation panel ───────────────────────────────────────────────
+// Compares the stock subledger (quantity_on_hand × average_cost) against the
+// balance of the inventory GL accounts that the Statement of Financial
+// Position actually reads.
+//
+// Two jobs:
+//   1. Migration. Stock bought before perpetual inventory was expensed
+//      straight to COGS, so it never reached the balance sheet. One click
+//      posts the catch-up entry that puts it there.
+//   2. Ongoing control. Shrinkage, manual journals or a failed background
+//      posting all show up here as a variance instead of quietly wrong
+//      financial statements.
+
+function ReconciliationPanel({ businessId }: { businessId: string }) {
+  const queryClient = useQueryClient();
+  const [note, setNote] = useState('');
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const asOfDate = new Date().toISOString().slice(0, 10);
+
+  const { data: reconciliation, isLoading } = useQuery({
+    queryKey: ['inventory_reconciliation', businessId, asOfDate],
+    queryFn: () => reconcileInventoryToLedger(businessId, asOfDate),
+    enabled: Boolean(businessId),
+  });
+
+  const adjustMutation = useMutation({
+    mutationFn: () => postInventoryReconciliationAdjustment(businessId, asOfDate, note || undefined),
+    onSuccess: (result) => {
+      setNote('');
+      setFeedback(
+        result
+          ? {
+              type: 'success',
+              message:
+                `Posted an adjustment of ${formatMwk(Math.abs(result.variance))}. ` +
+                'Inventory now agrees with the stock on hand and will appear under Current Assets.',
+            }
+          : { type: 'success', message: 'Already reconciled — nothing to post.' },
+      );
+      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
+    },
+    onError: (err: Error) => setFeedback({ type: 'error', message: err.message }),
+  });
+
+  if (isLoading || !reconciliation) return null;
+
+  const { subledgerValue, ledgerBalance, variance, isReconciled } = reconciliation;
+
+  return (
+    <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {isReconciled ? (
+            <CheckCircle2 size={16} className="shrink-0 text-brand-500" />
+          ) : (
+            <AlertTriangle size={16} className="shrink-0 text-amber-500" />
+          )}
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              {isReconciled ? 'Inventory agrees with the ledger' : 'Inventory does not agree with the ledger'}
+            </p>
+            <p className="text-xs text-gray-500">
+              Stock on hand {formatMwk(subledgerValue)} · Balance sheet {formatMwk(ledgerBalance)}
+              {!isReconciled && (
+                <>
+                  {' · '}
+                  <span className="font-semibold text-amber-700">
+                    {variance > 0 ? 'missing from' : 'overstated on'} the balance sheet{' '}
+                    {formatMwk(Math.abs(variance))}
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {!isReconciled && (
+          <div className="flex flex-1 flex-wrap items-center justify-end gap-2">
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Reason (optional)"
+              className="min-w-40 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs focus:border-brand-500 focus:outline-none sm:max-w-56"
+            />
+            <button
+              onClick={() => adjustMutation.mutate()}
+              disabled={adjustMutation.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              {adjustMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+              Post adjustment
+            </button>
+          </div>
+        )}
+      </div>
+
+      {!isReconciled && (
+        <p className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-500">
+          {variance > 0
+            ? 'Stock bought before perpetual inventory was switched on went straight to cost of sales, so it never reached the balance sheet. Posting the adjustment moves it to Inventory under Current Assets and reduces cost of sales by the same amount.'
+            : 'The ledger holds more inventory than the warehouse counts — usually shrinkage, breakage or stock sold without being recorded. Posting the adjustment writes the difference off to Inventory Adjustments & Shrinkage.'}
+        </p>
+      )}
+
+      {feedback && (
+        <div
+          className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+            feedback.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function WarehousePage() {
@@ -292,21 +414,40 @@ export function WarehousePage() {
       notes: string;
     }) => {
       if (!locationId) throw new Error('Please select a location to receive stock into.');
+      const movementDate = new Date().toISOString().slice(0, 10);
       const movements = lines.map((l) => ({
         business_id:   businessId!,
         product_id:    l.productId,
         location_id:   locationId,
         movement_type: 'purchase' as const,
-        movement_date: new Date().toISOString().slice(0, 10),
+        movement_date: movementDate,
         quantity:      l.quantity,
         unit_cost:     l.unitCost,
         notes:         notes || null,
         created_by:    currentUser?.id ?? null,
       }));
-      return repos.inventory.recordMovements(movements);
+      const recorded = await repos.inventory.recordMovements(movements);
+
+      // PERPETUAL INVENTORY: a receipt with no supplier invoice still has to
+      // hit the ledger, or the subledger walks away from the balance sheet.
+      // DR Inventory / CR Goods Received Not Invoiced (2114) — the liability
+      // clears when the supplier's expense is eventually recorded.
+      await postWarehouseReceipt(
+        businessId!,
+        lines.map((l) => ({
+          productId: l.productId,
+          quantity:  l.quantity,
+          unitCost:  l.unitCost,
+        })),
+        movementDate,
+        notes || null,
+      );
+
+      return recorded;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
       setReceiveError(null);
       setReceiveOpen(false);
     },
@@ -347,6 +488,8 @@ export function WarehousePage() {
           <Plus size={16} /> {isMobile ? 'Receive' : 'Receive Stock'}
         </button>
       </div>
+
+      <ReconciliationPanel businessId={businessId} />
 
       {lowStock.length > 0 && (
         <div className="mb-4 flex items-center gap-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">

@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
+import { postStockMovementAdjustment } from '@/services/inventoryJournalService';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -33,6 +34,12 @@ interface ProductForm {
   track_inventory: boolean;
   reorder_level: string;
   reorder_quantity: string;
+  // GL account overrides. Empty string = use the chart-of-accounts default
+  // (1141 Trading Stock / 5100 Cost of Goods Sold). Previously these columns
+  // existed in the database but had no UI, so they were always null and the
+  // defaults were the only possible behaviour.
+  inventory_account_id: string;
+  cogs_account_id: string;
 }
 
 interface MovementForm {
@@ -50,6 +57,7 @@ const EMPTY_PRODUCT: ProductForm = {
   name: '', sku: '', description: '', product_type: 'product',
   unit_of_measure: '', sale_price: '', purchase_price: '',
   track_inventory: false, reorder_level: '', reorder_quantity: '',
+  inventory_account_id: '', cogs_account_id: '',
 };
 
 const MOVEMENT_TYPES = [
@@ -94,9 +102,25 @@ function ProductModal({
       track_inventory: existing.track_inventory ?? false,
       reorder_level: String(existing.reorder_level ?? ''),
       reorder_quantity: String(existing.reorder_quantity ?? ''),
+      inventory_account_id: existing.inventory_account_id ?? '',
+      cogs_account_id: existing.cogs_account_id ?? '',
     } : { ...EMPTY_PRODUCT },
   );
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Posting accounts available for the GL overrides below. Group/header
+  // accounts are excluded — posting to one breaks the roll-up.
+  const { data: postingAccounts = [] } = useQuery({
+    queryKey: ['posting_accounts', businessId],
+    queryFn: () => repos.account.findPostingAccounts(businessId),
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
+
+  const inventoryAccountOptions = (postingAccounts as Row<'accounts'>[])
+    .filter((a) => a.account_type === 'asset' && a.account_subtype === 'current_asset');
+  const cogsAccountOptions = (postingAccounts as Row<'accounts'>[])
+    .filter((a) => a.account_type === 'expense');
 
   function set(field: keyof ProductForm, value: string | boolean) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -123,6 +147,9 @@ function ProductModal({
         track_inventory: form.product_type === 'product' ? form.track_inventory : false,
         reorder_level: form.reorder_level ? parseFloat(form.reorder_level) : null,
         reorder_quantity: form.reorder_quantity ? parseFloat(form.reorder_quantity) : null,
+        // null = fall back to the chart-of-accounts defaults (1141 / 5100).
+        inventory_account_id: form.inventory_account_id || null,
+        cogs_account_id: form.cogs_account_id || null,
         is_active: true,
       };
 
@@ -235,6 +262,48 @@ function ProductModal({
                         onChange={(e) => set('reorder_quantity', e.target.value)}
                         placeholder="e.g. 50"
                         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                    </div>
+
+                    {/* GL accounts — only meaningful for tracked stock, since
+                        that is what gets capitalised on purchase and released
+                        on sale. Blank uses the chart-of-accounts defaults. */}
+                    <div className="col-span-2 rounded-lg bg-gray-50 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        Accounting
+                      </p>
+                      <p className="mb-3 text-xs text-gray-500">
+                        Buying this product debits the inventory account (it becomes an asset on the
+                        balance sheet). Selling it moves that cost to the cost-of-sales account.
+                        Leave blank to use the defaults.
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label htmlFor="inventory_account_id" className="mb-1 block text-xs font-medium text-gray-700">
+                            Inventory account
+                          </label>
+                          <select id="inventory_account_id" value={form.inventory_account_id}
+                            onChange={(e) => set('inventory_account_id', e.target.value)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                            <option value="">Default — 1141 Trading Stock</option>
+                            {inventoryAccountOptions.map((a) => (
+                              <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="cogs_account_id" className="mb-1 block text-xs font-medium text-gray-700">
+                            Cost of sales account
+                          </label>
+                          <select id="cogs_account_id" value={form.cogs_account_id}
+                            onChange={(e) => set('cogs_account_id', e.target.value)}
+                            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                            <option value="">Default — 5100 Cost of Goods Sold</option>
+                            {cogsAccountOptions.map((a) => (
+                              <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}
@@ -606,18 +675,35 @@ function MovementsTab({ businessId }: { businessId: string }) {
       if (isNaN(qty) || qty <= 0) throw new Error('Enter a valid quantity');
       const unitCost = parseFloat(form.unit_cost) || 0;
 
+      // adjustment_out removes stock, so the movement quantity must be
+      // negative — the DB trigger sums quantities to derive on-hand.
+      const signedQty = form.movement_type === 'adjustment_out' ? -qty : qty;
+
       await repos.inventory.recordMovement({
         business_id: businessId,
         product_id: form.product_id,
         location_id: form.location_id,
         movement_type: form.movement_type,
         movement_date: form.movement_date,
-        quantity: qty,
+        quantity: signedQty,
         unit_cost: unitCost,
         reference: form.reference || null,
         notes: form.notes || null,
         created_by: null,
       } as InsertDto<'stock_movements'>);
+
+      // PERPETUAL INVENTORY: mirror the movement into the general ledger so
+      // the stock actually shows under Current Assets. Opening balances in
+      // particular were the most common way to end up with stock on hand
+      // and nothing on the balance sheet.
+      await postStockMovementAdjustment(businessId, {
+        productId:    form.product_id,
+        quantity:     qty,
+        unitCost,
+        movementType: form.movement_type,
+        movementDate: form.movement_date,
+        reference:    form.reference || null,
+      });
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Stock movement recorded.' });
