@@ -6,6 +6,10 @@ import {
   createInvoiceSettlementEntry,
   createExpenseSettlementEntry,
 } from '@/services/journalService';
+import {
+  deductStockAndPostCogs,
+  resolveExpenseLineAccountId,
+} from '@/services/inventoryJournalService';
 import { offlineDB, type QueueItem } from './db';
 import type {
   IncomeQueuePayload,
@@ -77,6 +81,29 @@ async function syncItem(item: QueueItem): Promise<string> {
       } catch (err) {
         console.warn('Invoice journal entry failed during offline sync:', err);
       }
+
+      // PERPETUAL INVENTORY: an offline sale still has to release stock and
+      // its cost. Done here rather than at enqueue time because the average
+      // cost must be read against live server balances — the device may have
+      // been offline for days and other tills may have moved the same stock.
+      try {
+        const productLines = result.lines
+          .filter((l) => l.product_id)
+          .map((l) => ({ productId: l.product_id as string, quantity: Number(l.quantity) }));
+        if (productLines.length > 0) {
+          await deductStockAndPostCogs(
+            item.businessId,
+            result.invoice,
+            productLines,
+            result.invoice.branch_id,
+            result.invoice.department_id,
+            null,
+          );
+        }
+      } catch (err) {
+        console.warn('Stock/COGS posting failed during offline sync:', err);
+      }
+
       return result.invoice.id;
     }
 
@@ -88,6 +115,34 @@ async function syncItem(item: QueueItem): Promise<string> {
         nextExpense = { ...nextExpense, expense_number: realNumber };
       }
       const result = await repos.expense.createWithLines(nextExpense, lines);
+
+      // PERPETUAL INVENTORY: the queued line carries whatever account the
+      // form picked while offline, where the products table wasn't
+      // available to consult. Re-resolve against the server now so an
+      // inventory-tracked purchase capitalises to the asset account rather
+      // than being expensed — and correct the stored line to match, so the
+      // expense document and the ledger tell the same story.
+      try {
+        const products = await repos.inventory.findAllProducts(item.businessId);
+        for (const line of result.lines) {
+          if (!line.product_id || !line.account_id) continue;
+          const product = products.find((p) => p.id === line.product_id) ?? null;
+          const resolved = await resolveExpenseLineAccountId(
+            item.businessId, product, line.account_id,
+          );
+          if (resolved !== line.account_id) {
+            await repos.expense.db
+              .from('expense_lines')
+              .update({ account_id: resolved } as never)
+              .eq('id', line.id)
+              .eq('business_id', item.businessId);
+            line.account_id = resolved;
+          }
+        }
+      } catch (err) {
+        console.warn('Inventory account resolution failed during offline sync:', err);
+      }
+
       try {
         const allocations = result.lines.map((l) => ({
           accountId: l.account_id || '',
