@@ -1,23 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, ChevronRight, ArrowLeft } from 'lucide-react';
+import { CheckCircle, ChevronRight, ArrowLeft, Search } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
 import { createInvoiceJournalEntry } from '@/services/journalService';
-import type { InsertDto } from '@/dal/types/database';
-
-const CATEGORIES = [
-  { label: 'Sales', emoji: '🛍️' },
-  { label: 'Service', emoji: '🔧' },
-  { label: 'Consulting', emoji: '💼' },
-  { label: 'Rent', emoji: '🏠' },
-  { label: 'Commission', emoji: '🤝' },
-  { label: 'Interest', emoji: '🏦' },
-  { label: 'Refund', emoji: '↩️' },
-  { label: 'Grant', emoji: '🎁' },
-  { label: 'Other', emoji: '💰' },
-];
+import type { InsertDto, Row } from '@/dal/types/database';
 
 type Step = 'amount' | 'category' | 'description' | 'costCenter' | 'confirm' | 'success';
 
@@ -31,10 +19,27 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState<Row<'accounts'> | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [description, setDescription] = useState('');
   const [branchId, setBranchId] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('');
+
+  // Fetch Chart of Accounts for income/revenue
+  const { data: incomeAccounts = [] } = useQuery({
+    queryKey: ['accounts_income_mobile', businessId],
+    queryFn: async () => {
+      const all = await repos.account.findByBusiness(businessId);
+      const filtered = all.filter(
+        (a: Row<'accounts'>) => a.account_type === 'income' && !a.is_group && a.is_active,
+      );
+      if (filtered.length > 0) return filtered;
+      // Fallback: all active posting accounts
+      return all.filter((a: Row<'accounts'>) => !a.is_group && a.is_active);
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 10,
+  });
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
@@ -53,7 +58,8 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   function reset() {
     setStep('amount');
     setAmount('');
-    setCategory('');
+    setSelectedAccount(null);
+    setSearchQuery('');
     setDescription('');
     setBranchId('');
     setDepartmentId('');
@@ -67,14 +73,25 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   const today = new Date().toISOString().slice(0, 10);
   const rawAmount = parseFloat(amount) || 0;
 
+  const filteredAccounts = incomeAccounts.filter(
+    (a) =>
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.code.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!selectedAccount) {
+        throw new Error('Please select an income account from the Chart of Accounts.');
+      }
+
       const contacts = await repos.contact.findByBusiness(businessId, 'customer');
       const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
       if (!walkIn) throw new Error('No customer contact found. Add a Walk-in Customer contact first.');
 
       const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
-      const desc = description.trim() || category;
+      const categoryName = selectedAccount.name;
+      const desc = description.trim() || categoryName;
 
       await repos.invoice.createWithLines(
         {
@@ -95,6 +112,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           wht_amount: 0,
           total_amount: rawAmount,
           amount_paid: rawAmount,
+          revenue_account_id: selectedAccount.id,
           notes: desc,
           created_by: null,
           branch_id: branchId || null,
@@ -110,6 +128,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           tax_rate: 0,
           tax_amount: 0,
           line_total: rawAmount,
+          account_id: selectedAccount.id,
         } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>],
       );
 
@@ -136,7 +155,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   function getTitle() {
     switch (step) {
       case 'amount': return 'How much received?';
-      case 'category': return 'What for?';
+      case 'category': return 'Income Category (Chart of Accounts)';
       case 'description': return 'Add details';
       case 'costCenter': return 'Revenue Center';
       case 'confirm': return 'Confirm';
@@ -154,7 +173,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           </div>
           <p className="text-lg font-semibold text-gray-900">Income Recorded!</p>
           <p className="text-sm text-gray-500">
-            MK {rawAmount.toLocaleString('en-MW')} · {category}
+            MK {rawAmount.toLocaleString('en-MW')} · {selectedAccount?.name}
           </p>
         </div>
       )}
@@ -168,35 +187,62 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
             disabled={!amount || parseFloat(amount) <= 0}
             className="flex w-full items-center justify-center gap-2 rounded-[2rem] bg-brand-500 py-5 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-brand-500/20 disabled:opacity-40 transition-all active:scale-95"
           >
-            Select Category <ChevronRight className="h-5 w-5" />
+            Select Income Account <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}
 
-      {/* Step: Category */}
+      {/* Step: Category (Chart of Accounts) */}
       {step === 'category' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           <button
             onClick={() => setStep('amount')}
             className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400"
           >
             <ArrowLeft className="h-4 w-4" /> Back to Amount
           </button>
-          <div className="grid grid-cols-3 gap-4">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.label}
-                onClick={() => { setCategory(cat.label); setStep('description'); }}
-                className={`flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all active:scale-90 ${
-                  category === cat.label
-                    ? 'border-brand-500 bg-brand-50 shadow-lg shadow-brand-500/10'
-                    : 'border-transparent bg-gray-50/50 hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-3xl">{cat.emoji}</span>
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-700">{cat.label}</span>
-              </button>
-            ))}
+
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-gray-400" />
+            <input
+              type="search"
+              placeholder="Search Chart of Accounts (code or name)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
+            {filteredAccounts.length === 0 ? (
+              <p className="py-6 text-center text-xs text-gray-500">
+                No matching accounts found in Chart of Accounts.
+              </p>
+            ) : (
+              filteredAccounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  onClick={() => {
+                    setSelectedAccount(acc);
+                    setStep('description');
+                  }}
+                  className={`flex items-center justify-between rounded-2xl border p-3.5 text-left transition-all active:scale-98 ${
+                    selectedAccount?.id === acc.id
+                      ? 'border-brand-500 bg-brand-50 shadow-sm'
+                      : 'border-gray-100 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-mono font-bold text-gray-700">
+                      {acc.code}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">{acc.name}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -210,7 +256,9 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
             <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
             {' · '}
-            <span>{category}</span>
+            <span className="font-mono font-bold">{selectedAccount?.code}</span>
+            {' '}
+            <span>{selectedAccount?.name}</span>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">
@@ -220,7 +268,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={`e.g. ${category} payment...`}
+              placeholder={`e.g. ${selectedAccount?.name} payment...`}
               autoFocus
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
@@ -244,7 +292,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
             <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
             {' · '}
-            <span>{category}</span>
+            <span>{selectedAccount?.name}</span>
           </div>
 
           <div>
@@ -320,8 +368,10 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               <span className="font-semibold text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Category</span>
-              <span className="text-gray-700">{category}</span>
+              <span className="text-gray-500">Income Account</span>
+              <span className="text-gray-900 font-medium">
+                <span className="font-mono text-xs text-gray-500">[{selectedAccount?.code}]</span> {selectedAccount?.name}
+              </span>
             </div>
             {description && (
               <div className="flex justify-between text-sm">

@@ -87,21 +87,25 @@ async function addStockForBranchPurchase(
   reference: string,
   createdBy: string | null,
 ): Promise<void> {
-  if (!branchId) return;
   const linesWithProducts = purchaseLines.filter((l) => l.productId && l.quantity > 0);
   if (linesWithProducts.length === 0) return;
 
   const locations = await repos.inventory.findLocations(businessId);
-  const branchLocation = locations.find((l) => l.branch_id === branchId);
-  if (!branchLocation) {
-    console.warn(`No inventory location linked to branch ${branchId} — stock not adjusted for this purchase.`);
+  // Try branch location first if branchId is provided, otherwise fall back to default warehouse or primary location
+  let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
+  if (!targetLocation) {
+    targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+  }
+
+  if (!targetLocation) {
+    console.warn(`No inventory location found for business ${businessId} — stock not adjusted for this purchase.`);
     return;
   }
 
   const movements = linesWithProducts.map((line) => ({
     business_id: businessId,
     product_id: line.productId,
-    location_id: branchLocation.id,
+    location_id: targetLocation.id,
     movement_type: 'purchase' as const,
     movement_date: new Date().toISOString().slice(0, 10),
     // Positive: stock is arriving at this location as part of the purchase.
@@ -430,7 +434,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           total_amount:    totalAmount,
           amount_paid:     totalAmount,
           reference:       values.reference || null,
-          notes:           values.notes || null,
+          notes:           values.notes || values.description || null,
           // NEW: cost centre / branch flows from form into expense header
           // and then into journal_entries.branch_id for branch P&L reporting
           branch_id:       values.branch_id || null,
@@ -1152,7 +1156,7 @@ function ExpenseList({ businessId }: { businessId: string }) {
                 <tr key={exp.id} className="transition-colors hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-brand-700">{exp.expense_number}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{exp.expense_date}</td>
-                  <td className="px-4 py-3 text-gray-700">{exp.notes ?? exp.reference ?? '—'}</td>
+                  <td className="px-4 py-3 font-medium text-gray-900">{exp.notes || exp.reference || '—'}</td>
                   <td className="px-4 py-3 text-right font-medium">{formatMwk(exp.total_amount)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(exp.amount_paid)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>

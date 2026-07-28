@@ -1,31 +1,11 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, ChevronRight, ArrowLeft } from 'lucide-react';
+import { CheckCircle, ChevronRight, ArrowLeft, Search } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import type { InsertDto, Row } from '@/dal/types/database';
-
-// Each category maps to a preferred Chart of Accounts code. At runtime we
-// only ever match against accounts that are (a) type 'expense', (b) NOT a
-// group/header account, and (c) active — so even if one of these codes
-// turns out to be wrong or missing in a given business's CoA, we fall back
-// to "Miscellaneous Expenses" rather than ever posting to a group account
-// (which is exactly the bug this whole fix addresses).
-const CATEGORIES = [
-  { label: 'Fuel', emoji: '⛽', preferredCode: '7151' },       // Fuel & Oil
-  { label: 'Food', emoji: '🍽️', preferredCode: '7162' },      // Entertainment & Hospitality
-  { label: 'Rent', emoji: '🏠', preferredCode: '7110' },       // Rent
-  { label: 'Supplies', emoji: '📦', preferredCode: '7131' },   // Stationery & Printing
-  { label: 'Airtime', emoji: '📱', preferredCode: '7141' },    // Telephone & Internet
-  { label: 'Transport', emoji: '🚗', preferredCode: '7153' },  // Travel Subsistence
-  { label: 'Utilities', emoji: '💡', preferredCode: '7120' },  // Utilities
-  { label: 'Salary', emoji: '👤', preferredCode: '6100' },     // Salaries & Wages
-  { label: 'Other', emoji: '💰', preferredCode: '7400' },      // Miscellaneous Expenses
-];
-
-const FALLBACK_CODE = '7400'; // Miscellaneous Expenses
 
 type Step = 'amount' | 'category' | 'description' | 'costCenter' | 'confirm' | 'success';
 
@@ -39,20 +19,25 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
   const queryClient = useQueryClient();
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('');
+  const [selectedAccount, setSelectedAccount] = useState<Row<'accounts'> | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [description, setDescription] = useState('');
   const [includeVat, setIncludeVat] = useState(false);
   const [branchId, setBranchId] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('');
 
-  // Leaf, active expense accounts only — never a group/header account.
+  // Fetch Chart of Accounts for expenses (leaf, active accounts)
   const { data: expenseAccounts = [] } = useQuery({
-    queryKey: ['accounts_expense', businessId],
+    queryKey: ['accounts_expense_mobile', businessId],
     queryFn: async () => {
       const all = await repos.account.findByBusiness(businessId);
-      return all.filter(
-        (a: Row<'accounts'>) => a.account_type === 'expense' && !a.is_group && a.is_active,
+      const filtered = all.filter(
+        (a: Row<'accounts'>) =>
+          (a.account_type === 'expense' || a.account_type === 'asset') && !a.is_group && a.is_active,
       );
+      if (filtered.length > 0) return filtered;
+      // Fallback: all active posting accounts
+      return all.filter((a: Row<'accounts'>) => !a.is_group && a.is_active);
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 10,
@@ -72,25 +57,11 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
     staleTime: 1000 * 60 * 10,
   });
 
-  function resolveAccountForCategory(label: string): Row<'accounts'> | null {
-    const cat = CATEGORIES.find((c) => c.label === label);
-    const preferredCode = cat?.preferredCode;
-    const byPreferredCode = preferredCode
-      ? expenseAccounts.find((a) => a.code === preferredCode)
-      : undefined;
-    if (byPreferredCode) return byPreferredCode;
-
-    // Preferred code wasn't found among leaf accounts (could be a group
-    // account, renamed, or missing in this business's CoA) — fall back to
-    // Miscellaneous Expenses rather than guessing.
-    const fallback = expenseAccounts.find((a) => a.code === FALLBACK_CODE);
-    return fallback ?? null;
-  }
-
   function reset() {
     setStep('amount');
     setAmount('');
-    setCategory('');
+    setSelectedAccount(null);
+    setSearchQuery('');
     setDescription('');
     setIncludeVat(false);
     setBranchId('');
@@ -108,18 +79,23 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
   const netAmount = includeVat ? rawAmount / 1.175 : rawAmount;
   const vatAmount = includeVat ? rawAmount - netAmount : 0;
 
+  const filteredAccounts = expenseAccounts.filter(
+    (a) =>
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      a.code.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
   const mutation = useMutation({
     mutationFn: async () => {
-      const account = resolveAccountForCategory(category);
-      if (!account) {
+      if (!selectedAccount) {
         throw new Error(
-          'Could not find a matching expense account in your Chart of Accounts. ' +
-          'Please set one up, or record this expense from the Expenses page instead.',
+          'Please select an expense account from your Chart of Accounts.',
         );
       }
 
       const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
-      const desc = description.trim() || category;
+      const categoryName = selectedAccount.name;
+      const desc = description.trim() || categoryName;
 
       await repos.expense.createWithLines(
         {
@@ -149,7 +125,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           tax_rate: includeVat ? 0.175 : 0,
           tax_amount: vatAmount,
           line_total: rawAmount,
-          account_id: account.id,
+          account_id: selectedAccount.id,
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
       );
 
@@ -158,19 +134,14 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       if (created) {
         try {
           const allocations: ExpenseAccountAllocation[] = [
-            { accountId: account.id, amount: netAmount, description: desc },
+            { accountId: selectedAccount.id, amount: netAmount, description: desc },
           ];
           const journalEntryId = await createExpenseJournalEntry(
             businessId, created, allocations, vatAmount, branchId || null, departmentId || null,
           );
-          // NOTE: same assumption as ExpensesPage.tsx — repos.expense.update
-          // must exist via BaseRepository. Adjust if your method name differs.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- repos.expense is typed as an expense-specific repo but exposes BaseRepository.update via inheritance
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BaseRepository exposes update via inheritance
           await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
         } catch (err) {
-          // The expense is still saved, but stays unlinked (journal_entry_id
-          // remains null) so it shows up as "Needs Posting" on the Expenses
-          // page instead of silently missing from the accounts.
           console.error('Journal entry failed:', err);
           throw new Error(
             'Expense saved, but posting to the ledger failed. ' +
@@ -192,7 +163,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
   function getTitle() {
     switch (step) {
       case 'amount': return 'How much?';
-      case 'category': return 'What for?';
+      case 'category': return 'Expense Account (Chart of Accounts)';
       case 'description': return 'Add details';
       case 'costCenter': return 'Cost Center';
       case 'confirm': return 'Confirm';
@@ -210,7 +181,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           </div>
           <p className="text-lg font-semibold text-gray-900">Expense Recorded!</p>
           <p className="text-sm text-gray-500">
-            MK {rawAmount.toLocaleString('en-MW')} · {category}
+            MK {rawAmount.toLocaleString('en-MW')} · {selectedAccount?.name}
           </p>
         </div>
       )}
@@ -243,14 +214,14 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
             disabled={!amount || parseFloat(amount) <= 0}
             className="flex w-full items-center justify-center gap-2 rounded-[2rem] bg-brand-500 py-5 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-brand-500/20 disabled:opacity-40 transition-all active:scale-95"
           >
-            Select Category <ChevronRight className="h-5 w-5" />
+            Select Expense Account <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}
 
-      {/* Step: Category */}
+      {/* Step: Category (Chart of Accounts) */}
       {step === 'category' && (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           <button
             onClick={() => setStep('amount')}
             className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400"
@@ -258,24 +229,47 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
             <ArrowLeft className="h-4 w-4" /> Back to Amount
           </button>
 
-          <div className="grid grid-cols-3 gap-4">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.label}
-                onClick={() => {
-                  setCategory(cat.label);
-                  setStep('description');
-                }}
-                className={`flex flex-col items-center gap-3 rounded-3xl border-2 p-5 transition-all active:scale-90 ${
-                  category === cat.label
-                    ? 'border-brand-500 bg-brand-50 shadow-lg shadow-brand-500/10'
-                    : 'border-transparent bg-gray-50/50 hover:bg-gray-50'
-                }`}
-              >
-                <span className="text-3xl">{cat.emoji}</span>
-                <span className="text-[10px] font-black uppercase tracking-wider text-gray-700">{cat.label}</span>
-              </button>
-            ))}
+          {/* Search bar */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-gray-400" />
+            <input
+              type="search"
+              placeholder="Search Chart of Accounts (code or name)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-2xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
+            {filteredAccounts.length === 0 ? (
+              <p className="py-6 text-center text-xs text-gray-500">
+                No matching accounts found in Chart of Accounts.
+              </p>
+            ) : (
+              filteredAccounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  onClick={() => {
+                    setSelectedAccount(acc);
+                    setStep('description');
+                  }}
+                  className={`flex items-center justify-between rounded-2xl border p-3.5 text-left transition-all active:scale-98 ${
+                    selectedAccount?.id === acc.id
+                      ? 'border-brand-500 bg-brand-50 shadow-sm'
+                      : 'border-gray-100 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-mono font-bold text-gray-700">
+                      {acc.code}
+                    </span>
+                    <span className="text-sm font-semibold text-gray-900">{acc.name}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-gray-400" />
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -293,7 +287,9 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
             <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
             {' · '}
-            <span>{category}</span>
+            <span className="font-mono font-bold">{selectedAccount?.code}</span>
+            {' '}
+            <span>{selectedAccount?.name}</span>
           </div>
 
           <div>
@@ -304,7 +300,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={`e.g. ${category} for office...`}
+              placeholder={`e.g. ${selectedAccount?.name} payment...`}
               autoFocus
               className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
@@ -332,7 +328,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
             <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
             {' · '}
-            <span>{category}</span>
+            <span>{selectedAccount?.name}</span>
           </div>
 
           <div>
@@ -424,8 +420,10 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
               </>
             )}
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Category</span>
-              <span className="text-gray-700">{category}</span>
+              <span className="text-gray-500">Expense Account</span>
+              <span className="text-gray-900 font-medium">
+                <span className="font-mono text-xs text-gray-500">[{selectedAccount?.code}]</span> {selectedAccount?.name}
+              </span>
             </div>
             {description && (
               <div className="flex justify-between text-sm">
