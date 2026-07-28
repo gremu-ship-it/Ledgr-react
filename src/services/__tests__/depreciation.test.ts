@@ -56,50 +56,67 @@ describe('calculateMonthlyDepreciation', () => {
   });
 
   describe('reducing balance', () => {
-    // depreciationRate is a FRACTION (0.24 == 24%/yr), consistent with the
-    // derived fallback `1 / (monthsLife / 12)`. See the note on
-    // DepreciationCalcInput.depreciationRate — the sibling
-    // asset_categories.mra_depreciation_rate field is a percentage, so these
-    // two must never be assigned to one another without dividing by 100.
+    // depreciationRate is a PERCENTAGE (24 == 24%/yr), matching
+    // asset_categories.mra_depreciation_rate and every other rate in the
+    // codebase (PAYE bands, TPR pension, loan ratePct, discount_percent).
     it('charges the monthly slice of the annual rate on net book value', () => {
-      // NBV 1,000,000 at 0.24/yr = 2%/month = 20,000
+      // NBV 1,000,000 at 24%/yr = 2%/month = 20,000
       const result = calculateMonthlyDepreciation(
         input({
           method: 'reducing_balance',
           acquisitionCost: 1_200_000,
           accumulatedDepreciation: 200_000,
-          depreciationRate: 0.24,
+          depreciationRate: 24,
         }),
       );
       expect(result).toBeCloseTo(20_000, 6);
     });
 
-    it('treats the rate as a fraction, so passing a percentage over-charges', () => {
-      // Guards the unit convention. Passing 24 (percent) instead of 0.24 asks
-      // for 200%/month; the "never exceed remaining depreciable amount" guard
-      // clamps it to the asset's entire cost in a single month rather than
-      // producing a negative book value — still catastrophically wrong, which
-      // is the point. A future change that starts writing
-      // fixed_assets.depreciation_rate must confront this test.
-      const asFraction = calculateMonthlyDepreciation(
-        input({ method: 'reducing_balance', depreciationRate: 0.24 }),
+    it('accepts the category MRA rate directly, with no conversion', () => {
+      // The whole point of aligning the units: asset_categories stores 25 for
+      // 25%, so feeding that straight in must give a sane charge rather than
+      // the clamped-to-full-cost result the old fraction convention produced.
+      const mraCategoryRate = 25; // as stored in asset_categories
+      const result = calculateMonthlyDepreciation(
+        input({ method: 'reducing_balance', depreciationRate: mraCategoryRate }),
       );
+      expect(result).toBeCloseTo(1_200_000 * (25 / 100 / 12), 6);
+      expect(result).toBeLessThan(1_200_000); // not clamped
+    });
+
+    it('treats a fractional rate as a sub-1% rate, not as 24%', () => {
+      // Guards against silently reverting to the old convention: 0.24 now means
+      // 0.24%/yr, which is ~100x smaller than 24%/yr.
       const asPercent = calculateMonthlyDepreciation(
         input({ method: 'reducing_balance', depreciationRate: 24 }),
       );
-
-      expect(asFraction).toBeCloseTo(1_200_000 * (0.24 / 12), 6);
-      expect(asPercent).toBeGreaterThan(asFraction * 10);
-      // clamped to the full depreciable amount, never beyond it
-      expect(asPercent).toBeCloseTo(1_200_000, 6);
+      const asFraction = calculateMonthlyDepreciation(
+        input({ method: 'reducing_balance', depreciationRate: 0.24 }),
+      );
+      expect(asPercent).toBeCloseTo(asFraction * 100, 6);
     });
 
     it('derives a rate from the useful life when none is given', () => {
-      // 10 year life -> 10%/yr -> NBV 1,200,000 * (0.1/12) = 10,000
+      // 10 year life -> 100/10 = 10%/yr -> NBV 1,200,000 * (10/100/12) = 10,000
       const result = calculateMonthlyDepreciation(
         input({ method: 'reducing_balance', depreciationRate: null }),
       );
       expect(result).toBeCloseTo(10_000, 6);
+    });
+
+    it('derived fallback is unchanged by the fraction-to-percentage switch', () => {
+      // Regression guard for the unit change: the fallback previously computed
+      // `1 / (monthsLife / 12)` as a fraction and now computes
+      // `100 / (monthsLife / 12)` as a percentage. Both reduce to the same
+      // monthly rate, so every existing asset with a null depreciation_rate
+      // must keep depreciating at exactly the same amount.
+      for (const years of [3, 5, 10, 20]) {
+        const result = calculateMonthlyDepreciation(
+          input({ method: 'reducing_balance', usefulLifeYears: years, depreciationRate: null }),
+        );
+        const expectedLegacyMonthlyRate = 1 / (years * 12 / 12) / 12;
+        expect(result).toBeCloseTo(1_200_000 * expectedLegacyMonthlyRate, 6);
+      }
     });
 
     it('decreases as accumulated depreciation grows', () => {

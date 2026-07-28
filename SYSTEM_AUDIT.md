@@ -18,7 +18,7 @@ The material risks are concentrated in three places: **four database tables ship
 |---|---|---|---|
 | Type check | `tsc -b` | ✅ Pass (0 errors) | ✅ Pass |
 | Lint | `eslint .` | ✅ Pass (0 warnings) | ✅ Pass |
-| Unit tests | `vitest run` | ✅ 16 tests / 2 files | ✅ **52 tests / 5 files** |
+| Unit tests | `vitest run` | ✅ 16 tests / 2 files | ✅ **54 tests / 5 files** |
 | Production build | `vite build` | ✅ 1.29s, 2.4 MB | ✅ Pass |
 | Dependency audit | `npm audit` | ❌ 27 (1 crit, 24 high) | ⚠️ **6 (0 crit, 5 high)** |
 
@@ -48,24 +48,53 @@ Everything below was implemented and verified against the full pipeline
 | F1 | New migration `20260728000005_enable_rls_on_unprotected_tables.sql`. Enables RLS on all four tables, with `<table>_business_access` policies scoped through `business_users` (matching the existing convention). `api_usage` gets RLS with **no** policy — service-role only by design. `currencies` gets a read-only policy. |
 | F2 | Removed `@vercel/node` (a devDependency used for **two type imports** in `api/health.ts`, but the root of the critical `tar` chain — types replaced with local structural interfaces). Upgraded `@sentry/vite-plugin` 2→5, `vite-plugin-pwa`, `react-router-dom`. **27 → 6 advisories; critical eliminated.** |
 | F3 | Added the `x-cron-secret` guard used by every sibling cron function, and corrected the in-file scheduling docs to pass the header. |
-| F4 | Extracted `calculatePAYE` out of `PayrollPage.tsx` into testable `src/lib/paye.ts`. Added 36 tests across three suites: PAYE bands, the double-entry invariant in `createBalancedEntry`, and depreciation. Fixed `vitest.config.ts` so importing a service no longer throws on the Supabase env check. |
+| F4 | Extracted `calculatePAYE` out of `PayrollPage.tsx` into testable `src/lib/paye.ts`, and the depreciation maths into `src/services/depreciation.ts` (a leaf module with no Supabase import chain). Added 38 tests across three suites: PAYE bands, the double-entry invariant in `createBalancedEntry`, and depreciation. |
+| F10 | Aligned `depreciationRate` with the codebase-wide percentage convention — see below. |
 | F5 | Deleted `supabase/functions/api/middleware.ts`. |
 | F6 | New `supabase/functions/_shared/cors.ts` with an origin allowlist from `ALLOWED_ORIGINS`/`APP_URL`, applied to the 11 sensitive functions via a `withCors` wrapper. Falls back to `*` when unconfigured, so the change is non-breaking; localhost always allowed. |
 | F8 | Deleted the three orphaned components, first porting the better `role="alert"` markup and the error-message-suppression from the dead `ErrorBoundary` into the live one. |
 
-### Two things worth your attention
+### Depreciation units — resolved
 
-**A latent unit-mismatch bug in depreciation (found by the new tests).**
-`calculateMonthlyDepreciation` treats `depreciationRate` as a **fraction**
-(`0.24` = 24%/yr) — that is what the derived fallback `1 / (monthsLife / 12)`
-produces. But the adjacent `asset_categories.mra_depreciation_rate` field is a
-**percentage**: the form input is `max="100"` with placeholder `"e.g. 25"`, and
-it renders as `25.0%`. Nothing currently writes `fixed_assets.depreciation_rate`,
-so this is not live — but the day someone wires the category rate into the asset
-rate, every asset depreciates ~100x too fast. I did **not** change the
-calculation (silently altering financial logic is not a safe unattended edit);
-instead the unit is now documented on the type and pinned by a test that fails
-loudly if the convention shifts. **This needs a product decision.**
+`calculateMonthlyDepreciation` previously treated `depreciationRate` as a
+**fraction** (`0.24` = 24%/yr), while the adjacent
+`asset_categories.mra_depreciation_rate` is a **percentage** (`max="100"`,
+placeholder `"e.g. 25"`, rendered `25.0%`). The two have now been aligned on
+**percentage**, which is the correct direction because it is what the rest of
+the codebase already does without exception:
+
+| Rate | Stored as | Converted at use |
+|---|---|---|
+| `paye_bands.rate` | percentage | `band.rate / 100` |
+| TPR pension employer/employee | percentage | `Number(...) / 100` |
+| Loan interest `ratePct` | percentage | `ratePct / 100 / 12` |
+| Invoice `discount_percent` | percentage | `discount_percent / 100` |
+| `asset_categories.residual_percent` | percentage | rendered `%` |
+| `depreciation_rate` (was) | **fraction** | **the sole outlier** |
+
+**This is behaviour-preserving.** Two independent reasons:
+
+1. **Nothing writes `fixed_assets.depreciation_rate`** — not the asset form, not
+   the category form, not the CSV importer, not any migration, trigger or Edge
+   Function. It is `null` for every row in existence, so the explicit-rate branch
+   is unreachable today.
+2. **The derived fallback is bit-identical.** It changed from
+   `1 / (monthsLife / 12)` (fraction) to `100 / (monthsLife / 12)` (percentage),
+   and the divisor changed from `/12` to `/100/12`. Both reduce to the same
+   monthly rate — verified numerically, and pinned by a regression test across
+   3/5/10/20-year lives. Every existing asset depreciates by exactly the same
+   amount.
+
+The practical effect is that `asset_categories.mra_depreciation_rate` can now be
+fed straight into an asset with no conversion, which is what someone would
+naturally have done — and which would previously have depreciated the asset
+100x too fast in a single period.
+
+**Deliberately not done:** I did not auto-wire the category rate as a fallback
+(mirroring how `resolveAssetAccounts` falls back to category accounts). That
+would change real depreciation charges for any business that has set an MRA rate
+on a category, which is a product decision rather than a units fix. The units are
+now safe for you to make that change whenever you want it.
 
 **The 6 remaining advisories are all low-exploitability here.** `react-router`'s
 is an **RSC-mode** CSRF bypass — this app is a Vite SPA using `BrowserRouter`,
@@ -247,7 +276,7 @@ lines 135 and 231), immediately after `fn="$(basename "$dir")"`:
 the CLI's own bulk deploy skips them, but this repo's hand-rolled loop does not.)
 
 **Requires a decision from you**
-1. **Depreciation rate units** (see §1a) — confirm whether `depreciation_rate` should be a fraction or a percentage, then align the type, the UI, and the test.
+1. **Optional follow-up:** now that units match, decide whether `postAssetDepreciation` should fall back to `asset_categories.mra_depreciation_rate` when an asset has no own rate (mirroring `resolveAssetAccounts`). This would change real charges, so it is left to you.
 2. **Deploy the RLS migration** and confirm against the live database. The four tables were unprotected in migrations, but it is possible policies were applied by hand via the dashboard; verify before assuming the leak was live.
 3. **Set `ALLOWED_ORIGINS`** in Supabase secrets. Until it is set, CORS still falls back to `*` — deliberately, so this change could not break a running deployment.
 

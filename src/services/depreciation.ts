@@ -17,16 +17,18 @@ export interface DepreciationCalcInput {
   usefulLifeMonths: number | null;
   accumulatedDepreciation: number;
   /**
-   * Annual reducing-balance rate expressed as a FRACTION, not a percentage:
-   * 0.25 means 25% a year. This matches the derived fallback below
-   * (`1 / (monthsLife / 12)`, which yields 0.1 for a ten-year life).
+   * Annual reducing-balance rate expressed as a PERCENTAGE: 25 means 25% a
+   * year, matching `asset_categories.mra_depreciation_rate` (form input is
+   * `max="100"`, placeholder "e.g. 25", rendered as "25.0%") and every other
+   * rate in this codebase — PAYE `band.rate`, TPR pension rates, loan
+   * `ratePct`, invoice `discount_percent` — all of which are stored as
+   * percentages and divided by 100 at the point of use.
    *
-   * ⚠ Note for whoever wires this up: `fixed_assets.depreciation_rate` is not
-   * currently written anywhere in the app, so nothing exercises this path yet.
-   * The neighbouring `asset_categories.mra_depreciation_rate` field IS a
-   * percentage (the form input is `max="100"` with placeholder "e.g. 25" and
-   * renders as "25.0%"). If that value is ever copied into this one, divide by
-   * 100 first — feeding 25 in here would charge 25x the intended depreciation.
+   * This previously expected a FRACTION (0.25 for 25%), making it the single
+   * outlier in the codebase and leaving a 100x trap for whoever first wired
+   * the category rate into an asset. Nothing writes
+   * `fixed_assets.depreciation_rate` yet, so correcting the convention now is
+   * behaviour-preserving in practice — see the unit tests.
    */
   depreciationRate: number | null;
 }
@@ -49,9 +51,11 @@ export function calculateMonthlyDepreciation(input: DepreciationCalcInput): numb
     if (!monthsLife) throw new Error('Straight-line depreciation requires a useful life.');
     charge = depreciableAmount / monthsLife;
   } else if (method === 'reducing_balance') {
-    const annualRate = depreciationRate ?? (monthsLife ? 1 / (monthsLife / 12) : null);
-    if (!annualRate) throw new Error('Reducing-balance depreciation requires a rate or useful life.');
-    const monthlyRate = annualRate / 12;
+    // Both operands are percentages: an explicit 25 means 25%/yr, and the
+    // straight-line-equivalent fallback for a 10-year life is 100/10 = 10%/yr.
+    const annualRatePercent = depreciationRate ?? (monthsLife ? 100 / (monthsLife / 12) : null);
+    if (!annualRatePercent) throw new Error('Reducing-balance depreciation requires a rate or useful life.');
+    const monthlyRate = annualRatePercent / 100 / 12;
     charge = remainingBookValue * monthlyRate;
   } else {
     throw new Error(`Depreciation method '${method}' is not yet supported by the automated posting engine.`);
