@@ -5,9 +5,20 @@ import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
+import { attemptChunkRecovery, clearChunkRecovery } from '@/lib/chunkRecovery';
 import './index.css';
 import './i18n';
 import App from './App.tsx';
+
+// Automatically recover once if Vite encounters a module preload failure
+// (e.g. after a deployment invalidates old chunk filenames).
+if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (event) => {
+    event.preventDefault();
+    attemptChunkRecovery('vite_preload');
+  });
+  clearChunkRecovery('vite_preload');
+}
 
 // --- Sentry (frontend) ------------------------------------------------------
 // Anonymised error reporting: sendDefaultPii is OFF and beforeSend strips any

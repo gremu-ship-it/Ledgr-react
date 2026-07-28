@@ -8,6 +8,7 @@ import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
+import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -405,20 +406,19 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       });
       const functionalAmount = totalAmount * rate.rate;
 
-      const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
-
       // Resolve COGS account from product if one is selected
       const selectedProduct = values.product_id
         ? products.find((p) => p.id === values.product_id)
         : undefined;
       const cogsAccountId = selectedProduct?.cogs_account_id ?? null;
 
-      await repos.expense.createWithLines(
-        {
+      const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
+      const buildPayload = (num: string) => ({
+        expense: {
           business_id:     businessId,
-          expense_number:  expenseNumber,
-          expense_type:    'receipt',
-          status:          'paid',
+          expense_number:  num,
+          expense_type:    'receipt' as const,
+          status:          'paid' as const,
           expense_date:    values.expense_date,
           currency:        originalCurrency,
           exchange_rate:   rate.rate,
@@ -435,13 +435,11 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           amount_paid:     totalAmount,
           reference:       values.reference || null,
           notes:           values.notes || values.description || null,
-          // NEW: cost centre / branch flows from form into expense header
-          // and then into journal_entries.branch_id for branch P&L reporting
           branch_id:       values.branch_id || null,
           department_id:   values.department_id || null,
           created_by:      null,
         } as InsertDto<'expenses'>,
-        [{
+        lines: [{
           line_number:  1,
           description:  values.description,
           quantity:     qty,
@@ -451,52 +449,68 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           tax_amount:   vatAmount,
           line_total:   totalAmount,
           account_id:   values.account_id,
-          // NEW: link the expense line to the product/service being purchased
-          // so inventory, COGS, and product-level reports stay connected
           product_id:   values.product_id || null,
-          // If a COGS account exists on the product, override the category
-          // account so COGS posts correctly (e.g. buying bags of maize)
           ...(cogsAccountId ? { account_id: cogsAccountId } : {}),
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
-      );
+      });
 
-      const allExpenses = await repos.expense.findByBusiness(businessId);
-      const created     = allExpenses.find((e) => e.expense_number === expenseNumber);
-      if (!created) return;
+      if (isOfflineNow) {
+        const offlineNum = generateOfflineNumber('EXP');
+        await enqueue('expense', businessId, buildPayload(offlineNum));
+        return { offline: true, expense_number: offlineNum };
+      }
 
       try {
-        const allocations: ExpenseAccountAllocation[] = [{
-          accountId:   cogsAccountId ?? values.account_id,
-          amount:      netAmount,
-          description: values.description,
-        }];
-        const journalEntryId = await createExpenseJournalEntry(
-          businessId,
-          created,
-          allocations,
-          vatAmount,
-          values.branch_id || null,
-          values.department_id || null,
+        const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
+        await repos.expense.createWithLines(
+          buildPayload(expenseNumber).expense,
+          buildPayload(expenseNumber).lines,
         );
-        await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
-        // NEW: if a branch + product were selected, add stock at that
-        // branch's linked location.
-        await addStockForBranchPurchase(
-          businessId,
-          values.branch_id || null,
-          [{ productId: values.product_id, quantity: qty, unitCost: qty > 0 ? netAmount / qty : netAmount }],
-          created.id,
-          expenseNumber,
-          null,
-        );
+        const allExpenses = await repos.expense.findByBusiness(businessId);
+        const created     = allExpenses.find((e) => e.expense_number === expenseNumber);
+        if (created) {
+          try {
+            const allocations: ExpenseAccountAllocation[] = [{
+              accountId:   cogsAccountId ?? values.account_id,
+              amount:      netAmount,
+              description: values.description,
+            }];
+            const journalEntryId = await createExpenseJournalEntry(
+              businessId,
+              created,
+              allocations,
+              vatAmount,
+              values.branch_id || null,
+              values.department_id || null,
+            );
+            await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
+
+            await addStockForBranchPurchase(
+              businessId,
+              values.branch_id || null,
+              [{ productId: values.product_id, quantity: qty, unitCost: qty > 0 ? netAmount / qty : netAmount }],
+              created.id,
+              expenseNumber,
+              null,
+            );
+          } catch (err) {
+            console.error('Journal entry failed for', expenseNumber, err);
+            throw new Error(
+              `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
+              `It will show as "Needs Posting" — you can retry from the expense list.`,
+              { cause: err },
+            );
+          }
+        }
+        return { offline: false, expense_number: expenseNumber };
       } catch (err) {
-        console.error('Journal entry failed for', expenseNumber, err);
-        throw new Error(
-          `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
-          `It will show as "Needs Posting" — you can retry from the expense list.`,
-          { cause: err },
-        );
+        if (isOfflineError(err)) {
+          const offlineNum = generateOfflineNumber('EXP');
+          await enqueue('expense', businessId, buildPayload(offlineNum));
+          return { offline: true, expense_number: offlineNum };
+        }
+        throw err;
       }
     },
     onSuccess: () => {
@@ -507,7 +521,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
         product_id: '', branch_id: '', department_id: '', quantity: '1',
       });
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries();
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => {

@@ -1,4 +1,11 @@
 import { repos } from '@/lib/repositories';
+import {
+  createInvoiceJournalEntry,
+  createInvoiceReceivableEntry,
+  createExpenseJournalEntry,
+  createInvoiceSettlementEntry,
+  createExpenseSettlementEntry,
+} from '@/services/journalService';
 import { offlineDB, type QueueItem } from './db';
 import type {
   IncomeQueuePayload,
@@ -36,25 +43,108 @@ async function syncItem(item: QueueItem): Promise<string> {
     case 'income':
     case 'invoice': {
       const { invoice, lines } = item.payload as IncomeQueuePayload | InvoiceQueuePayload;
-      const result = await repos.invoice.createWithLines(invoice, lines);
+      let nextInvoice = { ...invoice };
+      if (nextInvoice.invoice_number && nextInvoice.invoice_number.startsWith('INV-OFFLINE-')) {
+        const realNumber = await repos.business.reserveNextInvoiceNumber(item.businessId);
+        nextInvoice = { ...nextInvoice, invoice_number: realNumber };
+      }
+      if (!nextInvoice.contact_id || nextInvoice.contact_id === 'offline_walk_in_customer') {
+        const contacts = await repos.contact.findByBusiness(item.businessId, 'customer');
+        const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
+        if (walkIn) {
+          nextInvoice = { ...nextInvoice, contact_id: walkIn.id };
+        }
+      }
+      const result = await repos.invoice.createWithLines(nextInvoice, lines);
+      try {
+        if (item.operationType === 'income') {
+          await createInvoiceJournalEntry(
+            item.businessId,
+            result.invoice,
+            Number(result.invoice.subtotal),
+            Number(result.invoice.vat_amount),
+            result.invoice.branch_id,
+            result.invoice.department_id,
+          );
+        } else {
+          await createInvoiceReceivableEntry(
+            item.businessId,
+            result.invoice,
+            result.invoice.branch_id,
+            result.invoice.department_id,
+          );
+        }
+      } catch (err) {
+        console.warn('Invoice journal entry failed during offline sync:', err);
+      }
       return result.invoice.id;
     }
 
     case 'expense': {
       const { expense, lines } = item.payload as ExpenseQueuePayload;
-      const result = await repos.expense.createWithLines(expense, lines);
+      let nextExpense = { ...expense };
+      if (nextExpense.expense_number && nextExpense.expense_number.startsWith('EXP-OFFLINE-')) {
+        const realNumber = await repos.business.reserveNextExpenseNumber(item.businessId);
+        nextExpense = { ...nextExpense, expense_number: realNumber };
+      }
+      const result = await repos.expense.createWithLines(nextExpense, lines);
+      try {
+        const allocations = result.lines.map((l) => ({
+          accountId: l.account_id || '',
+          amount: Number(l.line_total),
+          description: l.description || '',
+        }));
+        if (allocations.length > 0) {
+          const journalEntryId = await createExpenseJournalEntry(
+            item.businessId,
+            result.expense,
+            allocations,
+            Number(result.expense.vat_amount),
+            result.expense.branch_id,
+            result.expense.department_id,
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- update exposed on repo
+          await (repos.expense as any).update(result.expense.id, { journal_entry_id: journalEntryId });
+        }
+      } catch (err) {
+        console.warn('Expense journal entry failed during offline sync:', err);
+      }
       return result.expense.id;
     }
 
     case 'invoice_payment': {
       const { payment } = item.payload as InvoicePaymentQueuePayload;
       const result = await repos.invoice.recordPayment(payment);
+      try {
+        await createInvoiceSettlementEntry(
+          item.businessId,
+          result.invoice,
+          result.payment,
+          'MWK',
+          result.invoice.branch_id,
+          result.invoice.department_id,
+        );
+      } catch (err) {
+        console.warn('Invoice payment settlement journal entry failed during offline sync:', err);
+      }
       return result.payment.id;
     }
 
     case 'expense_payment': {
       const { payment } = item.payload as ExpensePaymentQueuePayload;
       const result = await repos.expense.recordPayment(payment);
+      try {
+        await createExpenseSettlementEntry(
+          item.businessId,
+          result.expense,
+          result.payment,
+          'MWK',
+          result.expense.branch_id,
+          result.expense.department_id,
+        );
+      } catch (err) {
+        console.warn('Expense payment settlement journal entry failed during offline sync:', err);
+      }
       return result.payment.id;
     }
 

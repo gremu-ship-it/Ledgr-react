@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useOnlineStatus } from './useOnlineStatus';
 import { useOfflineQueue } from './useOfflineQueue';
 import { syncQueue, type SyncProgress } from '@/offline/syncEngine';
@@ -28,6 +29,7 @@ export interface SyncQueueState {
  *   flapping) with an internal in-flight ref.
  */
 export function useSyncQueue(): SyncQueueState {
+  const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();
   const { pendingCount } = useOfflineQueue();
 
@@ -43,12 +45,16 @@ export function useSyncQueue(): SyncQueueState {
     setIsSyncing(true);
 
     try {
-      await syncQueue((p) => setProgress({ ...p }));
+      const res = await syncQueue((p) => setProgress({ ...p }));
+      if (res.completed > 0) {
+        // Refresh all cached queries so the UI immediately shows synced items
+        await queryClient.invalidateQueries();
+      }
     } finally {
       setIsSyncing(false);
       inFlightRef.current = false;
     }
-  }, []);
+  }, [queryClient]);
 
   // Trigger on offline -> online transition.
   useEffect(() => {
