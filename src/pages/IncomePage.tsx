@@ -9,6 +9,7 @@ import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
+import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -360,7 +361,6 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       });
       const functionalAmount = amount * rate.rate;
 
-      const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
       const accounts      = await repos.account.findByBusiness(businessId);
       const arAccount     = accounts.find((a) => a.account_type === 'asset' && a.is_bank_account);
 
@@ -369,13 +369,14 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         ? products.find((p) => p.id === values.product_id)
         : undefined;
 
-      await repos.invoice.createWithLines(
-        {
+      const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
+      const buildPayload = (num: string, contactId: string) => ({
+        invoice: {
           business_id:      businessId,
-          invoice_number:   invoiceNumber,
-          invoice_type:     'invoice',
-          status:           'paid',
-          contact_id:       walkIn.id,
+          invoice_number:   num,
+          invoice_type:     'invoice' as const,
+          status:           'paid' as const,
+          contact_id:       contactId,
           issue_date:       values.issue_date,
           due_date:         values.issue_date,
           currency:         originalCurrency,
@@ -396,13 +397,11 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           amount_paid:      amount,
           ar_account_id:    arAccount?.id ?? null,
           notes:            values.notes || values.description || null,
-          // NEW: branch_id flows from the form into the invoice and then into
-          // the journal entry (journal_entries.branch_id) for branch reporting
           branch_id:        values.branch_id || null,
           department_id:    values.department_id || null,
           created_by:       null,
         } as InsertDto<'invoices'>,
-        [{
+        lines: [{
           line_number:      1,
           description:      values.description,
           quantity:         qty,
@@ -412,39 +411,57 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           tax_rate:         0,
           tax_amount:       0,
           line_total:       amount,
-          // NEW: link the line to the selected product so COGS / sales account
-          // can be resolved downstream; falls back to product's sales_account_id
           product_id:       values.product_id || null,
           account_id:       selectedProduct?.sales_account_id ?? null,
         } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>],
-      );
+      });
 
-      const allInvoices = await repos.invoice.findByBusiness(businessId);
-      const created     = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
-      if (created) {
-        try {
-          await createInvoiceJournalEntry(
-            businessId,
-            created,
-            amount,
-            0,
-            values.branch_id || null,
-            values.department_id || null,
-          );
-        } catch (err) {
-          console.warn('Journal entry failed (non-critical):', err);
-        }
+      if (isOfflineNow) {
+        const offlineNum = generateOfflineNumber('INV');
+        await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+        return { offline: true, invoice_number: offlineNum };
+      }
 
-        // NEW: if a branch + product were selected, reduce stock at that
-        // branch's linked location.
-        await deductStockForBranchSale(
-          businessId,
-          values.branch_id || null,
-          [{ productId: values.product_id, quantity: qty }],
-          created.id,
-          invoiceNumber,
-          null,
+      try {
+        const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
+        await repos.invoice.createWithLines(
+          buildPayload(invoiceNumber, walkIn.id).invoice,
+          buildPayload(invoiceNumber, walkIn.id).lines,
         );
+
+        const allInvoices = await repos.invoice.findByBusiness(businessId);
+        const created     = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
+        if (created) {
+          try {
+            await createInvoiceJournalEntry(
+              businessId,
+              created,
+              amount,
+              0,
+              values.branch_id || null,
+              values.department_id || null,
+            );
+          } catch (err) {
+            console.warn('Journal entry failed (non-critical):', err);
+          }
+
+          await deductStockForBranchSale(
+            businessId,
+            values.branch_id || null,
+            [{ productId: values.product_id, quantity: qty }],
+            created.id,
+            invoiceNumber,
+            null,
+          );
+        }
+        return { offline: false, invoice_number: invoiceNumber };
+      } catch (err) {
+        if (isOfflineError(err)) {
+          const offlineNum = generateOfflineNumber('INV');
+          await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+          return { offline: true, invoice_number: offlineNum };
+        }
+        throw err;
       }
     },
     onSuccess: () => {
@@ -453,8 +470,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
         reference: '', notes: '', product_id: '', branch_id: '', department_id: '', quantity: '1',
       });
-      queryClient.invalidateQueries({ queryKey: ['income'] });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries();
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),

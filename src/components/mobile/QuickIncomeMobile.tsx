@@ -6,6 +6,7 @@ import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
 import { createInvoiceJournalEntry } from '@/services/journalService';
 import type { InsertDto, Row } from '@/dal/types/database';
+import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 
 type Step = 'amount' | 'category' | 'product' | 'description' | 'costCenter' | 'confirm' | 'success';
 
@@ -99,21 +100,17 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
         throw new Error('Please select an income account from the Chart of Accounts.');
       }
 
-      const contacts = await repos.contact.findByBusiness(businessId, 'customer');
-      const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
-      if (!walkIn) throw new Error('No customer contact found. Add a Walk-in Customer contact first.');
-
-      const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
+      const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
       const categoryName = selectedAccount.name;
       const desc = description.trim() || selectedProduct?.name || categoryName;
 
-      await repos.invoice.createWithLines(
-        {
+      const buildPayload = (num: string, contactId: string) => ({
+        invoice: {
           business_id: businessId,
-          invoice_number: invoiceNumber,
-          invoice_type: 'invoice',
-          status: 'paid',
-          contact_id: walkIn.id,
+          invoice_number: num,
+          invoice_type: 'invoice' as const,
+          status: 'paid' as const,
+          contact_id: contactId,
           issue_date: today,
           due_date: today,
           currency: 'MWK',
@@ -132,7 +129,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           branch_id: branchId || null,
           department_id: departmentId || null,
         } as InsertDto<'invoices'>,
-        [{
+        lines: [{
           line_number: 1,
           description: desc,
           quantity: 1,
@@ -145,52 +142,78 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           account_id: selectedAccount.id,
           product_id: selectedProduct?.id || null,
         } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>],
-      );
+      });
 
-      const allInvoices = await repos.invoice.findByBusiness(businessId);
-      const created = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
-      if (created) {
-        try {
-          await createInvoiceJournalEntry(
-            businessId, created, rawAmount, 0, branchId || null, departmentId || null,
-          );
+      if (isOfflineNow) {
+        const offlineNum = generateOfflineNumber('INV');
+        await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+        return { offline: true, invoice_number: offlineNum };
+      }
 
-          // Optional: deduct stock if product is inventory-tracked
-          if (selectedProduct && selectedProduct.track_inventory) {
-            try {
-              const locations = await repos.inventory.findLocations(businessId);
-              let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
-              if (!targetLocation) {
-                targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+      try {
+        const contacts = await repos.contact.findByBusiness(businessId, 'customer');
+        const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
+        if (!walkIn) throw new Error('No customer contact found. Add a Walk-in Customer contact first.');
+
+        const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
+
+        await repos.invoice.createWithLines(
+          buildPayload(invoiceNumber, walkIn.id).invoice,
+          buildPayload(invoiceNumber, walkIn.id).lines,
+        );
+
+        const allInvoices = await repos.invoice.findByBusiness(businessId);
+        const created = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
+        if (created) {
+          try {
+            await createInvoiceJournalEntry(
+              businessId, created, rawAmount, 0, branchId || null, departmentId || null,
+            );
+
+            // Optional: deduct stock if product is inventory-tracked
+            if (selectedProduct && selectedProduct.track_inventory) {
+              try {
+                const locations = await repos.inventory.findLocations(businessId);
+                let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
+                if (!targetLocation) {
+                  targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+                }
+                if (targetLocation) {
+                  const balance = await repos.inventory.findBalance(businessId, selectedProduct.id, targetLocation.id);
+                  await repos.inventory.recordMovements([{
+                    business_id: businessId,
+                    product_id: selectedProduct.id,
+                    location_id: targetLocation.id,
+                    movement_type: 'sale' as const,
+                    movement_date: today,
+                    quantity: -1,
+                    unit_cost: balance ? Number(balance.average_cost) : 0,
+                    source_type: 'invoice',
+                    source_id: created.id,
+                    reference: invoiceNumber,
+                    created_by: null,
+                  } as InsertDto<'stock_movements'>]);
+                }
+              } catch (stockErr) {
+                console.warn('Stock deduction failed (non-critical):', stockErr);
               }
-              if (targetLocation) {
-                const balance = await repos.inventory.findBalance(businessId, selectedProduct.id, targetLocation.id);
-                await repos.inventory.recordMovements([{
-                  business_id: businessId,
-                  product_id: selectedProduct.id,
-                  location_id: targetLocation.id,
-                  movement_type: 'sale' as const,
-                  movement_date: today,
-                  quantity: -1,
-                  unit_cost: balance ? Number(balance.average_cost) : 0,
-                  source_type: 'invoice',
-                  source_id: created.id,
-                  reference: invoiceNumber,
-                  created_by: null,
-                } as InsertDto<'stock_movements'>]);
-              }
-            } catch (stockErr) {
-              console.warn('Stock deduction failed (non-critical):', stockErr);
             }
+          } catch (err) {
+            console.warn('Journal entry failed:', err);
           }
-        } catch (err) {
-          console.warn('Journal entry failed:', err);
         }
+        return { offline: false, invoice_number: invoiceNumber };
+      } catch (err) {
+        if (isOfflineError(err)) {
+          const offlineNum = generateOfflineNumber('INV');
+          await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+          return { offline: true, invoice_number: offlineNum };
+        }
+        throw err;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['income'] });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      queryClient.invalidateQueries();
       setStep('success');
       setTimeout(() => handleClose(), 1500);
     },

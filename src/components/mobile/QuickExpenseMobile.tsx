@@ -6,6 +6,7 @@ import { BottomSheet } from './BottomSheet';
 import { repos } from '@/lib/repositories';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import type { InsertDto, Row } from '@/dal/types/database';
+import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 
 type Step = 'amount' | 'category' | 'product' | 'description' | 'costCenter' | 'confirm' | 'success';
 
@@ -106,16 +107,16 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         );
       }
 
-      const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
+      const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
       const categoryName = selectedAccount.name;
       const desc = description.trim() || selectedProduct?.name || categoryName;
 
-      await repos.expense.createWithLines(
-        {
+      const buildPayload = (num: string) => ({
+        expense: {
           business_id: businessId,
-          expense_number: expenseNumber,
-          expense_type: 'receipt',
-          status: 'paid',
+          expense_number: num,
+          expense_type: 'receipt' as const,
+          status: 'paid' as const,
           expense_date: today,
           currency: 'MWK',
           exchange_rate: 1,
@@ -129,7 +130,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           branch_id: branchId || null,
           department_id: departmentId || null,
         } as InsertDto<'expenses'>,
-        [{
+        lines: [{
           line_number: 1,
           description: desc,
           quantity: 1,
@@ -141,60 +142,82 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
           account_id: selectedAccount.id,
           product_id: selectedProduct?.id || null,
         } as Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>],
-      );
+      });
 
-      const allExpenses = await repos.expense.findByBusiness(businessId);
-      const created = allExpenses.find((e) => e.expense_number === expenseNumber);
-      if (created) {
-        try {
-          const allocations: ExpenseAccountAllocation[] = [
-            { accountId: selectedAccount.id, amount: netAmount, description: desc },
-          ];
-          const journalEntryId = await createExpenseJournalEntry(
-            businessId, created, allocations, vatAmount, branchId || null, departmentId || null,
-          );
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BaseRepository exposes update via inheritance
-          await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+      if (isOfflineNow) {
+        const offlineNum = generateOfflineNumber('EXP');
+        await enqueue('expense', businessId, buildPayload(offlineNum));
+        return { offline: true, expense_number: offlineNum };
+      }
 
-          // Optional: add stock if product is inventory-tracked and a branch/location exists
-          if (selectedProduct && selectedProduct.track_inventory) {
-            try {
-              const locations = await repos.inventory.findLocations(businessId);
-              let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
-              if (!targetLocation) {
-                targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+      try {
+        const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
+        await repos.expense.createWithLines(
+          buildPayload(expenseNumber).expense,
+          buildPayload(expenseNumber).lines,
+        );
+
+        const allExpenses = await repos.expense.findByBusiness(businessId);
+        const created = allExpenses.find((e) => e.expense_number === expenseNumber);
+        if (created) {
+          try {
+            const allocations: ExpenseAccountAllocation[] = [
+              { accountId: selectedAccount.id, amount: netAmount, description: desc },
+            ];
+            const journalEntryId = await createExpenseJournalEntry(
+              businessId, created, allocations, vatAmount, branchId || null, departmentId || null,
+            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BaseRepository exposes update via inheritance
+            await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+
+            // Optional: add stock if product is inventory-tracked and a branch/location exists
+            if (selectedProduct && selectedProduct.track_inventory) {
+              try {
+                const locations = await repos.inventory.findLocations(businessId);
+                let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
+                if (!targetLocation) {
+                  targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+                }
+                if (targetLocation) {
+                  await repos.inventory.recordMovements([{
+                    business_id: businessId,
+                    product_id: selectedProduct.id,
+                    location_id: targetLocation.id,
+                    movement_type: 'purchase' as const,
+                    movement_date: today,
+                    quantity: 1,
+                    unit_cost: netAmount,
+                    source_type: 'expense',
+                    source_id: created.id,
+                    reference: expenseNumber,
+                    created_by: null,
+                  } as InsertDto<'stock_movements'>]);
+                }
+              } catch (stockErr) {
+                console.warn('Stock addition failed (non-critical):', stockErr);
               }
-              if (targetLocation) {
-                await repos.inventory.recordMovements([{
-                  business_id: businessId,
-                  product_id: selectedProduct.id,
-                  location_id: targetLocation.id,
-                  movement_type: 'purchase' as const,
-                  movement_date: today,
-                  quantity: 1,
-                  unit_cost: netAmount,
-                  source_type: 'expense',
-                  source_id: created.id,
-                  reference: expenseNumber,
-                  created_by: null,
-                } as InsertDto<'stock_movements'>]);
-              }
-            } catch (stockErr) {
-              console.warn('Stock addition failed (non-critical):', stockErr);
             }
+          } catch (err) {
+            console.error('Journal entry failed:', err);
+            throw new Error(
+              'Expense saved, but posting to the ledger failed. ' +
+              'It will show as "Needs Posting" on the Expenses page — you can retry from there.',
+              { cause: err },
+            );
           }
-        } catch (err) {
-          console.error('Journal entry failed:', err);
-          throw new Error(
-            'Expense saved, but posting to the ledger failed. ' +
-            'It will show as "Needs Posting" on the Expenses page — you can retry from there.',
-            { cause: err },
-          );
         }
+        return { offline: false, expense_number: expenseNumber };
+      } catch (err) {
+        if (isOfflineError(err)) {
+          const offlineNum = generateOfflineNumber('EXP');
+          await enqueue('expense', businessId, buildPayload(offlineNum));
+          return { offline: true, expense_number: offlineNum };
+        }
+        throw err;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      queryClient.invalidateQueries();
       setStep('success');
       setTimeout(() => {
         handleClose();

@@ -2,6 +2,38 @@ import { offlineDB, type QueueOperationType, type QueueItem } from './db';
 import type { QueuePayloadFor } from './payloads';
 
 /**
+ * Determines whether an error occurred because the device is offline or
+ * network connectivity failed.
+ */
+export function isOfflineError(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return true;
+  }
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes('Failed to fetch') ||
+    msg.includes('NetworkError') ||
+    msg.includes('Network request failed') ||
+    msg.includes('fetch failed') ||
+    msg.includes('offline') ||
+    msg.includes('ERR_INTERNET_DISCONNECTED') ||
+    msg.includes('ERR_NETWORK_CHANGED')
+  );
+}
+
+/**
+ * Generates a unique temporary reference number for an offline transaction
+ * (e.g. 'EXP-OFFLINE-123456'). Will be replaced with a genuine sequence
+ * number from BusinessRepository upon syncing online.
+ */
+export function generateOfflineNumber(prefix = 'OFF'): string {
+  const stamp = Date.now().toString().slice(-6);
+  const rand = Math.floor(100 + Math.random() * 900);
+  return `${prefix}-OFFLINE-${stamp}${rand}`;
+}
+
+/**
  * Returns the next monotonically increasing sequence number, used to
  * preserve creation order across all queued operations regardless of
  * `operationType`. We can't rely on `localId` alone for ordering once
