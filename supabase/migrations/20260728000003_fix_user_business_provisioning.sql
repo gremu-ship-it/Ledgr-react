@@ -29,8 +29,21 @@
 -- 20260728000001 granted EXECUTE on a SECURITY DEFINER function to
 -- `authenticated`. That let ANY logged-in user reassign ANY other user's
 -- business memberships by email. Service role only from here on.
-REVOKE EXECUTE ON FUNCTION public.assign_user_to_eagle_businesses(TEXT, TEXT)
-  FROM authenticated;
+-- Guarded so a from-scratch `supabase db reset` still works if the function
+-- is absent for any reason. (20260728000004 drops it entirely.)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public'
+       AND p.proname = 'assign_user_to_eagle_businesses'
+  ) THEN
+    REVOKE EXECUTE ON FUNCTION public.assign_user_to_eagle_businesses(TEXT, TEXT)
+      FROM authenticated;
+  END IF;
+END
+$$;
 
 
 -- ── (b) Generic, non-destructive access grant ───────────────────────────────

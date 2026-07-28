@@ -6,10 +6,10 @@
 --   (The SQL editor runs as service role, which is what these functions need.)
 --
 -- PREREQUISITE
---   Migration 20260728000003_fix_user_business_provisioning.sql must be applied
---   first, since it defines grant_user_business_access() and
---   diagnose_user_login(). Apply via `supabase db push`, or just paste that
---   migration into the SQL editor and run it once.
+--   Migrations 20260728000003 and 20260728000004 must be applied first, since
+--   they define diagnose_user_login() and set_user_business_access(). Apply via
+--   `supabase db push`, or paste those two migrations into the SQL editor and
+--   run them once.
 --
 -- This script is idempotent — safe to run more than once.
 -- ============================================================================
@@ -21,23 +21,21 @@
 select * from diagnose_user_login('peacemalamula@gmail.com');
 
 
--- ── 2. Grant supervisor on Eagle Nurseries ──────────────────────────────────
-select * from grant_user_business_access(
+-- ── 2. Grant supervisor on both Eagle businesses ────────────────────────────
+-- Additive: this does NOT touch any other membership he may have.
+-- If you want him restricted to ONLY these two, add  p_revoke_others => true
+-- (that variant still refuses to leave him with zero businesses).
+select * from set_user_business_access(
   'peacemalamula@gmail.com',
-  'b15238b7-2b36-4761-bc73-cf7e87a925bb'::uuid,  -- Eagle Nurseries
+  array[
+    'b15238b7-2b36-4761-bc73-cf7e87a925bb',  -- Eagle Nurseries
+    '93851ac2-73ac-4241-b462-ec8d9d663f8b'   -- Eagle Nova Horizon Holdings Ltd. Co.
+  ]::uuid[],
   'supervisor'
 );
 
 
--- ── 3. Grant supervisor on Eagle Nova Horizon Holdings Ltd. Co. ─────────────
-select * from grant_user_business_access(
-  'peacemalamula@gmail.com',
-  '93851ac2-73ac-4241-b462-ec8d9d663f8b'::uuid,  -- Eagle Nova Horizon Holdings Ltd. Co.
-  'supervisor'
-);
-
-
--- ── 4. Make sure his email is confirmed ─────────────────────────────────────
+-- ── 3. Make sure his email is confirmed ─────────────────────────────────────
 -- Dashboard-created users are only auto-confirmed if "Auto Confirm User" was
 -- ticked. Without this, signInWithPassword returns "Email not confirmed" and
 -- the app shows "Your email address is not yet verified" — a real login block,
@@ -47,7 +45,7 @@ update auth.users
  where lower(email) = 'peacemalamula@gmail.com';
 
 
--- ── 5. AFTER: confirm the fix ───────────────────────────────────────────────
+-- ── 4. AFTER: confirm the fix ───────────────────────────────────────────────
 -- Expect: email_confirmed = OK, and visible_memberships = 2 of 2, listing
 -- Eagle Nurseries and Eagle Nova, both role=supervisor, both status OK.
 select * from diagnose_user_login('peacemalamula@gmail.com');
@@ -65,10 +63,11 @@ select * from diagnose_user_login('peacemalamula@gmail.com');
 --     'admin' or 'board_member' instead, or adjust the supervisor rules.
 --
 -- NOTE ON THE OTHER MIGRATION
---   20260728000001 hardcodes 0cba121a-9245-4d64-b708-a3b8fa7f618e as a
---   "blocked business", but that UUID is actually this user's auth ID, so the
---   line never matched a business and did nothing. Its step 3 also
---   deactivates every membership outside the two Eagle businesses. This
---   script deliberately does not call that function; grant_user_business_access
---   only ever adds access.
+--   20260728000001's assign_user_to_eagle_businesses() is now DROPPED by
+--   migration 20260728000004. It hardcoded
+--   0cba121a-9245-4d64-b708-a3b8fa7f618e as a "blocked business" when that
+--   UUID is actually this user's auth ID, and it deactivated every membership
+--   outside the two Eagle businesses. set_user_business_access() used above is
+--   its safe replacement: additive by default, and it will not leave anyone
+--   with zero businesses.
 -- ============================================================================

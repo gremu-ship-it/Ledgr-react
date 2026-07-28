@@ -1,4 +1,24 @@
 -- ============================================================================
+-- ⚠️  SUPERSEDED — DO NOT USE / DO NOT COPY THIS PATTERN
+--
+-- The function created below, assign_user_to_eagle_businesses(), is DROPPED by
+-- migration 20260728000004_replace_eagle_assign_with_safe_access.sql. Use
+-- public.set_user_business_access() instead.
+--
+-- This file is retained only because it has already been applied to live
+-- environments; migrations are append-only, so it is fixed forward rather than
+-- rewritten. Reasons it was retired:
+--   1. Step 3 deactivated EVERY membership outside the two hardcoded Eagle
+--      businesses, which could strip a user to zero businesses and lock them
+--      out of the app entirely.
+--   2. SECURITY DEFINER + arbitrary email + GRANT to `authenticated` let any
+--      logged-in user rewrite any other user's access.
+--   3. The "blocked business" constant 0cba121a-9245-4d64-b708-a3b8fa7f618e is
+--      actually a USER id, so step 2 never matched anything.
+--   4. No pinned search_path on a SECURITY DEFINER function.
+-- ============================================================================
+
+-- ============================================================================
 -- Migration: Assign User to Eagle Nurseries and Eagle Nova Horizon Holdings Ltd. Co.
 -- Restrictions:
 --   - Assigned businesses:
