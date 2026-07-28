@@ -1,3 +1,4 @@
+import { Suspense, lazy, type ComponentType } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
@@ -8,51 +9,68 @@ import { InstallPrompt } from '@/offline/InstallPrompt';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
-
-// Auth pages
-import { LoginPage } from '@/pages/LoginPage';
-import { RegisterPage } from '@/pages/RegisterPage';
-import { CreateBusinessPage } from '@/pages/CreateBusinessPage';
-
-// App pages
-import { DashboardPage } from '@/pages/DashboardPage';
-import { IncomePage } from '@/pages/IncomePage';
-import { ExpensesPage } from '@/pages/ExpensesPage';
-import { InvoicesPage } from '@/pages/InvoicesPage';
-import { PayrollPage } from '@/pages/PayrollPage';
-import { ContactsPage } from '@/pages/ContactsPage';
-import { ProductsPage } from '@/pages/ProductsPage';
-import { InventoryPage } from '@/pages/InventoryPage';
-import { AccountsPage } from '@/pages/AccountsPage';
-import { AssetsPage } from '@/pages/AssetsPage';
-import { CapitalPage } from '@/pages/CapitalPage';
-import { TaxPage } from '@/pages/TaxPage';
-import { BankReconciliation } from '@/components/bank/BankReconciliation';
-import { ApiDocumentationPage } from '@/pages/ApiDocumentationPage';
-import { ApiKeysPage } from '@/pages/ApiKeysPage';
-import { ZapierIntegrationPage } from '@/pages/ZapierIntegrationPage';
-import { ReportsPage } from '@/pages/ReportsPage';
-import { AiInsightsPage } from '@/pages/AiInsightsPage';
-import { SettingsPage } from '@/pages/SettingsPage';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
-import { WarehousePage } from './pages/WarehousePage';
-import { TransfersPage } from './pages/TransfersPage';
-import { BranchesPage } from './pages/BranchesPage';
-import { DepartmentsPage } from './pages/DepartmentsPage';
-import { ForgotPasswordPage } from '@/pages/auth/ForgotPasswordPage';
-import { ResetPasswordPage } from '@/pages/auth/ResetPasswordPage';
-import { PeriodManagementPage } from '@/pages/PeriodManagementPage';
-import { JournalsPage } from '@/pages/JournalsPage';
-import { RepairCoaPage } from '@/pages/RepairCoaPage';
-import { AcceptInvitationPage } from '@/pages/AcceptInvitationPage';
-import { AuditLogPage } from '@/pages/AuditLogPage';
-import { AdminBillingPage } from '@/pages/admin/AdminBillingPage';
-import { PartnerAdminLayout } from '@/pages/partner-admin/PartnerAdminLayout';
-import { PartnerAdminDashboard } from '@/pages/partner-admin/PartnerAdminDashboard';
-import { PartnerOverviewPage } from '@/pages/partner-admin/PartnerOverviewPage';
-import { PartnerSettingsPage } from '@/pages/partner-admin/PartnerSettingsPage';
-import { PartnerClientsPage } from '@/pages/partner-admin/PartnerClientsPage';
-import { PartnerBillingPage } from '@/pages/partner-admin/PartnerBillingPage';
+
+// Route-level code splitting. Every page (and the chart-heavy bank
+// reconciliation view) is loaded on demand so the initial bundle stays small
+// and no single chunk can blow past the service-worker precache limit.
+// `lazyPage` adapts our named exports to the default export React.lazy wants.
+function lazyPage<K extends string, T extends Record<K, ComponentType<never>>>(
+  loader: () => Promise<T>,
+  name: K,
+): T[K] {
+  return lazy(async () => {
+    const mod = await loader();
+    return { default: mod[name] as ComponentType<Record<string, unknown>> };
+  }) as unknown as T[K];
+}
+
+const LoginPage = lazyPage(() => import('@/pages/LoginPage'), 'LoginPage');
+const RegisterPage = lazyPage(() => import('@/pages/RegisterPage'), 'RegisterPage');
+const CreateBusinessPage = lazyPage(() => import('@/pages/CreateBusinessPage'), 'CreateBusinessPage');
+const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage'), 'ForgotPasswordPage');
+const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
+const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
+const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
+const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
+const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
+const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
+const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
+const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
+const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
+const InventoryPage = lazyPage(() => import('@/pages/InventoryPage'), 'InventoryPage');
+const AccountsPage = lazyPage(() => import('@/pages/AccountsPage'), 'AccountsPage');
+const AssetsPage = lazyPage(() => import('@/pages/AssetsPage'), 'AssetsPage');
+const CapitalPage = lazyPage(() => import('@/pages/CapitalPage'), 'CapitalPage');
+const TaxPage = lazyPage(() => import('@/pages/TaxPage'), 'TaxPage');
+const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage'), 'ApiDocumentationPage');
+const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
+const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
+const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
+const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
+const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
+const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
+const TransfersPage = lazyPage(() => import('@/pages/TransfersPage'), 'TransfersPage');
+const BranchesPage = lazyPage(() => import('@/pages/BranchesPage'), 'BranchesPage');
+const DepartmentsPage = lazyPage(() => import('@/pages/DepartmentsPage'), 'DepartmentsPage');
+const PeriodManagementPage = lazyPage(() => import('@/pages/PeriodManagementPage'), 'PeriodManagementPage');
+const JournalsPage = lazyPage(() => import('@/pages/JournalsPage'), 'JournalsPage');
+const RepairCoaPage = lazyPage(() => import('@/pages/RepairCoaPage'), 'RepairCoaPage');
+const AuditLogPage = lazyPage(() => import('@/pages/AuditLogPage'), 'AuditLogPage');
+const AdminBillingPage = lazyPage(() => import('@/pages/admin/AdminBillingPage'), 'AdminBillingPage');
+const PartnerAdminLayout = lazyPage(() => import('@/pages/partner-admin/PartnerAdminLayout'), 'PartnerAdminLayout');
+const PartnerAdminDashboard = lazyPage(() => import('@/pages/partner-admin/PartnerAdminDashboard'), 'PartnerAdminDashboard');
+const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/PartnerOverviewPage'), 'PartnerOverviewPage');
+const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
+const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
+const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
+const BankReconciliation = lazyPage(
+  () => import('@/components/bank/BankReconciliation'),
+  'BankReconciliation',
+);
+
+// Plan gates wrap routes, so they stay in the main bundle.
 import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
 import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
@@ -94,6 +112,8 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <PartnerProvider>
         <BrowserRouter>
+          {/* Lazy route chunks resolve here; fullScreen keeps layout stable. */}
+          <Suspense fallback={<LoadingSpinner fullScreen label="Loading…" />}>
           <Routes>
             {/* Public-only */}
             <Route element={<PublicOnlyRoute />}>
@@ -270,6 +290,7 @@ function App() {
             <Route path="/" element={<Navigate to={homePath} replace />} />
             <Route path="*" element={<Navigate to={homePath} replace />} />
           </Routes>
+          </Suspense>
 
           <InstallPrompt />
           <CookieConsentBanner />

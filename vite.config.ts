@@ -46,6 +46,11 @@ export default defineConfig(({ mode }) => {
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // Safety net: minifier output size varies between environments (local
+        // vs CI), and a chunk creeping past workbox's 2 MiB default makes the
+        // build hard-fail. 5 MiB keeps the app fully precachable/offline while
+        // still flagging genuinely runaway bundles via chunkSizeWarningLimit.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
         cleanupOutdatedCaches: true,
@@ -116,6 +121,44 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
+      },
+    },
+    build: {
+      rolldownOptions: {
+        output: {
+          // Keep the shared vendor code out of the entry chunk. Pages are
+          // already lazy-loaded, so this mainly stops React + router + query +
+          // i18n + Dexie from bloating the one file every visitor must fetch.
+          advancedChunks: {
+            groups: [
+              {
+                name: 'vendor-react',
+                test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/,
+                priority: 30,
+              },
+              {
+                name: 'vendor-charts',
+                test: /node_modules[\\/](recharts|d3-.*|victory-.*|internmap|decimal\.js-light)[\\/]/,
+                priority: 25,
+              },
+              {
+                name: 'vendor-data',
+                test: /node_modules[\\/](@supabase|@tanstack|dexie|dexie-react-hooks)[\\/]/,
+                priority: 20,
+              },
+              {
+                name: 'vendor-i18n',
+                test: /node_modules[\\/](i18next.*|react-i18next)[\\/]/,
+                priority: 15,
+              },
+              {
+                name: 'vendor',
+                test: /node_modules[\\/]/,
+                priority: 1,
+              },
+            ],
+          },
+        },
       },
     },
     server: {
