@@ -18,15 +18,22 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
   const { t } = useTranslation();
   const [notes, setNotes] = useState('');
 
+  // v_cash_flow stores periods as YYYY-MM, while the report date picker
+  // supplies YYYY-MM-DD. Comparing those strings directly excludes the
+  // selected month (for example, `2026-01` is less than `2026-01-01`).
+  // Normalize the bounds to month keys before querying the view.
+  const periodStartMonth = periodStart.slice(0, 7);
+  const periodEndMonth = periodEnd.slice(0, 7);
+
   const { data: cashFlowData, isLoading, error } = useQuery({
-    queryKey: ['cash_flow', businessId, periodStart, periodEnd],
+    queryKey: ['cash_flow', businessId, periodStartMonth, periodEndMonth],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('v_cash_flow')
         .select('*')
         .eq('business_id', businessId)
-        .gte('period', periodStart)
-        .lte('period', periodEnd)
+        .gte('period', periodStartMonth)
+        .lte('period', periodEndMonth)
         .order('period', { ascending: true });
 
       if (error) throw error;
