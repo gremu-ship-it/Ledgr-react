@@ -1,8 +1,26 @@
 {
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|icons/|.*\\..*$).*)", "destination": "/index.html" }
   ],
   "headers": [
+    {
+      "source": "/(index\\.html|registerSW\\.js|sw\\.js|workbox-.*\\.js)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
     {
       "source": "/((?!api/).*)",
       "headers": [

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { isChunkLoadError } from '@/lib/chunkRecovery';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -44,6 +45,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (error) {
       if (fallback) return fallback(error, this.reset);
 
+      const isChunkError = isChunkLoadError(error);
+
       return (
         <div
           className="flex h-full min-h-[400px] w-full flex-col items-center justify-center gap-4 p-8 text-center"
@@ -53,19 +56,28 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <AlertTriangle className="h-6 w-6 text-red-700" aria-hidden="true" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Something went wrong</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {isChunkError ? 'A new version is available' : 'Something went wrong'}
+            </h2>
             <p className="mt-1 max-w-sm text-sm text-gray-700">
-              An unexpected error occurred while loading this page. You can try again, or refresh
-              the app if the problem persists.
+              {isChunkError
+                ? 'A new version of Ledgr has been deployed. Please refresh the page to load the latest update.'
+                : 'An unexpected error occurred while loading this page. You can try again, or refresh the app if the problem persists.'}
             </p>
           </div>
           <button
             type="button"
-            onClick={this.reset}
+            onClick={() => {
+              if (isChunkError && typeof window !== 'undefined' && typeof window.location?.reload === 'function') {
+                window.location.reload();
+              } else {
+                this.reset();
+              }
+            }}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            Try again
+            {isChunkError ? 'Reload Page' : 'Try again'}
           </button>
         </div>
       );

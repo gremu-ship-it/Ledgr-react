@@ -11,18 +11,35 @@ import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import {
+  isChunkLoadError,
+  attemptChunkRecovery,
+  clearChunkRecovery,
+} from '@/lib/chunkRecovery';
 
 // Route-level code splitting. Every page (and the chart-heavy bank
 // reconciliation view) is loaded on demand so the initial bundle stays small
 // and no single chunk can blow past the service-worker precache limit.
-// `lazyPage` adapts our named exports to the default export React.lazy wants.
+// `lazyPage` adapts our named exports to the default export React.lazy wants
+// and automatically recovers from chunk load errors (e.g. after a deployment)
+// by reloading the page once so users get the latest bundle hashes seamlessly.
 function lazyPage<K extends string, T extends Record<K, ComponentType<never>>>(
   loader: () => Promise<T>,
   name: K,
 ): T[K] {
   return lazy(async () => {
-    const mod = await loader();
-    return { default: mod[name] as ComponentType<Record<string, unknown>> };
+    try {
+      const mod = await loader();
+      clearChunkRecovery(name);
+      return { default: mod[name] as ComponentType<Record<string, unknown>> };
+    } catch (error) {
+      if (isChunkLoadError(error) && attemptChunkRecovery(name)) {
+        // Return a never-resolving promise so React Suspense stays pending while
+        // the browser reloads, preventing an ErrorBoundary flicker.
+        return new Promise(() => {});
+      }
+      throw error;
+    }
   }) as unknown as T[K];
 }
 
