@@ -22,7 +22,16 @@ type UserRole =
   | 'inventory_manager'
   | 'sales_clerk'
   | 'auditor'
-  | 'viewer';
+  | 'viewer'
+  | 'purchasing_officer'
+  | 'warehouse_worker'
+  | 'sales_manager'
+  | 'customer_service_rep'
+  | 'tax_compliance_officer'
+  | 'treasury_manager'
+  | 'asset_manager'
+  | 'board_member'
+  | 'branch_manager';
 
 interface Member {
   id: string;
@@ -83,7 +92,7 @@ const ROLE_CONFIG: Record<UserRole, {
   },
   supervisor: {
     label: 'Supervisor',
-    description: 'Read/write financial data and write payroll',
+    description: 'Read/write financial data',
     icon: Shield,
     badge: 'bg-indigo-100 text-indigo-700',
   },
@@ -95,13 +104,13 @@ const ROLE_CONFIG: Record<UserRole, {
   },
   inventory_manager: {
     label: 'Inventory Manager',
-    description: 'Read/write stock and financial records, can export',
+    description: 'Restricted to items under inventory',
     icon: Eye,
     badge: 'bg-sky-100 text-sky-700',
   },
   sales_clerk: {
     label: 'Sales Clerk',
-    description: 'Read/write sales and expenses',
+    description: 'Only view income, expenses, and invoices',
     icon: Calculator,
     badge: 'bg-green-100 text-green-700',
   },
@@ -117,6 +126,60 @@ const ROLE_CONFIG: Record<UserRole, {
     icon: BarChart3,
     badge: 'bg-gray-100 text-gray-600',
   },
+  purchasing_officer: {
+    label: 'Purchasing Officer',
+    description: 'Manages expenses, vendors, and inventory restocking',
+    icon: Calculator,
+    badge: 'bg-orange-100 text-orange-700',
+  },
+  warehouse_worker: {
+    label: 'Warehouse Worker',
+    description: 'Manages warehouse picking, packing, and stock transfers',
+    icon: Eye,
+    badge: 'bg-yellow-100 text-yellow-700',
+  },
+  sales_manager: {
+    label: 'Sales Manager',
+    description: 'Manages sales, invoices, customers, and sales reports',
+    icon: Users,
+    badge: 'bg-emerald-100 text-emerald-700',
+  },
+  customer_service_rep: {
+    label: 'Customer Service Rep',
+    description: 'Handles customer invoices and contacts view',
+    icon: Users,
+    badge: 'bg-cyan-100 text-cyan-700',
+  },
+  tax_compliance_officer: {
+    label: 'Tax Compliance Officer',
+    description: 'Manages tax returns, compliance, reports, and journals',
+    icon: Shield,
+    badge: 'bg-rose-100 text-rose-700',
+  },
+  treasury_manager: {
+    label: 'Treasury Manager',
+    description: 'Manages bank reconciliation, accounts, cash flow, and capital',
+    icon: Calculator,
+    badge: 'bg-violet-100 text-violet-700',
+  },
+  asset_manager: {
+    label: 'Asset Manager',
+    description: 'Manages fixed assets and capital equipment schedules',
+    icon: Eye,
+    badge: 'bg-stone-100 text-stone-700',
+  },
+  board_member: {
+    label: 'Board Member / Investor',
+    description: 'Read-only access to dashboard and high-level reports',
+    icon: BarChart3,
+    badge: 'bg-slate-100 text-slate-700',
+  },
+  branch_manager: {
+    label: 'Branch Manager',
+    description: 'Manages branch operations, income, expenses, inventory, and reports',
+    icon: Shield,
+    badge: 'bg-lime-100 text-lime-700',
+  },
 };
 
 const INVITABLE_ROLES: UserRole[] = [
@@ -129,12 +192,21 @@ const INVITABLE_ROLES: UserRole[] = [
   'sales_clerk',
   'auditor',
   'viewer',
+  'purchasing_officer',
+  'warehouse_worker',
+  'sales_manager',
+  'customer_service_rep',
+  'tax_compliance_officer',
+  'treasury_manager',
+  'asset_manager',
+  'board_member',
+  'branch_manager',
 ];
 
 // ── RoleBadge ────────────────────────────────────────────────────────────────
 
 function RoleBadge({ role }: { role: UserRole }) {
-  const config = ROLE_CONFIG[role];
+  const config = ROLE_CONFIG[role] || { label: role, icon: Shield, badge: 'bg-gray-100 text-gray-700' };
   const Icon = config.icon;
   return (
     <span className={clsx('inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium', config.badge)}>
@@ -201,7 +273,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           const { data: rpcData, error: rpcError } = await supabase.rpc('invite_member', {
             p_business_id: businessId,
             p_email: directEmail.trim().toLowerCase(),
-            p_role: directRole,
+            p_role: directRole as any,
           });
           if (rpcError) throw new Error(rpcError.message);
           const token = rpcData as string;
@@ -257,7 +329,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
       }
 
       setGeneratedLink(data.invite_url);
-      setSuccess(`Invite link created for ${ROLE_CONFIG[linkRole].label}!`);
+      setSuccess(`Invite link created for ${ROLE_CONFIG[linkRole]?.label || linkRole}!`);
       onInvited();
     } catch (err) {
       setError((err as Error).message);
@@ -349,7 +421,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 {assignableRoles.map((r) => (
-                  <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
+                  <option key={r} value={r}>{ROLE_CONFIG[r]?.label || r}</option>
                 ))}
               </select>
             </div>
@@ -365,7 +437,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           </form>
           <div className="mt-3">
             <p className="text-xs font-medium text-gray-500">Role permissions:</p>
-            <p className="text-xs text-gray-600">{ROLE_CONFIG[directRole].description}</p>
+            <p className="text-xs text-gray-600">{ROLE_CONFIG[directRole]?.description}</p>
           </div>
         </div>
       ) : (
@@ -442,7 +514,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 {assignableRoles.map((r) => (
-                  <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
+                  <option key={r} value={r}>{ROLE_CONFIG[r]?.label || r}</option>
                 ))}
               </select>
             </div>
@@ -458,7 +530,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
           </form>
           <div className="mt-3">
             <p className="text-xs font-medium text-gray-500">Role permissions:</p>
-            <p className="text-xs text-gray-600">{ROLE_CONFIG[linkRole].description}</p>
+            <p className="text-xs text-gray-600">{ROLE_CONFIG[linkRole]?.description}</p>
           </div>
         </div>
       )}
@@ -618,13 +690,9 @@ export function TeamManagementPage() {
   }
 
   async function handleChangeRole(memberId: string, newRole: UserRole) {
-    // The granular values (supervisor, data_entry, inventory_manager,
-    // sales_clerk) are now part of the user_role enum (see migration
-    // 20260723000001_expanded_roles_and_invitations.sql), so no cast is
-    // needed and the values round-trip cleanly through the DB.
     const { error: updateError } = await supabase
       .from('business_users')
-      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .update({ role: newRole as any, updated_at: new Date().toISOString() })
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -740,7 +808,7 @@ export function TeamManagementPage() {
                       className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
                       {(currentRole === 'owner' ? Object.keys(ROLE_CONFIG) as UserRole[] : INVITABLE_ROLES).map((r) => (
-                        <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
+                        <option key={r} value={r}>{ROLE_CONFIG[r]?.label || r}</option>
                       ))}
                     </select>
                   ) : (
@@ -888,12 +956,12 @@ export function TeamManagementPage() {
                   <td className="px-4 py-2 font-medium text-gray-700">{label}</td>
                   {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
                     const perm = {
-                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer'],
-                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk'],
+                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager'],
+                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','branch_manager'],
                       canWritePayroll: ['owner','admin','accountant','payroll_manager','supervisor'],
                       canDelete: ['owner','admin'],
                       canManageUsers: ['owner','admin'],
-                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor'],
+                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor','purchasing_officer','sales_manager','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager'],
                       canManageBilling: ['owner'],
                     }[key] ?? [];
                     const has = perm.includes(r);

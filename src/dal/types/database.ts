@@ -98,7 +98,16 @@ export type BusinessUserRole =
   | 'inventory_manager'
   | 'sales_clerk'
   | 'auditor'
-  | 'viewer';
+  | 'viewer'
+  | 'purchasing_officer'
+  | 'warehouse_worker'
+  | 'sales_manager'
+  | 'customer_service_rep'
+  | 'tax_compliance_officer'
+  | 'treasury_manager'
+  | 'asset_manager'
+  | 'board_member'
+  | 'branch_manager';
 /**
  * DB: invoice_status — exact 7 members.
  * 'partial' → 'partially_paid', 'viewed' does NOT exist, 'credit_note' is a status value.
