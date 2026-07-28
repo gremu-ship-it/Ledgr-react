@@ -15,6 +15,7 @@
 // Only permanent ban happens later, in finalize-account-deletions.
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { withCors } from '../_shared/cors.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import nodemailer from 'npm:nodemailer@6.9.14';
 
@@ -71,7 +72,7 @@ async function sendConfirmationEmail(toEmail: string) {
   }
 }
 
-serve(async (req) => {
+serve(withCors(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
 
   try {
@@ -142,4 +143,4 @@ serve(async (req) => {
       status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
   }
-});
+}));

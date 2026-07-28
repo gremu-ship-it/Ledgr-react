@@ -15,6 +15,7 @@
 // Returns: { success, member, message }
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { withCors } from '../_shared/cors.ts';
 import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -87,7 +88,7 @@ async function findUserByEmail(
   return null;
 }
 
-serve(async (req) => {
+serve(withCors(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
   }
@@ -357,4 +358,4 @@ serve(async (req) => {
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     });
   }
-});
+}));
