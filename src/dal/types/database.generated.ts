@@ -4498,6 +4498,15 @@ export type Database = {
         | "sales_clerk"
         | "auditor"
         | "viewer"
+        | "purchasing_officer"
+        | "warehouse_worker"
+        | "sales_manager"
+        | "customer_service_rep"
+        | "tax_compliance_officer"
+        | "treasury_manager"
+        | "asset_manager"
+        | "board_member"
+        | "branch_manager"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4727,6 +4736,15 @@ export const Constants = {
         "sales_clerk",
         "auditor",
         "viewer",
+        "purchasing_officer",
+        "warehouse_worker",
+        "sales_manager",
+        "customer_service_rep",
+        "tax_compliance_officer",
+        "treasury_manager",
+        "asset_manager",
+        "board_member",
+        "branch_manager",
       ],
     },
   },
