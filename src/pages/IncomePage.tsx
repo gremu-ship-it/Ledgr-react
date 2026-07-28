@@ -83,24 +83,28 @@ async function deductStockForBranchSale(
   reference: string,
   createdBy: string | null,
 ): Promise<void> {
-  if (!branchId) return;
   const linesWithProducts = saleLines.filter((l) => l.productId && l.quantity > 0);
   if (linesWithProducts.length === 0) return;
 
   const locations = await repos.inventory.findLocations(businessId);
-  const branchLocation = locations.find((l) => l.branch_id === branchId);
-  if (!branchLocation) {
-    console.warn(`No inventory location linked to branch ${branchId} — stock not adjusted for this sale.`);
+  // Try branch location first if branchId is provided, otherwise fall back to default warehouse or primary location
+  let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
+  if (!targetLocation) {
+    targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+  }
+
+  if (!targetLocation) {
+    console.warn(`No inventory location found for business ${businessId} — stock not adjusted for this sale.`);
     return;
   }
 
   const movements = [];
   for (const line of linesWithProducts) {
-    const balance = await repos.inventory.findBalance(businessId, line.productId, branchLocation.id);
+    const balance = await repos.inventory.findBalance(businessId, line.productId, targetLocation.id);
     movements.push({
       business_id: businessId,
       product_id: line.productId,
-      location_id: branchLocation.id,
+      location_id: targetLocation.id,
       movement_type: 'sale' as const,
       movement_date: new Date().toISOString().slice(0, 10),
       // Negative: stock is leaving this location as part of the sale.
@@ -391,7 +395,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           total_amount:     amount,
           amount_paid:      amount,
           ar_account_id:    arAccount?.id ?? null,
-          notes:            values.notes || null,
+          notes:            values.notes || values.description || null,
           // NEW: branch_id flows from the form into the invoice and then into
           // the journal entry (journal_entries.branch_id) for branch reporting
           branch_id:        values.branch_id || null,
@@ -1071,7 +1075,7 @@ function IncomeList({ businessId }: { businessId: string }) {
               <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-3 font-medium text-brand-700">{inv.invoice_number}</td>
                 <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{inv.issue_date}</td>
-                <td className="px-4 py-3 text-gray-700">{inv.notes ?? '—'}</td>
+                <td className="px-4 py-3 font-medium text-gray-900">{inv.notes || inv.po_number || '—'}</td>
                 <td className="px-4 py-3 text-right font-medium">{formatMwk(inv.total_amount)}</td>
                 <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(inv.amount_paid)}</td>
                 <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={inv.status} /></td>

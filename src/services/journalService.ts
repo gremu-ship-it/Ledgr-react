@@ -163,12 +163,16 @@ export async function createInvoiceJournalEntry(
   const invoiceDate = invoice.issue_date;
   const sourceId = invoice.id;
 
-  const [debtors, revenue, vatPayable, cash] = await Promise.all([
+  const [debtors, defaultRevenue, vatPayable, cash] = await Promise.all([
     getAccountByCode(businessId, '1131'),
     getAccountByCode(businessId, '4112'),
     getAccountByCode(businessId, '2121'),
     getAccountByCode(businessId, '1110'),
   ]);
+
+  const revenue = invoice.revenue_account_id
+    ? await repos.account.findById(invoice.revenue_account_id).catch(() => defaultRevenue)
+    : defaultRevenue;
 
   const currency        = invoice.original_currency ?? invoice.currency;
   const exchangeRate     = Number(invoice.exchange_rate);
