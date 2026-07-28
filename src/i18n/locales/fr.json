@@ -171,7 +171,13 @@
     "passwordPlaceholder": "Au moins 8 caractères",
     "createAccount": "Créer un compte",
     "creatingAccount": "Création du compte…",
-    "alreadyHaveAccount": "Vous avez déjà un compte ?"
+    "alreadyHaveAccount": "Vous avez déjà un compte ?",
+    "noBusinessTitle": "Aucune entreprise attribuée",
+    "noBusinessBody": "Vous êtes connecté, mais votre compte n'est encore lié à aucune entreprise active. Un administrateur doit généralement finaliser la configuration de votre accès.",
+    "signedInAs": "Connecté en tant que",
+    "noBusinessCreate": "Créer une entreprise",
+    "noBusinessRetry": "Vérifier à nouveau",
+    "noBusinessContactAdmin": "Si vous attendiez l'accès à une entreprise existante, demandez à votre administrateur de confirmer que votre compte y a été ajouté et que votre adhésion est active."
   },
   "dashboard": {
     "title": "Tableau de bord",

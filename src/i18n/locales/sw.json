@@ -171,7 +171,13 @@
     "passwordPlaceholder": "Angalau herufi 8",
     "createAccount": "Fungua akaunti",
     "creatingAccount": "Inafungua akaunti…",
-    "alreadyHaveAccount": "Tayari una akaunti?"
+    "alreadyHaveAccount": "Tayari una akaunti?",
+    "noBusinessTitle": "Hakuna biashara uliyopangiwa",
+    "noBusinessBody": "Umeingia, lakini akaunti yako bado haijaunganishwa na biashara inayotumika. Mara nyingi hii inamaanisha msimamizi bado anahitaji kukamilisha kuweka ufikiaji wako.",
+    "signedInAs": "Umeingia kama",
+    "noBusinessCreate": "Fungua biashara",
+    "noBusinessRetry": "Angalia tena",
+    "noBusinessContactAdmin": "Kama ulitegemea kupata ufikiaji wa biashara iliyopo, muulize msimamizi wako athibitishe kuwa akaunti yako imeongezwa na uanachama wako unatumika."
   },
   "dashboard": {
     "title": "Dashibodi",
