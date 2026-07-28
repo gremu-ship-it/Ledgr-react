@@ -223,6 +223,29 @@ Worth recording, because a lot here is above average:
 
 ## 5. What remains
 
+**⚠ Blocker — one manual edit required before merging**
+
+`.github/workflows/deploy.yml` loops over every directory in
+`supabase/functions/` and runs `supabase functions deploy` on each. The new
+`_shared/cors.ts` module lives in a directory there but is **not** a deployable
+function, so the loop will fail on an invalid function slug and **break both the
+staging and production deploys**.
+
+I wrote the fix but could not push it: the GitHub App backing this session lacks
+the `workflows` permission, so any commit touching `.github/workflows/` is
+rejected by the remote. Apply this by hand to **both** deploy loops (around
+lines 135 and 231), immediately after `fn="$(basename "$dir")"`:
+
+```yaml
+            # Directories prefixed with _ are shared modules imported by the
+            # functions (e.g. _shared/cors.ts), not deployable functions.
+            # `supabase functions deploy _shared` fails on an invalid slug.
+            case "$fn" in _*) echo "Skipping shared module: $fn"; continue ;; esac
+```
+
+(Underscore-prefixed directories are the Supabase convention for shared code;
+the CLI's own bulk deploy skips them, but this repo's hand-rolled loop does not.)
+
 **Requires a decision from you**
 1. **Depreciation rate units** (see §1a) — confirm whether `depreciation_rate` should be a fraction or a percentage, then align the type, the UI, and the test.
 2. **Deploy the RLS migration** and confirm against the live database. The four tables were unprotected in migrations, but it is possible policies were applied by hand via the dashboard; verify before assuming the leak was live.
