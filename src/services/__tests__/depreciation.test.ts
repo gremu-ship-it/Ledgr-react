@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   calculateMonthlyDepreciation,
   type DepreciationCalcInput,
-} from '../FixedAssetsJournalService';
+} from '../depreciation';
 
 /**
  * Depreciation drives both the P&L charge and the carrying amount on the
