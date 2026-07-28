@@ -1,3 +1,7 @@
+-- Fix cash-flow view: calculate movement from cash-equivalent lines only.
+-- Recreates the view so this also applies to databases where the original
+-- migration has already been run.
+
 -- Cash flow statement view, monthly aggregation.
 -- Mirrors the structure the React component reads from `v_cash_flow`:
 --   business_id, period (YYYY-MM), operating, investing, financing, net_change.
