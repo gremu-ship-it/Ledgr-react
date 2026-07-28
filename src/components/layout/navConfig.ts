@@ -24,6 +24,7 @@ import {
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
 import { hasCapability } from '@/lib/billing/plans';
 import type { PartnerFeatureKey } from '@/types/partners';
+import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 export interface NavItemConfig {
   labelKey: string;
@@ -115,14 +116,19 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
-/** Nav sections filtered to the modules the current partner has enabled. */
+/** Nav sections filtered to the modules the current partner has enabled and the user's role permissions. */
 export function visibleSectionsFor(
   isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
+  role?: string | null,
 ): NavSectionConfig[] {
   return NAV_SECTIONS
     .map((section) => ({
       ...section,
-      items: section.items.filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature)),
+      items: section.items.filter((i) => {
+        if (i.partnerFeature && !isFeatureEnabled(i.partnerFeature)) return false;
+        if (role && !isPathAllowedForRole(role, i.path)) return false;
+        return true;
+      }),
     }))
     .filter((section) => section.items.length > 0);
 }

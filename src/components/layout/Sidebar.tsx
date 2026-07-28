@@ -15,12 +15,13 @@ export function Sidebar() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
+  const role = useAppStore((s) => s.currentBusiness?.role);
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
   const { isFeatureEnabled } = usePartner();
   // Plan gating is per-item (Accounting + Organisation stay visible on Free);
-  // partner feature flags remove modules from the nav entirely.
-  const visibleSections = visibleSectionsFor(isFeatureEnabled);
+  // partner feature flags remove modules from the nav entirely, and role permissions hide unauthorized items.
+  const visibleSections = visibleSectionsFor(isFeatureEnabled, role);
 
   return (
     <>
