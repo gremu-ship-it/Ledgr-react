@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ReportHeader } from './ReportHeader';
 import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
@@ -17,7 +18,7 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
   const { t } = useTranslation();
   const [notes, setNotes] = useState('');
 
-  const { data: cashFlowData, isLoading } = useQuery({
+  const { data: cashFlowData, isLoading, error } = useQuery({
     queryKey: ['cash_flow', businessId, periodStart, periodEnd],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -31,6 +32,8 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
       if (error) throw error;
       return data ?? [];
     },
+    staleTime: 0,
+    enabled: Boolean(businessId && periodStart && periodEnd),
   });
 
   const periodLabel = `${periodStart} – ${periodEnd}`;
@@ -71,6 +74,25 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
 
   if (isLoading) {
     return <div className="p-8 text-center">Loading cash flow statement...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
+        <AlertTriangle className="h-8 w-8 text-red-400" />
+        <p className="text-sm text-gray-500">Failed to load cash flow statement. Please try again.</p>
+      </div>
+    );
+  }
+
+  if (!cashFlowData || cashFlowData.length === 0) {
+    return (
+      <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
+        <AlertTriangle className="h-8 w-8 text-gray-300" />
+        <p className="text-sm text-gray-500">No cash flow data found for the selected period.</p>
+        <p className="text-xs text-gray-400">Ensure journal entries are posted and include cash accounts.</p>
+      </div>
+    );
   }
 
   return (
