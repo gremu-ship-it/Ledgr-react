@@ -479,7 +479,8 @@ function openPrintWindow(title: string, html: string, autoPrint = true): void {
     // Wait for images/fonts
     const doPrint = () => {
       setTimeout(() => {
-        try { win.print(); } catch {}
+        // Ignored: the user may abort the print dialog; nothing else to recover.
+        try { win.print(); } catch { /* print aborted */ }
       }, 600);
     };
     if (win.document.readyState === 'complete') doPrint();

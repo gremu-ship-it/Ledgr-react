@@ -11,7 +11,7 @@ import type { Row } from '@/dal/types/database';
 import type { TransferWithLines, TransferStatus } from '@/dal/repositories/TransferRepository';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { generateDeliveryNoteDocument } from '@/lib/documents/documentGenerator';
-import { businessRowToBranding } from '@/lib/documents/types';
+import { businessRowToBranding, type BusinessBranding } from '@/lib/documents/types';
 import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ function printDeliveryNote(
   lines: Row<'stock_transfer_lines'>[],
   locations: Row<'inventory_locations'>[],
   products: Row<'products'>[],
-  businessBranding: ReturnType<typeof businessRowToBranding> | { name: string; logoUrl?: string | null; brandColor?: string | null },
+  businessBranding: BusinessBranding,
 ) {
   const fromLoc = locations.find((l) => l.id === transfer.from_location_id)?.name ?? '—';
   const toLoc   = locations.find((l) => l.id === transfer.to_location_id)?.name ?? '—';
@@ -49,15 +49,17 @@ function printDeliveryNote(
 
   generateDeliveryNoteDocument({
     business: {
-      name: (businessBranding as any).name || 'Business',
-      logoUrl: (businessBranding as any).logoUrl || (businessBranding as any).logo_url || null,
-      brandColor: (businessBranding as any).brandColor || (businessBranding as any).brand_color || null,
-      addressLine1: (businessBranding as any).addressLine1 || (businessBranding as any).address_line1 || null,
-      city: (businessBranding as any).city || null,
-      phone: (businessBranding as any).phone || null,
-      email: (businessBranding as any).email || null,
-      tpin: (businessBranding as any).tpin || null,
-      vatNumber: (businessBranding as any).vatNumber || (businessBranding as any).vat_number || null,
+      // BusinessBranding is already camelCase; snake_case fallbacks here were
+      // dead code left from when this accepted a raw businesses row.
+      name: businessBranding.name || 'Business',
+      logoUrl: businessBranding.logoUrl || null,
+      brandColor: businessBranding.brandColor || null,
+      addressLine1: businessBranding.addressLine1 || null,
+      city: businessBranding.city || null,
+      phone: businessBranding.phone || null,
+      email: businessBranding.email || null,
+      tpin: businessBranding.tpin || null,
+      vatNumber: businessBranding.vatNumber || null,
     },
     transfer: {
       transfer_number: transfer.transfer_number,
@@ -248,9 +250,9 @@ function TransferDrawer({
   const status  = STATUS[transfer.status as TransferStatus] ?? STATUS.draft;
 
   const { business: brandBusiness, logoUrl } = useBrandTheme();
-  const branding = brandBusiness
+  const branding: BusinessBranding = brandBusiness
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
-    : { name: businessName, logoUrl: logoUrl, brandColor: null } as any;
+    : { name: businessName, logoUrl: logoUrl, brandColor: null };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">

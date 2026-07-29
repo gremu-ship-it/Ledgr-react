@@ -145,7 +145,7 @@ export function StatementOfProfitOrLoss({
       preparerName,
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent,
     });
   };
@@ -166,7 +166,7 @@ export function StatementOfProfitOrLoss({
       preparerName,
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent: '',
       facts,
     });

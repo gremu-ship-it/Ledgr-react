@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, FileText, FileSpreadsheet, Receipt, Truck, FileDown, ChevronDown, Printer } from 'lucide-react';
+import { Download, FileText, FileDown, ChevronDown, Printer } from 'lucide-react';
 
 export type DocType = 'invoice' | 'delivery_note' | 'receipt' | 'quotation' | 'credit_note' | 'expense' | 'payslip' | 'report';
 
@@ -128,18 +128,3 @@ export function DocumentDownloadButton({
   );
 }
 
-// Helper to create standard icons for doc types
-export function docTypeIcon(type: DocType) {
-  switch (type) {
-    case 'invoice':
-      return <FileText className="h-4 w-4" />;
-    case 'delivery_note':
-      return <Truck className="h-4 w-4" />;
-    case 'receipt':
-      return <Receipt className="h-4 w-4" />;
-    case 'report':
-      return <FileSpreadsheet className="h-4 w-4" />;
-    default:
-      return <FileText className="h-4 w-4" />;
-  }
-}
