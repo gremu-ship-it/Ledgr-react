@@ -11,6 +11,7 @@ import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
+import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -372,18 +373,18 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('INV');
         await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
-        return { offline: true, invoice_number: offlineNum };
+        return { offline: true, invoice_number: offlineNum, touchedInventory: false };
       }
 
       try {
         const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
-        await repos.invoice.createWithLines(
+        // Use the row createWithLines returns rather than refetching every
+        // invoice for the business and scanning for this one.
+        const { invoice: created } = await repos.invoice.createWithLines(
           buildPayload(invoiceNumber, walkIn.id).invoice,
           buildPayload(invoiceNumber, walkIn.id).lines,
         );
 
-        const allInvoices = await repos.invoice.findByBusiness(businessId);
-        const created     = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
         if (created) {
           try {
             await createInvoiceJournalEntry(
@@ -409,23 +410,28 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             null,
           );
         }
-        return { offline: false, invoice_number: invoiceNumber };
+        return {
+          offline: false,
+          invoice_number: invoiceNumber,
+          touchedInventory: Boolean(selectedProduct?.track_inventory),
+        };
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('INV');
           await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
-          return { offline: true, invoice_number: offlineNum };
+          return { offline: true, invoice_number: offlineNum, touchedInventory: false };
         }
         throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
         issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
         reference: '', notes: '', product_id: '', branch_id: '', department_id: '', quantity: '1',
       });
-      queryClient.invalidateQueries();
+      // Scoped: see queryInvalidation.ts.
+      invalidateAfterIncome(queryClient, { touchedInventory: result.touchedInventory });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
@@ -677,7 +683,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       });
       const functionalTotal = total * rate.rate;
 
-      await repos.invoice.createWithLines(
+      const { invoice: created } = await repos.invoice.createWithLines(
         {
           business_id:      businessId,
           invoice_number:   form.invoice_number,
@@ -737,8 +743,8 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         }),
       );
 
-      const allInvoices = await repos.invoice.findByBusiness(businessId);
-      const created     = allInvoices.find((inv) => inv.invoice_number === form.invoice_number);
+      // createWithLines returns the inserted row; no need to refetch the
+      // whole invoice list to find it.
       if (created) {
         try {
           await createInvoiceReceivableEntry(

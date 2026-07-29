@@ -10,6 +10,7 @@ import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService'
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
+import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -467,18 +468,18 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('EXP');
         await enqueue('expense', businessId, buildPayload(offlineNum));
-        return { offline: true, expense_number: offlineNum };
+        return { offline: true, expense_number: offlineNum, touchedInventory: false };
       }
 
       try {
         const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
-        await repos.expense.createWithLines(
+        // Use the row createWithLines returns rather than refetching every
+        // expense for the business and scanning for this one.
+        const { expense: created } = await repos.expense.createWithLines(
           buildPayload(expenseNumber).expense,
           buildPayload(expenseNumber).lines,
         );
 
-        const allExpenses = await repos.expense.findByBusiness(businessId);
-        const created     = allExpenses.find((e) => e.expense_number === expenseNumber);
         if (created) {
           try {
             const allocations: ExpenseAccountAllocation[] = [{
@@ -513,17 +514,21 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
             );
           }
         }
-        return { offline: false, expense_number: expenseNumber };
+        return {
+          offline: false,
+          expense_number: expenseNumber,
+          touchedInventory: Boolean(selectedProduct?.track_inventory),
+        };
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('EXP');
           await enqueue('expense', businessId, buildPayload(offlineNum));
-          return { offline: true, expense_number: offlineNum };
+          return { offline: true, expense_number: offlineNum, touchedInventory: false };
         }
         throw err;
       }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setAlert({ type: 'success', message: 'Expense recorded and posted successfully.' });
       setForm({
         expense_date: today(), description: '', amount: '', account_id: '',
@@ -531,7 +536,8 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
         product_id: '', branch_id: '', department_id: '', quantity: '1',
       });
-      queryClient.invalidateQueries();
+      // Scoped: see queryInvalidation.ts.
+      invalidateAfterExpense(queryClient, { touchedInventory: result.touchedInventory });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => {
@@ -816,7 +822,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         }),
       );
 
-      await repos.expense.createWithLines(
+      const { expense: created } = await repos.expense.createWithLines(
         {
           business_id:    businessId,
           expense_number: form.expense_number,
@@ -864,8 +870,8 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         }),
       );
 
-      const allExpenses = await repos.expense.findByBusiness(businessId);
-      const created     = allExpenses.find((e) => e.expense_number === form.expense_number);
+      // createWithLines returns the inserted row; no need to refetch the
+      // whole expense list to find it.
       if (!created) return;
 
       try {
