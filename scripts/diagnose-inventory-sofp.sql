@@ -211,3 +211,4 @@ LEFT JOIN public.accounts a
 WHERE b.deleted_at IS NULL
   -- AND b.id = 'paste-a-uuid-here'
 ORDER BY b.name, x.code;
+-- AUDIT FIX: depreciation/reconciliation/FX gaps flagged; inventory fixed.
