@@ -77,6 +77,40 @@ order by
   tablename, policyname;
 
 
+-- ── 1b. BLAST RADIUS: every policy that calls user_has_role() ────────────────
+-- user_has_role(business_id, p_min_role) is a LINEAR RANK check whose CASE
+-- lists only the six original roles:
+--     owner > admin > accountant > payroll_manager > auditor > viewer
+-- The 13 roles added in 20260723000001 / 20260728000000 appear in no branch,
+-- so every comparison is false and they are denied — including at 'viewer',
+-- which is why a supervisor could not even read branches for a dropdown.
+--
+-- `tier` is the bar each policy sets. Read this before changing the function:
+-- the tiers are ordered, so widening one silently widens every policy that
+-- uses a lower one. In particular check whether any payroll/salary table
+-- appears at the 'viewer' tier before broadening read access.
+
+select
+  p.tablename,
+  p.policyname,
+  p.cmd,
+  substring(
+    coalesce(p.qual, '') || coalesce(p.with_check, '')
+    from 'user_has_role\([^,]*,\s*''([a-z_]+)'''
+  ) as tier,
+  case
+    when p.tablename ~ 'payroll|salary|employee|payslip' then 'SENSITIVE - check before widening read'
+    else ''
+  end as flag
+from pg_policies p
+where p.schemaname = 'public'
+  and (coalesce(p.qual, '') || coalesce(p.with_check, '')) like '%user_has_role%'
+order by
+  case when p.tablename ~ 'payroll|salary|employee|payslip' then 0 else 1 end,
+  p.tablename,
+  p.cmd;
+
+
 -- ── 2. Tables with RLS on but NO policy at all ───────────────────────────────
 -- These reject every write from every non-superuser, silently.
 
