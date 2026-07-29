@@ -45,6 +45,7 @@ function lazyPage<K extends string, T extends Record<K, ComponentType<never>>>(
 
 const LoginPage = lazyPage(() => import('@/pages/LoginPage'), 'LoginPage');
 const RegisterPage = lazyPage(() => import('@/pages/RegisterPage'), 'RegisterPage');
+const TermsAndConditionsPage = lazyPage(() => import('@/pages/TermsAndConditionsPage'), 'TermsAndConditionsPage');
 const CreateBusinessPage = lazyPage(() => import('@/pages/CreateBusinessPage'), 'CreateBusinessPage');
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage'), 'ForgotPasswordPage');
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
@@ -138,6 +139,9 @@ function App() {
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
+
+            {/* Public legal page — available whether or not the visitor is signed in. */}
+            <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
             <Route path="/reset-password" element={<ResetPasswordPage />} />

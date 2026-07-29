@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Building2, ChevronRight, ChevronLeft,
   Loader2, AlertCircle, CheckCircle2,
@@ -40,6 +40,7 @@ interface BusinessForm {
   invoice_prefix: string;
   expense_prefix: string;
   payroll_prefix: string;
+  accepts_terms: boolean;
 }
 
 const DEFAULTS: BusinessForm = {
@@ -61,6 +62,7 @@ const DEFAULTS: BusinessForm = {
   invoice_prefix: 'INV',
   expense_prefix: 'EXP',
   payroll_prefix: 'PAY',
+  accepts_terms: false,
 };
 
 const STEPS = [
@@ -444,6 +446,10 @@ export function CreateBusinessPage() {
       setError('Please enter your VAT registration number.');
       return false;
     }
+    if (step === 4 && !form.accepts_terms) {
+      setError('Please read and agree to the Terms and Conditions before creating your business.');
+      return false;
+    }
     setError(null);
     return true;
   }
@@ -612,6 +618,33 @@ export function CreateBusinessPage() {
             {step === 2 && <Step2 form={form} set={set} />}
             {step === 3 && <Step3 form={form} set={set} />}
             {step === 4 && <Step4 form={form} set={set} />}
+
+            {isLastStep && (
+              <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <label className="flex cursor-pointer items-start gap-3">
+                  <input
+                    id="accepts_terms"
+                    type="checkbox"
+                    required
+                    checked={form.accepts_terms}
+                    onChange={(e) => set('accepts_terms', e.target.checked)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    I have read and agree to the{' '}
+                    <Link
+                      to="/terms-and-conditions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-brand-600 underline hover:text-brand-700"
+                    >
+                      Terms and Conditions
+                    </Link>
+                    .
+                  </span>
+                </label>
+              </div>
+            )}
 
             <div className="mt-6 flex gap-3">
               {step > 1 && (
