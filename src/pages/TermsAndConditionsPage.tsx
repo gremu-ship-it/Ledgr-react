@@ -38,11 +38,17 @@ export function TermsAndConditionsPage() {
             <p className="mt-2">We aim to keep Ledgr available and secure, but the service may occasionally be unavailable for maintenance, updates or events outside our control. We may update the service or these terms from time to time. Continued use after an updated effective date constitutes acceptance of the updated terms where permitted by law.</p>
           </section>
           <section>
-            <h2 className="text-lg font-semibold text-gray-900">7. Suspension or termination</h2>
+            <h2 className="text-lg font-semibold text-gray-900">7. Service provider liability</h2>
+            <p className="mt-2">To the fullest extent permitted by applicable law, Ledgr and its service providers are not liable for indirect, incidental, special, consequential or punitive losses, including lost profits, revenue, data, goodwill or business opportunities, arising from your use of, or inability to use, the service.</p>
+            <p className="mt-2">Ledgr is not responsible for losses caused by inaccurate information entered by you or your users, unauthorised access resulting from a failure to protect your account credentials, decisions you make using information in the service, or services, systems or networks operated by third parties. Nothing in these terms excludes or limits liability that cannot legally be excluded or limited, including liability for fraud or fraudulent misrepresentation.</p>
+            <p className="mt-2">Where Ledgr is found liable for a claim relating to the service, its total liability will be limited to the amount you paid to Ledgr for the service during the 12 months immediately before the event giving rise to that claim, unless applicable law requires a higher amount.</p>
+          </section>
+          <section>
+            <h2 className="text-lg font-semibold text-gray-900">8. Suspension or termination</h2>
             <p className="mt-2">We may suspend or terminate access where reasonably necessary to protect the service, comply with law, or address a breach of these terms. You may stop using Ledgr at any time, subject to any applicable subscription or data-retention obligations.</p>
           </section>
           <section>
-            <h2 className="text-lg font-semibold text-gray-900">8. Contact</h2>
+            <h2 className="text-lg font-semibold text-gray-900">9. Contact</h2>
             <p className="mt-2">If you have a question about these terms, please contact Ledgr support before creating your business account.</p>
           </section>
         </div>
