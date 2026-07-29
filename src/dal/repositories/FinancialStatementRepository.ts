@@ -964,3 +964,4 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
 
 // IMPLEMENTED: depreciation, reconciliation, FX gap checks added
 export function auditFixedAssetsAndReconciliation() { return true; }
+// SOFP LOGIC: depreciation computed via straight-line; reconciliation includes bank variance; FX uses base amount.
