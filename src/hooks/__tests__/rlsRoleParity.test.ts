@@ -23,7 +23,47 @@ const MIGRATION = resolve(
   REPO_ROOT,
   'supabase/migrations/20260728000008_role_aware_master_data_rls.sql',
 );
+const LADDER_MIGRATION = resolve(
+  REPO_ROOT,
+  'supabase/migrations/20260728000009_role_aware_user_has_role.sql',
+);
 const PERMISSIONS = resolve(REPO_ROOT, 'src/hooks/usePermissions.ts');
+
+/** Roles whose usePermissions entry sets `flag: true`. */
+function uiRolesWithFlag(flag: string): string[] {
+  const src = readFileSync(PERMISSIONS, 'utf8');
+  const roles: string[] = [];
+  const caseRe = /case '([a-z_]+)':\s*return \{([\s\S]*?)\};/g;
+  let m: RegExpExecArray | null;
+  while ((m = caseRe.exec(src)) !== null) {
+    const [, role, body] = m;
+    if (new RegExp(`${flag}:\\s*true`).test(body)) roles.push(role);
+  }
+  return roles.sort();
+}
+
+/**
+ * Roles listed inside a `<name>(...)` SQL function in the ladder migration.
+ * Strips `--` comments first: the prose inside these functions contains both
+ * parentheses and role names, which would otherwise be read as list members.
+ */
+function sqlFnRoles(fnName: string): string[] {
+  const sql = readFileSync(LADDER_MIGRATION, 'utf8')
+    .split('\n')
+    .map((line) => line.replace(/--.*$/, ''))
+    .join('\n');
+
+  const start = sql.indexOf(`function public.${fnName}`);
+  expect(start, `${fnName} not found`).toBeGreaterThan(-1);
+
+  const listStart = sql.indexOf('bu.role::text in (', start);
+  expect(listStart, `${fnName} has no role list`).toBeGreaterThan(-1);
+
+  const listEnd = sql.indexOf(')', listStart + 'bu.role::text in ('.length);
+  return [...sql.slice(listStart, listEnd).matchAll(/'([a-z_]+)'/g)]
+    .map((x) => x[1])
+    .sort();
+}
 
 /** Roles with canWrite: true in the usePermissions switch. */
 function uiWriteRoles(): string[] {
@@ -79,6 +119,45 @@ describe('RLS / UI role parity', () => {
     const fnStart = sql.indexOf('function public.is_business_member');
     const fnEnd = sql.indexOf('$$;', fnStart);
     expect(sql.slice(fnStart, fnEnd)).not.toContain('bu.role');
+  });
+
+  it('keeps payroll read restricted to canViewPayroll roles', () => {
+    // The highest-stakes assertion here. Every payroll table gated SELECT at
+    // the 'viewer' tier, and 20260728000009 widens that tier to all members.
+    // If these tables were not pinned to can_view_payroll first, every salary
+    // would become readable by warehouse_worker and sales_clerk.
+    expect(sqlFnRoles('can_view_payroll')).toEqual(uiRolesWithFlag('canViewPayroll'));
+  });
+
+  it('keeps payroll write restricted to canWritePayroll roles', () => {
+    expect(sqlFnRoles('can_write_payroll')).toEqual(uiRolesWithFlag('canWritePayroll'));
+  });
+
+  it('excludes non-payroll roles from payroll access', () => {
+    const view = sqlFnRoles('can_view_payroll');
+    for (const role of ['warehouse_worker', 'sales_clerk', 'supervisor', 'viewer', 'data_entry']) {
+      expect(view, `${role} must not read payroll`).not.toContain(role);
+    }
+  });
+
+  it('pins payroll tables before widening the viewer tier', () => {
+    // Section 2 must run before section 3, or there is a window where the
+    // widened tier applies to payroll.
+    const sql = readFileSync(LADDER_MIGRATION, 'utf8');
+    const pinned = sql.indexOf("'payroll_employee_lines'");
+    const widened = sql.indexOf("when 'viewer'          then public.is_business_member");
+    expect(pinned).toBeGreaterThan(-1);
+    expect(widened).toBeGreaterThan(-1);
+    expect(pinned, 'payroll must be pinned before the viewer tier widens').toBeLessThan(widened);
+  });
+
+  it('maps every ladder tier to a capability helper', () => {
+    const sql = readFileSync(LADDER_MIGRATION, 'utf8');
+    for (const tier of ['viewer', 'auditor', 'payroll_manager', 'accountant', 'admin', 'owner']) {
+      expect(sql, `tier ${tier} unmapped`).toMatch(new RegExp(`when '${tier}'\\s+then`));
+    }
+    // An unrecognised tier must deny, not return NULL.
+    expect(sql).toMatch(/else\s+false/);
   });
 
   it('covers the tables reached from the transaction pages', () => {
