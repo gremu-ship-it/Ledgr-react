@@ -157,7 +157,7 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
       </table>
     `;
     generateProfessionalReportDocument({
-      business: businessBranding as any,
+      business: businessBranding,
       title: 'Trial Balance',
       subtitle: 'All posted journal entries — detailed trial balance',
       dateLabel: new Date().toLocaleDateString('en-MW', { day: '2-digit', month: 'long', year: 'numeric' }),
@@ -294,7 +294,7 @@ function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: s
       </table>
     `;
     generateProfessionalReportDocument({
-      business: businessBranding as any,
+      business: businessBranding,
       title: 'Multi-currency Transaction Report',
       subtitle: `Original transaction currency alongside functional currency (${functionalCurrency})`,
       dateLabel: new Date().toLocaleDateString('en-MW'),

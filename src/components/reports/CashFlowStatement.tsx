@@ -48,8 +48,12 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
     : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
 
   const handleExportPDF = () => {
-    const tableEl = document.querySelector('.rounded-2xl.border table')?.outerHTML || '';
-    const htmlContent = `<div style="margin-top:8px;">${tableEl}</div>` || document.querySelector('.space-y-6')?.outerHTML || '';
+    const tableEl = document.querySelector('.rounded-2xl.border table')?.outerHTML;
+    // The template literal is always truthy, so the || fallback must wrap the
+    // table lookup itself — otherwise a missing table exported an empty div.
+    const htmlContent = (tableEl
+      ? `<div style="margin-top:8px;">${tableEl}</div>`
+      : document.querySelector('.space-y-6')?.outerHTML) || '';
     exportReportAsPDF({
       title: t('reports.cash_flow.title'),
       subtitle: `${periodLabel} — ${brandName}`,
@@ -57,7 +61,7 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
       currency: 'MWK',
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent,
     });
   };
@@ -76,7 +80,7 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
       currency: 'MWK',
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent: '',
       facts,
     });

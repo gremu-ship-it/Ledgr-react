@@ -112,21 +112,36 @@ export function StatementOfFinancialPosition({
     enabled: Boolean(businessId && asOfDate),
   });
 
+  // Read-only data-quality audit over exactly what this statement is built
+  // from: asset register vs GL (fixed assets), bank GL vs latest locked
+  // statements (reconciliation variance), and FX rate snapshots. Failures are
+  // surfaced below the statement — figures still render, but flagged.
+  const { data: integrity } = useQuery({
+    queryKey: ['sofp-integrity', businessId, asOfDate],
+    queryFn: () => financialStatementRepo.auditStatementIntegrity(businessId, asOfDate),
+    enabled: Boolean(businessId && asOfDate),
+  });
+  const failedIntegrityChecks = integrity?.checks.filter((c) => !c.ok) ?? [];
+
   const showComparative = Boolean(comparativeDate);
   const dateLabel = format.date(asOfDate, { day: 'numeric', month: 'long', year: 'numeric' });
-  const formatMwk = (value: number) => format.currency(value, 'MWK');
-  const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
-  const totalProps = { showComparative, formatCurrency: formatMwk };
+  // getSOFP computes in the business functional currency (amount_base).
+  // Previously every amount was formatted 'MWK' regardless — mislabeling the
+  // statement for any business whose base currency is USD/ZAR/etc.
+  const functionalCurrency = (brandBusiness as Row<'businesses'> | undefined)?.base_currency || 'MWK';
+  const formatFunctional = (value: number) => format.currency(value, functionalCurrency);
+  const sectionProps = { showComparative, formatCurrency: formatFunctional, totalLabel: t('common.total') };
+  const totalProps = { showComparative, formatCurrency: formatFunctional };
 
   const businessBranding = brandBusiness
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
-    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: functionalCurrency };
 
   useEffect(() => {
     if (sofp && !sofp.isBalanced) {
       pushSofpBalanceWarning(
-        formatAccounting(sofp.netAssets, formatMwk),
-        formatAccounting(sofp.totalEquity, formatMwk),
+        formatAccounting(sofp.netAssets, formatFunctional),
+        formatAccounting(sofp.totalEquity, formatFunctional),
         businessId,
       );
     }
@@ -139,15 +154,15 @@ export function StatementOfFinancialPosition({
       const lines = section.lines.map((line) => `
         <tr>
           <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:9.5pt;">${line.name}</td>
-          <td style="padding:8px 12px; text-align:right; border-bottom:1px solid #f1f5f9; font-size:9.5pt;">${formatAccounting(line.amount, formatMwk)}</td>
-          ${showComparative ? `<td style="padding:8px 12px; text-align:right; border-bottom:1px solid #f1f5f9; font-size:9.5pt; color:#64748b;">${line.comparativeAmount !== null ? formatAccounting(line.comparativeAmount, formatMwk) : '—'}</td>` : ''}
+          <td style="padding:8px 12px; text-align:right; border-bottom:1px solid #f1f5f9; font-size:9.5pt;">${formatAccounting(line.amount, formatFunctional)}</td>
+          ${showComparative ? `<td style="padding:8px 12px; text-align:right; border-bottom:1px solid #f1f5f9; font-size:9.5pt; color:#64748b;">${line.comparativeAmount !== null ? formatAccounting(line.comparativeAmount, formatFunctional) : '—'}</td>` : ''}
         </tr>
       `).join('');
       const total = `
         <tr style="background:#f8fafc; font-weight:700;">
           <td style="padding:10px 12px;">Total ${label}</td>
-          <td style="padding:10px 12px; text-align:right;">${formatAccounting(section.subtotal, formatMwk)}</td>
-          ${showComparative ? `<td style="padding:10px 12px; text-align:right; color:#475569;">${section.comparativeSubtotal !== null ? formatAccounting(section.comparativeSubtotal, formatMwk) : '—'}</td>` : ''}
+          <td style="padding:10px 12px; text-align:right;">${formatAccounting(section.subtotal, formatFunctional)}</td>
+          ${showComparative ? `<td style="padding:10px 12px; text-align:right; color:#475569;">${section.comparativeSubtotal !== null ? formatAccounting(section.comparativeSubtotal, formatFunctional) : '—'}</td>` : ''}
         </tr>`;
       return `
         <tr><td colspan="${showComparative ? 3 : 2}" style="padding:14px 0 4px 0; font-size:8pt; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8;">${section.label}</td></tr>
@@ -165,13 +180,13 @@ export function StatementOfFinancialPosition({
         <tbody>
           ${rowsHtml(sofp.currentAssets, sofp.currentAssets.label)}
           ${rowsHtml(sofp.nonCurrentAssets, sofp.nonCurrentAssets.label)}
-          <tr style="background:#0f172a; color:white; font-weight:800;"><td style="padding:12px;">Total Assets</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalAssets, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalAssets !== null ? formatAccounting(sofp.comparativeTotalAssets, formatMwk) : '—'}</td>` : ''}</tr>
+          <tr style="background:#0f172a; color:white; font-weight:800;"><td style="padding:12px;">Total Assets</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalAssets, formatFunctional)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalAssets !== null ? formatAccounting(sofp.comparativeTotalAssets, formatFunctional) : '—'}</td>` : ''}</tr>
           ${rowsHtml(sofp.currentLiabilities, sofp.currentLiabilities.label)}
           ${rowsHtml(sofp.nonCurrentLiabilities, sofp.nonCurrentLiabilities.label)}
-          <tr style="border-top:2px solid #0f172a; font-weight:700;"><td style="padding:12px;">Total Liabilities</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalLiabilities, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalLiabilities !== null ? formatAccounting(sofp.comparativeTotalLiabilities, formatMwk) : '—'}</td>` : ''}</tr>
-          <tr style="font-weight:700;"><td style="padding:12px;">Net Assets</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.netAssets, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeNetAssets !== null ? formatAccounting(sofp.comparativeNetAssets, formatMwk) : '—'}</td>` : ''}</tr>
+          <tr style="border-top:2px solid #0f172a; font-weight:700;"><td style="padding:12px;">Total Liabilities</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalLiabilities, formatFunctional)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalLiabilities !== null ? formatAccounting(sofp.comparativeTotalLiabilities, formatFunctional) : '—'}</td>` : ''}</tr>
+          <tr style="font-weight:700;"><td style="padding:12px;">Net Assets</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.netAssets, formatFunctional)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeNetAssets !== null ? formatAccounting(sofp.comparativeNetAssets, formatFunctional) : '—'}</td>` : ''}</tr>
           ${rowsHtml(sofp.equity, sofp.equity.label)}
-          <tr style="background:#0f172a; color:white; font-weight:800;"><td style="padding:12px;">Total Equity</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalEquity, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalEquity !== null ? formatAccounting(sofp.comparativeTotalEquity, formatMwk) : '—'}</td>` : ''}</tr>
+          <tr style="background:#0f172a; color:white; font-weight:800;"><td style="padding:12px;">Total Equity</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalEquity, formatFunctional)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalEquity !== null ? formatAccounting(sofp.comparativeTotalEquity, formatFunctional) : '—'}</td>` : ''}</tr>
         </tbody>
       </table>
     `;
@@ -183,11 +198,11 @@ export function StatementOfFinancialPosition({
       title: t('reports.statementOfFinancialPosition'),
       subtitle: `${t('reports.asAt', { date: dateLabel })} — ${brandName}`,
       dateLabel,
-      currency: 'MWK',
+      currency: functionalCurrency,
       preparerName,
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent,
     });
   };
@@ -203,11 +218,11 @@ export function StatementOfFinancialPosition({
     exportReportAsXBRL({
       title: t('reports.statementOfFinancialPosition'),
       dateLabel,
-      currency: 'MWK',
+      currency: functionalCurrency,
       preparerName,
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent: '',
       facts,
     });
@@ -230,7 +245,7 @@ export function StatementOfFinancialPosition({
     <div className="max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <ReportHeader
         title={t('reports.statementOfFinancialPosition')}
-        subtitle={`${t('reports.asAt', { date: dateLabel })} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
+        subtitle={`${t('reports.asAt', { date: dateLabel })} · ${t('reports.currencyNote', { currency: functionalCurrency })}`}
         preparerName={preparerName}
         notes={notes}
         onNotesChange={setNotes}
@@ -243,10 +258,29 @@ export function StatementOfFinancialPosition({
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>
             {t('reports.sofpBalanceWarning', {
-              netAssets: formatAccounting(sofp.netAssets, formatMwk),
-              totalEquity: formatAccounting(sofp.totalEquity, formatMwk),
+              netAssets: formatAccounting(sofp.netAssets, formatFunctional),
+              totalEquity: formatAccounting(sofp.totalEquity, formatFunctional),
             })}
           </span>
+        </div>
+      )}
+
+      {failedIntegrityChecks.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="mb-1 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+            Data-quality findings ({integrity?.functionalCurrency}) — figures shown may need review
+          </div>
+          {failedIntegrityChecks.map((check) => (
+            <details key={check.key} className="mt-1">
+              <summary className="cursor-pointer font-medium">{check.summary}</summary>
+              <ul className="mt-1 list-disc space-y-0.5 ps-5">
+                {check.findings.map((finding, i) => (
+                  <li key={i}>{finding}</li>
+                ))}
+              </ul>
+            </details>
+          ))}
         </div>
       )}
 

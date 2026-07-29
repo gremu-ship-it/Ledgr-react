@@ -506,7 +506,12 @@ export function CreateBusinessPage() {
 
     // Record the accepted version with a database-generated timestamp. This is
     // deliberately a server-side audit record rather than a browser timestamp.
-    const { error: termsError } = await (supabase as any).rpc(
+    // The RPC exists via the 20260729 migration but is not yet in the generated
+    // database types — use the explicit-signature cast pattern from
+    // ExpenseRepository instead of `as any`.
+    const { error: termsError } = await (supabase as unknown as {
+      rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+    }).rpc(
       'record_business_terms_acceptance',
       { p_business_id: businessId, p_terms_version: '1.1' },
     );

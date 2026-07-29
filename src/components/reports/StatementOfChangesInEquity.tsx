@@ -69,7 +69,7 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
       currency: 'MWK',
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent,
     });
   };
@@ -82,7 +82,7 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
       currency: 'MWK',
       notes,
       businessName: brandName,
-      business: businessBranding as any,
+      business: businessBranding,
       htmlContent: '',
       facts: [
         { concept: 'ShareCapital', value: soce.shareCapital.closingBalance },

@@ -36,6 +36,28 @@ export async function runFxRevaluation(
 ): Promise<FxRevaluationResult> {
   if (!userId) throw new Error('You must be signed in to run FX revaluation.');
 
+  // Idempotency guard — MUST run before any journal lines are posted.
+  // A re-run revalues open balances from the ORIGINAL booking rate
+  // (invoice/expense.exchange_rate), ignoring the first run's own
+  // revaluation journals, so it posts the same unrealised gain/loss a second
+  // time and corrupts Debtors/Creditors and the P&L. fx_revaluations has a
+  // unique (business_id, revaluation_date) constraint, but that only fires
+  // AFTER the duplicate journal entry was posted — leaving it orphaned in
+  // the ledger with no audit row. Check first instead.
+  const { data: existingRuns, error: existingError } = await supabase
+    .from('fx_revaluations')
+    .select('id, status, journal_entry_id')
+    .eq('business_id', businessId)
+    .eq('revaluation_date', revaluationDate);
+  if (existingError) throw existingError;
+  if ((existingRuns as Array<{ status: string }> | null)?.length) {
+    throw new Error(
+      `FX revaluation has already been run for ${revaluationDate} (see fx_revaluations). ` +
+      `Re-running would double-post unrealised gains/losses. ` +
+      `To redo it, the existing run must be reversed in the ledger first.`,
+    );
+  }
+
   const business = await repos.business.findById(businessId);
   const functionalCurrency = business.base_currency || 'MWK';
 

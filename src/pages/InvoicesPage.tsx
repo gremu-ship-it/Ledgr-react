@@ -450,12 +450,14 @@ function InvoiceDetail({
         name: businessName || 'Business',
         tradingName: tradingName,
         logoUrl: logoUrl,
-        brandColor: (businessData as any)?.brand_color ?? '#0E7C5A',
+        // This is the no-business-data fallback branch, so brand_color is
+        // never readable here — use the default brand color outright.
+        brandColor: '#0E7C5A',
       };
 
   const handleDownloadInvoice = () => {
     generateInvoiceDocument({
-      business: businessBranding as any,
+      business: businessBranding,
       invoice: {
         invoice_number: invoice.invoice_number,
         issue_date: invoice.issue_date,
@@ -506,7 +508,7 @@ function InvoiceDetail({
     // Receipt after payment - professional
     const curr = invoice.currency || 'MWK';
     generateReceiptDocument({
-      business: businessBranding as any,
+      business: businessBranding,
       title: 'Payment Receipt',
       number: `RCPT-${invoice.invoice_number}`,
       date: new Date().toISOString(),
@@ -542,7 +544,7 @@ function InvoiceDetail({
   const handleDownloadDeliveryNote = () => {
     // Create a delivery note from invoice lines
     generateDeliveryNoteDocument({
-      business: businessBranding as any,
+      business: businessBranding,
       transfer: {
         transfer_number: `DN-${invoice.invoice_number}`,
         status: 'dispatched',

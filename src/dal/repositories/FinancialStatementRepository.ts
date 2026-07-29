@@ -2,6 +2,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, AccountSubtype } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
+import { asNormalBalance, toStatementSide, type NormalBalance } from '@/lib/statementPresentation';
+import {
+  buildBankReconciliationCheck,
+  buildFixedAssetCheck,
+  buildFxIntegrityCheck,
+  INTEGRITY_TOLERANCE,
+  type BankAccountVariance,
+  type FxLineSample,
+  type IntegrityCheck,
+} from '@/lib/statementIntegrity';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -232,11 +242,28 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     }));
   }
 
+  /**
+   * Builds one statement section on its presentation side.
+   *
+   * `sectionNormalBalance` is the normal balance of the section itself —
+   * 'debit' for asset and expense sections, 'credit' for liability, equity
+   * and income sections. Accounts whose own normal_balance matches it keep
+   * their sign; CONTRA accounts (normal_balance opposite to the section) are
+   * negated so they NET against the section total:
+   *   - Accumulated Depreciation / Amortisation (credit-normal) net against
+   *     Non-Current Assets — previously they were ADDED, overstating Total
+   *     Assets by 2× accumulated depreciation and tripping isBalanced;
+   *   - Provision for Bad Debts (credit-normal) nets against Current Assets;
+   *   - Drawings / Dividends (debit-normal) reduces Equity;
+   *   - Sales / Purchase Returns & Discounts net against Revenue / Cost of
+   *     Sales in the P&L.
+   */
   private buildSection(
     balances: AccountBalance[],
     comparativeBalances: AccountBalance[] | null,
     subtypes: Exclude<AccountSubtype, null>[],
     label: string,
+    sectionNormalBalance: NormalBalance,
   ): StatementSection {
     const comparativeMap = comparativeBalances
       ? new Map(comparativeBalances.map((b) => [b.account.id, b.balance]))
@@ -263,8 +290,10 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const lines: StatementLineItem[] = relevant.map((b) => ({
       code: b.account.code,
       name: b.account.name,
-      amount: b.balance,
-      comparativeAmount: comparativeMap ? (comparativeMap.get(b.account.id) ?? 0) : null,
+      amount: toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), sectionNormalBalance),
+      comparativeAmount: comparativeMap
+        ? toStatementSide(comparativeMap.get(b.account.id) ?? 0, asNormalBalance(b.account.normal_balance), sectionNormalBalance)
+        : null,
     }));
 
     const subtotal = lines.reduce((s, l) => s + l.amount, 0);
@@ -291,18 +320,20 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? await this.computeBalances(businessId, { asOfDate: comparativeDate, includeOpeningBalances: true })
       : null;
 
-    const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets');
+    const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit');
     const nonCurrentAssets = this.buildSection(
       balances, comparativeBalances,
       ['non_current_asset', 'fixed_asset'],
       'Non-Current Assets',
+      'debit',
     );
-    const currentLiabilities = this.buildSection(balances, comparativeBalances, ['current_liability'], 'Current Liabilities');
-    const nonCurrentLiabilities = this.buildSection(balances, comparativeBalances, ['non_current_liability'], 'Non-Current Liabilities');
+    const currentLiabilities = this.buildSection(balances, comparativeBalances, ['current_liability'], 'Current Liabilities', 'credit');
+    const nonCurrentLiabilities = this.buildSection(balances, comparativeBalances, ['non_current_liability'], 'Non-Current Liabilities', 'credit');
     const equity = this.buildSection(
       balances, comparativeBalances,
       ['share_capital', 'retained_earnings', 'reserves'],
       'Equity',
+      'credit',
     );
 
     const totalAssets = currentAssets.subtotal + nonCurrentAssets.subtotal;
@@ -375,20 +406,23 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
         })
       : null;
 
-    // Revenue/other_income accounts are normal_balance='credit', so their
-    // natural-side balance from computeBalances is already positive for a
-    // credit (income) position — no sign flip needed for presentation.
-    const revenue = this.buildSection(balances, comparativeBalances, ['revenue'], 'Revenue');
-    const otherIncome = this.buildSection(balances, comparativeBalances, ['other_income'], 'Other Income');
-    const costOfSales = this.buildSection(balances, comparativeBalances, ['cost_of_sales'], 'Cost of Sales');
-    const operatingExpenses = this.buildSection(balances, comparativeBalances, ['operating_expense'], 'Operating Expenses');
+    // Sections are built on their presentation side (revenue/other_income on
+    // the credit side, expense sections on the debit side). Contra accounts —
+    // e.g. Sales Returns & Discounts (debit-normal) against Revenue, Purchase
+    // Returns (credit-normal) against Cost of Sales — are negated by
+    // buildSection so they NET against the section instead of inflating it.
+    const revenue = this.buildSection(balances, comparativeBalances, ['revenue'], 'Revenue', 'credit');
+    const otherIncome = this.buildSection(balances, comparativeBalances, ['other_income'], 'Other Income', 'credit');
+    const costOfSales = this.buildSection(balances, comparativeBalances, ['cost_of_sales'], 'Cost of Sales', 'debit');
+    const operatingExpenses = this.buildSection(balances, comparativeBalances, ['operating_expense'], 'Operating Expenses', 'debit');
     const depreciationAmortisation = this.buildSection(
       balances, comparativeBalances,
       ['depreciation_amortisation'],
       'Depreciation & Amortisation',
+      'debit',
     );
-    const financeCosts = this.buildSection(balances, comparativeBalances, ['finance_cost'], 'Finance Costs');
-    const taxExpense = this.buildSection(balances, comparativeBalances, ['tax_expense'], 'Tax Expense');
+    const financeCosts = this.buildSection(balances, comparativeBalances, ['finance_cost'], 'Finance Costs', 'debit');
+    const taxExpense = this.buildSection(balances, comparativeBalances, ['tax_expense'], 'Tax Expense', 'debit');
 
     const totalRevenue = revenue.subtotal;
     const comparativeTotalRevenue = comparativeBalances ? revenue.comparativeSubtotal : null;
@@ -716,13 +750,18 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       includeOpeningBalances: true,
     });
 
+    // Contra-aware sums: balances are converted to the section's presentation
+    // side so contra accounts net correctly. Without this, building up the
+    // Provision for Bad Debts (credit-normal current asset) read as an
+    // INCREASE in current assets and wrongly reduced operating cash — the
+    // provision is a non-cash charge and must net the asset side down.
     const sumNonCashCurrentAssets = (balances: AccountBalance[]) => balances
       .filter((b) => b.account.account_subtype === 'current_asset' && !this.isCashEquivalent(b.account))
-      .reduce((s, b) => s + b.balance, 0);
+      .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit'), 0);
 
     const sumOperatingCurrentLiabilities = (balances: AccountBalance[]) => balances
       .filter((b) => b.account.account_subtype === 'current_liability' && !LOAN_ACCOUNT_CODES.has(b.account.code))
-      .reduce((s, b) => s + b.balance, 0);
+      .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'credit'), 0);
 
     const openingAssets = sumNonCashCurrentAssets(opening);
     const closingAssets = sumNonCashCurrentAssets(closing);
@@ -959,9 +998,174 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       totalOpeningEquity, totalClosingEquity, reconciles,
     };
   }
-}
-// AUDIT: Added fixed-asset depreciation, bank reconciliation, multi-currency FX gap checks.
 
-// IMPLEMENTED: depreciation, reconciliation, FX gap checks added
-export function auditFixedAssetsAndReconciliation() { return true; }
-// SOFP LOGIC: depreciation computed via straight-line; reconciliation includes bank variance; FX uses base amount.
+  // ── Statement integrity audit ────────────────────────────────────────────
+
+  /**
+   * Read-only integrity audit over the data the SOFP is built from.
+   *
+   * Replaces the old `auditFixedAssetsAndReconciliation() { return true; }`
+   * stub, which claimed fixed-asset, bank-reconciliation and FX gap checks
+   * existed but verified nothing. Runs three real checks as at `asOfDate`:
+   *
+   *   1. fixed-assets        — asset register Σ accumulated depreciation vs
+   *      the GL contra-asset (credit-normal fixed_asset) accounts;
+   *   2. bank-reconciliation — each bank account's GL balance vs the closing
+   *      balance on its latest locked imported bank statement (the "bank
+   *      variance" the old comment claimed was included);
+   *   3. fx                  — every posted/reversed foreign-currency journal
+   *      line must carry an exchange-rate snapshot; stale cached rates are
+   *      reported as findings.
+   *
+   * Pure evaluation logic lives in @/lib/statementIntegrity so it can be
+   * unit-tested without a database; this method only fetches the rows.
+   */
+  async auditStatementIntegrity(
+    businessId: string,
+    asOfDate: string,
+  ): Promise<StatementIntegrityReport> {
+    const balances = await this.computeBalances(businessId, {
+      asOfDate,
+      includeOpeningBalances: true,
+    });
+
+    // Fixed-asset register (non-disposed assets only — disposal removes the
+    // accumulated depreciation from both the register tie-out and the GL).
+    const assetsRes = await this.client
+      .from('fixed_assets')
+      .select('acquisition_cost, accumulated_depreciation, status')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .neq('status', 'disposed');
+    if (assetsRes.error) throw toRepositoryError('fixed_assets', assetsRes.error);
+    const registerRows = (assetsRes.data ?? []) as Array<{
+      acquisition_cost: number; accumulated_depreciation: number; status: string;
+    }>;
+
+    // Latest LOCKED bank statement per bank account (only a locked statement
+    // represents a completed reconciliation — saved-and-locked in
+    // BankReconciliation.finalize). is_locked arrives via the
+    // bank_reconciliation migration, which post-dates the generated types;
+    // the column exists at runtime and the filter is passed through.
+    const statementsRes = await this.client
+      .from('bank_statements')
+      .select('account_id, closing_balance, statement_date, is_locked')
+      .eq('business_id', businessId)
+      .order('statement_date', { ascending: false });
+    if (statementsRes.error) throw toRepositoryError('bank_statements', statementsRes.error);
+    const latestStatementByAccount = new Map<string, { statement_date: string; closing_balance: number }>();
+    for (const s of (statementsRes.data ?? []) as unknown as Array<{
+      account_id: string; statement_date: string; closing_balance: number; is_locked?: boolean;
+    }>) {
+      if (s.is_locked === false) continue; // skip statements still being saved
+      if (!latestStatementByAccount.has(s.account_id)) {
+        latestStatementByAccount.set(s.account_id, s);
+      }
+    }
+
+    // Functional currency for the FX check.
+    const businessRes = await this.client
+      .from('businesses')
+      .select('base_currency')
+      .eq('id', businessId)
+      .single();
+    if (businessRes.error) throw toRepositoryError('businesses', businessRes.error);
+    const functionalCurrency = ((businessRes.data as { base_currency?: string } | null)?.base_currency) || 'MWK';
+
+    // Foreign-currency journal lines touching posted/reversed entries.
+    const fxLinesRes = await this.client
+      .from('journal_lines')
+      .select('currency, amount_base, exchange_rate, rate_is_stale, journal_entries!inner(status, entry_number, business_id)')
+      .eq('business_id', businessId)
+      .eq('journal_entries.business_id', businessId)
+      .in('journal_entries.status', ['posted', 'reversed']);
+    if (fxLinesRes.error) throw toRepositoryError('journal_lines', fxLinesRes.error);
+    const foreignLines: FxLineSample[] = [];
+    let staleRateCount = 0;
+    for (const l of (fxLinesRes.data ?? []) as unknown as Array<{
+      currency: string | null; amount_base: number; exchange_rate: number | null;
+      rate_is_stale: boolean | null; journal_entries: { entry_number: string };
+    }>) {
+      if (!l.currency || l.currency.toUpperCase() === functionalCurrency.toUpperCase()) continue;
+      foreignLines.push({
+        entryNumber: l.journal_entries?.entry_number ?? null,
+        currency: l.currency,
+        amountBase: Number(l.amount_base),
+        exchangeRate: l.exchange_rate === null ? null : Number(l.exchange_rate),
+      });
+      if (l.rate_is_stale) staleRateCount += 1;
+    }
+
+    // GL vs register (contra-aware, asset side).
+    const glAssetCost = balances
+      .filter((b) => b.account.account_subtype === 'fixed_asset' && b.account.normal_balance === 'debit')
+      .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit'), 0);
+    const glAccumulatedDepreciation = -balances
+      .filter((b) => b.account.account_subtype === 'fixed_asset' && b.account.normal_balance === 'credit')
+      .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit'), 0);
+
+    const fixedAssets = buildFixedAssetCheck({
+      glAssetCost,
+      glAccumulatedDepreciation,
+      registerAssetCost: registerRows.reduce((s, r) => s + Number(r.acquisition_cost), 0),
+      registerAccumulatedDepreciation: registerRows.reduce((s, r) => s + Number(r.accumulated_depreciation), 0),
+      registerAssetCount: registerRows.length,
+    });
+
+    // Bank variance per bank account. The GL balance must be measured AS AT
+    // the statement's own date — comparing the asOfDate GL with an older
+    // statement's closing balance would report every subsequent transaction
+    // as a phantom "variance". Balances are cached per distinct date.
+    const balancesByDate = new Map<string, Map<string, number>>([
+      [asOfDate, new Map(balances.map((b) => [b.account.id, toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit')]))],
+    ]);
+    for (const statement of latestStatementByAccount.values()) {
+      if (!balancesByDate.has(statement.statement_date)) {
+        const historical = await this.computeBalances(businessId, {
+          asOfDate: statement.statement_date,
+          includeOpeningBalances: true,
+        });
+        balancesByDate.set(
+          statement.statement_date,
+          new Map(historical.map((b) => [b.account.id, toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit')])),
+        );
+      }
+    }
+
+    const asOfBalances = balancesByDate.get(asOfDate)!;
+    const bankRows: BankAccountVariance[] = balances
+      .filter((b) => b.account.is_bank_account)
+      .map((b) => {
+        const statement = latestStatementByAccount.get(b.account.id);
+        return {
+          accountCode: b.account.code,
+          accountName: b.account.name,
+          glBalance: statement
+            ? (balancesByDate.get(statement.statement_date)?.get(b.account.id) ?? 0)
+            : (asOfBalances.get(b.account.id) ?? 0),
+          statementDate: statement?.statement_date ?? null,
+          statementClosing: statement ? Number(statement.closing_balance) : null,
+        };
+      });
+    const bankReconciliation = buildBankReconciliationCheck(bankRows);
+
+    const fx = buildFxIntegrityCheck({ functionalCurrency, foreignLines, staleRateCount });
+
+    const checks = [fixedAssets, bankReconciliation, fx];
+    return {
+      asOfDate,
+      functionalCurrency,
+      ok: checks.every((c) => c.ok),
+      checks,
+    };
+  }
+}
+
+export interface StatementIntegrityReport {
+  asOfDate: string;
+  functionalCurrency: string;
+  ok: boolean;
+  checks: IntegrityCheck[];
+}
+
+export { INTEGRITY_TOLERANCE };
