@@ -170,3 +170,59 @@ describe('RLS / UI role parity', () => {
     }
   });
 });
+
+describe('businesses policy avoids nested RLS', () => {
+  const BUSINESSES_MIGRATION = resolve(
+    REPO_ROOT,
+    'supabase/migrations/20260728000010_businesses_select_no_nested_rls.sql',
+  );
+
+  /**
+   * The "business not found" bug: the businesses SELECT policy inlined
+   *   EXISTS (SELECT 1 FROM business_users WHERE ... )
+   * and a subquery inside a policy is itself subject to RLS on the table it
+   * reads. business_users was gated by the stale role ladder, so it returned
+   * no rows for a supervisor, so EXISTS was false, so the business looked
+   * absent. The membership row was perfectly healthy the whole time.
+   */
+  it('reads membership through a SECURITY DEFINER helper, not an inline subquery', () => {
+    const sql = readFileSync(BUSINESSES_MIGRATION, 'utf8');
+    const body = sql
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+
+    expect(body).toContain('for select using (public.is_business_member(id))');
+
+    // No policy on this table may query business_users directly again.
+    expect(body.toLowerCase()).not.toMatch(/select\s+1\s+from\s+business_users/);
+  });
+
+  it('collapses the duplicate member SELECT policies', () => {
+    const sql = readFileSync(BUSINESSES_MIGRATION, 'utf8');
+    expect(sql).toContain('drop policy if exists "Members can read their businesses"');
+    expect(sql).toContain('drop policy if exists businesses_select');
+  });
+
+  it('lets admins update the business, not just the owner', () => {
+    const sql = readFileSync(BUSINESSES_MIGRATION, 'utf8');
+    const body = sql
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('--'))
+      .join('\n');
+    const update = body.slice(body.indexOf('create policy businesses_update'));
+    expect(update).toContain('can_admin_business_data');
+    expect(update).not.toContain("'owner'::user_role");
+  });
+
+  it('preserves the partner and platform admin read paths', () => {
+    const sql = readFileSync(BUSINESSES_MIGRATION, 'utf8');
+    for (const fn of [
+      'is_platform_admin',
+      'is_partner_business_admin',
+      'can_read_partner_peer_business',
+    ]) {
+      expect(sql, `${fn} read path dropped`).toContain(fn);
+    }
+  });
+});
