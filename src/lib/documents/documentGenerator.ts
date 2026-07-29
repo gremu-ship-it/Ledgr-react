@@ -13,7 +13,6 @@
 import type { BusinessBranding, InvoiceLike, InvoiceLineLike, ContactLike } from './types';
 
 const DEFAULT_BRAND = '#0E7C5A'; // 5.32:1 AA contrast
-const DEFAULT_BRAND_LIGHT = '#ECFDF5';
 
 function esc(str: string | null | undefined): string {
   if (!str) return '';
@@ -435,7 +434,6 @@ function businessAddressBlock(b: BusinessBranding): string {
 }
 
 function renderLetterhead(b: BusinessBranding, title: string, docNumber: string, status?: string): string {
-  const brand = brandColorStyle(b.brandColor);
   const logoHtml = b.logoUrl
     ? `<img src="${esc(b.logoUrl)}" class="logo" alt="${esc(b.name)} logo" crossorigin="anonymous" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
        <div class="logo-fallback" style="display:none;">${esc(getInitials(b.name))}</div>`
@@ -475,6 +473,7 @@ function openPrintWindow(title: string, html: string, autoPrint = true): void {
   }
   win.document.write(html);
   win.document.close();
+  win.document.title = title;
   win.focus();
   if (autoPrint) {
     // Wait for images/fonts
