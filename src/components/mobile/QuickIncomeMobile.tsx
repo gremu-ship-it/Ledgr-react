@@ -8,6 +8,7 @@ import { createInvoiceJournalEntry } from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
+import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 
 type Step = 'amount' | 'category' | 'product' | 'description' | 'costCenter' | 'confirm' | 'success';
 
@@ -158,13 +159,13 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
         const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
 
-        await repos.invoice.createWithLines(
+        // createWithLines returns the inserted row; refetching every invoice
+        // for the business just to find it was the slowest step in this save.
+        const { invoice: created } = await repos.invoice.createWithLines(
           buildPayload(invoiceNumber, walkIn.id).invoice,
           buildPayload(invoiceNumber, walkIn.id).lines,
         );
 
-        const allInvoices = await repos.invoice.findByBusiness(businessId);
-        const created = allInvoices.find((inv) => inv.invoice_number === invoiceNumber);
         if (created) {
           try {
             await createInvoiceJournalEntry(
@@ -200,7 +201,11 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      // Scoped: see queryInvalidation.ts. A bare invalidateQueries() refetched
+      // every mounted query, most of which an invoice cannot affect.
+      invalidateAfterIncome(queryClient, {
+        touchedInventory: Boolean(selectedProduct?.track_inventory),
+      });
       setStep('success');
       setTimeout(() => handleClose(), 1500);
     },

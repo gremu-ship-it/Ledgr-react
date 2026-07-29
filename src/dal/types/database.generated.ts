@@ -4379,6 +4379,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      reserve_next_document_number: {
+        Args: { p_business_id: string; p_kind: string }
+        Returns: string
+      }
       seed_new_business: { Args: { p_biz: string }; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }

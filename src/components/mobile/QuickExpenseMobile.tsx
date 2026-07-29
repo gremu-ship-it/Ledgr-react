@@ -8,6 +8,7 @@ import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/serv
 import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
+import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 
 type Step = 'amount' | 'category' | 'product' | 'description' | 'costCenter' | 'confirm' | 'success';
 
@@ -161,13 +162,14 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
       try {
         const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
-        await repos.expense.createWithLines(
+        // createWithLines returns the inserted row, so use it directly. This
+        // used to refetch every expense for the business and scan the list for
+        // the one just created — a payload that grew with each transaction.
+        const { expense: created } = await repos.expense.createWithLines(
           buildPayload(expenseNumber).expense,
           buildPayload(expenseNumber).lines,
         );
 
-        const allExpenses = await repos.expense.findByBusiness(businessId);
-        const created = allExpenses.find((e) => e.expense_number === expenseNumber);
         if (created) {
           try {
             const allocations: ExpenseAccountAllocation[] = [
@@ -226,7 +228,12 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      // Scoped: a bare invalidateQueries() refetched every mounted query in
+      // the app, including payroll, team and partner data a new expense
+      // cannot affect.
+      invalidateAfterExpense(queryClient, {
+        touchedInventory: Boolean(selectedProduct?.track_inventory),
+      });
       setStep('success');
       setTimeout(() => {
         handleClose();

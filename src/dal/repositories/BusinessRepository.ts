@@ -90,32 +90,48 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
     return { business, role };
   }
 
-  /** ⚠️ Concurrency risk — documented. Replace with Postgres RPC for multi-user deployments. */
+  /**
+   * Reserve the next document number for a business.
+   *
+   * Delegates to the `reserve_next_document_number` RPC rather than doing a
+   * read-then-write here, for two reasons:
+   *
+   *  1. Permissions. Advancing a counter used to require UPDATE on the whole
+   *     businesses row, which RLS restricts to owner/admin. Every other writer
+   *     role — supervisor, sales_clerk, data_entry — got zero matched rows,
+   *     and BaseRepository.update() reports that as
+   *     `businesses with id "…" was not found`, naming a business that exists
+   *     and is readable. The RPC is SECURITY DEFINER and checks
+   *     can_write_business_data / can_write_payroll instead, so a writer can
+   *     raise an invoice without also being able to rename the company.
+   *
+   *  2. Concurrency. Read-then-write let two simultaneous users observe the
+   *     same counter and reserve the same number. The RPC's
+   *     `UPDATE … RETURNING` is atomic.
+   */
+  private async reserveDocumentNumber(
+    businessId: string,
+    kind: 'invoice' | 'expense' | 'payroll',
+  ): Promise<string> {
+    const { data, error } = await this.client.rpc('reserve_next_document_number', {
+      p_business_id: businessId,
+      p_kind: kind,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+    if (!data) throw new NotFoundError('businesses', businessId);
+    return data as string;
+  }
+
   async reserveNextInvoiceNumber(businessId: string): Promise<string> {
-    const business = await this.findById(businessId);
-    const nextNumber = business.invoice_next_number;
-    await this.update(businessId, { invoice_next_number: nextNumber + 1 });
-    return `${business.invoice_prefix ?? 'INV'}-${String(nextNumber).padStart(4, '0')}`;
+    return this.reserveDocumentNumber(businessId, 'invoice');
   }
 
   async reserveNextExpenseNumber(businessId: string): Promise<string> {
-    const business = await this.findById(businessId);
-    const nextNumber = business.expense_next_number;
-    await this.update(businessId, { expense_next_number: nextNumber + 1 });
-    return `${business.expense_prefix ?? 'EXP'}-${String(nextNumber).padStart(4, '0')}`;
+    return this.reserveDocumentNumber(businessId, 'expense');
   }
 
   async reserveNextPayrollNumber(businessId: string): Promise<string> {
-    const business = await this.findById(businessId);
-    const nextNumber = business.payroll_next_number;
-
-    await this.update(businessId, {
-      payroll_next_number: nextNumber + 1,
-    });
-
-    return `${business.payroll_prefix ?? 'PAY'}-${String(
-      nextNumber,
-    ).padStart(4, '0')}`;
+    return this.reserveDocumentNumber(businessId, 'payroll');
   }
 
   async findUserProfile(userId: string) {

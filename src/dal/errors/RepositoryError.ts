@@ -10,7 +10,14 @@ export abstract class RepositoryError extends Error {
 }
 export class NotFoundError extends RepositoryError {
   constructor(resource: string, id: string, cause?: unknown) {
-    super(`${resource} with id "${id}" was not found.`, resource, cause);
+    super(
+      // Under RLS a row the caller may not read comes back as zero rows, not
+      // as an error, so this message covers both "absent" and "forbidden".
+      // Say so, rather than sending people to look for a row that is present.
+      `${resource} with id "${id}" was not found, or you do not have permission to view it.`,
+      resource,
+      cause,
+    );
   }
 }
 export class ValidationError extends RepositoryError {

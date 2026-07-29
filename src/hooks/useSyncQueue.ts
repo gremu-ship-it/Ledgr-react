@@ -4,6 +4,7 @@ import { useOnlineStatus } from './useOnlineStatus';
 import { useOfflineQueue } from './useOfflineQueue';
 import { syncQueue, type SyncProgress } from '@/offline/syncEngine';
 import { QUEUE_TYPE_LABELS } from '@/offline/db';
+import { invalidateAfterSync } from '@/lib/queryInvalidation';
 
 export interface SyncQueueState {
   /** True while a sync pass is actively running. */
@@ -47,8 +48,11 @@ export function useSyncQueue(): SyncQueueState {
     try {
       const res = await syncQueue((p) => setProgress({ ...p }));
       if (res.completed > 0) {
-        // Refresh all cached queries so the UI immediately shows synced items
-        await queryClient.invalidateQueries();
+        // Refresh the caches the queue can have written to, so synced items
+        // appear immediately. Scoped rather than a blanket invalidate: the
+        // queue only flushes expenses and invoices, so payroll, team, partner
+        // and settings data cannot have changed.
+        invalidateAfterSync(queryClient);
       }
     } finally {
       setIsSyncing(false);

@@ -1,0 +1,101 @@
+import type { QueryClient } from '@tanstack/react-query';
+
+/**
+ * Scoped cache invalidation for transaction saves.
+ *
+ * Recording an expense or an invoice used to finish with a bare
+ * `queryClient.invalidateQueries()`, which marks EVERY cached query in the app
+ * stale. React Query then immediately refetches all of them that are mounted:
+ * contacts, products, branches, departments, assets, payroll, team, partner
+ * billing, every report. On a mobile connection that is the lag felt after the
+ * success tick, and almost none of it can be affected by the save.
+ *
+ * The lists below name only what a new transaction can actually change. Keys
+ * are matched by prefix, so ['expenses', businessId] is covered by 'expenses'.
+ *
+ * Keep in sync with the queryKey values used across the app — an unlisted key
+ * shows stale data until its own staleTime expires, so err towards including a
+ * key when a transaction plausibly affects it.
+ */
+
+/** Ledger and reporting surfaces that any posted transaction moves. */
+const LEDGER_KEYS = [
+  'journal',
+  'journal_entry_detail',
+  'accounts',
+  'accounts_by_type',
+  'posting_accounts',
+  // Financial statements are derived from the ledger.
+  'sofp',
+  'profit_or_loss',
+  'cash_flow',
+  'changes_in_equity',
+  'branch_performance',
+] as const;
+
+/** Stock surfaces, touched only when the line references a tracked product. */
+const INVENTORY_KEYS = [
+  'inventory_balances',
+  'products',
+  'products_all',
+  'reorder_alerts',
+  'locations',
+] as const;
+
+/**
+ * Invalidate the caches a saved expense affects.
+ *
+ * @param options.touchedInventory - whether the expense moved tracked stock.
+ *   Skipping the inventory keys when it did not avoids refetching product and
+ *   stock lists that cannot have changed.
+ */
+export function invalidateAfterExpense(
+  queryClient: QueryClient,
+  options: { touchedInventory?: boolean } = {},
+): void {
+  const keys: string[] = ['expenses', ...LEDGER_KEYS, 'usage'];
+  if (options.touchedInventory) keys.push(...INVENTORY_KEYS);
+  invalidateKeys(queryClient, keys);
+}
+
+/**
+ * Invalidate the caches a saved invoice affects.
+ *
+ * Includes 'contacts' because an invoice changes a customer's outstanding
+ * balance and AR ageing.
+ */
+export function invalidateAfterIncome(
+  queryClient: QueryClient,
+  options: { touchedInventory?: boolean } = {},
+): void {
+  const keys: string[] = ['invoices', 'contacts', ...LEDGER_KEYS, 'usage'];
+  if (options.touchedInventory) keys.push(...INVENTORY_KEYS);
+  invalidateKeys(queryClient, keys);
+}
+
+/**
+ * Invalidate everything a batch of synced offline items could have touched.
+ *
+ * The offline queue mixes expenses and invoices and does not report which
+ * kinds it flushed, so this is the union of both. Still far narrower than a
+ * bare invalidateQueries(), which would also refetch payroll, team, partner
+ * and settings data that the queue never writes.
+ */
+export function invalidateAfterSync(queryClient: QueryClient): void {
+  invalidateKeys(queryClient, [
+    'expenses',
+    'invoices',
+    'contacts',
+    ...LEDGER_KEYS,
+    ...INVENTORY_KEYS,
+    'usage',
+  ]);
+}
+
+function invalidateKeys(queryClient: QueryClient, keys: string[]): void {
+  for (const key of keys) {
+    // Not awaited: invalidation marks queries stale synchronously, and the
+    // refetches it triggers should not block the success animation.
+    void queryClient.invalidateQueries({ queryKey: [key] });
+  }
+}
