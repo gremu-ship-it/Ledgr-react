@@ -8,6 +8,9 @@ import type { StatementSection } from '@/dal/repositories/FinancialStatementRepo
 import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
 import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { businessRowToBranding } from '@/lib/documents/types';
+import type { Row } from '@/dal/types/database';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -109,6 +112,7 @@ export function StatementOfProfitOrLoss({
   const { t } = useTranslation();
   const format = useLocaleFormat();
   const [notes, setNotes] = useState('');
+  const { business: brandBusiness, businessName: brandName, logoUrl, brandColor } = useBrandTheme();
 
   const { data: pl, isLoading, error } = useQuery({
     queryKey: ['profit_or_loss', businessId, periodStart, periodEnd, comparativePeriodStart, comparativePeriodEnd],
@@ -127,16 +131,21 @@ export function StatementOfProfitOrLoss({
   const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
   const subtotalProps = { showComparative, formatCurrency: formatMwk };
 
+  const businessBranding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
+
   const handleExportPDF = () => {
-    const htmlContent = document.querySelector('.max-w-3xl')?.outerHTML || '';
+    const htmlContent = document.querySelector('.max-w-3xl')?.innerHTML || document.querySelector('.max-w-3xl')?.outerHTML || '';
     exportReportAsPDF({
       title: t('reports.statementOfProfitOrLoss'),
-      subtitle: periodLabel,
+      subtitle: `${periodLabel} — ${brandName}`,
       dateLabel: periodLabel,
       currency: 'MWK',
       preparerName,
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent,
     });
   };
@@ -156,7 +165,8 @@ export function StatementOfProfitOrLoss({
       currency: 'MWK',
       preparerName,
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent: '',
       facts,
     });

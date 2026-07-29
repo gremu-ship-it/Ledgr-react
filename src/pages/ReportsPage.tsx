@@ -10,6 +10,9 @@ import { StatementOfChangesInEquity } from '@/components/reports/StatementOfChan
 import { BranchPerformanceReport } from '@/components/reports/BranchPerformanceReport';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import type { Row } from '@/dal/types/database';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { businessRowToBranding } from '@/lib/documents/types';
+import { generateProfessionalReportDocument } from '@/lib/documents/documentGenerator';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,6 +101,7 @@ function DateFilter({ range, onChange }: { range: DateRange; onChange: (r: DateR
 // ── Trial Balance ─────────────────────────────────────────────────────────────
 
 function TrialBalanceReport({ businessId }: { businessId: string }) {
+  const { business: brandBusiness, businessName: brandName, logoUrl, brandColor } = useBrandTheme();
   const { data: rows = [], isLoading } = useQuery<TrialBalanceRow[]>({
     queryKey: ['trial_balance', businessId],
     queryFn: async () => {
@@ -115,6 +119,58 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
   const totalDebits = rows.reduce((s, r) => s + Number(r.total_debits ?? 0), 0);
   const totalCredits = rows.reduce((s, r) => s + Number(r.total_credits ?? 0), 0);
 
+  const businessBranding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
+
+  const handleExportPDF = () => {
+    const tableHtml = `
+      <table style="width:100%; border-collapse:collapse; font-size:9.5pt;">
+        <thead><tr style="background:#0f172a; color:white;">
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase; letter-spacing:0.06em;">Code</th>
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase; letter-spacing:0.06em;">Account</th>
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase; letter-spacing:0.06em;">Type</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; text-transform:uppercase; letter-spacing:0.06em;">Debits</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; text-transform:uppercase; letter-spacing:0.06em;">Credits</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; text-transform:uppercase; letter-spacing:0.06em;">Balance</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `
+            <tr>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-family:monospace; font-size:8.5pt;">${r.code ?? ''}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-weight:600;">${r.name ?? ''}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:8.5pt; color:#64748b;">${r.account_type ?? ''}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${formatMwk(Number(r.total_debits ?? 0))}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${formatMwk(Number(r.total_credits ?? 0))}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:600; color:${Number(r.balance ?? 0) < 0 ? '#dc2626' : '#0f172a'};">${formatMwk(Number(r.balance ?? 0))}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f8fafc; font-weight:700; border-top:2px solid #0f172a;">
+            <td colspan="3" style="padding:12px;">Totals</td>
+            <td style="padding:12px; text-align:right;">${formatMwk(totalDebits)}</td>
+            <td style="padding:12px; text-align:right;">${formatMwk(totalCredits)}</td>
+            <td style="padding:12px; text-align:right; color:${Math.abs(totalDebits - totalCredits) > 0.01 ? '#dc2626' : '#059669'};">${Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwk(totalDebits - totalCredits)}</td>
+          </tr>
+        </tfoot>
+      </table>
+    `;
+    generateProfessionalReportDocument({
+      business: businessBranding as any,
+      title: 'Trial Balance',
+      subtitle: 'All posted journal entries — detailed trial balance',
+      dateLabel: new Date().toLocaleDateString('en-MW', { day: '2-digit', month: 'long', year: 'numeric' }),
+      currency: 'MWK',
+      sections: [{ html: tableHtml }],
+      facts: [
+        { label: 'Total Debits', value: totalDebits },
+        { label: 'Total Credits', value: totalCredits },
+        { label: 'Difference', value: Math.abs(totalDebits - totalCredits) },
+      ],
+    });
+  };
+
   if (isLoading) return <div className="space-y-3">{[...Array(10)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />)}</div>;
 
   if (rows.length === 0) return (
@@ -125,10 +181,11 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
   );
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-3xl">
+    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm max-w-4xl">
       <ReportHeader
         title="Trial Balance"
         subtitle="All posted journal entries"
+        onExportPDF={handleExportPDF}
       />
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -179,6 +236,7 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
 
 
 function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: string; functionalCurrency: string }) {
+  const { business: brandBusiness, businessName: brandName, logoUrl, brandColor } = useBrandTheme();
   const { data: rows = [], isLoading, isError } = useQuery({
     queryKey: ['multi_currency_report', businessId],
     queryFn: async () => {
@@ -195,14 +253,62 @@ function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: s
     enabled: Boolean(businessId),
   });
 
+  const businessBranding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: functionalCurrency };
+
   if (isLoading) return <div className="space-y-3">{[...Array(6)].map((_, i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-gray-100" />)}</div>;
   if (isError) return <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Failed to load multi-currency report.</div>;
+
+  const handleExportPDF = () => {
+    const tableHtml = `
+      <table style="width:100%; min-width:760px; border-collapse:collapse; font-size:9pt;">
+        <thead><tr style="background:#0f172a; color:white;">
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase;">Date</th>
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase;">Entry</th>
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase;">Description</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; text-transform:uppercase;">Txn Amount</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; text-transform:uppercase;">Functional</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; text-transform:uppercase;">Rate</th>
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; text-transform:uppercase;">Rate Date</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(row => {
+            const entry = Array.isArray(row.journal_entries) ? row.journal_entries[0] : row.journal_entries;
+            const txCurrency = row.original_currency ?? row.currency ?? functionalCurrency;
+            const txAmount = Number(row.original_amount ?? row.amount ?? 0);
+            const functionalAmount = Number(row.amount_base ?? 0);
+            return `
+              <tr>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9;">${entry?.entry_date ?? '—'}</td>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-family:monospace; font-size:8.5pt;">${entry?.entry_number ?? '—'}</td>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9;">${row.description ?? entry?.description ?? '—'}</td>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:600;">${txCurrency} ${txAmount.toLocaleString('en-MW', { minimumFractionDigits: 2 })}</td>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; color:#0E7C5A; font-weight:600;">${functionalCurrency} ${functionalAmount.toLocaleString('en-MW', { minimumFractionDigits: 2 })}</td>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${Number(row.exchange_rate ?? 1).toFixed(6)}</td>
+                <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9;">${row.rate_date ?? entry?.entry_date ?? '—'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+    generateProfessionalReportDocument({
+      business: businessBranding as any,
+      title: 'Multi-currency Transaction Report',
+      subtitle: `Original transaction currency alongside functional currency (${functionalCurrency})`,
+      dateLabel: new Date().toLocaleDateString('en-MW'),
+      currency: functionalCurrency,
+      sections: [{ html: tableHtml }],
+    });
+  };
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <ReportHeader
         title="Multi-currency Transaction Report"
         subtitle={`Original transaction currency alongside functional currency (${functionalCurrency})`}
+        onExportPDF={handleExportPDF}
       />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">

@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabase';
 import { ReportHeader } from './ReportHeader';
 import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
 import type { Row } from '@/dal/types/database';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { businessRowToBranding } from '@/lib/documents/types';
 
 interface Props {
   businessId: string;
@@ -17,11 +19,8 @@ interface Props {
 export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props) {
   const { t } = useTranslation();
   const [notes, setNotes] = useState('');
+  const { business: brandBusiness, businessName: brandName, logoUrl, brandColor } = useBrandTheme();
 
-  // v_cash_flow stores periods as YYYY-MM, while the report date picker
-  // supplies YYYY-MM-DD. Comparing those strings directly excludes the
-  // selected month (for example, `2026-01` is less than `2026-01-01`).
-  // Normalize the bounds to month keys before querying the view.
   const periodStartMonth = periodStart.slice(0, 7);
   const periodEndMonth = periodEnd.slice(0, 7);
 
@@ -44,23 +43,26 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
   });
 
   const periodLabel = `${periodStart} – ${periodEnd}`;
+  const businessBranding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
 
   const handleExportPDF = () => {
-    const htmlContent = document.querySelector('.space-y-6')?.outerHTML || '';
+    const tableEl = document.querySelector('.rounded-2xl.border table')?.outerHTML || '';
+    const htmlContent = `<div style="margin-top:8px;">${tableEl}</div>` || document.querySelector('.space-y-6')?.outerHTML || '';
     exportReportAsPDF({
       title: t('reports.cash_flow.title'),
-      subtitle: periodLabel,
+      subtitle: `${periodLabel} — ${brandName}`,
       dateLabel: periodLabel,
       currency: 'MWK',
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent,
     });
   };
 
   const handleExportXBRL = () => {
-    // `period` is nullable on v_cash_flow, and an XBRL fact without a context
-    // date is meaningless — drop those rows rather than emitting `null` dates.
     const facts = (cashFlowData ?? []).flatMap((row) => (
       row.period === null ? [] : [
         { concept: 'OperatingCashFlow', value: Number(row.operating || 0), date: row.period },
@@ -73,7 +75,8 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
       dateLabel: periodLabel,
       currency: 'MWK',
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent: '',
       facts,
     });
