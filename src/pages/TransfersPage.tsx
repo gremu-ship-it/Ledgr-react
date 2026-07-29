@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Plus, Search, X, Loader2, Truck,
-  CheckCircle, Printer, AlertCircle, Download, FileText, Package,
+  CheckCircle, AlertCircle, FileText, Package,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -247,7 +247,7 @@ function TransferDrawer({
   const toLoc   = locations.find((l) => l.id === transfer.to_location_id)?.name ?? '—';
   const status  = STATUS[transfer.status as TransferStatus] ?? STATUS.draft;
 
-  const { business: brandBusiness, businessName: brandName, logoUrl } = useBrandTheme();
+  const { business: brandBusiness, logoUrl } = useBrandTheme();
   const branding = brandBusiness
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
     : { name: businessName, logoUrl: logoUrl, brandColor: null } as any;

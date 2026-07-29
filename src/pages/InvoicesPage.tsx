@@ -20,7 +20,7 @@ import { createInvoiceSettlementEntry } from '@/services/journalService';
 import { resolveTransactionRate } from '@/lib/currency';
 import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
 import { generateInvoiceDocument, generateDeliveryNoteDocument, generateReceiptDocument } from '@/lib/documents/documentGenerator';
-import { businessRowToBranding } from '@/lib/documents/types';
+import { businessRowToBranding, type BusinessBranding } from '@/lib/documents/types';
 import { supabase } from '@/lib/supabase';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -444,7 +444,7 @@ function InvoiceDetail({
 
   const canPay = !['paid', 'voided', 'credited'].includes(invoice.status);
 
-  const businessBranding = businessData
+  const businessBranding: BusinessBranding = businessData
     ? businessRowToBranding(businessData as Row<'businesses'>)
     : {
         name: businessName || 'Business',
