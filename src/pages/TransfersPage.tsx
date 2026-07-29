@@ -2,13 +2,17 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Plus, Search, X, Loader2, Truck,
-  CheckCircle, Printer, AlertCircle,
+  CheckCircle, Printer, AlertCircle, Download, FileText, Package,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
 import type { TransferWithLines, TransferStatus } from '@/dal/repositories/TransferRepository';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { generateDeliveryNoteDocument } from '@/lib/documents/documentGenerator';
+import { businessRowToBranding } from '@/lib/documents/types';
+import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -20,83 +24,53 @@ const STATUS: Record<TransferStatus, { label: string; bg: string; text: string }
   received:         { label: 'Received',         bg: 'bg-emerald-50', text: 'text-brand-600'  },
 };
 
-// ── Delivery note printer ─────────────────────────────────────────────────────
+// ── Professional delivery note generator ─────────────────────────────────────
 
 function printDeliveryNote(
   transfer: Row<'stock_transfers'>,
   lines: Row<'stock_transfer_lines'>[],
   locations: Row<'inventory_locations'>[],
   products: Row<'products'>[],
-  businessName: string,
+  businessBranding: ReturnType<typeof businessRowToBranding> | { name: string; logoUrl?: string | null; brandColor?: string | null },
 ) {
   const fromLoc = locations.find((l) => l.id === transfer.from_location_id)?.name ?? '—';
   const toLoc   = locations.find((l) => l.id === transfer.to_location_id)?.name ?? '—';
 
-  const lineRows = lines.map((l) => {
+  const mappedLines = lines.map((l) => {
     const p = products.find((p) => p.id === l.product_id);
-    return `<tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;">${p?.name ?? '—'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;text-align:center;">${p?.sku ?? '—'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;text-align:right;">${Number(l.quantity_requested)}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;text-align:right;">${l.quantity_dispatched != null ? Number(l.quantity_dispatched) : '—'}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f3f4f6;text-align:right;">${l.quantity_received != null ? Number(l.quantity_received) : '—'}</td>
-    </tr>`;
-  }).join('');
+    return {
+      product_name: p?.name ?? '—',
+      sku: p?.sku ?? null,
+      quantity_requested: Number(l.quantity_requested),
+      quantity_dispatched: l.quantity_dispatched != null ? Number(l.quantity_dispatched) : null,
+      quantity_received: l.quantity_received != null ? Number(l.quantity_received) : null,
+    };
+  });
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/>
-<title>Delivery Note – ${transfer.transfer_number}</title>
-<style>
-  body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:32px;}
-  h1{font-size:22px;margin:0 0 4px;color:#1D9E75;}
-  .meta{display:flex;justify-content:space-between;margin-bottom:24px;}
-  .label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9ca3af;}
-  table{width:100%;border-collapse:collapse;margin-top:16px;}
-  thead tr{background:#f9fafb;}
-  th{padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;border-bottom:2px solid #e5e7eb;text-align:left;}
-  th:nth-child(n+3){text-align:right;}th:nth-child(2){text-align:center;}
-  .footer{margin-top:40px;display:flex;justify-content:space-between;}
-  .sig-line{border-top:1px solid #d1d5db;margin-top:40px;padding-top:6px;font-size:11px;color:#9ca3af;}
-  .badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;background:#ecfdf5;color:#1D9E75;}
-</style></head><body>
-<h1>${businessName}</h1>
-<p style="color:#6b7280;margin:0 0 24px;">Delivery Note / Waybill</p>
-<div class="meta">
-  <div>
-    <div class="label">Transfer No.</div><strong>${transfer.transfer_number}</strong>
-    <br/><div class="label" style="margin-top:8px">Status</div>
-    <span class="badge">${STATUS[transfer.status as TransferStatus]?.label ?? transfer.status}</span>
-  </div>
-  <div style="text-align:right">
-    <div class="label">Date</div>
-    ${new Date(transfer.created_at).toLocaleDateString('en-GB',{day:'2-digit',month:'long',year:'numeric'})}
-    ${transfer.dispatched_at ? `<br/><div class="label" style="margin-top:8px">Dispatched</div>${new Date(transfer.dispatched_at).toLocaleDateString('en-GB')}` : ''}
-    ${transfer.received_at ? `<br/><div class="label" style="margin-top:8px">Received</div>${new Date(transfer.received_at).toLocaleDateString('en-GB')}` : ''}
-  </div>
-</div>
-<div class="meta">
-  <div><div class="label">From</div><strong>${fromLoc}</strong></div>
-  <div style="font-size:22px;color:#d1d5db;align-self:center;">→</div>
-  <div style="text-align:right"><div class="label">To</div><strong>${toLoc}</strong></div>
-</div>
-${transfer.notes ? `<p style="background:#f9fafb;padding:10px 14px;border-radius:8px;color:#6b7280;font-size:12px;">${transfer.notes}</p>` : ''}
-<table><thead><tr>
-  <th scope="col">Product</th><th scope="col" style="text-align:center">SKU</th>
-  <th scope="col" style="text-align:right">Requested</th>
-  <th scope="col" style="text-align:right">Dispatched</th>
-  <th scope="col" style="text-align:right">Received</th>
-</tr></thead><tbody>${lineRows}</tbody></table>
-<div class="footer">
-  <div style="width:200px"><div class="sig-line">Dispatched by</div></div>
-  <div style="width:200px"><div class="sig-line">Received by</div></div>
-</div>
-</body></html>`;
-
-  const win = window.open('', '_blank');
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  setTimeout(() => win.print(), 400);
+  generateDeliveryNoteDocument({
+    business: {
+      name: (businessBranding as any).name || 'Business',
+      logoUrl: (businessBranding as any).logoUrl || (businessBranding as any).logo_url || null,
+      brandColor: (businessBranding as any).brandColor || (businessBranding as any).brand_color || null,
+      addressLine1: (businessBranding as any).addressLine1 || (businessBranding as any).address_line1 || null,
+      city: (businessBranding as any).city || null,
+      phone: (businessBranding as any).phone || null,
+      email: (businessBranding as any).email || null,
+      tpin: (businessBranding as any).tpin || null,
+      vatNumber: (businessBranding as any).vatNumber || (businessBranding as any).vat_number || null,
+    },
+    transfer: {
+      transfer_number: transfer.transfer_number,
+      status: transfer.status,
+      created_at: transfer.created_at,
+      dispatched_at: transfer.dispatched_at,
+      received_at: transfer.received_at,
+      notes: transfer.notes,
+      from_location_name: fromLoc,
+      to_location_name: toLoc,
+    },
+    lines: mappedLines,
+  });
 }
 
 // ── Create transfer modal ─────────────────────────────────────────────────────
@@ -273,6 +247,11 @@ function TransferDrawer({
   const toLoc   = locations.find((l) => l.id === transfer.to_location_id)?.name ?? '—';
   const status  = STATUS[transfer.status as TransferStatus] ?? STATUS.draft;
 
+  const { business: brandBusiness, businessName: brandName, logoUrl } = useBrandTheme();
+  const branding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: businessName, logoUrl: logoUrl, brandColor: null } as any;
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
@@ -282,13 +261,28 @@ function TransferDrawer({
             <p className="text-xs text-gray-600">Transfer</p>
             <p className="font-semibold text-gray-900">{transfer.transfer_number}</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => printDeliveryNote(transfer, lines, locations, products, businessName)}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
-            >
-              <Printer size={13} /> Delivery Note
-            </button>
+          <div className="flex items-center gap-2">
+            <DocumentDownloadButton
+              label="Download"
+              variant="secondary"
+              size="sm"
+              options={[
+                {
+                  id: 'delivery',
+                  label: 'Delivery Note PDF',
+                  description: 'Professional waybill with logo',
+                  icon: <Package className="h-4 w-4" />,
+                  onClick: () => printDeliveryNote(transfer, lines, locations, products, branding),
+                },
+                {
+                  id: 'goods-received',
+                  label: 'Goods Received Note',
+                  description: 'Receipt confirmation',
+                  icon: <FileText className="h-4 w-4" />,
+                  onClick: () => printDeliveryNote(transfer, lines, locations, products, branding),
+                },
+              ]}
+            />
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
           </div>
         </div>

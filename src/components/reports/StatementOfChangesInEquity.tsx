@@ -8,6 +8,9 @@ import type { EquityRollForwardLine } from '@/dal/repositories/FinancialStatemen
 import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
 import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { businessRowToBranding } from '@/lib/documents/types';
+import type { Row } from '@/dal/types/database';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -43,6 +46,7 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
   const { t } = useTranslation();
   const format = useLocaleFormat();
   const [notes, setNotes] = useState('');
+  const { business: brandBusiness, businessName: brandName, logoUrl, brandColor } = useBrandTheme();
 
   const { data: soce, isLoading, error } = useQuery({
     queryKey: ['changes_in_equity', businessId, periodStart, periodEnd],
@@ -52,16 +56,20 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
 
   const formatMwk = (value: number) => format.currency(value, 'MWK');
   const periodLabel = t('reports.period', { start: format.date(periodStart), end: format.date(periodEnd) });
+  const businessBranding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
 
   const handleExportPDF = () => {
     const htmlContent = document.querySelector('.overflow-x-auto')?.outerHTML || '';
     exportReportAsPDF({
       title: t('reports.statementOfChangesInEquity'),
-      subtitle: periodLabel,
+      subtitle: `${periodLabel} — ${brandName}`,
       dateLabel: periodLabel,
       currency: 'MWK',
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent,
     });
   };
@@ -73,7 +81,8 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
       dateLabel: periodLabel,
       currency: 'MWK',
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent: '',
       facts: [
         { concept: 'ShareCapital', value: soce.shareCapital.closingBalance },

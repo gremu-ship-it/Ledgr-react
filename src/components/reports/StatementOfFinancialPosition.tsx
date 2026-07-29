@@ -9,6 +9,9 @@ import { useLocaleFormat } from '@/i18n';
 import { ReportHeader } from './ReportHeader';
 import { pushSofpBalanceWarning } from '@/lib/notifications';
 import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { businessRowToBranding } from '@/lib/documents/types';
+import type { Row } from '@/dal/types/database';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -101,6 +104,7 @@ export function StatementOfFinancialPosition({
   const { t } = useTranslation();
   const format = useLocaleFormat();
   const [notes, setNotes] = useState('');
+  const { business: brandBusiness, businessName: brandName, logoUrl, brandColor } = useBrandTheme();
 
   const { data: sofp, isLoading, error } = useQuery({
     queryKey: ['sofp', businessId, asOfDate, comparativeDate],
@@ -114,11 +118,10 @@ export function StatementOfFinancialPosition({
   const sectionProps = { showComparative, formatCurrency: formatMwk, totalLabel: t('common.total') };
   const totalProps = { showComparative, formatCurrency: formatMwk };
 
-  // Always call useEffect at the top level (Rules of Hooks).
-  // Only push the warning when we have unbalanced data.
-  // We intentionally omit formatMwk from deps because it is a stable derived formatter
-  // (useLocaleFormat is expected to be stable across renders) and we only want this
-  // side-effect to fire when the report data changes.
+  const businessBranding = brandBusiness
+    ? businessRowToBranding(brandBusiness as Row<'businesses'>)
+    : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
+
   useEffect(() => {
     if (sofp && !sofp.isBalanced) {
       pushSofpBalanceWarning(
@@ -129,22 +132,66 @@ export function StatementOfFinancialPosition({
     }
   }, [sofp]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Professional PDF export handler
+  const buildProfessionalHtml = () => {
+    if (!sofp) return '';
+    // Build a polished standalone table for export
+    const rowsHtml = (section: StatementSection, label: string) => {
+      const lines = section.lines.map((line) => `
+        <tr>
+          <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:9.5pt;">${line.name}</td>
+          <td style="padding:8px 12px; text-align:right; border-bottom:1px solid #f1f5f9; font-size:9.5pt;">${formatAccounting(line.amount, formatMwk)}</td>
+          ${showComparative ? `<td style="padding:8px 12px; text-align:right; border-bottom:1px solid #f1f5f9; font-size:9.5pt; color:#64748b;">${line.comparativeAmount !== null ? formatAccounting(line.comparativeAmount, formatMwk) : '—'}</td>` : ''}
+        </tr>
+      `).join('');
+      const total = `
+        <tr style="background:#f8fafc; font-weight:700;">
+          <td style="padding:10px 12px;">Total ${label}</td>
+          <td style="padding:10px 12px; text-align:right;">${formatAccounting(section.subtotal, formatMwk)}</td>
+          ${showComparative ? `<td style="padding:10px 12px; text-align:right; color:#475569;">${section.comparativeSubtotal !== null ? formatAccounting(section.comparativeSubtotal, formatMwk) : '—'}</td>` : ''}
+        </tr>`;
+      return `
+        <tr><td colspan="${showComparative ? 3 : 2}" style="padding:14px 0 4px 0; font-size:8pt; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8;">${section.label}</td></tr>
+        ${lines}
+        ${total}
+      `;
+    };
+    return `
+      <table style="width:100%; border-collapse:collapse; margin-top:8px;">
+        <thead><tr style="background:#0f172a; color:white;">
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase;">Item</th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase;">${dateLabel}</th>
+          ${showComparative && comparativeDate ? `<th style="padding:10px 12px; text-align:right; font-size:8pt; letter-spacing:0.06em; text-transform:uppercase;">${format.date(comparativeDate)}</th>` : ''}
+        </tr></thead>
+        <tbody>
+          ${rowsHtml(sofp.currentAssets, sofp.currentAssets.label)}
+          ${rowsHtml(sofp.nonCurrentAssets, sofp.nonCurrentAssets.label)}
+          <tr style="background:#0f172a; color:white; font-weight:800;"><td style="padding:12px;">Total Assets</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalAssets, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalAssets !== null ? formatAccounting(sofp.comparativeTotalAssets, formatMwk) : '—'}</td>` : ''}</tr>
+          ${rowsHtml(sofp.currentLiabilities, sofp.currentLiabilities.label)}
+          ${rowsHtml(sofp.nonCurrentLiabilities, sofp.nonCurrentLiabilities.label)}
+          <tr style="border-top:2px solid #0f172a; font-weight:700;"><td style="padding:12px;">Total Liabilities</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalLiabilities, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalLiabilities !== null ? formatAccounting(sofp.comparativeTotalLiabilities, formatMwk) : '—'}</td>` : ''}</tr>
+          <tr style="font-weight:700;"><td style="padding:12px;">Net Assets</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.netAssets, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeNetAssets !== null ? formatAccounting(sofp.comparativeNetAssets, formatMwk) : '—'}</td>` : ''}</tr>
+          ${rowsHtml(sofp.equity, sofp.equity.label)}
+          <tr style="background:#0f172a; color:white; font-weight:800;"><td style="padding:12px;">Total Equity</td><td style="padding:12px; text-align:right;">${formatAccounting(sofp.totalEquity, formatMwk)}</td>${showComparative ? `<td style="padding:12px; text-align:right;">${sofp.comparativeTotalEquity !== null ? formatAccounting(sofp.comparativeTotalEquity, formatMwk) : '—'}</td>` : ''}</tr>
+        </tbody>
+      </table>
+    `;
+  };
+
   const handleExportPDF = () => {
-    const htmlContent = document.querySelector('.max-w-3xl')?.outerHTML || '';
+    const htmlContent = buildProfessionalHtml() || document.querySelector('.max-w-3xl')?.outerHTML || '';
     exportReportAsPDF({
       title: t('reports.statementOfFinancialPosition'),
-      subtitle: `${t('reports.asAt', { date: dateLabel })}`,
+      subtitle: `${t('reports.asAt', { date: dateLabel })} — ${brandName}`,
       dateLabel,
       currency: 'MWK',
       preparerName,
       notes,
-      businessName: '', // ReportHeader handles branding
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent,
     });
   };
 
-  // XBRL export handler
   const handleExportXBRL = () => {
     if (!sofp) return;
     const facts = [
@@ -159,7 +206,8 @@ export function StatementOfFinancialPosition({
       currency: 'MWK',
       preparerName,
       notes,
-      businessName: '',
+      businessName: brandName,
+      business: businessBranding as any,
       htmlContent: '',
       facts,
     });

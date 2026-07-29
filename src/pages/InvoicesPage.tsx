@@ -8,6 +8,9 @@ import {
   CreditCard,
   CheckCircle,
   X,
+  FileDown,
+  Receipt,
+  Truck,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -15,6 +18,10 @@ import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { createInvoiceSettlementEntry } from '@/services/journalService';
 import { resolveTransactionRate } from '@/lib/currency';
+import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
+import { generateInvoiceDocument, generateDeliveryNoteDocument, generateReceiptDocument } from '@/lib/documents/documentGenerator';
+import { businessRowToBranding } from '@/lib/documents/types';
+import { supabase } from '@/lib/supabase';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -414,6 +421,22 @@ function InvoiceDetail({
     enabled: Boolean(invoice.id),
   });
 
+  // Fetch contact for professional invoice PDF
+  const { data: contact } = useQuery({
+    queryKey: ['contact', invoice.contact_id],
+    queryFn: async () => {
+      if (!invoice.contact_id) return null;
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('*')
+        .eq('id', invoice.contact_id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return data as Row<'contacts'> | null;
+    },
+    enabled: Boolean(invoice.contact_id),
+  });
+
   const amountDue =
     invoice.amount_due !== null
       ? Number(invoice.amount_due)
@@ -421,10 +444,128 @@ function InvoiceDetail({
 
   const canPay = !['paid', 'voided', 'credited'].includes(invoice.status);
 
+  const businessBranding = businessData
+    ? businessRowToBranding(businessData as Row<'businesses'>)
+    : {
+        name: businessName || 'Business',
+        tradingName: tradingName,
+        logoUrl: logoUrl,
+        brandColor: (businessData as any)?.brand_color ?? '#0E7C5A',
+      };
+
+  const handleDownloadInvoice = () => {
+    generateInvoiceDocument({
+      business: businessBranding as any,
+      invoice: {
+        invoice_number: invoice.invoice_number,
+        issue_date: invoice.issue_date,
+        due_date: invoice.due_date,
+        status: invoice.status,
+        subtotal: invoice.subtotal,
+        vat_amount: invoice.vat_amount,
+        wht_amount: invoice.wht_amount,
+        discount_amount: invoice.discount_amount,
+        total_amount: invoice.total_amount,
+        amount_paid: invoice.amount_paid,
+        currency: invoice.currency,
+        notes: invoice.notes,
+        terms: invoice.terms,
+        po_number: invoice.po_number,
+      },
+      lines: (withLines?.lines ?? []).map((l) => ({
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: l.unit_price,
+        tax_amount: l.tax_amount,
+        line_total: l.line_total,
+      })),
+      contact: contact
+        ? {
+            name: contact.name,
+            trading_name: contact.trading_name,
+            email: contact.email,
+            phone: contact.phone,
+            address_line1: contact.address_line1,
+            address_line2: contact.address_line2,
+            city: contact.city,
+            country: contact.country,
+            tpin: contact.tpin,
+            vat_number: contact.vat_number,
+          }
+        : null,
+      payments: payments.map((p) => ({
+        payment_date: p.payment_date,
+        amount: p.amount,
+        payment_method: p.payment_method,
+        reference: p.reference,
+      })),
+    });
+  };
+
+  const handleDownloadReceipt = () => {
+    // Receipt after payment - professional
+    const curr = invoice.currency || 'MWK';
+    generateReceiptDocument({
+      business: businessBranding as any,
+      title: 'Payment Receipt',
+      number: `RCPT-${invoice.invoice_number}`,
+      date: new Date().toISOString(),
+      status: 'paid',
+      from: {
+        name: businessBranding.name,
+        details: [
+          businessBranding.addressLine1 || '',
+          businessBranding.city || '',
+          businessBranding.phone || '',
+          businessBranding.email || '',
+        ].filter(Boolean),
+      },
+      to: contact
+        ? {
+            name: contact.name,
+            details: [contact.email || '', contact.phone || ''].filter(Boolean),
+          }
+        : undefined,
+      lines: [
+        { description: `Payment for Invoice ${invoice.invoice_number}`, amount: invoice.amount_paid },
+      ],
+      totals: [
+        { label: 'Invoice Total', value: invoice.total_amount },
+        { label: 'Amount Paid', value: invoice.amount_paid, bold: true },
+        { label: 'Balance Due', value: amountDue, isTotal: true },
+      ],
+      currency: curr,
+      notes: `Receipt for invoice ${invoice.invoice_number}. Thank you for your payment.`,
+    });
+  };
+
+  const handleDownloadDeliveryNote = () => {
+    // Create a delivery note from invoice lines
+    generateDeliveryNoteDocument({
+      business: businessBranding as any,
+      transfer: {
+        transfer_number: `DN-${invoice.invoice_number}`,
+        status: 'dispatched',
+        created_at: invoice.issue_date,
+        dispatched_at: new Date().toISOString(),
+        notes: invoice.notes,
+        from_location_name: businessBranding.name,
+        to_location_name: contact?.name || 'Customer',
+      },
+      lines: (withLines?.lines ?? []).map((l) => ({
+        product_name: l.description,
+        sku: null,
+        quantity_requested: Number(l.quantity),
+        quantity_dispatched: Number(l.quantity),
+        quantity_received: undefined,
+      })),
+    });
+  };
+
   return (
     <div>
       {/* Back button + header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
@@ -434,15 +575,48 @@ function InvoiceDetail({
             Back to Invoices
           </button>
         </div>
-        {canPay && amountDue > 0 && (
-          <button
-            onClick={() => setShowPaymentModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
-          >
-            <CreditCard className="h-4 w-4" />
-            Record Payment
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <DocumentDownloadButton
+            label="Download"
+            variant="secondary"
+            options={[
+              {
+                id: 'invoice',
+                label: 'Invoice PDF',
+                description: 'Professional invoice with logo & branding',
+                icon: <FileDown className="h-4 w-4" />,
+                onClick: handleDownloadInvoice,
+              },
+              {
+                id: 'delivery',
+                label: 'Delivery Note',
+                description: 'Goods delivery / waybill',
+                icon: <Truck className="h-4 w-4" />,
+                onClick: handleDownloadDeliveryNote,
+              },
+              ...(Number(invoice.amount_paid) > 0
+                ? [
+                    {
+                      id: 'receipt',
+                      label: 'Payment Receipt',
+                      description: 'Proof of payment',
+                      icon: <Receipt className="h-4 w-4" />,
+                      onClick: handleDownloadReceipt,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+          {canPay && amountDue > 0 && (
+            <button
+              onClick={() => setShowPaymentModal(true)}
+              className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 transition-colors shadow-sm"
+            >
+              <CreditCard className="h-4 w-4" />
+              Record Payment
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
