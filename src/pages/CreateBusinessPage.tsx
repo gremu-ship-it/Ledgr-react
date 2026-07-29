@@ -504,6 +504,18 @@ export function CreateBusinessPage() {
       return;
     }
 
+    // Record the accepted version with a database-generated timestamp. This is
+    // deliberately a server-side audit record rather than a browser timestamp.
+    const { error: termsError } = await (supabase as any).rpc(
+      'record_business_terms_acceptance',
+      { p_business_id: businessId, p_terms_version: '1.1' },
+    );
+    if (termsError) {
+      setLoading(false);
+      setError(`Your business was created, but we could not record your Terms and Conditions acceptance. Please contact support. (${termsError.message})`);
+      return;
+    }
+
     // White-label: a business signing up through a partner's branded domain
     // becomes that partner's client. Rejected server-side if the partner has
     // already hit its client limit.
