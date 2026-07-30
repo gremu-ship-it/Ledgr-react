@@ -421,8 +421,7 @@ export async function postCogsForSale(
       lines,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not meaningful for auto-generated entries; matches journalService
-    await repos.journal.post(entry.id, null as any);
+    await repos.journal.post(entry.id, null);
     return entry.id;
   } catch (err) {
     log.error(
@@ -588,8 +587,7 @@ export async function postWarehouseReceipt(
       lines,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see note on postCogsForSale
-    await repos.journal.post(entry.id, null as any);
+    await repos.journal.post(entry.id, null);
     return entry.id;
   } catch (err) {
     log.error(
@@ -686,8 +684,7 @@ export async function postStockMovementAdjustment(
       lines,
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see note on postCogsForSale
-    await repos.journal.post(entry.id, null as any);
+    await repos.journal.post(entry.id, null);
     return entry.id;
   } catch (err) {
     log.error(
@@ -873,8 +870,7 @@ export async function postInventoryReconciliationAdjustment(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see note on postCogsForSale
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   return { entryId: entry.id, variance };
 }
 

@@ -140,7 +140,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    * @throws {ValidationError} If the entry is not in `draft` status.
    * @throws {NotFoundError} If no entry with the given id exists.
    */
-  async post(id: string, postedBy: string): Promise<Row<'journal_entries'>> {
+  async post(id: string, postedBy: string | null): Promise<Row<'journal_entries'>> {
     const current = await this.findById(id);
 
     // FIX: guard against posting a non-draft entry

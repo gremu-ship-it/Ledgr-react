@@ -250,8 +250,7 @@ export async function createInvoiceJournalEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
 
   // Record usage
@@ -313,8 +312,7 @@ export async function createInvoiceJournalEntry(
     ],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry2.id, null as any);
+  await repos.journal.post(entry2.id, null);
 
   // Trigger webhook for paid invoice
   try {
@@ -414,8 +412,7 @@ export async function createInvoiceReceivableEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.invoice.update(invoice.id, { journal_entry_id: entry.id });
   return entry.id;
 }
@@ -506,8 +503,7 @@ export async function createInvoiceSettlementEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.invoice.update(invoice.id, { journal_entry_id: invoice.journal_entry_id ?? entry.id });
   return entry.id;
 }
@@ -629,8 +625,7 @@ export async function createExpenseJournalEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
 
   // Trigger webhook
@@ -732,8 +727,7 @@ export async function createExpenseSettlementEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   return entry.id;
 }
 
@@ -811,8 +805,7 @@ export async function createPayrollJournalEntry(
     ],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
 
   // Trigger webhook
   try {
