@@ -37,6 +37,7 @@ function tableStub(data: unknown[]) {
 }
 
 const ACCOUNTS: Array<Record<string, unknown>> = [
+  { id: 'a-current-assets', code: '1100', name: 'Current Assets', account_type: 'asset', account_subtype: 'current_asset', normal_balance: 'debit', is_group: true, is_system: true, is_bank_account: false, opening_balance: 1_500 },
   { id: 'a-cash', code: '1110', name: 'Cash on Hand', account_type: 'asset', account_subtype: 'current_asset', normal_balance: 'debit', is_group: false, is_system: true, is_bank_account: false, opening_balance: 0 },
   { id: 'a-provision', code: '1134', name: 'Provision for Bad Debts', account_type: 'asset', account_subtype: 'current_asset', normal_balance: 'credit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
   { id: 'a-buildings', code: '1512', name: 'Buildings', account_type: 'asset', account_subtype: 'fixed_asset', normal_balance: 'debit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
@@ -77,7 +78,8 @@ describe('getSOFP — contra-account presentation', () => {
 
   it('nets the Provision for Bad Debts against Current Assets', async () => {
     const sofp = await makeRepo().getSOFP('biz-1', '2026-06-30');
-    expect(sofp.currentAssets.subtotal).toBe(30_000 - 2_000);
+    expect(sofp.currentAssets.subtotal).toBe(30_000 - 2_000 + 1_500);
+    expect(sofp.currentAssets.lines.find((line) => line.code === '1100')?.amount).toBe(1_500);
   });
 
   it('presents Drawings / Dividends as a reduction of equity', async () => {
@@ -95,9 +97,9 @@ describe('getSOFP — contra-account presentation', () => {
 
   it('reports correct totals', async () => {
     const sofp = await makeRepo().getSOFP('biz-1', '2026-06-30');
-    expect(sofp.totalAssets).toBe(118_000);
+    expect(sofp.totalAssets).toBe(119_500);
     expect(sofp.totalLiabilities).toBe(20_000);
-    expect(sofp.netAssets).toBe(98_000);
+    expect(sofp.netAssets).toBe(99_500);
     expect(sofp.totalEquity).toBe(35_000);
   });
 });

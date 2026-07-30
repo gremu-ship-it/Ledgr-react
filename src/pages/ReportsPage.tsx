@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2, Coins } from 'lucide-react';
+import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2, Coins, PackageOpen } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
@@ -8,6 +8,7 @@ import { StatementOfProfitOrLoss } from '@/components/reports/StatementOfProfitO
 import { CashFlowStatement } from '@/components/reports/CashFlowStatement';
 import { StatementOfChangesInEquity } from '@/components/reports/StatementOfChangesInEquity';
 import { BranchPerformanceReport } from '@/components/reports/BranchPerformanceReport';
+import { RevenueBreakdownReport } from '@/components/reports/RevenueBreakdownReport';
 import { ReportHeader } from '@/components/reports/ReportHeader';
 import type { Row } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -34,7 +35,7 @@ function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'cashflow-ifrs' | 'equity' | 'branches' | 'currency';
+type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'revenue' | 'cashflow-ifrs' | 'equity' | 'branches' | 'currency';
 
 type TrialBalanceRow = Row<'v_trial_balance'>;
 
@@ -388,6 +389,10 @@ export function ReportsPage() {
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'pl-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <TrendingUp className="h-4 w-4" />P&L (IFRS)
         </button>
+        <button onClick={() => setTab('revenue')}
+          className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'revenue' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+          <PackageOpen className="h-4 w-4" />Revenue Breakdown
+        </button>
         <button onClick={() => setTab('cashflow-ifrs')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === 'cashflow-ifrs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
           <ArrowLeftRight className="h-4 w-4" />Cash Flow (IFRS)
@@ -439,6 +444,13 @@ export function ReportsPage() {
           comparativePeriodStart={showComparative ? oneYearBefore(range.from) : null}
           comparativePeriodEnd={showComparative ? oneYearBefore(range.to) : null}
           businessName={currentBusiness.business.name}
+        />
+      )}
+      {tab === 'revenue' && (
+        <RevenueBreakdownReport
+          businessId={businessId}
+          periodStart={range.from}
+          periodEnd={range.to}
         />
       )}
       {tab === 'cashflow-ifrs' && (
