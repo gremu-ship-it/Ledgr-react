@@ -133,21 +133,13 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
 
     // Atomic increment — avoids the read-then-write race condition.
     // SQL equivalent: UPDATE expenses SET amount_paid = amount_paid + payment.amount WHERE id = ...
-    const { error: updateError } = await (this.client as unknown as { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string; code?: string } | null }> }).rpc('increment_amount_paid', {
+    const { error: updateError } = await this.client.rpc('increment_amount_paid', {
       p_table:  'expenses',
       p_id:     payment.expense_id,
       p_amount: payment.amount,
     });
 
-    if (updateError) {
-      // RPC not available — fall back to read-then-write with documented risk.
-      // TODO: add increment_amount_paid RPC to remove this fallback.
-      const expense = await this.findById(payment.expense_id);
-      const updatedExpense = await this.update(expense.id, {
-        amount_paid: Number(expense.amount_paid) + Number(payment.amount),
-      });
-      return { payment: paymentData, expense: updatedExpense };
-    }
+    if (updateError) throw toRepositoryError('expenses', updateError);
 
     const updatedExpense = await this.findById(payment.expense_id);
     return { payment: paymentData, expense: updatedExpense };

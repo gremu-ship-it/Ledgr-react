@@ -106,29 +106,16 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
 
     if (paymentError) throw toRepositoryError('invoice_payments', paymentError);
 
-    let updatedInvoice: Row<'invoices'>;
-
-    // Prefer the shared atomic increment RPC used elsewhere in the repository
-    // layer. If it is not deployed yet, fall back to the older read/update flow
-    // so local/dev environments still work.
-    const { error: incrementError } = await (
-      this.client as unknown as {
-        rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string; code?: string } | null }>;
-      }
-    ).rpc('increment_amount_paid', {
+    // Atomic increment — avoids the read-then-write race condition.
+    const { error: incrementError } = await this.client.rpc('increment_amount_paid', {
       p_table: 'invoices',
       p_id: payment.invoice_id,
       p_amount: payment.amount,
     });
 
-    if (incrementError) {
-      const invoice = await this.findById(payment.invoice_id);
-      updatedInvoice = await this.update(invoice.id, {
-        amount_paid: Number(invoice.amount_paid) + Number(payment.amount),
-      });
-    } else {
-      updatedInvoice = await this.findById(payment.invoice_id);
-    }
+    if (incrementError) throw toRepositoryError('invoices', incrementError);
+
+    let updatedInvoice = await this.findById(payment.invoice_id);
 
     const nextStatus = getPaymentStatus(
       Number(updatedInvoice.total_amount),
