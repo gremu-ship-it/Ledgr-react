@@ -26,11 +26,9 @@ if (SENTRY_DSN) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-api-key, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
+import { corsHeadersForRequest } from '../_shared/cors.ts';
+
+let _req: Request | undefined;
 
 // Security headers are attached to EVERY response from the API.
 const SECURITY_HEADERS = {
@@ -102,12 +100,12 @@ const journalCreateSchema = z.object({
 function response(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, ...SECURITY_HEADERS, 'Content-Type': 'application/vnd.api+json', ...headers },
+    headers: { ...corsHeadersForRequest(_req), ...SECURITY_HEADERS, 'Content-Type': 'application/vnd.api+json', ...headers },
   });
 }
 
-function preflight() {
-  return new Response('ok', { headers: { ...CORS_HEADERS, ...SECURITY_HEADERS } });
+function preflight(req: Request) {
+  return new Response('ok', { headers: { ...corsHeadersForRequest(req), ...SECURITY_HEADERS } });
 }
 
 function errorResponse(status: number, title: string, detail?: string) {
@@ -182,7 +180,7 @@ async function checkRateLimit(bucket: string, limit: number): Promise<Response |
       }),
       {
         status: 429,
-        headers: { ...CORS_HEADERS, ...SECURITY_HEADERS, 'Content-Type': 'application/vnd.api+json', 'Retry-After': '60' },
+        headers: { ...corsHeadersForRequest(_req), ...SECURITY_HEADERS, 'Content-Type': 'application/vnd.api+json', 'Retry-After': '60' },
       },
     );
   }
@@ -345,8 +343,9 @@ function clientIp(req: Request): string {
 }
 
 serve(async (req) => {
+  _req = req;
   try {
-    if (req.method === 'OPTIONS') return preflight();
+    if (req.method === 'OPTIONS') return preflight(req);
 
     const path = apiPath(req);
 
@@ -378,10 +377,18 @@ serve(async (req) => {
 
     try {
       if (route.method === 'GET') {
-        const { data, error, count } = await supabase
+        // Filter soft-deleted records for tables that support soft-delete.
+        // Tables without a deleted_at column (journal_entries, accounts) are
+        // unaffected — the conditional .is() is simply skipped.
+        const SOFT_DELETE_TABLES = new Set(['invoices', 'expenses']);
+        let query = supabase
           .from(route.table)
           .select('*', { count: 'exact' })
-          .eq('business_id', auth.businessId)
+          .eq('business_id', auth.businessId) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (SOFT_DELETE_TABLES.has(route.table)) {
+          query = query.is('deleted_at', null);
+        }
+        const { data, error, count } = await query
           .order('created_at', { ascending: false });
         if (error) throw error;
         return response(jsonApiDocument(route.resource, data ?? [], { count: count ?? (data?.length ?? 0) }));

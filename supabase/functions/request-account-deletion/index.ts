@@ -17,6 +17,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import nodemailer from 'npm:nodemailer@6.9.14';
+import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -27,10 +28,7 @@ const SMTP_USER = Deno.env.get('SMTP_USER');
 const SMTP_PASS = Deno.env.get('SMTP_PASS');
 const SMTP_FROM = Deno.env.get('SMTP_FROM') ?? SMTP_USER;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+let _req: Request | undefined;
 
 async function sendConfirmationEmail(toEmail: string) {
   if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
@@ -72,13 +70,14 @@ async function sendConfirmationEmail(toEmail: string) {
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  _req = req;
+    if (req.method === 'OPTIONS') return preflightResponse(req);
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -88,7 +87,7 @@ serve(async (req) => {
     const { data: userData, error: userErr } = await callerClient.auth.getUser();
     if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
-        status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
     const userId = userData.user.id;
@@ -107,7 +106,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({
         error: 'Deletion already requested',
         deletion_requested_at: existing.deletion_requested_at,
-      }), { status: 409, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+      }), { status: 409, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' } });
     }
 
     const now = new Date().toISOString();
@@ -125,7 +124,7 @@ serve(async (req) => {
 
     if (updateErr) {
       return new Response(JSON.stringify({ error: `Failed to anonymize profile: ${updateErr.message}` }), {
-        status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 500, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -136,10 +135,10 @@ serve(async (req) => {
       deletion_requested_at: now,
       finalize_after: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       email: emailResult,
-    }), { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+    }), { status: 200, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' } });
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   }
 });

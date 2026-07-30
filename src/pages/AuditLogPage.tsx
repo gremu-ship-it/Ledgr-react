@@ -310,6 +310,12 @@ export function AuditLogPage() {
   const handleExportPDF = useCallback(() => {
     if (!logData?.data.length) return;
 
+    // SECURITY: Escape HTML entities to prevent XSS from audit log content
+    const esc = (str: string | null | undefined): string => {
+      if (!str) return "";
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    };
+
     const doc = document.implementation.createHTMLDocument('Audit Log');
     const style = doc.createElement('style');
     style.textContent = `
@@ -328,8 +334,8 @@ export function AuditLogPage() {
     const bodyHTML = `
       <h1>Ledgr Audit Log — Signed Export</h1>
       <div class="meta">
-        Business: ${currentBusiness?.business?.name || '—'}<br>
-        Generated: ${new Date().toISOString()}<br>
+        Business: ${esc(currentBusiness?.business?.name) || '—'}<br>
+        Generated: ${esc(new Date().toISOString())}<br>
         Entries: ${logData.data.length} • Chain verified: ${showVerify ? (tamperCount === 0 ? 'YES' : 'NO — VIOLATIONS') : 'NOT VERIFIED'}
       </div>
       <table>
@@ -345,12 +351,12 @@ export function AuditLogPage() {
             const status = chain ? (chain.chain_valid ? 'VALID' : 'TAMPERED') : '—';
             return `
               <tr>
-                <td>${fmtDate(e.occurred_at)}</td>
-                <td>${fmtTable(e.resource_type)}<br><small>${e.resource_ref || ''}</small></td>
-                <td>${e.event_type}</td>
-                <td>${e.user_email || e.user_id?.slice(0,8) || '—'}</td>
-                <td class="hash">${e.entry_hash || '—'}</td>
-                <td class="${status === 'VALID' ? 'valid' : status === 'TAMPERED' ? 'tampered' : ''}">${status}</td>
+                <td>${esc(fmtDate(e.occurred_at))}</td>
+                <td>${esc(fmtTable(e.resource_type))}<br><small>${esc(e.resource_ref)}</small></td>
+                <td>${esc(e.event_type)}</td>
+                <td>${esc(e.user_email) || esc(e.user_id?.slice(0,8)) || '—'}</td>
+                <td class="hash">${esc(e.entry_hash) || '—'}</td>
+                <td class="${status === 'VALID' ? 'valid' : status === 'TAMPERED' ? 'tampered' : ''}">${esc(status)}</td>
               </tr>`;
           }).join('')}
         </tbody>
@@ -363,7 +369,7 @@ export function AuditLogPage() {
     `;
     doc.body.innerHTML = bodyHTML;
 
-    const printWindow = window.open('', '_blank');
+    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
     if (printWindow) {
       printWindow.document.write(doc.documentElement.outerHTML);
       printWindow.document.close();

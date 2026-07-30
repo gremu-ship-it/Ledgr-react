@@ -26,14 +26,12 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import JSZip from 'npm:jszip@3.10.1';
+import { corsHeadersForRequest } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+let _req: Request | undefined;
 
 // Every table that is scoped by business_id and should be included in a
 // full export of a business the user owns. If a table listed here turns
@@ -102,8 +100,9 @@ function toCsv(rows: Record<string, unknown>[]): string {
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 serve(async (req) => {
+  _req = req;
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeadersForRequest(_req) });
   }
 
   try {
@@ -111,7 +110,7 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
         status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -123,7 +122,7 @@ serve(async (req) => {
     if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
         status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
     const userId = userData.user.id;
@@ -202,12 +201,23 @@ serve(async (req) => {
 
       zip.file(`${folder}/business.json`, JSON.stringify(business, null, 2));
 
+      // Tables that have a deleted_at column — exclude soft-deleted rows
+      // from the export so users don't receive records they already deleted.
+      const SOFT_DELETE_TABLES = new Set([
+        'branches', 'departments', 'accounts', 'contacts',
+        'invoices', 'expenses', 'products', 'employees', 'fixed_assets',
+      ]);
+
       for (const table of BUSINESS_TABLES) {
         try {
-          const { data: rows, error } = await admin
+          let query = admin
             .from(table)
             .select('*')
-            .eq('business_id', businessId);
+            .eq('business_id', businessId) as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+          if (SOFT_DELETE_TABLES.has(table)) {
+            query = query.is('deleted_at', null);
+          }
+          const { data: rows, error } = await query;
 
           if (error) {
             errors.push({ table: `${table} (${businessId})`, message: error.message });
@@ -249,7 +259,7 @@ serve(async (req) => {
     if (uploadErr) {
       return new Response(JSON.stringify({ error: `Upload failed: ${uploadErr.message}` }), {
         status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -260,7 +270,7 @@ serve(async (req) => {
     if (signErr || !signed) {
       return new Response(JSON.stringify({ error: `Could not create download link: ${signErr?.message}` }), {
         status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -271,12 +281,12 @@ serve(async (req) => {
       warnings: errors.length,
     }), {
       status: 200,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   }
 });

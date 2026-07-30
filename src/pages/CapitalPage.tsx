@@ -206,7 +206,7 @@ function openRepaymentSchedule(
   );
 
   // Open a new tab with the printable schedule
-  const win = window.open('', '_blank');
+  const win = window.open('', '_blank', 'noopener,noreferrer');
   if (!win) return; // popup blocked
 
   const rowsHtml = schedule
