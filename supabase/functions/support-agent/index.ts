@@ -252,9 +252,12 @@ async function callArena(
   const content: string = data.content || data.output || '';
   const actions: SupportAction[] = Array.isArray(data.actions) ? data.actions : [];
   const escalate =
+    data.escalate === true ||
     /escalate|contact (our )?support|support (team|desk)/i.test(content);
+  const supportEmail =
+    typeof data.supportEmail === 'string' ? data.supportEmail : undefined;
 
-  return { content, actions, escalate, category };
+  return { content, actions, escalate, category, supportEmail };
 }
 
 // ── Provider: Anthropic Claude (fallback) ───────────────────────────────────
