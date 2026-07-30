@@ -58,12 +58,36 @@ async function assertMember(authHeader: string, businessId: string): Promise<Res
   return membership ? null : json({ error: 'Not authorized for this business' }, 403);
 }
 
-function isPrivateHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true;
-  if (/^127\./.test(host) || /^0\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)) return true;
-  const match = /^172\.(\d{1,3})\./.exec(host);
-  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+function isPrivateIp(address: string): boolean {
+  const ip = address.toLowerCase();
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number);
+    if ([a, b, c, d].some((part) => part > 255)) return true;
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+      (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
+  }
+  const normalized = ip.replace(/^\[|\]$/g, '');
+  return normalized === '::1' || normalized === '::' || normalized.startsWith('fc') ||
+    normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+    normalized.startsWith('fea') || normalized.startsWith('feb') || normalized.startsWith('2001:db8') ||
+    (normalized.startsWith('::ffff:') && isPrivateIp(normalized.slice(7)));
+}
+
+async function assertPublicWebhookDestination(endpoint: URL): Promise<void> {
+  const host = endpoint.hostname.toLowerCase().replace(/\.$/, '');
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || isPrivateIp(host)) {
+    throw new Error('Webhook destination is not a public address');
+  }
+  const records = await Promise.all(['A', 'AAAA'].map((type) =>
+    Deno.resolveDns(host, type as 'A' | 'AAAA').catch(() => [] as string[]),
+  ));
+  const addresses = records.flat();
+  if (addresses.length === 0 || addresses.some(isPrivateIp)) {
+    throw new Error('Webhook destination does not resolve exclusively to public addresses');
+  }
 }
 
 async function deliverWebhooks(businessId: string, event: string, payload: unknown) {
@@ -80,9 +104,10 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         const endpoint = new URL(webhook.url);
-        if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || isPrivateHostname(endpoint.hostname)) {
+        if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password) {
           throw new Error('Webhook destination is not a permitted public HTTPS endpoint');
         }
+        await assertPublicWebhookDestination(endpoint);
         const res = await fetch(endpoint, {
           method: 'POST',
           redirect: 'error',

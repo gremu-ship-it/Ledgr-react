@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import * as Sentry from 'npm:@sentry/deno@8';
+import { z } from 'npm:zod@4.4.3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -60,6 +61,43 @@ const ROUTES: RouteDef[] = [
   { method: 'GET', path: '/journal-entries', resource: 'journal-entries', table: 'journal_entries', summary: 'List journal entries' },
   { method: 'POST', path: '/journal-entries', resource: 'journal-entries', table: 'journal_entries', event: 'journal_entry.created', summary: 'Create journal entry' },
 ];
+
+const uuid = z.string().uuid();
+const money = z.coerce.number().finite().nonnegative();
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD date');
+const nullableUuid = uuid.nullish();
+
+// These schemas are intentionally strict. Service-role writes must not inherit
+// every database column merely because a client supplied it.
+const invoiceCreateSchema = z.object({
+  invoice_number: z.string().trim().min(1).max(100), contact_id: uuid,
+  issue_date: date.optional(), due_date: date.nullish(), currency: z.string().length(3).optional(),
+  invoice_type: z.string().trim().min(1).max(50).optional(), notes: z.string().max(10_000).nullish(),
+  terms: z.string().max(2_000).nullish(), po_number: z.string().max(100).nullish(),
+  branch_id: nullableUuid, department_id: nullableUuid, ar_account_id: nullableUuid, revenue_account_id: nullableUuid,
+  subtotal: money.optional(), taxable_amount: money.optional(), vat_amount: money.optional(),
+  wht_amount: money.optional(), discount_amount: money.optional(), discount_percent: money.optional(), total_amount: money.optional(),
+}).strict();
+const expenseCreateSchema = z.object({
+  expense_number: z.string().trim().min(1).max(100), expense_date: date.optional(), due_date: date.nullish(),
+  currency: z.string().length(3).optional(), expense_type: z.string().trim().min(1).max(50).optional(),
+  notes: z.string().max(10_000).nullish(), reference: z.string().max(200).nullish(), contact_id: nullableUuid,
+  branch_id: nullableUuid, department_id: nullableUuid, ap_account_id: nullableUuid,
+  subtotal: money.optional(), vat_amount: money.optional(), wht_amount: money.optional(), total_amount: money.optional(),
+}).strict();
+const journalLineSchema = z.object({
+  line_number: z.coerce.number().int().positive().optional(), account_id: uuid, is_debit: z.boolean(),
+  amount: money, amount_base: z.coerce.number().finite().positive(), currency: z.string().length(3).optional(),
+  exchange_rate: z.coerce.number().finite().positive().optional(), description: z.string().max(2_000).nullish(),
+  branch_id: nullableUuid, department_id: nullableUuid, tax_code: z.string().max(50).nullish(), tax_amount: money.optional(),
+  original_currency: z.string().length(3).nullish(), original_amount: money.nullish(), rate_date: date.nullish(), rate_is_stale: z.boolean().optional(),
+}).strict();
+const journalCreateSchema = z.object({
+  entry_number: z.string().trim().min(1).max(100), entry_date: date, description: z.string().trim().min(1).max(10_000),
+  reference: z.string().max(200).nullish(), currency: z.string().length(3).optional(), exchange_rate: z.coerce.number().finite().positive().optional(),
+  branch_id: nullableUuid, department_id: nullableUuid, period_id: nullableUuid, source_type: z.string().max(100).nullish(), source_id: nullableUuid,
+  lines: z.array(journalLineSchema).min(2).max(500),
+}).strict();
 
 function response(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -129,14 +167,15 @@ function requestAttributes(body: unknown): Record<string, unknown> {
 // `api_key_id` column.
 async function checkRateLimit(bucket: string, limit: number): Promise<Response | null> {
   const windowStart = new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString();
-  const { data } = await supabase
-    .from('api_usage')
-    .select('id, count')
-    .eq('api_key', bucket)
-    .eq('window_start', windowStart)
-    .maybeSingle();
+  const { data: allowed, error } = await supabase.rpc('consume_api_rate_limit', {
+    p_bucket: bucket,
+    p_limit: limit,
+    p_window_start: windowStart,
+  });
 
-  if ((data?.count ?? 0) >= limit) {
+  // Fail closed if the rate-limit store is unavailable: continuing would make
+  // an outage in the limiter an unbounded public-API path.
+  if (error || !allowed) {
     return new Response(
       JSON.stringify({
         errors: [{ status: '429', title: 'Rate limit exceeded', detail: `Limit is ${limit} requests per minute.` }],
@@ -146,12 +185,6 @@ async function checkRateLimit(bucket: string, limit: number): Promise<Response |
         headers: { ...CORS_HEADERS, ...SECURITY_HEADERS, 'Content-Type': 'application/vnd.api+json', 'Retry-After': '60' },
       },
     );
-  }
-
-  if (data) {
-    await supabase.from('api_usage').update({ count: data.count + 1 }).eq('id', data.id);
-  } else {
-    await supabase.from('api_usage').insert({ api_key: bucket, count: 1, window_start: windowStart });
   }
 
   return null;
@@ -183,12 +216,36 @@ async function authenticate(req: Request): Promise<{ keyId: string; businessId: 
   return { keyId: key.id, businessId: key.business_id };
 }
 
-function isPrivateWebhookHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true;
-  if (/^127\./.test(host) || /^0\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)) return true;
-  const match = /^172\.(\d{1,3})\./.exec(host);
-  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+function isPrivateIp(address: string): boolean {
+  const ip = address.toLowerCase();
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number);
+    if ([a, b, c, d].some((part) => part > 255)) return true;
+    return a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
+      (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
+  }
+  const normalized = ip.replace(/^\[|\]$/g, '');
+  return normalized === '::1' || normalized === '::' || normalized.startsWith('fc') ||
+    normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
+    normalized.startsWith('fea') || normalized.startsWith('feb') || normalized.startsWith('2001:db8') ||
+    (normalized.startsWith('::ffff:') && isPrivateIp(normalized.slice(7)));
+}
+
+async function assertPublicWebhookDestination(endpoint: URL): Promise<void> {
+  const host = endpoint.hostname.toLowerCase().replace(/\.$/, '');
+  if (!host || host === 'localhost' || host.endsWith('.localhost') || isPrivateIp(host)) {
+    throw new Error('Webhook destination is not a public address');
+  }
+  const records = await Promise.all(['A', 'AAAA'].map((type) =>
+    Deno.resolveDns(host, type as 'A' | 'AAAA').catch(() => [] as string[]),
+  ));
+  const addresses = records.flat();
+  if (addresses.length === 0 || addresses.some(isPrivateIp)) {
+    throw new Error('Webhook destination does not resolve exclusively to public addresses');
+  }
 }
 
 async function deliverWebhooks(businessId: string, event: string, payload: unknown) {
@@ -204,9 +261,12 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         const endpoint = new URL(webhook.url);
-        if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || isPrivateWebhookHostname(endpoint.hostname)) {
+        if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password) {
           throw new Error('Webhook destination is not a permitted public HTTPS endpoint');
         }
+        // Resolve immediately before delivery. Redirects remain disabled; deploy
+        // an egress proxy with DNS pinning for protection against DNS rebinding.
+        await assertPublicWebhookDestination(endpoint);
         const res = await fetch(endpoint, {
           method: 'POST',
           redirect: 'error',
@@ -331,35 +391,28 @@ serve(async (req) => {
       const attrs = requestAttributes(body);
 
       if (route.resource === 'journal-entries') {
-        const lines = (attrs.lines ?? (body as { data?: { relationships?: { lines?: { data?: unknown[] } } } })?.data?.relationships?.lines?.data ?? []) as Record<string, unknown>[];
-        const entryAttrs = { ...attrs };
-        delete entryAttrs.lines;
-        const { data: entry, error } = await supabase
-          .from('journal_entries')
-          .insert({ ...entryAttrs, business_id: auth.businessId })
-          .select('*')
-          .single();
+        const entry = journalCreateSchema.parse(attrs);
+        const lines = entry.lines.map((line, index) => ({ ...line, line_number: line.line_number ?? index + 1 }));
+        const { data, error } = await supabase.rpc('create_api_journal_entry', {
+          p_business_id: auth.businessId,
+          // The RPC consumes an allowlisted subset of this object; keeping the
+          // lines here avoids a lossy client-side object reconstruction.
+          p_entry: entry,
+          p_lines: lines,
+        });
         if (error) throw error;
-        if (lines.length > 0) {
-          const lineRows = lines.map((line, idx) => ({
-            ...(line.attributes && typeof line.attributes === 'object' ? line.attributes : line),
-            business_id: auth.businessId,
-            journal_entry_id: entry.id,
-            line_number: Number((line.line_number ?? idx + 1)),
-          }));
-          const debits = lineRows.filter((l) => l.is_debit).reduce((s, l) => s + Number(l.amount_base ?? l.amount ?? 0), 0);
-          const credits = lineRows.filter((l) => !l.is_debit).reduce((s, l) => s + Number(l.amount_base ?? l.amount ?? 0), 0);
-          if (Math.abs(debits - credits) > 0.005) throw new Error('Journal entry lines do not balance in functional currency.');
-          const { error: lineError } = await supabase.from('journal_lines').insert(lineRows);
-          if (lineError) throw lineError;
-        }
-        await deliverWebhooks(auth.businessId, route.event!, entry);
-        return response(jsonApiDocument(route.resource, entry), 201);
+        await deliverWebhooks(auth.businessId, route.event!, data);
+        return response(jsonApiDocument(route.resource, data), 201);
       }
 
+      // Explicit schemas prevent callers from writing lifecycle, audit,
+      // payment, ownership, or soft-delete columns through the service role.
+      const safeAttrs = route.resource === 'invoices'
+        ? invoiceCreateSchema.parse(attrs)
+        : expenseCreateSchema.parse(attrs);
       const { data, error } = await supabase
         .from(route.table)
-        .insert({ ...attrs, business_id: auth.businessId })
+        .insert({ ...safeAttrs, business_id: auth.businessId })
         .select('*')
         .single();
       if (error) throw error;

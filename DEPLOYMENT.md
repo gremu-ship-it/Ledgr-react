@@ -217,6 +217,9 @@ cd server
 cp .env.example .env
 npm install
 npm run dev                   # http://localhost:3000/api/health
+# Production gateway deployments must set REDIS_URL. It is the shared,
+# atomic rate-limit store; the gateway intentionally refuses to start in
+# APP_ENV=production without it.
 ```
 
 ## 12. Files added/changed by this setup
