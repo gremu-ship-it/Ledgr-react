@@ -133,7 +133,7 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (staging)
         run: |
-          for dir in supabase/functions/*/; do
+          for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
             supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
@@ -225,7 +225,7 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (production)
         run: |
-          for dir in supabase/functions/*/; do
+          for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
             supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
