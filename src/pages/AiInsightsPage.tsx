@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2, Calendar } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
-import { callArenaAgent, isArenaConfigured } from '@/lib/arenaAgent';
+import { callAiInsightsAgent } from '@/lib/aiInsightsAgent';
 import {
   buildRichBusinessContext,
   detectAdvancedAnomalies,
@@ -258,11 +258,10 @@ export function AiInsightsPage() {
         { role: 'user' as const, content: userMessage.content },
       ];
 
-      const { content } = await callArenaAgent(
-        history,
-        t('ai.systemPrompt'),
-        context
-      );
+      const { content } = await callAiInsightsAgent({
+        messages: history,
+        businessContext: context,
+      });
 
       // Special handling for natural language report requests
       let finalContent = content;
@@ -326,7 +325,7 @@ export function AiInsightsPage() {
         <div className="ml-auto flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1">
           <div className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
           <span className="text-xs font-medium text-brand-700">
-            {isArenaConfigured() ? t('ai.arenaAgent') : t('ai.connected')}
+            {t('ai.connected')}
           </span>
         </div>
       </div>
