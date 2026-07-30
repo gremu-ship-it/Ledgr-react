@@ -8,23 +8,22 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+let _req: Request | undefined;
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  _req = req;
+    if (req.method === 'OPTIONS') return preflightResponse(req);
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
-        status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -34,7 +33,7 @@ serve(async (req) => {
     const { data: userData, error: userErr } = await callerClient.auth.getUser();
     if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
-        status: 401, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 401, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
     const userId = userData.user.id;
@@ -49,14 +48,14 @@ serve(async (req) => {
 
     if (!existing?.deletion_requested_at) {
       return new Response(JSON.stringify({ error: 'No pending deletion to cancel' }), {
-        status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 400, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
     if (existing.deletion_finalized_at) {
       return new Response(JSON.stringify({
         error: 'This account has already been permanently locked and can no longer be cancelled. Contact support.',
-      }), { status: 410, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } });
+      }), { status: 410, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' } });
     }
 
     const { error: updateErr } = await admin
@@ -66,16 +65,16 @@ serve(async (req) => {
 
     if (updateErr) {
       return new Response(JSON.stringify({ error: updateErr.message }), {
-        status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        status: 500, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
     return new Response(JSON.stringify({ success: true }), {
-      status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      status: 200, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: (err as Error).message }), {
-      status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   }
 });

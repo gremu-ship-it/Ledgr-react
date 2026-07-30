@@ -14,25 +14,23 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-const CORS_HEADERS: Record<string, string> = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+let _req: Request | undefined;
 
 serve(async (req) => {
+  _req = req;
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
+    return new Response('ok', { headers: corsHeadersForRequest(_req) });
   }
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   }
 
@@ -41,7 +39,7 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
         status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -54,7 +52,7 @@ serve(async (req) => {
     if (callerErr || !callerData?.user) {
       return new Response(JSON.stringify({ error: 'Invalid or expired session' }), {
         status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -67,7 +65,7 @@ serve(async (req) => {
     } catch {
       return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
         status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -75,7 +73,7 @@ serve(async (req) => {
     if (!token) {
       return new Response(JSON.stringify({ error: 'token is required' }), {
         status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -93,7 +91,7 @@ serve(async (req) => {
     if (inviteErr) {
       return new Response(JSON.stringify({ error: `Database error: ${inviteErr.message}` }), {
         status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -112,7 +110,7 @@ serve(async (req) => {
           }),
           {
             status: 404,
-            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
           },
         );
       }
@@ -126,7 +124,7 @@ serve(async (req) => {
         }),
         {
           status: 200,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
         },
       );
     }
@@ -141,7 +139,7 @@ serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
         },
       );
     }
@@ -157,7 +155,7 @@ serve(async (req) => {
         }),
         {
           status: 400,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
         },
       );
     }
@@ -171,7 +169,7 @@ serve(async (req) => {
         }),
         {
           status: 403,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
         },
       );
     }
@@ -186,7 +184,7 @@ serve(async (req) => {
     if (bizErr || !business) {
       return new Response(JSON.stringify({ error: 'Business associated with invitation not found' }), {
         status: 404,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -201,7 +199,7 @@ serve(async (req) => {
     if (existingErr) {
       return new Response(JSON.stringify({ error: `Membership check failed: ${existingErr.message}` }), {
         status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }
 
@@ -217,7 +215,7 @@ serve(async (req) => {
           }),
           {
             status: 409,
-            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
           },
         );
       } else {
@@ -237,7 +235,7 @@ serve(async (req) => {
         if (updateErr) {
           return new Response(JSON.stringify({ error: `Failed to reactivate membership: ${updateErr.message}` }), {
             status: 500,
-            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
           });
         }
       }
@@ -258,7 +256,7 @@ serve(async (req) => {
       if (insertErr) {
         return new Response(JSON.stringify({ error: `Failed to create membership: ${insertErr.message}` }), {
           status: 500,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
         });
       }
     }
@@ -286,14 +284,14 @@ serve(async (req) => {
       }),
       {
         status: 200,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       },
     );
   } catch (err) {
     console.error('accept-invite-link error', err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
     });
   }
 });

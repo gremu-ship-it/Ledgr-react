@@ -466,7 +466,7 @@ function renderLetterhead(b: BusinessBranding, title: string, docNumber: string,
 }
 
 function openPrintWindow(title: string, html: string, autoPrint = true): void {
-  const win = window.open('', '_blank');
+  const win = window.open('', '_blank', 'noopener,noreferrer');
   if (!win) {
     alert('Please allow popups to download documents');
     return;

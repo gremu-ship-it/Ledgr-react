@@ -25,13 +25,21 @@ export class BaseRepository<T extends TableName> {
     return this.client;
   }
 
+  /**
+   * Whether this table supports soft-delete (has a `deleted_at` column).
+   * Used to automatically exclude soft-deleted rows from read queries.
+   */
+  protected get isSoftDeletable(): boolean {
+    return SOFT_DELETE_TABLES.has(this.table as string);
+  }
+
   async findById(id: string): Promise<Row<T>> {
-    const { data, error } = await this.client
-      .from(this.table)
-      .select('*')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase's PostgrestFilterBuilder.eq requires a key of Row<T>, but T is a generic table name; we know 'id' exists on every table this repo targets
-      .eq('id' as any, id)
-      .maybeSingle();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase's PostgrestFilterBuilder requires typed keys; we know 'id' and 'deleted_at' exist on the targeted tables
+    let query = this.client.from(this.table).select('*').eq('id' as any, id) as any;
+    if (this.isSoftDeletable) {
+      query = query.is('deleted_at', null);
+    }
+    const { data, error } = await query.maybeSingle();
     if (error) throw toRepositoryError(this.table as string, error);
     if (!data) throw new NotFoundError(this.table as string, id);
     return data as Row<T>;
@@ -43,9 +51,12 @@ export class BaseRepository<T extends TableName> {
     orderBy?: keyof Row<T> & string;
     ascending?: boolean;
   }): Promise<Row<T>[]> {
-    let query = this.client.from(this.table).select('*');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic table type; see findById
+    let query = this.client.from(this.table).select('*') as any;
+    if (this.isSoftDeletable) {
+      query = query.is('deleted_at', null);
+    }
     if (options?.orderBy) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `orderBy` is already typed as `keyof Row<T> & string` but PostgrestTransformBuilder.order requires string; the cast is a no-op for the runtime value
       query = query.order(options.orderBy as any, { ascending: options.ascending ?? true });
     }
     if (options?.limit !== undefined) {

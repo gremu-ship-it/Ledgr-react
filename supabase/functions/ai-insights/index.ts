@@ -40,12 +40,8 @@ if (SENTRY_DSN) {
   });
 }
 
-// ── HTTP helpers (mirrors supabase/functions/support-agent) ─────────────────
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-api-key, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// ── HTTP helpers ────────────────────────────────────────────────────────────
+import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'",
@@ -57,15 +53,18 @@ const SECURITY_HEADERS = {
   'Cache-Control': 'no-store',
 };
 
+// Track the current request for CORS origin resolution
+let _currentReq: Request | undefined;
+
 function json(body: unknown, status = 200, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...CORS_HEADERS, ...SECURITY_HEADERS, 'Content-Type': 'application/json', ...extra },
+    headers: { ...corsHeadersForRequest(_currentReq), ...SECURITY_HEADERS, 'Content-Type': 'application/json', ...extra },
   });
 }
 
-function preflight() {
-  return new Response('ok', { headers: { ...CORS_HEADERS, ...SECURITY_HEADERS } });
+function preflight(req: Request) {
+  return preflightResponse(req);
 }
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -171,8 +170,9 @@ async function callAnthropic(
 
 // ── Request handling ────────────────────────────────────────────────────────
 serve(async (req) => {
+  _currentReq = req;
   try {
-    if (req.method === 'OPTIONS') return preflight();
+    if (req.method === 'OPTIONS') return preflight(req);
     if (req.method !== 'POST') {
       return json({ error: 'Method not allowed' }, 405);
     }
