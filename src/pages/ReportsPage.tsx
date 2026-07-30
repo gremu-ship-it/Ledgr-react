@@ -13,6 +13,7 @@ import type { Row } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { businessRowToBranding } from '@/lib/documents/types';
 import { generateProfessionalReportDocument } from '@/lib/documents/documentGenerator';
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -422,47 +423,61 @@ export function ReportsPage() {
         </label>
       )}
 
-      {tab === 'trial' && <TrialBalanceReport businessId={businessId} />}
+      {tab === 'trial' && (
+        <SectionErrorBoundary sectionName="Trial Balance">
+          <TrialBalanceReport businessId={businessId} />
+        </SectionErrorBoundary>
+      )}
       {tab === 'sofp' && (
-        <StatementOfFinancialPosition
-          businessId={businessId}
-          asOfDate={range.to}
-          comparativeDate={showComparative ? oneYearBefore(range.to) : null}
-          businessName={currentBusiness.business.name}
-        />
+        <SectionErrorBoundary sectionName="Statement of Financial Position">
+          <StatementOfFinancialPosition
+            businessId={businessId}
+            asOfDate={range.to}
+            comparativeDate={showComparative ? oneYearBefore(range.to) : null}
+            businessName={currentBusiness.business.name}
+          />
+        </SectionErrorBoundary>
       )}
       {tab === 'pl-ifrs' && (
-        <StatementOfProfitOrLoss
-          businessId={businessId}
-          periodStart={range.from}
-          periodEnd={range.to}
-          comparativePeriodStart={showComparative ? oneYearBefore(range.from) : null}
-          comparativePeriodEnd={showComparative ? oneYearBefore(range.to) : null}
-          businessName={currentBusiness.business.name}
-        />
+        <SectionErrorBoundary sectionName="Statement of Profit or Loss">
+          <StatementOfProfitOrLoss
+            businessId={businessId}
+            periodStart={range.from}
+            periodEnd={range.to}
+            comparativePeriodStart={showComparative ? oneYearBefore(range.from) : null}
+            comparativePeriodEnd={showComparative ? oneYearBefore(range.to) : null}
+            businessName={currentBusiness.business.name}
+          />
+        </SectionErrorBoundary>
       )}
       {tab === 'cashflow-ifrs' && (
-        <CashFlowStatement
-          businessId={businessId}
-          periodStart={range.from}
-          periodEnd={range.to}
-          businessName={currentBusiness.business.name}
-        />
+        <SectionErrorBoundary sectionName="Cash Flow Statement">
+          <CashFlowStatement
+            businessId={businessId}
+            periodStart={range.from}
+            periodEnd={range.to}
+            businessName={currentBusiness.business.name}
+          />
+        </SectionErrorBoundary>
       )}
       {tab === 'equity' && (
-        <StatementOfChangesInEquity
-          businessId={businessId}
-          periodStart={range.from}
-          periodEnd={range.to}
-          businessName={currentBusiness.business.name}
-        />
+        <SectionErrorBoundary sectionName="Statement of Changes in Equity">
+          <StatementOfChangesInEquity
+            businessId={businessId}
+            periodStart={range.from}
+            periodEnd={range.to}
+            businessName={currentBusiness.business.name}
+          />
+        </SectionErrorBoundary>
       )}
       {tab === 'branches' && (
-        <BranchPerformanceReport
-          businessId={businessId}
-          periodStart={range.from}
-          periodEnd={range.to}
-        />
+        <SectionErrorBoundary sectionName="Branch Performance">
+          <BranchPerformanceReport
+            businessId={businessId}
+            periodStart={range.from}
+            periodEnd={range.to}
+          />
+        </SectionErrorBoundary>
       )}
       {tab === 'currency' && (
         <MultiCurrencyReport

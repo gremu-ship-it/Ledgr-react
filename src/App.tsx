@@ -11,6 +11,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { createLogger } from '@/lib/logger';
+import { pushError } from '@/lib/notifications';
 import {
   isChunkLoadError,
   attemptChunkRecovery,
@@ -95,12 +97,27 @@ import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
+const log = createLogger('QueryClient');
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
       retry: 1,
       refetchOnWindowFocus: false,
+    },
+    mutations: {
+      onError: (error, variables) => {
+        // Global fallback for mutations that don't have their own onError handler.
+        // Logs the error and shows a generic toast so the user knows something failed.
+        const message = error instanceof Error ? error.message : 'An unexpected error occurred';
+        log.error('Mutation failed (unhandled)', error as Error, {
+          // Include a stringified snapshot of variables for debugging (safe: no PII
+          // in mutation variables by convention — IDs and form fields only).
+          variables: JSON.stringify(variables).slice(0, 200),
+        });
+        pushError('Operation failed', message);
+      },
     },
   },
 });

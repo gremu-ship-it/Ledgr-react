@@ -19,11 +19,14 @@
  * instead of proxying.
  */
 
-import express, { type Request, type Response } from 'express';
+import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import * as Sentry from '@sentry/node';
+import { createServerLogger } from './logger';
+
+const log = createServerLogger('Gateway');
 
 const PORT = Number(process.env.PORT) || 3000;
 const APP_ENV = process.env.APP_ENV || 'staging';
@@ -64,6 +67,23 @@ app.use(
 // Capture raw body as a string for proxying (any content type).
 app.use(express.text({ type: () => true, limit: '1mb' }));
 
+// Request logging middleware — logs method, path, status, and duration.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+    const reqLog = log.child({ operation: 'request' });
+    reqLog[level](`${req.method} ${req.path} → ${res.statusCode}`, {
+      status: res.statusCode,
+      duration: `${duration}ms`,
+      method: req.method,
+      path: req.path,
+    });
+  });
+  next();
+});
+
 // Unauthenticated: 10 req/min per IP on every route except /api/health.
 const unauthLimiter = rateLimit({
   windowMs: 60_000,
@@ -97,6 +117,7 @@ app.use(
   authLimiter,
   async (req: Request, res: Response) => {
     if (!TARGET_URL) {
+      log.warn('TARGET_URL not configured — returning 503');
       res.status(503).json({
         errors: [{ status: '503', title: 'Bad gateway', detail: 'TARGET_URL is not configured' }],
       });
@@ -127,6 +148,11 @@ app.use(
       if (ct) res.set('Content-Type', ct);
       res.send(text);
     } catch (err) {
+      log.error('Proxy request failed', err as Error, {
+        method: req.method,
+        path: req.originalUrl,
+        target: TARGET_URL,
+      });
       if (SENTRY_DSN) Sentry.captureException(err);
       res.status(502).json({ errors: [{ status: '502', title: 'Bad gateway' }] });
     }
@@ -139,7 +165,7 @@ app.use(
 if (SENTRY_DSN) Sentry.setupExpressErrorHandler(app);
 
 app.listen(PORT, () => {
-  console.log(`Ledgr gateway listening on :${PORT} (${APP_ENV})`);
+  log.info(`Ledgr gateway listening on :${PORT}`, { env: APP_ENV, port: PORT, target: TARGET_URL || '(none)' });
 });
 
 function hashToken(token: string): string {
