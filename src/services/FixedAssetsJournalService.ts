@@ -14,6 +14,7 @@
  */
 
 import { repos } from '@/lib/repositories';
+import { supabase } from '@/lib/supabase';
 import type { Row } from '@/dal/types/database';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -111,6 +112,200 @@ export function calculateMonthlyDepreciation(input: DepreciationCalcInput): numb
   // Never depreciate below residual value
   const maxAllowed = remainingBookValue - residualValue;
   return Math.max(0, Math.min(charge, maxAllowed));
+}
+
+// ── Capitalisation (acquisition) ──────────────────────────────────────────────
+
+// The pure capitalisation helpers live in @/lib/fixedAssetCapitalisation so
+// they carry no Supabase dependency and can be unit-tested without a
+// database (same pattern as inventoryValuation.ts). Re-exported here so the
+// service remains the single entry point for fixed-asset posting logic.
+export {
+  buildCapitalisationLines,
+  selectAssetsMissingCapitalisation,
+} from '@/lib/fixedAssetCapitalisation';
+import {
+  buildCapitalisationLines,
+  selectAssetsMissingCapitalisation,
+} from '@/lib/fixedAssetCapitalisation';
+
+/** Returns the set of asset ids that already have a NON-REVERSED
+ *  capitalisation journal entry. A reversed capitalisation means the user
+ *  undid it; the asset must be capitalisable again after that. */
+async function findCapitalisedAssetIds(businessId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('source_id')
+    .eq('business_id', businessId)
+    .eq('source_type', 'fixed_asset_acquisition')
+    .neq('status', 'reversed');
+  if (error) throw error;
+  return new Set(
+    ((data ?? []) as Array<{ source_id: string | null }>)
+      .map((r) => r.source_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+}
+
+export interface CapitalisationResult {
+  assetId: string;
+  assetName: string;
+  amount: number;
+  journalEntryId: string;
+  skipped?: string;
+}
+
+/**
+ * Posts the capitalisation (acquisition) journal for ONE asset:
+ *   DR Fixed Asset account (cost) / CR funding account (bank / creditor /
+ *   capital), dated at the acquisition date.
+ *
+ * BACKGROUND: fixed_assets register rows were created without any GL entry,
+ * so the SOFP (a GL report) showed fixed assets at zero even when the
+ * register listed assets. Depreciation/disposal/revaluation journals existed;
+ * the initial capitalisation was the missing leg.
+ *
+ * Idempotent: an asset that already has a non-reversed capitalisation entry
+ * is skipped. Delta postings (cost edited after capitalisation) pass
+ * amountOverride + direction so only the CHANGE is posted.
+ */
+export async function postAssetCapitalisation(
+  businessId: string,
+  asset: Row<'fixed_assets'>,
+  fundingAccountId: string,
+  postedBy: string,
+  options?: {
+    amountOverride?: number;
+    direction?: 'increase' | 'decrease';
+    entryDate?: string;
+    descriptionSuffix?: string;
+    idempotencyCheck?: boolean;
+    entryNumberSuffix?: string;
+  },
+): Promise<CapitalisationResult> {
+  if (options?.idempotencyCheck ?? true) {
+    const capitalised = await findCapitalisedAssetIds(businessId);
+    if (capitalised.has(asset.id)) {
+      return {
+        assetId: asset.id,
+        assetName: asset.name,
+        amount: 0,
+        journalEntryId: '',
+        skipped: 'Capitalisation entry already posted for this asset.',
+      };
+    }
+  }
+
+  const amount = options?.amountOverride ?? asset.acquisition_cost;
+  if (!(amount > 0)) {
+    return {
+      assetId: asset.id,
+      assetName: asset.name,
+      amount: 0,
+      journalEntryId: '',
+      skipped: 'Zero capitalisation amount — nothing to post.',
+    };
+  }
+
+  const { assetAccountId } = await resolveAssetAccounts(asset);
+  const direction = options?.direction ?? 'increase';
+  const description =
+    `Capitalisation — ${asset.name} (${asset.asset_number})` +
+    (options?.descriptionSuffix ?? '');
+
+  const entryNumber = `${await nextEntryNumber()}${options?.entryNumberSuffix ?? ''}`;
+  const { entry } = await repos.journal.createBalancedEntry(
+    {
+      business_id: businessId,
+      entry_number: entryNumber,
+      entry_date: options?.entryDate ?? asset.acquisition_date,
+      description,
+      reference: asset.purchase_invoice_ref ?? null,
+      source_type: 'fixed_asset_acquisition',
+      source_id: asset.id,
+      currency: 'MWK',
+      exchange_rate: 1,
+      status: 'draft',
+      branch_id: asset.branch_id,
+      department_id: asset.department_id,
+      created_by: postedBy,
+    },
+    buildCapitalisationLines({
+      assetAccountId,
+      fundingAccountId,
+      amount,
+      description,
+      direction,
+    }),
+  );
+
+  await repos.journal.post(entry.id, postedBy);
+  return { assetId: asset.id, assetName: asset.name, amount, journalEntryId: entry.id };
+}
+
+/**
+ * Keeps the GL in step when an asset row is saved from the form:
+ *  - no capitalisation entry yet (register-era asset, CSV import) → post the
+ *    FULL acquisition cost;
+ *  - entry exists and the cost changed → post only the DELTA (increase or
+ *    decrease), dated today with a 'cost adjustment' note;
+ *  - entry exists and cost unchanged → nothing.
+ */
+export async function syncAssetCapitalisation(
+  businessId: string,
+  asset: Row<'fixed_assets'>,
+  previousAcquisitionCost: number,
+  fundingAccountId: string,
+  postedBy: string,
+): Promise<CapitalisationResult | null> {
+  const capitalised = await findCapitalisedAssetIds(businessId);
+  if (!capitalised.has(asset.id)) {
+    if (asset.status === 'disposed') return null;
+    return postAssetCapitalisation(businessId, asset, fundingAccountId, postedBy, {
+      idempotencyCheck: false,
+    });
+  }
+
+  const delta = asset.acquisition_cost - previousAcquisitionCost;
+  if (Math.abs(delta) < 0.005) return null;
+  return postAssetCapitalisation(businessId, asset, fundingAccountId, postedBy, {
+    amountOverride: Math.abs(delta),
+    direction: delta > 0 ? 'increase' : 'decrease',
+    entryDate: new Date().toISOString().slice(0, 10),
+    descriptionSuffix: delta > 0 ? ' — cost adjustment' : ' — cost adjustment (decrease)',
+    idempotencyCheck: false,
+  });
+}
+
+/**
+ * Backfill: posts capitalisation journals for every non-disposed register
+ * asset that lacks one. Funding is user-chosen (how the assets were actually
+ * paid for — bank, creditor or owner capital). Idempotent via
+ * findCapitalisedAssetIds + the per-call check in postAssetCapitalisation.
+ */
+export async function backfillAssetCapitalisation(
+  businessId: string,
+  fundingAccountId: string,
+  postedBy: string,
+): Promise<CapitalisationResult[]> {
+  const [assets, capitalised] = await Promise.all([
+    repos.asset.findByBusiness(businessId),
+    findCapitalisedAssetIds(businessId),
+  ]);
+  const missing = selectAssetsMissingCapitalisation(assets, capitalised);
+
+  const results: CapitalisationResult[] = [];
+  for (let i = 0; i < missing.length; i++) {
+    results.push(
+      await postAssetCapitalisation(businessId, missing[i], fundingAccountId, postedBy, {
+        idempotencyCheck: false, // already filtered against the snapshot above
+        // Timestamp-based entry numbers can collide within the same second in
+        // a loop — disambiguate with the index.
+        entryNumberSuffix: `-CAP${i + 1}`,
+      }),
+    );
+  }
+  return results;
 }
 
 // ── Monthly Depreciation Run ──────────────────────────────────────────────────

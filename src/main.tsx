@@ -6,6 +6,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { attemptChunkRecovery, clearChunkRecovery } from '@/lib/chunkRecovery';
+import { initErrorCapture } from '@/lib/errorCapture';
 import './index.css';
 import './i18n';
 import App from './App.tsx';
@@ -18,6 +19,10 @@ if (typeof window !== 'undefined') {
     attemptChunkRecovery('vite_preload');
   });
   clearChunkRecovery('vite_preload');
+
+  // Begin capturing client-side errors so the Support Agent can attach
+  // sanitised diagnostics when a user reports a problem.
+  initErrorCapture();
 }
 
 // --- Sentry (frontend) ------------------------------------------------------
