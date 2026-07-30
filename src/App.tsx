@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'rea
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
@@ -127,7 +127,7 @@ function App() {
   const homePath = isAdminPortalHost() ? '/partner-admin' : (roleHome !== '/dashboard' ? roleHome : '/dashboard');
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary name="App">
       <QueryClientProvider client={queryClient}>
         <PartnerProvider>
         <BrowserRouter>

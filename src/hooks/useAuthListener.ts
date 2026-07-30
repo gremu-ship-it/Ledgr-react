@@ -3,6 +3,9 @@ import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 import { i18n, normalizeLanguage } from '@/i18n';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAuthListener');
 
 // Module-level flags — survives re-renders and effect re-runs
 let isHydrating = false;
@@ -58,7 +61,7 @@ export function useAuthListener() {
             const fetched = await repos.business.findMembershipsWithRole(userId);
             memberships = fetched;
           } catch (err) {
-            console.warn('Failed to load memberships, using cached values.', err);
+            log.warn('Failed to load memberships, using cached values.', { error: err });
           }
         }
 
@@ -83,7 +86,7 @@ export function useAuthListener() {
         hasInitialHydrated = true;
         lastHydratedUserId = userId;
       } catch (err) {
-        console.error('Failed to hydrate user:', err);
+        log.error('Failed to hydrate user', err as Error);
       } finally {
         isHydrating = false;
         if (isMountedRef.current) {

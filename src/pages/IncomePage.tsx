@@ -12,6 +12,9 @@ import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('IncomePage');
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -396,7 +399,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
               values.department_id || null,
             );
           } catch (err) {
-            console.warn('Journal entry failed (non-critical):', err);
+            log.warn('Journal entry failed (non-critical)', { error: err });
           }
 
           // Releases stock and posts DR Cost of Sales / CR Inventory in the
@@ -754,7 +757,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             form.department_id || null,
           );
         } catch (err) {
-          console.warn('Journal entry failed (non-critical):', err);
+          log.warn('Journal entry failed (non-critical)', { error: err });
         }
 
         // Reduce stock for every line that has a product selected, and post

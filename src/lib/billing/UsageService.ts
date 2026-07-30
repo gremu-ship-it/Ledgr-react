@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { getPlan, type PlanTier } from './plans';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('UsageService');
 
 export interface UsageStats {
   currentMonth: number;
@@ -25,7 +28,7 @@ export class UsageService {
       .gte('entry_date', startOfMonth);
 
     if (error) {
-      console.error('Failed to count usage:', error);
+      log.error('Failed to count usage', error as Error);
       return 0;
     }
 
@@ -76,7 +79,7 @@ export class UsageService {
   async recordTransaction(businessId: string, type: 'journal' | 'invoice' | 'expense') {
     // For now we just count journal_entries.
     // In the future we can store this in a usage_logs table.
-    console.log(`[Usage] Recorded ${type} for business ${businessId}`);
+    log.debug('Transaction recorded', { type, businessId });
   }
 
   /**

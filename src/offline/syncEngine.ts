@@ -1,4 +1,7 @@
 import { repos } from '@/lib/repositories';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SyncEngine');
 import {
   createInvoiceJournalEntry,
   createInvoiceReceivableEntry,
@@ -79,7 +82,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           );
         }
       } catch (err) {
-        console.warn('Invoice journal entry failed during offline sync:', err);
+        log.warn('Invoice journal entry failed during offline sync', { error: err });
       }
 
       // PERPETUAL INVENTORY: an offline sale still has to release stock and
@@ -101,7 +104,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           );
         }
       } catch (err) {
-        console.warn('Stock/COGS posting failed during offline sync:', err);
+        log.warn('Stock/COGS posting failed during offline sync', { error: err });
       }
 
       return result.invoice.id;
@@ -140,7 +143,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           }
         }
       } catch (err) {
-        console.warn('Inventory account resolution failed during offline sync:', err);
+        log.warn('Inventory account resolution failed during offline sync', { error: err });
       }
 
       try {
@@ -162,7 +165,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           await (repos.expense as any).update(result.expense.id, { journal_entry_id: journalEntryId });
         }
       } catch (err) {
-        console.warn('Expense journal entry failed during offline sync:', err);
+        log.warn('Expense journal entry failed during offline sync', { error: err });
       }
       return result.expense.id;
     }
@@ -180,7 +183,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           result.invoice.department_id,
         );
       } catch (err) {
-        console.warn('Invoice payment settlement journal entry failed during offline sync:', err);
+        log.warn('Invoice payment settlement journal entry failed during offline sync', { error: err });
       }
       return result.payment.id;
     }
@@ -198,7 +201,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           result.expense.department_id,
         );
       } catch (err) {
-        console.warn('Expense payment settlement journal entry failed during offline sync:', err);
+        log.warn('Expense payment settlement journal entry failed during offline sync', { error: err });
       }
       return result.payment.id;
     }

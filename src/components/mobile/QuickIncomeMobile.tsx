@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, Tag } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('QuickIncomeMobile');
 import { repos } from '@/lib/repositories';
 import { createInvoiceJournalEntry } from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
@@ -187,7 +190,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               );
             }
           } catch (err) {
-            console.warn('Journal entry failed:', err);
+            log.warn('Journal entry failed', { error: err });
           }
         }
         return { offline: false, invoice_number: invoiceNumber };

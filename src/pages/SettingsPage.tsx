@@ -31,6 +31,9 @@ import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeou
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BillingTab } from '@/components/billing/BillingTab';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SettingsPage');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -192,7 +195,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       setAlert({ type: 'success', message: 'Logo uploaded successfully.' });
       setTimeout(() => setAlert(null), 3000);
     } catch (err) {
-      console.error('Logo upload error:', err);
+      log.error('Logo upload error', err as Error);
       setAlert({ type: 'error', message: err instanceof Error ? err.message : 'Failed to upload logo.' });
       setTimeout(() => setAlert(null), 3000);
     } finally {

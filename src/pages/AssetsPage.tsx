@@ -7,6 +7,9 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AssetsPage');
 import type { Row, InsertDto, DepreciationMethod, AssetStatus } from '@/dal/types/database';
 import type { Database } from '@/dal/types/database.generated';
 import {
@@ -1223,7 +1226,7 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                       is_active: true,
                     } as never);
                   } catch (err) {
-                    console.error('CSV import row failed', err);
+                    log.error('CSV import row failed', err as Error);
                   }
                 }
                 queryClient.invalidateQueries({ queryKey: ['assets'] });

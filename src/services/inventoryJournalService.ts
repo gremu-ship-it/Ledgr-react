@@ -60,6 +60,9 @@
  */
 
 import { repos } from '@/lib/repositories';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('InventoryJournalService');
 import type { Row } from '@/dal/types/database';
 import {
   TOLERANCE,
@@ -225,9 +228,9 @@ export async function resolveExpenseLineAccountId(
       // lesser evil versus blocking the user from recording it at all —
       // the reconciliation panel on the Warehouse page will surface the
       // resulting variance.
-      console.warn(
-        '[inventory] Could not resolve an inventory account; expensing this purchase instead.',
-        err,
+      log.warn(
+        'Could not resolve an inventory account; expensing this purchase instead.',
+        { error: err },
       );
     }
   }
@@ -371,10 +374,10 @@ export async function postCogsForSale(
       buildCogsPostings(costLines, accountsByProduct);
 
     if (skippedProductIds.length > 0) {
-      console.warn(
-        `[inventory] No cost recognised for ${skippedProductIds.length} sold line(s) — ` +
+      log.warn(
+        `No cost recognised for ${skippedProductIds.length} sold line(s) — ` +
         'stock was sold with a zero average cost (received without a cost, or sold before being received).',
-        skippedProductIds,
+        { skippedProductIds },
       );
     }
 
@@ -422,11 +425,11 @@ export async function postCogsForSale(
     await repos.journal.post(entry.id, null as any);
     return entry.id;
   } catch (err) {
-    console.error(
-      `[inventory] Failed to post COGS for invoice ${invoice.invoice_number}. ` +
+    log.error(
+      `Failed to post COGS for invoice ${invoice.invoice_number}. ` +
       'The sale is recorded; inventory and cost of sales will be out of step until reconciled ' +
       '(Warehouse → Ledger reconciliation).',
-      err,
+      err as Error,
     );
     return null;
   }
@@ -465,8 +468,8 @@ export async function deductStockAndPostCogs(
       targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
     }
     if (!targetLocation) {
-      console.warn(
-        `[inventory] No stock location for business ${businessId} — stock not adjusted for invoice ${invoice.invoice_number}.`,
+      log.warn(
+        `No stock location for business ${businessId} — stock not adjusted for invoice ${invoice.invoice_number}.`,
       );
       return { costLines: [], cogsEntryId: null };
     }
@@ -499,9 +502,9 @@ export async function deductStockAndPostCogs(
     );
     return { costLines, cogsEntryId };
   } catch (err) {
-    console.error(
-      `[inventory] Stock deduction failed for invoice ${invoice.invoice_number}.`,
-      err,
+    log.error(
+      `Stock deduction failed for invoice ${invoice.invoice_number}.`,
+      err as Error,
     );
     return { costLines: [], cogsEntryId: null };
   }
@@ -589,10 +592,10 @@ export async function postWarehouseReceipt(
     await repos.journal.post(entry.id, null as any);
     return entry.id;
   } catch (err) {
-    console.error(
-      '[inventory] Failed to post the GL entry for a warehouse receipt. ' +
+    log.error(
+      'Failed to post the GL entry for a warehouse receipt. ' +
       'Stock levels are updated; run the Warehouse → Ledger reconciliation to correct the balance sheet.',
-      err,
+      err as Error,
     );
     return null;
   }
@@ -687,10 +690,10 @@ export async function postStockMovementAdjustment(
     await repos.journal.post(entry.id, null as any);
     return entry.id;
   } catch (err) {
-    console.error(
-      '[inventory] Failed to post the GL entry for a manual stock movement. ' +
+    log.error(
+      'Failed to post the GL entry for a manual stock movement. ' +
       'Stock levels are updated; use Warehouse → Ledger reconciliation to correct the balance sheet.',
-      err,
+      err as Error,
     );
     return null;
   }

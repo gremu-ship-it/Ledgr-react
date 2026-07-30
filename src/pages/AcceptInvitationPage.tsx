@@ -3,6 +3,9 @@ import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AcceptInvitationPage');
 import { useAppStore } from '@/store/useAppStore';
 
 type PageState = 'loading' | 'success' | 'error' | 'needs_login';
@@ -68,7 +71,7 @@ export function AcceptInvitationPage() {
       (response.error && response.code === 'INVITATION_NOT_FOUND');
 
     if (isNotFound) {
-      console.log('Token not found in business_invitations, trying legacy RPC...');
+      log.info('Token not found in business_invitations, trying legacy RPC');
       const rpcRes = await supabase.rpc('accept_invitation' as never, {
         p_token: inviteToken,
       } as never);

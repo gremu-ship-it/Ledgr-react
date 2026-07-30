@@ -9,6 +9,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
 import { clsx } from 'clsx';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TeamManagementPage');
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -645,7 +648,7 @@ export function TeamManagementPage() {
       if (invitesError) throw invitesError;
       setActiveLinks((invitesData ?? []) as InvitationLink[]);
     } catch (err) {
-      console.error('Error loading invite links:', err);
+      log.error('Error loading invite links', err as Error);
     } finally {
       setLoading(false);
     }
