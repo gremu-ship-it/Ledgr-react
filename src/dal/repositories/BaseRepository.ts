@@ -51,12 +51,13 @@ export class BaseRepository<T extends TableName> {
     orderBy?: keyof Row<T> & string;
     ascending?: boolean;
   }): Promise<Row<T>[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic table type; see findById
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- generic table type; conditional deleted_at filter requires dynamic chaining
     let query = this.client.from(this.table).select('*') as any;
     if (this.isSoftDeletable) {
       query = query.is('deleted_at', null);
     }
     if (options?.orderBy) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- orderBy is typed but PostgREST requires string
       query = query.order(options.orderBy as any, { ascending: options.ascending ?? true });
     }
     if (options?.limit !== undefined) {

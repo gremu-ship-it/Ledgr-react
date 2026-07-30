@@ -26,7 +26,7 @@ if (SENTRY_DSN) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
-import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
+import { corsHeadersForRequest } from '../_shared/cors.ts';
 
 let _req: Request | undefined;
 
