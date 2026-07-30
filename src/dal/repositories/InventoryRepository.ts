@@ -227,4 +227,51 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
     if (error) throw toRepositoryError('products', error);
     return data ?? [];
   }
+
+  /**
+   * Reconciles stock levels against sales & purchase records: backfills any
+   * `stock_movements` row missing for a tracked-product invoice or expense
+   * line, then recomputes `inventory_balances` from the full movement
+   * history. For businesses where inventory tracking was switched on after
+   * income/expense transactions already existed, this is what closes the
+   * gap between quantity on hand and what those transactions imply it
+   * should be.
+   *
+   * `backfill_and_recalculate_inventory` is not in the generated Supabase
+   * types (see database.supplement.ts for why the generated file lags
+   * behind migrations) — cast the client narrowly to this RPC's exact
+   * signature rather than casting to `any`, following the pattern used for
+   * `record_business_terms_acceptance` in CreateBusinessPage.
+   */
+  async backfillFromSalesAndPurchases(businessId: string): Promise<{
+    salesBackfilled: number;
+    purchasesBackfilled: number;
+    balancesUpdated: number;
+  }> {
+    const { data, error } = await (
+      this.client as unknown as {
+        rpc: (
+          fn: 'backfill_and_recalculate_inventory',
+          args: { p_business_id: string },
+        ) => Promise<{
+          data: {
+            out_business_id: string;
+            sales_backfilled: number;
+            purchases_backfilled: number;
+            balances_updated: number;
+          }[] | null;
+          error: { code?: string; message?: string } | null;
+        }>;
+      }
+    ).rpc('backfill_and_recalculate_inventory', { p_business_id: businessId });
+
+    if (error) throw toRepositoryError('stock_movements', error);
+
+    const row = data?.[0];
+    return {
+      salesBackfilled: Number(row?.sales_backfilled ?? 0),
+      purchasesBackfilled: Number(row?.purchases_backfilled ?? 0),
+      balancesUpdated: Number(row?.balances_updated ?? 0),
+    };
+  }
 }

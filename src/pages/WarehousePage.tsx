@@ -248,6 +248,79 @@ function StockCard({ balance }: { balance: BalanceRow }) {
   );
 }
 
+// ── Stock sync panel ─────────────────────────────────────────────────────────
+// Different problem from the GL reconciliation below: this compares
+// quantity_on_hand against what the sales (invoices) and purchase (expenses)
+// records themselves imply it should be, for businesses where inventory
+// tracking was switched on after those transactions already existed. Fixes
+// it by backfilling the missing stock_movements rows and recomputing
+// balances from the full movement history — see
+// backfill_and_recalculate_inventory() and
+// scripts/diagnose-sales-vs-inventory.sql for the read-only version of this
+// check.
+
+function StockSyncPanel({ businessId }: { businessId: string }) {
+  const queryClient = useQueryClient();
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const syncMutation = useMutation({
+    mutationFn: () => repos.inventory.backfillFromSalesAndPurchases(businessId),
+    onSuccess: ({ salesBackfilled, purchasesBackfilled, balancesUpdated }) => {
+      if (salesBackfilled === 0 && purchasesBackfilled === 0) {
+        setFeedback({
+          type: 'success',
+          message: 'Every tracked sale and purchase already has a matching stock movement — nothing to sync.',
+        });
+      } else {
+        setFeedback({
+          type: 'success',
+          message:
+            `Added ${salesBackfilled} missing sale movement${salesBackfilled === 1 ? '' : 's'} and ` +
+            `${purchasesBackfilled} missing purchase movement${purchasesBackfilled === 1 ? '' : 's'}, ` +
+            `then recalculated ${balancesUpdated} stock balance${balancesUpdated === 1 ? '' : 's'}. ` +
+            'Check the ledger reconciliation below next, since stock values have changed.',
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
+    },
+    onError: (err: Error) => setFeedback({ type: 'error', message: err.message }),
+  });
+
+  return (
+    <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Reconcile stock levels against sales &amp; purchases</p>
+          <p className="text-xs text-gray-500">
+            If inventory tracking started after invoices or expenses were already recorded, stock on hand can
+            disagree with what those transactions imply. This finds tracked-product sale/purchase lines with no
+            matching stock movement, adds the missing movements, and recalculates balances.
+          </p>
+        </div>
+        <button
+          onClick={() => syncMutation.mutate()}
+          disabled={syncMutation.isPending}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {syncMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+          Reconcile stock levels
+        </button>
+      </div>
+
+      {feedback && (
+        <div
+          className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+            feedback.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Ledger reconciliation panel ───────────────────────────────────────────────
 // Compares the stock subledger (quantity_on_hand × average_cost) against the
 // balance of the inventory GL accounts that the Statement of Financial
@@ -489,6 +562,7 @@ export function WarehousePage() {
         </button>
       </div>
 
+      <StockSyncPanel businessId={businessId} />
       <ReconciliationPanel businessId={businessId} />
 
       {lowStock.length > 0 && (
