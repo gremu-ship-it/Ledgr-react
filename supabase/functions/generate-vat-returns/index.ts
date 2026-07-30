@@ -7,8 +7,22 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- supabase invoke sends an empty body; we read everything from the DB
+const CRON_SECRET = Deno.env.get('CRON_SECRET');
+
+// This is a tenant-wide, service-role job. Keep it callable only by the
+// scheduler: Supabase JWT verification alone is insufficient because an
+// ordinary authenticated user must not be able to generate returns for every
+// business.
 Deno.serve(async (req) => {
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
+  }
+
+  const providedSecret = req.headers.get('x-cron-secret');
+  if (!CRON_SECRET || !providedSecret || providedSecret !== CRON_SECRET) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, // service role: bypasses RLS, runs for all businesses
@@ -152,7 +166,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({ period: periodStartStr.slice(0, 7), results }), {
+  // Do not expose tenant identifiers or detailed database errors in a network
+  // response. Scheduler diagnostics are available in Edge Function logs.
+  return new Response(JSON.stringify({
+    period: periodStartStr.slice(0, 7),
+    created: results.filter((result) => result.status === 'created').length,
+    skipped: results.filter((result) => result.status === 'skipped').length,
+    failed: results.filter((result) => result.status === 'error').length,
+  }), {
     headers: { 'Content-Type': 'application/json' },
   });
 });

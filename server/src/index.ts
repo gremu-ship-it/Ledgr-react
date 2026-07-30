@@ -55,9 +55,17 @@ app.use(
   }),
 );
 
+const allowedOrigins = ALLOWED_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: ALLOWED_ORIGIN ? ALLOWED_ORIGIN.split(',').map((o) => o.trim()) : true,
+    // Never reflect arbitrary origins in production. Non-browser clients do
+    // not send Origin and remain supported; browser callers must be explicitly
+    // configured through ALLOWED_ORIGIN.
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS'));
+    },
   }),
 );
 

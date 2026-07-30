@@ -183,6 +183,14 @@ async function authenticate(req: Request): Promise<{ keyId: string; businessId: 
   return { keyId: key.id, businessId: key.business_id };
 }
 
+function isPrivateWebhookHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true;
+  if (/^127\./.test(host) || /^0\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)) return true;
+  const match = /^172\.(\d{1,3})\./.exec(host);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+}
+
 async function deliverWebhooks(businessId: string, event: string, payload: unknown) {
   const { data: webhooks } = await supabase
     .from('webhooks')
@@ -195,8 +203,14 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
     const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        const res = await fetch(webhook.url, {
+        const endpoint = new URL(webhook.url);
+        if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || isPrivateWebhookHostname(endpoint.hostname)) {
+          throw new Error('Webhook destination is not a permitted public HTTPS endpoint');
+        }
+        const res = await fetch(endpoint, {
           method: 'POST',
+          redirect: 'error',
+          signal: AbortSignal.timeout(10_000),
           headers: {
             'Content-Type': 'application/json',
             'X-Ledgr-Event': event,
@@ -204,13 +218,14 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
           },
           body,
         });
-        const responseBody = await res.text();
+        // Recipient bodies are untrusted and may contain sensitive data; only
+        // store delivery metadata.
         await supabase.from('webhook_deliveries').insert({
           webhook_id: webhook.id,
           event,
           payload,
           status_code: res.status,
-          response_body: responseBody.slice(0, 10000),
+          response_body: null,
           attempt,
           delivered_at: res.ok ? new Date().toISOString() : null,
         });

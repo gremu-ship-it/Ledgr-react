@@ -5,6 +5,11 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 
+const ALLOWED_EVENTS = new Set([
+  'invoice.created', 'invoice.paid', 'expense.created', 'payroll.run',
+  'tax.due_soon', 'journal_entry.created',
+]);
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -46,7 +51,19 @@ async function assertMember(authHeader: string, businessId: string): Promise<Res
     .eq('is_active', true)
     .maybeSingle();
 
+  // The current application invokes this from permitted business actions in
+  // the browser, so active membership is required here. Event names are
+  // separately allowlisted below; moving dispatch fully server-side is the
+  // next step before arbitrary user-supplied payloads can be eliminated.
   return membership ? null : json({ error: 'Not authorized for this business' }, 403);
+}
+
+function isPrivateHostname(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return true;
+  if (/^127\./.test(host) || /^0\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host) || /^169\.254\./.test(host)) return true;
+  const match = /^172\.(\d{1,3})\./.exec(host);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
 }
 
 async function deliverWebhooks(businessId: string, event: string, payload: unknown) {
@@ -62,8 +79,14 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
     const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        const res = await fetch(webhook.url, {
+        const endpoint = new URL(webhook.url);
+        if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || isPrivateHostname(endpoint.hostname)) {
+          throw new Error('Webhook destination is not a permitted public HTTPS endpoint');
+        }
+        const res = await fetch(endpoint, {
           method: 'POST',
+          redirect: 'error',
+          signal: AbortSignal.timeout(10_000),
           headers: {
             'Content-Type': 'application/json',
             'X-Ledgr-Event': event,
@@ -71,13 +94,14 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
           },
           body,
         });
-        const responseBody = await res.text();
+        // Do not persist the recipient response: it can contain secrets from a
+        // destination reached through a misconfiguration or SSRF bypass.
         await supabase.from('webhook_deliveries').insert({
           webhook_id: webhook.id,
           event,
           payload,
           status_code: res.status,
-          response_body: responseBody.slice(0, 10000),
+          response_body: null,
           attempt,
           delivered_at: res.ok ? new Date().toISOString() : null,
         });
@@ -111,6 +135,7 @@ serve(async (req) => {
 
   const body = await req.json().catch(() => null) as { business_id?: string; event?: string; payload?: unknown } | null;
   if (!body?.business_id || !body.event) return json({ error: 'business_id and event are required' }, 400);
+  if (!ALLOWED_EVENTS.has(body.event)) return json({ error: 'Unsupported webhook event' }, 400);
 
   const authError = await assertMember(authHeader, body.business_id);
   if (authError) return authError;
