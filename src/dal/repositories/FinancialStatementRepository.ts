@@ -166,8 +166,12 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
   // ── Core balance computation ────────────────────────────────────────────────
 
   /**
-   * Computes the balance of every posting (non-group) account for a business,
-   * as of a point in time (for SOFP) or across a date range (for P&L).
+   * Computes the balance of every account for a business as of a point in time
+   * (for SOFP) or across a date range (for P&L). Group accounts are retained:
+   * although new journal postings must use a leaf account, older data and the
+   * account setup screen can contain an opening balance on a group account.
+   * Excluding those accounts made a recorded Current Asset disappear from the
+   * Statement of Financial Position.
    *
    * Uses `amount_base` exclusively (MWK functional currency) — matches the
    * convention established in JournalRepository's double-entry balance check.
@@ -186,7 +190,6 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       .from('accounts')
       .select('*')
       .eq('business_id', businessId)
-      .eq('is_group', false)
       .is('deleted_at', null);
 
     if (accounts.error) throw toRepositoryError('accounts', accounts.error);
