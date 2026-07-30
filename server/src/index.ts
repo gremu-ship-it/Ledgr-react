@@ -23,6 +23,8 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { RedisStore, type RedisReply } from 'rate-limit-redis';
+import Redis from 'ioredis';
 import * as Sentry from '@sentry/node';
 import { createServerLogger } from './logger';
 
@@ -33,7 +35,18 @@ const APP_ENV = process.env.APP_ENV || 'staging';
 const TARGET_URL = process.env.TARGET_URL || '';
 const SENTRY_DSN = process.env.SENTRY_DSN || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
+const REDIS_URL = process.env.REDIS_URL || '';
 
+// A process-local store does not protect a horizontally scaled gateway. Redis
+// is mandatory in production; local development can run without it.
+if (APP_ENV === 'production' && !REDIS_URL) {
+  throw new Error('REDIS_URL must be configured when APP_ENV=production');
+}
+const redis = REDIS_URL ? new Redis(REDIS_URL, { maxRetriesPerRequest: 1 }) : null;
+redis?.on('error', (error) => console.error('Redis rate-limit store error:', error.message));
+// ioredis has heavily overloaded `call`; narrow it to the store's generic
+// Redis command shape at this integration boundary.
+const redisCommand = redis as unknown as { call: (...args: string[]) => Promise<unknown> } | null;
 if (SENTRY_DSN) {
   Sentry.init({
     dsn: SENTRY_DSN,
@@ -58,9 +71,17 @@ app.use(
   }),
 );
 
+const allowedOrigins = ALLOWED_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: ALLOWED_ORIGIN ? ALLOWED_ORIGIN.split(',').map((o) => o.trim()) : true,
+    // Never reflect arbitrary origins in production. Non-browser clients do
+    // not send Origin and remain supported; browser callers must be explicitly
+    // configured through ALLOWED_ORIGIN.
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error('Origin is not allowed by CORS'));
+    },
   }),
 );
 
@@ -88,6 +109,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 const unauthLimiter = rateLimit({
   windowMs: 60_000,
   max: 10,
+  ...(redisCommand ? { store: new RedisStore({ prefix: 'rl:anon:', sendCommand: (...args: string[]) => redisCommand.call(...args) as Promise<RedisReply> }) } : {}),
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => req.path === '/api/health',
@@ -97,6 +119,7 @@ const unauthLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 60_000,
   max: 100,
+  ...(redisCommand ? { store: new RedisStore({ prefix: 'rl:auth:', sendCommand: (...args: string[]) => redisCommand.call(...args) as Promise<RedisReply> }) } : {}),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) =>

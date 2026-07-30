@@ -5,7 +5,6 @@ export interface Webhook {
   business_id: string;
   url: string;
   events: string[];
-  secret: string | null;
   is_active: boolean;
   created_at: string;
   last_triggered_at: string | null;
@@ -23,23 +22,26 @@ export interface WebhookDelivery {
   delivered_at: string | null;
 }
 
-const WEBHOOK_COLUMNS = 'id, business_id, url, events, secret, is_active, created_at, last_triggered_at';
+// Signing secrets are intentionally never returned to the browser. The Edge
+// Function generates/uses them with the service role when delivering events.
+const WEBHOOK_COLUMNS = 'id, business_id, url, events, is_active, created_at, last_triggered_at';
 const DELIVERY_COLUMNS = 'id, webhook_id, event, payload, status_code, response_body, attempt, created_at, delivered_at';
 
 export class WebhookService {
   async registerWebhook(businessId: string, url: string, events: string[]): Promise<Webhook> {
     const parsed = new URL(url);
-    if (parsed.protocol !== 'https:') throw new Error('Webhook URL must use HTTPS.');
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) {
+      throw new Error('Webhook URL must be an HTTPS URL without embedded credentials.');
+    }
 
-    const secret = crypto.randomUUID().replace(/-/g, '');
-
+    // The database default generates the signing secret. Do not create or
+    // return it in browser code.
     const { data, error } = await supabase
       .from('webhooks')
       .insert({
         business_id: businessId,
         url,
         events,
-        secret,
         is_active: true,
       })
       .select(WEBHOOK_COLUMNS)
