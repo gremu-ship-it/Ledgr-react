@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
 import { clsx } from 'clsx';
 import { createLogger } from '@/lib/logger';
+import { handleError } from '@/lib/errorHandler';
 
 const log = createLogger('TeamManagementPage');
 
@@ -301,6 +302,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
       setDirectRole('viewer');
       onInvited();
     } catch (err) {
+      handleError(err, { module: 'TeamManagementPage', operation: 'addDirectMember', notify: false });
       setError((err as Error).message);
     } finally {
       setLoading(false);
@@ -335,6 +337,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
       setSuccess(`Invite link created for ${ROLE_CONFIG[linkRole]?.label || linkRole}!`);
       onInvited();
     } catch (err) {
+      handleError(err, { module: 'TeamManagementPage', operation: 'createInviteLink', notify: false });
       setError((err as Error).message);
     } finally {
       setLoading(false);
@@ -633,6 +636,7 @@ export function TeamManagementPage() {
         setMembers(mapped);
       }
     } catch (err) {
+      handleError(err, { module: 'TeamManagementPage', operation: 'loadTeamMembers', notify: false });
       setError(err instanceof Error ? err.message : 'Error loading team members');
     }
 

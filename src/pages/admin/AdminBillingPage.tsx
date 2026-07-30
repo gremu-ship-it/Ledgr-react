@@ -6,6 +6,7 @@ import { pushSuccess, pushError } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';
 import { subscriptionPaymentService, type ManualPaymentMethod } from '@/services/billing/SubscriptionPaymentService';
 import { PLANS, type PlanTier } from '@/lib/billing/plans';
+import { handleError } from '@/lib/errorHandler';
 
 interface BusinessSearchResult {
   id: string;
@@ -131,6 +132,7 @@ export function AdminBillingPage() {
       queryClient.invalidateQueries({ queryKey: ['usage', selected.id] });
       setSelected(null);
     } catch (e: unknown) {
+      handleError(e, { module: 'AdminBillingPage', operation: 'grantPlan', notify: false, businessId: selected.id });
       const message = e instanceof Error ? e.message : 'Could not grant plan';
       pushError('Grant failed', message, { businessId: selected.id });
     }
@@ -230,6 +232,7 @@ export function AdminBillingPage() {
                       alert('No business found with that ID.');
                     }
                   } catch (err) {
+                    handleError(err, { module: 'AdminBillingPage', operation: 'loadBusinessById', notify: false });
                     alert('Failed to load business: ' + (err instanceof Error ? err.message : 'Unknown error'));
                   }
                 }}

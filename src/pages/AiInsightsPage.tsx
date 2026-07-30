@@ -284,7 +284,8 @@ export function AiInsightsPage() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch {
+    } catch (err) {
+      log.error('AI chat response failed', err as Error);
       setMessages((prev) => [
         ...prev,
         {
