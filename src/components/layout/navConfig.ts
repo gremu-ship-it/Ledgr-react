@@ -19,6 +19,7 @@ import {
   Lock,
   ScrollText,
   ShieldCheck,
+  LifeBuoy,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -54,6 +55,12 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.ai',
     items: [
       { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.support',
+    items: [
+      { labelKey: 'navigation.items.support', path: '/support', icon: LifeBuoy },
     ],
   },
   {

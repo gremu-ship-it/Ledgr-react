@@ -400,6 +400,9 @@ export function usePermissions(): Permissions {
 export function isPathAllowedForRole(role: string | null, path: string): boolean {
   if (!role) return false;
 
+  // The Support assistant is available to every authenticated role.
+  if (path === '/support') return true;
+
   switch (role) {
     case 'owner':
     case 'admin':

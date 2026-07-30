@@ -15,6 +15,7 @@ import { useLocation } from 'react-router-dom';
 import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
+import { SupportWidget } from '@/components/support/SupportWidget';
 
 export function AppLayout() {
   const { t } = useTranslation();
@@ -89,6 +90,9 @@ export function AppLayout() {
 
         {/* Bottom nav — mobile only */}
       <BottomNav />
+
+      {/* Always-available support assistant */}
+      <SupportWidget />
 
       {/* Inactivity warning modal */}
       {showWarning && (

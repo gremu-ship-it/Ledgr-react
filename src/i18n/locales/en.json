@@ -79,7 +79,8 @@
       "finance": "Finance",
       "inventory": "Inventory",
       "accounting": "Accounting",
-      "organisation": "Organisation"
+      "organisation": "Organisation",
+      "support": "Help"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -103,7 +104,8 @@
       "contacts": "Contacts",
       "branches": "Branches",
       "departments": "Departments",
-      "settings": "Settings"
+      "settings": "Settings",
+      "support": "Support"
     }
   },
   "auth": {
@@ -474,5 +476,54 @@
     "joinedAs": "You’ve joined as {{role}}. Redirecting to your dashboard…",
     "theBusiness": "the business",
     "member": "a member"
+  },
+  "support": {
+    "title": "Support Assistant",
+    "subtitle": "Answers, troubleshooting & compliance help",
+    "widgetAriaLabel": "Open support assistant",
+    "greeting": "Hi! I’m the Ledgr Support Assistant. I can help with how features work, troubleshoot errors you’re seeing, and answer compliance questions about your data. Pick a topic below to get started.",
+    "categories": {
+      "query": "Ask a question",
+      "error": "Report a problem",
+      "compliance": "Compliance & privacy"
+    },
+    "suggest": {
+      "invoicing": "How do I create and send an invoice?",
+      "expenses": "How do I record an expense?",
+      "reports": "How do I generate financial statements?",
+      "gettingStarted": "How do I set up my business?",
+      "crash": "The app crashed or shows a blank screen",
+      "sync": "My data isn’t syncing",
+      "login": "I can’t sign in or have an MFA issue",
+      "slow": "The app is slow or unresponsive",
+      "export": "How do I export all my data?",
+      "delete": "How do I delete my account?",
+      "audit": "Where is the audit log?",
+      "gdpr": "What are my data privacy rights?"
+    },
+    "attachDiagnostics": "Attach recent app errors to help diagnose the issue",
+    "analysing": "Analysing…",
+    "error": "Sorry, I couldn’t reach the support assistant. Please check your connection and try again, or email support@ledgr.app.",
+    "escalated": "Escalated to the support team",
+    "escalateFooter": "Still stuck? Email our team at {{email}} and we’ll pick it up — a screenshot helps.",
+    "placeholder": "Ask a question, describe an issue, or ask about compliance…",
+    "send": "Send message",
+    "enterHint": "Press Enter to send · Shift+Enter for a new line",
+    "complianceQuickLinks": "Compliance & data self-service",
+    "quick": {
+      "export": "Export my data",
+      "exportDesc": "Download a copy of your business data (data portability).",
+      "delete": "Delete my account",
+      "deleteDesc": "Request permanent deletion — there’s a grace period to cancel.",
+      "audit": "Audit log",
+      "auditDesc": "Review who changed what, with timestamps.",
+      "terms": "Terms & conditions",
+      "termsDesc": "Read the current terms you accepted.",
+      "cookies": "Cookie & privacy settings",
+      "cookiesDesc": "Manage consent and tracking preferences."
+    },
+    "contactTitle": "Talk to a human",
+    "contactBody": "The assistant handles most questions. For billing disputes, legal, or urgent issues, email our team.",
+    "disclaimer": "The assistant uses AI and may make mistakes. Verify important financial or compliance details. Conversations are not used to train models without your consent."
   }
 }
