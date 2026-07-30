@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { handleError } from '@/lib/errorHandler';
 import { supabase } from '@/lib/supabase';
 import type { Row, InsertDto } from '@/dal/types/database';
 import {
@@ -204,6 +205,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
       });
       onClose();
     } catch (e) {
+      handleError(e, { module: 'AccountsPage', operation: 'saveAccount', notify: false });
       setError((e instanceof Error ? e.message : String(e)) || 'Save failed.');
     } finally {
       setSaving(false);
@@ -531,6 +533,7 @@ export function AccountsPage() {
           : `Chart of Accounts is already complete — nothing to add.`,
       });
     } catch (e) {
+      handleError(e, { module: 'AccountsPage', operation: 'seedChartOfAccounts', notify: false });
       setSeedMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     } finally {
       setSeeding(false);
@@ -560,6 +563,7 @@ export function AccountsPage() {
         text: `Switched to ${selectedTemplate.toUpperCase()}. Added ${added} account(s), deactivated ${deactivated}.`,
       });
     } catch (e) {
+      handleError(e, { module: 'AccountsPage', operation: 'switchCoaTemplate', notify: false });
       setSeedMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     } finally {
       setSeeding(false);

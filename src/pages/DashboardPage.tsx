@@ -20,6 +20,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { UsageMeter } from '@/components/billing/UsageMeter';
 import { UpgradeModal } from '@/components/billing/UpgradeModal';
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useState } from 'react';
 
 // ── KPI Card ──────────────────────────────────────────────────────────────────
@@ -255,45 +256,51 @@ export function DashboardPage() {
 
       {/* Charts row — Income/Expense chart (2/3) + Cash Flow (1/3) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">{t('dashboard.incomeVsExpenses')}</h2>
-              <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')}</p>
+        <SectionErrorBoundary sectionName="Income/Expense Chart">
+          <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-gray-900">{t('dashboard.incomeVsExpenses')}</h2>
+                <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')}</p>
+              </div>
             </div>
+            <IncomeExpenseChart
+              data={trend.data}
+              isLoading={trend.isLoading}
+              isError={trend.isError}
+            />
           </div>
-          <IncomeExpenseChart
-            data={trend.data}
-            isLoading={trend.isLoading}
-            isError={trend.isError}
-          />
-        </div>
+        </SectionErrorBoundary>
 
-        <div className="flex flex-col gap-4">
-          <CashFlowIndicator
-            income={income.data?.totalAmount}
-            expenses={expenses.data}
-            isLoading={income.isLoading || expenses.isLoading}
-            isError={income.isError || expenses.isError}
-          />
-        </div>
+        <SectionErrorBoundary sectionName="Cash Flow Indicator">
+          <div className="flex flex-col gap-4">
+            <CashFlowIndicator
+              income={income.data?.totalAmount}
+              expenses={expenses.data}
+              isLoading={income.isLoading || expenses.isLoading}
+              isError={income.isError || expenses.isError}
+            />
+          </div>
+        </SectionErrorBoundary>
       </div>
 
       {/* Recent Transactions — full width with search + pagination */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-gray-900">{t('dashboard.recentTransactions')}</h2>
-            <p className="mt-0.5 text-xs text-gray-600">{t('dashboard.lastJournalEntries')}</p>
+      <SectionErrorBoundary sectionName="Recent Transactions">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">{t('dashboard.recentTransactions')}</h2>
+              <p className="mt-0.5 text-xs text-gray-600">{t('dashboard.lastJournalEntries')}</p>
+            </div>
+            <FileText className="h-4 w-4 text-gray-300" />
           </div>
-          <FileText className="h-4 w-4 text-gray-300" />
+          <RecentTransactions
+            entries={recentEntries.data}
+            isLoading={recentEntries.isLoading}
+            isError={recentEntries.isError}
+          />
         </div>
-        <RecentTransactions
-          entries={recentEntries.data}
-          isLoading={recentEntries.isLoading}
-          isError={recentEntries.isError}
-        />
-      </div>
+      </SectionErrorBoundary>
 
       {/* Upgrade Modal */}
       <UpgradeModal 

@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('LanguageSwitcher');
 import { LANGUAGE_OPTIONS, normalizeLanguage, type SupportedLanguage } from '@/i18n';
 
 export function LanguageSwitcher() {
@@ -37,7 +40,7 @@ export function LanguageSwitcher() {
         },
       });
     } catch (err) {
-      console.warn('Failed to save language preference:', err);
+      log.warn('Failed to save language preference', { error: err });
       setSaveError(t('language.saveError'));
     } finally {
       setIsSaving(false);

@@ -11,6 +11,7 @@ import { clsx } from 'clsx';
 import { usePartner } from '@/partner/PartnerContext';
 import { usePartnerTheme } from '@/partner/usePartnerTheme';
 import { PartnerClientRepository } from '@/dal/repositories/PartnerClientRepository';
+import { handleError } from '@/lib/errorHandler';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -528,6 +529,7 @@ export function CreateBusinessPage() {
       try {
         await PartnerClientRepository.addClientToPartner(partner.id, businessId as string);
       } catch (linkErr) {
+        handleError(linkErr, { module: 'CreateBusinessPage', operation: 'linkToPartner', notify: false });
         setLoading(false);
         setError(
           linkErr instanceof Error && /limit/i.test(linkErr.message)

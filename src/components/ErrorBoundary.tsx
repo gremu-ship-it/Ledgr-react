@@ -1,10 +1,17 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { isChunkLoadError } from '@/lib/chunkRecovery';
+import { createLogger } from '@/lib/logger';
+import { captureError } from '@/lib/errorCapture';
+import * as Sentry from '@sentry/react';
+
+const log = createLogger('ErrorBoundary');
 
 interface ErrorBoundaryProps {
   children: ReactNode;
   fallback?: (error: Error, reset: () => void) => ReactNode;
+  /** Optional label for logging (e.g. "Dashboard", "Reports"). */
+  name?: string;
 }
 
 interface ErrorBoundaryState {
@@ -15,9 +22,15 @@ interface ErrorBoundaryState {
  * Catches render-time errors in the component tree below it and displays a
  * friendly fallback instead of a blank white screen.
  *
+ * Integrations:
+ *  - Structured logger (with module + name context)
+ *  - Sentry error reporting (when DSN is configured)
+ *  - errorCapture ring buffer (for the Support Agent)
+ *
  * Note: only catches errors during rendering / lifecycle / constructors.
  * It does NOT catch errors in event handlers or async code (e.g. a failed
- * fetch inside useEffect) — handle those locally with try/catch.
+ * fetch inside useEffect) — handle those locally with try/catch or
+ * `handleError()` from `@/lib/errorHandler`.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
@@ -30,8 +43,26 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-     
-    console.error('Ledgr ErrorBoundary caught an error:', error, info.componentStack);
+    const boundaryName = this.props.name ?? 'App';
+
+    // 1. Structured logger → console + Sentry (for error/fatal)
+    log.error(`ErrorBoundary "${boundaryName}" caught a render error`, error, {
+      componentStack: info.componentStack ?? undefined,
+    });
+
+    // 2. Support Agent ring buffer (sanitised, no PII)
+    captureError(error, `ErrorBoundary:${boundaryName}`);
+
+    // 3. Direct Sentry capture with React component stack as extra context.
+    //    The logger already calls Sentry.captureException for error-level logs,
+    //    but we send a second event here with the component stack attached so
+    //    we can trace the exact React component that blew up.
+    if (import.meta.env.VITE_SENTRY_DSN) {
+      Sentry.captureException(error, {
+        tags: { boundary: boundaryName },
+        extra: { componentStack: info.componentStack },
+      });
+    }
   }
 
   reset = () => {

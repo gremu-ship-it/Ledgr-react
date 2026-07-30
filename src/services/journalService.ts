@@ -41,6 +41,9 @@ import type { Row } from '@/dal/types/database';
 import { webhookService } from '@/services/webhook/WebhookService';
 import { usageService } from '@/lib/billing/UsageService';
 import { getPlan, normalizePlanTier } from '@/lib/billing/plans';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('JournalService');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -247,8 +250,7 @@ export async function createInvoiceJournalEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
 
   // Record usage
@@ -261,7 +263,7 @@ export async function createInvoiceJournalEntry(
       invoice_number: invoiceNumber,
       total_amount: invoice.total_amount,
     });
-  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
+  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
 
   const entryNumber2 = await nextEntryNumber(businessId);
   await new Promise((r) => setTimeout(r, 100));
@@ -310,8 +312,7 @@ export async function createInvoiceJournalEntry(
     ],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry2.id, null as any);
+  await repos.journal.post(entry2.id, null);
 
   // Trigger webhook for paid invoice
   try {
@@ -320,7 +321,7 @@ export async function createInvoiceJournalEntry(
       invoice_number: invoiceNumber,
       total_amount: invoice.total_amount,
     });
-  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
+  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
 }
 
 // ── Invoice-Builder: Receivable Entry (draft creation, no cash line) ─────────
@@ -411,8 +412,7 @@ export async function createInvoiceReceivableEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.invoice.update(invoice.id, { journal_entry_id: entry.id });
   return entry.id;
 }
@@ -503,8 +503,7 @@ export async function createInvoiceSettlementEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.invoice.update(invoice.id, { journal_entry_id: invoice.journal_entry_id ?? entry.id });
   return entry.id;
 }
@@ -626,8 +625,7 @@ export async function createExpenseJournalEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
 
   // Trigger webhook
@@ -637,7 +635,7 @@ export async function createExpenseJournalEntry(
       expense_number: expense.expense_number,
       total_amount: expense.total_amount,
     });
-  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
+  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
 
   return entry.id;
 }
@@ -729,8 +727,7 @@ export async function createExpenseSettlementEntry(
     lines,
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
   return entry.id;
 }
 
@@ -808,8 +805,7 @@ export async function createPayrollJournalEntry(
     ],
   );
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- postedBy is required by the repo signature but not relevant for auto-generated entries
-  await repos.journal.post(entry.id, null as any);
+  await repos.journal.post(entry.id, null);
 
   // Trigger webhook
   try {
@@ -819,5 +815,5 @@ export async function createPayrollJournalEntry(
       total_gross: totalGross,
       total_net: totalNet,
     });
-  } catch (e) { console.warn('Webhook failed (non-blocking)', e); }
+  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
 }

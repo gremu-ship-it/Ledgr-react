@@ -15,6 +15,7 @@ import { CheckCircle, AlertCircle, RefreshCw, Database } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { seedChartOfAccounts } from '@/services/seedChartOfAccounts';
+import { handleError } from '@/lib/errorHandler';
 
 interface SeedResult {
   businessId:   string;
@@ -43,6 +44,7 @@ export function RepairCoaPage() {
       const { inserted, skipped } = await seedChartOfAccounts(supabase, businessId);
       setResults([{ businessId, businessName, inserted, skipped }]);
     } catch (err) {
+      handleError(err, { module: 'RepairCoaPage', operation: 'seedSingleBusiness', notify: false });
       setResults([{ businessId, businessName, inserted: 0, skipped: 0, error: (err as Error).message }]);
     } finally {
       setRunning(false);
@@ -77,6 +79,7 @@ export function RepairCoaPage() {
         const { inserted, skipped } = await seedChartOfAccounts(supabase, biz.id);
         out.push({ businessId: biz.id, businessName: biz.name, inserted, skipped });
       } catch (err) {
+        handleError(err, { module: 'RepairCoaPage', operation: 'seedAllBusinesses', notify: false, businessId: biz.id });
         out.push({ businessId: biz.id, businessName: biz.name, inserted: 0, skipped: 0, error: (err as Error).message });
       }
       // Update UI as each business completes

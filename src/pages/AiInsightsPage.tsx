@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2, Calendar } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AiInsightsPage');
 import { useAppStore } from '@/store/useAppStore';
 import { callAiInsightsAgent } from '@/lib/aiInsightsAgent';
 import {
@@ -205,7 +208,7 @@ export function AiInsightsPage() {
         // Leave the forecast null and say so in the UI. Showing nothing is
         // fine; showing an invented flat line as though it were a real
         // projection is not.
-        console.error('[AiInsights] Cash-flow forecast failed:', forecastData.reason);
+        log.error('Cash-flow forecast failed', { reason: forecastData.reason });
         setCashForecast(null);
         setForecastFailed(true);
       }
@@ -281,7 +284,8 @@ export function AiInsightsPage() {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
-    } catch {
+    } catch (err) {
+      log.error('AI chat response failed', err as Error);
       setMessages((prev) => [
         ...prev,
         {

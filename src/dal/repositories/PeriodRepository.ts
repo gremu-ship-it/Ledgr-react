@@ -3,6 +3,9 @@ import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import type { Json } from '../types/database.generated';
 import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('PeriodRepository');
 
 interface AuditLogEntry {
   business_id: string;
@@ -182,6 +185,6 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
   });
 
   if (error) {
-    console.error('Failed to write audit_log entry:', error);
+    log.error('Failed to write audit_log entry', error as Error);
   }
 }}

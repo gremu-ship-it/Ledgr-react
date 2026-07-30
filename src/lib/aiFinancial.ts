@@ -2,6 +2,9 @@ import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import { formatMwk } from '@/lib/formatters';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('aiFinancial');
 
 const financialStatements = new FinancialStatementRepository(repos.account.db);
 
@@ -185,7 +188,7 @@ export async function buildRichBusinessContext(
       rawData: { revenue3M, expense3M, cashBalance, outstandingTotal },
     };
   } catch (e) {
-    console.error('Failed to build rich context', e);
+    log.error('Failed to build rich context', e as Error);
     return {
       businessName,
       today,
@@ -287,7 +290,7 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
   } catch (e) {
     // Degrade to "no anomalies" for the UI, but make the failure visible —
     // a silent [] here is indistinguishable from a clean set of books.
-    console.error('[aiFinancial] Anomaly detection failed', e);
+    log.error('Anomaly detection failed', e as Error);
     return [];
   }
 }
@@ -410,7 +413,7 @@ export async function getTaxPlanningSuggestions(businessId: string): Promise<Tax
 
     return suggestions;
   } catch (e) {
-    console.error('[aiFinancial] Tax planning suggestions failed', e);
+    log.error('Tax planning suggestions failed', e as Error);
     return [];
   }
 }

@@ -11,6 +11,9 @@ import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ExpensesPage');
 
 function formatMwk(amount: number): string {
   return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -101,7 +104,7 @@ async function addStockForBranchPurchase(
   }
 
   if (!targetLocation) {
-    console.warn(`No inventory location found for business ${businessId} — stock not adjusted for this purchase.`);
+    log.warn('No inventory location found — stock not adjusted for this purchase', { businessId });
     return;
   }
 
@@ -123,7 +126,7 @@ async function addStockForBranchPurchase(
   try {
     await repos.inventory.recordMovements(movements);
   } catch (err) {
-    console.error('Stock addition failed for purchase', reference, err);
+    log.error('Stock addition failed for purchase', err as Error, { reference });
   }
 }
 
@@ -506,7 +509,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               null,
             );
           } catch (err) {
-            console.error('Journal entry failed for', expenseNumber, err);
+            log.error('Journal entry failed', err as Error, { expenseNumber });
             throw new Error(
               `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
               `It will show as "Needs Posting" — you can retry from the expense list.`,
@@ -915,7 +918,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           null,
         );
       } catch (err) {
-        console.error('Journal entry failed for', form.expense_number, err);
+        log.error('Journal entry failed', err as Error, { expenseNumber: form.expense_number });
         throw new Error(
           `Expense saved, but posting to the ledger failed: ${(err as Error).message}. ` +
           `It will show as "Needs Posting" — you can retry from the expense list.`,

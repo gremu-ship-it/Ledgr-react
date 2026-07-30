@@ -3,6 +3,9 @@ import type { Database, Row, InsertDto } from '../types/database';
 import type { Json } from '../types/database.generated';
 import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('JournalRepository');
 
 export interface JournalEntryWithLines {
   entry: Row<'journal_entries'>;
@@ -137,7 +140,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    * @throws {ValidationError} If the entry is not in `draft` status.
    * @throws {NotFoundError} If no entry with the given id exists.
    */
-  async post(id: string, postedBy: string): Promise<Row<'journal_entries'>> {
+  async post(id: string, postedBy: string | null): Promise<Row<'journal_entries'>> {
     const current = await this.findById(id);
 
     // FIX: guard against posting a non-draft entry
@@ -395,7 +398,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       .maybeSingle();
 
     if (fetchError) {
-      console.error(`Failed to fetch ${table} ${sourceId} for auto-void:`, fetchError);
+      log.error(`Failed to fetch ${table} ${sourceId} for auto-void`, fetchError as Error);
       return;
     }
     if (!current) return;
@@ -409,7 +412,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       .eq('id', sourceId);
 
     if (updateError) {
-      console.error(`Failed to auto-void ${table} ${sourceId}:`, updateError);
+      log.error(`Failed to auto-void ${table} ${sourceId}`, updateError as Error);
       return;
     }
 
@@ -450,7 +453,7 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     });
 
     if (error) {
-      console.error('Failed to write audit_log entry:', error);
+      log.error('Failed to write audit_log entry', error as Error);
     }
   }
 }

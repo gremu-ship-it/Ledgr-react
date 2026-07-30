@@ -1,4 +1,23 @@
 import { repos } from '@/lib/repositories';
+import { withRetry } from '@/lib/errorHandler';
+
+/**
+ * Wraps a non-critical sync operation with retry logic.
+ * If all retries fail, logs the error and returns null (doesn't throw).
+ */
+async function retryNonCritical<T>(
+  operation: () => Promise<T>,
+  context: { operation: string; businessId?: string },
+): Promise<T | null> {
+  return withRetry(operation, {
+    module: 'SyncEngine',
+    operation: context.operation,
+    businessId: context.businessId,
+    maxAttempts: 2, // Quick retry for transient failures
+    initialDelay: 500,
+    backoffMultiplier: 2,
+  });
+}
 import {
   createInvoiceJournalEntry,
   createInvoiceReceivableEntry,
@@ -60,7 +79,7 @@ async function syncItem(item: QueueItem): Promise<string> {
         }
       }
       const result = await repos.invoice.createWithLines(nextInvoice, lines);
-      try {
+      await retryNonCritical(async () => {
         if (item.operationType === 'income') {
           await createInvoiceJournalEntry(
             item.businessId,
@@ -78,15 +97,13 @@ async function syncItem(item: QueueItem): Promise<string> {
             result.invoice.department_id,
           );
         }
-      } catch (err) {
-        console.warn('Invoice journal entry failed during offline sync:', err);
-      }
+      }, { operation: 'invoice_journal_entry', businessId: item.businessId });
 
       // PERPETUAL INVENTORY: an offline sale still has to release stock and
       // its cost. Done here rather than at enqueue time because the average
       // cost must be read against live server balances — the device may have
       // been offline for days and other tills may have moved the same stock.
-      try {
+      await retryNonCritical(async () => {
         const productLines = result.lines
           .filter((l) => l.product_id)
           .map((l) => ({ productId: l.product_id as string, quantity: Number(l.quantity) }));
@@ -100,9 +117,7 @@ async function syncItem(item: QueueItem): Promise<string> {
             null,
           );
         }
-      } catch (err) {
-        console.warn('Stock/COGS posting failed during offline sync:', err);
-      }
+      }, { operation: 'stock_cogs_posting', businessId: item.businessId });
 
       return result.invoice.id;
     }
@@ -122,7 +137,7 @@ async function syncItem(item: QueueItem): Promise<string> {
       // inventory-tracked purchase capitalises to the asset account rather
       // than being expensed — and correct the stored line to match, so the
       // expense document and the ledger tell the same story.
-      try {
+      await retryNonCritical(async () => {
         const products = await repos.inventory.findAllProducts(item.businessId);
         for (const line of result.lines) {
           if (!line.product_id || !line.account_id) continue;
@@ -139,11 +154,9 @@ async function syncItem(item: QueueItem): Promise<string> {
             line.account_id = resolved;
           }
         }
-      } catch (err) {
-        console.warn('Inventory account resolution failed during offline sync:', err);
-      }
+      }, { operation: 'inventory_account_resolution', businessId: item.businessId });
 
-      try {
+      await retryNonCritical(async () => {
         const allocations = result.lines.map((l) => ({
           accountId: l.account_id || '',
           amount: Number(l.line_total),
@@ -161,16 +174,14 @@ async function syncItem(item: QueueItem): Promise<string> {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any -- update exposed on repo
           await (repos.expense as any).update(result.expense.id, { journal_entry_id: journalEntryId });
         }
-      } catch (err) {
-        console.warn('Expense journal entry failed during offline sync:', err);
-      }
+      }, { operation: 'expense_journal_entry', businessId: item.businessId });
       return result.expense.id;
     }
 
     case 'invoice_payment': {
       const { payment } = item.payload as InvoicePaymentQueuePayload;
       const result = await repos.invoice.recordPayment(payment);
-      try {
+      await retryNonCritical(async () => {
         await createInvoiceSettlementEntry(
           item.businessId,
           result.invoice,
@@ -179,16 +190,14 @@ async function syncItem(item: QueueItem): Promise<string> {
           result.invoice.branch_id,
           result.invoice.department_id,
         );
-      } catch (err) {
-        console.warn('Invoice payment settlement journal entry failed during offline sync:', err);
-      }
+      }, { operation: 'invoice_payment_settlement', businessId: item.businessId });
       return result.payment.id;
     }
 
     case 'expense_payment': {
       const { payment } = item.payload as ExpensePaymentQueuePayload;
       const result = await repos.expense.recordPayment(payment);
-      try {
+      await retryNonCritical(async () => {
         await createExpenseSettlementEntry(
           item.businessId,
           result.expense,
@@ -197,9 +206,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           result.expense.branch_id,
           result.expense.department_id,
         );
-      } catch (err) {
-        console.warn('Expense payment settlement journal entry failed during offline sync:', err);
-      }
+      }, { operation: 'expense_payment_settlement', businessId: item.businessId });
       return result.payment.id;
     }
 

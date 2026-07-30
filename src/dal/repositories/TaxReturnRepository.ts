@@ -4,6 +4,9 @@ import { BaseRepository } from './BaseRepository';
 import { JournalRepository } from './JournalRepository';
 import { TaxRepository } from './TaxRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TaxReturnRepository');
 
 /**
  * NOTE ON ASSUMPTIONS (please verify before relying on this in production):
@@ -403,7 +406,7 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
 
     if (rows.length === 0) return;
     const { error } = await this.client.from('tax_alerts').insert(rows as never);
-    if (error) console.error('Failed to schedule tax_alerts:', error);
+    if (error) log.error('Failed to schedule tax_alerts', error as Error);
   }
 
   private lastDayOfMonth(dateStr: string): string {

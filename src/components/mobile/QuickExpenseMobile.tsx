@@ -3,6 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, ShoppingCart } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('QuickExpenseMobile');
 import { repos } from '@/lib/repositories';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
@@ -205,11 +208,11 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                   } as InsertDto<'stock_movements'>]);
                 }
               } catch (stockErr) {
-                console.warn('Stock addition failed (non-critical):', stockErr);
+                log.warn('Stock addition failed (non-critical)', { error: stockErr });
               }
             }
           } catch (err) {
-            console.error('Journal entry failed:', err);
+            log.error('Journal entry failed', err as Error);
             throw new Error(
               'Expense saved, but posting to the ledger failed. ' +
               'It will show as "Needs Posting" on the Expenses page — you can retry from there.',

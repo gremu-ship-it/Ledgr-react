@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { BottomNav } from './BottomNav';
-import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { OfflineBanner } from '@/offline/OfflineBanner';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { usePartnerTheme } from '@/partner/usePartnerTheme';
@@ -82,7 +82,7 @@ export function AppLayout() {
             isMobile && isDashboard && 'pt-6'
           )}
         >
-          <ErrorBoundary>
+          <ErrorBoundary name="PageContent">
             <Outlet />
           </ErrorBoundary>
         </main>
