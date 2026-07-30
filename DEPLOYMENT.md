@@ -73,7 +73,6 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 | `SUPABASE_PROJECT_REF_PROD` | `ghijkl` | production |
 | `VITE_SUPABASE_URL_STAGING` | `https://abc.supabase.co` | staging build |
 | `VITE_SUPABASE_URL_PROD` | `https://ghi.supabase.co` | prod build |
-| `VITE_ARENA_AGENT_URL_STAGING` / `_PROD` | `https://api.arena.ai/...` | build |
 | `APP_URL_STAGING` / `APP_URL_PROD` | `https://staging.ledgr.app` | Edge Function secrets |
 | `SENTRY_ORG` | `ledgr` | both |
 | `SENTRY_PROJECT_STAGING` / `SENTRY_PROJECT_PROD` | `ledgr-web-staging` / `ledgr-web-prod` | Sentry upload |
@@ -87,7 +86,6 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI (both) |
 | `SUPABASE_DB_PASSWORD_STAGING` / `_PROD` | DB migrations (both) |
 | `VITE_SUPABASE_ANON_KEY_STAGING` / `_PROD` | build |
-| `VITE_ARENA_API_KEY_STAGING` / `_PROD` | build |
 | `VITE_SENTRY_DSN_STAGING` / `_PROD` | frontend Sentry init |
 | `SENTRY_AUTH_TOKEN` | Sentry source-map upload (CI) |
 | `SENTRY_DSN_BACKEND_STAGING` / `_PROD` | backend (Edge Function) Sentry |

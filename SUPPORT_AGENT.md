@@ -28,12 +28,15 @@ Browser (SupportChat)
 supabase/functions/support-agent/index.ts   (Deno edge function)
    │  auth (getUser) + per-user rate limit (support_agent_usage)
    ▼
-AI provider (one of):
-   • Arena agent  — if SUPPORT_AGENT_ARENA_URL + SUPPORT_AGENT_ARENA_KEY are set
-   • Anthropic    — otherwise (ANTHROPIC_API_KEY secret, forced tool-use for JSON)
+Anthropic Claude (ANTHROPIC_API_KEY secret, forced tool-use for JSON)
    ▼
 Structured JSON: { content, actions[], escalate, category, supportEmail? }
 ```
+
+> History note: an optional "Arena agent" provider referenced in earlier
+> revisions of this document was removed. It pointed at a speculative
+> `api.arena.ai` agents endpoint that is not publicly available. The Arena
+> Agent *Mode* chat UI is unrelated to this integration.
 
 The AI provider key is **never** exposed to the browser. The edge function is
 auth-gated: only a signed-in user may call it, and the user's JWT is forwarded so
@@ -50,12 +53,8 @@ the function can verify identity.
 2. Set secrets (only the ones you need):
 
    ```bash
-   # Required unless you use Arena:
+   # Required — the AI provider:
    supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-
-   # Optional — route to a dedicated Arena support agent instead of Anthropic:
-   supabase secrets set SUPPORT_AGENT_ARENA_URL=https://api.arena.ai/v1/agents/ledgr-support-agent/invoke
-   supabase secrets set SUPPORT_AGENT_ARENA_KEY=...
 
    # Optional — shown to users on escalation:
    supabase secrets set SUPPORT_EMAIL=support@ledgr.app

@@ -6,11 +6,9 @@
 //   3. Compliance (data export, account deletion, audit log, MRA tax, RBAC).
 //
 // It is auth-gated: only a signed-in Ledgr user (JWT) may invoke it. The AI
-// provider is pluggable:
-//   • If SUPPORT_AGENT_ARENA_URL + SUPPORT_AGENT_ARENA_KEY are set, it calls a
-//     dedicated Arena support agent (keeps the model/prompt managed in Arena).
-//   • Otherwise it falls back to Anthropic Claude (ANTHROPIC_API_KEY secret),
-//     which is already configured for other edge functions in this project.
+// provider is Anthropic Claude (ANTHROPIC_API_KEY secret), which is already
+// configured for other edge functions in this project. The key is never
+// exposed to the browser.
 //
 // Responses are returned as structured JSON so the UI can render in-app
 // navigation shortcuts ("actions") and decide when to escalate to a human.
@@ -24,8 +22,6 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const SENTRY_DSN = Deno.env.get('SENTRY_DSN');
 const SUPPORT_EMAIL = Deno.env.get('SUPPORT_EMAIL') || 'support@ledgr.app';
-const ARENA_URL = Deno.env.get('SUPPORT_AGENT_ARENA_URL');
-const ARENA_KEY = Deno.env.get('SUPPORT_AGENT_ARENA_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const ANTHROPIC_MODEL = Deno.env.get('SUPPORT_AGENT_MODEL') || 'claude-sonnet-4-20250514';
 // Requests per user per rolling minute.
@@ -224,40 +220,7 @@ ${categoryGuidance[category]}
 ${contextBlock}`;
 }
 
-// ── Provider: Arena (optional) ──────────────────────────────────────────────
-async function callArena(
-  messages: ChatMessage[],
-  category: Category,
-  systemPrompt: string,
-): Promise<SupportResult> {
-  const res = await fetch(ARENA_URL!, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${ARENA_KEY}`,
-    },
-    body: JSON.stringify({
-      messages: [{ role: 'system', content: systemPrompt }, ...messages],
-      temperature: 0.3,
-      max_tokens: 1200,
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text().catch(() => '');
-    throw new Error(`Arena agent error ${res.status}: ${errText}`);
-  }
-
-  const data = await res.json();
-  const content: string = data.content || data.output || '';
-  const actions: SupportAction[] = Array.isArray(data.actions) ? data.actions : [];
-  const escalate =
-    /escalate|contact (our )?support|support (team|desk)/i.test(content);
-
-  return { content, actions, escalate, category };
-}
-
-// ── Provider: Anthropic Claude (fallback) ───────────────────────────────────
+// ── Provider: Anthropic Claude ──────────────────────────────────────────────
 const SUPPORT_TOOL = {
   name: 'support_response',
   description: 'Return the support reply as structured data with optional in-app navigation actions.',
@@ -393,17 +356,14 @@ serve(async (req) => {
 
     const systemPrompt = buildSystemPrompt(category, context);
 
-    let result: SupportResult;
-    if (ARENA_URL && ARENA_KEY) {
-      result = await callArena(messages, category, systemPrompt);
-    } else if (ANTHROPIC_API_KEY) {
-      result = await callAnthropic(messages, category, systemPrompt);
-    } else {
+    if (!ANTHROPIC_API_KEY) {
       return json(
-        { error: 'Support assistant is not configured (no AI provider secret set).' },
+        { error: 'Support assistant is not configured (ANTHROPIC_API_KEY secret not set).' },
         503,
       );
     }
+
+    const result: SupportResult = await callAnthropic(messages, category, systemPrompt);
 
     if (result.escalate) result.supportEmail = SUPPORT_EMAIL;
 
