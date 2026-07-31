@@ -48,8 +48,6 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { RedisStore } from 'rate-limit-redis';
-import Redis from 'ioredis';
 import { createServerLogger } from './logger.js';
 
 const log = createServerLogger('Gateway');
@@ -58,30 +56,6 @@ const PORT = Number(process.env.PORT) || 3000;
 const APP_ENV = process.env.APP_ENV || 'staging';
 const TARGET_URL = process.env.TARGET_URL || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
-const REDIS_URL = process.env.REDIS_URL || '';
-
-// Redis is optional for staging, required for production
-let redis: Redis | null = null;
-if (REDIS_URL) {
-  redis = new Redis(REDIS_URL, {
-    maxRetriesPerRequest: 3,
-    retryStrategy(times) {
-      if (times > 3) {
-        log.error('Redis connection failed after 3 retries');
-        return null;
-      }
-      return Math.min(times * 200, 2000);
-    },
-  });
-
-  redis.on('error', (err) => {
-    log.error('Redis error', err);
-  });
-
-  redis.on('connect', () => {
-    log.info('Redis connected');
-  });
-}
 
 const app = express();
 
@@ -126,29 +100,21 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Rate limiting configuration
-const rateLimitConfig = {
-  windowMs: 60_000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req: Request) => req.path === '/api/health',
-  ...(redis && {
-    store: new RedisStore({
-      sendCommand: (...args: string[]) => redis!.call(...args),
-    }),
-  }),
-};
-
 // Unauthenticated: 10 req/min per IP on every route except /api/health.
 const unauthLimiter = rateLimit({
-  ...rateLimitConfig,
+  windowMs: 60_000,
   max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => req.path === '/api/health',
 });
 
 // Authenticated: 100 req/min per API key / bearer token.
 const authLimiter = rateLimit({
-  ...rateLimitConfig,
+  windowMs: 60_000,
   max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
   keyGenerator: (req) =>
     (req.headers['authorization'] as string) ||
     (req.headers['x-api-key'] as string) ||
