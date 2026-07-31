@@ -1,5 +1,3 @@
-// Initialize Sentry FIRST, before any other imports (required for ESM instrumentation)
-import './sentry.js';
 /**
  * Ledgr API gateway
  * ------------------------------------------------------------------
