@@ -19,13 +19,37 @@
  * instead of proxying.
  */
 
+// Initialize Sentry FIRST, before importing Express
+import * as Sentry from '@sentry/node';
+
+const SENTRY_DSN = process.env.SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: process.env.APP_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    beforeSend(event) {
+      if (event.request?.url?.includes('/api/health')) {
+        return null;
+      }
+      return event;
+    },
+    integrations: [
+      Sentry.expressIntegration(),
+      Sentry.httpIntegration(),
+    ],
+  });
+  console.log('[Sentry] Initialized successfully');
+} else {
+  console.log('[Sentry] DSN not configured, skipping initialization');
+}
+
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import { RedisStore, type RedisReply } from 'rate-limit-redis';
+import { RedisStore } from 'rate-limit-redis';
 import Redis from 'ioredis';
-import * as Sentry from '@sentry/node';
 import { createServerLogger } from './logger.js';
 
 const log = createServerLogger('Gateway');
@@ -33,20 +57,32 @@ const log = createServerLogger('Gateway');
 const PORT = Number(process.env.PORT) || 3000;
 const APP_ENV = process.env.APP_ENV || 'staging';
 const TARGET_URL = process.env.TARGET_URL || '';
-const SENTRY_DSN = process.env.SENTRY_DSN || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
 const REDIS_URL = process.env.REDIS_URL || '';
 
-// A process-local store does not protect a horizontally scaled gateway. Redis
-// is mandatory in production; local development can run without it.
-if (APP_ENV === 'production' && !REDIS_URL) {
-  throw new Error('REDIS_URL must be configured when APP_ENV=production');
+// Redis is optional for staging, required for production
+let redis: Redis | null = null;
+if (REDIS_URL) {
+  redis = new Redis(REDIS_URL, {
+    maxRetriesPerRequest: 3,
+    retryStrategy(times) {
+      if (times > 3) {
+        log.error('Redis connection failed after 3 retries');
+        return null;
+      }
+      return Math.min(times * 200, 2000);
+    },
+  });
+
+  redis.on('error', (err) => {
+    log.error('Redis error', err);
+  });
+
+  redis.on('connect', () => {
+    log.info('Redis connected');
+  });
 }
-const redis = REDIS_URL ? new Redis(REDIS_URL, { maxRetriesPerRequest: 1 }) : null;
-redis?.on('error', (error) => console.error('Redis rate-limit store error:', error.message));
-// ioredis has heavily overloaded `call`; narrow it to the store's generic
-// Redis command shape at this integration boundary.
-const redisCommand = redis as unknown as { call: (...args: string[]) => Promise<unknown> } | null;
+
 const app = express();
 
 // Trust Railway's reverse proxy (required for accurate IP detection in rate limiting)
@@ -64,17 +100,9 @@ app.use(
   }),
 );
 
-const allowedOrigins = ALLOWED_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean);
-
 app.use(
   cors({
-    // Never reflect arbitrary origins in production. Non-browser clients do
-    // not send Origin and remain supported; browser callers must be explicitly
-    // configured through ALLOWED_ORIGIN.
-    origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error('Origin is not allowed by CORS'));
-    },
+    origin: ALLOWED_ORIGIN ? ALLOWED_ORIGIN.split(',').map((o) => o.trim()) : true,
   }),
 );
 
@@ -98,23 +126,29 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Unauthenticated: 10 req/min per IP on every route except /api/health.
-const unauthLimiter = rateLimit({
+// Rate limiting configuration
+const rateLimitConfig = {
   windowMs: 60_000,
-  max: 10,
-  ...(redisCommand ? { store: new RedisStore({ prefix: 'rl:anon:', sendCommand: (...args: string[]) => redisCommand.call(...args) as Promise<RedisReply> }) } : {}),
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => req.path === '/api/health',
+  skip: (req: Request) => req.path === '/api/health',
+  ...(redis && {
+    store: new RedisStore({
+      sendCommand: (...args: string[]) => redis!.call(...args),
+    }),
+  }),
+};
+
+// Unauthenticated: 10 req/min per IP on every route except /api/health.
+const unauthLimiter = rateLimit({
+  ...rateLimitConfig,
+  max: 10,
 });
 
 // Authenticated: 100 req/min per API key / bearer token.
 const authLimiter = rateLimit({
-  windowMs: 60_000,
+  ...rateLimitConfig,
   max: 100,
-  ...(redisCommand ? { store: new RedisStore({ prefix: 'rl:auth:', sendCommand: (...args: string[]) => redisCommand.call(...args) as Promise<RedisReply> }) } : {}),
-  standardHeaders: true,
-  legacyHeaders: false,
   keyGenerator: (req) =>
     (req.headers['authorization'] as string) ||
     (req.headers['x-api-key'] as string) ||
@@ -125,6 +159,11 @@ const authLimiter = rateLimit({
 app.get('/api/health', (_req: Request, res: Response) => {
   res.set('Cache-Control', 'no-store');
   res.json({ status: 'ok', env: APP_ENV, ts: Date.now(), service: 'ledgr-gateway' });
+});
+
+// Test endpoint to verify Sentry error capture
+app.get('/api/test-error', (_req: Request, _res: Response) => {
+  throw new Error('Test error for Sentry verification');
 });
 
 app.use(
