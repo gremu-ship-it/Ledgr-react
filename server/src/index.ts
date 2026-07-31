@@ -47,16 +47,6 @@ redis?.on('error', (error) => console.error('Redis rate-limit store error:', err
 // ioredis has heavily overloaded `call`; narrow it to the store's generic
 // Redis command shape at this integration boundary.
 const redisCommand = redis as unknown as { call: (...args: string[]) => Promise<unknown> } | null;
-if (SENTRY_DSN) {
-  Sentry.init({
-    dsn: SENTRY_DSN,
-    environment: APP_ENV,
-    tracesSampleRate: 0.1,
-    sendDefaultPii: false, // anonymised: no IP / email / username attached
-    integrations: [Sentry.expressIntegration()],
-  });
-}
-
 const app = express();
 
 app.use(
