@@ -1,3 +1,5 @@
+// Initialize Sentry FIRST, before any other imports (required for ESM instrumentation)
+import './sentry.js';
 /**
  * Ledgr API gateway
  * ------------------------------------------------------------------
@@ -48,6 +50,9 @@ redis?.on('error', (error) => console.error('Redis rate-limit store error:', err
 // Redis command shape at this integration boundary.
 const redisCommand = redis as unknown as { call: (...args: string[]) => Promise<unknown> } | null;
 const app = express();
+
+// Trust Railway's reverse proxy (required for accurate IP detection in rate limiting)
+app.set('trust proxy', 1);
 
 app.use(
   helmet({
