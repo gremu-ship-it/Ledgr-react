@@ -26,7 +26,7 @@ import rateLimit from 'express-rate-limit';
 import { RedisStore, type RedisReply } from 'rate-limit-redis';
 import Redis from 'ioredis';
 import * as Sentry from '@sentry/node';
-import { createServerLogger } from './logger';
+import { createServerLogger } from './logger.js';
 
 const log = createServerLogger('Gateway');
 
