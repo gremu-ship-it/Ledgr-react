@@ -9,6 +9,12 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { postStockMovementAdjustment } from '@/services/inventoryJournalService';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useDensity } from '@/hooks/useDensity';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
+import { SwipeableRow } from '@/components/mobile/SwipeableRow';
+import { EmptyState, InventoryEmptyState } from '@/components/ui/EmptyState';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -354,12 +360,20 @@ function DeleteConfirm({ name, onConfirm, onCancel, isPending }: {
 
 // ── Products Tab ──────────────────────────────────────────────────────────────
 
+
 function ProductsTab({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const { thClass, tdClass } = useDensity();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Row<'products'> | undefined>();
   const [deleting, setDeleting] = useState<Row<'products'> | undefined>();
+
+  const onRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['products', businessId] });
+  };
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
 
   const { data: products = [], isLoading } = useQuery({
     queryKey: ['products', businessId],
@@ -397,87 +411,118 @@ function ProductsTab({ businessId }: { businessId: string }) {
   );
 
   return (
-    <div>
+    <div ref={containerRef as any}>
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input type="text" placeholder="Search products…" value={search}
+          <input
+            type="text"
+            placeholder="Search products…"
+            value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          />
         </div>
-        <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
-          <Plus className="h-4 w-4" />Add Product
+        <button
+          onClick={() => { setEditing(undefined); setShowModal(true); }}
+          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-600 active:scale-95 transition-all shadow-sm"
+        >
+          <Plus className="h-4 w-4" />{isMobile ? 'Add' : 'Add Product'}
         </button>
       </div>
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>
       ) : filtered.length === 0 ? (
-        <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
-            <Package className="h-7 w-7 text-brand-400" />
-          </div>
-          <h2 className="text-base font-semibold text-gray-900">{search ? 'No products match your search' : 'No products yet'}</h2>
-          {!search && (
-            <button onClick={() => { setEditing(undefined); setShowModal(true); }}
-              className="mt-1 flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
-              <Plus className="h-4 w-4" />Add Product
-            </button>
-          )}
+        search ? (
+          <EmptyState
+            title={`No results for "${search}"`}
+            description="Try adjusting search. Products are searched by name and SKU."
+            secondaryLabel="Clear search"
+            onSecondary={() => setSearch('')}
+            variant="search"
+          />
+        ) : (
+          <InventoryEmptyState onAction={() => { setEditing(undefined); setShowModal(true); }} />
+        )
+      ) : isMobile ? (
+        <div className="space-y-3">
+          {filtered.slice(0, 100).map((p) => (
+            <SwipeableRow
+              key={p.id}
+              actions={[
+                { label: 'Edit', icon: Pencil, color: 'bg-gray-700', action: () => { setEditing(p); setShowModal(true); } },
+                { label: 'Delete', icon: Trash2, color: 'bg-red-500', action: () => setDeleting(p) },
+              ]}
+            >
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-gray-900">{p.name}</p>
+                    {p.sku && <p className="text-[11px] font-mono text-gray-500">{p.sku}</p>}
+                    {p.description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{p.description}</p>}
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${p.product_type === 'service' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
+                    {p.product_type}
+                  </span>
+                </div>
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm font-bold text-gray-900">{formatMwkDetailed(p.sale_price)}</span>
+                  <span className="text-xs text-gray-500">{p.track_inventory ? 'Tracked' : 'No tracking'}</span>
+                </div>
+              </div>
+            </SwipeableRow>
+          ))}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-              <tr>
-                <th scope="col" className="px-4 py-3 text-left">Name</th>
-                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
-                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">SKU</th>
-                <th scope="col" className="px-4 py-3 text-right">Sale Price</th>
-                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Purchase Price</th>
-                <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center">Inventory</th>
-                <th scope="col" className="px-4 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((p) => (
-                <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="font-medium text-gray-900">{p.name}</div>
-                    {p.description && <div className="text-xs text-gray-600 truncate max-w-xs">{p.description}</div>}
-                  </td>
-                  <td className="hidden sm:table-cell px-4 py-3">
-                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      p.product_type === 'service' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'
-                    }`}>
-                      {p.product_type === 'service' ? 'Service' : 'Product'}
-                    </span>
-                  </td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{p.sku ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(p.sale_price)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(p.purchase_price)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-center">
-                    {p.track_inventory
-                      ? <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Tracked</span>
-                      : <span className="text-xs text-gray-600">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => { setEditing(p); setShowModal(true); }}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setDeleting(p)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th scope="col" className={`${thClass} text-left`}>Name</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Type</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>SKU</th>
+                  <th scope="col" className={`${thClass} text-right`}>Sale Price</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Purchase Price</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-center`}>Inventory</th>
+                  <th scope="col" className={`${thClass} text-center`}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filtered.slice(0, 200).map((p) => (
+                  <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                    <td className={tdClass}>
+                      <div className="font-medium text-gray-900">{p.name}</div>
+                      {p.description && <div className="text-xs text-gray-600 truncate max-w-xs">{p.description}</div>}
+                    </td>
+                    <td className={`hidden sm:table-cell ${tdClass}`}>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${p.product_type === 'service' ? 'bg-purple-50 text-purple-700' : 'bg-blue-50 text-blue-700'}`}>
+                        {p.product_type === 'service' ? 'Service' : 'Product'}
+                      </span>
+                    </td>
+                    <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{p.sku ?? '—'}</td>
+                    <td className={`${tdClass} text-right font-medium`}>{formatMwkDetailed(p.sale_price)}</td>
+                    <td className={`hidden sm:table-cell ${tdClass} text-right text-gray-500`}>{formatMwkDetailed(p.purchase_price)}</td>
+                    <td className={`hidden sm:table-cell ${tdClass} text-center`}>
+                      {p.track_inventory ? <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Tracked</span> : <span className="text-xs text-gray-600">—</span>}
+                    </td>
+                    <td className={tdClass}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => { setEditing(p); setShowModal(true); }} className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => setDeleting(p)} className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -501,7 +546,7 @@ function ProductsTab({ businessId }: { businessId: string }) {
   );
 }
 
-// ── Stock Tab ─────────────────────────────────────────────────────────────────
+
 
 function StockTab({ businessId }: { businessId: string }) {
   const { data: products = [] } = useQuery({
