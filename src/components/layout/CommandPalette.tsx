@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,9 +13,12 @@ import {
   Sparkles,
   LifeBuoy,
   Building2,
+  Package,
   X,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { repos } from '@/lib/repositories';
+import type { Row } from '@/dal/types/database';
 import { NAV_SECTIONS } from './navConfig';
 
 interface CommandItem {
@@ -31,12 +35,20 @@ export function CommandPalette() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const businesses = useAppStore((s) => s.businesses);
+  const currentBusinessId = useAppStore((s) => s.currentBusiness?.business.id);
   const switchBusiness = useAppStore((s) => s.switchBusiness);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const { data: products = [] } = useQuery({
+    queryKey: ['command-palette-products', currentBusinessId],
+    queryFn: () => repos.inventory.findAllProducts(currentBusinessId!),
+    enabled: open && Boolean(currentBusinessId),
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Build command list
   const commands: CommandItem[] = useMemo(() => {
@@ -75,8 +87,17 @@ export function CommandPalette() {
       },
     }));
 
-    return [...quickActions, ...navItems, ...businessSwitches];
-  }, [t, businesses, switchBusiness, navigate]);
+    const productCommands: CommandItem[] = (products as Row<'products'>[]).map((product) => ({
+      id: `product-${product.id}`,
+      label: product.name,
+      keywords: `product ${product.name} ${product.sku ?? ''} ${product.description ?? ''}`,
+      path: `/products?search=${encodeURIComponent(product.name)}`,
+      icon: Package,
+      group: 'Products',
+    }));
+
+    return [...productCommands, ...quickActions, ...navItems, ...businessSwitches];
+  }, [t, businesses, switchBusiness, navigate, products]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands.slice(0, 20);
@@ -86,46 +107,52 @@ export function CommandPalette() {
       .slice(0, 30);
   }, [commands, query]);
 
-  // Keyboard shortcut
+  // Keyboard shortcut and a touch-friendly trigger used by the mobile dashboard.
   useEffect(() => {
+    function openFromMobile() {
+      setQuery('');
+      setSelected(0);
+      setOpen(true);
+      window.setTimeout(() => inputRef.current?.focus(), 10);
+    }
+
     function onKeyDown(e: KeyboardEvent) {
-      const isK = e.key.toLowerCase() === 'k';
+      const isPaletteShortcut = e.key.toLowerCase() === 'p' || e.key.toLowerCase() === 'k';
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && isK) {
+      if (mod && isPaletteShortcut) {
         e.preventDefault();
-        setOpen((v) => !v);
+        if (open) {
+          setOpen(false);
+        } else {
+          setQuery('');
+          setSelected(0);
+          setOpen(true);
+          window.setTimeout(() => inputRef.current?.focus(), 10);
+        }
       }
       if (e.key === '/' && !open && (e.target as HTMLElement)?.tagName !== 'INPUT' && (e.target as HTMLElement)?.tagName !== 'TEXTAREA') {
         // Optional: '/' to open as well
         const active = document.activeElement as HTMLElement | null;
         if (!active || active.tagName !== 'INPUT') {
           e.preventDefault();
+          setQuery('');
+          setSelected(0);
           setOpen(true);
+          window.setTimeout(() => inputRef.current?.focus(), 10);
         }
       }
     }
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('ledgr:open-command-palette', openFromMobile);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('ledgr:open-command-palette', openFromMobile);
+    };
   }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 10);
-      setSelected(0);
-      setQuery('');
-    }
-  }, [open]);
-
-  useEffect(() => {
-    // Reset selection when filtered changes
-    setSelected(0);
-  }, [filtered.length]);
 
   const execute = (item: CommandItem) => {
     setOpen(false);
-    try {
-      if ('vibrate' in navigator) navigator.vibrate(10);
-    } catch {}
+    navigator.vibrate?.(10);
     if (item.action) item.action();
     else if (item.path) navigate(item.path);
   };
@@ -146,7 +173,10 @@ export function CommandPalette() {
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setSelected(0);
+            }}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -161,7 +191,7 @@ export function CommandPalette() {
                 setOpen(false);
               }
             }}
-            placeholder="Search pages, actions, or switch business… (⌘K)"
+            placeholder="Search products, pages, actions, or businesses… (⌘P)"
             className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
           />
           <kbd className="hidden sm:inline-flex rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">ESC</kbd>
@@ -174,7 +204,7 @@ export function CommandPalette() {
           {filtered.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <p className="text-sm font-medium text-gray-500">No results for “{query}”</p>
-              <p className="mt-1 text-xs text-gray-400">Try searching for Income, Invoice, Payroll…</p>
+              <p className="mt-1 text-xs text-gray-400">Try a product name, SKU, Income, Invoice, or Payroll.</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -217,7 +247,7 @@ export function CommandPalette() {
             <kbd className="rounded border border-gray-200 bg-white px-1.5 py-0.5">↑↓</kbd> Navigate
             <kbd className="rounded border border-gray-200 bg-white px-1.5 py-0.5">⏎</kbd> Select
           </span>
-          <span className="hidden sm:inline">Press <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5">⌘K</kbd> to toggle</span>
+          <span className="hidden sm:inline">Press <kbd className="rounded border border-gray-200 bg-white px-1 py-0.5">⌘P</kbd> to toggle</span>
         </div>
       </div>
     </>

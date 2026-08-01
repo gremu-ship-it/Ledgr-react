@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { LanguageSwitcher } from '@/components/i18n/LanguageSwitcher';
 import { BusinessSwitcher } from './BusinessSwitcher';
 import { ThemeToggle } from './ThemeToggle';
+import { OfflineQueueDrawer } from './OfflineQueueDrawer';
 import { announce } from '@/lib/a11y';
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {
@@ -144,6 +145,8 @@ export function Header() {
 
         <LanguageSwitcher />
         <ThemeToggle />
+
+        <OfflineQueueDrawer />
 
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>

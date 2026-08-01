@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   DollarSign,
@@ -68,6 +68,7 @@ function vibrate(ms = 10) {
 
 export function BottomNav() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const [showExpense, setShowExpense] = useState(false);
@@ -167,6 +168,28 @@ export function BottomNav() {
       {fabOpen && (
         <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 lg:hidden">
           <div className="flex flex-col items-center gap-3">
+            <button
+              onClick={() => {
+                vibrate(10);
+                setFabOpen(false);
+                navigate('/income?action=invoice');
+              }}
+              className="group flex min-h-[48px] items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-3 shadow-lg active:scale-95"
+            >
+              <IconBadge icon={FileText} tone="info" size="sm" interactive />
+              <span className="text-sm font-semibold text-gray-900">New invoice</span>
+            </button>
+            <button
+              onClick={() => {
+                vibrate(10);
+                setFabOpen(false);
+                navigate('/warehouse');
+              }}
+              className="group flex min-h-[48px] items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-3 shadow-lg active:scale-95"
+            >
+              <IconBadge icon={Package} tone="brand" size="sm" interactive />
+              <span className="text-sm font-semibold text-gray-900">Stock movement</span>
+            </button>
             <button
               onClick={() => {
                 vibrate(10);
@@ -274,7 +297,11 @@ function NavTab({
       to={path}
       aria-label={t(labelKey)}
       onClick={() => {
-        try { if ('vibrate' in navigator) navigator.vibrate(5); } catch {}
+        try {
+          if ('vibrate' in navigator) navigator.vibrate(5);
+        } catch {
+          // Haptic feedback is optional.
+        }
       }}
       className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold transition-colors touch-manipulation"
     >
