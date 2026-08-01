@@ -19,7 +19,6 @@ import {
   Eye,
   EyeOff,
   Search,
-  ClipboardCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -180,7 +179,6 @@ export function MobileDashboard() {
       queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
       queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
     ]);
-    setLastUpdated(new Date());
   }, [queryClient]);
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
