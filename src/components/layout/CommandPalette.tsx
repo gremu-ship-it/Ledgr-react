@@ -107,8 +107,15 @@ export function CommandPalette() {
       .slice(0, 30);
   }, [commands, query]);
 
-  // Keyboard shortcut
+  // Keyboard shortcut and a touch-friendly trigger used by the mobile dashboard.
   useEffect(() => {
+    function openFromMobile() {
+      setQuery('');
+      setSelected(0);
+      setOpen(true);
+      window.setTimeout(() => inputRef.current?.focus(), 10);
+    }
+
     function onKeyDown(e: KeyboardEvent) {
       const isPaletteShortcut = e.key.toLowerCase() === 'p' || e.key.toLowerCase() === 'k';
       const mod = e.metaKey || e.ctrlKey;
@@ -136,7 +143,11 @@ export function CommandPalette() {
       }
     }
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('ledgr:open-command-palette', openFromMobile);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('ledgr:open-command-palette', openFromMobile);
+    };
   }, [open]);
 
   const execute = (item: CommandItem) => {

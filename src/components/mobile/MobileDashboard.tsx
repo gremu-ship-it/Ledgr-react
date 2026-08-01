@@ -16,6 +16,10 @@ import {
   Package,
   Settings,
   ChevronDown,
+  Eye,
+  EyeOff,
+  Search,
+  ClipboardCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -144,6 +148,7 @@ export function MobileDashboard() {
 
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+  const [balanceVisible, setBalanceVisible] = useState(true);
 
   const onRefresh = useCallback(async () => {
     await Promise.all([
@@ -211,13 +216,23 @@ export function MobileDashboard() {
             )}
           </div>
         </div>
-        <button
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event('ledgr:open-command-palette'))}
+            aria-label="Search Ledgr"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
+          >
+            <Search className="h-5 w-5 text-gray-600" />
+          </button>
+          <button
           onClick={() => navigate('/settings?tab=appearance')}
           aria-label="Settings"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
         >
           <Settings className="h-5 w-5 text-gray-600" />
-        </button>
+          </button>
+        </div>
       </div>
 
       {/* Hero */}
@@ -239,7 +254,16 @@ export function MobileDashboard() {
             <>
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Current Balance</p>
-                <div className="rounded-full bg-white/20 px-3 py-1">
+                <button
+                  type="button"
+                  onClick={() => setBalanceVisible((visible) => !visible)}
+                  className="flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold text-white uppercase"
+                  aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+                >
+                  {balanceVisible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                  {balanceVisible ? 'Hide' : 'Show'}
+                </button>
+                <div className="hidden rounded-full bg-white/20 px-3 py-1">
                   <p className="text-[10px] font-bold text-white uppercase">{new Date().toLocaleDateString('en-MW', { month: 'short', year: 'numeric' })}</p>
                 </div>
               </div>
@@ -247,10 +271,10 @@ export function MobileDashboard() {
               <div className="mt-3">
                 <p className="text-white tracking-tighter font-black leading-none" style={{ fontSize: 'clamp(1.75rem, 8vw, 2.5rem)' }}>
                   {netProfit !== undefined ? (isProfitPositive ? '+' : '-') : ''}
-                  {formatMwkCompact(netProfit !== undefined ? Math.abs(netProfit) : 0)}
+                  {balanceVisible ? formatMwkCompact(netProfit !== undefined ? Math.abs(netProfit) : 0) : '••••••'}
                 </p>
                 <p className="mt-1 text-xs font-medium text-white/75">
-                  {netProfit !== undefined ? (isProfitPositive ? formatMwk(netProfit) : `-${formatMwk(Math.abs(netProfit))}`) : formatMwk(0)}
+                  {balanceVisible ? (netProfit !== undefined ? (isProfitPositive ? formatMwk(netProfit) : `-${formatMwk(Math.abs(netProfit))}`) : formatMwk(0)) : 'Balance hidden'}
                 </p>
               </div>
 
@@ -272,6 +296,22 @@ export function MobileDashboard() {
           )}
         </div>
       </div>
+
+      <section className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm backdrop-blur-sm" aria-labelledby="today-title">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 text-brand-700" aria-hidden="true" />
+            <h2 id="today-title" className="text-xs font-black uppercase tracking-widest text-gray-900">Today</h2>
+          </div>
+          <span className="text-[10px] font-bold uppercase text-gray-400">Action centre</span>
+        </div>
+        <div className="space-y-2">
+          {(outstanding.data?.count ?? 0) > 0 && <button type="button" onClick={() => navigate('/invoices')} className="flex w-full items-center justify-between rounded-xl bg-indigo-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-indigo-950">{outstanding.data!.count} invoice{outstanding.data!.count === 1 ? '' : 's'} awaiting payment</span><ChevronRight className="h-4 w-4 text-indigo-600" /></button>}
+          {(lowStock.data?.length ?? 0) > 0 && <button type="button" onClick={() => navigate('/warehouse')} className="flex w-full items-center justify-between rounded-xl bg-amber-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-amber-950">{lowStock.data!.length} low-stock item{lowStock.data!.length === 1 ? '' : 's'} need attention</span><ChevronRight className="h-4 w-4 text-amber-700" /></button>}
+          {netVat > 0 && <button type="button" onClick={() => navigate('/tax')} className="flex w-full items-center justify-between rounded-xl bg-gray-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-gray-800">VAT payment position is ready to review</span><ChevronRight className="h-4 w-4 text-gray-500" /></button>}
+          {(outstanding.data?.count ?? 0) === 0 && (lowStock.data?.length ?? 0) === 0 && netVat <= 0 && <p className="rounded-xl bg-brand-50 px-3 py-3 text-center text-xs font-semibold text-brand-800">You are all caught up for now.</p>}
+        </div>
+      </section>
 
       {/* This-month snapshot — designed for fast action, not reporting analytics. */}
       <div className="grid grid-cols-2 gap-3">
