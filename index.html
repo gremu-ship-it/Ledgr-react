@@ -8,6 +8,18 @@
     <meta name="theme-color" content="#0E7C5A" />
     <meta name="description" content="MWK-first accounting, invoicing, payroll, and inventory for Malawian SMEs." />
     <title>Ledgr</title>
+    <script>
+      // Apply the persisted / OS-preferred theme before React mounts so the
+      // dark palette is evident immediately and there is no flash of light.
+      (function () {
+        try {
+          var stored = localStorage.getItem('ledgr-theme');
+          var dark = stored === 'dark'
+            || (stored !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
