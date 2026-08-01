@@ -434,19 +434,15 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
                 No products/services configured. You can add them in Inventory and they will appear here.
               </p>
             ) : (
-              filteredProducts.map((product) => (
+              filteredProducts.slice(0, 100).map((product) => (
                 <button
                   key={product.id}
                   onClick={() => {
                     setSelectedProduct(product);
-                    // Auto-suggest COGS account if available and not already selected? Keep current account but allow override hint
                     if (product.purchase_account_id || product.cogs_account_id) {
                       const targetAccountId = product.cogs_account_id || product.purchase_account_id;
                       const matchedAccount = expenseAccounts.find((a) => a.id === targetAccountId);
-                      if (matchedAccount) {
-                        // If we find a matching expense account from product, use it
-                        setSelectedAccount(matchedAccount);
-                      }
+                      if (matchedAccount) setSelectedAccount(matchedAccount);
                     }
                     setStep('description');
                   }}

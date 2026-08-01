@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -36,6 +36,11 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
 import { QuickIncomeMobile } from './QuickIncomeMobile';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from './PullToRefreshIndicator';
+import { SwipeableRow } from './SwipeableRow';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CreditCard, Eye } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -130,8 +135,6 @@ function StatCard({
   );
 }
 
-// ── Quick Action Button ─────────────────────────────────────────────────
-
 function QuickActionButton({
   icon,
   tone,
@@ -146,7 +149,9 @@ function QuickActionButton({
   return (
     <button
       onClick={() => {
-        try { if ('vibrate' in navigator) navigator.vibrate(5); } catch {}
+        try {
+          if ('vibrate' in navigator) navigator.vibrate(5);
+        } catch {}
         onClick();
       }}
       className="group flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-3 transition-transform active:scale-95 touch-manipulation"
@@ -161,6 +166,7 @@ function QuickActionButton({
 
 export function MobileDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const currentUser = useAppStore((s) => s.currentUser);
   const businessId = currentBusiness?.business?.id;
@@ -168,6 +174,19 @@ export function MobileDashboard() {
 
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['monthly_income'] }),
+      queryClient.invalidateQueries({ queryKey: ['monthly_expenses'] }),
+      queryClient.invalidateQueries({ queryKey: ['income_expense_trend'] }),
+      queryClient.invalidateQueries({ queryKey: ['recent_journal'] }),
+      queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
+      queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
+    ]);
+  }, [queryClient]);
+
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
 
   const income = useMonthlyIncome(businessId);
   const expenses = useMonthlyExpenses(businessId);
@@ -183,9 +202,7 @@ export function MobileDashboard() {
   });
 
   const netProfit =
-    income.data !== undefined && expenses.data !== undefined
-      ? income.data.totalAmount - expenses.data
-      : undefined;
+    income.data !== undefined && expenses.data !== undefined ? income.data.totalAmount - expenses.data : undefined;
 
   const incomeTrend = monthOverMonthChange(trend.data, 'income');
   const expensesTrend = monthOverMonthChange(trend.data, 'expenses');
@@ -204,11 +221,12 @@ export function MobileDashboard() {
 
   const firstName = currentUser?.profile?.full_name?.split(' ')[0] ?? currentUser?.email?.split('@')[0] ?? 'there';
   const { logoUrl } = useBrandTheme();
-
   const isProfitPositive = netProfit !== undefined && netProfit >= 0;
 
   return (
-    <div className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
+    <div ref={containerRef as any} className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+
       {/* Header */}
       <div className="flex items-center justify-between px-1 pt-1">
         <div className="flex items-center gap-3 min-w-0">
@@ -231,7 +249,7 @@ export function MobileDashboard() {
           </div>
         </div>
         <button
-          onClick={() => navigate('/settings')}
+          onClick={() => navigate('/settings?tab=appearance')}
           aria-label="Settings"
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
         >
@@ -239,7 +257,7 @@ export function MobileDashboard() {
         </button>
       </div>
 
-      {/* Net Profit Hero — improved with sign */}
+      {/* Hero */}
       <div className="relative overflow-hidden rounded-[1.75rem] p-5 shadow-xl shadow-brand-500/15 ring-1 ring-white/20">
         <div
           className={clsx(
@@ -292,7 +310,7 @@ export function MobileDashboard() {
         </div>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Income" value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)} valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={income.isLoading} trend={incomeTrend} />
         <StatCard label="Expenses" value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)} valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={expenses.isLoading} trend={expensesTrend} />
@@ -362,7 +380,7 @@ export function MobileDashboard() {
         </button>
       </div>
 
-      {/* Recent Transactions */}
+      {/* Recent Transactions — with swipe */}
       <div className="px-1">
         <div className="mb-3 flex items-center justify-between">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Recent</p>
@@ -378,31 +396,42 @@ export function MobileDashboard() {
             ))}
           </div>
         ) : !recentEntries.data || recentEntries.data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 py-10 text-center">
-            <Receipt className="mb-3 h-8 w-8 text-gray-300" />
-            <p className="text-xs font-bold uppercase tracking-widest text-gray-400 text-center px-6 leading-relaxed">No transactions yet</p>
-          </div>
+          <EmptyState
+            title="No transactions yet"
+            description="Start by recording income or expenses. Swipe actions will appear here."
+            actionLabel="Record Income"
+            onAction={() => setShowIncome(true)}
+            variant="finance"
+          />
         ) : (
           <div className="overflow-hidden rounded-2xl border border-white bg-white/70 shadow-sm divide-y divide-gray-100/50">
             {recentEntries.data.map((entry, i) => {
               const t: IconTone = entry.source_type === 'invoice' ? 'brand' : entry.source_type === 'expense' ? 'negative' : 'neutral';
               const Icon: LucideIcon = entry.source_type === 'invoice' ? DollarSign : entry.source_type === 'expense' ? Receipt : ClipboardList;
               return (
-                <div key={i} className="flex items-center justify-between px-4 py-3.5 active:bg-white/60 touch-manipulation">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <IconBadge icon={Icon} tone={t} size="sm" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-bold text-gray-900 truncate max-w-[140px]">{entry.description ?? entry.source_type ?? 'Journal'}</p>
-                        {entry.isLocked && <Lock className="h-3 w-3 text-amber-500" />}
+                <SwipeableRow
+                  key={i}
+                  actions={[
+                    { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => navigate('/journals') },
+                    { label: 'Details', icon: CreditCard, color: 'bg-brand-500', action: () => navigate('/reports') },
+                  ]}
+                >
+                  <div className="flex items-center justify-between px-4 py-3.5 bg-white active:bg-white/60 touch-manipulation">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <IconBadge icon={Icon} tone={t} size="sm" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-gray-900 truncate max-w-[140px]">{entry.description ?? entry.source_type ?? 'Journal'}</p>
+                          {entry.isLocked && <Lock className="h-3 w-3 text-amber-500" />}
+                        </div>
+                        <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{entry.entry_date}</p>
                       </div>
-                      <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{entry.entry_date}</p>
                     </div>
+                    <p className={clsx('text-[10px] font-bold uppercase px-2 py-1 rounded-md', entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700')}>
+                      {entry.source_type ?? 'entry'}
+                    </p>
                   </div>
-                  <p className={clsx('text-[10px] font-bold uppercase px-2 py-1 rounded-md', entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700')}>
-                    {entry.source_type ?? 'entry'}
-                  </p>
-                </div>
+                </SwipeableRow>
               );
             })}
           </div>
