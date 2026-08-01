@@ -10,6 +10,7 @@ import { useUsage } from '@/hooks/useUsage';
 import { supabase } from '@/lib/supabase';
 import { LanguageSwitcher } from '@/components/i18n/LanguageSwitcher';
 import { BusinessSwitcher } from './BusinessSwitcher';
+import { ThemeToggle } from './ThemeToggle';
 import { OfflineQueueDrawer } from './OfflineQueueDrawer';
 import { announce } from '@/lib/a11y';
 
@@ -143,6 +144,7 @@ export function Header() {
         </button>
 
         <LanguageSwitcher />
+        <ThemeToggle />
 
         <OfflineQueueDrawer />
 

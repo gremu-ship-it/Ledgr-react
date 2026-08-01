@@ -87,6 +87,7 @@ const BankReconciliation = lazyPage(
   'BankReconciliation',
 );
 const SupportPage = lazyPage(() => import('@/pages/SupportPage'), 'SupportPage');
+const ToolsPage = lazyPage(() => import('@/pages/ToolsPage'), 'default');
 
 // Plan gates wrap routes, so they stay in the main bundle.
 import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
@@ -285,6 +286,7 @@ function App() {
                   <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                   <Route path="/support" element={<SupportPage />} />
+                  <Route path="/tools" element={<ToolsPage />} />
                 </Route>
               </Route>
             </Route>

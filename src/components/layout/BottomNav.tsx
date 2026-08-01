@@ -55,6 +55,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
   { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
+  { labelKey: 'navigation.items.tools', path: '/tools', icon: BarChart2, tone: 'brand' },
 ];
 
 function vibrate(ms = 10) {
@@ -124,7 +125,7 @@ export function BottomNav() {
       {/* More menu */}
       {moreOpen && (
         <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-700">{t('common.more')}</p>
+          <p className="mb-3 text-xs font-semibold text-gray-700">{t('common.more')}</p>
           <div className="grid grid-cols-3 gap-2">
             {moreItems.map((item) => {
               const locked = GATED_PATHS.has(item.path) ? !planMeetsMin(planTier, 'growth') : false;
@@ -256,7 +257,7 @@ export function BottomNav() {
             }}
             aria-expanded={moreOpen}
             aria-label={t('common.more')}
-            className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors touch-manipulation"
+            className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-1 text-[10px] font-bold transition-colors touch-manipulation"
           >
             {moreOpen ? (
               <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
@@ -302,7 +303,7 @@ function NavTab({
           // Haptic feedback is optional.
         }
       }}
-      className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider touch-manipulation"
+      className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold transition-colors touch-manipulation"
     >
       {({ isActive }) =>
         isActive ? (

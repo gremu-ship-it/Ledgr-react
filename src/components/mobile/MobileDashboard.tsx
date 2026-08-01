@@ -38,6 +38,7 @@ import { QuickIncomeMobile } from './QuickIncomeMobile';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { PullToRefreshIndicator } from './PullToRefreshIndicator';
+import { MobileOnboardingChecklist } from '@/components/OnboardingChecklist';
 import { isItemLocked, visibleSectionsFor } from '@/components/layout/navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import { useUsage } from '@/hooks/useUsage';
@@ -126,7 +127,7 @@ function QuickActionButton({
       className="group flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-3 transition-transform active:scale-95 touch-manipulation"
     >
       <IconBadge icon={icon} tone={tone} size="sm" interactive />
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-700 text-center leading-tight">{label}</span>
+      <span className="text-[10px] font-semibold text-gray-700 text-center leading-tight">{label}</span>
     </button>
   );
 }
@@ -329,23 +330,9 @@ export function MobileDashboard() {
         </div>
       </div>
 
-      <section className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm backdrop-blur-sm" aria-labelledby="today-title">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4 text-brand-700" aria-hidden="true" />
-            <h2 id="today-title" className="text-xs font-black uppercase tracking-widest text-gray-900">Today</h2>
-          </div>
-          <span className="text-[10px] font-bold uppercase text-gray-400">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Pull to refresh'}</span>
-        </div>
-        <div className="space-y-2">
-          {(outstanding.data?.count ?? 0) > 0 && <button type="button" onClick={() => navigate('/invoices')} className="flex w-full items-center justify-between rounded-xl bg-indigo-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-indigo-950">{outstanding.data!.count} invoice{outstanding.data!.count === 1 ? '' : 's'} awaiting payment</span><ChevronRight className="h-4 w-4 text-indigo-600" /></button>}
-          {(lowStock.data?.length ?? 0) > 0 && <button type="button" onClick={() => navigate('/warehouse')} className="flex w-full items-center justify-between rounded-xl bg-amber-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-amber-950">{lowStock.data!.length} low-stock item{lowStock.data!.length === 1 ? '' : 's'} need attention</span><ChevronRight className="h-4 w-4 text-amber-700" /></button>}
-          {netVat > 0 && <button type="button" onClick={() => navigate('/tax')} className="flex w-full items-center justify-between rounded-xl bg-gray-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-gray-800">VAT payment position is ready to review</span><ChevronRight className="h-4 w-4 text-gray-500" /></button>}
-          {(outstanding.data?.count ?? 0) === 0 && (lowStock.data?.length ?? 0) === 0 && netVat <= 0 && <p className="rounded-xl bg-brand-50 px-3 py-3 text-center text-xs font-semibold text-brand-800">You are all caught up for now.</p>}
-        </div>
-      </section>
+      {/* Onboarding checklist (mobile compact) */}
+      <MobileOnboardingChecklist />
 
-      {/* This-month snapshot — designed for fast action, not reporting analytics. */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard label="Income" value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)} valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={income.isLoading} onClick={() => navigate('/income')} />
         <StatCard label="Expenses" value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)} valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={expenses.isLoading} onClick={() => navigate('/expenses')} />
