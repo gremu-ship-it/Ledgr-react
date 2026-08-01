@@ -4,6 +4,7 @@ import {
   Plus, Trash2, Pencil, AlertCircle, CheckCircle,
   Package, BarChart3, ArrowUpDown, X, Search,
 } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
@@ -11,9 +12,6 @@ import { postStockMovementAdjustment } from '@/services/inventoryJournalService'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -431,7 +429,7 @@ function ProductsTab({ businessId }: { businessId: string }) {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+            <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
               <tr>
                 <th scope="col" className="px-4 py-3 text-left">Name</th>
                 <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Type</th>
@@ -457,8 +455,8 @@ function ProductsTab({ businessId }: { businessId: string }) {
                     </span>
                   </td>
                   <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{p.sku ?? '—'}</td>
-                  <td className="px-4 py-3 text-right font-medium">{formatMwk(p.sale_price)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(p.purchase_price)}</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(p.sale_price)}</td>
+                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(p.purchase_price)}</td>
                   <td className="hidden sm:table-cell px-4 py-3 text-center">
                     {p.track_inventory
                       ? <span className="inline-flex rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Tracked</span>
@@ -574,7 +572,7 @@ function StockTab({ businessId }: { businessId: string }) {
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+        <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
           <tr>
             <th scope="col" className="px-4 py-3 text-left">Product</th>
             {locations.map((loc) => (
@@ -608,7 +606,7 @@ function StockTab({ businessId }: { businessId: string }) {
                   );
                 })}
                 <td className="px-4 py-3 text-right font-semibold text-gray-900">{totalOnHand.toFixed(2)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(Number(avgCost))}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(Number(avgCost))}</td>
                 <td className="px-4 py-3 text-center">
                   {low
                     ? <span className="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-600">Low Stock</span>
@@ -829,7 +827,7 @@ function MovementsTab({ businessId }: { businessId: string }) {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left">Date</th>
                   <th scope="col" className="px-4 py-3 text-left">Type</th>
@@ -854,7 +852,7 @@ function MovementsTab({ businessId }: { businessId: string }) {
                     </td>
                     <td className="hidden sm:table-cell px-4 py-3 text-gray-600">{locationMap[m.location_id] ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-medium">{Number(m.quantity).toFixed(2)}</td>
-                    <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(Number(m.unit_cost))}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(Number(m.unit_cost))}</td>
                     <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{m.reference ?? '—'}</td>
                   </tr>
                 ))}

@@ -1,13 +1,8 @@
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { getMraDueDates, useVatSummary, usePayeSummary } from '@/hooks/useTaxData';
 
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 interface TaxRemittancePanelProps {
   businessId: string;
@@ -78,19 +73,19 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>{t('dashboard.outputVatSales')}</span>
-                <span className="font-medium">{formatMwk(vat.data?.outputVat ?? 0)}</span>
+                <span className="font-medium">{formatMwkDetailed(vat.data?.outputVat ?? 0)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>{t('dashboard.inputVatExpenses')}</span>
                 <span className="font-medium text-brand-600">
-                  − {formatMwk(vat.data?.inputVat ?? 0)}
+                  − {formatMwkDetailed(vat.data?.inputVat ?? 0)}
                 </span>
               </div>
               <div className={`flex justify-between border-t border-gray-100 pt-1.5 font-semibold ${
                 (vat.data?.vatPayable ?? 0) > 0 ? 'text-red-600' : 'text-brand-600'
               }`}>
                 <span>{t('dashboard.vatPayableToMra')}</span>
-                <span>{formatMwk(vat.data?.vatPayable ?? 0)}</span>
+                <span>{formatMwkDetailed(vat.data?.vatPayable ?? 0)}</span>
               </div>
               <p className="text-xs text-gray-600">{t('dashboard.period', { period: vat.data?.period ?? '—' })}</p>
             </div>
@@ -108,7 +103,7 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between font-semibold text-red-600">
                 <span>{t('dashboard.totalPayeToRemit')}</span>
-                <span>{formatMwk(paye.data?.totalPaye ?? 0)}</span>
+                <span>{formatMwkDetailed(paye.data?.totalPaye ?? 0)}</span>
               </div>
               <p className="text-xs text-gray-600">{t('dashboard.period', { period: paye.data?.period ?? '—' })}</p>
               <p className="text-xs text-gray-600">

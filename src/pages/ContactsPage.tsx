@@ -4,13 +4,11 @@ import {
   Plus, Trash2, Pencil, AlertCircle, CheckCircle,
   Users, Building2, Phone, Mail, MapPin, X, Search,
 } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
 
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 type ContactType = 'customer' | 'supplier';
 type Tab = 'customer' | 'supplier';
@@ -291,7 +289,7 @@ function ContactCard({ contact, totalLabel, total, onEdit, onDelete }: {
 
       <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 flex justify-between items-center">
         <span className="text-xs text-gray-500">{totalLabel}</span>
-        <span className="text-sm font-semibold text-gray-900">{formatMwk(total)}</span>
+        <span className="text-sm font-semibold text-gray-900">{formatMwkDetailed(total)}</span>
       </div>
     </div>
   );

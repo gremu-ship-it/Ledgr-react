@@ -5,6 +5,7 @@ import {
   X, Search, Building2, Tag, ChevronDown, PlayCircle,
   ArchiveX, TrendingUp, ListOrdered, Loader2, Landmark,
 } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { createLogger } from '@/lib/logger';
@@ -43,9 +44,6 @@ function statusLabel(status: string) {
   return ASSET_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
-function formatMwk(amount: number): string {
-  return `MK ${Number(amount).toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -725,7 +723,7 @@ function CapitaliseAssetsModal({ businessId, userId, onClose }: {
                   <div key={r.assetId} className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs">
                     <CheckCircle className="mt-0.5 h-3.5 w-3.5 text-emerald-600 shrink-0" />
                     <span className="text-emerald-800">
-                      {r.assetName}: {formatMwk(r.amount)}
+                      {r.assetName}: {formatMwkDetailed(r.amount)}
                     </span>
                   </div>
                 ))
@@ -821,7 +819,7 @@ function RunDepreciationModal({ businessId, userId, onClose }: {
             <div className="space-y-3">
               <div className="rounded-xl bg-brand-50 px-4 py-3">
                 <p className="text-sm font-semibold text-brand-800">
-                  Posted {posted.length} entr{posted.length === 1 ? 'y' : 'ies'} — total {formatMwk(totalCharge)}
+                  Posted {posted.length} entr{posted.length === 1 ? 'y' : 'ies'} — total {formatMwkDetailed(totalCharge)}
                 </p>
                 {skipped.length > 0 && (
                   <p className="mt-1 text-xs text-brand-600">{skipped.length} asset(s) skipped — see below.</p>
@@ -835,7 +833,7 @@ function RunDepreciationModal({ businessId, userId, onClose }: {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {posted.map((r) => (
-                        <tr key={r.assetId}><td className="px-3 py-2">{r.assetName}</td><td className="px-3 py-2 text-right">{formatMwk(r.charge)}</td></tr>
+                        <tr key={r.assetId}><td className="px-3 py-2">{r.assetName}</td><td className="px-3 py-2 text-right">{formatMwkDetailed(r.charge)}</td></tr>
                       ))}
                     </tbody>
                   </table>
@@ -920,13 +918,13 @@ function DisposeAssetModal({ asset, businessId, userId, onClose }: {
           {result ? (
             <Alert
               type="success"
-              message={`Asset disposed. ${result.gainLoss >= 0 ? 'Gain' : 'Loss'} of ${formatMwk(Math.abs(result.gainLoss))} recorded.`}
+              message={`Asset disposed. ${result.gainLoss >= 0 ? 'Gain' : 'Loss'} of ${formatMwkDetailed(Math.abs(result.gainLoss))} recorded.`}
             />
           ) : (
             <>
               <p className="text-sm text-gray-500">
                 Disposing <span className="font-medium text-gray-700">{asset.name}</span> ({asset.asset_number}).
-                Net book value: <span className="font-medium">{formatMwk(netBookValue)}</span>
+                Net book value: <span className="font-medium">{formatMwkDetailed(netBookValue)}</span>
               </p>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Disposal Date *</label>
@@ -949,7 +947,7 @@ function DisposeAssetModal({ asset, businessId, userId, onClose }: {
               <div className={`rounded-lg px-4 py-3 text-sm font-semibold ${
                 previewGainLoss >= 0 ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
               }`}>
-                {previewGainLoss >= 0 ? 'Gain' : 'Loss'} on disposal: {formatMwk(Math.abs(previewGainLoss))}
+                {previewGainLoss >= 0 ? 'Gain' : 'Loss'} on disposal: {formatMwkDetailed(Math.abs(previewGainLoss))}
               </div>
             </>
           )}
@@ -1008,12 +1006,12 @@ function RevalueAssetModal({ asset, businessId, userId, onClose }: {
         <div className="px-6 py-5 space-y-4">
           {error && <Alert type="error" message={error} />}
           {result ? (
-            <Alert type="success" message={`Revaluation recorded. Surplus of ${formatMwk(result.surplus)} posted to Revaluation Reserve.`} />
+            <Alert type="success" message={`Revaluation recorded. Surplus of ${formatMwkDetailed(result.surplus)} posted to Revaluation Reserve.`} />
           ) : (
             <>
               <p className="text-sm text-gray-500">
                 Revaluing <span className="font-medium text-gray-700">{asset.name}</span> ({asset.asset_number}).
-                Current net book value: <span className="font-medium">{formatMwk(netBookValue)}</span>
+                Current net book value: <span className="font-medium">{formatMwkDetailed(netBookValue)}</span>
               </p>
               <p className="text-xs text-gray-600">
                 Only upward revaluations are supported, per IAS 16. The surplus is posted to equity (Revaluation Reserve), not through profit or loss.
@@ -1026,14 +1024,14 @@ function RevalueAssetModal({ asset, businessId, userId, onClose }: {
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">New Value (MWK) *</label>
                 <input type="number" min="0" step="0.01" value={newValue} onChange={(e) => setNewValue(e.target.value)}
-                  placeholder={`Must exceed ${formatMwk(netBookValue)}`}
+                  placeholder={`Must exceed ${formatMwkDetailed(netBookValue)}`}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
               </div>
               {newValueNum > 0 && (
                 <div className={`rounded-lg px-4 py-3 text-sm font-semibold ${
                   previewSurplus > 0 ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
                 }`}>
-                  {previewSurplus > 0 ? `Revaluation surplus: ${formatMwk(previewSurplus)}` : 'New value must exceed net book value'}
+                  {previewSurplus > 0 ? `Revaluation surplus: ${formatMwkDetailed(previewSurplus)}` : 'New value must exceed net book value'}
                 </div>
               )}
             </>
@@ -1100,9 +1098,9 @@ function DepreciationScheduleModal({ asset, businessId, onClose }: {
                 {chronological.map((s) => (
                   <tr key={s.id}>
                     <td className="px-3 py-2">{s.period_start} – {s.period_end}</td>
-                    <td className="px-3 py-2 text-right">{formatMwk(Number(s.depreciation_charge))}</td>
-                    <td className="px-3 py-2 text-right text-red-600">{formatMwk(Number(s.accumulated_to_date))}</td>
-                    <td className="px-3 py-2 text-right font-semibold">{formatMwk(Number(s.net_book_value))}</td>
+                    <td className="px-3 py-2 text-right">{formatMwkDetailed(Number(s.depreciation_charge))}</td>
+                    <td className="px-3 py-2 text-right text-red-600">{formatMwkDetailed(Number(s.accumulated_to_date))}</td>
+                    <td className="px-3 py-2 text-right font-semibold">{formatMwkDetailed(Number(s.net_book_value))}</td>
                     <td className="px-3 py-2 text-center">
                       {s.posted ? <CheckCircle className="mx-auto h-4 w-4 text-brand-500" /> : <span className="text-xs text-gray-600">—</span>}
                     </td>
@@ -1287,10 +1285,10 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                       <div className="text-xs text-gray-600">{asset.asset_number}</div>
                     </td>
                     <td className="px-4 py-3 text-gray-500">{categoryMap[asset.category_id] ?? '—'}</td>
-                    <td className="px-4 py-3 text-right font-medium">{formatMwk(Number(asset.acquisition_cost))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">{formatMwk(Number(asset.accumulated_depreciation))}</td>
+                    <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(Number(asset.acquisition_cost))}</td>
+                    <td className="px-4 py-3 text-right text-red-600">{formatMwkDetailed(Number(asset.accumulated_depreciation))}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                      {formatMwk(Number(asset.net_book_value ?? (Number(asset.acquisition_cost) - Number(asset.accumulated_depreciation))))}
+                      {formatMwkDetailed(Number(asset.net_book_value ?? (Number(asset.acquisition_cost) - Number(asset.accumulated_depreciation))))}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColor(asset.status)}`}>
@@ -1334,18 +1332,18 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                           <div><span className="text-gray-400">Useful Life:</span> {asset.useful_life_years ? `${asset.useful_life_years} years` : '—'}</div>
                           <div><span className="text-gray-400">Acquisition Date:</span> {asset.acquisition_date}</div>
                           <div><span className="text-gray-400">Dep. Start Date:</span> {asset.depreciation_start_date}</div>
-                          <div><span className="text-gray-400">Residual Value:</span> {formatMwk(Number(asset.residual_value))}</div>
+                          <div><span className="text-gray-400">Residual Value:</span> {formatMwkDetailed(Number(asset.residual_value))}</div>
                           <div><span className="text-gray-400">Last Dep. Date:</span> {asset.last_depreciation_date ?? '—'}</div>
                           <div><span className="text-gray-400">Serial Number:</span> {asset.serial_number ?? '—'}</div>
                           <div><span className="text-gray-400">Location:</span> {asset.location ?? '—'}</div>
                           {asset.status === 'disposed' && (
                             <>
                               <div><span className="text-gray-400">Disposal Date:</span> {asset.disposal_date ?? '—'}</div>
-                              <div><span className="text-gray-400">Disposal Proceeds:</span> {asset.disposal_proceeds != null ? formatMwk(Number(asset.disposal_proceeds)) : '—'}</div>
+                              <div><span className="text-gray-400">Disposal Proceeds:</span> {asset.disposal_proceeds != null ? formatMwkDetailed(Number(asset.disposal_proceeds)) : '—'}</div>
                             </>
                           )}
                           {asset.revalued_amount != null && (
-                            <div><span className="text-gray-400">Revalued Amount:</span> {formatMwk(Number(asset.revalued_amount))} ({asset.revaluation_date})</div>
+                            <div><span className="text-gray-400">Revalued Amount:</span> {formatMwkDetailed(Number(asset.revalued_amount))} ({asset.revaluation_date})</div>
                           )}
                           {asset.notes && <div className="col-span-4"><span className="text-gray-400">Notes:</span> {asset.notes}</div>}
                         </div>

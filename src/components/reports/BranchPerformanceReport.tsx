@@ -1,3 +1,4 @@
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -26,12 +27,6 @@ const UNASSIGNED_BRANCH_ID = '__unassigned__';
 const TOLERANCE = 0.01;
 const EMPTY_BRANCH_PERFORMANCE_ROWS: BranchPerformanceRow[] = [];
 
-function formatMwk(amount: number): string {
-  return `MK ${Number(amount).toLocaleString('en-MW', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 function formatCompactMwk(amount: number): string {
   const abs = Math.abs(amount);
@@ -302,7 +297,7 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
               <th scope="col" className="px-4 py-3 text-left">Branch</th>
               <th scope="col" className="px-4 py-3 text-right">Revenue</th>
@@ -337,14 +332,14 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMwk(row.revenue)}</td>
-                  <td className="hidden md:table-cell px-4 py-3 text-right text-gray-600">{formatMwk(row.costOfSales)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-gray-900">{formatMwkDetailed(row.revenue)}</td>
+                  <td className="hidden md:table-cell px-4 py-3 text-right text-gray-600">{formatMwkDetailed(row.costOfSales)}</td>
                   <td className={`px-4 py-3 text-right font-medium ${row.grossProfit < 0 ? 'text-red-600' : 'text-emerald-700'}`}>
-                    {formatMwk(row.grossProfit)}
+                    {formatMwkDetailed(row.grossProfit)}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-3 text-right text-gray-600">{formatMwk(totalExpenses)}</td>
+                  <td className="hidden lg:table-cell px-4 py-3 text-right text-gray-600">{formatMwkDetailed(totalExpenses)}</td>
                   <td className={`px-4 py-3 text-right font-semibold ${row.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                    {formatMwk(row.netProfit)}
+                    {formatMwkDetailed(row.netProfit)}
                   </td>
                   <td className={`hidden sm:table-cell px-4 py-3 text-right font-medium ${(row.netMargin ?? 0) < 0 ? 'text-red-600' : 'text-gray-600'}`}>
                     {formatPercent(row.netMargin)}
@@ -376,7 +371,7 @@ function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
         </div>
         <div className="rounded-xl bg-gray-50 px-3 py-2 text-right">
           <p className="text-xs text-gray-600">Net Profit</p>
-          <p className={`text-sm font-bold ${row.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMwk(row.netProfit)}</p>
+          <p className={`text-sm font-bold ${row.netProfit < 0 ? 'text-red-600' : 'text-gray-900'}`}>{formatMwkDetailed(row.netProfit)}</p>
         </div>
       </div>
 
@@ -397,7 +392,7 @@ function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
                       <tr key={line.key}>
                         <td className="px-3 py-2 font-mono text-xs text-gray-600">{line.code}</td>
                         <td className="px-3 py-2 text-gray-700">{line.name}</td>
-                        <td className="px-3 py-2 text-right font-medium text-gray-900">{formatMwk(line.amount)}</td>
+                        <td className="px-3 py-2 text-right font-medium text-gray-900">{formatMwkDetailed(line.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -526,10 +521,10 @@ export function BranchPerformanceReport({
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard label="Total branch revenue" value={formatMwk(totals.revenue)} helper={periodLabel(periodStart, periodEnd)} />
-        <SummaryCard label="Gross profit" value={formatMwk(totals.grossProfit)} helper={`${formatPercent(totals.revenue ? (totals.grossProfit / totals.revenue) * 100 : null)} gross margin`} tone={totals.grossProfit < 0 ? 'bad' : 'good'} />
-        <SummaryCard label="Net profit" value={formatMwk(totals.netProfit)} helper="Across all reported branches" tone={totals.netProfit < 0 ? 'bad' : 'good'} />
-        <SummaryCard label="Top branch" value={bestBranch?.branchName ?? '—'} helper={bestBranch ? `${formatMwk(bestBranch.netProfit)} net profit` : 'No profitable branch yet'} tone="neutral" />
+        <SummaryCard label="Total branch revenue" value={formatMwkDetailed(totals.revenue)} helper={periodLabel(periodStart, periodEnd)} />
+        <SummaryCard label="Gross profit" value={formatMwkDetailed(totals.grossProfit)} helper={`${formatPercent(totals.revenue ? (totals.grossProfit / totals.revenue) * 100 : null)} gross margin`} tone={totals.grossProfit < 0 ? 'bad' : 'good'} />
+        <SummaryCard label="Net profit" value={formatMwkDetailed(totals.netProfit)} helper="Across all reported branches" tone={totals.netProfit < 0 ? 'bad' : 'good'} />
+        <SummaryCard label="Top branch" value={bestBranch?.branchName ?? '—'} helper={bestBranch ? `${formatMwkDetailed(bestBranch.netProfit)} net profit` : 'No profitable branch yet'} tone="neutral" />
       </div>
 
       <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -546,14 +541,14 @@ export function BranchPerformanceReport({
         <div
           className="h-80"
           role="img"
-          aria-label={`Bar chart comparing branch performance across ${rows.length} branch${rows.length === 1 ? '' : 'es'}. Sorted by net profit. ${rows.map((r) => `${r.branchName}: revenue ${formatMwk(r.revenue)}, net profit ${formatMwk(r.netProfit)}`).join('. ')}`}
+          aria-label={`Bar chart comparing branch performance across ${rows.length} branch${rows.length === 1 ? '' : 'es'}. Sorted by net profit. ${rows.map((r) => `${r.branchName}: revenue ${formatMwkDetailed(r.revenue)}, net profit ${formatMwkDetailed(r.netProfit)}`).join('. ')}`}
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} />
               <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 12 }} tickFormatter={formatCompactMwk} />
-              <Tooltip formatter={(value) => formatMwk(Number(value))} />
+              <Tooltip formatter={(value) => formatMwkDetailed(Number(value))} />
               <Legend />
               <Bar dataKey="Revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} />
               <Bar dataKey="Gross Profit" fill="#0E7C5A" radius={[6, 6, 0, 0]} />

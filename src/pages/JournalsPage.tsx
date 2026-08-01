@@ -202,7 +202,7 @@ export function JournalsPage() {
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left">Date</th>
                   <th scope="col" className="px-4 py-3 text-left">Entry #</th>

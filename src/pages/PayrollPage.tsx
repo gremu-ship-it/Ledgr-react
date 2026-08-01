@@ -4,15 +4,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users, Plus, AlertCircle, CheckCircle, ChevronRight, ArrowLeft, X, Briefcase, Pencil,
 } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { nextEntryNumber } from '@/services/journalService';
 import { EditEmployeeModal } from '@/components/payroll/EditEmployeeModal';
 
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -469,20 +467,20 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
                         <p className="font-medium text-gray-900">{line.employee.first_name} {line.employee.last_name}</p>
                         <p className="text-xs text-gray-600">{line.employee.job_title ?? line.employee.employee_number}</p>
                       </td>
-                      <td className="px-4 py-3 text-right">{formatMwk(line.gross_pay)}</td>
-                      <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.paye_deduction)}</td>
-                      <td className="px-4 py-3 text-right text-red-600">−{formatMwk(line.pension_employee)}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(line.net_pay)}</td>
+                      <td className="px-4 py-3 text-right">{formatMwkDetailed(line.gross_pay)}</td>
+                      <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(line.paye_deduction)}</td>
+                      <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(line.pension_employee)}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwkDetailed(line.net_pay)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                   <tr>
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">Totals</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwk(totals.gross)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(totals.paye)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(totals.pensionEmployee)}</td>
-                    <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwk(totals.net)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwkDetailed(totals.gross)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwkDetailed(totals.paye)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwkDetailed(totals.pensionEmployee)}</td>
+                    <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwkDetailed(totals.net)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -490,7 +488,7 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
             {totals.pensionEmployer > 0 && (
               <p className="text-xs text-gray-500">
                 Additional employer pension contribution (10%, not deducted from employees):{' '}
-                <span className="font-medium text-gray-700">{formatMwk(totals.pensionEmployer)}</span>
+                <span className="font-medium text-gray-700">{formatMwkDetailed(totals.pensionEmployer)}</span>
               </p>
             )}
             <div className="flex gap-3">
@@ -564,7 +562,7 @@ function ApprovePayrollModal({
 
         <p className="mb-4 text-sm text-gray-500">
           This posts the payroll journal entry (salaries, PAYE, pension) and disburses net pay of{' '}
-          <span className="font-semibold text-gray-900">{formatMwk(Number(run.total_net))}</span> from the selected account.
+          <span className="font-semibold text-gray-900">{formatMwkDetailed(Number(run.total_net))}</span> from the selected account.
           PAYE and TPR remittances will be generated automatically. This cannot be undone from here.
         </p>
 
@@ -651,24 +649,24 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
                 {(runWithLines?.lines ?? []).map((line) => (
                   <tr key={line.id}>
                     <td className="px-4 py-3 font-medium text-gray-900">{line.employee_id}</td>
-                    <td className="px-4 py-3 text-right">{formatMwk(Number(line.gross_pay))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.paye_deduction))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.pension_employee))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwk(Number(line.other_deductions))}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(Number(line.net_pay))}</td>
+                    <td className="px-4 py-3 text-right">{formatMwkDetailed(Number(line.gross_pay))}</td>
+                    <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.paye_deduction))}</td>
+                    <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.pension_employee))}</td>
+                    <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.other_deductions))}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwkDetailed(Number(line.net_pay))}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                 <tr>
                   <td className="px-4 py-3 text-sm font-semibold">Totals</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwk(Number(selectedRun.total_gross))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(Number(selectedRun.total_paye))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwkDetailed(Number(selectedRun.total_gross))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwkDetailed(Number(selectedRun.total_paye))}</td>
                   <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">
-                    −{formatMwk((runWithLines?.lines ?? []).reduce((s, l) => s + Number(l.pension_employee), 0))}
+                    −{formatMwkDetailed((runWithLines?.lines ?? []).reduce((s, l) => s + Number(l.pension_employee), 0))}
                   </td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwk(Number(selectedRun.total_other_deductions))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwk(Number(selectedRun.total_net))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwkDetailed(Number(selectedRun.total_other_deductions))}</td>
+                  <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwkDetailed(Number(selectedRun.total_net))}</td>
                 </tr>
               </tfoot>
             </table>
@@ -731,9 +729,9 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
               <td className="px-4 py-3 font-medium text-brand-700">{run.run_number}</td>
               <td className="px-4 py-3 text-gray-500">{run.payroll_period}</td>
               <td className="px-4 py-3 text-gray-500">{run.pay_date}</td>
-              <td className="px-4 py-3 text-right">{formatMwk(Number(run.total_gross))}</td>
-              <td className="px-4 py-3 text-right text-red-600">{formatMwk(Number(run.total_paye))}</td>
-              <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(Number(run.total_net))}</td>
+              <td className="px-4 py-3 text-right">{formatMwkDetailed(Number(run.total_gross))}</td>
+              <td className="px-4 py-3 text-right text-red-600">{formatMwkDetailed(Number(run.total_paye))}</td>
+              <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwkDetailed(Number(run.total_net))}</td>
               <td className="px-4 py-3 text-center"><StatusBadge status={run.status} /></td>
               <td className="px-3 py-3"><ChevronRight className="h-4 w-4 text-gray-400" /></td>
             </tr>
@@ -817,9 +815,9 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
                   <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
                   <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500 capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-right">{formatMwk(gross)}</td>
-                  <td className="px-4 py-3 text-right text-red-600">−{formatMwk(paye)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwk(net)}</td>
+                  <td className="px-4 py-3 text-right">{formatMwkDetailed(gross)}</td>
+                  <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(paye)}</td>
+                  <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwkDetailed(net)}</td>
                   {canEdit && (
                     <td className="px-3 py-3">
                       <Pencil className="h-4 w-4 text-gray-400" />

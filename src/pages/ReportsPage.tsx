@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2, Coins, PackageOpen } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
 import { StatementOfFinancialPosition } from '@/components/reports/StatementOfFinancialPosition';
@@ -18,9 +19,6 @@ import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatMwk(amount: number): string {
-  return `MK ${Number(amount).toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 function startOfYear(): string {
   return `${new Date().getFullYear()}-01-01`;
@@ -142,18 +140,18 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
               <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-family:monospace; font-size:8.5pt;">${r.code ?? ''}</td>
               <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-weight:600;">${r.name ?? ''}</td>
               <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:8.5pt; color:#64748b;">${r.account_type ?? ''}</td>
-              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${formatMwk(Number(r.total_debits ?? 0))}</td>
-              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${formatMwk(Number(r.total_credits ?? 0))}</td>
-              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:600; color:${Number(r.balance ?? 0) < 0 ? '#dc2626' : '#0f172a'};">${formatMwk(Number(r.balance ?? 0))}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${formatMwkDetailed(Number(r.total_debits ?? 0))}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right;">${formatMwkDetailed(Number(r.total_credits ?? 0))}</td>
+              <td style="padding:8px 12px; border-bottom:1px solid #f1f5f9; text-align:right; font-weight:600; color:${Number(r.balance ?? 0) < 0 ? '#dc2626' : '#0f172a'};">${formatMwkDetailed(Number(r.balance ?? 0))}</td>
             </tr>
           `).join('')}
         </tbody>
         <tfoot>
           <tr style="background:#f8fafc; font-weight:700; border-top:2px solid #0f172a;">
             <td colspan="3" style="padding:12px;">Totals</td>
-            <td style="padding:12px; text-align:right;">${formatMwk(totalDebits)}</td>
-            <td style="padding:12px; text-align:right;">${formatMwk(totalCredits)}</td>
-            <td style="padding:12px; text-align:right; color:${Math.abs(totalDebits - totalCredits) > 0.01 ? '#dc2626' : '#059669'};">${Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwk(totalDebits - totalCredits)}</td>
+            <td style="padding:12px; text-align:right;">${formatMwkDetailed(totalDebits)}</td>
+            <td style="padding:12px; text-align:right;">${formatMwkDetailed(totalCredits)}</td>
+            <td style="padding:12px; text-align:right; color:${Math.abs(totalDebits - totalCredits) > 0.01 ? '#dc2626' : '#059669'};">${Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwkDetailed(totalDebits - totalCredits)}</td>
           </tr>
         </tfoot>
       </table>
@@ -191,7 +189,7 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
       />
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
               <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Code</th>
               <th scope="col" className="px-4 py-3 text-left">Account</th>
@@ -211,10 +209,10 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
                     {row.account_type}
                   </span>
                 </td>
-                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_debits ?? 0))}</td>
-                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwk(Number(row.total_credits ?? 0))}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwkDetailed(Number(row.total_debits ?? 0))}</td>
+                <td className="hidden sm:table-cell px-4 py-2.5 text-right text-gray-600">{formatMwkDetailed(Number(row.total_credits ?? 0))}</td>
                 <td className={`px-4 py-2.5 text-right font-medium ${Number(row.balance ?? 0) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                  {formatMwk(Number(row.balance ?? 0))}
+                  {formatMwkDetailed(Number(row.balance ?? 0))}
                 </td>
               </tr>
             ))}
@@ -223,10 +221,10 @@ function TrialBalanceReport({ businessId }: { businessId: string }) {
             <tr className="border-t-2 border-gray-300">
               <td colSpan={2} className="px-4 py-3 text-gray-900">Totals</td>
               <td className="hidden sm:table-cell px-4 py-3 text-gray-900"></td>
-              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwk(totalDebits)}</td>
-              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwk(totalCredits)}</td>
+              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwkDetailed(totalDebits)}</td>
+              <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-900">{formatMwkDetailed(totalCredits)}</td>
               <td className={`px-4 py-3 text-right ${Math.abs(totalDebits - totalCredits) > 0.01 ? 'text-red-600' : 'text-brand-700'}`}>
-                {Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwk(totalDebits - totalCredits)}
+                {Math.abs(totalDebits - totalCredits) < 0.01 ? '✓ Balanced' : formatMwkDetailed(totalDebits - totalCredits)}
               </td>
             </tr>
           </tfoot>
@@ -314,7 +312,7 @@ function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: s
       />
       <div className="overflow-x-auto">
         <table className="w-full min-w-[760px] text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
               <th scope="col" className="px-4 py-3 text-left">Date</th>
               <th scope="col" className="px-4 py-3 text-left">Entry</th>

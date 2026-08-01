@@ -102,8 +102,8 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing';
-const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing'];
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance';
+const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance'];
 
 const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'business', label: 'Business Profile', icon: Building2 },
@@ -113,8 +113,68 @@ const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'team', label: 'Team Members', icon: Users },
   { value: 'api', label: 'API & Webhooks', icon: Key },
   { value: 'billing', label: 'Billing & Plans', icon: DollarSign },
+  { value: 'appearance', label: 'Appearance', icon: Eye },
   { value: 'privacy', label: 'Privacy', icon: Cookie },
 ];
+
+function AppearanceTab() {
+  const density = useAppStore((s) => s.density);
+  const setDensity = useAppStore((s) => s.setDensity);
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth);
+  const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-gray-900">Appearance</h2>
+        <p className="mt-0.5 text-sm text-gray-500">Customize how Ledgr looks and feels.</p>
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">Data Density</h3>
+          <p className="mb-3 text-xs text-gray-500">Choose comfortable for spacious tables or compact for power users.</p>
+          <div className="flex gap-2">
+            {(['comfortable', 'compact'] as const).map((d) => (
+              <button
+                key={d}
+                onClick={() => setDensity(d)}
+                className={`rounded-xl border px-4 py-2.5 text-sm font-medium capitalize transition-colors ${density === d ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">Sidebar Width</h3>
+          <p className="mb-3 text-xs text-gray-500">Drag the sidebar edge or adjust here. Current: {sidebarWidth}px</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={200}
+              max={360}
+              value={sidebarWidth}
+              onChange={(e) => setSidebarWidth(Number(e.target.value))}
+              className="w-48 accent-brand-500"
+            />
+            <button onClick={() => setSidebarWidth(256)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Reset to 256px</button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+          <h4 className="text-sm font-medium text-gray-800">Keyboard Shortcuts</h4>
+          <ul className="mt-2 space-y-1 text-xs text-gray-600">
+            <li><kbd className="rounded border bg-white px-1 py-0.5">⌘K</kbd> or <kbd className="rounded border bg-white px-1 py-0.5">Ctrl+K</kbd> — Open command palette</li>
+            <li><kbd className="rounded border bg-white px-1 py-0.5">/</kbd> — Also opens command palette</li>
+            <li><kbd className="rounded border bg-white px-1 py-0.5">Esc</kbd> — Close modals / menus</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Business Profile Tab ──────────────────────────────────────────────────────
 
@@ -1705,6 +1765,7 @@ export function SettingsPage() {
                   </PlanGate>
                 )}
                 {activeTab === 'billing' && <BillingTab />}
+                {activeTab === 'appearance' && <AppearanceTab />}
                 {activeTab === 'privacy' && <PrivacyTab />}
               </>
             )}

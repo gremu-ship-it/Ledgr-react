@@ -20,8 +20,12 @@ interface AppState {
 
   // ── UI state ─────────────────────────────────────────────────────
   sidebarOpen: boolean;
+  sidebarWidth: number; // px, 200-360, only when open
+  density: 'comfortable' | 'compact';
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
+  setSidebarWidth: (w: number) => void;
+  setDensity: (d: 'comfortable' | 'compact') => void;
 
   theme: Theme;
   setTheme: (theme: Theme) => void;
@@ -37,6 +41,8 @@ interface AppState {
 
 const THEME_STORAGE_KEY   = 'ledgr-theme';
 const SIDEBAR_STORAGE_KEY = 'ledgr-sidebar-open';
+const SIDEBAR_WIDTH_KEY   = 'ledgr-sidebar-width';
+const DENSITY_KEY         = 'ledgr-density';
 
 function getInitialSidebarOpen(): boolean {
   if (typeof window === 'undefined') return true;
@@ -44,6 +50,19 @@ function getInitialSidebarOpen(): boolean {
   const stored = window.localStorage.getItem(SIDEBAR_STORAGE_KEY);
   if (stored === null) return true;
   return stored === 'true';
+}
+
+function getInitialSidebarWidth(): number {
+  if (typeof window === 'undefined') return 256;
+  const stored = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
+  if (!stored || isNaN(stored)) return 256;
+  return Math.min(360, Math.max(200, stored));
+}
+
+function getInitialDensity(): 'comfortable' | 'compact' {
+  if (typeof window === 'undefined') return 'comfortable';
+  const stored = window.localStorage.getItem(DENSITY_KEY);
+  return stored === 'compact' ? 'compact' : 'comfortable';
 }
 
 function getInitialTheme(): Theme {
@@ -73,6 +92,8 @@ export const useAppStore = create<AppState>()(
       },
 
       sidebarOpen: getInitialSidebarOpen(),
+      sidebarWidth: getInitialSidebarWidth(),
+      density: getInitialDensity(),
       toggleSidebar: () =>
         set((state) => {
           const next = !state.sidebarOpen;
@@ -87,6 +108,15 @@ export const useAppStore = create<AppState>()(
         }
         set({ sidebarOpen: open });
       },
+      setSidebarWidth: (w) => {
+        const clamped = Math.min(360, Math.max(200, Math.round(w)));
+        window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(clamped));
+        set({ sidebarWidth: clamped });
+      },
+      setDensity: (d) => {
+        window.localStorage.setItem(DENSITY_KEY, d);
+        set({ density: d });
+      },
 
       theme: getInitialTheme(),
       setTheme: (theme) => {
@@ -99,7 +129,6 @@ export const useAppStore = create<AppState>()(
         get().setTheme(next);
       },
 
-      // Inactivity timeout (default 60 minutes)
       inactivityTimeoutMinutes: 60,
       setInactivityTimeoutMinutes: (minutes) => set({ inactivityTimeoutMinutes: minutes }),
 
@@ -115,6 +144,8 @@ export const useAppStore = create<AppState>()(
       name: 'ledgr-app-store',
       partialize: (state) => ({
         theme: state.theme,
+        sidebarWidth: state.sidebarWidth,
+        density: state.density,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.theme) {

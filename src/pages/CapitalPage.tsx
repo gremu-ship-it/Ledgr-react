@@ -5,6 +5,7 @@ import {
   Landmark, Coins, TrendingUp, ArrowDownCircle, ArrowUpCircle,
   Wallet, Receipt, Printer, FileDown,
 } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, AccountSubtype, LoanStatus, ShareTransactionType } from '@/dal/types/database';
@@ -38,9 +39,6 @@ function loanStatusLabel(s: string) {
   return LOAN_STATUSES.find((x) => x.value === s)?.label ?? s;
 }
 
-function formatMwk(amount: number): string {
-  return `MK ${Number(amount).toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -214,10 +212,10 @@ function openRepaymentSchedule(
       (r, i) => `<tr${i % 2 === 0 ? '' : ' class="alt"'}>
         <td>${r.date}</td>
         <td class="${r.type}">${r.type === 'actual' ? 'Actual' : 'Projected'}</td>
-        <td class="num">${formatMwk(r.principal)}</td>
-        <td class="num">${formatMwk(r.interest)}</td>
-        <td class="num">${formatMwk(r.total)}</td>
-        <td class="num">${formatMwk(r.balance)}</td>
+        <td class="num">${formatMwkDetailed(r.principal)}</td>
+        <td class="num">${formatMwkDetailed(r.interest)}</td>
+        <td class="num">${formatMwkDetailed(r.total)}</td>
+        <td class="num">${formatMwkDetailed(r.balance)}</td>
       </tr>`,
     )
     .join('\n');
@@ -265,7 +263,7 @@ function openRepaymentSchedule(
     <div>
       <h1>${loan.lender_name} — Repayment Schedule</h1>
       <div class="meta">
-        <span><strong>Principal:</strong> ${formatMwk(principal)}</span>
+        <span><strong>Principal:</strong> ${formatMwkDetailed(principal)}</span>
         <span><strong>Interest Rate:</strong> ${rateDisplay}</span>
         <span><strong>Term:</strong> ${termDisplay}</span>
         <span><strong>Start Date:</strong> ${loan.start_date}</span>
@@ -294,9 +292,9 @@ function openRepaymentSchedule(
   </table>
 
   <div class="summary">
-    <div><div class="label">Total Principal</div><div class="value">${formatMwk(totals.principal)}</div></div>
-    <div><div class="label">Total Interest</div><div class="value">${formatMwk(totals.interest)}</div></div>
-    <div><div class="label">Total Paid</div><div class="value">${formatMwk(totals.total)}</div></div>
+    <div><div class="label">Total Principal</div><div class="value">${formatMwkDetailed(totals.principal)}</div></div>
+    <div><div class="label">Total Interest</div><div class="value">${formatMwkDetailed(totals.interest)}</div></div>
+    <div><div class="label">Total Paid</div><div class="value">${formatMwkDetailed(totals.total)}</div></div>
   </div>
 
   <div class="footer">
@@ -538,7 +536,7 @@ function RepaymentModal({
         <div className="col-span-2"><Field label="Loan" required>
           <select className={inputCls} value={form.loanId} onChange={(e) => setForm({ ...form, loanId: e.target.value })}>
             <option value="">Select loan…</option>
-            {loans.map((l) => <option key={l.id} value={l.id}>{l.lender_name} — {formatMwk(Number(l.principal_amount))}</option>)}
+            {loans.map((l) => <option key={l.id} value={l.id}>{l.lender_name} — {formatMwkDetailed(Number(l.principal_amount))}</option>)}
           </select>
         </Field></div>
         <Field label="Repayment date" required>
@@ -551,7 +549,7 @@ function RepaymentModal({
           <input type="number" step="0.01" className={inputCls} value={form.principalPortion} onChange={(e) => setForm({ ...form, principalPortion: e.target.value })} />
         </Field>
         <Field label="Interest portion (MK)">
-          <input className={inputCls + ' bg-gray-50'} value={formatMwk(interest)} readOnly />
+          <input className={inputCls + ' bg-gray-50'} value={formatMwkDetailed(interest)} readOnly />
         </Field>
         <div className="col-span-2"><AccountPicker label="Bank/Cash paid from" required value={form.bankAccountId}
           onChange={(v) => setForm({ ...form, bankAccountId: v })} accounts={bankAccounts} placeholder="Select bank/cash…" /></div>
@@ -693,10 +691,10 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
   return (
     <div>
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <SummaryCard label="Total Borrowed" value={formatMwk(totalBorrowed)} icon={<Landmark className="h-4 w-4" />} />
-        <SummaryCard label="Outstanding" value={formatMwk(outstanding)} icon={<Wallet className="h-4 w-4" />} accent />
-        <SummaryCard label="Principal Repaid" value={formatMwk(totalRepaid)} icon={<TrendingUp className="h-4 w-4" />} />
-        <SummaryCard label="Interest Paid" value={formatMwk(interestPaid)} icon={<Receipt className="h-4 w-4" />} />
+        <SummaryCard label="Total Borrowed" value={formatMwkDetailed(totalBorrowed)} icon={<Landmark className="h-4 w-4" />} />
+        <SummaryCard label="Outstanding" value={formatMwkDetailed(outstanding)} icon={<Wallet className="h-4 w-4" />} accent />
+        <SummaryCard label="Principal Repaid" value={formatMwkDetailed(totalRepaid)} icon={<TrendingUp className="h-4 w-4" />} />
+        <SummaryCard label="Interest Paid" value={formatMwkDetailed(interestPaid)} icon={<Receipt className="h-4 w-4" />} />
       </div>
 
       <div className="mb-4 flex items-center justify-between">
@@ -720,7 +718,7 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
 
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs uppercase text-gray-500">
             <tr>
               <th scope="col" className="px-4 py-3">Lender</th>
               <th scope="col" className="px-4 py-3 text-right">Principal</th>
@@ -743,9 +741,9 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
               return (
                 <tr key={l.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-900">{l.lender_name}</td>
-                  <td className="px-4 py-3 text-right">{formatMwk(Number(l.principal_amount))}</td>
-                  <td className="px-4 py-3 text-right">{formatMwk(repaid)}</td>
-                  <td className="px-4 py-3 text-right font-medium">{formatMwk(out)}</td>
+                  <td className="px-4 py-3 text-right">{formatMwkDetailed(Number(l.principal_amount))}</td>
+                  <td className="px-4 py-3 text-right">{formatMwkDetailed(repaid)}</td>
+                  <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(out)}</td>
                   <td className="px-4 py-3">{l.interest_rate_pct != null ? `${l.interest_rate_pct}%` : '—'}</td>
                   <td className="px-4 py-3">{l.start_date}</td>
                   <td className="px-4 py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${loanStatusColor(l.status)}`}>{loanStatusLabel(l.status)}</span></td>
@@ -779,7 +777,7 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
           <h3 className="mb-3 text-sm font-semibold text-gray-700">Recent Repayments</h3>
           <div className="overflow-x-auto rounded-xl border border-gray-200">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs uppercase text-gray-500">
                 <tr><th scope="col" className="px-4 py-3">Date</th><th scope="col" className="px-4 py-3">Loan</th><th scope="col" className="px-4 py-3 text-right">Principal</th><th scope="col" className="px-4 py-3 text-right">Interest</th><th scope="col" className="px-4 py-3 text-right">Total</th></tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -789,9 +787,9 @@ function LoansTab({ businessId, userId }: { businessId: string; userId: string }
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-2.5">{r.repayment_date}</td>
                       <td className="px-4 py-2.5">{loan?.lender_name ?? '—'}</td>
-                      <td className="px-4 py-2.5 text-right">{formatMwk(Number(r.principal_portion))}</td>
-                      <td className="px-4 py-2.5 text-right">{formatMwk(Number(r.interest_portion))}</td>
-                      <td className="px-4 py-2.5 text-right font-medium">{formatMwk(Number(r.amount))}</td>
+                      <td className="px-4 py-2.5 text-right">{formatMwkDetailed(Number(r.principal_portion))}</td>
+                      <td className="px-4 py-2.5 text-right">{formatMwkDetailed(Number(r.interest_portion))}</td>
+                      <td className="px-4 py-2.5 text-right font-medium">{formatMwkDetailed(Number(r.amount))}</td>
                     </tr>
                   );
                 })}
@@ -843,9 +841,9 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
   return (
     <div>
       <div className="mb-5 grid grid-cols-3 gap-3">
-        <SummaryCard label="Shares In (issued)" value={formatMwk(issued)} icon={<ArrowUpCircle className="h-4 w-4" />} />
-        <SummaryCard label="Shares Out (bought back)" value={formatMwk(boughtBack)} icon={<ArrowDownCircle className="h-4 w-4" />} />
-        <SummaryCard label="Net Share Capital" value={formatMwk(net)} icon={<Coins className="h-4 w-4" />} accent />
+        <SummaryCard label="Shares In (issued)" value={formatMwkDetailed(issued)} icon={<ArrowUpCircle className="h-4 w-4" />} />
+        <SummaryCard label="Shares Out (bought back)" value={formatMwkDetailed(boughtBack)} icon={<ArrowDownCircle className="h-4 w-4" />} />
+        <SummaryCard label="Net Share Capital" value={formatMwkDetailed(net)} icon={<Coins className="h-4 w-4" />} accent />
       </div>
 
       <div className="mb-4 flex items-center justify-between">
@@ -866,7 +864,7 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
 
       <div className="overflow-x-auto rounded-xl border border-gray-200">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs uppercase text-gray-500">
             <tr>
               <th scope="col" className="px-4 py-3">Shareholder</th>
               <th scope="col" className="px-4 py-3">Type</th>
@@ -890,7 +888,7 @@ function ShareTab({ businessId, userId }: { businessId: string; userId: string }
                     : <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Shares Out</span>}
                 </td>
                 <td className="px-4 py-3 text-right">{s.shares_count != null ? Number(s.shares_count).toLocaleString() : '—'}</td>
-                <td className="px-4 py-3 text-right font-medium">{formatMwk(Number(s.amount))}</td>
+                <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(Number(s.amount))}</td>
                 <td className="px-4 py-3">{s.created_at.slice(0, 10)}</td>
                 <td className="px-4 py-3 text-gray-500">{s.reference ?? '—'}</td>
               </tr>

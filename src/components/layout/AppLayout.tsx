@@ -16,10 +16,12 @@ import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 import { SupportWidget } from '@/components/support/SupportWidget';
+import { CommandPalette } from './CommandPalette';
 
 export function AppLayout() {
   const { t } = useTranslation();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
+  const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const isMobile = useIsMobile();
   const location = useLocation();
 
@@ -37,14 +39,8 @@ export function AppLayout() {
         {t('common.skipToMain')}
       </a>
 
-      <div
-        id="ledgr-live-region"
-        aria-live="polite"
-        aria-atomic="true"
-        className="sr-only"
-      />
+      <div id="ledgr-live-region" aria-live="polite" aria-atomic="true" className="sr-only" />
 
-      {/* Offline banner — sticky above header */}
       <div className="sticky top-0 z-40">
         <OfflineBanner />
       </div>
@@ -52,10 +48,14 @@ export function AppLayout() {
       <Sidebar />
 
       <div
-        className={clsx(
-          'flex min-h-screen flex-col transition-all duration-200',
-          sidebarOpen ? 'lg:ps-64' : 'lg:ps-[72px]',
-        )}
+        className={clsx('flex min-h-screen flex-col transition-all duration-200')}
+        style={
+          !isMobile
+            ? {
+                paddingInlineStart: sidebarOpen ? `${sidebarWidth}px` : '72px',
+              }
+            : undefined
+        }
       >
         {(!isMobile || showMobileHeader) && <Header />}
 
@@ -65,7 +65,6 @@ export function AppLayout() {
           aria-label="Main content"
           className={clsx(
             'flex-1 p-4 sm:p-6 outline-none',
-            // Desktop: normal padding, Mobile: extra bottom for floating nav + safe-area
             isMobile ? 'pb-[calc(7rem+env(safe-area-inset-bottom))]' : 'pb-6',
             isMobile && isDashboard && 'pt-6'
           )}
@@ -78,6 +77,7 @@ export function AppLayout() {
 
       <BottomNav />
       <SupportWidget />
+      <CommandPalette />
 
       {showWarning && (
         <InactivityWarningModal

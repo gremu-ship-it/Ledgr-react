@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
@@ -16,9 +17,6 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('IncomePage');
 
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -910,7 +908,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             </div>
             <div className="overflow-x-auto rounded-lg border border-gray-200">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 text-xs font-medium text-gray-500">
+                <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium text-gray-500">
                   <tr>
                     <th scope="col" className="px-3 py-2 text-left">Product / Service</th>  {/* NEW column */}
                     <th scope="col" className="px-3 py-2 text-left">Description</th>
@@ -960,7 +958,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                           {TAX_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                         </select>
                       </td>
-                      <td className="px-3 py-2 text-right text-sm font-medium">{formatMwk(lineCalcs[idx]?.lineTotal ?? 0)}</td>
+                      <td className="px-3 py-2 text-right text-sm font-medium">{formatMwkDetailed(lineCalcs[idx]?.lineTotal ?? 0)}</td>
                       <td className="px-2 py-2">
                         {form.lines.length > 1 && (
                           <button onClick={() => removeLine(idx)} className="text-gray-400 hover:text-red-500 transition-colors">
@@ -977,9 +975,9 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwk(subtotal)}</span></div>
-              <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwk(vatAmount)}</span></div>
-              <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwk(total)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwkDetailed(vatAmount)}</span></div>
+              <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwkDetailed(total)}</span></div>
             </div>
           </div>
 
@@ -1043,7 +1041,7 @@ function IncomeList({ businessId }: { businessId: string }) {
     <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
+          <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
             <tr>
               <th scope="col" className="px-4 py-3 text-left">Invoice #</th>
               <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
@@ -1059,8 +1057,8 @@ function IncomeList({ businessId }: { businessId: string }) {
                 <td className="px-4 py-3 font-medium text-brand-700">{inv.invoice_number}</td>
                 <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{inv.issue_date}</td>
                 <td className="px-4 py-3 font-medium text-gray-900">{inv.notes || inv.po_number || '—'}</td>
-                <td className="px-4 py-3 text-right font-medium">{formatMwk(inv.total_amount)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwk(inv.amount_paid)}</td>
+                <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(inv.total_amount)}</td>
+                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(inv.amount_paid)}</td>
                 <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={inv.status} /></td>
               </tr>
             ))}
