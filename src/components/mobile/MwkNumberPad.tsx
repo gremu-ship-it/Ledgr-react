@@ -9,7 +9,9 @@ interface MwkNumberPadProps {
 function vibrate(ms = 5) {
   try {
     if ('vibrate' in navigator) navigator.vibrate(ms);
-  } catch {}
+  } catch {
+    // ignore: vibration not supported or permission denied
+  }
 }
 
 export function MwkNumberPad({ value, onChange, maxAmount = 999999999 }: MwkNumberPadProps) {

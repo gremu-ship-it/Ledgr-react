@@ -9,8 +9,8 @@ import { pushBankReconciliationComplete, pushBankStatementImported } from '@/lib
 import { announce } from '@/lib/a11y';
 
 type Account = { id: string; code: string; name: string; is_bank_account: boolean };
-type Entry = { id: string; entry_date: string; entry_number: string; description: string; reference: string | null; amount: number };
-type Pair = { bank: BankTransaction; entry: Entry; confidence?: number; confirmed: boolean };
+type Entry = { id: string; entry_date: string; entry_number: string; description: string; reference: string | null; amount: number; journalLineId?: string };
+type Pair = { bank: BankTransaction; entry: Entry; confidence?: number; confirmed: boolean; journalLineId?: string };
 type ScoredEntry = { entry: Entry; confidence: number };
 type BankKey = string;
 
@@ -39,7 +39,13 @@ type RawEntry = {
   entry_number: string;
   description: string;
   reference: string | null;
-  journal_lines: Array<{ amount: number | null; is_debit: boolean | null; reconciled: boolean | null }>;
+  journal_lines: Array<{
+    id: string;
+    account_id: string;
+    amount: number | null;
+    is_debit: boolean | null;
+    reconciled: boolean | null;
+  }>;
 };
 
 export function BankReconciliation({ businessId }: { businessId: string }) {
@@ -74,23 +80,36 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
     queryFn: async () =>
       (await supabase
         .from('journal_entries')
-        .select('id,entry_date,entry_number,description,reference,journal_lines(amount,is_debit,reconciled)')
+        .select('id,entry_date,entry_number,description,reference,journal_lines(id,account_id,amount,is_debit,reconciled)')
         .eq('business_id', businessId)
         .order('entry_date', { ascending: false })
         .limit(250)).data || [],
   });
 
+  // Only consider journal_lines on the selected bank account for the candidate pool.
+  // Store the specific journal_line.id so we can link it later.
   const ledger = useMemo(
-    () =>
-      (rawEntries as unknown as RawEntry[])
-        .map(e => ({
-          ...e,
-          amount: (e.journal_lines || [])
-            .filter(l => !l.reconciled)
-            .reduce((sum, l) => sum + Number(l.amount || 0), 0),
-        }))
-        .filter((e: Entry) => e.amount > 0),
-    [rawEntries],
+    () => {
+      if (!bankAccount) return [] as Entry[];
+      return (rawEntries as unknown as RawEntry[])
+        .map(e => {
+          const bankLeg = (e.journal_lines || []).find(
+            l => l.account_id === bankAccount && !l.reconciled
+          );
+          if (!bankLeg) return null;
+          return {
+            id: e.id,
+            entry_date: e.entry_date,
+            entry_number: e.entry_number,
+            description: e.description,
+            reference: e.reference,
+            amount: Number(bankLeg.amount || 0),
+            journalLineId: bankLeg.id,
+          } as Entry;
+        })
+        .filter((e): e is Entry => !!e && e.amount > 0);
+    },
+    [rawEntries, bankAccount],
   );
   const unmatchedEntries = entries.length ? entries : ledger;
 
@@ -133,7 +152,7 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
   }
 
   function accept(bank: BankTransaction, entry: Entry, confidence?: number) {
-    setPairs(p => [...p, { bank, entry, confidence, confirmed: true }]);
+    setPairs(p => [...p, { bank, entry, confidence, confirmed: true, journalLineId: entry.journalLineId }]);
     setLines(x => x.filter(v => v !== bank));
     setEntries(x => x.filter(v => v.id !== entry.id));
     setPickerOpenFor(null);
@@ -303,21 +322,42 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
         .select('id')
         .single();
       if (error || !statement) throw error || new Error('Unable to save reconciliation');
+
+      // Persist matched pairs + link to journal_line (issue #51)
+      const matchedJournalLineIds: string[] = [];
       if (pairs.length) {
         const { error: linesError } = await supabase.from('bank_statement_lines').insert(
-          pairs.map(p => ({
-            business_id: businessId,
-            statement_id: statement.id,
-            transaction_date: p.bank.date,
-            description: p.bank.description,
-            reference: p.bank.reference || null,
-            debit_amount: p.bank.type === 'debit' ? p.bank.amount : 0,
-            credit_amount: p.bank.type === 'credit' ? p.bank.amount : 0,
-            is_reconciled: true,
-          })) as never,
+          pairs.map(p => {
+            if (p.journalLineId) matchedJournalLineIds.push(p.journalLineId);
+            return {
+              business_id: businessId,
+              statement_id: statement.id,
+              transaction_date: p.bank.date,
+              description: p.bank.description,
+              reference: p.bank.reference || null,
+              debit_amount: p.bank.type === 'debit' ? p.bank.amount : 0,
+              credit_amount: p.bank.type === 'credit' ? p.bank.amount : 0,
+              is_reconciled: true,
+              journal_line_id: p.journalLineId || null,
+            };
+          }) as never,
         );
         if (linesError) throw linesError;
       }
+
+      // Mark the matched journal_lines as reconciled (only the bank leg)
+      if (matchedJournalLineIds.length > 0) {
+        const { error: journalUpdateError } = await supabase
+          .from('journal_lines')
+          .update({
+            reconciled: true,
+            reconciled_at: new Date().toISOString(),
+          } as never)
+          .in('id', matchedJournalLineIds)
+          .eq('business_id', businessId);
+        if (journalUpdateError) throw journalUpdateError;
+      }
+
       const { error: lockError } = await supabase
         .from('bank_statements')
         .update({
@@ -328,6 +368,7 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
         } as never)
         .eq('id', statement.id);
       if (lockError) throw lockError;
+
       const accountName = accounts.find(a => a.id === bankAccount)?.name || 'Bank account';
       pushBankReconciliationComplete(accountName, pairs.length, businessId);
       announce(`Reconciliation saved. ${pairs.length} matched transactions locked.`);

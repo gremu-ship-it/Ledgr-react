@@ -1073,7 +1073,7 @@ function IncomeList({ businessId }: { businessId: string }) {
     );
 
   return (
-    <div ref={containerRef as any}>
+    <div ref={containerRef}>
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
       {isMobile ? (
         <div className="space-y-3">
