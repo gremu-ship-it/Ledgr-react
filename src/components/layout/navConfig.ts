@@ -20,6 +20,7 @@ import {
   ScrollText,
   ShieldCheck,
   LifeBuoy,
+  Building2,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -31,38 +32,18 @@ export interface NavItemConfig {
   labelKey: string;
   path: string;
   icon: LucideIcon;
-  /** If set, the item is soft-gated: still visible/clickable, but shows a small lock badge + onClick toast when the current plan doesn't include this capability. */
   requiresCapability?: PlanCapability;
-  /** Per-item minimum plan (for Accounting/Organisation items). Falls back to section minPlan. */
   minPlan?: PlanTier;
-  /**
-   * White-label module switch. When the current partner (bank/MFI) has this
-   * feature disabled the item is hidden entirely — unlike plan gating there
-   * is no upsell, because the client buys from the partner, not from Ledgr.
-   */
   partnerFeature?: PartnerFeatureKey;
 }
 
 export interface NavSectionConfig {
   labelKey: string;
   items: NavItemConfig[];
-  /** Minimum plan tier required to see this section. Omit for free (visible to all). */
   minPlan?: PlanTier;
 }
 
 export const NAV_SECTIONS: NavSectionConfig[] = [
-  {
-    labelKey: 'navigation.sections.ai',
-    items: [
-      { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
-    ],
-  },
-  {
-    labelKey: 'navigation.sections.support',
-    items: [
-      { labelKey: 'navigation.items.support', path: '/support', icon: LifeBuoy },
-    ],
-  },
   {
     labelKey: 'navigation.sections.overview',
     items: [
@@ -95,7 +76,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, minPlan: 'growth' },
       { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, minPlan: 'growth' },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
-      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Building2, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
       { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth' },
     ],
@@ -108,22 +89,29 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth' },
     ],
   },
+  {
+    labelKey: 'navigation.sections.ai',
+    items: [
+      { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.support',
+    items: [
+      { labelKey: 'navigation.items.support', path: '/support', icon: LifeBuoy },
+    ],
+  },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 const PLAN_TIER_ORDER: PlanTier[] = ['free', 'growth', 'pro', 'enterprise'];
 
-/**
- * Returns true if `actual` tier meets or exceeds `required`.
- * If required is undefined the section is open to everyone.
- */
 export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   if (!required) return true;
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
-/** Nav sections filtered to the modules the current partner has enabled and the user's role permissions. */
 export function visibleSectionsFor(
   isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
   role?: string | null,
@@ -140,7 +128,6 @@ export function visibleSectionsFor(
     .filter((section) => section.items.length > 0);
 }
 
-/** Set of all paths gated behind a paid plan (item has minPlan or requiresCapability). */
 export const GATED_PATHS: Set<string> = new Set(
   NAV_SECTIONS.flatMap((s) =>
     s.items
@@ -149,9 +136,6 @@ export const GATED_PATHS: Set<string> = new Set(
   ),
 );
 
-/**
- * Returns true if the given item should be considered locked for the current plan tier.
- */
 export function isItemLocked(
   item: NavItemConfig,
   currentTier: PlanTier,

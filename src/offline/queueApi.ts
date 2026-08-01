@@ -28,9 +28,11 @@ export function isOfflineError(error: unknown): boolean {
  * number from BusinessRepository upon syncing online.
  */
 export function generateOfflineNumber(prefix = 'OFF'): string {
-  const stamp = Date.now().toString().slice(-6);
-  const rand = Math.floor(100 + Math.random() * 900);
-  return `${prefix}-OFFLINE-${stamp}${rand}`;
+  const shortId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID().slice(0, 8).toUpperCase()
+    : Math.random().toString(36).slice(2, 10).toUpperCase();
+  const stamp = Date.now().toString(36).toUpperCase();
+  return `${prefix}-OFFLINE-${stamp}-${shortId}`;
 }
 
 /**

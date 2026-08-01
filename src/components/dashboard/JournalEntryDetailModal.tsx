@@ -2,12 +2,10 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, RotateCcw, Lock, AlertCircle, MapPin, Loader2 } from 'lucide-react';
 import { repos } from '@/lib/repositories';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { nextEntryNumber } from '@/services/journalService';
 
-function formatMwk(amount: number): string {
-  return `MK ${Number(amount).toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 interface JournalEntryDetailModalProps {
   entryId: string;
@@ -186,10 +184,10 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                             {acc ? `${acc.code} — ${acc.name}` : line.account_id}
                           </td>
                           <td className="px-3 py-2 text-right text-gray-600">
-                            {line.is_debit ? formatMwk(Number(line.amount_base)) : ''}
+                            {line.is_debit ? formatMwkDetailed(Number(line.amount_base)) : ''}
                           </td>
                           <td className="px-3 py-2 text-right text-gray-600">
-                            {!line.is_debit ? formatMwk(Number(line.amount_base)) : ''}
+                            {!line.is_debit ? formatMwkDetailed(Number(line.amount_base)) : ''}
                           </td>
                         </tr>
                       );

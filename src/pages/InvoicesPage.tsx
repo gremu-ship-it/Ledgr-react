@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  FileText,
   AlertCircle,
   ChevronRight,
   ArrowLeft,
@@ -11,7 +10,9 @@ import {
   FileDown,
   Receipt,
   Truck,
+  Eye,
 } from 'lucide-react';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
@@ -22,22 +23,18 @@ import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadB
 import { generateInvoiceDocument, generateDeliveryNoteDocument, generateReceiptDocument } from '@/lib/documents/documentGenerator';
 import { businessRowToBranding, type BusinessBranding } from '@/lib/documents/types';
 import { supabase } from '@/lib/supabase';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { SwipeableRow } from '@/components/mobile/SwipeableRow';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useDensity } from '@/hooks/useDensity';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
+import { useCallback } from 'react';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
-
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
-
+import { formatDateShort } from '@/lib/formatters';
 function formatDate(date: string): string {
-  return new Date(date).toLocaleDateString('en-MW', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDateShort(date);
 }
 
 function today(): string {
@@ -140,7 +137,7 @@ function RecordPaymentModal({
         throw new Error('Enter a valid payment amount');
       if (amount > amountDue)
         throw new Error(
-          `Amount cannot exceed the outstanding balance of ${formatMwk(amountDue)}`,
+          `Amount cannot exceed the outstanding balance of ${formatMwkDetailed(amountDue)}`,
         );
 
       const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
@@ -226,15 +223,15 @@ function RecordPaymentModal({
           </div>
           <div className="mt-1 flex justify-between text-gray-600">
             <span>Total</span>
-            <span>{formatMwk(Number(invoice.total_amount))}</span>
+            <span>{formatMwkDetailed(Number(invoice.total_amount))}</span>
           </div>
           <div className="mt-1 flex justify-between text-gray-600">
             <span>Already Paid</span>
-            <span>{formatMwk(Number(invoice.amount_paid))}</span>
+            <span>{formatMwkDetailed(Number(invoice.amount_paid))}</span>
           </div>
           <div className="mt-2 flex justify-between border-t border-gray-200 pt-2 font-semibold text-gray-900">
             <span>Outstanding</span>
-            <span className="text-brand-700">{formatMwk(amountDue)}</span>
+            <span className="text-brand-700">{formatMwkDetailed(amountDue)}</span>
           </div>
         </div>
 
@@ -695,7 +692,7 @@ function InvoiceDetail({
             ) : (
               <div className="overflow-hidden rounded-lg border border-gray-200">
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
                     <tr>
                       <th scope="col" className="px-4 py-2.5 text-left">Description</th>
                       <th scope="col" className="px-4 py-2.5 text-right">Qty</th>
@@ -714,13 +711,13 @@ function InvoiceDetail({
                           {line.quantity}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-500">
-                          {formatMwk(Number(line.unit_price))}
+                          {formatMwkDetailed(Number(line.unit_price))}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-500">
-                          {formatMwk(Number(line.tax_amount))}
+                          {formatMwkDetailed(Number(line.tax_amount))}
                         </td>
                         <td className="px-4 py-3 text-right font-medium">
-                          {formatMwk(Number(line.line_total))}
+                          {formatMwkDetailed(Number(line.line_total))}
                         </td>
                       </tr>
                     ))}
@@ -734,21 +731,21 @@ function InvoiceDetail({
               <div className="w-64 space-y-1.5 text-sm">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal</span>
-                  <span>{formatMwk(Number(invoice.subtotal))}</span>
+                  <span>{formatMwkDetailed(Number(invoice.subtotal))}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>VAT (17.5%)</span>
-                  <span>{formatMwk(Number(invoice.vat_amount))}</span>
+                  <span>{formatMwkDetailed(Number(invoice.vat_amount))}</span>
                 </div>
                 {Number(invoice.wht_amount) > 0 && (
                   <div className="flex justify-between text-gray-600">
                     <span>WHT</span>
-                    <span>−{formatMwk(Number(invoice.wht_amount))}</span>
+                    <span>−{formatMwkDetailed(Number(invoice.wht_amount))}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900">
                   <span>Total</span>
-                  <span>{formatMwk(Number(invoice.total_amount))}</span>
+                  <span>{formatMwkDetailed(Number(invoice.total_amount))}</span>
                 </div>
               </div>
             </div>
@@ -773,18 +770,18 @@ function InvoiceDetail({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>Invoice Total</span>
-                <span>{formatMwk(Number(invoice.total_amount))}</span>
+                <span>{formatMwkDetailed(Number(invoice.total_amount))}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>Amount Paid</span>
                 <span className="text-brand-700">
-                  {formatMwk(Number(invoice.amount_paid))}
+                  {formatMwkDetailed(Number(invoice.amount_paid))}
                 </span>
               </div>
               <div className="flex justify-between border-t border-gray-100 pt-2 font-semibold text-gray-900">
                 <span>Outstanding</span>
                 <span className={amountDue > 0 ? 'text-red-600' : 'text-brand-700'}>
-                  {formatMwk(amountDue)}
+                  {formatMwkDetailed(amountDue)}
                 </span>
               </div>
             </div>
@@ -838,7 +835,7 @@ function InvoiceDetail({
                   >
                     <div>
                       <p className="font-medium text-gray-900">
-                        {formatMwk(Number(p.amount))}
+                        {formatMwkDetailed(Number(p.amount))}
                       </p>
                       <p className="text-xs text-gray-600">
                         {formatDate(p.payment_date)} ·{' '}
@@ -885,6 +882,16 @@ function InvoiceList({
   onSelect: (invoice: Row<'invoices'>) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const isMobile = useIsMobile();
+  const { tdClass, thClass } = useDensity();
+  const queryClient = useQueryClient();
+
+  const onRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['invoices', businessId] });
+  }, [queryClient, businessId]);
+
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
 
   const { data: invoices = [], isLoading, isError } = useQuery({
     queryKey: ['invoices', businessId],
@@ -897,14 +904,43 @@ function InvoiceList({
       ? invoices
       : invoices.filter((inv) => inv.status === statusFilter);
 
+  const filteredIds = filtered.map((i) => i.id);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
+  const someSelected = filteredIds.some((id) => selectedIds.has(id));
+
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }
+
+  const totalSelectedAmount = filtered
+    .filter((inv) => selectedIds.has(inv.id))
+    .reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+
   if (isLoading) {
     return (
       <div className="space-y-3">
         {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            className="h-16 animate-pulse rounded-xl bg-gray-100"
-          />
+          <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />
         ))}
       </div>
     );
@@ -920,100 +956,152 @@ function InvoiceList({
   }
 
   return (
-    <div>
-      {/* Status filter tabs */}
-      <div className="mb-5 flex flex-wrap gap-1">
-        {STATUS_TABS.map((tab) => {
-          const count =
-            tab.value === 'all'
-              ? invoices.length
-              : invoices.filter((inv) => inv.status === tab.value).length;
-          return (
-            <button
-              key={tab.value}
-              onClick={() => setStatusFilter(tab.value)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                statusFilter === tab.value
-                  ? 'bg-brand-500 text-white'
-                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {tab.label}
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-xs ${
+    <div ref={containerRef as any}>
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap gap-1">
+          {STATUS_TABS.map((tab) => {
+            const count =
+              tab.value === 'all'
+                ? invoices.length
+                : invoices.filter((inv) => inv.status === tab.value).length;
+            return (
+              <button
+                key={tab.value}
+                onClick={() => setStatusFilter(tab.value)}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   statusFilter === tab.value
-                    ? 'bg-white/20 text-white'
-                    : 'bg-gray-100 text-gray-500'
+                    ? 'bg-brand-500 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                {tab.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs ${
+                    statusFilter === tab.value ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-3 py-2 text-sm border border-brand-100">
+            <span className="font-semibold text-brand-800">{selectedIds.size} selected</span>
+            <span className="text-brand-600">{formatMwkDetailed(totalSelectedAmount)} total</span>
+            <button onClick={() => setSelectedIds(new Set())} className="ml-2 rounded-lg bg-white px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 border">Clear</button>
+          </div>
+        )}
       </div>
 
-      {/* Empty state */}
       {filtered.length === 0 ? (
-        <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
-          <FileText className="h-10 w-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">
-            {statusFilter === 'all'
-              ? 'No invoices yet'
-              : `No ${statusFilter.replace('_', ' ')} invoices`}
-          </p>
+        <EmptyState
+          title={statusFilter === 'all' ? 'No invoices yet' : `No ${statusFilter.replace('_', ' ')} invoices`}
+          description={statusFilter === 'all' ? 'Create your first invoice to start billing.' : 'Try a different status filter.'}
+          actionLabel={statusFilter === 'all' ? 'New Invoice' : undefined}
+          onAction={statusFilter === 'all' ? () => (window.location.href = '/income?action=invoice') : undefined}
+          variant="finance"
+        />
+      ) : isMobile ? (
+        <div className="space-y-3">
+          {filtered.map((inv) => {
+            const amountDue = inv.amount_due !== null ? Number(inv.amount_due) : Number(inv.total_amount) - Number(inv.amount_paid);
+            const isSel = selectedIds.has(inv.id);
+            const canPay = !['paid', 'voided', 'credited'].includes(inv.status) && amountDue > 0;
+            return (
+              <SwipeableRow
+                key={inv.id}
+                actions={[
+                  { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => onSelect(inv) },
+                  ...(canPay ? [{ label: 'Pay', icon: CreditCard, color: 'bg-brand-500', action: () => onSelect(inv) } as const] : []),
+                ]}
+              >
+                <div className={`flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm ${isSel ? 'border-brand-300 ring-1 ring-brand-100' : 'border-gray-200'}`}>
+                  <input type="checkbox" checked={isSel} onChange={() => toggleOne(inv.id)} className="h-4 w-4 rounded border-gray-300 text-brand-600" />
+                  <div className="min-w-0 flex-1" onClick={() => onSelect(inv)}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-brand-700">{inv.invoice_number}</p>
+                      <StatusBadge status={inv.status} />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <p className="text-xs text-gray-500">{formatDate(inv.issue_date)} {inv.due_date ? `→ ${formatDate(inv.due_date)}` : ''}</p>
+                      <p className="text-sm font-bold text-gray-900">{formatMwkDetailed(Number(inv.total_amount))}</p>
+                    </div>
+                    {amountDue > 0 && amountDue !== Number(inv.total_amount) && (
+                      <p className="mt-1 text-xs font-medium text-red-600">{formatMwkDetailed(amountDue)} due</p>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
+                </div>
+              </SwipeableRow>
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500 shadow-sm">
                 <tr>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Issue Date</th>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Due Date</th>
-                  <th scope="col" className="px-4 py-3 text-right">Total</th>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Outstanding</th>
-                  <th scope="col" className="px-4 py-3 text-center">Status</th>
+                  <th scope="col" className={`w-10 ${thClass}`}>
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = !allSelected && someSelected;
+                      }}
+                      onChange={toggleAll}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                      aria-label="Select all invoices"
+                    />
+                  </th>
+                  <th scope="col" className={`${thClass} text-left`}>Invoice #</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Issue Date</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Due Date</th>
+                  <th scope="col" className={`${thClass} text-right`}>Total</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Outstanding</th>
+                  <th scope="col" className={`${thClass} text-center`}>Status</th>
                   <th scope="col" className="w-8" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map((inv) => {
                   const amountDue =
-                    inv.amount_due !== null
-                      ? Number(inv.amount_due)
-                      : Number(inv.total_amount) - Number(inv.amount_paid);
+                    inv.amount_due !== null ? Number(inv.amount_due) : Number(inv.total_amount) - Number(inv.amount_paid);
+                  const isSel = selectedIds.has(inv.id);
                   return (
                     <tr
                       key={inv.id}
-                      onClick={() => onSelect(inv)}
-                      className="cursor-pointer transition-colors hover:bg-gray-50"
+                      className={`transition-colors ${isSel ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
                     >
-                      <td className="px-4 py-3 font-medium text-brand-700">
+                      <td className={`${tdClass}`}>
+                        <input
+                          type="checkbox"
+                          checked={isSel}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleOne(inv.id);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                        />
+                      </td>
+                      <td className={`${tdClass} font-medium text-brand-700 cursor-pointer`} onClick={() => onSelect(inv)}>
                         {inv.invoice_number}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
-                        {formatDate(inv.issue_date)}
+                      <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{formatDate(inv.issue_date)}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{inv.due_date ? formatDate(inv.due_date) : '—'}</td>
+                      <td className={`${tdClass} text-right font-medium`}>{formatMwkDetailed(Number(inv.total_amount))}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-right ${amountDue > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`}>
+                        {amountDue > 0 ? formatMwkDetailed(amountDue) : '—'}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">
-                        {inv.due_date ? formatDate(inv.due_date) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">
-                        {formatMwk(Number(inv.total_amount))}
-                      </td>
-                      <td
-                        className={`hidden sm:table-cell px-4 py-3 text-right ${
-                          amountDue > 0
-                            ? 'font-medium text-red-600'
-                            : 'text-gray-400'
-                        }`}
-                      >
-                        {amountDue > 0 ? formatMwk(amountDue) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className={`${tdClass} text-center`}>
                         <StatusBadge status={inv.status} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className={`px-3 ${tdClass} cursor-pointer`} onClick={() => onSelect(inv)}>
                         <ChevronRight className="h-4 w-4 text-gray-400" />
                       </td>
                     </tr>

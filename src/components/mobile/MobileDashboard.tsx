@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   Lock,
   Package,
-  Smartphone,
+  Settings,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -36,6 +36,11 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
 import { QuickIncomeMobile } from './QuickIncomeMobile';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from './PullToRefreshIndicator';
+import { SwipeableRow } from './SwipeableRow';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CreditCard, Eye } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -99,11 +104,12 @@ function StatCard({
   const Wrapper = onClick ? 'button' : 'div';
 
   return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <Wrapper
-      onClick={onClick}
+      onClick={onClick as any}
       className={clsx(
-        'group w-full rounded-3xl border border-white bg-white/60 p-4 text-left shadow-sm backdrop-blur-md transition-all',
-        onClick && 'active:scale-95 active:bg-white/80',
+        'group w-full rounded-2xl border border-white bg-white/80 p-4 text-left shadow-sm backdrop-blur-sm transition-all touch-manipulation',
+        onClick && 'active:scale-[0.97] active:bg-white',
       )}
     >
       <div className="flex items-center justify-between mb-3">
@@ -115,23 +121,19 @@ function StatCard({
               trend.positive ? 'bg-brand-50 text-brand-600' : 'bg-red-50 text-red-500',
             )}
           >
-            {trend.positive ? (
-              <TrendingUp className="h-2.5 w-2.5" />
-            ) : (
-              <TrendingDown className="h-2.5 w-2.5" />
-            )}
+            {trend.positive ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
             {trend.pct.toFixed(0)}%
           </span>
         )}
       </div>
       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
-      <p className={`text-xl font-black tracking-tight ${valueColor} truncate`} title={valueTitle ?? value}>{value}</p>
-      {subtext && <p className="mt-1 text-[10px] font-medium text-gray-400 truncate uppercase">{subtext}</p>}
+      <p className={`text-lg font-black tracking-tight ${valueColor} truncate`} title={valueTitle ?? value}>
+        {value}
+      </p>
+      {subtext && <p className="mt-1 text-[10px] font-medium text-gray-500 truncate uppercase">{subtext}</p>}
     </Wrapper>
   );
 }
-
-// ── Quick Action Button ─────────────────────────────────────────────────
 
 function QuickActionButton({
   icon,
@@ -146,11 +148,16 @@ function QuickActionButton({
 }) {
   return (
     <button
-      onClick={onClick}
-      className="group flex flex-col items-center gap-2 rounded-2xl border border-gray-200 bg-white p-5 transition-transform active:scale-95"
+      onClick={() => {
+        try {
+          if ('vibrate' in navigator) navigator.vibrate(5);
+        } catch {}
+        onClick();
+      }}
+      className="group flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-3 transition-transform active:scale-95 touch-manipulation"
     >
-      <IconBadge icon={icon} tone={tone} size="lg" interactive />
-      <span className="text-xs font-medium text-gray-700">{label}</span>
+      <IconBadge icon={icon} tone={tone} size="sm" interactive />
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-700 text-center leading-tight">{label}</span>
     </button>
   );
 }
@@ -159,6 +166,7 @@ function QuickActionButton({
 
 export function MobileDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const currentUser = useAppStore((s) => s.currentUser);
   const businessId = currentBusiness?.business?.id;
@@ -166,6 +174,19 @@ export function MobileDashboard() {
 
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['monthly_income'] }),
+      queryClient.invalidateQueries({ queryKey: ['monthly_expenses'] }),
+      queryClient.invalidateQueries({ queryKey: ['income_expense_trend'] }),
+      queryClient.invalidateQueries({ queryKey: ['recent_journal'] }),
+      queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
+      queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
+    ]);
+  }, [queryClient]);
+
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
 
   const income = useMonthlyIncome(businessId);
   const expenses = useMonthlyExpenses(businessId);
@@ -181,9 +202,7 @@ export function MobileDashboard() {
   });
 
   const netProfit =
-    income.data !== undefined && expenses.data !== undefined
-      ? income.data.totalAmount - expenses.data
-      : undefined;
+    income.data !== undefined && expenses.data !== undefined ? income.data.totalAmount - expenses.data : undefined;
 
   const incomeTrend = monthOverMonthChange(trend.data, 'income');
   const expensesTrend = monthOverMonthChange(trend.data, 'expenses');
@@ -200,72 +219,52 @@ export function MobileDashboard() {
     return 'Good evening';
   };
 
-  const firstName = currentUser?.profile?.full_name?.split(' ')[0]
-    ?? currentUser?.email?.split('@')[0]
-    ?? 'there';
-
+  const firstName = currentUser?.profile?.full_name?.split(' ')[0] ?? currentUser?.email?.split('@')[0] ?? 'there';
   const { logoUrl } = useBrandTheme();
+  const isProfitPositive = netProfit !== undefined && netProfit >= 0;
 
   return (
-    <div className="relative flex flex-col gap-6 pb-24">
-      {/* Futuristic Background Elements */}
-      <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -left-[10%] h-[40%] w-[70%] rounded-full bg-brand-500/5 blur-[120px]" />
-        <div className="absolute top-[20%] -right-[10%] h-[30%] w-[60%] rounded-full bg-indigo-500/5 blur-[100px]" />
-        <div className="absolute bottom-[10%] left-[20%] h-[40%] w-[80%] rounded-full bg-brand-400/5 blur-[120px]" />
-      </div>
+    <div ref={containerRef as any} className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="absolute -inset-1 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 opacity-20 blur-sm" />
+      <div className="flex items-center justify-between px-1 pt-1">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative shrink-0">
             {logoUrl ? (
-              <img
-                src={logoUrl}
-                alt="Business logo"
-                className="relative h-12 w-12 shrink-0 rounded-2xl object-cover shadow-sm ring-2 ring-white"
-              />
+              <img src={logoUrl} alt="Business logo" className="h-12 w-12 rounded-2xl object-cover shadow-sm ring-2 ring-white" />
             ) : (
-              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-500 text-lg font-black text-white shadow-lg ring-2 ring-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500 text-lg font-black text-white shadow-lg ring-2 ring-white">
                 {firstName[0]?.toUpperCase()}
               </div>
             )}
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-black tracking-tight text-gray-900 leading-none">
+            <h1 className="text-[18px] font-black tracking-tight text-gray-900 leading-none">
               {greeting()}, <span className="text-brand-600">{firstName}</span>
             </h1>
             {businessName && (
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1.5 truncate">
-                {businessName}
-              </p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mt-1.5 truncate">{businessName}</p>
             )}
           </div>
         </div>
         <button
-          onClick={() => navigate('/settings')}
-          className="group relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform active:scale-90"
+          onClick={() => navigate('/settings?tab=appearance')}
+          aria-label="Settings"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
         >
-          <Smartphone className="h-5 w-5 text-gray-400 group-hover:text-brand-600" />
+          <Settings className="h-5 w-5 text-gray-600" />
         </button>
       </div>
 
-      {/* Net Profit Hero Card — Futuristic Glassmorphism */}
-      <div className="relative overflow-hidden rounded-[2.5rem] p-6 shadow-2xl shadow-brand-500/20 ring-1 ring-white/20">
-        <div className={clsx(
-          'absolute inset-0 transition-colors duration-500',
-          netProfit === undefined
-            ? 'bg-gray-100'
-            : netProfit >= 0
-            ? 'bg-gradient-to-br from-brand-500 via-brand-600 to-emerald-600'
-            : 'bg-gradient-to-br from-red-500 via-red-600 to-rose-700',
-        )} />
-        
-        {/* Decorative Circles */}
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute -bottom-10 -left-10 h-32 w-32 rounded-full bg-black/10 blur-2xl" />
-
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-[1.75rem] p-5 shadow-xl shadow-brand-500/15 ring-1 ring-white/20">
+        <div
+          className={clsx(
+            'absolute inset-0 transition-colors duration-300',
+            netProfit === undefined ? 'bg-gray-100' : isProfitPositive ? 'bg-gradient-to-br from-brand-600 to-emerald-600' : 'bg-gradient-to-br from-red-600 to-rose-700',
+          )}
+        />
         <div className="relative z-10">
           {income.isLoading || expenses.isLoading ? (
             <div className="animate-pulse space-y-4">
@@ -276,51 +275,34 @@ export function MobileDashboard() {
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">
-                  Current Balance
-                </p>
-                <div className="rounded-full bg-white/20 px-3 py-1 backdrop-blur-md">
-                  <p className="text-[10px] font-bold text-white uppercase">
-                    {new Date().toLocaleDateString('en-MW', { month: 'short', year: 'numeric' })}
-                  </p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Current Balance</p>
+                <div className="rounded-full bg-white/20 px-3 py-1">
+                  <p className="text-[10px] font-bold text-white uppercase">{new Date().toLocaleDateString('en-MW', { month: 'short', year: 'numeric' })}</p>
                 </div>
               </div>
-              
-              <div className="mt-4">
-                <p
-                  className="text-white tracking-tighter font-black leading-none"
-                  style={{ fontSize: 'clamp(2rem, 10vw, 3.5rem)' }}
-                >
-                  {netProfit !== undefined ? formatMwkCompact(Math.abs(netProfit)) : formatMwkCompact(0)}
+
+              <div className="mt-3">
+                <p className="text-white tracking-tighter font-black leading-none" style={{ fontSize: 'clamp(1.75rem, 8vw, 2.5rem)' }}>
+                  {netProfit !== undefined ? (isProfitPositive ? '+' : '-') : ''}
+                  {formatMwkCompact(netProfit !== undefined ? Math.abs(netProfit) : 0)}
                 </p>
-                <p className="mt-1 text-sm font-medium text-white/70">
-                  {netProfit !== undefined ? formatMwk(Math.abs(netProfit)) : formatMwk(0)}
+                <p className="mt-1 text-xs font-medium text-white/75">
+                  {netProfit !== undefined ? (isProfitPositive ? formatMwk(netProfit) : `-${formatMwk(Math.abs(netProfit))}`) : formatMwk(0)}
                 </p>
               </div>
 
-              <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-4">
+              <div className="mt-5 flex items-center justify-between border-t border-white/15 pt-3">
                 <div className="flex items-center gap-2">
-                  <div className={clsx(
-                    'flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md',
-                    netProfit !== undefined && netProfit >= 0 ? 'bg-white/20' : 'bg-black/20'
-                  )}>
-                    {netProfit !== undefined && netProfit >= 0
-                      ? <TrendingUp className="h-4 w-4 text-white" />
-                      : <TrendingDown className="h-4 w-4 text-white" />}
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+                    {isProfitPositive ? <TrendingUp className="h-4 w-4 text-white" /> : <TrendingDown className="h-4 w-4 text-white" />}
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/60 leading-none">Status</p>
-                    <p className="text-xs font-black text-white mt-0.5">
-                      {netProfit !== undefined && netProfit >= 0 ? 'Surplus' : 'Deficit'}
-                    </p>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-white/60 leading-none">Status</p>
+                    <p className="text-xs font-black text-white mt-0.5">{isProfitPositive ? 'Surplus' : 'Deficit'}</p>
                   </div>
                 </div>
-                
-                <button 
-                  onClick={() => navigate('/reports')}
-                  className="rounded-xl bg-white/20 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white backdrop-blur-md transition-all active:scale-95 active:bg-white/30"
-                >
-                  View Insights
+                <button onClick={() => navigate('/reports')} className="rounded-xl bg-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white active:scale-95">
+                  Insights
                 </button>
               </div>
             </>
@@ -328,110 +310,45 @@ export function MobileDashboard() {
         </div>
       </div>
 
-      {/* Stat Cards — 2-column grid */}
-      <div className="grid grid-cols-2 gap-4">
-        <StatCard
-          label="Income"
-          value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)}
-          valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
-          subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined}
-          tone="brand"
-          icon={TrendingUp}
-          isLoading={income.isLoading}
-          trend={incomeTrend}
-        />
-        <StatCard
-          label="Expenses"
-          value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)}
-          valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
-          tone="negative"
-          icon={Receipt}
-          isLoading={expenses.isLoading}
-          trend={expensesTrend}
-        />
-        <StatCard
-          label="Outstanding"
-          value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
-          valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
-          subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined}
-          tone="info"
-          icon={FileText}
-          isLoading={outstanding.isLoading}
-          onClick={() => navigate('/invoices')}
-        />
-        <StatCard
-          label="VAT Accrued"
-          value={netVat !== undefined ? formatMwkCompact(Math.abs(netVat)) : formatMwkCompact(0)}
-          valueTitle={netVat !== undefined ? formatMwk(Math.abs(netVat)) : formatMwk(0)}
-          subtext={netVat !== undefined ? (netVat >= 0 ? 'Payable to MRA' : 'Refundable (input > output)') : 'Tax status'}
-          tone="warning"
-          icon={Percent}
-          isLoading={expenseVat.isLoading || income.isLoading}
-          onClick={() => navigate('/tax')}
-        />
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard label="Income" value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)} valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={income.isLoading} trend={incomeTrend} />
+        <StatCard label="Expenses" value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)} valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={expenses.isLoading} trend={expensesTrend} />
+        <StatCard label="Outstanding" value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)} valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} tone="info" icon={FileText} isLoading={outstanding.isLoading} onClick={() => navigate('/invoices')} />
+        <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={netVat >= 0 ? 'Payable to MRA' : 'Refundable'} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} onClick={() => navigate('/tax')} />
       </div>
 
-      {/* Income vs Expenses Chart */}
-      <div className="rounded-[2rem] border border-white bg-white/60 p-6 shadow-sm backdrop-blur-md">
-        <div className="mb-4 flex items-center justify-between">
+      {/* Chart */}
+      <div className="rounded-2xl border border-white bg-white/70 p-4 shadow-sm backdrop-blur-sm">
+        <div className="mb-3 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-black uppercase tracking-widest text-gray-900">Analytics</h2>
+            <h2 className="text-xs font-black uppercase tracking-widest text-gray-900">Analytics</h2>
             <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Income vs Expenses</p>
           </div>
-          <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500 uppercase">6 Months</span>
+          <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500 uppercase">6M</span>
         </div>
-        <IncomeExpenseChart
-          data={trend.data}
-          isLoading={trend.isLoading}
-          isError={trend.isError}
-          compact
-        />
+        <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} compact />
       </div>
 
       {/* Quick Actions */}
       <div className="px-1">
-        <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-          Terminal
-        </p>
-        <div className="grid grid-cols-4 gap-4">
-          <QuickActionButton
-            icon={DollarSign}
-            tone="brand"
-            label="Income"
-            onClick={() => setShowIncome(true)}
-          />
-          <QuickActionButton
-            icon={Receipt}
-            tone="negative"
-            label="Expense"
-            onClick={() => setShowExpense(true)}
-          />
-          <QuickActionButton
-            icon={FileText}
-            tone="info"
-            label="Invoice"
-            onClick={() => navigate('/income?action=invoice')}
-          />
-          <QuickActionButton
-            icon={Users}
-            tone="neutral"
-            label="Payroll"
-            onClick={() => navigate('/payroll?action=run')}
-          />
+        <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Quick Actions</p>
+        <div className="grid grid-cols-4 gap-2">
+          <QuickActionButton icon={DollarSign} tone="brand" label="Income" onClick={() => setShowIncome(true)} />
+          <QuickActionButton icon={Receipt} tone="negative" label="Expense" onClick={() => setShowExpense(true)} />
+          <QuickActionButton icon={FileText} tone="info" label="Invoice" onClick={() => navigate('/income?action=invoice')} />
+          <QuickActionButton icon={Users} tone="neutral" label="Payroll" onClick={() => navigate('/payroll?action=run')} />
         </div>
       </div>
 
-      {/* Inventory + Mobile Money */}
-      <div className="grid grid-cols-1 gap-4">
-        <button
-          onClick={() => navigate('/warehouse')}
-          className="relative overflow-hidden w-full rounded-[2rem] border border-white bg-white/60 p-6 text-left shadow-sm backdrop-blur-md transition-all active:scale-[0.98]"
-        >
-          <div className="mb-4 flex items-center justify-between">
+      {/* Inventory */}
+      <div className="grid grid-cols-1 gap-3">
+        <button onClick={() => navigate('/warehouse')} className="w-full rounded-2xl border border-white bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm active:scale-[0.98] touch-manipulation">
+          <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
               <div>
-                <span className="text-sm font-black uppercase tracking-widest text-gray-900">Inventory</span>
+                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Inventory</span>
                 <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Stock Management</p>
               </div>
             </div>
@@ -439,155 +356,112 @@ export function MobileDashboard() {
           </div>
 
           {lowStock.isLoading ? (
-            <div className="h-12 animate-pulse rounded-2xl bg-gray-100/50" />
+            <div className="h-12 animate-pulse rounded-xl bg-gray-100/50" />
           ) : lowStock.data && lowStock.data.length > 0 ? (
-            <div className="rounded-2xl bg-amber-50/50 p-3 ring-1 ring-amber-100">
+            <div className="rounded-xl bg-amber-50/80 p-3 ring-1 ring-amber-100">
               <div className="mb-2 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                <p className="text-[11px] font-bold text-amber-700 uppercase">
-                  {lowStock.data.length} Alerts
-                </p>
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <p className="text-[11px] font-bold text-amber-800 uppercase">{lowStock.data.length} low stock alerts</p>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {lowStock.data.slice(0, 2).map((alert) => (
                   <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between">
-                    <span className="truncate text-xs font-medium text-gray-600">{alert.product_name}</span>
-                    <span className="shrink-0 text-xs font-black text-gray-900">
-                      {Number(alert.quantity_available)} left
-                    </span>
+                    <span className="truncate text-xs font-medium text-gray-700 max-w-[60%]">{alert.product_name}</span>
+                    <span className="shrink-0 text-xs font-black text-gray-900">{Number(alert.quantity_available)} left</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className="rounded-2xl bg-brand-50/50 p-3 ring-1 ring-brand-100">
-              <p className="text-xs font-bold text-brand-700 uppercase text-center italic">Optimal stock levels maintained</p>
+            <div className="rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
+              <p className="text-[11px] font-bold text-brand-700 uppercase text-center">Stock levels OK</p>
             </div>
           )}
         </button>
-
-        <div className="w-full rounded-[2rem] border border-dashed border-gray-200 bg-white/40 p-6 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <IconBadge icon={Smartphone} tone="neutral" size="sm" />
-            <div>
-              <span className="text-sm font-black uppercase tracking-widest text-gray-400">Integrations</span>
-              <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Mobile Money (Coming Soon)</p>
-            </div>
-          </div>
-        </div>
       </div>
 
-      {/* Recent Transactions */}
+      {/* Recent Transactions — with swipe */}
       <div className="px-1">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-            Log
-          </p>
-          <button
-            onClick={() => navigate('/reports')}
-            className="text-[10px] font-black uppercase tracking-widest text-brand-600 underline underline-offset-4"
-          >
-            History
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Recent</p>
+          <button onClick={() => navigate('/reports')} className="text-[10px] font-black uppercase tracking-widest text-brand-600 underline underline-offset-4 touch-manipulation">
+            View All
           </button>
         </div>
 
         {recentEntries.isLoading ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-3xl bg-gray-100/50" />
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-gray-100/50" />
             ))}
           </div>
         ) : !recentEntries.data || recentEntries.data.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-[2rem] border border-dashed border-gray-200 py-10 text-center">
-            <Receipt className="mb-3 h-10 w-10 text-gray-200" />
-            <p className="text-xs font-black uppercase tracking-widest text-gray-400 text-center px-6 leading-relaxed">No data detected. Start by recording a transaction.</p>
-          </div>
+          <EmptyState
+            title="No transactions yet"
+            description="Start by recording income or expenses. Swipe actions will appear here."
+            actionLabel="Record Income"
+            onAction={() => setShowIncome(true)}
+            variant="finance"
+          />
         ) : (
-          <div className="overflow-hidden rounded-[2rem] border border-white bg-white/60 shadow-sm backdrop-blur-md divide-y divide-gray-100/50">
+          <div className="overflow-hidden rounded-2xl border border-white bg-white/70 shadow-sm divide-y divide-gray-100/50">
             {recentEntries.data.map((entry, i) => {
-              const t: IconTone =
-                entry.source_type === 'invoice' ? 'brand'
-                : entry.source_type === 'expense' ? 'negative'
-                : 'neutral';
-              const Icon: LucideIcon =
-                entry.source_type === 'invoice' ? DollarSign
-                : entry.source_type === 'expense' ? Receipt
-                : ClipboardList;
-
+              const t: IconTone = entry.source_type === 'invoice' ? 'brand' : entry.source_type === 'expense' ? 'negative' : 'neutral';
+              const Icon: LucideIcon = entry.source_type === 'invoice' ? DollarSign : entry.source_type === 'expense' ? Receipt : ClipboardList;
               return (
-                <div key={i} className="flex items-center justify-between px-5 py-4 transition-colors active:bg-white/40">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <IconBadge icon={Icon} tone={t} size="sm" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs font-black text-gray-900 truncate max-w-[140px] uppercase tracking-wide">
-                          {entry.description ?? entry.source_type ?? 'Journal'}
-                        </p>
-                        {entry.isLocked && (
-                          <Lock className="h-3 w-3 text-amber-500" />
-                        )}
+                <SwipeableRow
+                  key={i}
+                  actions={[
+                    { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => navigate('/journals') },
+                    { label: 'Details', icon: CreditCard, color: 'bg-brand-500', action: () => navigate('/reports') },
+                  ]}
+                >
+                  <div className="flex items-center justify-between px-4 py-3.5 bg-white active:bg-white/60 touch-manipulation">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <IconBadge icon={Icon} tone={t} size="sm" />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-bold text-gray-900 truncate max-w-[140px]">{entry.description ?? entry.source_type ?? 'Journal'}</p>
+                          {entry.isLocked && <Lock className="h-3 w-3 text-amber-500" />}
+                        </div>
+                        <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{entry.entry_date}</p>
                       </div>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">{entry.entry_date}</p>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <p className={clsx(
-                      'text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg',
-                      entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700',
-                    )}>
+                    <p className={clsx('text-[10px] font-bold uppercase px-2 py-1 rounded-md', entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700')}>
                       {entry.source_type ?? 'entry'}
                     </p>
                   </div>
-                </div>
+                </SwipeableRow>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Shortcuts */}
       <div className="px-1">
-        <p className="mb-4 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">
-          Navigation
-        </p>
-        <div className="overflow-hidden rounded-[2rem] border border-white bg-white/60 shadow-sm backdrop-blur-md divide-y divide-gray-100/50">
+        <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Shortcuts</p>
+        <div className="overflow-hidden rounded-2xl border border-white bg-white/70 shadow-sm divide-y divide-gray-100/50">
           {[
-            { label: 'View Invoices', icon: FileText, tone: 'info' as IconTone, path: '/invoices' },
+            { label: 'Invoices', icon: FileText, tone: 'info' as IconTone, path: '/invoices' },
             { label: 'Tax Center', icon: Percent, tone: 'warning' as IconTone, path: '/tax' },
-            { label: 'Market Intelligence', icon: BarChart2, tone: 'brand' as IconTone, path: '/reports' },
-            { label: 'Neural Network', icon: Sparkles, tone: 'brand' as IconTone, path: '/ai' },
+            { label: 'Reports', icon: BarChart2, tone: 'brand' as IconTone, path: '/reports' },
+            { label: 'Ledgr AI', icon: Sparkles, tone: 'brand' as IconTone, path: '/ai' },
           ].map((item) => (
-            <button
-              key={item.path}
-              onClick={() => navigate(item.path)}
-              className="group flex w-full items-center justify-between px-5 py-4 transition-colors active:bg-white/40"
-            >
-              <div className="flex items-center gap-4">
+            <button key={item.path} onClick={() => navigate(item.path)} className="flex w-full items-center justify-between px-4 py-3.5 active:bg-white/60 touch-manipulation">
+              <div className="flex items-center gap-3">
                 <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-xs font-black uppercase tracking-widest text-gray-700">{item.label}</span>
+                <span className="text-xs font-bold uppercase tracking-widest text-gray-700">{item.label}</span>
               </div>
-              <ChevronRight className="h-5 w-5 text-gray-300 transition-transform group-active:translate-x-1" />
+              <ChevronRight className="h-4 w-4 text-gray-400" />
             </button>
           ))}
         </div>
       </div>
 
-      {/* Action Button Removed — Now part of BottomNav */}
-
-
-      {/* Quick entry sheets */}
       {businessId && (
         <>
-          <QuickExpenseMobile
-            businessId={businessId}
-            open={showExpense}
-            onClose={() => setShowExpense(false)}
-          />
-          <QuickIncomeMobile
-            businessId={businessId}
-            open={showIncome}
-            onClose={() => setShowIncome(false)}
-          />
+          <QuickExpenseMobile businessId={businessId} open={showExpense} onClose={() => setShowExpense(false)} />
+          <QuickIncomeMobile businessId={businessId} open={showIncome} onClose={() => setShowIncome(false)} />
         </>
       )}
     </div>

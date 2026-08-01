@@ -23,8 +23,6 @@ import { UpgradeModal } from '@/components/billing/UpgradeModal';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { useState } from 'react';
 
-// ── KPI Card ──────────────────────────────────────────────────────────────────
-
 interface KpiCardProps {
   label: string;
   value: string;
@@ -38,6 +36,8 @@ interface KpiCardProps {
 
 function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
   const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+
   if (isLoading) {
     return (
       <div className="animate-pulse rounded-2xl border border-gray-200 bg-white p-5">
@@ -56,58 +56,62 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
     );
   }
 
+  const full = valueTitle ?? value;
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(full).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+
   if (featured) {
     return (
-      <div
-        className="relative overflow-hidden rounded-2xl p-5"
+      <button
+        onClick={handleCopy}
+        title={full}
+        className="group relative w-full overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
         style={{ background: 'linear-gradient(135deg, #065c42, #0a7c5a)' }}
       >
         <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
-        <p
-          className="mb-2 font-extrabold text-white truncate"
-          style={{ fontSize: 'clamp(1.25rem, 3.5vw, 1.75rem)' }}
-          title={valueTitle ?? value}
-        >
+        <p className="mb-2 truncate font-extrabold text-white" style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.6rem)' }}>
           {value}
         </p>
         <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${
-            trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'
-          }`}>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'}`}>
             {trendUp ? '▲' : '▼'} {trendUp ? t('dashboard.profitable') : t('dashboard.loss')}
           </span>
-          {sub && <span className="text-sm text-white/80">{sub}</span>}
+          {sub && <span className="text-xs text-white/80">{sub}</span>}
         </div>
-      </div>
+        {copied && <span className="absolute right-3 top-3 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white">Copied!</span>}
+      </button>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
-      <p className="mb-2 text-xs font-bold uppercase tracking-wider text-gray-400 truncate">{label}</p>
-      <p
-        className="mb-2 font-extrabold text-gray-900 truncate"
-        style={{ fontSize: 'clamp(1.1rem, 2.5vw, 1.5rem)' }}
-        title={valueTitle ?? value}
-      >
+    <button
+      onClick={handleCopy}
+      title={full}
+      className="group w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
+    >
+      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
+      <p className="mb-1 font-extrabold leading-tight text-gray-900" style={{ fontSize: 'clamp(1.1rem, 2vw, 1.35rem)' }}>
         {value}
       </p>
-      {sub && <p className="text-sm text-gray-600 truncate overflow-hidden">{sub}</p>}
-    </div>
+      {sub && <p className="line-clamp-2 text-xs text-gray-600">{sub}</p>}
+      {copied && <p className="mt-2 text-[10px] font-bold text-brand-600">Copied!</p>}
+    </button>
   );
 }
-
-// ── Quick Actions ─────────────────────────────────────────────────────────────
 
 function QuickActions() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
   const actions = [
-    { label: t('dashboard.newInvoice'),    icon: Plus,       onClick: () => navigate('/income?action=invoice'),  color: 'bg-brand-500 hover:bg-brand-600 text-white' },
-    { label: t('dashboard.recordIncome'),  icon: DollarSign, onClick: () => navigate('/income?action=record'),   color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: t('dashboard.recordExpense'), icon: Receipt,    onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: t('dashboard.runPayroll'),    icon: Users,      onClick: () => navigate('/payroll?action=run'),     color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.newInvoice'), icon: Plus, onClick: () => navigate('/income?action=invoice'), color: 'bg-brand-500 hover:bg-brand-600 text-white' },
+    { label: t('dashboard.recordIncome'), icon: DollarSign, onClick: () => navigate('/income?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.recordExpense'), icon: Receipt, onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.runPayroll'), icon: Users, onClick: () => navigate('/payroll?action=run'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
   ];
 
   return (
@@ -118,7 +122,7 @@ function QuickActions() {
           <button
             key={action.label}
             onClick={action.onClick}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 sm:px-4 sm:py-2.5 text-sm font-semibold shadow-sm transition-all ${action.color}`}
+            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 sm:px-4 sm:py-2.5 text-sm font-semibold shadow-sm transition-all active:scale-95 touch-manipulation ${action.color}`}
           >
             <Icon className="h-4 w-4" />
             {action.label}
@@ -129,42 +133,33 @@ function QuickActions() {
   );
 }
 
-// ── Main Dashboard Page ───────────────────────────────────────────────────────
-
 export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
-  const businessId      = currentBusiness?.business.id;
-  const businessName    = currentBusiness?.business.name;
-  const isMobile        = useIsMobile();
+  const businessId = currentBusiness?.business.id;
+  const businessName = currentBusiness?.business.name;
+  const isMobile = useIsMobile();
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
-  const income        = useMonthlyIncome(businessId);
-  const expenses      = useMonthlyExpenses(businessId);
-  const expenseVat    = useMonthlyExpenseVat(businessId);
-  const outstanding   = useOutstandingInvoices(businessId);
-  const trend         = useIncomeExpenseTrend(businessId, 6);
+  const income = useMonthlyIncome(businessId);
+  const expenses = useMonthlyExpenses(businessId);
+  const expenseVat = useMonthlyExpenseVat(businessId);
+  const outstanding = useOutstandingInvoices(businessId);
+  const trend = useIncomeExpenseTrend(businessId, 6);
   const recentEntries = useRecentJournalEntries(businessId, 10);
 
   const netProfit =
-    income.data !== undefined && expenses.data !== undefined
-      ? income.data.totalAmount - expenses.data
-      : undefined;
+    income.data !== undefined && expenses.data !== undefined ? income.data.totalAmount - expenses.data : undefined;
   const netIsLoading = income.isLoading || expenses.isLoading;
-  const netIsError   = income.isError   || expenses.isError;
+  const netIsError = income.isError || expenses.isError;
 
-  // Net VAT payable/accrued = output VAT collected on sales - input VAT paid
-  // on purchases, using the *actual* vat_amount recorded on each invoice and
-  // expense — not a flat rate assumption. A business that is fully zero-rated
-  // or tax-exempt will correctly show MK 0 here, since no vat_amount was ever
-  // recorded on its transactions.
-  const outputVat  = income.data?.vatAmount ?? 0;
-  const inputVat   = expenseVat.data ?? 0;
-  const netVat     = outputVat - inputVat;
+  const outputVat = income.data?.vatAmount ?? 0;
+  const inputVat = expenseVat.data ?? 0;
+  const netVat = outputVat - inputVat;
   const vatIsLoading = income.isLoading || expenseVat.isLoading;
-  const vatIsError   = income.isError   || expenseVat.isError;
+  const vatIsError = income.isError || expenseVat.isError;
 
   if (!businessId) {
     return (
@@ -173,9 +168,7 @@ export function DashboardPage() {
           <AlertCircle className="h-7 w-7 text-brand-500" />
         </div>
         <h1 className="text-lg font-semibold text-gray-900">{t('dashboard.noBusinessSelected')}</h1>
-        <p className="max-w-sm text-sm text-gray-500">
-          {t('dashboard.noBusinessBody')}
-        </p>
+        <p className="max-w-sm text-sm text-gray-500">{t('dashboard.noBusinessBody')}</p>
       </div>
     );
   }
@@ -184,16 +177,10 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Tax reminder — fires once per session when tax is due */}
       <TaxReminderModal />
-
-      {/* Tax remittance panel */}
       <TaxRemittancePanel businessId={businessId} />
-
-      {/* Usage Meter */}
       <UsageMeter />
 
-      {/* Page header + Quick Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">{t('dashboard.financialOverview')}</h1>
@@ -204,7 +191,6 @@ export function DashboardPage() {
         <QuickActions />
       </div>
 
-      {/* KPI Cards — 5 cards, first one featured */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label={t('dashboard.netProfit')}
@@ -254,7 +240,6 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Charts row — Income/Expense chart (2/3) + Cash Flow (1/3) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <SectionErrorBoundary sectionName="Income/Expense Chart">
           <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -264,27 +249,17 @@ export function DashboardPage() {
                 <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')}</p>
               </div>
             </div>
-            <IncomeExpenseChart
-              data={trend.data}
-              isLoading={trend.isLoading}
-              isError={trend.isError}
-            />
+            <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} />
           </div>
         </SectionErrorBoundary>
 
         <SectionErrorBoundary sectionName="Cash Flow Indicator">
           <div className="flex flex-col gap-4">
-            <CashFlowIndicator
-              income={income.data?.totalAmount}
-              expenses={expenses.data}
-              isLoading={income.isLoading || expenses.isLoading}
-              isError={income.isError || expenses.isError}
-            />
+            <CashFlowIndicator income={income.data?.totalAmount} expenses={expenses.data} isLoading={income.isLoading || expenses.isLoading} isError={income.isError || expenses.isError} />
           </div>
         </SectionErrorBoundary>
       </div>
 
-      {/* Recent Transactions — full width with search + pagination */}
       <SectionErrorBoundary sectionName="Recent Transactions">
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
@@ -294,23 +269,11 @@ export function DashboardPage() {
             </div>
             <FileText className="h-4 w-4 text-gray-300" />
           </div>
-          <RecentTransactions
-            entries={recentEntries.data}
-            isLoading={recentEntries.isLoading}
-            isError={recentEntries.isError}
-          />
+          <RecentTransactions entries={recentEntries.data} isLoading={recentEntries.isLoading} isError={recentEntries.isError} />
         </div>
       </SectionErrorBoundary>
 
-      {/* Upgrade Modal */}
-      <UpgradeModal 
-        isOpen={showUpgradeModal} 
-        onClose={() => setShowUpgradeModal(false)} 
-        onUpgrade={() => {
-          setShowUpgradeModal(false);
-          navigate('/settings?tab=billing');
-        }} 
-      />
+      <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => { setShowUpgradeModal(false); navigate('/settings?tab=billing'); }} />
     </div>
   );
 }

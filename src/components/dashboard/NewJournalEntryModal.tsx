@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { repos } from '@/lib/repositories';
+import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
@@ -30,9 +31,6 @@ function newLine(): LineDraft {
   };
 }
 
-function formatMwk(amount: number): string {
-  return `MK ${amount.toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
 
 interface Props {
   businessId: string;
@@ -402,9 +400,9 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
 
           {/* Balance summary */}
           <div className={`flex items-center justify-between rounded-lg px-4 py-3 text-sm ${isBalanced ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-600'}`}>
-            <span>Debits: {formatMwk(totalDebits)} · Credits: {formatMwk(totalCredits)}</span>
+            <span>Debits: {formatMwkDetailed(totalDebits)} · Credits: {formatMwkDetailed(totalCredits)}</span>
             <span className="font-semibold">
-              {isBalanced ? '✓ Balanced' : `Difference: ${formatMwk(Math.abs(difference))}`}
+              {isBalanced ? '✓ Balanced' : `Difference: ${formatMwkDetailed(Math.abs(difference))}`}
             </span>
           </div>
 

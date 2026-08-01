@@ -12,17 +12,19 @@ export default defineConfig(({ mode }) => {
     VitePWA({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
-      includeAssets: ['icons/*.png'],
+      includeAssets: ['icons/*.png', 'icons/*.svg', 'favicon.svg'],
       manifest: {
-        name: 'Ledgr',
+        name: 'Ledgr — Business Accounting for Malawi',
         short_name: 'Ledgr',
-        description: 'Smart accounting for Malawian SMEs',
-        theme_color: '#16a34a',
+        description: 'MWK-first accounting, invoicing, payroll, and inventory for Malawian SMEs. Works offline.',
+        theme_color: '#0E7C5A',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
+        lang: 'en-MW',
+        categories: ['business', 'finance', 'productivity'],
         icons: [
           {
             src: 'icons/icon-192.png',
@@ -43,13 +45,29 @@ export default defineConfig(({ mode }) => {
             purpose: 'maskable',
           },
         ],
+        shortcuts: [
+          {
+            name: 'New Invoice',
+            short_name: 'Invoice',
+            url: '/invoices?action=new',
+            icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: 'Record Expense',
+            short_name: 'Expense',
+            url: '/expenses?action=new',
+            icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+          {
+            name: 'Record Income',
+            short_name: 'Income',
+            url: '/income?action=new',
+            icons: [{ src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
+          },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
-        // Safety net: minifier output size varies between environments (local
-        // vs CI), and a chunk creeping past workbox's 2 MiB default makes the
-        // build hard-fail. 5 MiB keeps the app fully precachable/offline while
-        // still flagging genuinely runaway bundles via chunkSizeWarningLimit.
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
@@ -96,9 +114,6 @@ export default defineConfig(({ mode }) => {
     }),
   ];
 
-  // Upload source maps to Sentry in CI so production stack traces are readable.
-  // Guarded by SENTRY_AUTH_TOKEN so local/dev builds skip it entirely and the
-  // @sentry/vite-plugin dependency is never required to produce a build.
   if (process.env.SENTRY_AUTH_TOKEN) {
     plugins.push(
       sentryVitePlugin({
@@ -113,7 +128,6 @@ export default defineConfig(({ mode }) => {
   return {
     plugins,
     define: {
-      // Stable release tag for Sentry (git sha in CI, otherwise a local stamp).
       'import.meta.env.VITE_APP_VERSION': JSON.stringify(
         process.env.VITE_APP_VERSION || `local-${new Date().toISOString()}`,
       ),
@@ -124,39 +138,25 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
-      rolldownOptions: {
+      chunkSizeWarningLimit: 800,
+      rollupOptions: {
         output: {
-          // Keep the shared vendor code out of the entry chunk. Pages are
-          // already lazy-loaded, so this mainly stops React + router + query +
-          // i18n + Dexie from bloating the one file every visitor must fetch.
-          advancedChunks: {
-            groups: [
-              {
-                name: 'vendor-react',
-                test: /node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/,
-                priority: 30,
-              },
-              {
-                name: 'vendor-charts',
-                test: /node_modules[\\/](recharts|d3-.*|victory-.*|internmap|decimal\.js-light)[\\/]/,
-                priority: 25,
-              },
-              {
-                name: 'vendor-data',
-                test: /node_modules[\\/](@supabase|@tanstack|dexie|dexie-react-hooks)[\\/]/,
-                priority: 20,
-              },
-              {
-                name: 'vendor-i18n',
-                test: /node_modules[\\/](i18next.*|react-i18next)[\\/]/,
-                priority: 15,
-              },
-              {
-                name: 'vendor',
-                test: /node_modules[\\/]/,
-                priority: 1,
-              },
-            ],
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (/node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/.test(id)) {
+                return 'vendor-react';
+              }
+              if (/node_modules[\\/](recharts|d3-.*|victory-.*|internmap|decimal\.js-light)[\\/]/.test(id)) {
+                return 'vendor-charts';
+              }
+              if (/node_modules[\\/](@supabase|@tanstack|dexie|dexie-react-hooks)[\\/]/.test(id)) {
+                return 'vendor-data';
+              }
+              if (/node_modules[\\/](i18next.*|react-i18next)[\\/]/.test(id)) {
+                return 'vendor-i18n';
+              }
+              return 'vendor';
+            }
           },
         },
       },

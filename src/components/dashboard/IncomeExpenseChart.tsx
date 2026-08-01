@@ -151,8 +151,8 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
             stroke="#0a7c5a"
             strokeWidth={3}
             fill="url(#incomeGradient)"
-            dot={{ r: 4, fill: '#0a7c5a', strokeWidth: 0 }}
-            activeDot={{ r: 5, strokeWidth: 0 }}
+            dot={{ r: compact ? 5 : 4, fill: '#0a7c5a', strokeWidth: 0, stroke: '#0a7c5a' }}
+            activeDot={{ r: 7, strokeWidth: 0 }}
           />
           <Area
             type="monotone"
@@ -162,8 +162,8 @@ export function IncomeExpenseChart({ data, isLoading, isError, compact }: Income
             strokeWidth={3}
             strokeDasharray="6 4"
             fill="url(#expensesGradient)"
-            dot={{ r: 4, fill: '#e3342f', strokeWidth: 0 }}
-            activeDot={{ r: 5, strokeWidth: 0 }}
+            dot={{ r: compact ? 5 : 4, fill: '#e3342f', strokeWidth: 0 }}
+            activeDot={{ r: 7, strokeWidth: 0 }}
           />
         </AreaChart>
       </ResponsiveContainer>
