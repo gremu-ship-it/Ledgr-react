@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Trash2, Pencil, AlertCircle, CheckCircle,
@@ -361,11 +362,11 @@ function DeleteConfirm({ name, onConfirm, onCancel, isPending }: {
 // ── Products Tab ──────────────────────────────────────────────────────────────
 
 
-function ProductsTab({ businessId }: { businessId: string }) {
+function ProductsTab({ businessId, initialSearch }: { businessId: string; initialSearch: string }) {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { thClass, tdClass } = useDensity();
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Row<'products'> | undefined>();
   const [deleting, setDeleting] = useState<Row<'products'> | undefined>();
@@ -411,7 +412,7 @@ function ProductsTab({ businessId }: { businessId: string }) {
   );
 
   return (
-    <div ref={containerRef as any}>
+    <div ref={containerRef}>
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="relative flex-1 max-w-sm">
@@ -914,8 +915,10 @@ function MovementsTab({ businessId }: { businessId: string }) {
 
 export function ProductsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const [searchParams] = useSearchParams();
   const businessId = currentBusiness?.business?.id;
   const [tab, setTab] = useState<Tab>('products');
+  const productSearch = searchParams.get('search') ?? '';
 
   if (!businessId) {
     return (
@@ -956,7 +959,7 @@ export function ProductsPage() {
         </button>
       </div>
 
-      {tab === 'products' && <ProductsTab businessId={businessId} />}
+      {tab === 'products' && <ProductsTab key={productSearch} businessId={businessId} initialSearch={productSearch} />}
       {tab === 'stock' && <StockTab businessId={businessId} />}
       {tab === 'movements' && <MovementsTab businessId={businessId} />}
     </div>
