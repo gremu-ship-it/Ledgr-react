@@ -56,6 +56,7 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
   const [busy, setBusy] = useState(false);
   const [dragged, setDragged] = useState<BankTransaction | null>(null);
   const [pickerOpenFor, setPickerOpenFor] = useState<BankKey | null>(null);
+  const [selectedBankKeys, setSelectedBankKeys] = useState<Set<BankKey>>(new Set());
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['bank-accounts', businessId],
@@ -149,6 +150,43 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
     setEntries(x => [...x, removed.entry]);
     announce(`Removed match: ${removed.bank.description} unlinked from ${removed.entry.entry_number}.`);
   }
+
+  // Checkbox helpers
+  const toggleBankSelection = (key: BankKey) => {
+    setSelectedBankKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const selectAllBankLines = () => {
+    const allKeys = lines.map((b, i) => bankKey(b, i));
+    setSelectedBankKeys(new Set(allKeys));
+  };
+
+  const clearBankSelection = () => setSelectedBankKeys(new Set());
+
+  const autoReconcileSelected = () => {
+    if (selectedBankKeys.size === 0 || unmatchedEntries.length === 0) return;
+
+    const toReconcile: BankTransaction[] = [];
+    lines.forEach((b, i) => {
+      if (selectedBankKeys.has(bankKey(b, i))) toReconcile.push(b);
+    });
+
+    toReconcile.forEach(bank => {
+      const best = unmatchedEntries
+        .map(entry => ({ entry, confidence: scoreEntry(bank, entry) }))
+        .sort((a, b) => b.confidence - a.confidence)[0];
+      if (best && best.confidence >= 0.55) {
+        accept(bank, best.entry, best.confidence);
+      }
+    });
+    clearBankSelection();
+    announce(`Auto-reconciled ${toReconcile.length} selected bank lines.`);
+  };
 
   async function runAiMatching() {
     setBusy(true);
@@ -378,9 +416,24 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border p-3" aria-labelledby="bank-lines-heading">
-          <h3 id="bank-lines-heading" className="mb-3 font-semibold">
-            Unmatched bank lines ({lines.length})
-          </h3>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 id="bank-lines-heading" className="font-semibold">
+              Unmatched bank lines ({lines.length})
+            </h3>
+            {lines.length > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <button onClick={selectAllBankLines} className="text-brand-600 hover:underline">Select all</button>
+                <button onClick={clearBankSelection} className="text-gray-500 hover:underline">Clear</button>
+                <button
+                  onClick={autoReconcileSelected}
+                  disabled={selectedBankKeys.size === 0 || unmatchedEntries.length === 0}
+                  className="rounded bg-emerald-600 px-2.5 py-0.5 font-medium text-white disabled:opacity-50"
+                >
+                  Auto-reconcile selected ({selectedBankKeys.size})
+                </button>
+              </div>
+            )}
+          </div>
           {lines.length === 0 ? (
             <p className="text-xs text-gray-500">No unmatched bank lines. Import a statement above.</p>
           ) : (
@@ -389,22 +442,34 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
             </p>
           )}
           <ul className="space-y-2" role="list">
-            {lines.map((b, i) => (
-              <li key={bankKey(b, i)}>
-                <BankLineCard
-                  bank={b}
-                  isDragging={dragged === b}
-                  onDragStart={() => setDragged(b)}
-                  onDragEnd={() => setDragged(null)}
-                  isPickerOpen={pickerOpenFor === bankKey(b, i)}
-                  onOpenPicker={() => setPickerOpenFor(bankKey(b, i))}
-                  onClosePicker={() => setPickerOpenFor(null)}
-                  unmatchedEntries={unmatchedEntries}
-                  onPickEntry={entry => accept(b, entry, scoreEntry(b, entry))}
-                  onCreateTransaction={() => createTransaction(b)}
-                />
-              </li>
-            ))}
+            {lines.map((b, i) => {
+              const key = bankKey(b, i);
+              return (
+                <li key={key} className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedBankKeys.has(key)}
+                    onChange={() => toggleBankSelection(key)}
+                    className="mt-3 accent-emerald-600"
+                    aria-label={`Select ${b.description}`}
+                  />
+                  <div className="flex-1">
+                    <BankLineCard
+                      bank={b}
+                      isDragging={dragged === b}
+                      onDragStart={() => setDragged(b)}
+                      onDragEnd={() => setDragged(null)}
+                      isPickerOpen={pickerOpenFor === key}
+                      onOpenPicker={() => setPickerOpenFor(key)}
+                      onClosePicker={() => setPickerOpenFor(null)}
+                      unmatchedEntries={unmatchedEntries}
+                      onPickEntry={entry => accept(b, entry, scoreEntry(b, entry))}
+                      onCreateTransaction={() => createTransaction(b)}
+                    />
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
 

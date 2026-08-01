@@ -20,6 +20,7 @@ interface OnboardingChecklistProps {
 export function OnboardingChecklist({ className, compact = false }: OnboardingChecklistProps) {
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const [skipped, setSkipped] = React.useState(() => localStorage.getItem('onboardingSkipped') === 'true');
 
   // Simulated completion state — in real app this would come from backend / local flags
   // For now we derive from simple heuristics (you can wire to real data)
@@ -71,8 +72,8 @@ export function OnboardingChecklist({ className, compact = false }: OnboardingCh
   const completedCount = steps.filter(s => s.completed).length;
   const progress = Math.round((completedCount / steps.length) * 100);
 
-  if (completedCount === steps.length) {
-    return null; // All done — hide checklist
+  if (completedCount === steps.length || skipped) {
+    return null; // All done or skipped — hide checklist
   }
 
   return (
@@ -136,7 +137,11 @@ export function OnboardingChecklist({ className, compact = false }: OnboardingCh
         <Button 
           variant="ghost" 
           size="sm"
-          onClick={() => navigate('/dashboard')}
+          onClick={() => {
+            localStorage.setItem('onboardingSkipped', 'true');
+            setSkipped(true);
+            navigate('/dashboard');
+          }}
         >
           Skip for now
         </Button>
