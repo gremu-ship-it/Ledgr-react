@@ -22,7 +22,7 @@ export function OfflineBanner() {
 
   if (!isOnline) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-white">
+      <div className="flex items-center justify-center gap-2 bg-amber-600 px-4 py-2 text-sm font-medium text-white">
         <WifiOff className="h-4 w-4 shrink-0" />
         <span>You are offline — transactions will sync when connected.</span>
         {pendingCount > 0 && (
@@ -48,7 +48,7 @@ export function OfflineBanner() {
 
   if (failedCount > 0) {
     return (
-      <div className="flex items-center justify-center gap-3 bg-red-500 px-4 py-2 text-sm font-medium text-white">
+      <div className="flex items-center justify-center gap-3 bg-red-600 px-4 py-2 text-sm font-medium text-white">
         <AlertTriangle className="h-4 w-4 shrink-0" />
         <span>
           {failedCount} transaction{failedCount === 1 ? '' : 's'} failed to sync.

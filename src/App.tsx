@@ -1,6 +1,5 @@
 import { Suspense, lazy, type ComponentType } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -11,8 +10,6 @@ import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
-import { createLogger } from '@/lib/logger';
-import { pushError } from '@/lib/notifications';
 import {
   isChunkLoadError,
   attemptChunkRecovery,
@@ -97,31 +94,6 @@ import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
-const log = createLogger('QueryClient');
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 60_000,
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-    mutations: {
-      onError: (error, variables) => {
-        // Global fallback for mutations that don't have their own onError handler.
-        // Logs the error and shows a generic toast so the user knows something failed.
-        const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-        log.error('Mutation failed (unhandled)', error as Error, {
-          // Include a stringified snapshot of variables for debugging (safe: no PII
-          // in mutation variables by convention — IDs and form fields only).
-          variables: JSON.stringify(variables).slice(0, 200),
-        });
-        pushError('Operation failed', message);
-      },
-    },
-  },
-});
-
 export function RoleRoute() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
@@ -140,13 +112,11 @@ function App() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
   const roleHome = getHomePathForRole(role);
-  // admin.ledgr.com is the partner admin portal; otherwise role-specific home or /dashboard.
   const homePath = isAdminPortalHost() ? '/partner-admin' : (roleHome !== '/dashboard' ? roleHome : '/dashboard');
 
   return (
     <ErrorBoundary name="App">
-      <QueryClientProvider client={queryClient}>
-        <PartnerProvider>
+      <PartnerProvider>
         <BrowserRouter>
           {/* Lazy route chunks resolve here; fullScreen keeps layout stable. */}
           <Suspense fallback={<LoadingSpinner fullScreen label="Loading…" />}>
@@ -158,12 +128,11 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
 
-            {/* Public legal page — available whether or not the visitor is signed in. */}
+            {/* Public legal page */}
             <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
             <Route path="/reset-password" element={<ResetPasswordPage />} />
-            {/* Invitation flow – public so it can show "sign in to accept" UI; internally handles both authenticated and unauthenticated states */}
             <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
 
             {/* Protected, no AppLayout */}
@@ -171,13 +140,12 @@ function App() {
               <Route path="/create-business" element={<CreateBusinessPage />} />
             </Route>
 
-            {/* Internal admin tools — platform admins only, doesn't need a business selected */}
+            {/* Internal admin tools */}
             <Route element={<PlatformAdminRoute />}>
               <Route path="/admin/billing" element={<AdminBillingPage />} />
             </Route>
 
-            {/* Partner admin portal — served at admin.ledgr.com, also reachable
-                at /partner-admin on the main app for convenience. */}
+            {/* Partner admin portal */}
             <Route element={<PartnerAdminRoute />}>
               <Route element={<PartnerAdminLayout />}>
                 <Route path="/partner-admin" element={<PartnerAdminDashboard />} />
@@ -188,11 +156,13 @@ function App() {
               </Route>
             </Route>
 
-            {/* Protected with AppLayout & RoleRoute */}
+            {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
+
+                  {/* Finance */}
                   <Route path="/income" element={<IncomePage />} />
                   <Route path="/expenses" element={<ExpensesPage />} />
                   <Route path="/invoices" element={<InvoicesPage />} />
@@ -201,6 +171,8 @@ function App() {
                       <PayrollPage />
                     </PartnerPlanGate>
                   } />
+
+                  {/* Inventory */}
                   <Route path="/products" element={
                     <PartnerPlanGate featureKey="inventory" featureName="Products">
                       <ProductsPage />
@@ -211,40 +183,6 @@ function App() {
                       <InventoryPage />
                     </PartnerPlanGate>
                   } />
-                  <Route path="/accounts" element={<AccountsPage />} />
-                  <Route path="/assets" element={<AssetsPage />} />
-                  <Route path="/capital" element={<CapitalPage />} />
-                  <Route path="/tax" element={<TaxPage />} />
-                  <Route path="/bank-reconcile" element={(
-                    <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
-                      <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
-                    </PartnerPlanGate>
-                  )} />
-                  <Route path="/api-docs" element={(
-                    <PlanGate capability="api_access" featureName="Public API">
-                      <ApiDocumentationPage />
-                    </PlanGate>
-                  )} />
-                  <Route path="/api-keys" element={(
-                    <PlanGate capability="api_access" featureName="API Keys">
-                      <ApiKeysPage />
-                    </PlanGate>
-                  )} />
-                  <Route path="/zapier" element={(
-                    <PlanGate capability="webhooks" featureName="Zapier Integration">
-                      <ZapierIntegrationPage />
-                    </PlanGate>
-                  )} />
-                  <Route path="/reports" element={<ReportsPage />} />
-                  <Route path="/journals" element={<JournalsPage />} />
-                  <Route path="/periods" element={<PeriodManagementPage />} />
-                  <Route path="/ai" element={(
-                    <PartnerPlanGate featureKey="ai_advisor" capability="ai_insights" featureName="AI Insights">
-                      <AiInsightsPage />
-                    </PartnerPlanGate>
-                  )} />
-                  <Route path="/chat" element={<Navigate to="/ai" replace />} />
-                  <Route path="/settings" element={<SettingsPage />} />
                   <Route path="/warehouse" element={
                     <PartnerPlanGate featureKey="inventory" featureName="Warehouses">
                       <WarehousePage />
@@ -255,27 +193,8 @@ function App() {
                       <TransfersPage />
                     </PartnerPlanGate>
                   } />
-                  <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
-                  <Route path="/api-docs" element={<ApiDocumentationPage />} />
-                  <Route path="/api-keys" element={<ApiKeysPage />} />
-                  <Route path="/zapier" element={<ZapierIntegrationPage />} />
 
-                  {/* Accounting & Organisation */}
-                  <Route path="/contacts" element={
-                    <PlanGate capability="accounting_organisation" featureName="Contacts">
-                      <ContactsPage />
-                    </PlanGate>
-                  } />
-                  <Route path="/branches" element={
-                    <PlanGate capability="accounting_organisation" featureName="Branches">
-                      <BranchesPage />
-                    </PlanGate>
-                  } />
-                  <Route path="/departments" element={
-                    <PlanGate capability="accounting_organisation" featureName="Departments">
-                      <DepartmentsPage />
-                    </PlanGate>
-                  } />
+                  {/* Accounting — all gated via accounting_organisation */}
                   <Route path="/accounts" element={
                     <PlanGate capability="accounting_organisation" featureName="Chart of Accounts">
                       <AccountsPage />
@@ -296,11 +215,6 @@ function App() {
                       <TaxPage />
                     </PlanGate>
                   } />
-                  <Route path="/bank-reconcile" element={
-                    <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
-                      <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
-                    </PartnerPlanGate>
-                  } />
                   <Route path="/reports" element={
                     <PlanGate capability="accounting_organisation" featureName="Reports">
                       <ReportsPage />
@@ -316,11 +230,60 @@ function App() {
                       <PeriodManagementPage />
                     </PlanGate>
                   } />
+                  <Route path="/bank-reconcile" element={
+                    <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
+                      <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
+                    </PartnerPlanGate>
+                  } />
                   <Route path="/audit" element={
                     <PlanGate capability="accounting_organisation" featureName="Audit Log">
                       <AuditLogPage />
                     </PlanGate>
                   } />
+
+                  {/* Organisation */}
+                  <Route path="/contacts" element={
+                    <PlanGate capability="accounting_organisation" featureName="Contacts">
+                      <ContactsPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/branches" element={
+                    <PlanGate capability="accounting_organisation" featureName="Branches">
+                      <BranchesPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/departments" element={
+                    <PlanGate capability="accounting_organisation" featureName="Departments">
+                      <DepartmentsPage />
+                    </PlanGate>
+                  } />
+
+                  {/* Integrations — gated */}
+                  <Route path="/api-docs" element={
+                    <PlanGate capability="api_access" featureName="Public API">
+                      <ApiDocumentationPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/api-keys" element={
+                    <PlanGate capability="api_access" featureName="API Keys">
+                      <ApiKeysPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/zapier" element={
+                    <PlanGate capability="webhooks" featureName="Zapier Integration">
+                      <ZapierIntegrationPage />
+                    </PlanGate>
+                  } />
+
+                  {/* AI & Settings */}
+                  <Route path="/ai" element={
+                    <PartnerPlanGate featureKey="ai_advisor" capability="ai_insights" featureName="AI Insights">
+                      <AiInsightsPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/chat" element={<Navigate to="/ai" replace />} />
+                  <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                   <Route path="/support" element={<SupportPage />} />
                 </Route>
               </Route>
@@ -335,8 +298,7 @@ function App() {
           <InstallPrompt />
           <CookieConsentBanner />
         </BrowserRouter>
-        </PartnerProvider>
-      </QueryClientProvider>
+      </PartnerProvider>
     </ErrorBoundary>
   );
 }

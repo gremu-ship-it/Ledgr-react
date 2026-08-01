@@ -1,14 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { attemptChunkRecovery, clearChunkRecovery } from '@/lib/chunkRecovery';
 import { initErrorCapture } from '@/lib/errorCapture';
-import { createLogger } from '@/lib/logger';
-import { pushError } from '@/lib/notifications';
+import { queryClient } from '@/lib/queryClient';
 import './index.css';
 import './i18n';
 import App from './App.tsx';
@@ -55,27 +54,6 @@ if (SENTRY_DSN) {
     }
   });
 }
-
-const log = createLogger('QueryClient');
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-    mutations: {
-      onError: (error, variables) => {
-        // Global fallback for mutations that don't have their own onError handler.
-        const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-        log.error('Mutation failed (unhandled)', error as Error, {
-          variables: JSON.stringify(variables).slice(0, 200),
-        });
-        pushError('Operation failed', message);
-      },
-    },
-  },
-});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

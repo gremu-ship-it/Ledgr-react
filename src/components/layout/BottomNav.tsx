@@ -20,7 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
@@ -57,6 +57,14 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
 ];
 
+function vibrate(ms = 10) {
+  try {
+    if ('vibrate' in navigator) navigator.vibrate(ms);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function BottomNav() {
   const { t } = useTranslation();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -67,9 +75,7 @@ export function BottomNav() {
   const businessId = currentBusiness?.business?.id;
   const { planTier } = useUsage();
 
-  // Always show all nav items. Free users see Accounting/Organisation items but get upgrade prompt on click.
   const { isFeatureEnabled } = usePartner();
-  // Hide modules the partner (bank/MFI) hasn't licensed for its clients.
   const bottomItems = BOTTOM_NAV_ITEMS.filter(
     (i) => i.path !== '/products' || isFeatureEnabled('inventory'),
   );
@@ -77,25 +83,50 @@ export function BottomNav() {
     (i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature),
   );
 
+  // Dynamic balanced split for FAB centering
+  const { leftItems, rightItems } = useMemo(() => {
+    const mid = Math.ceil(bottomItems.length / 2);
+    return {
+      leftItems: bottomItems.slice(0, mid),
+      rightItems: bottomItems.slice(mid),
+    };
+  }, [bottomItems]);
+
+  // Single backdrop closes both menus, and Escape closes too
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        setMoreOpen(false);
+        setFabOpen(false);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const isAnySheetOpen = moreOpen || fabOpen;
+
   return (
     <>
-      {/* Backdrop for "More" menu */}
-      {moreOpen && (
+      {/* Unified backdrop */}
+      {isAnySheetOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
-          onClick={() => setMoreOpen(false)}
+          className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] lg:hidden"
+          onClick={() => {
+            setMoreOpen(false);
+            setFabOpen(false);
+          }}
+          aria-hidden="true"
         />
       )}
 
-      {/* More menu — icon tiles, matching app-wide badge treatment */}
+      {/* More menu */}
       {moreOpen && (
-        <div className="fixed bottom-20 left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
+        <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
           <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-700">{t('common.more')}</p>
           <div className="grid grid-cols-3 gap-2">
             {moreItems.map((item) => {
-              // Reconstruct enough for isItemLocked (minPlan / requiresCapability not present on these items)
               const locked = GATED_PATHS.has(item.path) ? !planMeetsMin(planTier, 'growth') : false;
-              // Note: GATED_PATHS is still exported from navConfig for compatibility with other code
               const handleMoreClick = (e: React.MouseEvent) => {
                 if (locked) {
                   e.preventDefault();
@@ -103,6 +134,7 @@ export function BottomNav() {
                   setMoreOpen(false);
                   return;
                 }
+                vibrate(10);
                 setMoreOpen(false);
               };
 
@@ -111,15 +143,18 @@ export function BottomNav() {
                   key={item.path}
                   to={item.path}
                   onClick={handleMoreClick}
-                  className="group flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50"
+                  className={({ isActive }) =>
+                    clsx(
+                      'group flex min-h-[84px] flex-col items-center justify-center gap-1.5 rounded-xl px-2 py-3 text-center transition-colors active:bg-gray-50',
+                      isActive && 'bg-brand-50 ring-1 ring-brand-100'
+                    )
+                  }
                 >
                   <div className="relative">
                     <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                    {locked && (
-                      <Lock className="absolute -right-0.5 -top-0.5 h-3 w-3 text-gray-400" />
-                    )}
+                    {locked && <Lock className="absolute -right-0.5 -top-0.5 h-3 w-3 text-gray-400" />}
                   </div>
-                  <span className="text-xs font-medium text-gray-600">{t(item.labelKey)}</span>
+                  <span className="text-xs font-medium leading-tight text-gray-700">{t(item.labelKey)}</span>
                 </NavLink>
               );
             })}
@@ -127,28 +162,28 @@ export function BottomNav() {
         </div>
       )}
 
-      {/* FAB backdrop */}
-      {fabOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/20 lg:hidden"
-          onClick={() => setFabOpen(false)}
-        />
-      )}
-
       {/* FAB action menu */}
       {fabOpen && (
-        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 lg:hidden">
+        <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 lg:hidden">
           <div className="flex flex-col items-center gap-3">
             <button
-              onClick={() => { setFabOpen(false); setShowIncome(true); }}
-              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
+              onClick={() => {
+                vibrate(10);
+                setFabOpen(false);
+                setShowIncome(true);
+              }}
+              className="group flex min-h-[48px] items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-3 shadow-lg active:scale-95"
             >
               <IconBadge icon={Wallet} tone="brand" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">{t('common.recordIncome')}</span>
             </button>
             <button
-              onClick={() => { setFabOpen(false); setShowExpense(true); }}
-              className="group flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-100"
+              onClick={() => {
+                vibrate(10);
+                setFabOpen(false);
+                setShowExpense(true);
+              }}
+              className="group flex min-h-[48px] items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-3 shadow-lg active:scale-95"
             >
               <IconBadge icon={Receipt} tone="negative" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">{t('common.recordExpense')}</span>
@@ -157,22 +192,25 @@ export function BottomNav() {
         </div>
       )}
 
-      {/* Bottom nav bar */}
-      <div className="fixed bottom-6 left-6 right-6 z-30 lg:hidden">
-        <nav className="flex h-16 items-center justify-around rounded-3xl border border-white/20 bg-white/80 px-2 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
-          {/* First 2 nav items */}
-          {bottomItems.slice(0, 2).map((item) => (
+      {/* Bottom nav bar — safe-area aware */}
+      <div className="fixed bottom-[max(0.75rem,env(safe-area-inset-bottom))] left-4 right-4 z-30 lg:hidden">
+        <nav className="flex h-[64px] items-center justify-around rounded-[1.75rem] border border-white/30 bg-white/90 px-2 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
+          {leftItems.map((item) => (
             <NavTab key={item.path} {...item} />
           ))}
 
           {/* FAB center button */}
           <button
             type="button"
-            onClick={() => setFabOpen((v) => !v)}
+            onClick={() => {
+              vibrate(10);
+              setFabOpen((v) => !v);
+              if (moreOpen) setMoreOpen(false);
+            }}
             aria-expanded={fabOpen}
             aria-label={fabOpen ? t('common.closeAddMenu') : t('common.openAddMenu')}
             className={clsx(
-              'flex h-14 w-14 -translate-y-4 items-center justify-center rounded-2xl shadow-xl transition-all active:scale-90',
+              'flex h-14 w-14 shrink-0 -translate-y-4 items-center justify-center rounded-2xl shadow-xl transition-all active:scale-90 touch-manipulation',
               fabOpen
                 ? 'bg-gray-900 rotate-45'
                 : 'bg-gradient-to-br from-brand-600 to-brand-700 ring-4 ring-white shadow-brand-500/30',
@@ -181,18 +219,21 @@ export function BottomNav() {
             <Plus className="h-7 w-7 text-white" aria-hidden="true" />
           </button>
 
-          {/* Last 2 nav items */}
-          {bottomItems.slice(2).map((item) => (
+          {rightItems.map((item) => (
             <NavTab key={item.path} {...item} />
           ))}
 
           {/* More button */}
           <button
             type="button"
-            onClick={() => setMoreOpen((v) => !v)}
+            onClick={() => {
+              vibrate(10);
+              setMoreOpen((v) => !v);
+              if (fabOpen) setFabOpen(false);
+            }}
             aria-expanded={moreOpen}
             aria-label={t('common.more')}
-            className="group flex flex-col items-center gap-1 rounded-xl px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors"
+            className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 rounded-xl px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors touch-manipulation"
           >
             {moreOpen ? (
               <IconBadge icon={MoreHorizontal} tone="brand" size="sm" interactive />
@@ -206,19 +247,10 @@ export function BottomNav() {
         </nav>
       </div>
 
-      {/* Mobile quick entry sheets */}
       {businessId && (
         <>
-          <QuickExpenseMobile
-            businessId={businessId}
-            open={showExpense}
-            onClose={() => setShowExpense(false)}
-          />
-          <QuickIncomeMobile
-            businessId={businessId}
-            open={showIncome}
-            onClose={() => setShowIncome(false)}
-          />
+          <QuickExpenseMobile businessId={businessId} open={showExpense} onClose={() => setShowExpense(false)} />
+          <QuickIncomeMobile businessId={businessId} open={showIncome} onClose={() => setShowIncome(false)} />
         </>
       )}
     </>
@@ -240,7 +272,10 @@ function NavTab({
     <NavLink
       to={path}
       aria-label={t(labelKey)}
-      className="group flex flex-col items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+      onClick={() => {
+        try { if ('vibrate' in navigator) navigator.vibrate(5); } catch {}
+      }}
+      className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase tracking-wider touch-manipulation"
     >
       {({ isActive }) =>
         isActive ? (
