@@ -7,6 +7,7 @@ import { Header } from './Header';
 import { BottomNav } from './BottomNav';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { OfflineBanner } from '@/offline/OfflineBanner';
+import { OfflineSyncProvider } from '@/offline/OfflineSyncProvider';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { usePartnerTheme } from '@/partner/usePartnerTheme';
 
@@ -34,60 +35,62 @@ export function AppLayout() {
   const showMobileHeader = isMobile && !isDashboard;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <a href="#main-content" className="skip-link">
-        {t('common.skipToMain')}
-      </a>
+    <OfflineSyncProvider>
+      <div className="min-h-screen bg-gray-50">
+        <a href="#main-content" className="skip-link">
+          {t('common.skipToMain')}
+        </a>
 
-      <div id="ledgr-live-region" aria-live="polite" aria-atomic="true" className="sr-only" />
+        <div id="ledgr-live-region" aria-live="polite" aria-atomic="true" className="sr-only" />
 
-      <div className="sticky top-0 z-40">
-        <OfflineBanner />
-      </div>
+        <div className="sticky top-0 z-40">
+          <OfflineBanner />
+        </div>
 
-      <Sidebar />
+        <Sidebar />
 
-      <div
-        className={clsx('flex min-h-screen flex-col transition-all duration-200')}
-        style={
-          !isMobile
-            ? {
-                paddingInlineStart: sidebarOpen ? `${sidebarWidth}px` : '72px',
-              }
-            : undefined
-        }
-      >
-        {(!isMobile || showMobileHeader) && <Header />}
-
-        <main
-          id="main-content"
-          tabIndex={-1}
-          aria-label="Main content"
-          className={clsx(
-            'flex-1 p-4 sm:p-6 outline-none',
-            isMobile ? 'pb-[calc(7rem+env(safe-area-inset-bottom))]' : 'pb-6',
-            isMobile && isDashboard && 'pt-6'
-          )}
+        <div
+          className={clsx('flex min-h-screen flex-col transition-all duration-200')}
+          style={
+            !isMobile
+              ? {
+                  paddingInlineStart: sidebarOpen ? `${sidebarWidth}px` : '72px',
+                }
+              : undefined
+          }
         >
-          <ErrorBoundary name="PageContent">
-            <Outlet />
-          </ErrorBoundary>
-        </main>
+          {(!isMobile || showMobileHeader) && <Header />}
+
+          <main
+            id="main-content"
+            tabIndex={-1}
+            aria-label="Main content"
+            className={clsx(
+              'flex-1 p-4 sm:p-6 outline-none',
+              isMobile ? 'pb-[calc(7rem+env(safe-area-inset-bottom))]' : 'pb-6',
+              isMobile && isDashboard && 'pt-6'
+            )}
+          >
+            <ErrorBoundary name="PageContent">
+              <Outlet />
+            </ErrorBoundary>
+          </main>
+        </div>
+
+        <BottomNav />
+        <SupportWidget />
+        <CommandPalette />
+
+        {showWarning && (
+          <InactivityWarningModal
+            secondsRemaining={secondsRemaining}
+            onExtend={extendSession}
+            onLogoutNow={() => {
+              window.location.href = '/login';
+            }}
+          />
+        )}
       </div>
-
-      <BottomNav />
-      <SupportWidget />
-      <CommandPalette />
-
-      {showWarning && (
-        <InactivityWarningModal
-          secondsRemaining={secondsRemaining}
-          onExtend={extendSession}
-          onLogoutNow={() => {
-            window.location.href = '/login';
-          }}
-        />
-      )}
-    </div>
+    </OfflineSyncProvider>
   );
 }

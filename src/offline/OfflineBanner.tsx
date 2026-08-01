@@ -1,6 +1,6 @@
 import { WifiOff, RefreshCw, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
-import { useSyncQueue } from '@/hooks/useSyncQueue';
+import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 
 /**
@@ -17,7 +17,7 @@ import { useOfflineQueue } from '@/hooks/useOfflineQueue';
  */
 export function OfflineBanner() {
   const isOnline = useOnlineStatus();
-  const { isSyncing, progress, syncNow } = useSyncQueue();
+  const { isSyncing, progress, syncNow } = useOfflineSync();
   const { pendingCount, failedCount } = useOfflineQueue();
 
   if (!isOnline) {
