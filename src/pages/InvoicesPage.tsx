@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  FileText,
   AlertCircle,
   ChevronRight,
   ArrowLeft,
@@ -11,6 +10,7 @@ import {
   FileDown,
   Receipt,
   Truck,
+  Eye,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
@@ -23,6 +23,13 @@ import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadB
 import { generateInvoiceDocument, generateDeliveryNoteDocument, generateReceiptDocument } from '@/lib/documents/documentGenerator';
 import { businessRowToBranding, type BusinessBranding } from '@/lib/documents/types';
 import { supabase } from '@/lib/supabase';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { SwipeableRow } from '@/components/mobile/SwipeableRow';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useDensity } from '@/hooks/useDensity';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
+import { useCallback } from 'react';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 import { formatDateShort } from '@/lib/formatters';
@@ -876,6 +883,15 @@ function InvoiceList({
 }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const isMobile = useIsMobile();
+  const { tdClass, thClass } = useDensity();
+  const queryClient = useQueryClient();
+
+  const onRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['invoices', businessId] });
+  }, [queryClient, businessId]);
+
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
 
   const { data: invoices = [], isLoading, isError } = useQuery({
     queryKey: ['invoices', businessId],
@@ -940,7 +956,8 @@ function InvoiceList({
   }
 
   return (
-    <div>
+    <div ref={containerRef as any}>
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-1">
           {STATUS_TABS.map((tab) => {
@@ -981,11 +998,47 @@ function InvoiceList({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
-          <FileText className="h-10 w-10 text-gray-300" />
-          <p className="text-sm font-medium text-gray-500">
-            {statusFilter === 'all' ? 'No invoices yet' : `No ${statusFilter.replace('_', ' ')} invoices`}
-          </p>
+        <EmptyState
+          title={statusFilter === 'all' ? 'No invoices yet' : `No ${statusFilter.replace('_', ' ')} invoices`}
+          description={statusFilter === 'all' ? 'Create your first invoice to start billing.' : 'Try a different status filter.'}
+          actionLabel={statusFilter === 'all' ? 'New Invoice' : undefined}
+          onAction={statusFilter === 'all' ? () => (window.location.href = '/income?action=invoice') : undefined}
+          variant="finance"
+        />
+      ) : isMobile ? (
+        <div className="space-y-3">
+          {filtered.map((inv) => {
+            const amountDue = inv.amount_due !== null ? Number(inv.amount_due) : Number(inv.total_amount) - Number(inv.amount_paid);
+            const isSel = selectedIds.has(inv.id);
+            const canPay = !['paid', 'voided', 'credited'].includes(inv.status) && amountDue > 0;
+            return (
+              <SwipeableRow
+                key={inv.id}
+                actions={[
+                  { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => onSelect(inv) },
+                  ...(canPay ? [{ label: 'Pay', icon: CreditCard, color: 'bg-brand-500', action: () => onSelect(inv) } as const] : []),
+                ]}
+              >
+                <div className={`flex items-center gap-3 rounded-2xl border bg-white p-4 shadow-sm ${isSel ? 'border-brand-300 ring-1 ring-brand-100' : 'border-gray-200'}`}>
+                  <input type="checkbox" checked={isSel} onChange={() => toggleOne(inv.id)} className="h-4 w-4 rounded border-gray-300 text-brand-600" />
+                  <div className="min-w-0 flex-1" onClick={() => onSelect(inv)}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-brand-700">{inv.invoice_number}</p>
+                      <StatusBadge status={inv.status} />
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <p className="text-xs text-gray-500">{formatDate(inv.issue_date)} {inv.due_date ? `→ ${formatDate(inv.due_date)}` : ''}</p>
+                      <p className="text-sm font-bold text-gray-900">{formatMwkDetailed(Number(inv.total_amount))}</p>
+                    </div>
+                    {amountDue > 0 && amountDue !== Number(inv.total_amount) && (
+                      <p className="mt-1 text-xs font-medium text-red-600">{formatMwkDetailed(amountDue)} due</p>
+                    )}
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-gray-300 shrink-0" />
+                </div>
+              </SwipeableRow>
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -993,7 +1046,7 @@ function InvoiceList({
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500 shadow-sm">
                 <tr>
-                  <th scope="col" className="w-10 px-3 py-3">
+                  <th scope="col" className={`w-10 ${thClass}`}>
                     <input
                       type="checkbox"
                       checked={allSelected}
@@ -1005,12 +1058,12 @@ function InvoiceList({
                       aria-label="Select all invoices"
                     />
                   </th>
-                  <th scope="col" className="px-4 py-3 text-left">Invoice #</th>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Issue Date</th>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Due Date</th>
-                  <th scope="col" className="px-4 py-3 text-right">Total</th>
-                  <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Outstanding</th>
-                  <th scope="col" className="px-4 py-3 text-center">Status</th>
+                  <th scope="col" className={`${thClass} text-left`}>Invoice #</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Issue Date</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Due Date</th>
+                  <th scope="col" className={`${thClass} text-right`}>Total</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Outstanding</th>
+                  <th scope="col" className={`${thClass} text-center`}>Status</th>
                   <th scope="col" className="w-8" />
                 </tr>
               </thead>
@@ -1024,7 +1077,7 @@ function InvoiceList({
                       key={inv.id}
                       className={`transition-colors ${isSel ? 'bg-brand-50/50' : 'hover:bg-gray-50'}`}
                     >
-                      <td className="px-3 py-3">
+                      <td className={`${tdClass}`}>
                         <input
                           type="checkbox"
                           checked={isSel}
@@ -1036,19 +1089,19 @@ function InvoiceList({
                           className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
                         />
                       </td>
-                      <td className="px-4 py-3 font-medium text-brand-700 cursor-pointer" onClick={() => onSelect(inv)}>
+                      <td className={`${tdClass} font-medium text-brand-700 cursor-pointer`} onClick={() => onSelect(inv)}>
                         {inv.invoice_number}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{formatDate(inv.issue_date)}</td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{inv.due_date ? formatDate(inv.due_date) : '—'}</td>
-                      <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(Number(inv.total_amount))}</td>
-                      <td className={`hidden sm:table-cell px-4 py-3 text-right ${amountDue > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`}>
+                      <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{formatDate(inv.issue_date)}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{inv.due_date ? formatDate(inv.due_date) : '—'}</td>
+                      <td className={`${tdClass} text-right font-medium`}>{formatMwkDetailed(Number(inv.total_amount))}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-right ${amountDue > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`}>
                         {amountDue > 0 ? formatMwkDetailed(amountDue) : '—'}
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className={`${tdClass} text-center`}>
                         <StatusBadge status={inv.status} />
                       </td>
-                      <td className="px-3 py-3 cursor-pointer" onClick={() => onSelect(inv)}>
+                      <td className={`px-3 ${tdClass} cursor-pointer`} onClick={() => onSelect(inv)}>
                         <ChevronRight className="h-4 w-4 text-gray-400" />
                       </td>
                     </tr>
