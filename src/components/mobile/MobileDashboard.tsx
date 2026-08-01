@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   TrendingUp,
   TrendingDown,
@@ -9,14 +10,12 @@ import {
   DollarSign,
   FileText,
   Users,
-  BarChart2,
   Percent,
-  ClipboardList,
   AlertTriangle,
   Lock,
   Package,
   Settings,
-  Sparkles,
+  ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -26,11 +25,8 @@ import {
   useMonthlyIncome,
   useMonthlyExpenses,
   useOutstandingInvoices,
-  useIncomeExpenseTrend,
-  useRecentJournalEntries,
   useMonthlyExpenseVat,
 } from '@/hooks/useDashboardData';
-import { IncomeExpenseChart } from '@/components/dashboard/IncomeExpenseChart';
 import { formatMwk, formatMwkCompact } from '@/lib/formatters';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
@@ -38,24 +34,9 @@ import { QuickIncomeMobile } from './QuickIncomeMobile';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { PullToRefreshIndicator } from './PullToRefreshIndicator';
-import { SwipeableRow } from './SwipeableRow';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { CreditCard, Eye } from 'lucide-react';
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function monthOverMonthChange(
-  data: { month: string; income: number; expenses: number }[] | undefined,
-  key: 'income' | 'expenses',
-): { pct: number; positive: boolean } | null {
-  if (!data || data.length < 2) return null;
-  const prev = data[data.length - 2][key];
-  const curr = data[data.length - 1][key];
-  if (!prev) return null;
-  const pct = ((curr - prev) / prev) * 100;
-  const positive = key === 'expenses' ? pct <= 0 : pct >= 0;
-  return { pct: Math.abs(pct), positive };
-}
+import { isItemLocked, visibleSectionsFor } from '@/components/layout/navConfig';
+import { usePartner } from '@/partner/PartnerContext';
+import { useUsage } from '@/hooks/useUsage';
 
 // ── Stat Card ────────────────────────────────────────────────────────────
 
@@ -67,7 +48,6 @@ function StatCard({
   tone = 'neutral',
   icon,
   isLoading,
-  trend,
   onClick,
 }: {
   label: string;
@@ -77,7 +57,6 @@ function StatCard({
   tone?: IconTone;
   icon: LucideIcon;
   isLoading?: boolean;
-  trend?: { pct: number; positive: boolean } | null;
   onClick?: () => void;
 }) {
   const valueColor = {
@@ -101,38 +80,22 @@ function StatCard({
     );
   }
 
-  const Wrapper = onClick ? 'button' : 'div';
-
-  return (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    <Wrapper
-      onClick={onClick as any}
-      className={clsx(
-        'group w-full rounded-2xl border border-white bg-white/80 p-4 text-left shadow-sm backdrop-blur-sm transition-all touch-manipulation',
-        onClick && 'active:scale-[0.97] active:bg-white',
-      )}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <IconBadge icon={icon} tone={tone} size="sm" interactive={!!onClick} />
-        {trend && (
-          <span
-            className={clsx(
-              'inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tight',
-              trend.positive ? 'bg-brand-50 text-brand-600' : 'bg-red-50 text-red-500',
-            )}
-          >
-            {trend.positive ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
-            {trend.pct.toFixed(0)}%
-          </span>
-        )}
-      </div>
-      <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-0.5">{label}</p>
-      <p className={`text-lg font-black tracking-tight ${valueColor} truncate`} title={valueTitle ?? value}>
-        {value}
-      </p>
-      {subtext && <p className="mt-1 text-[10px] font-medium text-gray-500 truncate uppercase">{subtext}</p>}
-    </Wrapper>
+  const className = clsx(
+    'group w-full rounded-2xl border border-white bg-white/80 p-4 text-left shadow-sm backdrop-blur-sm transition-all touch-manipulation',
+    onClick && 'active:scale-[0.97] active:bg-white',
   );
+  const content = <>
+    <div className="mb-3 flex items-center justify-between">
+      <IconBadge icon={icon} tone={tone} size="sm" interactive={Boolean(onClick)} />
+    </div>
+    <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
+    <p className={`truncate text-lg font-black tracking-tight ${valueColor}`} title={valueTitle ?? value}>
+      {value}
+    </p>
+    {subtext && <p className="mt-1 truncate text-[10px] font-medium uppercase text-gray-500">{subtext}</p>}
+  </>;
+
+  return onClick ? <button type="button" onClick={onClick} className={className}>{content}</button> : <div className={className}>{content}</div>;
 }
 
 function QuickActionButton({
@@ -151,7 +114,9 @@ function QuickActionButton({
       onClick={() => {
         try {
           if ('vibrate' in navigator) navigator.vibrate(5);
-        } catch {}
+        } catch {
+          // Haptic feedback is optional.
+        }
         onClick();
       }}
       className="group flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-3 transition-transform active:scale-95 touch-manipulation"
@@ -166,11 +131,16 @@ function QuickActionButton({
 
 export function MobileDashboard() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const { isFeatureEnabled } = usePartner();
+  const { planTier } = useUsage();
   const currentUser = useAppStore((s) => s.currentUser);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
+  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role)
+    .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
@@ -179,8 +149,6 @@ export function MobileDashboard() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ['monthly_income'] }),
       queryClient.invalidateQueries({ queryKey: ['monthly_expenses'] }),
-      queryClient.invalidateQueries({ queryKey: ['income_expense_trend'] }),
-      queryClient.invalidateQueries({ queryKey: ['recent_journal'] }),
       queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
       queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
     ]);
@@ -191,8 +159,6 @@ export function MobileDashboard() {
   const income = useMonthlyIncome(businessId);
   const expenses = useMonthlyExpenses(businessId);
   const outstanding = useOutstandingInvoices(businessId);
-  const trend = useIncomeExpenseTrend(businessId, 6);
-  const recentEntries = useRecentJournalEntries(businessId, 5);
 
   const lowStock = useQuery({
     queryKey: ['reorder_alerts', businessId],
@@ -203,9 +169,6 @@ export function MobileDashboard() {
 
   const netProfit =
     income.data !== undefined && expenses.data !== undefined ? income.data.totalAmount - expenses.data : undefined;
-
-  const incomeTrend = monthOverMonthChange(trend.data, 'income');
-  const expensesTrend = monthOverMonthChange(trend.data, 'expenses');
 
   const expenseVat = useMonthlyExpenseVat(businessId);
   const outputVat = income.data?.vatAmount ?? 0;
@@ -224,7 +187,7 @@ export function MobileDashboard() {
   const isProfitPositive = netProfit !== undefined && netProfit >= 0;
 
   return (
-    <div ref={containerRef as any} className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
+    <div ref={containerRef} className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
 
       {/* Header */}
@@ -310,24 +273,12 @@ export function MobileDashboard() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* This-month snapshot — designed for fast action, not reporting analytics. */}
       <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Income" value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)} valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={income.isLoading} trend={incomeTrend} />
-        <StatCard label="Expenses" value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)} valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={expenses.isLoading} trend={expensesTrend} />
+        <StatCard label="Income" value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)} valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={income.isLoading} onClick={() => navigate('/income')} />
+        <StatCard label="Expenses" value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)} valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={expenses.isLoading} onClick={() => navigate('/expenses')} />
         <StatCard label="Outstanding" value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)} valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} tone="info" icon={FileText} isLoading={outstanding.isLoading} onClick={() => navigate('/invoices')} />
         <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={netVat >= 0 ? 'Payable to MRA' : 'Refundable'} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} onClick={() => navigate('/tax')} />
-      </div>
-
-      {/* Chart */}
-      <div className="rounded-2xl border border-white bg-white/70 p-4 shadow-sm backdrop-blur-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-xs font-black uppercase tracking-widest text-gray-900">Analytics</h2>
-            <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Income vs Expenses</p>
-          </div>
-          <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500 uppercase">6M</span>
-        </div>
-        <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} compact />
       </div>
 
       {/* Quick Actions */}
@@ -380,83 +331,46 @@ export function MobileDashboard() {
         </button>
       </div>
 
-      {/* Recent Transactions — with swipe */}
-      <div className="px-1">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Recent</p>
-          <button onClick={() => navigate('/reports')} className="text-[10px] font-black uppercase tracking-widest text-brand-600 underline underline-offset-4 touch-manipulation">
-            View All
-          </button>
+      {/* All desktop workspaces stay reachable on mobile without crowding the home screen. */}
+      <section className="px-1" aria-labelledby="mobile-workspaces">
+        <div className="mb-3">
+          <p id="mobile-workspaces" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">All workspaces</p>
+          <p className="mt-1 text-xs text-gray-500">Open any Ledgr tool when you need it.</p>
         </div>
-
-        {recentEntries.isLoading ? (
-          <div className="space-y-3">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-gray-100/50" />
-            ))}
-          </div>
-        ) : !recentEntries.data || recentEntries.data.length === 0 ? (
-          <EmptyState
-            title="No transactions yet"
-            description="Start by recording income or expenses. Swipe actions will appear here."
-            actionLabel="Record Income"
-            onAction={() => setShowIncome(true)}
-            variant="finance"
-          />
-        ) : (
-          <div className="overflow-hidden rounded-2xl border border-white bg-white/70 shadow-sm divide-y divide-gray-100/50">
-            {recentEntries.data.map((entry, i) => {
-              const t: IconTone = entry.source_type === 'invoice' ? 'brand' : entry.source_type === 'expense' ? 'negative' : 'neutral';
-              const Icon: LucideIcon = entry.source_type === 'invoice' ? DollarSign : entry.source_type === 'expense' ? Receipt : ClipboardList;
-              return (
-                <SwipeableRow
-                  key={i}
-                  actions={[
-                    { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => navigate('/journals') },
-                    { label: 'Details', icon: CreditCard, color: 'bg-brand-500', action: () => navigate('/reports') },
-                  ]}
-                >
-                  <div className="flex items-center justify-between px-4 py-3.5 bg-white active:bg-white/60 touch-manipulation">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <IconBadge icon={Icon} tone={t} size="sm" />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-xs font-bold text-gray-900 truncate max-w-[140px]">{entry.description ?? entry.source_type ?? 'Journal'}</p>
-                          {entry.isLocked && <Lock className="h-3 w-3 text-amber-500" />}
-                        </div>
-                        <p className="text-[10px] font-medium text-gray-500 uppercase mt-0.5">{entry.entry_date}</p>
+        <div className="space-y-2">
+          {workspaceSections.map((section) => (
+            <details key={section.labelKey} className="group overflow-hidden rounded-2xl border border-white bg-white/75 shadow-sm backdrop-blur-sm">
+              <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between px-4 py-3 touch-manipulation">
+                <span className="text-xs font-black uppercase tracking-widest text-gray-800">{t(section.labelKey)}</span>
+                <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" aria-hidden="true" />
+              </summary>
+              <div className="grid grid-cols-2 gap-2 border-t border-gray-100 p-2">
+                {section.items.map((item) => {
+                  const locked = isItemLocked(item, planTier, section.minPlan);
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.path}
+                      type="button"
+                      onClick={() => navigate(locked ? '/settings?tab=billing' : item.path)}
+                      className={clsx(
+                        'flex min-h-[76px] items-center gap-2 rounded-xl p-3 text-left transition-colors active:scale-[0.98]',
+                        locked ? 'bg-gray-50 text-gray-500' : 'bg-white hover:bg-brand-50 active:bg-brand-50',
+                      )}
+                    >
+                      <div className="relative">
+                        <IconBadge icon={Icon} tone="brand" size="sm" interactive={!locked} />
+                        {locked && <Lock className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-white p-0.5 text-gray-500" aria-label="Upgrade required" />}
                       </div>
-                    </div>
-                    <p className={clsx('text-[10px] font-bold uppercase px-2 py-1 rounded-md', entry.source_type === 'expense' ? 'bg-red-50 text-red-600' : 'bg-brand-50 text-brand-700')}>
-                      {entry.source_type ?? 'entry'}
-                    </p>
-                  </div>
-                </SwipeableRow>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="px-1">
-        <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Shortcuts</p>
-        <div className="overflow-hidden rounded-2xl border border-white bg-white/70 shadow-sm divide-y divide-gray-100/50">
-          {[
-            { label: 'Invoices', icon: FileText, tone: 'info' as IconTone, path: '/invoices' },
-            { label: 'Tax Center', icon: Percent, tone: 'warning' as IconTone, path: '/tax' },
-            { label: 'Reports', icon: BarChart2, tone: 'brand' as IconTone, path: '/reports' },
-            { label: 'Ledgr AI', icon: Sparkles, tone: 'brand' as IconTone, path: '/ai' },
-          ].map((item) => (
-            <button key={item.path} onClick={() => navigate(item.path)} className="flex w-full items-center justify-between px-4 py-3.5 active:bg-white/60 touch-manipulation">
-              <div className="flex items-center gap-3">
-                <IconBadge icon={item.icon} tone={item.tone} size="sm" interactive />
-                <span className="text-xs font-bold uppercase tracking-widest text-gray-700">{item.label}</span>
+                      <span className="line-clamp-2 text-xs font-bold leading-tight">{t(item.labelKey)}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <ChevronRight className="h-4 w-4 text-gray-400" />
-            </button>
+            </details>
           ))}
         </div>
-      </div>
+      </section>
 
       {businessId && (
         <>
