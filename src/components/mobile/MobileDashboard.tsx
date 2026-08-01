@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -133,6 +133,20 @@ function QuickActionButton({
 
 // ── Main ─────────────────────────────────────────────────────────────────
 
+type MobileActionId = 'income' | 'expense' | 'invoice' | 'payroll' | 'stock' | 'contacts';
+const DEFAULT_MOBILE_ACTIONS: MobileActionId[] = ['income', 'expense', 'invoice', 'payroll'];
+
+function getMobilePreferences(): { quickActionIds: MobileActionId[]; pinnedPaths: string[] } {
+  if (typeof window === 'undefined') return { quickActionIds: DEFAULT_MOBILE_ACTIONS, pinnedPaths: [] };
+  try {
+    const saved = localStorage.getItem('ledgr-mobile-dashboard-preferences');
+    const preferences = saved ? JSON.parse(saved) as { quickActionIds?: MobileActionId[]; pinnedPaths?: string[] } : null;
+    return { quickActionIds: preferences?.quickActionIds?.slice(0, 4) || DEFAULT_MOBILE_ACTIONS, pinnedPaths: preferences?.pinnedPaths || [] };
+  } catch {
+    return { quickActionIds: DEFAULT_MOBILE_ACTIONS, pinnedPaths: [] };
+  }
+}
+
 export function MobileDashboard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -149,6 +163,15 @@ export function MobileDashboard() {
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
   const [balanceVisible, setBalanceVisible] = useState(true);
+  const [preferences] = useState(getMobilePreferences);
+  const [quickActionIds, setQuickActionIds] = useState<MobileActionId[]>(preferences.quickActionIds);
+  const [showActionEditor, setShowActionEditor] = useState(false);
+  const [pinnedPaths, setPinnedPaths] = useState<string[]>(preferences.pinnedPaths);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('ledgr-mobile-dashboard-preferences', JSON.stringify({ quickActionIds, pinnedPaths }));
+  }, [quickActionIds, pinnedPaths]);
 
   const onRefresh = useCallback(async () => {
     await Promise.all([
@@ -157,6 +180,7 @@ export function MobileDashboard() {
       queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
       queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
     ]);
+    setLastUpdated(new Date());
   }, [queryClient]);
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
@@ -190,6 +214,14 @@ export function MobileDashboard() {
   const firstName = currentUser?.profile?.full_name?.split(' ')[0] ?? currentUser?.email?.split('@')[0] ?? 'there';
   const { logoUrl } = useBrandTheme();
   const isProfitPositive = netProfit !== undefined && netProfit >= 0;
+  const mobileActions: Record<MobileActionId, { label: string; icon: LucideIcon; tone: IconTone; run: () => void }> = {
+    income: { label: 'Income', icon: DollarSign, tone: 'brand', run: () => setShowIncome(true) },
+    expense: { label: 'Expense', icon: Receipt, tone: 'negative', run: () => setShowExpense(true) },
+    invoice: { label: 'Invoice', icon: FileText, tone: 'info', run: () => navigate('/income?action=invoice') },
+    payroll: { label: 'Payroll', icon: Users, tone: 'neutral', run: () => navigate('/payroll?action=run') },
+    stock: { label: 'Stock', icon: Package, tone: 'brand', run: () => navigate('/warehouse') },
+    contacts: { label: 'Contacts', icon: Users, tone: 'info', run: () => navigate('/contacts') },
+  };
 
   return (
     <div ref={containerRef} className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
@@ -303,7 +335,7 @@ export function MobileDashboard() {
             <ClipboardCheck className="h-4 w-4 text-brand-700" aria-hidden="true" />
             <h2 id="today-title" className="text-xs font-black uppercase tracking-widest text-gray-900">Today</h2>
           </div>
-          <span className="text-[10px] font-bold uppercase text-gray-400">Action centre</span>
+          <span className="text-[10px] font-bold uppercase text-gray-400">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Pull to refresh'}</span>
         </div>
         <div className="space-y-2">
           {(outstanding.data?.count ?? 0) > 0 && <button type="button" onClick={() => navigate('/invoices')} className="flex w-full items-center justify-between rounded-xl bg-indigo-50 px-3 py-3 text-left"><span className="text-xs font-semibold text-indigo-950">{outstanding.data!.count} invoice{outstanding.data!.count === 1 ? '' : 's'} awaiting payment</span><ChevronRight className="h-4 w-4 text-indigo-600" /></button>}
@@ -321,16 +353,27 @@ export function MobileDashboard() {
         <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={netVat >= 0 ? 'Payable to MRA' : 'Refundable'} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} onClick={() => navigate('/tax')} />
       </div>
 
-      {/* Quick Actions */}
-      <div className="px-1">
-        <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Quick Actions</p>
-        <div className="grid grid-cols-4 gap-2">
-          <QuickActionButton icon={DollarSign} tone="brand" label="Income" onClick={() => setShowIncome(true)} />
-          <QuickActionButton icon={Receipt} tone="negative" label="Expense" onClick={() => setShowExpense(true)} />
-          <QuickActionButton icon={FileText} tone="info" label="Invoice" onClick={() => navigate('/income?action=invoice')} />
-          <QuickActionButton icon={Users} tone="neutral" label="Payroll" onClick={() => navigate('/payroll?action=run')} />
+      {/* Personal quick actions */}
+      <section className="px-1" aria-labelledby="quick-actions-title">
+        <div className="mb-3 flex items-center justify-between">
+          <p id="quick-actions-title" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Quick actions</p>
+          <button type="button" onClick={() => setShowActionEditor((open) => !open)} className="text-[10px] font-black uppercase tracking-widest text-brand-700">{showActionEditor ? 'Done' : 'Customize'}</button>
         </div>
-      </div>
+        {showActionEditor && (
+          <div className="mb-3 rounded-2xl bg-brand-50 p-3">
+            <p className="mb-2 text-xs font-medium text-brand-900">Choose up to four. Remove an action and add it again to move it to the end.</p>
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(mobileActions) as MobileActionId[]).map((id) => {
+                const selected = quickActionIds.includes(id);
+                return <button key={id} type="button" onClick={() => setQuickActionIds((ids) => selected ? ids.filter((item) => item !== id) : ids.length < 4 ? [...ids, id] : ids)} className={clsx('rounded-full px-3 py-1.5 text-xs font-semibold', selected ? 'bg-brand-700 text-white' : 'bg-white text-gray-700')} aria-pressed={selected}>{mobileActions[id].label}</button>;
+              })}
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-4 gap-2">
+          {quickActionIds.map((id) => <QuickActionButton key={id} {...mobileActions[id]} onClick={mobileActions[id].run} />)}
+        </div>
+      </section>
 
       {/* Inventory */}
       <div className="grid grid-cols-1 gap-3">
@@ -375,8 +418,19 @@ export function MobileDashboard() {
       <section className="px-1" aria-labelledby="mobile-workspaces">
         <div className="mb-3">
           <p id="mobile-workspaces" className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">All workspaces</p>
-          <p className="mt-1 text-xs text-gray-500">Open any Ledgr tool when you need it.</p>
+          <div className="mt-1 flex items-center justify-between gap-3">
+            <p className="text-xs text-gray-500">Open any Ledgr tool when you need it.</p>
+            <button type="button" onClick={() => setPinnedPaths((paths) => paths.length ? [] : workspaceSections.flatMap((section) => section.items).slice(0, 4).map((item) => item.path))} className="shrink-0 text-[10px] font-black uppercase tracking-widest text-brand-700">{pinnedPaths.length ? 'Clear pins' : 'Pin essentials'}</button>
+          </div>
         </div>
+        {pinnedPaths.length > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-2">
+            {workspaceSections.flatMap((section) => section.items).filter((item) => pinnedPaths.includes(item.path)).map((item) => {
+              const Icon = item.icon;
+              return <button key={item.path} type="button" onClick={() => navigate(item.path)} className="flex min-h-[56px] items-center gap-2 rounded-xl bg-brand-50 px-3 text-left text-xs font-bold text-brand-900"><Icon className="h-4 w-4" />{t(item.labelKey)}</button>;
+            })}
+          </div>
+        )}
         <div className="space-y-2">
           {workspaceSections.map((section) => (
             <details key={section.labelKey} className="group overflow-hidden rounded-2xl border border-white bg-white/75 shadow-sm backdrop-blur-sm">
