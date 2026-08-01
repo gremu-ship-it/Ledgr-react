@@ -1,5 +1,6 @@
-import { type LucideIcon, Package, FileText, TrendingUp, SearchX } from 'lucide-react';
+import { type LucideIcon, Package, FileText, TrendingUp, SearchX, Users, Receipt, Calendar } from 'lucide-react';
 import { clsx } from 'clsx';
+import { Button } from './Button';
 
 interface EmptyStateProps {
   icon?: LucideIcon;
@@ -9,8 +10,10 @@ interface EmptyStateProps {
   onAction?: () => void;
   secondaryLabel?: string;
   onSecondary?: () => void;
-  variant?: 'default' | 'search' | 'inventory' | 'finance';
+  variant?: 'default' | 'search' | 'inventory' | 'finance' | 'onboarding';
   className?: string;
+  /** New: enforce single headline + description + action */
+  compact?: boolean;
 }
 
 export function EmptyState({
@@ -23,12 +26,30 @@ export function EmptyState({
   onSecondary,
   variant = 'default',
   className,
+  compact = false,
 }: EmptyStateProps) {
   const variantStyles = {
     default: 'border-gray-200 bg-white',
     search: 'border-gray-200 bg-gray-50/50 border-dashed',
     inventory: 'border-amber-100 bg-amber-50/30 border-dashed',
     finance: 'border-brand-100 bg-brand-50/30',
+    onboarding: 'border-brand-200 bg-brand-50/20',
+  };
+
+  const iconBg = {
+    default: 'bg-gray-50',
+    search: 'bg-gray-100',
+    inventory: 'bg-amber-100',
+    finance: 'bg-brand-100',
+    onboarding: 'bg-brand-100',
+  };
+
+  const iconColor = {
+    default: 'text-gray-400',
+    search: 'text-gray-400',
+    inventory: 'text-amber-600',
+    finance: 'text-brand-600',
+    onboarding: 'text-brand-600',
   };
 
   return (
@@ -36,55 +57,139 @@ export function EmptyState({
       className={clsx(
         'flex flex-col items-center justify-center gap-4 rounded-2xl border px-6 py-12 text-center',
         variantStyles[variant],
-        className
+        className,
+        compact && 'py-8 gap-3'
       )}
     >
       <div
         className={clsx(
           'flex h-14 w-14 items-center justify-center rounded-2xl',
-          variant === 'search' && 'bg-gray-100',
-          variant === 'inventory' && 'bg-amber-100',
-          variant === 'finance' && 'bg-brand-100',
-          variant === 'default' && 'bg-gray-50'
+          iconBg[variant]
         )}
       >
-        <Icon
-          className={clsx(
-            'h-7 w-7',
-            variant === 'search' && 'text-gray-400',
-            variant === 'inventory' && 'text-amber-600',
-            variant === 'finance' && 'text-brand-600',
-            variant === 'default' && 'text-gray-400'
-          )}
-        />
+        <Icon className={clsx('h-7 w-7', iconColor[variant])} />
       </div>
 
       <div className="space-y-1.5 max-w-sm">
         <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        {description && <p className="text-xs leading-relaxed text-gray-500">{description}</p>}
+        {description && (
+          <p className={clsx(
+            'leading-relaxed text-gray-500',
+            compact ? 'text-xs' : 'text-xs'
+          )}>
+            {description}
+          </p>
+        )}
       </div>
 
       {(actionLabel || secondaryLabel) && (
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           {actionLabel && onAction && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onAction}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-600 active:scale-95 transition-all"
             >
               {actionLabel}
-            </button>
+            </Button>
           )}
           {secondaryLabel && onSecondary && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onSecondary}
-              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50 active:scale-95 transition-all"
             >
               {secondaryLabel}
-            </button>
+            </Button>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+// ── Standardised contextual empty states (presentation spec #7) ───────────────
+
+export function NoInvoicesYet({ onAction }: { onAction?: () => void }) {
+  return (
+    <EmptyState
+      icon={Receipt}
+      title="No invoices yet"
+      description="Create your first invoice to start tracking customer payments."
+      actionLabel="Create invoice"
+      onAction={onAction}
+      variant="finance"
+    />
+  );
+}
+
+export function NoCustomersYet({ onAction }: { onAction?: () => void }) {
+  return (
+    <EmptyState
+      icon={Users}
+      title="No customers yet"
+      description="Add your first customer or supplier to begin managing contacts."
+      actionLabel="Add contact"
+      onAction={onAction}
+      variant="default"
+    />
+  );
+}
+
+export function NoTransactionsYet({ onAction }: { onAction?: () => void }) {
+  return (
+    <EmptyState
+      icon={TrendingUp}
+      title="No transactions yet"
+      description="Record your first income or expense to see activity here."
+      actionLabel="Record transaction"
+      onAction={onAction}
+      variant="finance"
+    />
+  );
+}
+
+export function NoProductsYet({ onAction }: { onAction?: () => void }) {
+  return (
+    <EmptyState
+      icon={Package}
+      title="No products yet"
+      description="Add your first product to start tracking inventory and stock levels."
+      actionLabel="Add product"
+      onAction={onAction}
+      variant="inventory"
+    />
+  );
+}
+
+export function OnboardingEmptyState({ 
+  step, 
+  onAction 
+}: { 
+  step: 1 | 2 | 3 | 4 | 5 | 6; 
+  onAction?: () => void 
+}) {
+  const steps = {
+    1: { title: "Add business information", desc: "Tell us about your company to personalise your experience." },
+    2: { title: "Configure financial year", desc: "Set your financial year and chart of accounts." },
+    3: { title: "Add first contact", desc: "Create your first customer or supplier." },
+    4: { title: "Record first transaction", desc: "Log your first income or expense entry." },
+    5: { title: "Create first invoice", desc: "Send your first invoice to a customer." },
+    6: { title: "Add products", desc: "Enable inventory tracking by adding products." },
+  };
+
+  const s = steps[step];
+
+  return (
+    <EmptyState
+      icon={Calendar}
+      title={s.title}
+      description={s.desc}
+      actionLabel="Get started"
+      onAction={onAction}
+      variant="onboarding"
+      compact
+    />
   );
 }
 

@@ -116,7 +116,7 @@ export function Sidebar() {
             return (
               <div key={section.labelKey} className={clsx('mb-6', isSupport && 'mt-8 pt-6 border-t border-gray-100')}>
                 {sidebarOpen && (
-                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <p className="mb-2 px-3 text-[11px] font-semibold text-gray-400 category-label">
                     {t(section.labelKey)}
                   </p>
                 )}

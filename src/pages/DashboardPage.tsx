@@ -21,6 +21,7 @@ import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { UsageMeter } from '@/components/billing/UsageMeter';
 import { UpgradeModal } from '@/components/billing/UpgradeModal';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
+import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { useState } from 'react';
 
 interface KpiCardProps {
@@ -108,21 +109,25 @@ function QuickActions() {
   const navigate = useNavigate();
 
   const actions = [
-    { label: t('dashboard.newInvoice'), icon: Plus, onClick: () => navigate('/income?action=invoice'), color: 'bg-brand-500 hover:bg-brand-600 text-white' },
-    { label: t('dashboard.recordIncome'), icon: DollarSign, onClick: () => navigate('/income?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: t('dashboard.recordExpense'), icon: Receipt, onClick: () => navigate('/expenses?action=record'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
-    { label: t('dashboard.runPayroll'), icon: Users, onClick: () => navigate('/payroll?action=run'), color: 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200' },
+    { label: t('dashboard.newInvoice'), icon: Plus, onClick: () => navigate('/income?action=invoice'), variant: 'primary' as const },
+    { label: t('dashboard.recordIncome'), icon: DollarSign, onClick: () => navigate('/income?action=record'), variant: 'secondary' as const },
+    { label: t('dashboard.recordExpense'), icon: Receipt, onClick: () => navigate('/expenses?action=record'), variant: 'secondary' as const },
+    { label: t('dashboard.runPayroll'), icon: Users, onClick: () => navigate('/payroll?action=run'), variant: 'secondary' as const },
   ];
 
   return (
     <div className="flex flex-wrap gap-2">
-      {actions.map((action) => {
+      {actions.map((action, idx) => {
         const Icon = action.icon;
         return (
           <button
-            key={action.label}
+            key={idx}
             onClick={action.onClick}
-            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 sm:px-4 sm:py-2.5 text-sm font-semibold shadow-sm transition-all active:scale-95 touch-manipulation ${action.color}`}
+            className={`flex items-center gap-2 rounded-xl px-3 py-2.5 sm:px-4 sm:py-2.5 text-sm font-semibold shadow-sm transition-all active:scale-95 touch-manipulation ${
+              action.variant === 'primary' 
+                ? 'bg-brand-500 hover:bg-brand-600 text-white' 
+                : 'bg-white hover:bg-gray-50 text-gray-700 border border-gray-200'
+            }`}
           >
             <Icon className="h-4 w-4" />
             {action.label}
@@ -180,6 +185,9 @@ export function DashboardPage() {
       <TaxReminderModal />
       <TaxRemittancePanel businessId={businessId} />
       <UsageMeter />
+
+      {/* Onboarding progress checklist (spec #5) */}
+      <OnboardingChecklist />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>

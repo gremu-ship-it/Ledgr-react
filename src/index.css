@@ -438,6 +438,47 @@
   /* Apply the new design system tokens globally */
   html { background-color: #F8FAFC; }
 
+  /* ── LIGHT / DARK THEME SUPPORT (presentation spec #8) ───────────────── */
+  .dark {
+    --color-app-bg: #0F172A;
+    --color-card-bg: #1E293B;
+    --color-navy-900: #F8FAFC;
+    --color-navy-600: #94A3B8;
+    --color-navy-200: #334155;
+
+    color-scheme: dark;
+  }
+
+  .dark html,
+  .dark body {
+    background-color: var(--color-app-bg);
+    color: #E2E8F0;
+  }
+
+  .dark .bg-white,
+  .dark [class*="bg-white"] {
+    background-color: var(--color-card-bg) !important;
+  }
+
+  .dark .text-gray-900,
+  .dark .text-navy-900 {
+    color: #F8FAFC !important;
+  }
+
+  .dark .text-gray-600,
+  .dark .text-navy-600 {
+    color: #94A3B8 !important;
+  }
+
+  .dark .border-gray-200 {
+    border-color: #334155 !important;
+  }
+
+  .dark .shadow-card,
+  .dark .shadow-soft {
+    box-shadow: 0 1px 4px 0 rgb(15 23 42 / 0.4), 0 0 0 1px rgb(51 65 85 / 0.6);
+  }
+
   /* ── WCAG 2.4.7 Focus Visible ─────────────────────────────────────────
      3px minimum outline width, 2px offset for separation from element,
      high-contrast colour meeting 3:1 non-text contrast on any surface.
@@ -596,4 +637,116 @@
   }
 
   @tailwind utilities;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRESENTATION STANDARDISATION TOKENS (specs 1,2,3,4)
+   ───────────────────────────────────────────────────────────────────────────── */
+@layer components {
+  /* Standardised heading hierarchy */
+  .heading-1 {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 700;
+    color: #0F172A;
+  }
+  .dark .heading-1 { color: #F8FAFC; }
+
+  .heading-2 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 600;
+    color: #0F172A;
+  }
+  .dark .heading-2 { color: #F8FAFC; }
+
+  .heading-3 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    font-weight: 600;
+    color: #0F172A;
+  }
+  .dark .heading-3 { color: #F8FAFC; }
+
+  /* Card standardisation */
+  .card {
+    background-color: var(--color-card-bg);
+    border-radius: 1rem;           /* 16px - consistent across app */
+    box-shadow: var(--shadow-card);
+    padding: 1.5rem;               /* 24px padding */
+    border: 1px solid #E2E8F0;
+  }
+  .dark .card {
+    border-color: #334155;
+  }
+
+  /* Table standardisation (spec #4) */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+
+  .data-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background-color: #F8FAFC;
+    border-bottom: 2px solid #E2E8F0;
+  }
+  .dark .data-table thead {
+    background-color: #1E293B;
+    border-color: #334155;
+  }
+
+  .data-table th {
+    padding: 0.875rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: none;           /* sentence case by default */
+    letter-spacing: normal;
+    color: #475569;
+  }
+  .dark .data-table th { color: #94A3B8; }
+
+  .data-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #E2E8F0;
+    vertical-align: middle;
+  }
+  .dark .data-table td { border-color: #334155; }
+
+  .data-table tbody tr:hover {
+    background-color: #F1F5F9;
+  }
+  .dark .data-table tbody tr:hover {
+    background-color: #334155;
+  }
+
+  .data-table .numeric {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .data-table .compact {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+
+  /* Helper text standard (spec #2) */
+  .helper-text {
+    font-size: 0.75rem;   /* 12px minimum */
+    line-height: 1rem;
+    color: #64748B;
+  }
+
+  /* Category label (still allowed uppercase) */
+  .category-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #64748B;
+  }
 }

@@ -41,6 +41,7 @@ import { PullToRefreshIndicator } from './PullToRefreshIndicator';
 import { SwipeableRow } from './SwipeableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CreditCard, Eye } from 'lucide-react';
+import { MobileOnboardingChecklist } from '@/components/OnboardingChecklist';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ function QuickActionButton({
       className="group flex min-h-[72px] flex-col items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-2 py-3 transition-transform active:scale-95 touch-manipulation"
     >
       <IconBadge icon={icon} tone={tone} size="sm" interactive />
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-700 text-center leading-tight">{label}</span>
+      <span className="text-[10px] font-semibold text-gray-700 text-center leading-tight">{label}</span>
     </button>
   );
 }
@@ -309,6 +310,9 @@ export function MobileDashboard() {
           )}
         </div>
       </div>
+
+      {/* Onboarding checklist (mobile compact) */}
+      <MobileOnboardingChecklist />
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">

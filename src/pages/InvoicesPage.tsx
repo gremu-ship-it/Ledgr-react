@@ -1043,8 +1043,8 @@ function InvoiceList({
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500 shadow-sm">
+            <table className="data-table w-full text-sm">
+              <thead className="bg-gray-50 text-xs font-medium text-gray-500 shadow-sm">
                 <tr>
                   <th scope="col" className={`w-10 ${thClass}`}>
                     <input
@@ -1061,8 +1061,8 @@ function InvoiceList({
                   <th scope="col" className={`${thClass} text-left`}>Invoice #</th>
                   <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Issue Date</th>
                   <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Due Date</th>
-                  <th scope="col" className={`${thClass} text-right`}>Total</th>
-                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Outstanding</th>
+                  <th scope="col" className={`${thClass} text-right numeric`}>Total</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right numeric`}>Outstanding</th>
                   <th scope="col" className={`${thClass} text-center`}>Status</th>
                   <th scope="col" className="w-8" />
                 </tr>
