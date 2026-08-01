@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle, Eye, CreditCard } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -14,6 +14,12 @@ import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 import { createLogger } from '@/lib/logger';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useDensity } from '@/hooks/useDensity';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
+import { SwipeableRow } from '@/components/mobile/SwipeableRow';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 const log = createLogger('IncomePage');
 
@@ -254,7 +260,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function EmptyState({ onRecord }: { onRecord: () => void }) {
+function IncomeEmptyState({ onRecord }: { onRecord: () => void }) {
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-50">
@@ -1018,56 +1024,119 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   );
 }
 
+
 // ── Income List ───────────────────────────────────────────────────────────────
 
 function IncomeList({ businessId }: { businessId: string }) {
+  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const { tdClass, thClass } = useDensity();
+
+  const onRefresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['invoices', 'income', businessId] });
+  };
+
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
+
   const { data: invoices = [], isLoading, isError } = useQuery({
     queryKey: ['invoices', 'income', businessId],
     queryFn: () => repos.invoice.findByBusiness(businessId),
     enabled: Boolean(businessId),
   });
 
-  if (isLoading) return <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
-  if (isError) return (
-    <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-      <AlertCircle className="h-4 w-4 shrink-0" />Failed to load income records.
-    </div>
-  );
+  if (isLoading)
+    return (
+      <div className="space-y-3">
+        {[...Array(5)].map((_, i) => (
+          <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />
+        ))}
+      </div>
+    );
+  if (isError)
+    return (
+      <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+        <AlertCircle className="h-4 w-4 shrink-0" />
+        Failed to load income records.
+      </div>
+    );
 
   const incomeInvoices = invoices.filter((inv) => inv.invoice_type === 'invoice');
-  if (incomeInvoices.length === 0) return null;
+  if (incomeInvoices.length === 0)
+    return (
+      <EmptyState
+        title="No income yet"
+        description="Record your first income or create an invoice. Swipe actions will appear here."
+        actionLabel="Record Income"
+        onAction={() => (window.location.href = '/income?action=record')}
+        variant="finance"
+      />
+    );
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Invoice #</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
-              <th scope="col" className="px-4 py-3 text-left">Description / Contact</th>
-              <th scope="col" className="px-4 py-3 text-right">Amount</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {incomeInvoices.map((inv) => (
-              <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-medium text-brand-700">{inv.invoice_number}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{inv.issue_date}</td>
-                <td className="px-4 py-3 font-medium text-gray-900">{inv.notes || inv.po_number || '—'}</td>
-                <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(inv.total_amount)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(inv.amount_paid)}</td>
-                <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={inv.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <div ref={containerRef as any}>
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+      {isMobile ? (
+        <div className="space-y-3">
+          {incomeInvoices.map((inv) => (
+            <SwipeableRow
+              key={inv.id}
+              actions={[
+                { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => {} },
+                { label: 'Paid', icon: CreditCard, color: 'bg-brand-500', action: () => {} },
+              ]}
+            >
+              <div className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-brand-700">{inv.invoice_number}</p>
+                  <p className="mt-0.5 truncate text-xs text-gray-500">{inv.notes || inv.po_number || inv.issue_date}</p>
+                  <div className="mt-1">
+                    <StatusBadge status={inv.status} />
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-gray-900">{formatMwkDetailed(inv.total_amount)}</p>
+                  <p className="text-xs text-gray-500">{formatMwkDetailed(inv.amount_paid)} paid</p>
+                </div>
+              </div>
+            </SwipeableRow>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th scope="col" className={`${thClass} text-left`}>Invoice #</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Date</th>
+                  <th scope="col" className={`${thClass} text-left`}>Description / Contact</th>
+                  <th scope="col" className={`${thClass} text-right`}>Amount</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Paid</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-center`}>Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {incomeInvoices.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                    <td className={`${tdClass} font-medium text-brand-700`}>{inv.invoice_number}</td>
+                    <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{inv.issue_date}</td>
+                    <td className={`${tdClass} font-medium text-gray-900`}>{inv.notes || inv.po_number || '—'}</td>
+                    <td className={`${tdClass} text-right font-medium`}>{formatMwkDetailed(inv.total_amount)}</td>
+                    <td className={`hidden sm:table-cell ${tdClass} text-right text-gray-500`}>{formatMwkDetailed(inv.amount_paid)}</td>
+                    <td className={`hidden sm:table-cell ${tdClass} text-center`}>
+                      <StatusBadge status={inv.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -1138,7 +1207,7 @@ export function IncomePage() {
 
       {tab === 'quick'   && <QuickEntryTab    businessId={businessId} onSuccess={() => setTab('list')} />}
       {tab === 'invoice' && <InvoiceBuilderTab businessId={businessId} onSuccess={() => setTab('list')} />}
-      {tab === 'list'    && (hasIncome ? <IncomeList businessId={businessId} /> : <EmptyState onRecord={() => setTab('quick')} />)}
+      {tab === 'list'    && (hasIncome ? <IncomeList businessId={businessId} /> : <IncomeEmptyState onRecord={() => setTab('quick')} />)}
     </div>
   );
 }

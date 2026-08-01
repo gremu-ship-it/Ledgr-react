@@ -1,11 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, Tag } from 'lucide-react';
+import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, Tag, Building2, Users2 } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { createLogger } from '@/lib/logger';
-
-const log = createLogger('QuickIncomeMobile');
 import { repos } from '@/lib/repositories';
 import { createInvoiceJournalEntry } from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
@@ -13,7 +11,9 @@ import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 
-type Step = 'amount' | 'category' | 'product' | 'description' | 'costCenter' | 'confirm' | 'success';
+const log = createLogger('QuickIncomeMobile');
+
+type Step = 'amount' | 'details' | 'confirm' | 'success';
 
 interface QuickIncomeMobileProps {
   businessId: string;
@@ -33,18 +33,13 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   const [selectedProduct, setSelectedProduct] = useState<Row<'products'> | null>(null);
   const [productSearchQuery, setProductSearchQuery] = useState('');
 
-  // Fetch Chart of Accounts - strictly income accounts only for income recording
   const { data: incomeAccounts = [] } = useQuery({
     queryKey: ['accounts_income_mobile', businessId],
-    queryFn: async () => {
-      // Specifically filter for income accounts only - no fallback to other types
-      return await repos.account.findByType(businessId, 'income', false);
-    },
+    queryFn: () => repos.account.findByType(businessId, 'income', false),
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 10,
   });
 
-  // Fetch products/services for dropdown - what is being sold
   const { data: products = [] } = useQuery({
     queryKey: ['products_all_mobile_income', businessId],
     queryFn: () => repos.inventory.findAllProducts(businessId),
@@ -86,28 +81,25 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
   const today = new Date().toISOString().slice(0, 10);
   const rawAmount = parseFloat(amount) || 0;
 
-  const filteredAccounts = incomeAccounts.filter(
-    (a) =>
-      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.code.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
+  const filteredAccounts = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    if (!q) return incomeAccounts.slice(0, 20);
+    return incomeAccounts.filter((a) => a.name.toLowerCase().includes(q) || a.code.toLowerCase().includes(q)).slice(0, 20);
+  }, [incomeAccounts, searchQuery]);
 
-  const filteredProducts = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
-      (p.sku && p.sku.toLowerCase().includes(productSearchQuery.toLowerCase())) ||
-      (p.description && p.description.toLowerCase().includes(productSearchQuery.toLowerCase())),
-  );
+  const filteredProducts = useMemo(() => {
+    const q = productSearchQuery.toLowerCase();
+    if (!q) return products.slice(0, 30);
+    return products
+      .filter((p) => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.description && p.description.toLowerCase().includes(q)))
+      .slice(0, 30);
+  }, [products, productSearchQuery]);
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (!selectedAccount) {
-        throw new Error('Please select an income account from the Chart of Accounts.');
-      }
-
+      if (!selectedAccount) throw new Error('Please select an income account.');
       const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
-      const categoryName = selectedAccount.name;
-      const desc = description.trim() || selectedProduct?.name || categoryName;
+      const desc = description.trim() || selectedProduct?.name || selectedAccount.name;
 
       const buildPayload = (num: string, contactId: string) => ({
         invoice: {
@@ -134,81 +126,57 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           branch_id: branchId || null,
           department_id: departmentId || null,
         } as InsertDto<'invoices'>,
-        lines: [{
-          line_number: 1,
-          description: desc,
-          quantity: 1,
-          unit_price: rawAmount,
-          discount_percent: 0,
-          tax_code: 'none',
-          tax_rate: 0,
-          tax_amount: 0,
-          line_total: rawAmount,
-          account_id: selectedAccount.id,
-          product_id: selectedProduct?.id || null,
-        } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>],
+        lines: [
+          {
+            line_number: 1,
+            description: desc,
+            quantity: 1,
+            unit_price: rawAmount,
+            discount_percent: 0,
+            tax_code: 'none',
+            tax_rate: 0,
+            tax_amount: 0,
+            line_total: rawAmount,
+            account_id: selectedAccount.id,
+            product_id: selectedProduct?.id || null,
+          } as Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>,
+        ],
       });
 
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('INV');
         await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
-        return { offline: true, invoice_number: offlineNum };
+        return { offline: true };
       }
 
       try {
         const contacts = await repos.contact.findByBusiness(businessId, 'customer');
         const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
         if (!walkIn) throw new Error('No customer contact found. Add a Walk-in Customer contact first.');
-
         const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
-
-        // createWithLines returns the inserted row; refetching every invoice
-        // for the business just to find it was the slowest step in this save.
-        const { invoice: created } = await repos.invoice.createWithLines(
-          buildPayload(invoiceNumber, walkIn.id).invoice,
-          buildPayload(invoiceNumber, walkIn.id).lines,
-        );
-
+        const { invoice: created } = await repos.invoice.createWithLines(buildPayload(invoiceNumber, walkIn.id).invoice, buildPayload(invoiceNumber, walkIn.id).lines);
         if (created) {
           try {
-            await createInvoiceJournalEntry(
-              businessId, created, rawAmount, 0, branchId || null, departmentId || null,
-            );
-
-            // Perpetual inventory: release the stock and post
-            // DR Cost of Sales / CR Inventory at weighted-average cost.
-            // Shared with the desktop and offline-sync paths so all three
-            // value stock identically.
+            await createInvoiceJournalEntry(businessId, created, rawAmount, 0, branchId || null, departmentId || null);
             if (selectedProduct && selectedProduct.track_inventory) {
-              await deductStockAndPostCogs(
-                businessId,
-                created,
-                [{ productId: selectedProduct.id, quantity: 1 }],
-                branchId || null,
-                departmentId || null,
-                null,
-              );
+              await deductStockAndPostCogs(businessId, created, [{ productId: selectedProduct.id, quantity: 1 }], branchId || null, departmentId || null, null);
             }
           } catch (err) {
             log.warn('Journal entry failed', { error: err });
           }
         }
-        return { offline: false, invoice_number: invoiceNumber };
+        return { offline: false };
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('INV');
           await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
-          return { offline: true, invoice_number: offlineNum };
+          return { offline: true };
         }
         throw err;
       }
     },
     onSuccess: () => {
-      // Scoped: see queryInvalidation.ts. A bare invalidateQueries() refetched
-      // every mounted query, most of which an invoice cannot affect.
-      invalidateAfterIncome(queryClient, {
-        touchedInventory: Boolean(selectedProduct?.track_inventory),
-      });
+      invalidateAfterIncome(queryClient, { touchedInventory: Boolean(selectedProduct?.track_inventory) });
       setStep('success');
       setTimeout(() => handleClose(), 1500);
     },
@@ -216,19 +184,19 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
   function getTitle() {
     switch (step) {
-      case 'amount': return 'How much received?';
-      case 'category': return 'Income Account (Income Only)';
-      case 'product': return 'What was sold? (Product/Service)';
-      case 'description': return 'Add details';
-      case 'costCenter': return 'Revenue Center';
-      case 'confirm': return 'Confirm';
-      default: return 'Record Income';
+      case 'amount':
+        return `Amount — Step 1 of 3`;
+      case 'details':
+        return `Details — Step 2 of 3`;
+      case 'confirm':
+        return `Confirm — Step 3 of 3`;
+      default:
+        return 'Record Income';
     }
   }
 
   return (
     <BottomSheet open={open} onClose={handleClose} title={getTitle()}>
-      {/* Success */}
       {step === 'success' && (
         <div className="flex flex-col items-center py-8 gap-3">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
@@ -242,312 +210,146 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
         </div>
       )}
 
-      {/* Step: Amount */}
       {step === 'amount' && (
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-6">
           <MwkNumberPad value={amount} onChange={setAmount} />
           <button
-            onClick={() => setStep('category')}
+            onClick={() => setStep('details')}
             disabled={!amount || parseFloat(amount) <= 0}
-            className="flex w-full items-center justify-center gap-2 rounded-[2rem] bg-brand-500 py-5 text-sm font-black uppercase tracking-[0.2em] text-white shadow-xl shadow-brand-500/20 disabled:opacity-40 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-black uppercase tracking-[0.15em] text-white shadow-xl shadow-brand-500/20 disabled:opacity-40 active:scale-95"
           >
-            Select Income Account <ChevronRight className="h-5 w-5" />
+            Continue — Details <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}
 
-      {/* Step: Category (Chart of Accounts - Income Only) */}
-      {step === 'category' && (
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => setStep('amount')}
-            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400"
-          >
+      {step === 'details' && (
+        <div className="flex flex-col gap-5">
+          <button onClick={() => setStep('amount')} className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest text-gray-400">
             <ArrowLeft className="h-4 w-4" /> Back to Amount
           </button>
 
-          <div className="rounded-xl bg-brand-50 px-3 py-2 text-[11px] font-medium text-brand-700 ring-1 ring-brand-200">
-            Showing only <span className="font-black">Income</span> accounts from your Chart of Accounts
+          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm">
+            <span className="font-bold text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
           </div>
 
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-gray-400" />
-            <input
-              type="search"
-              placeholder="Search income accounts (code or name)..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2 max-h-[320px] overflow-y-auto pr-1">
-            {filteredAccounts.length === 0 ? (
-              <p className="py-6 text-center text-xs text-gray-500">
-                No income accounts found in Chart of Accounts. Please create income accounts in your CoA.
-              </p>
-            ) : (
-              filteredAccounts.map((acc) => (
-                <button
-                  key={acc.id}
-                  onClick={() => {
-                    setSelectedAccount(acc);
-                    setStep('product');
-                  }}
-                  className={`flex items-center justify-between rounded-2xl border p-3.5 text-left transition-all active:scale-98 ${
-                    selectedAccount?.id === acc.id
-                      ? 'border-brand-500 bg-brand-50 shadow-sm'
-                      : 'border-gray-100 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-mono font-bold text-gray-700">
-                      {acc.code}
-                    </span>
-                    <span className="text-sm font-semibold text-gray-900">{acc.name}</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-gray-400" />
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Step: Product/Service Selection */}
-      {step === 'product' && (
-        <div className="flex flex-col gap-4">
-          <button
-            onClick={() => setStep('category')}
-            className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to Category
-          </button>
-
-          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
-            <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
-            {' · '}
-            <span className="font-mono font-bold">{selectedAccount?.code}</span>
-            {' '}
-            <span>{selectedAccount?.name}</span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-black uppercase tracking-wider text-gray-700 flex items-center gap-2">
-              <Tag className="h-4 w-4" /> Product / Service Sold
-            </label>
-            <span className="text-[10px] font-bold uppercase text-gray-400">Optional</span>
-          </div>
-
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-gray-400" />
-            <input
-              type="search"
-              placeholder="Search products/services (name, SKU)..."
-              value={productSearchQuery}
-              onChange={(e) => setProductSearchQuery(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 bg-gray-50/50 pl-10 pr-4 py-2.5 text-sm text-gray-900 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto pr-1">
-            <button
-              onClick={() => {
-                setSelectedProduct(null);
-                setStep('description');
-              }}
-              className={`flex items-center justify-between rounded-2xl border p-3.5 text-left transition-all active:scale-98 ${
-                !selectedProduct
-                  ? 'border-brand-500 bg-brand-50 shadow-sm'
-                  : 'border-gray-100 bg-white hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100">
-                  <Package className="h-4 w-4 text-gray-500" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">No specific product</p>
-                  <p className="text-[11px] text-gray-500">General income without product link</p>
-                </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-gray-400" />
-            </button>
-
-            {filteredProducts.length === 0 && productSearchQuery ? (
-              <p className="py-4 text-center text-xs text-gray-500">
-                No matching products found. Try a different search or skip.
-              </p>
-            ) : filteredProducts.length === 0 && !productSearchQuery && products.length === 0 ? (
-              <p className="py-4 text-center text-xs text-gray-500">
-                No products/services configured. You can add them in Inventory and they will appear here.
-              </p>
-            ) : (
-              filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => {
-                    setSelectedProduct(product);
-                    // Auto-suggest sales account if available
-                    if (product.sales_account_id) {
-                      const matchedAccount = incomeAccounts.find((a) => a.id === product.sales_account_id);
-                      if (matchedAccount) {
-                        setSelectedAccount(matchedAccount);
-                      }
-                    }
-                    setStep('description');
-                  }}
-                  className={`flex items-center justify-between rounded-2xl border p-3.5 text-left transition-all active:scale-98 ${
-                    selectedProduct?.id === product.id
-                      ? 'border-brand-500 bg-brand-50 shadow-sm'
-                      : 'border-gray-100 bg-white hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50">
-                      <Package className="h-4 w-4 text-brand-500" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-gray-900">{product.name}</p>
-                      <div className="flex gap-2 mt-0.5">
-                        {product.sku && (
-                          <span className="text-[10px] font-mono font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                            {product.sku}
-                          </span>
-                        )}
-                        <span className="text-[11px] text-gray-500">
-                          {product.product_type} · MK {Number(product.sale_price).toLocaleString('en-MW')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-gray-400 shrink-0" />
-                </button>
-              ))
-            )}
-          </div>
-
-          <button
-            onClick={() => setStep('description')}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white py-3 text-sm font-semibold text-gray-700 transition-all active:scale-95"
-          >
-            Skip — Continue without product
-          </button>
-        </div>
-      )}
-
-      {/* Step: Description */}
-      {step === 'description' && (
-        <div className="flex flex-col gap-4">
-          <button onClick={() => setStep('product')} className="flex items-center gap-1 text-sm text-gray-500">
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
-          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500 space-y-1">
-            <div>
-              <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
-              {' · '}
-              <span className="font-mono font-bold">{selectedAccount?.code}</span>
-              {' '}
-              <span>{selectedAccount?.name}</span>
-            </div>
-            {selectedProduct && (
-              <div className="flex items-center gap-2 text-xs">
-                <Package className="h-3 w-3" />
-                <span className="font-medium text-gray-700">{selectedProduct.name}</span>
-                {selectedProduct.sku && <span className="text-gray-400">({selectedProduct.sku})</span>}
-              </div>
-            )}
-          </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Description <span className="text-gray-400">(optional)</span>
+            <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-700">
+              <Tag className="h-3.5 w-3.5" /> Income Account <span className="text-red-500">*</span>
             </label>
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search income accounts..."
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 py-2 text-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+            <div className="max-h-[140px] overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
+              {selectedAccount && (
+                <div className="flex items-center justify-between bg-brand-50 px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-brand-500 px-2 py-0.5 text-[10px] font-mono font-bold text-white">{selectedAccount.code}</span>
+                    <span className="text-sm font-semibold text-brand-800">{selectedAccount.name}</span>
+                  </div>
+                  <button onClick={() => setSelectedAccount(null)} className="text-xs text-brand-600 underline">
+                    Change
+                  </button>
+                </div>
+              )}
+              {!selectedAccount &&
+                filteredAccounts.map((acc) => (
+                  <button key={acc.id} onClick={() => setSelectedAccount(acc)} className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50">
+                    <span className="flex items-center gap-2">
+                      <span className="rounded bg-gray-100 px-2 py-0.5 text-[10px] font-mono font-bold text-gray-600">{acc.code}</span>
+                      <span className="text-sm text-gray-900">{acc.name}</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-gray-300" />
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-700">
+              <Package className="h-3.5 w-3.5" /> Product / Service <span className="font-normal normal-case text-gray-400">(optional)</span>
+            </label>
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+              <input
+                value={productSearchQuery}
+                onChange={(e) => setProductSearchQuery(e.target.value)}
+                placeholder="Search products..."
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 py-2 text-sm focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+            <div className="max-h-[120px] overflow-y-auto rounded-xl border border-gray-100 divide-y divide-gray-50">
+              {selectedProduct ? (
+                <div className="flex items-center justify-between bg-gray-50 px-3 py-2.5">
+                  <span className="text-sm font-medium text-gray-800">{selectedProduct.name}</span>
+                  <button onClick={() => setSelectedProduct(null)} className="text-xs text-gray-500 underline">
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button onClick={() => setSelectedProduct(null)} className="w-full px-3 py-2 text-left text-xs text-gray-500 hover:bg-gray-50">
+                    No product — general income
+                  </button>
+                  {filteredProducts.slice(0, 20).map((p) => (
+                    <button key={p.id} onClick={() => setSelectedProduct(p)} className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-50">
+                      <span className="truncate text-sm text-gray-900">{p.name}</span>
+                      {p.sku && <span className="ml-2 text-[10px] font-mono text-gray-400">{p.sku}</span>}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-gray-700">Description (optional)</label>
             <input
-              type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={selectedProduct ? `e.g. Sale of ${selectedProduct.name}...` : `e.g. ${selectedAccount?.name} payment...`}
-              autoFocus
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              placeholder={selectedProduct ? `Sale of ${selectedProduct.name}` : 'e.g. Sale for Blantyre branch'}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
-          <button
-            onClick={() => setStep('costCenter')}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white transition-all active:scale-95"
-          >
-            Next <ChevronRight className="h-5 w-5" />
-          </button>
-        </div>
-      )}
 
-      {/* Step: Cost Center */}
-      {step === 'costCenter' && (
-        <div className="flex flex-col gap-4">
-          <button onClick={() => setStep('product')} className="flex items-center gap-1 text-sm text-gray-500">
-            <ArrowLeft className="h-4 w-4" /> Back
-          </button>
-
-          <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500 space-y-1">
+          {branches.length > 0 && (
             <div>
-              <span className="font-medium text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
-              {' · '}
-              <span>{selectedAccount?.name}</span>
-            </div>
-            {selectedProduct && (
-              <div className="text-xs flex items-center gap-1">
-                <Package className="h-3 w-3" /> {selectedProduct.name}
-              </div>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
-              Assign to Branch / Revenue Center
-              <span className="text-gray-400"> (optional)</span>
-            </label>
-            {branches.length === 0 ? (
-              <p className="text-xs text-gray-600">No branches configured. You can assign later.</p>
-            ) : (
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700">
+                <Building2 className="h-3.5 w-3.5" /> Branch (optional)
+              </label>
               <div className="grid grid-cols-2 gap-2">
-                {branches.map((b) => (
+                {branches.slice(0, 6).map((b) => (
                   <button
                     key={b.id}
                     onClick={() => setBranchId(branchId === b.id ? '' : b.id)}
-                    className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
-                      branchId === b.id
-                        ? 'border-brand-500 bg-brand-50 shadow-sm'
-                        : 'border-gray-100 bg-white hover:bg-gray-50'
-                    }`}
+                    className={`rounded-xl border px-3 py-2 text-left text-xs font-medium ${branchId === b.id ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
                   >
-                    <p className="text-xs font-bold text-gray-800 truncate">{b.name}</p>
-                    {b.code && <p className="text-[10px] text-gray-700">{b.code}</p>}
+                    <span className="block truncate font-bold">{b.name}</span>
                   </button>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {departments.length > 0 && (
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">
-                Assign to Department
-                <span className="text-gray-400"> (optional)</span>
+              <label className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-700">
+                <Users2 className="h-3.5 w-3.5" /> Department (optional)
               </label>
               <div className="grid grid-cols-2 gap-2">
-                {departments.map((d) => (
+                {departments.slice(0, 6).map((d) => (
                   <button
                     key={d.id}
                     onClick={() => setDepartmentId(departmentId === d.id ? '' : d.id)}
-                    className={`rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
-                      departmentId === d.id
-                        ? 'border-brand-500 bg-brand-50 shadow-sm'
-                        : 'border-gray-100 bg-white hover:bg-gray-50'
-                    }`}
+                    className={`rounded-xl border px-3 py-2 text-left text-xs font-medium ${departmentId === d.id ? 'border-brand-500 bg-brand-50 text-brand-800' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
                   >
-                    <p className="text-xs font-bold text-gray-800 truncate">{d.name}</p>
-                    {d.code && <p className="text-[10px] text-gray-700">{d.code}</p>}
+                    <span className="block truncate font-bold">{d.name}</span>
                   </button>
                 ))}
               </div>
@@ -556,73 +358,53 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
           <button
             onClick={() => setStep('confirm')}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white transition-all active:scale-95"
+            disabled={!selectedAccount}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-sm font-bold text-white shadow-lg disabled:opacity-40 active:scale-95"
           >
-            Next <ChevronRight className="h-5 w-5" />
+            Review — Step 3 <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      {/* Step: Confirm */}
       {step === 'confirm' && (
         <div className="flex flex-col gap-4">
-          <button onClick={() => setStep('costCenter')} className="flex items-center gap-1 text-sm text-gray-500">
-            <ArrowLeft className="h-4 w-4" /> Back
+          <button onClick={() => setStep('details')} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+            <ArrowLeft className="h-4 w-4" /> Back to Details
           </button>
-          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-3">
+
+          <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 space-y-2.5">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Amount</span>
-              <span className="font-semibold text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
+              <span className="font-bold text-gray-900">MK {rawAmount.toLocaleString('en-MW')}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Income Account</span>
-              <span className="text-gray-900 font-medium text-right max-w-[60%]">
-                <span className="font-mono text-xs text-gray-500">[{selectedAccount?.code}]</span> {selectedAccount?.name}
+              <span className="text-gray-500">Account</span>
+              <span className="font-medium text-gray-900 text-right max-w-[60%]">
+                [{selectedAccount?.code}] {selectedAccount?.name}
               </span>
             </div>
             {selectedProduct && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Product / Service</span>
-                <span className="text-gray-900 font-medium text-right max-w-[60%]">
-                  {selectedProduct.name} {selectedProduct.sku ? `(${selectedProduct.sku})` : ''}
-                </span>
-              </div>
-            )}
-            {description && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Description</span>
-                <span className="text-gray-700 text-right max-w-[60%]">{description}</span>
+                <span className="text-gray-500">Product</span>
+                <span className="font-medium text-gray-900">{selectedProduct.name}</span>
               </div>
             )}
             {branchId && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Branch / Revenue Center</span>
-                <span className="text-gray-700">{branches.find((b) => b.id === branchId)?.name ?? '—'}</span>
+                <span className="text-gray-500">Branch</span>
+                <span className="text-gray-700">{branches.find((b) => b.id === branchId)?.name}</span>
               </div>
             )}
-            {departmentId && (
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Department</span>
-                <span className="text-gray-700">{departments.find((d) => d.id === departmentId)?.name ?? '—'}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Date</span>
-              <span className="text-gray-700">{today}</span>
-            </div>
           </div>
+
           <button
             onClick={() => mutation.mutate()}
             disabled={mutation.isPending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-semibold text-white disabled:opacity-60 transition-all active:scale-95"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 py-4 text-base font-bold text-white disabled:opacity-60 active:scale-95"
           >
             {mutation.isPending ? 'Saving…' : 'Record Income ✓'}
           </button>
-          {mutation.isError && (
-            <p className="text-center text-sm text-red-600">
-              {(mutation.error as Error)?.message ?? 'Something went wrong.'}
-            </p>
-          )}
+          {mutation.isError && <p className="text-center text-sm text-red-600">{(mutation.error as Error).message}</p>}
         </div>
       )}
     </BottomSheet>

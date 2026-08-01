@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye } from 'lucide-react';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useDensity } from '@/hooks/useDensity';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
+import { SwipeableRow } from '@/components/mobile/SwipeableRow';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -352,7 +358,7 @@ function Alert({ type, message }: { type: 'success' | 'error'; message: string }
   );
 }
 
-function EmptyState({ onRecord }: { onRecord: () => void }) {
+function ExpenseEmptyState({ onRecord }: { onRecord: () => void }) {
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
@@ -1161,7 +1167,18 @@ function useRetryPosting(businessId: string) {
 
 // ── Expense List ──────────────────────────────────────────────────────────────
 
+
 function ExpenseList({ businessId }: { businessId: string }) {
+  const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
+  const { thClass, tdClass } = useDensity();
+
+  const onRefresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['expenses', businessId] });
+  }, [queryClient, businessId]);
+
+  const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
+
   const { data: expenses = [], isLoading, isError } = useQuery({
     queryKey: ['expenses', businessId],
     queryFn: () => repos.expense.findByBusiness(businessId),
@@ -1176,65 +1193,111 @@ function ExpenseList({ businessId }: { businessId: string }) {
       <AlertCircle className="h-4 w-4 shrink-0" />Failed to load expenses.
     </div>
   );
-  if (expenses.length === 0) return null;
+  if (expenses.length === 0) return (
+    <EmptyState
+      title="No expenses yet"
+      description="Record your first expense. Swipe actions will appear here on mobile."
+      actionLabel="Record Expense"
+      onAction={() => (window.location.href = '/expenses?action=record')}
+      variant="finance"
+    />
+  );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Expense #</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Date</th>
-              <th scope="col" className="px-4 py-3 text-left">Description / Notes</th>
-              <th scope="col" className="px-4 py-3 text-right">Amount</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Paid</th>
-              <th scope="col" className="hidden sm:table-cell px-4 py-3 text-center">Status</th>
-              <th scope="col" className="px-4 py-3 text-center">Posting</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {expenses.map((exp: Row<'expenses'>) => {
-              const needsPosting = !exp.journal_entry_id;
-              return (
-                <tr key={exp.id} className="transition-colors hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-brand-700">{exp.expense_number}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{exp.expense_date}</td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{exp.notes || exp.reference || '—'}</td>
-                  <td className="px-4 py-3 text-right font-medium">{formatMwkDetailed(exp.total_amount)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-right text-gray-500">{formatMwkDetailed(exp.amount_paid)}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-center"><StatusBadge status={exp.status} /></td>
-                  <td className="px-4 py-3 text-center">
+    <div ref={containerRef as any}>
+      <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+      {isMobile ? (
+        <div className="space-y-3">
+          {expenses.map((exp) => {
+            const needsPosting = !exp.journal_entry_id;
+            return (
+              <SwipeableRow
+                key={exp.id}
+                actions={[
+                  { label: 'View', icon: Eye, color: 'bg-gray-700', action: () => {} },
+                  { label: needsPosting ? 'Retry' : 'Posted', icon: needsPosting ? RefreshCw : CheckCircle, color: needsPosting ? 'bg-amber-500' : 'bg-brand-500', action: () => { if (needsPosting) { setRetryingId(exp.id); retry.mutate(exp, { onSettled: () => setRetryingId(null) }); } } },
+                ]}
+              >
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-brand-700">{exp.expense_number}</p>
+                    <StatusBadge status={exp.status} />
+                  </div>
+                  <p className="mt-1 text-sm font-medium text-gray-900 truncate">{exp.notes || exp.reference || '—'}</p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <p className="text-xs text-gray-500">{exp.expense_date}</p>
+                    <p className="text-sm font-bold text-gray-900">{formatMwkDetailed(exp.total_amount)}</p>
+                  </div>
+                  <div className="mt-1">
                     {needsPosting ? (
-                      <button
-                        onClick={() => { setRetryingId(exp.id); retry.mutate(exp, { onSettled: () => setRetryingId(null) }); }}
-                        disabled={retry.isPending && retryingId === exp.id}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
-                        title="Not posted to ledger — click to retry."
-                      >
-                        <RefreshCw className={`h-3 w-3 ${retry.isPending && retryingId === exp.id ? 'animate-spin' : ''}`} />
-                        Needs Posting
-                      </button>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">Needs Posting</span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-brand-600">
-                        <CheckCircle className="h-3 w-3" /> Posted
-                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-brand-600">Posted</span>
                     )}
-                  </td>
+                  </div>
+                </div>
+              </SwipeableRow>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th scope="col" className={`${thClass} text-left`}>Expense #</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-left`}>Date</th>
+                  <th scope="col" className={`${thClass} text-left`}>Description</th>
+                  <th scope="col" className={`${thClass} text-right`}>Amount</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-right`}>Paid</th>
+                  <th scope="col" className={`hidden sm:table-cell ${thClass} text-center`}>Status</th>
+                  <th scope="col" className={`${thClass} text-center`}>Posting</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      {retry.isError && (
-        <div className="border-t border-red-100 bg-red-50 px-4 py-2.5 text-xs text-red-700">
-          Retry failed: {(retry.error as Error).message}
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {expenses.map((exp: Row<'expenses'>) => {
+                  const needsPosting = !exp.journal_entry_id;
+                  return (
+                    <tr key={exp.id} className="hover:bg-gray-50 transition-colors">
+                      <td className={`${tdClass} font-medium text-brand-700`}>{exp.expense_number}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-gray-500`}>{exp.expense_date}</td>
+                      <td className={`${tdClass} font-medium text-gray-900 truncate max-w-[200px]`}>{exp.notes || exp.reference || '—'}</td>
+                      <td className={`${tdClass} text-right font-medium`}>{formatMwkDetailed(exp.total_amount)}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-right text-gray-500`}>{formatMwkDetailed(exp.amount_paid)}</td>
+                      <td className={`hidden sm:table-cell ${tdClass} text-center`}><StatusBadge status={exp.status} /></td>
+                      <td className={`${tdClass} text-center`}>
+                        {needsPosting ? (
+                          <button
+                            onClick={() => { setRetryingId(exp.id); retry.mutate(exp, { onSettled: () => setRetryingId(null) }); }}
+                            disabled={retry.isPending && retryingId === exp.id}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                          >
+                            <RefreshCw className={`h-3 w-3 ${retry.isPending && retryingId === exp.id ? 'animate-spin' : ''}`} />
+                            Needs Posting
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-brand-600">
+                            <CheckCircle className="h-3 w-3" /> Posted
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {retry.isError && (
+            <div className="border-t border-red-100 bg-red-50 px-4 py-2.5 text-xs text-red-700">Retry failed: {(retry.error as Error).message}</div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -1304,7 +1367,7 @@ export function ExpensesPage() {
 
       {tab === 'quick'   && <QuickExpenseTab   businessId={businessId} onSuccess={() => setTab('list')} />}
       {tab === 'expense' && <ExpenseBuilderTab  businessId={businessId} onSuccess={() => setTab('list')} />}
-      {tab === 'list'    && (hasExpenses ? <ExpenseList businessId={businessId} /> : <EmptyState onRecord={() => setTab('quick')} />)}
+      {tab === 'list'    && (hasExpenses ? <ExpenseList businessId={businessId} /> : <ExpenseEmptyState onRecord={() => setTab('quick')} />)}
     </div>
   );
 }
