@@ -20,7 +20,6 @@ interface OnboardingChecklistProps {
 export function OnboardingChecklist({ className, compact = false }: OnboardingChecklistProps) {
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
-  const businessId = currentBusiness?.business?.id;
 
   // Simulated completion state — in real app this would come from backend / local flags
   // For now we derive from simple heuristics (you can wire to real data)
@@ -100,7 +99,7 @@ export function OnboardingChecklist({ className, compact = false }: OnboardingCh
       </div>
 
       <div className="space-y-1">
-        {steps.map((step, index) => (
+        {steps.map((step) => (
           <button
             key={step.id}
             onClick={() => navigate(step.path)}

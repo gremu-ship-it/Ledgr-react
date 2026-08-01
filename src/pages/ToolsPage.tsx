@@ -5,7 +5,6 @@ import {
   TrendingUp, Users, FileText, Package, Calendar, 
   CreditCard, BarChart3, Settings 
 } from 'lucide-react';
-import { useAppStore } from '@/store/useAppStore';
 import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/Button';
 import { clsx } from 'clsx';
