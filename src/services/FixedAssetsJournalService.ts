@@ -73,46 +73,15 @@ async function resolveAssetAccounts(
 
 // ── Depreciation calculation (pure, no DB) ────────────────────────────────────
 
-export interface DepreciationCalcInput {
-  method: Row<'fixed_assets'>['depreciation_method'];
-  acquisitionCost: number;
-  residualValue: number;
-  usefulLifeYears: number | null;
-  usefulLifeMonths: number | null;
-  accumulatedDepreciation: number;
-  depreciationRate: number | null;
-}
-
-export function calculateMonthlyDepreciation(input: DepreciationCalcInput): number {
-  const {
-    method, acquisitionCost, residualValue,
-    usefulLifeYears, usefulLifeMonths, accumulatedDepreciation, depreciationRate,
-  } = input;
-
-  const depreciableAmount = acquisitionCost - residualValue;
-  const remainingBookValue = acquisitionCost - accumulatedDepreciation;
-  const monthsLife = usefulLifeMonths ?? (usefulLifeYears ? usefulLifeYears * 12 : null);
-
-  if (remainingBookValue <= residualValue) return 0; // fully depreciated
-
-  let charge: number;
-
-  if (method === 'straight_line') {
-    if (!monthsLife) throw new Error('Straight-line depreciation requires a useful life.');
-    charge = depreciableAmount / monthsLife;
-  } else if (method === 'reducing_balance') {
-    const annualRate = depreciationRate ?? (monthsLife ? 1 / (monthsLife / 12) : null);
-    if (!annualRate) throw new Error('Reducing-balance depreciation requires a rate or useful life.');
-    const monthlyRate = annualRate / 12;
-    charge = remainingBookValue * monthlyRate;
-  } else {
-    throw new Error(`Depreciation method '${method}' is not yet supported by the automated posting engine.`);
-  }
-
-  // Never depreciate below residual value
-  const maxAllowed = remainingBookValue - residualValue;
-  return Math.max(0, Math.min(charge, maxAllowed));
-}
+// The pure depreciation arithmetic lives in @/services/depreciation (a leaf
+// module with no Supabase import chain) so it can be unit-tested in isolation.
+// Re-exported here so the service remains the single entry point for
+// fixed-asset posting logic (same pattern as fixedAssetCapitalisation).
+export {
+  calculateMonthlyDepreciation,
+  type DepreciationCalcInput,
+} from '@/services/depreciation';
+import { calculateMonthlyDepreciation } from '@/services/depreciation';
 
 // ── Capitalisation (acquisition) ──────────────────────────────────────────────
 
