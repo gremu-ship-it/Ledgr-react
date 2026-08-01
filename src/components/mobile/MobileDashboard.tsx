@@ -168,7 +168,6 @@ export function MobileDashboard() {
   const [quickActionIds, setQuickActionIds] = useState<MobileActionId[]>(preferences.quickActionIds);
   const [showActionEditor, setShowActionEditor] = useState(false);
   const [pinnedPaths, setPinnedPaths] = useState<string[]>(preferences.pinnedPaths);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     localStorage.setItem('ledgr-mobile-dashboard-preferences', JSON.stringify({ quickActionIds, pinnedPaths }));
