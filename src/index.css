@@ -455,22 +455,90 @@
     color: #E2E8F0;
   }
 
+  /* ── Neutral surfaces ─────────────────────────────────────────────────
+     The app shell, cards, tables and inputs are built from Tailwind's
+     neutral scale (white / gray-50 / gray-100). Without these overrides
+     they stay light in dark mode, which reads as a white background and
+     makes the dark theme look broken. Intentional colour accents
+     (emerald / red / amber chips etc.) are deliberately left untouched. */
   .dark .bg-white,
   .dark [class*="bg-white"] {
     background-color: var(--color-card-bg) !important;
   }
 
+  .dark .bg-gray-50,
+  .dark .bg-slate-50,
+  .dark .bg-zinc-50,
+  .dark .bg-neutral-50,
+  .dark .bg-stone-50,
+  .dark [class*="bg-gray-50"] {
+    background-color: var(--color-app-bg) !important;
+  }
+
+  .dark .bg-gray-100,
+  .dark .bg-slate-100,
+  .dark .bg-zinc-100,
+  .dark .bg-neutral-100,
+  .dark .bg-stone-100,
+  .dark [class*="bg-gray-100"] {
+    background-color: var(--color-card-bg) !important;
+  }
+
+  .dark .bg-gray-200,
+  .dark .bg-slate-200,
+  .dark [class*="bg-gray-200"] {
+    background-color: #334155 !important;
+  }
+
+  /* ── Neutral text ──────────────────────────────────────────────────── */
   .dark .text-gray-900,
+  .dark .text-slate-900,
   .dark .text-navy-900 {
     color: #F8FAFC !important;
   }
 
+  .dark .text-gray-800,
+  .dark .text-slate-800,
+  .dark .text-navy-800 {
+    color: #E2E8F0 !important;
+  }
+
+  .dark .text-gray-700,
+  .dark .text-slate-700,
+  .dark .text-navy-700 {
+    color: #CBD5E1 !important;
+  }
+
   .dark .text-gray-600,
+  .dark .text-slate-600,
   .dark .text-navy-600 {
     color: #94A3B8 !important;
   }
 
-  .dark .border-gray-200 {
+  .dark .text-gray-500,
+  .dark .text-slate-500,
+  .dark .text-navy-500 {
+    color: #94A3B8 !important;
+  }
+
+  /* ── Neutral borders / dividers ────────────────────────────────────── */
+  .dark .border-gray-100,
+  .dark .border-slate-100 {
+    border-color: #334155 !important;
+  }
+
+  .dark .border-gray-200,
+  .dark .border-slate-200 {
+    border-color: #334155 !important;
+  }
+
+  .dark .border-gray-300,
+  .dark .border-slate-300 {
+    border-color: #475569 !important;
+  }
+
+  .dark .divide-gray-200,
+  .dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
     border-color: #334155 !important;
   }
 

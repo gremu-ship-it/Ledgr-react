@@ -24,6 +24,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
@@ -126,6 +127,10 @@ export function BottomNav() {
       {moreOpen && (
         <div className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-50 rounded-2xl border border-gray-200 bg-white p-4 shadow-xl lg:hidden">
           <p className="mb-3 text-xs font-semibold text-gray-700">{t('common.more')}</p>
+          <div className="mb-2 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2">
+            <span className="text-sm font-medium text-gray-700">{t('common.theme', 'Theme')}</span>
+            <ThemeToggle />
+          </div>
           <div className="grid grid-cols-3 gap-2">
             {moreItems.map((item) => {
               const locked = GATED_PATHS.has(item.path) ? !planMeetsMin(planTier, 'growth') : false;
