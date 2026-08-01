@@ -27,12 +27,22 @@ export function isOfflineError(error: unknown): boolean {
  * (e.g. 'EXP-OFFLINE-123456'). Will be replaced with a genuine sequence
  * number from BusinessRepository upon syncing online.
  */
+let lastOfflineNumberTimestamp = 0;
+let offlineNumberSequence = 0;
+
 export function generateOfflineNumber(prefix = 'OFF'): string {
-  const shortId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID().slice(0, 8).toUpperCase()
-    : Math.random().toString(36).slice(2, 10).toUpperCase();
-  const stamp = Date.now().toString(36).toUpperCase();
-  return `${prefix}-OFFLINE-${stamp}-${shortId}`;
+  const timestamp = Date.now();
+  if (timestamp === lastOfflineNumberTimestamp) {
+    offlineNumberSequence += 1;
+  } else {
+    lastOfflineNumberTimestamp = timestamp;
+    offlineNumberSequence = 0;
+  }
+
+  // Keep the temporary number numeric: several document-number integrations
+  // validate this suffix, while the per-millisecond sequence keeps rapid
+  // local creations unique.
+  return `${prefix}-OFFLINE-${timestamp}${offlineNumberSequence.toString().padStart(3, '0')}`;
 }
 
 /**

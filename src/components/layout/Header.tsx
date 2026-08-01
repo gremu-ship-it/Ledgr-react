@@ -10,6 +10,7 @@ import { useUsage } from '@/hooks/useUsage';
 import { supabase } from '@/lib/supabase';
 import { LanguageSwitcher } from '@/components/i18n/LanguageSwitcher';
 import { BusinessSwitcher } from './BusinessSwitcher';
+import { OfflineQueueDrawer } from './OfflineQueueDrawer';
 import { announce } from '@/lib/a11y';
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {
@@ -142,6 +143,8 @@ export function Header() {
         </button>
 
         <LanguageSwitcher />
+
+        <OfflineQueueDrawer />
 
         {/* Notification bell */}
         <div className="relative" ref={notifRef}>
