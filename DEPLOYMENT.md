@@ -138,7 +138,15 @@ For **each** environment:
    supabase secrets set SENTRY_DSN=... SENDGRID_API_KEY=... PAYCHANGU_SECRET_KEY=... \
      APP_URL=... CRON_SECRET=... --project-ref <ref>
    ```
-5. Deploy functions (automatic in `deploy.yml`): `supabase functions deploy api --project-ref <ref>`.
+5. Deploy functions (automatic in `deploy.yml`). The workflow deploys every function under `supabase/functions/`, then runs an OPTIONS/CORS smoke check for `initiate-subscription-payment`, `verify-subscription-payment`, and `paychangu-webhook`. To repair or verify a single project manually, run:
+   ```bash
+   supabase functions deploy initiate-subscription-payment --project-ref <ref>
+   supabase functions deploy verify-subscription-payment --project-ref <ref>
+   supabase functions deploy paychangu-webhook --project-ref <ref>
+   curl -i -X OPTIONS "https://<ref>.supabase.co/functions/v1/initiate-subscription-payment" \
+     -H "Origin: https://your-app-domain.example"
+   ```
+   The OPTIONS response must contain `Access-Control-Allow-Origin` for the app's exact origin. If it does not, set `APP_URL` and `ALLOWED_ORIGINS` (including the protocol, no trailing slash) and deploy again.
 
 The public API rate-limit table is `public.api_usage` (`supabase/migrations/20250724_api_usage.sql`).
 The Edge Function fixes a prior bug (it now uses the correct `api_key` text
