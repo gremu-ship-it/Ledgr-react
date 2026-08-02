@@ -91,8 +91,6 @@ jobs:
       - name: Build frontend
         run: npm run build
       - name: Deploy frontend to Vercel (staging)
-        # Builds on Vercel using the staging project's environment. All
-        # build-time VITE_* and Sentry vars are injected here.
         run: |
           npm i -g vercel@latest
           vercel deploy \
@@ -133,10 +131,18 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (staging)
         run: |
+          # Functions that handle their own JWT/auth verification and must not
+          # be blocked at the Supabase gateway. Deploying without this flag causes
+          # CORS preflight to be rejected → "Failed to fetch" in the browser.
+          NO_VERIFY_FUNCTIONS="initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
+              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+            else
+              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
           done
       - name: Deploy Express gateway to Railway (if configured)
         if: env.RAILWAY_TOKEN != ''
@@ -148,7 +154,6 @@ jobs:
 
   # =========================================================================
   # PRODUCTION — only on a `v*` tag, behind a manual approval gate
-  # (the `production` environment requires a reviewer before this job runs)
   # =========================================================================
   deploy-production:
     name: Deploy to production
@@ -220,15 +225,22 @@ jobs:
             ANTHROPIC_API_KEY="${{ secrets.ANTHROPIC_API_KEY_PROD }}" \
             PAYCHANGU_SECRET_KEY="${{ secrets.PAYCHANGU_SECRET_KEY_PROD }}" \
             PAYCHANGU_WEBHOOK_SECRET="${{ secrets.PAYCHANGU_WEBHOOK_SECRET_PROD }}" \
+            INVOICE_TRACKING_SECRET="${{ secrets.INVOICE_TRACKING_SECRET_PROD }}" \
+            ALLOWED_ORIGINS="${{ vars.ALLOWED_ORIGINS_PROD }}" \
             APP_URL="${{ vars.APP_URL_PROD }}" \
             CRON_SECRET="${{ secrets.CRON_SECRET_PROD }}" \
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (production)
         run: |
+          NO_VERIFY_FUNCTIONS="initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
-            supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
+              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+            else
+              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+            fi
           done
       - name: Deploy Express gateway to Railway (if configured)
         if: env.RAILWAY_TOKEN != ''
