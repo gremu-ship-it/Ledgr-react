@@ -5,8 +5,24 @@
 // applied to every response by vercel.json, so this endpoint is already
 // hardened. A deeper dependency check (e.g. Supabase reachability) can be added
 // here later; for uptime purposes a 200 with a timestamp is what we assert on.
+//
+// The VercelRequest/VercelResponse types are defined locally as structural
+// interfaces instead of importing `@vercel/node`: that devDependency is the
+// root of a large vulnerable transitive tree (tar, ajv, undici,
+// path-to-regexp, ...), and this handler only needs a sliver of its surface.
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+interface VercelRequest {
+  method?: string;
+  url?: string;
+  query: Record<string, string | string[]>;
+  headers: Record<string, string | string[] | undefined>;
+  body?: unknown;
+}
+
+interface VercelResponse {
+  setHeader(name: string, value: string): this;
+  status(code: number): { json(body: unknown): this };
+}
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
   res.setHeader('Content-Type', 'application/json');

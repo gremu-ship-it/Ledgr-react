@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Lock, Sparkles } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
 import { hasCapability, planRequiredFor, type PlanCapability } from '@/lib/billing/plans';

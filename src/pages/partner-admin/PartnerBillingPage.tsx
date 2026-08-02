@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PartnerBillingRepository } from '@/dal/repositories/PartnerBillingRepository';
 import { PartnerRepository } from '@/dal/repositories/PartnerRepository';

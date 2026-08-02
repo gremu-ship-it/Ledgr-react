@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate, useParams } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useParams } from 'react-router';
 import { Building2, CreditCard, LayoutGrid, LogOut, Settings, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';

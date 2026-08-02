@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Plus, DollarSign, Receipt, Users } from 'lucide-react';
 
 export function QuickActions() {

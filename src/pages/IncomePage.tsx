@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle, Eye, CreditCard } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';

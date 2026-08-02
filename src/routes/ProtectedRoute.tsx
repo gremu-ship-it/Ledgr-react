@@ -1,4 +1,4 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';

@@ -1,4 +1,4 @@
-import { defineConfig, type PluginOption } from 'vite';
+import { defineConfig, loadEnv, type PluginOption } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
@@ -6,6 +6,25 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 
 export default defineConfig(({ mode }) => {
+  // Supabase host for the PWA API-caching rules below. Derived from the same
+  // env var the app client uses (src/lib/supabase.ts) so a staging build
+  // caches against the staging project instead of silently using prod. Falls
+  // back to the production ref only when VITE_SUPABASE_URL is unset (legacy
+  // behaviour).
+  const env = loadEnv(mode, process.cwd(), '');
+  const supabaseHost = (() => {
+    try {
+      return new URL(env.VITE_SUPABASE_URL ?? '').hostname;
+    } catch {
+      return 'hsuhuvuxfuufrlejsatw.supabase.co';
+    }
+  })();
+  // Embed the computed host in a RegExp source: workbox serialises urlPattern
+  // values into the service worker via toString(), so a closure variable
+  // (function pattern) would be referenced but never defined in the SW.
+  const supabaseUrlPattern = (pathPrefix: string) =>
+    new RegExp(`^https://${supabaseHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${pathPrefix}`);
+
   const plugins: PluginOption[] = [
     react(),
     tailwindcss(),
@@ -75,9 +94,7 @@ export default defineConfig(({ mode }) => {
         clientsClaim: true,
         runtimeCaching: [
           {
-            urlPattern: ({ url }) =>
-              url.hostname === 'hsuhuvuxfuufrlejsatw.supabase.co' &&
-              url.pathname.startsWith('/rest/v1/'),
+            urlPattern: supabaseUrlPattern('/rest/v1/'),
             handler: 'NetworkFirst',
             method: 'GET',
             options: {
@@ -91,9 +108,7 @@ export default defineConfig(({ mode }) => {
             },
           },
           {
-            urlPattern: ({ url }) =>
-              url.hostname === 'hsuhuvuxfuufrlejsatw.supabase.co' &&
-              url.pathname.startsWith('/auth/v1/'),
+            urlPattern: supabaseUrlPattern('/auth/v1/'),
             handler: 'NetworkOnly',
           },
           {

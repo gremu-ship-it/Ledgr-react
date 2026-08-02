@@ -1,6 +1,6 @@
 import { useUsage } from '@/hooks/useUsage';
 import { AlertTriangle, TrendingUp } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 export function UsageMeter() {
   const { usage, plan } = useUsage();

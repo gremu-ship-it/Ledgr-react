@@ -1,4 +1,4 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 import { clsx } from 'clsx';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
@@ -12,7 +12,7 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { usePartnerTheme } from '@/partner/usePartnerTheme';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router';
 import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
