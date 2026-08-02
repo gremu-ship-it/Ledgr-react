@@ -1,7 +1,6 @@
 // RSS feed for the English blog.
 import rss from '@astrojs/rss';
 import { getCollection } from 'astro:content';
-import { SITE } from '../../data/site';
 
 export async function GET(context: { site: string }) {
   const posts = (await getCollection('blog'))
