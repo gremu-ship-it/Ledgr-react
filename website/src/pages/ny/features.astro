@@ -1,0 +1,125 @@
+---
+// Features (/en/features/) — full module overview.
+// Deep per-module pages (/en/features/accounting/…) are a future addition
+// (STRUCTURE.md §3).
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import FeatureCard from '../../components/FeatureCard.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { t } from '../../i18n';
+
+const locale = 'ny' as const;
+const url = (p: string) => getRelativeLocaleUrl(locale, p);
+
+const modules = [
+  {
+    title: 'Accounting',
+    body: 'Double-entry journals, chart of accounts, period management, capital and transfers, bank reconciliation with statement integrity checks.',
+    bullets: ['Chart of accounts', 'Journals & periods', 'Bank reconciliation'],
+  },
+  {
+    title: 'Invoicing',
+    body: 'MWK invoices with open-tracking pixels, email delivery via SendGrid and payment-status handling — know exactly where each invoice stands.',
+    bullets: ['Open-tracking pixel', 'Email delivery', 'Payment status tracking'],
+  },
+  {
+    title: 'Payroll & tax',
+    body: 'PAYE bands, pension contributions, VAT and withholding tax computed automatically, ready for MRA filings.',
+    bullets: ['PAYE bands', 'Pension contributions', 'VAT & WHT', 'MRA filings'],
+  },
+  {
+    title: 'Inventory',
+    body: 'Products, warehouses, branches and departments with fixed-asset depreciation and inventory valuation.',
+    bullets: ['Products & warehouses', 'Branches & departments', 'Fixed assets & depreciation'],
+  },
+  {
+    title: 'Reporting',
+    body: 'Profit & loss, balance sheet, revenue breakdown and integrity-checked statements, exportable for your accountant or funder.',
+    bullets: ['P&L & balance sheet', 'Revenue breakdown', 'Exportable reports'],
+  },
+  {
+    title: 'Offline-first',
+    body: 'A PWA with a service-worker precache and an offline queue that syncs when connectivity returns. No other Malawi accounting tool does this.',
+    bullets: ['Service-worker precache', 'Offline queue & sync', 'Phone installable'],
+  },
+  {
+    title: 'Multi-user & security',
+    body: 'Businesses, roles and invitations, audit log, MFA and inactivity timeout — plus row-level security on every table.',
+    bullets: ['Roles & invitations', 'Audit log', 'MFA & inactivity timeout'],
+  },
+  {
+    title: 'Integrations & AI',
+    body: 'A public JSON:API with hashed API keys, Zapier template, PayChangu billing, and AI insights that explain your numbers.',
+    bullets: ['Public API (JSON:API)', 'Zapier template', 'AI insights & support agent'],
+  },
+];
+
+const iconSvg =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5L20 7"/></svg>';
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="features"
+  title={t(locale, 'pageTitles.features')}
+  description="Accounting, invoicing, payroll, inventory and reporting for Malawian SMEs — offline-first, MRA-ready, in MWK."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">Features</p>
+      <h1 class="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        Everything your business needs to run its books
+      </h1>
+      <p class="mt-4 max-w-2xl text-lg text-brand-100">
+        Eight modules, one login. Built for Malawian SMEs — from the street-side
+        shop to the growing exporter.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        modules.map((m) => (
+          <div
+            id={m.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+            class="scroll-mt-24 rounded-2xl border border-navy-200 bg-card-bg p-6 shadow-soft"
+          >
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-100 text-brand-700" set:html={iconSvg} />
+            <h2 class="mt-4 text-lg font-semibold text-navy-900">{m.title}</h2>
+            <p class="mt-2 text-sm leading-relaxed text-navy-600">{m.body}</p>
+            <ul class="mt-4 flex flex-wrap gap-1.5">
+              {
+                m.bullets.map((b) => (
+                  <li class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{b}</li>
+                ))
+              }
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <!-- Nudge: still on spreadsheets? -->
+  <section class="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">
+    <div class="rounded-2xl border border-brand-200 bg-brand-50 p-8 text-center sm:p-12">
+      <h2 class="text-2xl font-bold tracking-tight text-navy-900 sm:text-3xl">Still doing this in Excel?</h2>
+      <p class="mx-auto mt-3 max-w-xl text-navy-600">
+        Spreadsheets are fine until one wrong formula breaks the whole year.
+        See how Ledgr compares on price, offline use and MRA readiness.
+      </p>
+      <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+        <a href={url('compare')} class="rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-700">
+          Compare Ledgr vs Excel
+        </a>
+        <a href={url('pricing')} class="rounded-lg border border-brand-300 px-6 py-3 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50">
+          See pricing
+        </a>
+      </div>
+    </div>
+  </section>
+  <CtaBanner locale={locale} />
+</SiteLayout>

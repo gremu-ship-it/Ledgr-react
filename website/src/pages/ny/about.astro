@@ -1,0 +1,51 @@
+---
+
+// About (/en/about/) — mission and story.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { t } from '../../i18n';
+
+const locale = 'ny' as const;
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="about"
+  title={t(locale, 'pageTitles.about')}
+  description="Why we built Ledgr — accounting software made for Malawian SMEs, in Kwacha, that works offline."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">About</p>
+      <h1 class="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        Accounting software that understands Malawi
+      </h1>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
+    <!-- TODO: write the real story — why we built Ledgr, who it is for, team. -->
+    <div class="space-y-6 text-lg leading-relaxed text-navy-600">
+      <p>
+        Most accounting software is built elsewhere, priced in foreign currency,
+        and assumes your internet never drops. Malawian SMEs deserve better:
+        books in Kwacha, tax rules that match MRA, and software that works on a
+        phone with patchy 3G.
+      </p>
+      <p>
+        That is why we built Ledgr — an offline-first, MWK-first accounting
+        platform for Malawian businesses, from the street-side shop to the
+        growing exporter.
+      </p>
+      <p class="rounded-2xl border border-brand-200 bg-brand-50 p-6 text-navy-900">
+        <strong>Our mission:</strong> give every Malawian business owner the
+        financial clarity they need to grow — without needing a degree in
+        accounting or a fibre connection.
+      </p>
+    </div>
+    <!-- TODO: add team section (photos/bios) and contact CTA -->
+  </section>
+
+  <CtaBanner locale={locale} />
+</SiteLayout>

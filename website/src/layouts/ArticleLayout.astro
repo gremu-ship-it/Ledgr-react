@@ -1,0 +1,30 @@
+---
+// ArticleLayout — SiteLayout + article chrome for blog posts and help pages.
+import SiteLayout from './SiteLayout.astro';
+import type { Locale } from '../data/site';
+
+interface Props {
+  title: string;
+  description: string;
+  locale?: Locale;
+  path?: string;
+  /** Link rendered above the article, e.g. back to the blog index. */
+  backHref?: string;
+  backLabel?: string;
+}
+
+const { title, description, locale, path, backHref, backLabel } = Astro.props;
+---
+
+<SiteLayout title={title} description={description} locale={locale} path={path}>
+  <article class="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
+    {backHref && (
+      <a href={backHref} class="mb-8 inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:text-brand-700">
+        <span aria-hidden="true">←</span> {backLabel}
+      </a>
+    )}
+    <div class="prose-headings:scroll-mt-24">
+      <slot />
+    </div>
+  </article>
+</SiteLayout>

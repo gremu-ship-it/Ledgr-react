@@ -1,0 +1,329 @@
+---
+// Home (/ny/) — Chichewa translation of the anchor landing page.
+// NOTE: this is a v1 draft translation; have a native speaker review before
+// launch (STRUCTURE.md §11).
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import FeatureCard from '../../components/FeatureCard.astro';
+import PricingCard from '../../components/PricingCard.astro';
+import TestimonialCard from '../../components/TestimonialCard.astro';
+import FaqItem from '../../components/FaqItem.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { SITE } from '../../data/site';
+import { t } from '../../i18n';
+import { PLANS } from '../../data/pricing';
+
+const locale = 'ny' as const;
+const url = (p: string) => getRelativeLocaleUrl(locale, p);
+
+const modules = [
+  {
+    title: 'Kauntibuku',
+    body: 'Mndandanda wa maakaunti, ma journal a double-entry, kusamalira nyengo, capital, kusamutsa ndalama ndi bank reconciliation — zokonzedwa monga momwe accountant amafunira.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  },
+  {
+    title: 'Ma invoice',
+    body: 'Ma invoice a MWK otsatira pomwe kasitomala watsegula, operekedwa pa imelo ndi kutsatira malipiro — dziwani ngati kasitomala wawona kapena walipira invoice yanu.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8M8 17h5"/></svg>',
+  },
+  {
+    title: 'Malipiro ndi msonkho',
+    body: 'Magulu a PAYE, zopereka za penshoni, VAT, msonkho wokakamiza ndi zofunsidwa ndi MRA — mawerengedwe olondola, mwezi uliwonse, mu MWK.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M18.4 17.4a9 9 0 1 0-12.8 0"/><path d="M12 7a3 3 0 1 1 3-3"/></svg>',
+  },
+  {
+    title: 'Katundu',
+    body: 'Zogulitsa, nyumba zosungira, nthambi, madipatimenti ndi katundu wokhazikika wowerengera kutsika kwake — dziwani zomwe muli nazo, zili kuti, ndi mtengo wake.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  },
+  {
+    title: 'Malipoti',
+    body: 'Profit & loss, balance sheet, kugawanika kwa ndalama zolowa ndi malipoti otsimikiziridwa — otsitsika kuti aperekedwe kwa accountant kapena pamene mukupempha ngongole.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 13v4M11 9v8M15 5v12M19 11v6"/></svg>',
+  },
+  {
+    title: 'Zimagwira popanda intaneti',
+    body: 'Ledgr ndi PWA: imagwirabe ntchito pa intaneti yofooka ndipo imayenda zokha mukabwerera pa intaneti. Palibe pulogalamu ina yaku Malawi yochita izi.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>',
+  },
+  {
+    title: 'Gulu ndi maudindo',
+    body: 'Ogwiritsa ntchito ambiri ndi maudindo, nthambi za bizinesi, kuyitanira ogwira ntchito, audit log, MFA ndi nthawi yotuluka — kotetezedwa kwa magulu akukula.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  },
+  {
+    title: 'Maganizo a AI',
+    body: 'Pezani mayankho osavuta pa manambala anu, kuphatikiza wothandizira wa AI mkatikati mwa pulogalamu — wokhoza kukwezera kwa munthu pamene mufunikira.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg>',
+  },
+];
+
+const steps = [
+  { n: '1', title: 'Pangani bizinesi yanu', body: 'Lembetsani kwaulere, kwezani mbiri ya bizinesi yanu ndi maakaunti mu mphindi zochepa.' },
+  { n: '2', title: 'Lembani zomwe mukuchita', body: 'Ma invoice, ndalama zolowa, ndalama zotuluka, malipiro, katundu — pa foni kapena laputopu, pa intaneti kapena popanda.' },
+  { n: '3', title: 'Mvetsetsani ndi kupereka', body: 'Pangani malipoti, tsatirani ngongole za makasitomala, ndipo khalani okonzekera MRA nthawi iliyonse.' },
+];
+
+const audiences = [
+  { title: 'Masitolo & ogulitsa', body: 'Malonda, katundu ndi ogulitsa pamalo amodzi — musaganizire phindu la mwezi wanu.' },
+  { title: 'Ulimi wamalonda', body: 'Tsatirani zokolola ndi kugulitsa ndi malipoti omwe wobwereketsa adzamvetse.' },
+  { title: 'Mayendedwe & katundu', body: 'Mafuta, kukonza ndi ndalama zolowa — dziwani njira zomwe zimalipira.' },
+  { title: 'Ntchito za akatswiri', body: 'Zipatala, mabungwe amilandu, alangizi: nthawi yolipiritsa, ndalama zotuluka, msonkho wokonzeka.' },
+  { title: 'Mipingo & NGOs', body: 'Kauntibuku wowonekera kwa mamembala ndi opereka thandizo, ndi malipoti omveka.' },
+  { title: 'Otanitsa & otumiza kunja', body: 'Katundu wa m’nyumba zosungira zambiri ndi malipoti a MWK ogwirizana ndi madola.' },
+];
+
+const testimonials = [
+  { quote: 'TODO — mawu enieni a kasitomala. Funsani makasitomala osangalala kuti atipatse chilolezo.', name: 'Dzina lanu pano', business: 'Bizinesi, Mzinda' },
+  { quote: 'TODO — mawu enieni a kasitomala. Funsani makasitomala osangalala kuti atipatse chilolezo.', name: 'Dzina lanu pano', business: 'Bizinesi, Mzinda' },
+  { quote: 'TODO — mawu enieni a kasitomala. Funsani makasitomala osangalala kuti atipatse chilolezo.', name: 'Dzina lanu pano', business: 'Bizinesi, Mzinda' },
+];
+
+const faqs = [
+  { q: 'Kodi Ledgr alidi wopanda malipiro kuti ayambe?', a: 'Inde — plan ya Free ilibe khadi kapena nthawi yomaliza. Imaphatikizapo ndalama zolowa, zotuluka ndi malipoti oyambira mpaka zochitika 50 pamwezi.' },
+  { q: 'Chimachitika ndi chiyani ndikakhala popanda intaneti?', a: 'Ledgr amagwirabe ntchito. Zolemba zimasungidwa pa chipangizo chanu ndipo zimayenda zokha mukabwerera pa intaneti.' },
+  { q: 'Kodi ndingasinthe kupita ku malipiro a chaka chonse?', a: 'Inde. Malipiro a chaka chonse amakupatsani kuchepetsedwa kwa 20–25%, ndipo mutha kusintha kuchokera ku Settings.' },
+  { q: 'Kodi deta yanga ili pabwino?', a: 'Deta yanu imasungidwa mu database yoyang\'aniridwa ndi chitetezo cha mizere, maudindo, MFA ndi zosunga zobwezeretsera.' },
+];
+
+const sidebarItems = ['Dashboard', 'Ma invoice', 'Ndalama zolowa', 'Ndalama zotuluka', 'Malipoti'];
+const kpis = [
+  { label: 'Ndalama zolowa', value: 'MK 2.4M', up: '+18%' },
+  { label: 'Ndalama zotuluka', value: 'MK 1.1M', up: '+6%' },
+  { label: 'Phindu', value: 'MK 1.3M', up: '+24%' },
+];
+const invoiceRows = [
+  { client: 'Bvumbwe Traders', amount: 'MK 486,000', status: 'Yalipidwa' },
+  { client: 'Mzuzu Agro Ltd', amount: 'MK 312,500', status: 'Yotseguka' },
+  { client: 'Lilongwe Bookshop', amount: 'MK 158,000', status: 'Yotseguka' },
+];
+---
+
+<SiteLayout
+  locale={locale}
+  path=""
+  title={t(locale, 'pageTitles.home')}
+  description="Kauntibuku, ma invoice, malipiro ndi katundu mu MWK kwa mabizinesi ang'onoang'ono aku Malawi. Zimagwira ntchito pa intaneti ndi popanda. Kuyamba kwaulere."
+>
+  <!-- ═══ 1. Hero ═══ -->
+  <section class="relative overflow-hidden bg-brand-950">
+    <div class="mx-auto grid w-full max-w-6xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-28">
+      <div>
+        <p class="inline-flex items-center gap-2 rounded-full border border-brand-400/40 bg-brand-900/60 px-3 py-1 text-xs font-semibold text-brand-100">
+          <span class="h-1.5 w-1.5 rounded-full bg-brand-400" aria-hidden="true"></span>
+          Lopangidwira mabizinesi ang'onoang'ono aku Malawi — MWK choyamba
+        </p>
+        <h1 class="mt-5 text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
+          Kauntibuku wolankhula ndi <span class="text-brand-400">Kwacha</span>
+        </h1>
+        <p class="mt-5 max-w-xl text-lg leading-relaxed text-brand-100">
+          Ledgr ndi chida cha kauntibuku, ma invoice, malipiro a antchito ndi
+          katundu kwa mabizinesi aku Malawi — chimagwira ntchito pa intaneti
+          yofooka, chokonzekera MRA, ndipo mtengo wake ndi wotsika poyerekeza
+          ndi mapulogalamu ochokera kunja.
+        </p>
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <a href={`${SITE.appUrl}/register`} class="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-400">
+            {t(locale, 'nav.getStarted')} →
+          </a>
+          <a href={url('pricing')} class="rounded-lg border border-brand-400/50 px-6 py-3 text-sm font-semibold text-brand-100 transition-colors hover:bg-brand-900">
+            Onani mitengo
+          </a>
+        </div>
+        <ul class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-brand-200">
+          <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> Zimagwira popanda intaneti</li>
+          <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> PAYE, VAT &amp; MRA</li>
+          <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> Kuyamba kwaulere</li>
+        </ul>
+      </div>
+
+      <!-- Product mockup (TODO: replace with a real screenshot) -->
+      <div class="relative" aria-hidden="true">
+        <div class="rounded-2xl border border-brand-700 bg-brand-900/70 p-4 shadow-card-hover">
+          <div class="flex items-center justify-between border-b border-brand-800 pb-3">
+            <div class="flex items-center gap-1.5">
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-300/50"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-300/50"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-300/50"></span>
+            </div>
+            <span class="rounded-full bg-brand-800/80 px-2.5 py-0.5 text-[10px] font-medium text-brand-300">ledgr.app</span>
+          </div>
+
+          <div class="mt-4 flex gap-4">
+            <div class="hidden w-28 shrink-0 space-y-1.5 sm:block">
+              {sidebarItems.map((item, i) => (
+                <div
+                  class:list={[
+                    'rounded-lg px-2.5 py-1.5 text-[11px] font-medium',
+                    i === 0 ? 'bg-brand-600/80 text-white' : 'bg-brand-800/40 text-brand-300',
+                  ]}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-white">Dashboard</p>
+                <span class="rounded-full bg-brand-800/60 px-2 py-0.5 text-[10px] text-brand-300">Mwezi uno</span>
+              </div>
+              <div class="mt-3 grid grid-cols-3 gap-2">
+                {kpis.map((k) => (
+                  <div class="rounded-xl bg-brand-800/60 p-3">
+                    <p class="text-[10px] text-brand-200">{k.label}</p>
+                    <p class="mt-0.5 text-sm font-bold text-white">{k.value}</p>
+                    <p class="text-[10px] text-brand-400">{k.up}</p>
+                  </div>
+                ))}
+              </div>
+              <div class="mt-2 h-28 rounded-xl bg-brand-800/40 p-3">
+                <div class="flex h-full items-end gap-1.5">
+                  {[40, 65, 50, 80, 60, 95, 75, 55, 88].map((h) => (
+                    <div class="flex-1 rounded-t bg-brand-500/70" style={`height:${h}%`}></div>
+                  ))}
+                </div>
+              </div>
+              <div class="mt-2 space-y-1.5">
+                {invoiceRows.map((r) => (
+                  <div class="flex items-center justify-between rounded-lg bg-brand-800/40 px-3 py-1.5">
+                    <div class="flex items-center gap-2">
+                      <span class:list={['h-1.5 w-1.5 rounded-full', r.status === 'Yalipidwa' ? 'bg-brand-400' : 'bg-amber-400']}></span>
+                      <span class="text-[10px] text-brand-200">{r.client}</span>
+                    </div>
+                    <span class="text-[10px] font-semibold text-white">{r.amount}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mt-3 text-center text-xs text-brand-400">TODO: chithunzi chenicheni cha pulogalamu — Dashboard</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 2. Trust bar ═══ -->
+  <section class="border-b border-navy-200 bg-white">
+    <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-4 py-6 text-sm font-medium text-navy-600 sm:px-6">
+      <span class="text-navy-900">Timadaliridwa ndi mabizinesi aku Malawi:</span>
+      <span>TODO: logo ya kasitomala</span>
+      <span>TODO: logo ya kasitomala</span>
+      <span>TODO: logo ya kasitomala</span>
+    </div>
+  </section>
+
+  <!-- ═══ 3. Feature grid ═══ -->
+  <section class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6" id="features">
+    <SectionHeading
+      eyebrow="Zonse pamalo amodzi"
+      title="Bizinesi yanu yonse, mu Kwacha"
+      subtitle="Magulu asanu ndi atatu omwe amagwirizana, kuti musalembenso manambala kawiri."
+    />
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {modules.map((m) => <FeatureCard title={m.title} body={m.body} icon={m.icon} />)}
+    </div>
+    <p class="mt-10 text-center">
+      <a href={url('features')} class="font-semibold text-brand-600 hover:text-brand-700">
+        {t(locale, 'common.learnMore')} →
+      </a>
+    </p>
+  </section>
+
+  <!-- ═══ 4. How it works ═══ -->
+  <section class="bg-white">
+    <div class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Zimagwira bwanji" title="Mutha kuyamba masana ano" />
+      <div class="mt-12 grid gap-8 md:grid-cols-3">
+        {steps.map((s) => (
+          <div class="rounded-2xl border border-navy-200 bg-app-bg p-6">
+            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-base font-bold text-white">{s.n}</span>
+            <h3 class="mt-4 text-lg font-semibold text-navy-900">{s.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-navy-600">{s.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 4.5 Who it's for ═══ -->
+  <section class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+    <SectionHeading
+      eyebrow="Amene amagwiritsa ntchito"
+      title="Kuchokera ku sitolo ya msewu mpaka wotumiza kunja"
+      subtitle="Ngati bizinesi yanu imagulitsa mu Kwacha, Ledgr inapangidwira inu."
+    />
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {audiences.map((a) => (
+        <div class="rounded-2xl border border-navy-200 bg-card-bg p-6 shadow-soft transition-shadow hover:shadow-card-hover">
+          <h3 class="text-base font-semibold text-navy-900">{a.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-navy-600">{a.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ═══ 5. Offline highlight ═══ -->
+  <section class="bg-brand-700">
+    <div class="mx-auto grid w-full max-w-6xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center">
+      <div>
+        <h2 class="text-3xl font-bold tracking-tight text-white">Zimagwira pamene intaneti kulibe</h2>
+        <p class="mt-4 leading-relaxed text-brand-100">
+          Kuzimitsidwa kwa magetsi, intaneti yofooka — Ledgr inapangidwira zovuta
+          za intaneti ku Malawi. Ikani pa foni yanu, pitirizani kulemba, ndipo
+          zonse zimayenda zokha mukabwerera pa intaneti.
+        </p>
+      </div>
+      <ul class="space-y-3 text-brand-100">
+        <li class="flex items-start gap-3"><span class="text-brand-300" aria-hidden="true">✓</span> Zolemba popanda intaneti zomwe zimayenda zokha</li>
+        <li class="flex items-start gap-3"><span class="text-brand-300" aria-hidden="true">✓</span> Zimatha kuikidwa ngati pulogalamu pa foni (PWA)</li>
+        <li class="flex items-start gap-3"><span class="text-brand-300" aria-hidden="true">✓</span> Imagwiritsa ntchito data yochepa — yopangidwira intaneti yofooka</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ 6. Pricing teaser ═══ -->
+  <section class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6" id="pricing">
+    <SectionHeading
+      eyebrow="Mitengo mu MWK"
+      title="Mapulani osavuta, mitengo yowona mtima"
+      subtitle="Lipirani pamwezi kapena chaka chonse ndi PayChangu. Plan iliyonse imayamba kwaulere."
+    />
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {PLANS.map((p) => <PricingCard plan={p} locale={locale} />)}
+    </div>
+    <p class="mt-10 text-center">
+      <a href={url('pricing')} class="font-semibold text-brand-600 hover:text-brand-700">
+        Yerekezerani mapulani onse →
+      </a>
+    </p>
+  </section>
+
+  <!-- ═══ 7. Testimonials ═══ -->
+  <section class="bg-white">
+    <div class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Nkhani za makasitomala" title="Okondedwa ndi eni mabizinesi" subtitle="TODO: lowetsani mawu enieni m'malo mwa awa." />
+      <div class="mt-12 grid gap-6 md:grid-cols-3">
+        {testimonials.map((tm) => <TestimonialCard quote={tm.quote} name={tm.name} business={tm.business} />)}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 8. FAQ teaser ═══ -->
+  <section class="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6">
+    <SectionHeading eyebrow="Mafunso" title="Mafunso, mayankho" />
+    <div class="mt-10 space-y-3">
+      {faqs.map((f) => <FaqItem question={f.q} answer={f.a} />)}
+    </div>
+    <p class="mt-8 text-center">
+      <a href={url('faq')} class="font-semibold text-brand-600 hover:text-brand-700">
+        {t(locale, 'common.viewAll')} →
+      </a>
+    </p>
+  </section>
+
+  <!-- ═══ 9. CTA ═══ -->
+  <CtaBanner locale={locale} />
+</SiteLayout>

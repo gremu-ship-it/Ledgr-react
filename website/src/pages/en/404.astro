@@ -1,0 +1,25 @@
+---
+// 404 (/en/404/) — localized not-found page.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { dict } from '../../i18n';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+
+const locale = 'en' as const;
+const d = dict(locale).common;
+---
+
+<BaseLayout locale={locale} path="404" title="404 — Ledgr" description={d.notFoundBody}>
+  <main class="flex flex-1 items-center justify-center px-4">
+    <div class="py-24 text-center">
+      <p class="text-7xl font-bold text-brand-600">404</p>
+      <h1 class="mt-4 text-2xl font-bold text-navy-900">{d.notFoundTitle}</h1>
+      <p class="mt-2 text-navy-600">{d.notFoundBody}</p>
+      <a
+        href={getRelativeLocaleUrl(locale, '')}
+        class="mt-8 inline-flex rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+      >
+        {d.backHome}
+      </a>
+    </div>
+  </main>
+</BaseLayout>

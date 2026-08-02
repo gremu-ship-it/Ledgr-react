@@ -1,0 +1,71 @@
+{
+  "nav": {
+    "features": "Features",
+    "pricing": "Pricing",
+    "partners": "Partners",
+    "developers": "Developers",
+    "help": "Help",
+    "blog": "Blog",
+    "signIn": "Sign in",
+    "getStarted": "Start free"
+  },
+  "footer": {
+    "product": "Product",
+    "company": "Company",
+    "legal": "Legal",
+    "contact": "Contact",
+    "about": "About",
+    "faq": "FAQ",
+    "compare": "Compare",
+    "terms": "Terms & conditions",
+    "privacy": "Privacy policy",
+    "cookies": "Cookie policy",
+    "tagline": "MWK-first accounting, invoicing, payroll and inventory for Malawian SMEs. Works online and offline.",
+    "rights": "All rights reserved.",
+    "pwaNote": "Install Ledgr as an app on your phone — it works without internet."
+  },
+  "cta": {
+    "title": "Start your books the right way",
+    "subtitle": "Free to start. No card required. MWK pricing, PayChangu payments.",
+    "button": "Get started free",
+    "secondary": "Talk to us"
+  },
+  "common": {
+    "readMore": "Read more",
+    "learnMore": "Learn more",
+    "viewAll": "View all",
+    "backToBlog": "Back to blog",
+    "backToHelp": "Back to help center",
+    "backHome": "Back to home",
+    "notFoundTitle": "Page not found",
+    "notFoundBody": "The page you are looking for does not exist or has moved.",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "switchLanguage": "Change language",
+    "currentLanguage": "Current language"
+  },
+  "pricing": {
+    "monthly": "Monthly",
+    "annual": "Annual",
+    "save": "Save {pct}%",
+    "saveWithAnnual": "Save {pct}% with annual billing",
+    "perMonth": "per month",
+    "mostPopular": "Most popular"
+  },
+  "pageTitles": {
+    "home": "Ledgr — Business Accounting for Malawi",
+    "features": "Features — Ledgr",
+    "pricing": "Pricing — Ledgr",
+    "partners": "Partners — Ledgr",
+    "developers": "Developers — Ledgr",
+    "help": "Help Center — Ledgr",
+    "blog": "Blog — Ledgr",
+    "about": "About — Ledgr",
+    "contact": "Contact — Ledgr",
+    "faq": "FAQ — Ledgr",
+    "compare": "Compare — Ledgr",
+    "terms": "Terms & Conditions — Ledgr",
+    "privacy": "Privacy Policy — Ledgr",
+    "cookies": "Cookie Policy — Ledgr"
+  }
+}

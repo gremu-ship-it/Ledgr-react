@@ -1,0 +1,64 @@
+---
+
+// Developers (/en/developers/) — API, webhooks and Zapier.
+// The product's API docs live in-app at /api-docs (JSON:API v1).
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { SITE } from '../../data/site';
+import { t } from '../../i18n';
+
+const locale = 'ny' as const;
+
+const features = [
+  { title: 'Public JSON:API', body: 'A documented REST API at /api/v1 with hashed API keys — read and write your business data programmatically.' },
+  { title: 'Webhooks', body: 'Subscribe to events and get real-time pushes, so your tools react the moment things change.' },
+  { title: 'Zapier template', body: 'Connect Ledgr to 6,000+ apps without writing code using the ready-made Zapier template.' },
+  { title: 'Offline-first client', body: 'The whole product is a PWA — an example of what a resilient, low-bandwidth client looks like.' },
+];
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="developers"
+  title={t(locale, 'pageTitles.developers')}
+  description="Build on Ledgr — public JSON:API with hashed API keys, webhooks and a Zapier template for Malawian SMEs."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">Developers</p>
+      <h1 class="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        Build on Ledgr
+      </h1>
+      <p class="mt-4 max-w-2xl text-lg text-brand-100">
+        A clean JSON:API, webhooks and Zapier — connect Ledgr to your accounting
+        practice, app or workflow.
+      </p>
+      <div class="mt-8 flex flex-wrap gap-3">
+        <a href={`${SITE.appUrl}/api-docs`} class="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-400">
+          View API docs →
+        </a>
+        <a href={`${SITE.appUrl}/api-keys`} class="rounded-lg border border-brand-400/50 px-6 py-3 text-sm font-semibold text-brand-100 transition-colors hover:bg-brand-900">
+          Manage API keys
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+    <div class="grid gap-6 sm:grid-cols-2">
+      {
+        features.map((f) => (
+          <div class="rounded-2xl border border-navy-200 bg-card-bg p-6 shadow-soft">
+            <h2 class="text-lg font-semibold text-navy-900">{f.title}</h2>
+            <p class="mt-2 text-sm leading-relaxed text-navy-600">{f.body}</p>
+          </div>
+        ))
+      }
+    </div>
+    <!-- TODO: add code sample block (curl GET /api/v1/…) and endpoint list -->
+  </section>
+
+  <CtaBanner locale={locale} />
+</SiteLayout>

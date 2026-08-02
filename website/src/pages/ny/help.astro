@@ -1,0 +1,65 @@
+---
+// Help center (/en/help/) — article index from the content collection.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import { getCollection } from 'astro:content';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { t } from '../../i18n';
+
+const locale = 'ny' as const;
+
+const articles = (await getCollection('help'))
+  .filter((a) => a.data.locale === locale)
+  .sort((a, b) => a.data.order - b.data.order);
+
+const categories = [...new Set(articles.map((a) => a.data.category))];
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="help"
+  title={t(locale, 'pageTitles.help')}
+  description="Ledgr help center — guides for setup, invoicing, payroll, tax and offline use. Or ask the in-app AI support agent."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">Help center</p>
+      <h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">How can we help?</h1>
+      <!-- TODO: add search (client-side filter over articles) -->
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+    {
+      categories.map((cat) => (
+        <div class="mb-12 last:mb-0">
+          <h2 class="text-xl font-semibold text-navy-900">{cat}</h2>
+          <ul class="mt-5 grid gap-3 md:grid-cols-2">
+            {
+              articles.filter((a) => a.data.category === cat).map((a) => (
+                <li>
+                  <a
+                    href={getRelativeLocaleUrl(locale, `help/${a.id.split('/').pop()}`)}
+                    class="flex items-center justify-between gap-3 rounded-xl border border-navy-200 bg-card-bg px-5 py-4 shadow-soft transition-shadow hover:shadow-card-hover"
+                  >
+                    <span class="text-sm font-medium text-navy-900">{a.data.title}</span>
+                    <span class="text-brand-600" aria-hidden="true">→</span>
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      ))
+    }
+
+    <div class="mt-14">
+      <SectionHeading
+        eyebrow="Still stuck?"
+        title="Ask the AI support agent"
+        subtitle="Inside the app, our AI agent answers product, triage and compliance questions — and escalates to a human when needed."
+      />
+    </div>
+  </section>
+</SiteLayout>

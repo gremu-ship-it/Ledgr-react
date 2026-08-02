@@ -1,0 +1,45 @@
+---
+// Help article (/en/help/[slug]/).
+import { getCollection, render } from 'astro:content';
+import ArticleLayout from '../../../layouts/ArticleLayout.astro';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { t } from '../../../i18n';
+
+export async function getStaticPaths() {
+  // NOTE: module-scope consts are not visible inside getStaticPaths (Astro
+  // hoists it), so the locale is declared here.
+  const locale = 'ny' as const;
+  const articles = await getCollection('help');
+  return articles
+    .filter((a) => a.data.locale === locale)
+    .map((article) => ({
+      // Collection ids include the locale folder (e.g. 'en/my-article') —
+      // use the filename as the URL slug.
+      params: { slug: article.id.split('/').pop()! },
+      props: { article },
+    }));
+}
+
+const { article } = Astro.props;
+const locale = 'ny' as const;
+const slug = article.id.split('/').pop()!;
+const { Content } = await render(article);
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<ArticleLayout
+  locale={locale}
+  path={`help/${slug}`}
+  title={`${article.data.title} — Ledgr Help`}
+  description={article.data.description}
+  backHref={getRelativeLocaleUrl(locale, 'help')}
+  backLabel={t(locale, 'common.backToHelp')}
+>
+  <header>
+    <p class="text-sm font-medium uppercase tracking-wide text-brand-600">{article.data.category}</p>
+    <h1 class="mt-2 text-3xl font-bold tracking-tight text-navy-900 sm:text-4xl">{article.data.title}</h1>
+  </header>
+  <div class="prose mt-8 max-w-none prose-headings:mt-8 prose-headings:font-semibold prose-headings:text-navy-900 prose-p:leading-relaxed prose-p:text-navy-600 prose-a:text-brand-600 prose-ul:list-disc prose-li:text-navy-600 prose-ol:list-decimal">
+    <Content />
+  </div>
+</ArticleLayout>

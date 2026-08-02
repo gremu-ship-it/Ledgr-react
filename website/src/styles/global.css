@@ -1,0 +1,77 @@
+/* ────────────────────────────────────────────────────────────────────────
+   Ledgr marketing site — global styles
+   Brand tokens copied verbatim from the app (src/index.css) so the site and
+   the product share one design language.
+   ──────────────────────────────────────────────────────────────────────── */
+@import "tailwindcss";
+
+@layer theme, base, components, utilities;
+
+@layer theme {
+  @theme default {
+    --font-sans:
+      ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+      "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --font-mono:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
+
+    /* ── Brand color scale — WCAG 2.1 AA compliant Emerald Green ─────────
+       brand-500 (#0E7C5A) → 5.32:1 contrast on white ✅ AA Normal
+       brand-600 (#0B6A4D) → 6.45:1 contrast on white ✅ AA Normal
+       brand-700 (#08553D) → 8.18:1 contrast on white ✅ AAA            */
+    --color-brand-50:  oklch(97%   0.025 175);
+    --color-brand-100: oklch(93%   0.050 175);
+    --color-brand-200: oklch(87%   0.090 175);
+    --color-brand-300: oklch(76%   0.135 175);
+    --color-brand-400: oklch(64%   0.150 175);
+    --color-brand-500: oklch(45%   0.110 175);   /* #0E7C5A — AA Normal */
+    --color-brand-600: oklch(38%   0.095 175);   /* #0B6A4D — AA Normal */
+    --color-brand-700: oklch(30%   0.080 175);   /* #08553D — AAA       */
+    --color-brand-800: oklch(24%   0.065 175);
+    --color-brand-900: oklch(18%   0.050 175);
+    --color-brand-950: oklch(13%   0.035 175);
+
+    /* ── Accessibility tokens ─────────────────────────────────────────── */
+    --color-focus-ring: #0B6A4D;          /* brand-600 */
+    --color-error-text: #B91C1C;
+    --color-success-text: #047857;
+    --color-warning-text: #92400E;
+    --color-info-text:    #1E40AF;
+
+    /* ── Surfaces & text ──────────────────────────────────────────────── */
+    --color-app-bg:   #F8FAFC;   /* Soft off-white canvas */
+    --color-card-bg:  #FFFFFF;
+    --color-navy-900: #0F172A;   /* Headings & figures */
+    --color-navy-600: #475569;   /* Secondary text */
+    --color-navy-200: #E2E8F0;   /* Borders & dividers */
+
+    /* ── Shadows ──────────────────────────────────────────────────────── */
+    --shadow-soft:  0 2px 8px 0 rgb(0 0 0 / 0.06);
+    --shadow-card:  0 1px 4px 0 rgb(15 23 42 / 0.06), 0 0 0 1px rgb(226 232 240 / 0.8);
+    --shadow-card-hover: 0 8px 24px -6px rgb(15 23 42 / 0.12), 0 0 0 1px rgb(226 232 240 / 0.9);
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+  body {
+    @apply bg-app-bg text-navy-900 antialiased;
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background-color: var(--color-brand-200);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}
