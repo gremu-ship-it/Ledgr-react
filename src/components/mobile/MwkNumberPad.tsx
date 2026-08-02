@@ -10,7 +10,7 @@ function vibrate(ms = 5) {
   try {
     if ('vibrate' in navigator) navigator.vibrate(ms);
   } catch {
-    // ignore: vibration not supported or permission denied
+    void 0; // ignore: vibration not supported or permission denied
   }
 }
 

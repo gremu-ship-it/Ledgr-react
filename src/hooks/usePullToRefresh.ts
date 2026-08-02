@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, type RefObject } from 'react';
 
 interface UsePullToRefreshOptions {
   onRefresh: () => Promise<void> | void;
@@ -6,7 +6,14 @@ interface UsePullToRefreshOptions {
   disabled?: boolean;
 }
 
-export function usePullToRefresh({ onRefresh, threshold = 80, disabled = false }: UsePullToRefreshOptions) {
+export interface UsePullToRefreshResult {
+  containerRef: RefObject<HTMLDivElement | null>;
+  pullDistance: number;
+  isRefreshing: boolean;
+  progress: number;
+}
+
+export function usePullToRefresh({ onRefresh, threshold = 80, disabled = false }: UsePullToRefreshOptions): UsePullToRefreshResult {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const startY = useRef<number | null>(null);

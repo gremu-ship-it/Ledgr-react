@@ -128,8 +128,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // Test endpoint to verify Sentry error capture
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.get('/api/test-error', (_req: Request, _res: Response) => {
+app.get('/api/test-error', () => {
   throw new Error('Test error for Sentry verification');
 });
 

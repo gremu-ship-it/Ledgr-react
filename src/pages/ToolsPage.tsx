@@ -13,8 +13,7 @@ interface Tool {
   id: string;
   label: string;
   description: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- icon component accepts no props; any is conventional here
-  icon: React.ComponentType<any>;
+  icon: React.ComponentType<{ className?: string }>;
   path: string;
   category: 'daily' | 'accounting' | 'advanced';
   requiresPlan?: 'growth' | 'pro';

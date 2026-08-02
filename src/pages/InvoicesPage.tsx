@@ -956,6 +956,7 @@ function InvoiceList({
   }
 
   return (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <div ref={containerRef}>
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
