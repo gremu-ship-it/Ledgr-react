@@ -1,0 +1,73 @@
+# Optional: GitHub Pages preview of the marketing website.
+#
+# The website is a fully static build (website/dist). This workflow publishes
+# it to GitHub Pages — useful for a public preview URL while the production
+# domain (ledgr.com) is still pointed at the app.
+#
+# To enable:
+#   1. Repo Settings → Pages → Source: "GitHub Actions"
+#   2. Merge a PR containing this file to main (or run the workflow manually
+#      from the Actions tab)
+# The site will appear at https://<org>.github.io/Ledgr-react/
+# (the ASTRO_BASE env var below matches the repo name; adjust if the repo
+# is renamed). The production Vercel deploy (rootDirectory: website) is
+# unaffected by this workflow.
+
+name: Website Deploy (GitHub Pages)
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "website/**"
+      - ".github/workflows/website-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: website-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install dependencies
+        working-directory: website
+        run: npm ci
+
+      - name: Build (with Pages base path)
+        working-directory: website
+        run: npm run build
+        env:
+          ASTRO_BASE: /Ledgr-react
+
+      - uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
