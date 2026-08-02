@@ -62,5 +62,10 @@
   },
   "overrides": {
     "tsx": "^4.23.4"
+  },
+  "allowScripts": {
+    "@sentry/cli@2.39.1": true,
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.3": true
   }
 }
