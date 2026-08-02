@@ -35,6 +35,10 @@ interface AppState {
   inactivityTimeoutMinutes: number; // default 60
   setInactivityTimeoutMinutes: (minutes: number) => void;
 
+  // ── Orientation lock (optional rotation control) ────────────────
+  orientationLock: boolean;
+  setOrientationLock: (v: boolean) => void;
+
   // ── Reset (on logout) ───────────────────────────────────────────
   reset: () => void;
 }
@@ -43,6 +47,7 @@ const THEME_STORAGE_KEY   = 'ledgr-theme';
 const SIDEBAR_STORAGE_KEY = 'ledgr-sidebar-open';
 const SIDEBAR_WIDTH_KEY   = 'ledgr-sidebar-width';
 const DENSITY_KEY         = 'ledgr-density';
+const ORIENTATION_LOCK_KEY = 'ledgr-orientation-lock';
 
 function getInitialSidebarOpen(): boolean {
   if (typeof window === 'undefined') return true;
@@ -63,6 +68,11 @@ function getInitialDensity(): 'comfortable' | 'compact' {
   if (typeof window === 'undefined') return 'comfortable';
   const stored = window.localStorage.getItem(DENSITY_KEY);
   return stored === 'compact' ? 'compact' : 'comfortable';
+}
+
+function getInitialOrientationLock(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(ORIENTATION_LOCK_KEY) === 'true';
 }
 
 function getInitialTheme(): Theme {
@@ -132,6 +142,12 @@ export const useAppStore = create<AppState>()(
       inactivityTimeoutMinutes: 60,
       setInactivityTimeoutMinutes: (minutes) => set({ inactivityTimeoutMinutes: minutes }),
 
+      orientationLock: getInitialOrientationLock(),
+      setOrientationLock: (v) => {
+        window.localStorage.setItem(ORIENTATION_LOCK_KEY, String(v));
+        set({ orientationLock: v });
+      },
+
       reset: () =>
         set({
           currentUser: null,
@@ -146,6 +162,7 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         sidebarWidth: state.sidebarWidth,
         density: state.density,
+        orientationLock: state.orientationLock,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.theme) {

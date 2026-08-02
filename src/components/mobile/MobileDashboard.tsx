@@ -155,6 +155,8 @@ export function MobileDashboard() {
   const { isFeatureEnabled } = usePartner();
   const { planTier } = useUsage();
   const currentUser = useAppStore((s) => s.currentUser);
+  const orientationLock = useAppStore((s) => s.orientationLock);
+  const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
   const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role)
@@ -263,6 +265,32 @@ export function MobileDashboard() {
           <Settings className="h-5 w-5 text-gray-600" />
           </button>
         </div>
+      </div>
+
+      {/* Orientation toggle card */}
+      <div className="mx-2 mt-2 rounded-2xl bg-white/80 p-3 shadow-sm ring-1 ring-white/20 backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => {
+            const next = !orientationLock;
+            setOrientationLock(next);
+            try {
+              const s = window.screen as unknown as { orientation?: { lock: (t: string) => Promise<void>; unlock: () => void } };
+              if (next && s?.orientation?.lock) s.orientation.lock('portrait').catch(() => {});
+              else if (!next && s?.orientation?.unlock) s.orientation.unlock();
+            } catch { /* ignore */ }
+          }}
+          className="flex w-full items-center justify-between"
+          aria-pressed={orientationLock}
+        >
+          <div className="text-left">
+            <p className="text-xs font-black uppercase tracking-widest text-gray-900">Screen Rotation</p>
+            <p className="text-[10px] font-medium text-gray-500">{orientationLock ? 'Locked to portrait' : 'Auto (device decides)'}</p>
+          </div>
+          <div className={`h-5 w-9 rounded-full transition-colors ${orientationLock ? 'bg-brand-600' : 'bg-gray-300'}`} aria-hidden="true">
+            <div className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${orientationLock ? 'translate-x-5' : 'translate-x-0.5'} mt-0.5`} />
+          </div>
+        </button>
       </div>
 
       {/* Hero */}
