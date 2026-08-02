@@ -50,7 +50,12 @@ export interface StatementOfFinancialPosition {
   equity: StatementSection;
   totalEquity: number;
   comparativeTotalEquity: number | null;
-  isBalanced: boolean; // totalAssets === totalLiabilities + totalEquity (within tolerance)
+  isBalanced: boolean;
+  /** Current year's unclosed net profit (revenue − expenses, YTD from Jan 1).
+   *  Injected as a synthetic line in the equity section so the balance sheet
+   *  self-balances without a manual period-close journal entry. */
+  currentYearProfit: number;
+  currentYearProfitComparative: number | null;
 }
 
 export interface StatementOfProfitOrLoss {
@@ -309,6 +314,44 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
 
   // ── Statement of Financial Position (IAS 1) ─────────────────────────────────
 
+  /**
+   * Computes the net profit / loss for the year-to-date period (Jan 1 of the
+   * given year → asOfDate). Revenue and expense accounts carry their activity
+   * until manually closed to retained earnings; this method computes the
+   * running P&L so the SOFP can include it in equity without waiting for a
+   * manual period-close journal entry.
+   */
+  private async computeYtdProfit(
+    businessId: string,
+    asOfDate: string,
+  ): Promise<number> {
+    const yearStart = `${asOfDate.slice(0, 4)}-01-01`;
+    const balances = await this.computeBalances(businessId, {
+      dateFrom: yearStart,
+      dateTo: asOfDate,
+      includeOpeningBalances: false,
+    });
+
+    // Revenue & other income are credit-normal; expenses are debit-normal.
+    // buildSection uses toStatementSide so contra accounts net correctly —
+    // mirror that logic here on the raw balances.
+    const income = balances
+      .filter((b) => b.account.account_subtype === 'revenue' || b.account.account_subtype === 'other_income')
+      .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'credit'), 0);
+
+    const expenses = balances
+      .filter((b) =>
+        b.account.account_subtype === 'cost_of_sales' ||
+        b.account.account_subtype === 'operating_expense' ||
+        b.account.account_subtype === 'depreciation_amortisation' ||
+        b.account.account_subtype === 'finance_cost' ||
+        b.account.account_subtype === 'tax_expense',
+      )
+      .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit'), 0);
+
+    return income - expenses;
+  }
+
   async getSOFP(
     businessId: string,
     asOfDate: string,
@@ -354,16 +397,41 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? (comparativeTotalAssets ?? 0) - (comparativeTotalLiabilities ?? 0)
       : null;
 
-    const totalEquity = equity.subtotal;
-    const comparativeTotalEquity = comparativeBalances ? equity.comparativeSubtotal : null;
+    // ── Auto-inject current-year P&L into equity ──
+    // Until someone runs a period close (transferring P&L account balances
+    // into 3130 "Current Year Profit / Loss"), the equity section only shows
+    // share capital + retained earnings + reserves — missing the current
+    // year's activity entirely. Compute the running YTD net profit/loss from
+    // the revenue/expense accounts and add it as a synthetic line so the
+    // balance sheet balances without manual intervention.
+    const currentYearProfit = await this.computeYtdProfit(businessId, asOfDate);
+    const currentYearProfitComparative = comparativeDate
+      ? await this.computeYtdProfit(businessId, comparativeDate)
+      : null;
 
-    // Equity accounts (share_capital, retained_earnings, reserves) do not
-    // include current-year P&L until closed to retained earnings via
-    // account 3130 ("Current Year Profit / Loss"). If the business hasn't
-    // run a period-close routine, netAssets and totalEquity will diverge
-    // by exactly the current year's unclosed net profit. This is surfaced
-    // via isBalanced rather than silently reconciled, since forcing them
-    // to match would hide a real bookkeeping gap the user should know about.
+    if (Math.abs(currentYearProfit) > TOLERANCE) {
+      equity.lines.push({
+        code: '3130',
+        name: 'Current Year Profit / Loss (auto)',
+        amount: currentYearProfit,
+        comparativeAmount: currentYearProfitComparative,
+      });
+      equity.subtotal += currentYearProfit;
+      if (equity.comparativeSubtotal !== null && currentYearProfitComparative !== null) {
+        equity.comparativeSubtotal += currentYearProfitComparative;
+      }
+    }
+
+    const totalEquity = equity.subtotal;
+    const comparativeTotalEquity = comparativeBalances
+      ? (equity.comparativeSubtotal ?? 0)
+      : null;
+
+    // While the synthetic current-year P&L line injected above closes the
+    // gap between netAssets and totalEquity for most cases, a residual
+    // difference can still occur if opening balances on revenue/expense
+    // accounts exist (e.g. data migration artefacts). Flag it so the user
+    // can investigate rather than silently absorbing it.
     const isBalanced = Math.abs(netAssets - totalEquity) < TOLERANCE;
 
     return {
@@ -383,6 +451,8 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       totalEquity,
       comparativeTotalEquity,
       isBalanced,
+      currentYearProfit,
+      currentYearProfitComparative,
     };
   }
 
@@ -991,9 +1061,11 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const totalOpeningEquity = shareCapital.openingBalance + retainedEarnings.openingBalance + reserves.openingBalance;
     const totalClosingEquity = shareCapital.closingBalance + retainedEarnings.closingBalance + reserves.closingBalance;
 
+    // totalEquity now includes the auto-injected YTD P&L (currentYearProfit).
+    // totalClosingEquity already adds pl.netProfit to retainedEarnings, so
+    // when the period == YTD (the common case) both figures should match.
     const sofpAtPeriodEnd = await this.getSOFP(businessId, periodEnd);
-    const reconciles = Math.abs(totalClosingEquity - sofpAtPeriodEnd.totalEquity - pl.netProfit) < TOLERANCE
-      || Math.abs(totalClosingEquity - sofpAtPeriodEnd.totalEquity) < TOLERANCE;
+    const reconciles = Math.abs(totalClosingEquity - sofpAtPeriodEnd.totalEquity) < TOLERANCE;
 
     return {
       periodStart, periodEnd,
