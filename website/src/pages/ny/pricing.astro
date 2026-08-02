@@ -1,0 +1,172 @@
+---
+// Pricing (/en/pricing/) — real plan data from src/data/pricing.ts.
+// Billing toggle (monthly/annual) is a tiny vanilla script — no framework.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import PricingCard from '../../components/PricingCard.astro';
+import FaqItem from '../../components/FaqItem.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { t, dict } from '../../i18n';
+import { PLANS } from '../../data/pricing';
+
+const locale = 'ny' as const;
+const d = dict(locale).pricing;
+
+const comparison: { feature: string; tiers: (string | boolean)[] }[] = [
+  { feature: 'Monthly price (MWK)', tiers: ['Free', 'MK 100,000', 'MK 200,000', 'MK 500,000'] },
+  { feature: 'Transactions / month', tiers: ['50', '500', '2,000', 'Unlimited'] },
+  { feature: 'Income & expense tracking', tiers: [true, true, true, true] },
+  { feature: 'Basic dashboard & reports', tiers: [true, true, true, true] },
+  { feature: 'Bank reconciliation', tiers: [false, true, true, true] },
+  { feature: 'Full accounting & organisation', tiers: [false, true, true, true] },
+  { feature: 'AI Insights & forecasting', tiers: [false, false, true, true] },
+  { feature: 'Public API & webhooks', tiers: [false, false, true, true] },
+  { feature: 'Custom onboarding & support', tiers: [false, false, false, true] },
+];
+
+const faqs = [
+  { q: 'How do I pay?', a: 'Payments run through PayChangu in MWK — mobile money and card, monthly or annually. Annual billing saves you 20–25%.' },
+  { q: 'Can I change plans?', a: 'Yes. Upgrade or downgrade anytime from Settings; you are billed pro-rata.' },
+  { q: 'What counts as a transaction?', a: 'A transaction is a recorded income, expense, journal, invoice or payroll entry. Reports and exports are unlimited on every plan.' },
+  { q: 'Is there a contract?', a: 'No. Free, Growth and Pro are month-to-month. Enterprise is billed per agreement with onboarding included.' },
+];
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="pricing"
+  title={t(locale, 'pageTitles.pricing')}
+  description="Ledgr pricing in MWK: Free, Growth (MK 100,000/mo), Pro (MK 200,000/mo) and Enterprise. Pay monthly or annually via PayChangu."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">Pricing</p>
+      <h1 class="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        Fair prices, in Kwacha
+      </h1>
+      <p class="mt-4 max-w-2xl text-lg text-brand-100">
+        Start free. Upgrade when you grow. Pay with PayChangu — mobile money or
+        card — and save 20–25% with annual billing.
+      </p>
+    </div>
+  </section>
+
+  <!-- Billing toggle + plan cards -->
+  <section data-pricing-grid class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+    <div class="flex justify-center">
+      <div role="group" aria-label="Billing period" class="inline-flex items-center gap-1 rounded-full border border-navy-200 bg-card-bg p-1 shadow-soft">
+        <button type="button" data-billing-btn="monthly" aria-pressed="true" class="rounded-full px-5 py-2 text-sm font-semibold text-white bg-brand-600 transition-colors">
+          {d.monthly}
+        </button>
+        <button type="button" data-billing-btn="annual" aria-pressed="false" class="rounded-full px-5 py-2 text-sm font-semibold text-navy-600 transition-colors">
+          {d.annual}
+          <span class="ml-1.5 rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700">
+            {d.save.replace('{pct}', '20')}
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {PLANS.map((p) => <PricingCard plan={p} locale={locale} />)}
+    </div>
+    <p class="mt-6 text-center text-sm text-navy-600">
+      Need more? <a href="mailto:hello@ledgr.com" class="font-semibold text-brand-600 hover:text-brand-700">Talk to us about Enterprise</a>.
+    </p>
+  </section>
+
+  <!-- Comparison table -->
+  <section class="bg-white">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+      <SectionHeading eyebrow="Compare plans" title="What you get on each plan" />
+      <div class="mt-10 overflow-x-auto rounded-2xl border border-navy-200 shadow-soft">
+        <table class="w-full min-w-[640px] border-collapse bg-card-bg text-sm">
+          <thead>
+            <tr class="border-b border-navy-200 bg-brand-50/50 text-left">
+              <th scope="col" class="px-4 py-3 font-semibold text-navy-900">Feature</th>
+              {['Free', 'Growth', 'Pro', 'Enterprise'].map((n) => (
+                <th scope="col" class="px-4 py-3 text-center font-semibold text-navy-900">
+                  {n}{n === 'Pro' ? ' ⭐' : ''}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {
+              comparison.map((row) => (
+                <tr class="border-b border-navy-200 last:border-0">
+                  <th scope="row" class="px-4 py-3 font-medium text-navy-900">{row.feature}</th>
+                  {
+                    row.tiers.map((cell) => (
+                      <td class="px-4 py-3 text-center text-navy-600">
+                        {cell === true
+                          ? <span class="text-brand-600" aria-label="Included">✓</span>
+                          : cell === false
+                            ? <span class="text-navy-200" aria-label="Not included">—</span>
+                            : cell}
+                      </td>
+                    ))
+                  }
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
+    <SectionHeading eyebrow="Pricing FAQ" title="Billing questions" />
+    <div class="mt-10 space-y-3">
+      {faqs.map((f) => <FaqItem question={f.q} answer={f.a} />)}
+    </div>
+  </section>
+
+  <CtaBanner locale={locale} />
+</SiteLayout>
+
+<script>
+  // Zero-dependency billing toggle. Swaps plan-card prices between the
+  // monthly and annual figures (both are rendered in data attributes),
+  // shows/hides the annual-savings note, and remembers the choice.
+  const grid = document.querySelector<HTMLElement>('[data-pricing-grid]');
+  if (grid) {
+    const buttons = Array.from(grid.querySelectorAll<HTMLButtonElement>('[data-billing-btn]'));
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>('[data-plan-card]'));
+
+    const apply = (mode: 'monthly' | 'annual') => {
+      buttons.forEach((btn) => {
+        const active = btn.dataset.billingBtn === mode;
+        btn.setAttribute('aria-pressed', String(active));
+        btn.className = active
+          ? 'rounded-full px-5 py-2 text-sm font-semibold text-white bg-brand-600 transition-colors'
+          : 'rounded-full px-5 py-2 text-sm font-semibold text-navy-600 transition-colors';
+      });
+      cards.forEach((card) => {
+        const price = card.querySelector('[data-price]');
+        const note = card.querySelector<HTMLElement>('[data-annual-note]');
+        if (price && card.dataset[mode]) price.textContent = card.dataset[mode]!;
+        if (note) note.hidden = mode !== 'annual';
+      });
+    };
+
+    buttons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.billingBtn === 'annual' ? 'annual' : 'monthly';
+        apply(mode);
+        try {
+          localStorage.setItem('ledgr-billing', mode);
+        } catch { /* private mode etc. */ }
+      });
+    });
+
+    // Restore the visitor's last choice (defaults to monthly).
+    let initial: 'monthly' | 'annual' = 'monthly';
+    try {
+      if (localStorage.getItem('ledgr-billing') === 'annual') initial = 'annual';
+    } catch { /* ignore */ }
+    apply(initial);
+  }
+</script>

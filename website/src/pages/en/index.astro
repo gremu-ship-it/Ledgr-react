@@ -1,0 +1,329 @@
+---
+// Home (/en/) — the anchor landing page.
+// Section order follows STRUCTURE.md §4. Copy is v1 draft — TODO polish.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import FeatureCard from '../../components/FeatureCard.astro';
+import PricingCard from '../../components/PricingCard.astro';
+import TestimonialCard from '../../components/TestimonialCard.astro';
+import FaqItem from '../../components/FaqItem.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { SITE } from '../../data/site';
+import { t } from '../../i18n';
+import { PLANS } from '../../data/pricing';
+
+const locale = 'en' as const;
+const url = (p: string) => getRelativeLocaleUrl(locale, p);
+
+const modules = [
+  {
+    title: 'Accounting',
+    body: 'Chart of accounts, double-entry journals, period management, capital, transfers and bank reconciliation — organised the way an accountant expects.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  },
+  {
+    title: 'Invoicing',
+    body: 'MWK invoices with open-tracking, email delivery and payment-status handling — know when a client has seen and paid your invoice.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h8M8 17h5"/></svg>',
+  },
+  {
+    title: 'Payroll & tax',
+    body: 'PAYE bands, pension contributions, VAT, withholding tax and MRA filings — compute deductions correctly, every month, in MWK.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v-9"/><path d="M18.4 17.4a9 9 0 1 0-12.8 0"/><path d="M12 7a3 3 0 1 1 3-3"/></svg>',
+  },
+  {
+    title: 'Inventory',
+    body: 'Products, warehouses, branches, departments and fixed assets with depreciation — know what you have, where it is and what it is worth.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  },
+  {
+    title: 'Reporting',
+    body: 'Profit & loss, balance sheet, revenue breakdown and integrity-checked statements — exportable for your accountant or a loan application.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 13v4M11 9v8M15 5v12M19 11v6"/></svg>',
+  },
+  {
+    title: 'Works offline',
+    body: 'Ledgr is a PWA: it keeps working on flaky connections and syncs when you are back online. No other accounting package for Malawi does this.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 12 10 5 10-5"/><path d="m2 17 10 5 10-5"/></svg>',
+  },
+  {
+    title: 'Team & roles',
+    body: 'Multi-user with roles and permissions, business branches, invitation flow, audit log, MFA and inactivity timeout — safe for growing teams.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  },
+  {
+    title: 'AI Insights',
+    body: 'Get plain-language answers about your numbers, plus an in-app AI support agent — with human escalation when you need it.',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg>',
+  },
+];
+
+const steps = [
+  { n: '1', title: 'Create your business', body: 'Sign up free, set up your business profile and chart of accounts in minutes.' },
+  { n: '2', title: 'Record what you do', body: 'Invoices, income, expenses, payroll, stock — on your phone or laptop, online or offline.' },
+  { n: '3', title: 'Understand and file', body: 'Run reports, track what clients owe you, and be MRA-ready for every filing period.' },
+];
+
+const audiences = [
+  { title: 'Shops & retail', body: 'Sales, stock and suppliers in one place — no more guessing your monthly profit.' },
+  { title: 'Agribusiness', body: 'Track inputs, harvests and sales cycles with reports your funder will understand.' },
+  { title: 'Transport & logistics', body: 'Fuel, maintenance and trip income — know which routes actually pay.' },
+  { title: 'Professional services', body: 'Clinics, law firms, consultants: time billed, expenses tracked, tax ready.' },
+  { title: 'Churches & NGOs', body: 'Transparent accounts for members and donors, with clear reporting.' },
+  { title: 'Exporters & importers', body: 'Multi-warehouse stock and MWK reporting that reconciles to the dollar.' },
+];
+
+const testimonials = [
+  { quote: 'TODO — real customer quote. Ask happy users for permission.', name: 'Your name here', business: 'Business, City' },
+  { quote: 'TODO — real customer quote. Ask happy users for permission.', name: 'Your name here', business: 'Business, City' },
+  { quote: 'TODO — real customer quote. Ask happy users for permission.', name: 'Your name here', business: 'Business, City' },
+];
+
+const faqs = [
+  { q: 'Is Ledgr really free to start?', a: 'Yes — the Free plan has no card and no time limit. It covers income, expenses and basic reports up to 50 transactions a month.' },
+  { q: 'What happens when I am offline?', a: 'Ledgr keeps working. Transactions queue on your device and sync automatically when you reconnect.' },
+  { q: 'Can I switch to annual billing later?', a: 'Yes. Annual billing gives you 20–25% off, and you can change billing period from Settings.' },
+  { q: 'Is my data safe?', a: 'Your data lives in a managed Postgres database with row-level security, audit logs, MFA and encrypted backups.' },
+];
+
+const sidebarItems = ['Dashboard', 'Invoices', 'Income', 'Expenses', 'Reports'];
+const kpis = [
+  { label: 'Income', value: 'MK 2.4M', up: '+18%' },
+  { label: 'Expenses', value: 'MK 1.1M', up: '+6%' },
+  { label: 'Net profit', value: 'MK 1.3M', up: '+24%' },
+];
+const invoiceRows = [
+  { client: 'Bvumbwe Traders', amount: 'MK 486,000', status: 'Paid' },
+  { client: 'Mzuzu Agro Ltd', amount: 'MK 312,500', status: 'Open' },
+  { client: 'Lilongwe Bookshop', amount: 'MK 158,000', status: 'Open' },
+];
+---
+
+<SiteLayout
+  locale={locale}
+  path=""
+  title={t(locale, 'pageTitles.home')}
+  description="MWK-first accounting, invoicing, payroll and inventory for Malawian SMEs. Works online and offline. Free to start."
+>
+  <!-- ═══ 1. Hero ═══ -->
+  <section class="relative overflow-hidden bg-brand-950">
+    <div class="mx-auto grid w-full max-w-6xl gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:items-center lg:py-28">
+      <div>
+        <p class="inline-flex items-center gap-2 rounded-full border border-brand-400/40 bg-brand-900/60 px-3 py-1 text-xs font-semibold text-brand-100">
+          <span class="h-1.5 w-1.5 rounded-full bg-brand-400" aria-hidden="true"></span>
+          Built for Malawian SMEs — MWK first
+        </p>
+        <h1 class="mt-5 text-4xl font-bold leading-tight tracking-tight text-white sm:text-5xl">
+          Accounting that speaks <span class="text-brand-400">Kwacha</span>
+        </h1>
+        <p class="mt-5 max-w-xl text-lg leading-relaxed text-brand-100">
+          Ledgr is the accounting, invoicing, payroll and inventory toolkit for
+          Malawian businesses — it works on flaky connections, files the MRA way,
+          and costs a fraction of imported software.
+        </p>
+        <div class="mt-8 flex flex-wrap items-center gap-3">
+          <a href={`${SITE.appUrl}/register`} class="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-400">
+            {t(locale, 'nav.getStarted')} →
+          </a>
+          <a href={url('pricing')} class="rounded-lg border border-brand-400/50 px-6 py-3 text-sm font-semibold text-brand-100 transition-colors hover:bg-brand-900">
+            See pricing
+          </a>
+        </div>
+        <ul class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-brand-200">
+          <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> Works offline</li>
+          <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> PAYE, VAT &amp; MRA-ready</li>
+          <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> Free to start</li>
+        </ul>
+      </div>
+
+      <!-- Product mockup (TODO: replace with a real screenshot) -->
+      <div class="relative" aria-hidden="true">
+        <div class="rounded-2xl border border-brand-700 bg-brand-900/70 p-4 shadow-card-hover">
+          <div class="flex items-center justify-between border-b border-brand-800 pb-3">
+            <div class="flex items-center gap-1.5">
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-300/50"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-300/50"></span>
+              <span class="h-2.5 w-2.5 rounded-full bg-brand-300/50"></span>
+            </div>
+            <span class="rounded-full bg-brand-800/80 px-2.5 py-0.5 text-[10px] font-medium text-brand-300">ledgr.app</span>
+          </div>
+
+          <div class="mt-4 flex gap-4">
+            <!-- Sidebar -->
+            <div class="hidden w-28 shrink-0 space-y-1.5 sm:block">
+              {sidebarItems.map((item, i) => (
+                <div
+                  class:list={[
+                    'rounded-lg px-2.5 py-1.5 text-[11px] font-medium',
+                    i === 0 ? 'bg-brand-600/80 text-white' : 'bg-brand-800/40 text-brand-300',
+                  ]}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            <!-- Main panel -->
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center justify-between">
+                <p class="text-xs font-semibold text-white">Dashboard</p>
+                <span class="rounded-full bg-brand-800/60 px-2 py-0.5 text-[10px] text-brand-300">This month</span>
+              </div>
+              <div class="mt-3 grid grid-cols-3 gap-2">
+                {kpis.map((k) => (
+                  <div class="rounded-xl bg-brand-800/60 p-3">
+                    <p class="text-[10px] text-brand-200">{k.label}</p>
+                    <p class="mt-0.5 text-sm font-bold text-white">{k.value}</p>
+                    <p class="text-[10px] text-brand-400">{k.up}</p>
+                  </div>
+                ))}
+              </div>
+              <div class="mt-2 h-28 rounded-xl bg-brand-800/40 p-3">
+                <div class="flex h-full items-end gap-1.5">
+                  {[40, 65, 50, 80, 60, 95, 75, 55, 88].map((h) => (
+                    <div class="flex-1 rounded-t bg-brand-500/70" style={`height:${h}%`}></div>
+                  ))}
+                </div>
+              </div>
+              <div class="mt-2 space-y-1.5">
+                {invoiceRows.map((r) => (
+                  <div class="flex items-center justify-between rounded-lg bg-brand-800/40 px-3 py-1.5">
+                    <div class="flex items-center gap-2">
+                      <span class:list={['h-1.5 w-1.5 rounded-full', r.status === 'Paid' ? 'bg-brand-400' : 'bg-amber-400']}></span>
+                      <span class="text-[10px] text-brand-200">{r.client}</span>
+                    </div>
+                    <span class="text-[10px] font-semibold text-white">{r.amount}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="mt-3 text-center text-xs text-brand-400">TODO: real product screenshot — Dashboard</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 2. Trust bar ═══ -->
+  <section class="border-b border-navy-200 bg-white">
+    <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 px-4 py-6 text-sm font-medium text-navy-600 sm:px-6">
+      <span class="text-navy-900">Trusted by Malawian businesses:</span>
+      <span>TODO: customer logo</span>
+      <span>TODO: customer logo</span>
+      <span>TODO: customer logo</span>
+    </div>
+  </section>
+
+  <!-- ═══ 3. Feature grid ═══ -->
+  <section class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6" id="features">
+    <SectionHeading
+      eyebrow="Everything in one place"
+      title="Your whole business, in Kwacha"
+      subtitle="Eight modules that talk to each other, so you never re-key a number twice."
+    />
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {modules.map((m) => <FeatureCard title={m.title} body={m.body} icon={m.icon} />)}
+    </div>
+    <p class="mt-10 text-center">
+      <a href={url('features')} class="font-semibold text-brand-600 hover:text-brand-700">
+        {t(locale, 'common.learnMore')} →
+      </a>
+    </p>
+  </section>
+
+  <!-- ═══ 4. How it works ═══ -->
+  <section class="bg-white">
+    <div class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="How it works" title="Up and running this afternoon" />
+      <div class="mt-12 grid gap-8 md:grid-cols-3">
+        {steps.map((s) => (
+          <div class="rounded-2xl border border-navy-200 bg-app-bg p-6">
+            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-base font-bold text-white">{s.n}</span>
+            <h3 class="mt-4 text-lg font-semibold text-navy-900">{s.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-navy-600">{s.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 4.5 Who it's for ═══ -->
+  <section class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+    <SectionHeading
+      eyebrow="Who it’s for"
+      title="From the street-side shop to the exporter"
+      subtitle="If your business trades in Kwacha, Ledgr was built for you."
+    />
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {audiences.map((a) => (
+        <div class="rounded-2xl border border-navy-200 bg-card-bg p-6 shadow-soft transition-shadow hover:shadow-card-hover">
+          <h3 class="text-base font-semibold text-navy-900">{a.title}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-navy-600">{a.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ═══ 5. Offline highlight ═══ -->
+  <section class="bg-brand-700">
+    <div class="mx-auto grid w-full max-w-6xl gap-8 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:items-center">
+      <div>
+        <h2 class="text-3xl font-bold tracking-tight text-white">Works when the network doesn’t</h2>
+        <p class="mt-4 leading-relaxed text-brand-100">
+          Power cuts, load-shedding, patchy 3G — Ledgr is built for the reality of
+          Malawian connectivity. Install it on your phone, keep recording, and
+          everything syncs the moment you’re back online.
+        </p>
+      </div>
+      <ul class="space-y-3 text-brand-100">
+        <li class="flex items-start gap-3"><span class="text-brand-300" aria-hidden="true">✓</span> Offline queue with automatic sync</li>
+        <li class="flex items-start gap-3"><span class="text-brand-300" aria-hidden="true">✓</span> Installable as a phone app (PWA)</li>
+        <li class="flex items-start gap-3"><span class="text-brand-300" aria-hidden="true">✓</span> Tiny data usage — built for low bandwidth</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ═══ 6. Pricing teaser ═══ -->
+  <section class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6" id="pricing">
+    <SectionHeading
+      eyebrow="Pricing in MWK"
+      title="Simple plans, honest prices"
+      subtitle="Pay monthly or yearly with PayChangu. Every plan starts free."
+    />
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      {PLANS.map((p) => <PricingCard plan={p} locale={locale} />)}
+    </div>
+    <p class="mt-10 text-center">
+      <a href={url('pricing')} class="font-semibold text-brand-600 hover:text-brand-700">
+        Compare all plans →
+      </a>
+    </p>
+  </section>
+
+  <!-- ═══ 7. Testimonials ═══ -->
+  <section class="bg-white">
+    <div class="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Customer stories" title="Loved by business owners" subtitle="TODO: replace placeholders with real quotes." />
+      <div class="mt-12 grid gap-6 md:grid-cols-3">
+        {testimonials.map((tm) => <TestimonialCard quote={tm.quote} name={tm.name} business={tm.business} />)}
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 8. FAQ teaser ═══ -->
+  <section class="mx-auto w-full max-w-3xl px-4 py-20 sm:px-6">
+    <SectionHeading eyebrow="FAQ" title="Questions, answered" />
+    <div class="mt-10 space-y-3">
+      {faqs.map((f) => <FaqItem question={f.q} answer={f.a} />)}
+    </div>
+    <p class="mt-8 text-center">
+      <a href={url('faq')} class="font-semibold text-brand-600 hover:text-brand-700">
+        {t(locale, 'common.viewAll')} →
+      </a>
+    </p>
+  </section>
+
+  <!-- ═══ 9. CTA ═══ -->
+  <CtaBanner locale={locale} />
+</SiteLayout>

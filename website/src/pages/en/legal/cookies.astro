@@ -1,0 +1,12 @@
+---
+// Cookie Policy (/en/legal/cookies/)
+import _LegalPage from './_LegalPage.astro';
+import { t } from '../../../i18n';
+const locale = 'en' as const;
+---
+<_LegalPage
+  title="Cookie Policy"
+  description={t(locale, 'pageTitles.cookies')}
+  updated="TODO — date of review"
+  path="legal/cookies"
+/>

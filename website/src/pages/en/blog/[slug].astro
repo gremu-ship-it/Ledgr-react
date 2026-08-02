@@ -1,0 +1,50 @@
+---
+// Blog post (/en/blog/[slug]/) — renders a single post from the collection.
+import { getCollection, render } from 'astro:content';
+import ArticleLayout from '../../../layouts/ArticleLayout.astro';
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { t } from '../../../i18n';
+
+export async function getStaticPaths() {
+  // NOTE: module-scope consts are not visible inside getStaticPaths (Astro
+  // hoists it), so the locale is declared here.
+  const locale = 'en' as const;
+  const posts = await getCollection('blog');
+  return posts
+    .filter((p) => p.data.locale === locale && !p.data.draft)
+    .map((post) => ({
+      // Collection ids include the locale folder (e.g. 'en/my-post') —
+      // use the filename as the URL slug.
+      params: { slug: post.id.split('/').pop()! },
+      props: { post },
+    }));
+}
+
+const { post } = Astro.props;
+const locale = 'en' as const;
+const slug = post.id.split('/').pop()!;
+const { Content } = await render(post);
+const fmt = new Intl.DateTimeFormat('en-MW', { year: 'numeric', month: 'long', day: 'numeric' });
+---
+
+<ArticleLayout
+  locale={locale}
+  path={`blog/${slug}`}
+  title={`${post.data.title} — Ledgr Blog`}
+  description={post.data.description}
+  backHref={getRelativeLocaleUrl(locale, 'blog')}
+  backLabel={t(locale, 'common.backToBlog')}
+>
+  <header>
+    <p class="text-sm font-medium text-navy-600">{fmt.format(post.data.pubDate)}</p>
+    <h1 class="mt-2 text-3xl font-bold tracking-tight text-navy-900 sm:text-4xl">{post.data.title}</h1>
+    <div class="mt-3 flex flex-wrap gap-1.5">
+      {post.data.tags.map((tag) => (
+        <span class="rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">{tag}</span>
+      ))}
+    </div>
+  </header>
+  <div class="prose mt-8 max-w-none prose-headings:mt-8 prose-headings:font-semibold prose-headings:text-navy-900 prose-p:leading-relaxed prose-p:text-navy-600 prose-a:text-brand-600 prose-ul:list-disc prose-li:text-navy-600">
+    <Content />
+  </div>
+</ArticleLayout>

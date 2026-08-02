@@ -1,0 +1,71 @@
+{
+  "nav": {
+    "features": "Zinthu",
+    "pricing": "Mitengo",
+    "partners": "Mabanki ndi mabungwe",
+    "developers": "Opanga mapulogalamu",
+    "help": "Thandizo",
+    "blog": "Nkhani",
+    "signIn": "Lowani",
+    "getStarted": "Yambani kwaulere"
+  },
+  "footer": {
+    "product": "Katundu",
+    "company": "Kampani",
+    "legal": "Zamalamulo",
+    "contact": "Kulankhulana",
+    "about": "Za ife",
+    "faq": "Mafunso",
+    "compare": "Kuyerekeza",
+    "terms": "Malamulo ndi zofunikira",
+    "privacy": "Ndondomeko yachinsinsi",
+    "cookies": "Ndondomeko ya ma cookie",
+    "tagline": "Kauntibuku, ma invoice, malipiro ndi katundu mu MWK kwa mabizinesi ang'onoang'ono aku Malawi. Zimagwira ntchito pa intaneti komanso popanda.",
+    "rights": "Ufulu wonse ndi wotetezedwa.",
+    "pwaNote": "Ikani Ledgr ngati pulogalamu pa foni yanu — imagwira ntchito popanda intaneti."
+  },
+  "cta": {
+    "title": "Yambani kauntibuku molondola",
+    "subtitle": "Kuyamba ndi kwaulere. Palibe khadi lofunikira. Mitengo ya MWK, malipiro a PayChangu.",
+    "button": "Yambani kwaulere",
+    "secondary": "Tilankhuleni"
+  },
+  "common": {
+    "readMore": "Werengani zambiri",
+    "learnMore": "Dziwani zambiri",
+    "viewAll": "Onani zonse",
+    "backToBlog": "Bwererani ku nkhani",
+    "backToHelp": "Bwererani ku thandizo",
+    "backHome": "Bwererani kunyumba",
+    "notFoundTitle": "Tsamba silinapezeke",
+    "notFoundBody": "Tsamba lomwe mukufuna silikukhalapo kapena latha kusinthidwa.",
+    "openMenu": "Tsegulani menyu",
+    "closeMenu": "Tsekani menyu",
+    "switchLanguage": "Sinthani chinenero",
+    "currentLanguage": "Chinenero chamakono"
+  },
+  "pricing": {
+    "monthly": "Pamwezi",
+    "annual": "Chaka chonse",
+    "save": "Pungani {pct}%",
+    "saveWithAnnual": "Pungani {pct}% ndi malipiro a chaka chonse",
+    "perMonth": "pamwezi",
+    "mostPopular": "Yotchuka kwambiri"
+  },
+  "pageTitles": {
+    "home": "Ledgr — Kauntibuku wa Bizinesi ku Malawi",
+    "features": "Zinthu — Ledgr",
+    "pricing": "Mitengo — Ledgr",
+    "partners": "Mabanki ndi mabungwe — Ledgr",
+    "developers": "Opanga mapulogalamu — Ledgr",
+    "help": "Thandizo — Ledgr",
+    "blog": "Nkhani — Ledgr",
+    "about": "Za ife — Ledgr",
+    "contact": "Kulankhulana — Ledgr",
+    "faq": "Mafunso — Ledgr",
+    "compare": "Kuyerekeza — Ledgr",
+    "terms": "Malamulo ndi zofunikira — Ledgr",
+    "privacy": "Ndondomeko yachinsinsi — Ledgr",
+    "cookies": "Ndondomeko ya ma cookie — Ledgr"
+  }
+}

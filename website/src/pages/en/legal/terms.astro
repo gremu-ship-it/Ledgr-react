@@ -1,0 +1,12 @@
+---
+// Terms & Conditions (/en/legal/terms/)
+import _LegalPage from './_LegalPage.astro';
+import { t } from '../../../i18n';
+const locale = 'en' as const;
+---
+<_LegalPage
+  title="Terms & Conditions"
+  description={t(locale, 'pageTitles.terms')}
+  updated="TODO — date of review"
+  path="legal/terms"
+/>

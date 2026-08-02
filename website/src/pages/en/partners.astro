@@ -1,0 +1,73 @@
+---
+// Partners (/en/partners/) — white-label program for banks & MFIs.
+// Source of truth: WHITE_LABEL_SETUP.md in the repo root.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { t } from '../../i18n';
+
+const locale = 'en' as const;
+
+const steps = [
+  { n: '1', title: 'We brand it for you', body: 'Your logo, your colours, your domain — Ledgr becomes your SME accounting product.' },
+  { n: '2', title: 'You choose the modules', body: 'Switch AI advisor, payroll, inventory, multi-currency and bank reconciliation on or off per your offer.' },
+  { n: '3', title: 'We bill you, not your clients', body: 'One partner invoice per period. Your clients get Ledgr; you get a managed, billable service.' },
+];
+
+const modules = ['AI advisor', 'Payroll', 'Inventory', 'Multi-currency', 'Bank reconciliation'];
+---
+
+<SiteLayout
+  locale={locale}
+  path="partners"
+  title={t(locale, 'pageTitles.partners')}
+  description="Offer Ledgr to your SME clients under your own brand — the white-label accounting, invoicing and payroll platform for Malawian banks and MFIs."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">For banks & MFIs</p>
+      <h1 class="mt-3 max-w-3xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        Offer your SME clients accounting — under your brand
+      </h1>
+      <p class="mt-4 max-w-2xl text-lg text-brand-100">
+        Ledgr’s white-label program lets banks and microfinance institutions give
+        clients a professional accounting, invoicing and payroll toolkit on your
+        own domain, with your own modules — while Ledgr handles the billing.
+      </p>
+      <div class="mt-8">
+        <a href="mailto:hello@ledgr.com" class="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-400">
+          Talk to the partnerships team →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+    <SectionHeading eyebrow="How it works" title="Three steps to launch" />
+    <div class="mt-12 grid gap-8 md:grid-cols-3">
+      {
+        steps.map((s) => (
+          <div class="rounded-2xl border border-navy-200 bg-card-bg p-6 shadow-soft">
+            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-base font-bold text-white">{s.n}</span>
+            <h3 class="mt-4 text-lg font-semibold text-navy-900">{s.title}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-navy-600">{s.body}</p>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="bg-white">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+      <SectionHeading eyebrow="Your offer, your rules" title="Modular by design" subtitle="Each module can be switched on or off per partner — a lite offer for depositors, a full package for business clients." />
+      <div class="mt-10 flex flex-wrap justify-center gap-3">
+        {modules.map((m) => (
+          <span class="rounded-full bg-brand-50 px-4 py-2 text-sm font-semibold text-brand-700">{m}</span>
+        ))}
+      </div>
+      <!-- TODO: add partner portal screenshots + client-limit / pricing details -->
+    </div>
+  </section>
+
+  <CtaBanner locale={locale} />
+</SiteLayout>

@@ -1,0 +1,14 @@
+---
+
+// Cookie Policy (/en/legal/cookies/)
+import _LegalPage from './_LegalPage.astro';
+import { t } from '../../../i18n';
+const locale = 'ny' as const;
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+<_LegalPage
+  title="Cookie Policy"
+  description={t(locale, 'pageTitles.cookies')}
+  updated="TODO — date of review"
+  path="legal/cookies"
+/>

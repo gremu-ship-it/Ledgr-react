@@ -1,0 +1,12 @@
+---
+// Privacy Policy (/en/legal/privacy/)
+import _LegalPage from './_LegalPage.astro';
+import { t } from '../../../i18n';
+const locale = 'en' as const;
+---
+<_LegalPage
+  title="Privacy Policy"
+  description={t(locale, 'pageTitles.privacy')}
+  updated="TODO — date of review"
+  path="legal/privacy"
+/>

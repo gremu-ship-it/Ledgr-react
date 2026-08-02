@@ -1,0 +1,54 @@
+---
+// Legal pages (/en/legal/{terms,privacy,cookies}).
+// These are structural placeholders — final copy must be reviewed before
+// launch. The app also has an in-product Terms page (/terms-and-conditions).
+import SiteLayout from '../../../layouts/SiteLayout.astro';
+import { t } from '../../../i18n';
+
+interface Props {
+  title: string;
+  description: string;
+  updated: string;
+  path: string;
+}
+
+const { title, description, updated, path } = Astro.props;
+const locale = 'en' as const;
+---
+
+<SiteLayout locale={locale} path={path} title={title} description={description}>
+  <article class="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
+    <p class="text-sm font-semibold uppercase tracking-wider text-brand-600">Legal</p>
+    <h1 class="mt-3 text-4xl font-bold tracking-tight text-navy-900">{title}</h1>
+    <p class="mt-2 text-sm text-navy-600">Last updated: {updated}</p>
+
+    <div class="mt-10 space-y-8 text-sm leading-relaxed text-navy-600">
+      <!-- TODO: replace each section with reviewed legal copy -->
+      <section>
+        <h2 class="text-lg font-semibold text-navy-900">1. Introduction</h2>
+        <p class="mt-2">
+          TODO — placeholder. This section will explain who operates Ledgr, the
+          service provided, and the agreement formed by using it.
+        </p>
+      </section>
+      <section>
+        <h2 class="text-lg font-semibold text-navy-900">2. Terms of use</h2>
+        <p class="mt-2">
+          TODO — placeholder. This section will cover acceptable use, accounts,
+          subscriptions and termination.
+        </p>
+      </section>
+      <section>
+        <h2 class="text-lg font-semibold text-navy-900">3. Data &amp; liability</h2>
+        <p class="mt-2">
+          TODO — placeholder. This section will cover data ownership, service
+          availability, warranties and limits of liability.
+        </p>
+      </section>
+      <p class="rounded-xl bg-brand-50 p-4 text-navy-900">
+        Contact: <span class="font-medium">support@ledgr.com</span> — TODO:
+        confirm the correct legal contact.
+      </p>
+    </div>
+  </article>
+</SiteLayout>

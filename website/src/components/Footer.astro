@@ -1,0 +1,100 @@
+---
+// Footer — product/company/legal/contact columns, all links locale-aware.
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { SITE, type Locale } from '../data/site';
+import { t, dict } from '../i18n';
+import LanguageSwitcher from './LanguageSwitcher.astro';
+
+interface Props {
+  locale?: Locale;
+}
+
+const locale: Locale = Astro.props.locale ?? ((Astro.currentLocale as Locale) ?? 'en');
+const d = dict(locale).footer;
+const url = (path: string) => getRelativeLocaleUrl(locale, path);
+
+const columns = [
+  {
+    heading: d.product,
+    links: [
+      { href: url('features'), label: t(locale, 'nav.features') },
+      { href: url('pricing'), label: t(locale, 'nav.pricing') },
+      { href: url('developers'), label: t(locale, 'nav.developers') },
+      { href: url('partners'), label: t(locale, 'nav.partners') },
+      { href: url('compare'), label: d.compare },
+    ],
+  },
+  {
+    heading: d.company,
+    links: [
+      { href: url('about'), label: d.about },
+      { href: url('contact'), label: d.contact },
+      { href: url('blog'), label: t(locale, 'nav.blog') },
+      { href: url('help'), label: t(locale, 'nav.help') },
+      { href: url('faq'), label: d.faq },
+    ],
+  },
+  {
+    heading: d.legal,
+    links: [
+      { href: url('legal/terms'), label: d.terms },
+      { href: url('legal/privacy'), label: d.privacy },
+      { href: url('legal/cookies'), label: d.cookies },
+    ],
+  },
+];
+---
+
+<footer class="border-t border-navy-200 bg-white">
+  <div class="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+    <div class="grid gap-10 md:grid-cols-5">
+      <div class="md:col-span-2">
+        <a href={url('')} class="flex items-center gap-2.5" aria-label={SITE.name}>
+          <img src="/favicon.svg" alt="" width="28" height="28" class="h-7 w-7 rounded-lg" />
+          <span class="text-lg font-bold tracking-tight text-navy-900">Ledgr<span class="text-brand-600">.</span></span>
+        </a>
+        <p class="mt-4 max-w-xs text-sm leading-relaxed text-navy-600">{d.tagline}</p>
+        <p class="mt-3 text-sm font-medium text-brand-700">{d.pwaNote}</p>
+        <div class="mt-4">
+          <LanguageSwitcher locale={locale} />
+        </div>
+      </div>
+
+      {
+        columns.map((col) => (
+          <nav aria-label={col.heading}>
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-navy-900">{col.heading}</h2>
+            <ul class="mt-4 space-y-2.5">
+              {
+                col.links.map((l) => (
+                  <li>
+                    <a href={l.href} class="text-sm text-navy-600 transition-colors hover:text-brand-700">
+                      {l.label}
+                    </a>
+                  </li>
+                ))
+              }
+            </ul>
+          </nav>
+        ))
+      }
+
+      <nav aria-label={d.contact}>
+        <h2 class="text-sm font-semibold uppercase tracking-wider text-navy-900">{d.contact}</h2>
+        <ul class="mt-4 space-y-2.5 text-sm text-navy-600">
+          <li>
+            <a href={`mailto:${SITE.supportEmail}`} class="transition-colors hover:text-brand-700">{SITE.supportEmail}</a>
+          </li>
+          <li>
+            <a href={`mailto:${SITE.salesEmail}`} class="transition-colors hover:text-brand-700">{SITE.salesEmail}</a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <div class="mt-10 flex flex-col items-start justify-between gap-2 border-t border-navy-200 pt-6 text-sm text-navy-600 sm:flex-row sm:items-center">
+      <p>© {new Date().getFullYear()} {SITE.name}. {d.rights}</p>
+      <p class="text-xs text-navy-600/80">{SITE.tagline}</p>
+    </div>
+  </div>
+</footer>

@@ -1,0 +1,76 @@
+---
+
+// FAQ (/en/faq/) — top questions; kept in sync with pricing/home teasers.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import FaqItem from '../../components/FaqItem.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { t } from '../../i18n';
+
+const locale = 'ny' as const;
+
+const groups = [
+  {
+    title: 'Getting started',
+    items: [
+      { q: 'How do I sign up?', a: 'Create a free account, set up your business profile, and you are ready to record your first income or expense — no card needed.' },
+      { q: 'Do I need an accountant to use Ledgr?', a: 'No. Ledgr is designed for owners and bookkeepers, with double-entry kept under the hood. Reports can be exported for your accountant anytime.' },
+      { q: 'Can I import my existing records?', a: 'Yes — CSV import is planned for spreadsheets and bank statements. (TODO: confirm current import scope in the app.)' },
+    ],
+  },
+  {
+    title: 'Offline & devices',
+    items: [
+      { q: 'Does Ledgr really work offline?', a: 'Yes. Install it as an app, keep recording without a connection, and everything syncs automatically when you are back online.' },
+      { q: 'Which devices are supported?', a: 'Any modern browser — phone, tablet or laptop. It installs as a PWA on Android and iOS.' },
+      { q: 'How much data does it use?', a: 'Very little. Ledgr is designed for low-bandwidth connections and syncs only what changed.' },
+    ],
+  },
+  {
+    title: 'Payments & plans',
+    items: [
+      { q: 'What payment methods do you accept?', a: 'PayChangu — mobile money and card, in MWK. Annual billing saves 20–25%.' },
+      { q: 'What happens if I hit my transaction limit?', a: 'You can keep using Ledgr, but new transactions pause until you upgrade or the month resets. (TODO: verify exact enforcement in the app.)' },
+      { q: 'Can I cancel anytime?', a: 'Yes — no contracts on Free, Growth and Pro plans.' },
+    ],
+  },
+  {
+    title: 'Data & security',
+    items: [
+      { q: 'Where is my data stored?', a: 'In a managed cloud database with row-level security, encrypted connections and daily backups.' },
+      { q: 'Who can see my books?', a: 'Only the people you invite. Roles, an audit log, MFA and automatic timeout keep access controlled.' },
+      { q: 'Can I export everything if I leave?', a: 'Yes — your data is yours. Reports and exports are available on every plan.' },
+    ],
+  },
+];
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="faq"
+  title={t(locale, 'pageTitles.faq')}
+  description="Frequently asked questions about Ledgr — getting started, offline use, payments, plans and data security."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">FAQ</p>
+      <h1 class="mt-3 text-4xl font-bold tracking-tight text-white sm:text-5xl">Questions, answered</h1>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-3xl px-4 py-16 sm:px-6">
+    {
+      groups.map((g) => (
+        <div class="mb-12">
+          <h2 class="text-xl font-semibold text-navy-900">{g.title}</h2>
+          <div class="mt-5 space-y-3">
+            {g.items.map((f) => <FaqItem question={f.q} answer={f.a} />)}
+          </div>
+        </div>
+      ))
+    }
+  </section>
+
+  <CtaBanner locale={locale} />
+</SiteLayout>

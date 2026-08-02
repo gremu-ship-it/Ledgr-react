@@ -1,0 +1,32 @@
+---
+// LanguageSwitcher — toggles between /en/… and /ny/… keeping the same path.
+import { getRelativeLocaleUrl } from 'astro:i18n';
+import { SITE, type Locale } from '../data/site';
+import { t } from '../i18n';
+
+interface Props {
+  locale?: Locale;
+  /** Compact = icon + code only (header); full = labeled (footer). */
+  variant?: 'compact' | 'full';
+}
+
+const locale: Locale = Astro.props.locale ?? ((Astro.currentLocale as Locale) ?? 'en');
+const variant = Astro.props.variant ?? 'compact';
+const other: Locale = locale === 'en' ? 'ny' : 'en';
+
+// Strip the locale prefix from the current path, then rebuild it in the
+// other locale.
+const pathWithoutLocale = Astro.url.pathname.replace(/^\/(en|ny)(\/|$)/, '/');
+const otherUrl = getRelativeLocaleUrl(other, pathWithoutLocale);
+const otherMeta = SITE.locales.find((l) => l.code === other)!;
+---
+
+<a
+  href={otherUrl}
+  hreflang={other}
+  class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-navy-600 transition-colors hover:bg-brand-50 hover:text-brand-700"
+  title={`${t(locale, 'common.switchLanguage')}: ${otherMeta.nativeLabel}`}
+>
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+  {variant === 'full' ? otherMeta.nativeLabel : otherMeta.code.toUpperCase()}
+</a>

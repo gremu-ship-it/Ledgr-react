@@ -1,0 +1,67 @@
+---
+// BaseLayout — full <head> with SEO meta, canonical, OG and hreflang
+// alternates, plus a bare <body> shell. Pages pass their locale-relative
+// path (e.g. 'pricing', 'blog/my-post', '' for home) so alternates and
+// canonicals resolve correctly.
+import { getAbsoluteLocaleUrl } from 'astro:i18n';
+import { SITE, type Locale } from '../data/site';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  locale?: Locale;
+  /** Path relative to the locale root, e.g. 'pricing' or '' for home. */
+  path?: string;
+  /** OpenGraph image under /og/… (optional; TODO add OG assets). */
+  ogImage?: string;
+}
+
+const { title, description, locale = (Astro.currentLocale as Locale) ?? 'en', path = '', ogImage = '/og/og-default.png' } = Astro.props;
+
+const canonical = getAbsoluteLocaleUrl(locale, path);
+const defaultLocaleUrl = getAbsoluteLocaleUrl('en', path);
+const ogImageUrl = ogImage ? new URL(ogImage, SITE.url).toString() : undefined;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#0E7C5A" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href={canonical} />
+
+    <!-- hreflang alternates -->
+    {SITE.locales.map((l) => (
+      <link rel="alternate" hreflang={l.code} href={getAbsoluteLocaleUrl(l.code, path)} />
+    ))}
+    <link rel="alternate" hreflang="x-default" href={defaultLocaleUrl} />
+
+    <!-- Open Graph / Twitter -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={SITE.name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content={locale === 'ny' ? 'ny' : 'en_MW'} />
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {ogImageUrl && <meta name="twitter:image" content={ogImageUrl} />}
+  </head>
+  <body class="flex min-h-screen flex-col">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-white"
+    >
+      Skip to content
+    </a>
+    <slot />
+  </body>
+</html>

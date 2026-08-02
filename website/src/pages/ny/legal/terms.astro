@@ -1,0 +1,14 @@
+---
+
+// Terms & Conditions (/en/legal/terms/)
+import _LegalPage from './_LegalPage.astro';
+import { t } from '../../../i18n';
+const locale = 'ny' as const;
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+<_LegalPage
+  title="Terms & Conditions"
+  description={t(locale, 'pageTitles.terms')}
+  updated="TODO — date of review"
+  path="legal/terms"
+/>

@@ -1,0 +1,106 @@
+---
+
+// Compare (/en/compare/) — Ledgr vs the realistic alternatives.
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import CtaBanner from '../../components/CtaBanner.astro';
+import { t } from '../../i18n';
+
+const locale = 'ny' as const;
+
+const rows: { dimension: string; excel: string; generic: string; ledgr: string }[] = [
+  {
+    dimension: 'Pricing',
+    excel: 'Free, but your time isn’t',
+    generic: 'USD/EUR pricing',
+    ledgr: 'MWK, free to start, PayChangu',
+  },
+  {
+    dimension: 'Offline',
+    excel: 'Works offline (it’s a file)',
+    generic: 'Usually needs internet',
+    ledgr: 'PWA — keeps working, syncs later',
+  },
+  {
+    dimension: 'Tax (MRA)',
+    excel: 'You compute PAYE/VAT by hand',
+    generic: 'Foreign tax rules',
+    ledgr: 'PAYE bands, VAT, WHT built in',
+  },
+  {
+    dimension: 'Double-entry integrity',
+    excel: 'Easy to break',
+    generic: 'Varies',
+    ledgr: 'Journals with integrity checks',
+  },
+  {
+    dimension: 'Invoicing',
+    excel: 'Manual, no tracking',
+    generic: 'Often extra cost',
+    ledgr: 'Included — with open tracking',
+  },
+  {
+    dimension: 'Phone support & setup',
+    excel: 'None',
+    generic: 'None',
+    ledgr: 'In-app AI + human escalation',
+  },
+];
+---
+<!-- TODO: Chichewa translation of body copy pending — chrome (nav/footer/CTAs) is translated. -->
+
+<SiteLayout
+  locale={locale}
+  path="compare"
+  title={t(locale, 'pageTitles.compare')}
+  description="Ledgr vs spreadsheets and imported accounting software — why Malawian SMEs choose a MWK-first, offline-first accounting platform."
+>
+  <section class="bg-brand-950">
+    <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6">
+      <p class="text-sm font-semibold uppercase tracking-wider text-brand-400">Compare</p>
+      <h1 class="mt-3 max-w-2xl text-4xl font-bold tracking-tight text-white sm:text-5xl">
+        Ledgr vs the alternatives
+      </h1>
+      <p class="mt-4 max-w-2xl text-lg text-brand-100">
+        Most Malawian SMEs run their books in Excel — or pay for software built
+        for a different market. Here’s how Ledgr stacks up.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto w-full max-w-5xl px-4 py-16 sm:px-6">
+    <div class="overflow-x-auto rounded-2xl border border-navy-200 shadow-soft">
+      <table class="w-full min-w-[640px] border-collapse bg-card-bg text-sm">
+        <thead>
+          <tr class="border-b border-navy-200 bg-brand-50/50 text-left">
+            <th scope="col" class="px-4 py-3 font-semibold text-navy-900">Dimension</th>
+            <th scope="col" class="px-4 py-3 font-semibold text-navy-900">Spreadsheets</th>
+            <th scope="col" class="px-4 py-3 font-semibold text-navy-900">Imported software</th>
+            <th scope="col" class="px-4 py-3 font-semibold text-brand-700">Ledgr</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            rows.map((r) => (
+              <tr class="border-b border-navy-200 last:border-0">
+                <th scope="row" class="px-4 py-3 font-medium text-navy-900">{r.dimension}</th>
+                <td class="px-4 py-3 text-navy-600">{r.excel}</td>
+                <td class="px-4 py-3 text-navy-600">{r.generic}</td>
+                <td class="px-4 py-3 font-medium text-brand-700">{r.ledgr}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+    <div class="mt-10">
+      <SectionHeading
+        eyebrow="The bottom line"
+        title="Built here, for here"
+        subtitle="If your business is in Malawi, your accounting software should be too — in Kwacha, MRA-aware, and online-or-offline."
+      />
+    </div>
+  </section>
+
+  <CtaBanner locale={locale} />
+</SiteLayout>
