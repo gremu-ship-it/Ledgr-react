@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useIsMobile';

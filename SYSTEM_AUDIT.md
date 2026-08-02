@@ -53,6 +53,7 @@ Everything below was implemented and verified against the full pipeline
 | F5 | Deleted `supabase/functions/api/middleware.ts`. |
 | F6 | New `supabase/functions/_shared/cors.ts` with an origin allowlist from `ALLOWED_ORIGINS`/`APP_URL`, applied to the 11 sensitive functions via a `withCors` wrapper. Falls back to `*` when unconfigured, so the change is non-breaking; localhost always allowed. |
 | F8 | Deleted the three orphaned components, first porting the better `role="alert"` markup and the error-message-suppression from the dead `ErrorBoundary` into the live one. |
+| F11 | Re-applied the F2 dependency remediation on `arena/019fc2dd-ledgr-react` and finished the job: removed `@vercel/node` again (types in `api/health.ts` replaced with local structural interfaces), migrated `react-router` 7 → 8 (`react-router-dom` dropped — v8 exports everything from `react-router`; all 44 imports swapped), bumped `react`/`react-dom` to 19.2.7 (v8 peer minimum), `postcss` to 8.5.25, added a `tsx` override (4.23.4 → `esbuild` 0.28.1, clearing the last advisory). `npm audit`: **0 vulnerabilities** (was 13: 1 critical, 9 high, 3 moderate). Full pipeline green: typecheck, lint, 170 tests, production build. |
 
 ### Depreciation units — resolved
 

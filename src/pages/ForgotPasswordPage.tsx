@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { FormField, Input, AuthAlert, SubmitButton } from '@/components/auth/AuthUI';

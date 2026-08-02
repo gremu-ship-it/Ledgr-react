@@ -2,7 +2,7 @@ import React from 'react';
 import { CheckCircle2, Circle, ArrowRight } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { Button } from '@/components/ui/Button';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 interface OnboardingStep {
   id: number;

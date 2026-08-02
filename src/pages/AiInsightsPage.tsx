@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Send, Bot, User, Sparkles, TrendingUp, AlertCircle, Users, Receipt, Loader2, Calendar } from 'lucide-react';

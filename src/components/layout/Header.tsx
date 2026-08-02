@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useId } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Bell, Menu, LogOut, Settings, User, X, AlertTriangle, CheckCircle2, Crown, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';

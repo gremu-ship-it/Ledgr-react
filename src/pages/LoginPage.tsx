@@ -1,5 +1,5 @@
 import { useState, type FormEvent, useMemo } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { AuthShell } from '@/components/auth/AuthShell';

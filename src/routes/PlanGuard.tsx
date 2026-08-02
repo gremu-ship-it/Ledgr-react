@@ -5,7 +5,7 @@
  * with an upgrade prompt that shows which plan unlocks the feature and a
  * one-tap CTA to the Billing & Plans settings tab.
  */
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router';
 import { Lock, Sparkles } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
 import { PLANS, type PlanTier } from '@/lib/billing/plans';

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { Search, ShieldCheck, CheckCircle2, Loader2, KeyRound, Clock } from 'lucide-react';
 import { pushSuccess, pushError } from '@/lib/notifications';
 import { supabase } from '@/lib/supabase';

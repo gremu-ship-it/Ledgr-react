@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 const effectiveDate = '29 July 2026';
 const termsVersion = 'Version 1.1';
