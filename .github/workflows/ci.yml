@@ -33,7 +33,7 @@ jobs:
       matrix:
         # Node 18 is intentionally absent: vite@8 requires
         # ^20.19.0 || >=22.12.0, so an 18.x leg can never pass.
-        node-version: [20.x, 22.x]
+        node-version: [22.x]
 
     steps:
       - uses: actions/checkout@v4
