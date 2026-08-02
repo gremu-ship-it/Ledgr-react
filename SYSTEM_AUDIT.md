@@ -32,9 +32,9 @@ The material risks are concentrated in three places: **four database tables ship
 | F4 | Test coverage ≈ 1% on a financial-calculation system | **High** | 🟡 **Started** (16 → 52 tests) |
 | F5 | Dead, buggy `api/middleware.ts` rate limiter | Medium | ✅ **Fixed** (deleted) |
 | F6 | `Access-Control-Allow-Origin: *` on 15 authenticated functions | Medium | ✅ **Fixed** (allowlist) |
-| F7 | Hardcoded Supabase project ref in `vite.config.ts` / docs page | Low | ⬜ Open |
+| F7 | Hardcoded Supabase project ref in `vite.config.ts` / docs page | Low | ✅ **Fixed** (derived from `VITE_SUPABASE_URL`, prod ref as fallback) |
 | F8 | Duplicate orphaned components (auth pages, ErrorBoundary) | Low | ✅ **Fixed** (deleted) |
-| F9 | README is still the unmodified Vite template | Low | ⬜ Open |
+| F9 | README is still the unmodified Vite template | Low | ✅ **Fixed** (rewritten — features, stack, quickstart, structure, docs index) |
 
 ---
 
@@ -54,6 +54,7 @@ Everything below was implemented and verified against the full pipeline
 | F6 | New `supabase/functions/_shared/cors.ts` with an origin allowlist from `ALLOWED_ORIGINS`/`APP_URL`, applied to the 11 sensitive functions via a `withCors` wrapper. Falls back to `*` when unconfigured, so the change is non-breaking; localhost always allowed. |
 | F8 | Deleted the three orphaned components, first porting the better `role="alert"` markup and the error-message-suppression from the dead `ErrorBoundary` into the live one. |
 | F11 | Re-applied the F2 dependency remediation on `arena/019fc2dd-ledgr-react` and finished the job: removed `@vercel/node` again (types in `api/health.ts` replaced with local structural interfaces), migrated `react-router` 7 → 8 (`react-router-dom` dropped — v8 exports everything from `react-router`; all 44 imports swapped), bumped `react`/`react-dom` to 19.2.7 (v8 peer minimum), `postcss` to 8.5.25, added a `tsx` override (4.23.4 → `esbuild` 0.28.1, clearing the last advisory). `npm audit`: **0 vulnerabilities** (was 13: 1 critical, 9 high, 3 moderate). Full pipeline green: typecheck, lint, 170 tests, production build. |
+| F7/F9 | On the same branch: `vite.config.ts` + `ApiDocumentationPage.tsx` now derive the Supabase host from `VITE_SUPABASE_URL` (prod ref kept only as a fallback). PWA `runtimeCaching` patterns use a build-time RegExp — workbox serialises urlPatterns via `toString()`, so the computed host must be embedded in the pattern itself, not a closure variable (verified in `dist/sw.js` for both the env and fallback paths). README rewritten from the stock Vite template into a project README (features, stack, quickstart, layout, docs index). |
 
 ### Depreciation units — resolved
 

@@ -13,6 +13,18 @@ const endpoints = [
   { method: 'GET', path: '/api/v1/openapi.json', desc: 'OpenAPI 3.0 specification' },
 ];
 
+function supabaseFunctionsBaseUrl(): string {
+  const raw = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (raw) {
+    try {
+      return new URL('/functions/v1/api/api/v1', raw).toString().replace(/\/$/, '');
+    } catch {
+      // fall through to the production default below
+    }
+  }
+  return 'https://hsuhuvuxfuufrlejsatw.supabase.co/functions/v1/api/api/v1';
+}
+
 function buildOpenApiSpec() {
   const paths: Record<string, unknown> = {};
   for (const endpoint of endpoints.filter((e) => !e.path.endsWith('openapi.json'))) {
@@ -37,7 +49,7 @@ function buildOpenApiSpec() {
       version: '1.0.0',
       description: 'JSON:API REST API for integrating with Ledgr accounting platform (Malawi).',
     },
-    servers: [{ url: 'https://hsuhuvuxfuufrlejsatw.supabase.co/functions/v1/api/api/v1' }],
+    servers: [{ url: supabaseFunctionsBaseUrl() }],
     components: {
       securitySchemes: {
         ApiKeyAuth: {
