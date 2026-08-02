@@ -17,12 +17,14 @@ import {
   Sparkles,
   Settings,
   Lock,
+  LogOut,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
+import { supabase } from '@/lib/supabase';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
@@ -166,6 +168,18 @@ export function BottomNav() {
               );
             })}
           </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate('/login', { replace: true });
+              setMoreOpen(false);
+            }}
+            className="mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-red-700 transition-colors hover:bg-red-50"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            {t('auth.signOut')}
+          </button>
         </div>
       )}
 

@@ -14,6 +14,8 @@ import { usePartnerTheme } from '@/partner/usePartnerTheme';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useLocation } from 'react-router';
 import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
+import { useOrientationLock } from '@/hooks/useOrientationLock';
+import { useAutoSignOutOnHidden } from '@/hooks/useAutoSignOutOnHidden';
 import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 import { SupportWidget } from '@/components/support/SupportWidget';
@@ -30,6 +32,8 @@ export function AppLayout() {
   usePartnerTheme();
   const { showWarning, secondsRemaining, extendSession } = useInactivityTimeout();
   useRenewalReminder();
+  useOrientationLock();
+  useAutoSignOutOnHidden();
 
   const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
   const showMobileHeader = isMobile && !isDashboard;

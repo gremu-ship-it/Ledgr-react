@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router';
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
@@ -122,6 +123,8 @@ function AppearanceTab() {
   const setDensity = useAppStore((s) => s.setDensity);
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
+  const orientationLock = useAppStore((s) => s.orientationLock);
+  const setOrientationLock = useAppStore((s) => s.setOrientationLock);
 
   return (
     <div className="space-y-6">
@@ -160,6 +163,37 @@ function AppearanceTab() {
               className="w-48 accent-brand-500"
             />
             <button onClick={() => setSidebarWidth(256)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">Reset to 256px</button>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-gray-700">Screen Orientation</h3>
+          <p className="mb-3 text-xs text-gray-500">Choose whether the app rotates automatically with your device.</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setOrientationLock(false);
+                try {
+                  const s = window.screen as unknown as { orientation?: { unlock: () => void } };
+                  if (s?.orientation?.unlock) s.orientation.unlock();
+                } catch { /* ignore */ }
+              }}
+              className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${!orientationLock ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              Auto (default)
+            </button>
+            <button
+              onClick={() => {
+                setOrientationLock(true);
+                try {
+                  const s = window.screen as unknown as { orientation?: { lock: (t: string) => Promise<void> } };
+                  if (s?.orientation?.lock) s.orientation.lock('portrait').catch(() => {});
+                } catch { /* ignore */ }
+              }}
+              className={`rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${orientationLock ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}
+            >
+              Lock Portrait
+            </button>
           </div>
         </div>
 
@@ -613,6 +647,7 @@ function FinancialSettingsTab({ business }: { business: Row<'businesses'> }) {
 // ── User Profile Tab ──────────────────────────────────────────────────────────
 
 function UserProfileTab() {
+  const navigate = useNavigate();
   const currentUser = useAppStore((s) => s.currentUser);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm] = useState({
@@ -679,6 +714,20 @@ function UserProfileTab() {
           className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors"
         >
           {mutation.isPending ? 'Saving…' : 'Save Changes'}
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-red-100 bg-red-50 p-4">
+        <h3 className="text-sm font-semibold text-red-900">Sign out</h3>
+        <p className="mt-1 text-xs text-red-700">End your current session on this device.</p>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            navigate('/login', { replace: true });
+          }}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-red-700"
+        >
+          Log out
         </button>
       </div>
     </div>
