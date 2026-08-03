@@ -403,6 +403,9 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
   // The Support assistant is available to every authenticated role.
   if (path === '/support') return true;
 
+  // The Marketing assistant (draft-only) is available to every authenticated role.
+  if (path === '/marketing') return true;
+
   switch (role) {
     case 'owner':
     case 'admin':

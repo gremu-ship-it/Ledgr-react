@@ -12,6 +12,7 @@ import {
   Coins,
   BarChart2,
   Sparkles,
+  Megaphone,
   Warehouse,
   ArrowLeftRight,
   GitBranch,
@@ -93,6 +94,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.ai',
     items: [
       { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
+      { labelKey: 'navigation.items.marketing', path: '/marketing', icon: Megaphone },
     ],
   },
   {

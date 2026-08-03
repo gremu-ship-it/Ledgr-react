@@ -426,6 +426,68 @@ export type SupplementalTables = {
       },
     ]
   }
+  // Added by 20260803000000_marketing_agent.sql (Marketing Assistant, Phase 0).
+  // status is the marketing_post_status enum; typed as a literal union here
+  // because the enum isn't in the generated Enums map yet.
+  marketing_posts: {
+    Row: {
+      id: string
+      business_id: string
+      created_by: string | null
+      kind: string
+      channel: string
+      status: 'draft' | 'approved' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'archived'
+      title: string | null
+      content_json: Record<string, unknown>
+      scheduled_for: string | null
+      published_at: string | null
+      external_id: string | null
+      error: string | null
+      created_at: string
+      updated_at: string
+    }
+    Insert: {
+      id?: string
+      business_id: string
+      created_by?: string | null
+      kind?: string
+      channel?: string
+      status?: 'draft' | 'approved' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'archived'
+      title?: string | null
+      content_json?: Record<string, unknown>
+      scheduled_for?: string | null
+      published_at?: string | null
+      external_id?: string | null
+      error?: string | null
+      created_at?: string
+      updated_at?: string
+    }
+    Update: {
+      id?: string
+      business_id?: string
+      created_by?: string | null
+      kind?: string
+      channel?: string
+      status?: 'draft' | 'approved' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'archived'
+      title?: string | null
+      content_json?: Record<string, unknown>
+      scheduled_for?: string | null
+      published_at?: string | null
+      external_id?: string | null
+      error?: string | null
+      created_at?: string
+      updated_at?: string
+    }
+    Relationships: [
+      {
+        foreignKeyName: "marketing_posts_business_id_fkey"
+        columns: ["business_id"]
+        isOneToOne: false
+        referencedRelation: "businesses"
+        referencedColumns: ["id"]
+      },
+    ]
+  }
 }
 
 export type SupplementalViews = {
