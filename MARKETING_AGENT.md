@@ -15,10 +15,10 @@ assistants, and reuses the same architecture: an Anthropic-powered Supabase Edge
 Function that is auth-gated, rate-limited, and never exposes its API key to the
 browser.
 
-> **Status:** Phases 0–3 are **implemented** — see *Implementation status*
-> below each phase. Phase 4 remains planned. The remaining open questions at
-> the bottom still need your sign-off before we widen scope; the defaults built
-> on are noted there.
+> **Status:** All phases (0–4) are **implemented** — see *Implementation status*
+> below each phase. Phase 3's live Facebook publishing still needs you to
+> register the Meta app + pass App Review; everything else is code-complete and
+> verified.
 
 ---
 
@@ -251,6 +251,30 @@ agent.
 - Analytics loop: post performance feeds back into recommendations
   (double-down on what works).
 
+**✅ Phase 4 — DONE (implemented)** — *autonomy with approval*: only posts the
+user has **approved** are auto-published on schedule.
+- `marketing-scheduler` edge function — the autopilot runner. Triggered by a
+  cron with a shared `MARKETING_CRON_SECRET`; publishes `approved` posts whose
+  `scheduled_for` has passed, but only for businesses with autopilot ON and
+  never beyond their per-day cap. Guardrails: autopilot opt-in, per-day rate
+  cap, AI-content disclosure suffix, and a `MARKETING_DRY_RUN` mode.
+- `marketing-metrics-sync` edge function — analytics loop: pulls lifetime
+  insights (impressions/reactions/comments) for published posts into
+  `marketing_posts.metrics_json`.
+- Recommendations learn: the context builder now includes a **"RECENT POST
+  PERFORMANCE"** block (top posts by reach) so it can double down on what works.
+- Migration `20260803000003_marketing_autopilot` — `marketing_settings` gains
+  `autopilot_enabled` / `max_posts_per_day` / `ai_disclosure`; `marketing_posts`
+  gains `metrics_json`; typed in `database.supplement.ts`.
+- UI — **Autopilot** settings card (toggle + per-day cap + AI disclosure),
+  **Schedule** action on drafts (approve + pick a time), and a **Content
+  library** list (status badges + metrics + delete).
+- Client lib: `scheduleDraft`, `listMarketingPosts`, `deleteMarketingPost`,
+  `getAutopilotSettings`, `saveAutopilotSettings`.
+- Verified: `typecheck`, `lint` (0 errors), `test` (170 passing), `build`.
+- **To run the autopilot**, schedule the two cron functions (see Setup):
+  `marketing-scheduler` (e.g. hourly) and `marketing-metrics-sync` (e.g. daily).
+
 ---
 
 ## Security & privacy
@@ -297,6 +321,11 @@ openssl rand -base64 32 | supabase secrets set SOCIAL_TOKEN_ENC_KEY=-   # token 
 supabase secrets set FB_APP_ID=... FB_APP_SECRET=...
 # optional override (defaults to <SUPABASE_URL>/functions/v1/facebook-auth):
 # supabase secrets set FB_REDIRECT_URI=https://your-app.example.com/callback
+
+# Phase 4 — autopilot cron (shared secret guards the runner + metrics sync):
+openssl rand -hex 32 | supabase secrets set MARKETING_CRON_SECRET=-
+# Optional dry-run (logs what would post without posting):
+# supabase secrets set MARKETING_DRY_RUN=1
 
 # Apply the data-model migration
 supabase db push   # or supabase migration up for 20260803000000_marketing_agent.sql

@@ -137,3 +137,119 @@ export async function saveBrandVoice(businessId: string, brandVoice: string): Pr
     throw new Error(error.message || 'Could not save brand voice');
   }
 }
+
+// ── Autopilot settings (Phase 4) ────────────────────────────────────────────
+
+export interface AutopilotSettings {
+  autopilotEnabled: boolean;
+  maxPostsPerDay: number;
+  aiDisclosure: boolean;
+}
+
+export async function getAutopilotSettings(businessId: string): Promise<AutopilotSettings> {
+  const { data, error } = await supabase
+    .from('marketing_settings')
+    .select('autopilot_enabled,max_posts_per_day,ai_disclosure')
+    .eq('business_id', businessId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || 'Could not load autopilot settings');
+  return {
+    autopilotEnabled: data?.autopilot_enabled ?? false,
+    maxPostsPerDay: data?.max_posts_per_day ?? 1,
+    aiDisclosure: data?.ai_disclosure ?? true,
+  };
+}
+
+export async function saveAutopilotSettings(businessId: string, s: AutopilotSettings): Promise<void> {
+  const { error } = await supabase.from('marketing_settings').upsert({
+    business_id: businessId,
+    autopilot_enabled: s.autopilotEnabled,
+    max_posts_per_day: Math.max(1, Math.min(10, Math.round(s.maxPostsPerDay))),
+    ai_disclosure: s.aiDisclosure,
+  });
+  if (error) throw new Error(error.message || 'Could not save autopilot settings');
+}
+
+// ── Scheduling + content library (Phase 4) ──────────────────────────────────
+
+export type MarketingPostStatus =
+  | 'draft'
+  | 'approved'
+  | 'scheduled'
+  | 'publishing'
+  | 'published'
+  | 'failed'
+  | 'archived';
+
+export interface MarketingPost {
+  id: string;
+  status: MarketingPostStatus;
+  channel: string;
+  text: string;
+  scheduledFor: string | null;
+  publishedAt: string | null;
+  error: string | null;
+  metrics: { impressions?: number; reactions?: number; comments?: number };
+  createdAt: string;
+}
+
+/** Approve a draft and schedule it for the autopilot to publish. */
+export async function scheduleDraft(args: {
+  businessId: string;
+  text: string;
+  scheduledFor: string; // ISO datetime
+  channel?: string;
+}): Promise<MarketingPost> {
+  const { data, error } = await supabase
+    .from('marketing_posts')
+    .insert({
+      business_id: args.businessId,
+      kind: 'post',
+      channel: args.channel ?? 'facebook',
+      status: 'approved',
+      content_json: { text: args.text },
+      scheduled_for: args.scheduledFor,
+    })
+    .select('id,status,channel,content_json,scheduled_for,published_at,error,metrics_json,created_at')
+    .single();
+  if (error || !data) throw new Error(error?.message || 'Could not schedule draft');
+  return rowToPost(data);
+}
+
+/** The business's content library (drafts / scheduled / published + metrics). */
+export async function listMarketingPosts(businessId: string): Promise<MarketingPost[]> {
+  const { data, error } = await supabase
+    .from('marketing_posts')
+    .select('id,status,channel,content_json,scheduled_for,published_at,error,metrics_json,created_at')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) throw new Error(error.message || 'Could not load posts');
+  return (data ?? []).map(rowToPost);
+}
+
+/** Permanently remove a draft/scheduled post (not published ones). */
+export async function deleteMarketingPost(postId: string): Promise<void> {
+  const { error } = await supabase.from('marketing_posts').delete().eq('id', postId);
+  if (error) throw new Error(error.message || 'Could not delete post');
+}
+
+function rowToPost(r: Record<string, unknown>): MarketingPost {
+  const cj = (r.content_json ?? null) as { text?: string } | null;
+  const mj = (r.metrics_json ?? null) as { impressions?: number; reactions?: number; comments?: number } | null;
+  return {
+    id: String(r.id),
+    status: (r.status as MarketingPostStatus) ?? 'draft',
+    channel: typeof r.channel === 'string' ? r.channel : 'facebook',
+    text: typeof cj?.text === 'string' ? cj.text : '',
+    scheduledFor: typeof r.scheduled_for === 'string' ? r.scheduled_for : null,
+    publishedAt: typeof r.published_at === 'string' ? r.published_at : null,
+    error: typeof r.error === 'string' ? r.error : null,
+    metrics: {
+      impressions: typeof mj?.impressions === 'number' ? mj.impressions : undefined,
+      reactions: typeof mj?.reactions === 'number' ? mj.reactions : undefined,
+      comments: typeof mj?.comments === 'number' ? mj.comments : undefined,
+    },
+    createdAt: typeof r.created_at === 'string' ? r.created_at : '',
+  };
+}

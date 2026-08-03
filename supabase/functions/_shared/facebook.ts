@@ -128,3 +128,40 @@ export async function postToPageFeed(pageId: string, pageToken: string, message:
   }
   return data.id;
 }
+
+export interface PostMetrics {
+  impressions: number;
+  reactions: number;
+  comments: number;
+}
+
+/**
+ * Best-effort read of a published post's lifetime metrics. Returns zeros if the
+ * post is too fresh or metrics are unavailable (insights need pages_read_engagement
+ * and take time to populate). Never throws.
+ */
+export async function getPostMetrics(postId: string, pageToken: string): Promise<PostMetrics> {
+  const url = new URL(`${GRAPH}/${postId}/insights`);
+  url.searchParams.set('access_token', pageToken);
+  url.searchParams.set('metric', 'post_impressions,post_reactions_like_total,post_comments');
+  url.searchParams.set('period', 'lifetime');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return { impressions: 0, reactions: 0, comments: 0 };
+    const data = (await res.json().catch(() => ({}))) as {
+      data?: Array<{ name?: string; values?: Array<{ value?: number }> }>;
+    };
+    const byName = new Map<string, number>();
+    for (const m of data.data ?? []) {
+      const v = Array.isArray(m.values) && m.values.length ? m.values[0].value ?? 0 : 0;
+      if (m.name) byName.set(m.name, (byName.get(m.name) ?? 0) + (typeof v === 'number' ? v : 0));
+    }
+    return {
+      impressions: byName.get('post_impressions') ?? 0,
+      reactions: byName.get('post_reactions_like_total') ?? 0,
+      comments: byName.get('post_comments') ?? 0,
+    };
+  } catch {
+    return { impressions: 0, reactions: 0, comments: 0 };
+  }
+}

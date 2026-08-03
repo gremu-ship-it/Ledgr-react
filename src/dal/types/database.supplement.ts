@@ -443,6 +443,7 @@ export type SupplementalTables = {
       published_at: string | null
       external_id: string | null
       error: string | null
+      metrics_json: Record<string, unknown>
       created_at: string
       updated_at: string
     }
@@ -459,6 +460,7 @@ export type SupplementalTables = {
       published_at?: string | null
       external_id?: string | null
       error?: string | null
+      metrics_json?: Record<string, unknown>
       created_at?: string
       updated_at?: string
     }
@@ -475,6 +477,7 @@ export type SupplementalTables = {
       published_at?: string | null
       external_id?: string | null
       error?: string | null
+      metrics_json?: Record<string, unknown>
       created_at?: string
       updated_at?: string
     }
@@ -495,6 +498,9 @@ export type SupplementalTables = {
       business_id: string
       brand_voice: string
       post_language: string
+      autopilot_enabled: boolean
+      max_posts_per_day: number
+      ai_disclosure: boolean
       updated_at: string
       updated_by: string | null
     }
@@ -502,6 +508,9 @@ export type SupplementalTables = {
       business_id: string
       brand_voice?: string
       post_language?: string
+      autopilot_enabled?: boolean
+      max_posts_per_day?: number
+      ai_disclosure?: boolean
       updated_at?: string
       updated_by?: string | null
     }
@@ -509,6 +518,9 @@ export type SupplementalTables = {
       business_id?: string
       brand_voice?: string
       post_language?: string
+      autopilot_enabled?: boolean
+      max_posts_per_day?: number
+      ai_disclosure?: boolean
       updated_at?: string
       updated_by?: string | null
     }

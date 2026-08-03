@@ -603,6 +603,33 @@
       "publishing": "Publishing…",
       "published": "Posted to your Facebook Page.",
       "publishFailed": "Publish failed"
+    },
+    "autopilot": {
+      "title": "Autopilot",
+      "description": "When on, approved scheduled posts are published automatically on their due date, up to your daily cap. You approve every post — nothing is published without your approval.",
+      "enabled": "Autopilot on",
+      "maxPerDay": "Max posts / day",
+      "aiDisclosure": "Add AI-assistant disclosure",
+      "saveFailed": "Could not save autopilot settings.",
+      "scheduled": "Scheduled — the autopilot will publish it at the chosen time.",
+      "scheduleFailed": "Could not schedule the post.",
+      "deleteFailed": "Could not delete the post.",
+      "library": "Content library",
+      "libraryEmpty": "No posts yet. Generate a draft, then save, schedule, or publish it.",
+      "scheduledFor": "Scheduled for",
+      "delete": "Delete",
+      "schedule": "Schedule",
+      "scheduledShort": "Scheduled",
+      "confirm": "Confirm",
+      "status": {
+        "draft": "Draft",
+        "approved": "Approved",
+        "scheduled": "Scheduled",
+        "publishing": "Publishing",
+        "published": "Published",
+        "failed": "Failed",
+        "archived": "Archived"
+      }
     }
   }
 }

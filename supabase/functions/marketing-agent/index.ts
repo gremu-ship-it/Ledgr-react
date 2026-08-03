@@ -176,7 +176,7 @@ async function buildMarketingContext(
 
   // Run reads in parallel; any single failure degrades gracefully rather than
   // blanking the whole context.
-  const [productsRes, balancesRes, invoicesRes, linesRes, overdueRes, customersRes, businessRes] =
+  const [productsRes, balancesRes, invoicesRes, linesRes, overdueRes, customersRes, postsRes, businessRes] =
     await Promise.allSettled([
       authClient
         .from('products')
@@ -218,6 +218,14 @@ async function buildMarketingContext(
         .eq('contact_type', 'customer')
         .eq('is_active', true)
         .limit(300),
+      // Recent published posts + their metrics (Phase 4 analytics feedback).
+      authClient
+        .from('marketing_posts')
+        .select('content_json,metrics_json,published_at')
+        .eq('business_id', businessId)
+        .eq('status', 'published')
+        .order('published_at', { ascending: false })
+        .limit(40),
       authClient.from('businesses').select('name,base_currency').eq('id', businessId).maybeSingle(),
     ]);
 
@@ -361,6 +369,38 @@ async function buildMarketingContext(
   lines.push('');
   lines.push(`RECENT SALES (sample ~${invoices.length} invoices, now ${nowIso.slice(0, 10)}):`);
   lines.push(`- Total invoiced: ${mwk(totalSales)} | Outstanding: ${mwk(Math.max(totalSales - totalPaid, 0))}`);
+
+  // ── Post performance (Phase 4 analytics feedback) ────────────────────────
+  const publishedPosts =
+    postsRes.status === 'fulfilled'
+      ? ((postsRes.value.data ?? []) as Array<Record<string, unknown>>)
+      : [];
+  type Perf = { text: string; impressions: number; reactions: number; comments: number };
+  const perf: Perf[] = [];
+  for (const p of publishedPosts) {
+    const cj = (p.content_json ?? null) as { text?: string } | null;
+    const mj = (p.metrics_json ?? null) as { impressions?: number; reactions?: number; comments?: number } | null;
+    const text = typeof cj?.text === 'string' ? cj.text : '';
+    const impressions = (mj?.impressions as number | undefined) ?? 0;
+    if (text && (impressions || (mj?.reactions ?? 0) || (mj?.comments ?? 0))) {
+      perf.push({
+        text: text.length > 80 ? text.slice(0, 80) + '…' : text,
+        impressions,
+        reactions: (mj?.reactions as number | undefined) ?? 0,
+        comments: (mj?.comments as number | undefined) ?? 0,
+      });
+    }
+  }
+  const topPosts = perf.sort((a, b) => b.impressions - a.impressions).slice(0, 4);
+  lines.push('');
+  lines.push('RECENT POST PERFORMANCE (what is working — double down on these themes):');
+  if (topPosts.length) {
+    for (const tp of topPosts) {
+      lines.push(`- "${tp.text}" — ${tp.impressions} views, ${tp.reactions} reactions, ${tp.comments} comments`);
+    }
+  } else {
+    lines.push('- (no published posts with metrics yet)');
+  }
 
   lines.push('');
   lines.push('Use ONLY the data above. Do not invent prices, stock levels, or customer testimonials.');

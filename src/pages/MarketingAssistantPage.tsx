@@ -29,11 +29,18 @@ import {
   saveDraft,
   loadBrandVoice,
   saveBrandVoice,
+  scheduleDraft,
+  listMarketingPosts,
+  deleteMarketingPost,
+  getAutopilotSettings,
+  saveAutopilotSettings,
   type MarketingMode,
   type MarketingResult,
   type Recommendation,
   type MarketingDraft,
   type Source,
+  type MarketingPost,
+  type AutopilotSettings,
 } from '@/lib/marketingAgent';
 import {
   getFacebookConnection,
@@ -254,6 +261,78 @@ export function MarketingAssistantPage() {
     }
   }
 
+  // Autopilot + content library (Phase 4).
+  const [autopilot, setAutopilot] = useState<AutopilotSettings>({
+    autopilotEnabled: false,
+    maxPostsPerDay: 1,
+    aiDisclosure: true,
+  });
+  const [savingAutopilot, setSavingAutopilot] = useState(false);
+  const [schedulingId, setSchedulingId] = useState<number>(-1);
+  const [scheduledIds, setScheduledIds] = useState<Set<number>>(new Set());
+  const [posts, setPosts] = useState<MarketingPost[]>([]);
+
+  const refreshPosts = async () => {
+    try {
+      setPosts(await listMarketingPosts(businessId));
+    } catch (err) {
+      log.warn('Could not load content library', { error: err as Error });
+    }
+  };
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    Promise.allSettled([getAutopilotSettings(businessId), listMarketingPosts(businessId)]).then(
+      ([ap, lp]) => {
+        if (cancelled) return;
+        if (ap.status === 'fulfilled') setAutopilot(ap.value);
+        if (lp.status === 'fulfilled') setPosts(lp.value);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  async function saveAutopilot(next: AutopilotSettings) {
+    try {
+      setSavingAutopilot(true);
+      await saveAutopilotSettings(businessId, next);
+      setAutopilot(next);
+    } catch (err) {
+      log.error('Could not save autopilot', err as Error);
+      setFbStatus({ kind: 'error', text: t('marketing.autopilot.saveFailed') });
+    } finally {
+      setSavingAutopilot(false);
+    }
+  }
+
+  async function handleSchedule(draft: MarketingDraft, index: number, scheduledFor: string) {
+    try {
+      setSchedulingId(index);
+      await scheduleDraft({ businessId, text: draft.text, scheduledFor, channel: draft.channel });
+      setScheduledIds((prev) => new Set(prev).add(index));
+      void refreshPosts();
+      setFbStatus({ kind: 'ok', text: t('marketing.autopilot.scheduled') });
+    } catch (err) {
+      log.error('Could not schedule', err as Error);
+      setFbStatus({ kind: 'error', text: t('marketing.autopilot.scheduleFailed') });
+    } finally {
+      setSchedulingId(-1);
+    }
+  }
+
+  async function handleDeletePost(postId: string) {
+    try {
+      await deleteMarketingPost(postId);
+      void refreshPosts();
+    } catch (err) {
+      log.error('Could not delete post', err as Error);
+      setFbStatus({ kind: 'error', text: t('marketing.autopilot.deleteFailed') });
+    }
+  }
+
   function switchTab(next: Tab) {
     setTab(next);
     setInput('');
@@ -466,6 +545,50 @@ export function MarketingAssistantPage() {
         </div>
       )}
 
+      {/* Autopilot (Phase 4) */}
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-brand-500" />
+          <h2 className="text-sm font-semibold text-gray-900">{t('marketing.autopilot.title')}</h2>
+          <label className="ml-auto inline-flex items-center gap-2 text-xs text-gray-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              checked={autopilot.autopilotEnabled}
+              disabled={savingAutopilot}
+              onChange={(e) => saveAutopilot({ ...autopilot, autopilotEnabled: e.target.checked })}
+            />
+            {t('marketing.autopilot.enabled')}
+          </label>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">{t('marketing.autopilot.description')}</p>
+        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-gray-700">
+          <label className="inline-flex items-center gap-2">
+            {t('marketing.autopilot.maxPerDay')}
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={autopilot.maxPostsPerDay}
+              disabled={savingAutopilot}
+              onChange={(e) => setAutopilot((a) => ({ ...a, maxPostsPerDay: Number(e.target.value) || 1 }))}
+              onBlur={(e) => saveAutopilot({ ...autopilot, maxPostsPerDay: Number(e.target.value) || 1 })}
+              className="w-16 rounded-md border border-gray-200 px-2 py-1 text-sm focus:border-brand-500 focus:outline-none"
+            />
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+              checked={autopilot.aiDisclosure}
+              disabled={savingAutopilot}
+              onChange={(e) => saveAutopilot({ ...autopilot, aiDisclosure: e.target.checked })}
+            />
+            {t('marketing.autopilot.aiDisclosure')}
+          </label>
+        </div>
+      </div>
+
       {/* Prompt input */}
       <div className="mb-3 flex gap-2 items-end">
         <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
@@ -541,8 +664,14 @@ export function MarketingAssistantPage() {
           publishingId={publishingId}
           publishedIds={publishedIds}
           onPublish={handlePublish}
+          schedulingId={schedulingId}
+          scheduledIds={scheduledIds}
+          onSchedule={handleSchedule}
         />
       )}
+
+      {/* Content library (Phase 4) */}
+      <ContentLibrary posts={posts} onDelete={handleDeletePost} t={t} />
 
       <p className="mt-6 text-center text-xs text-gray-600">{t('marketing.disclaimer')}</p>
     </div>
@@ -563,6 +692,9 @@ function ResultsView({
   publishingId,
   publishedIds,
   onPublish,
+  schedulingId,
+  scheduledIds,
+  onSchedule,
 }: {
   result: MarketingResult;
   t: TFunc;
@@ -573,6 +705,9 @@ function ResultsView({
   publishingId: number;
   publishedIds: Set<number>;
   onPublish: (draft: MarketingDraft, index: number) => void;
+  schedulingId: number;
+  scheduledIds: Set<number>;
+  onSchedule: (draft: MarketingDraft, index: number, scheduledFor: string) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -616,6 +751,9 @@ function ResultsView({
               publishing={publishingId === i}
               published={publishedIds.has(i)}
               onPublish={() => onPublish(draft, i)}
+              scheduling={schedulingId === i}
+              scheduled={scheduledIds.has(i)}
+              onSchedule={(iso) => onSchedule(draft, i, iso)}
             />
           ))}
         </div>
@@ -737,6 +875,85 @@ function SourcesView({ sources, t }: { sources: Source[]; t: TFunc }) {
   );
 }
 
+function ContentLibrary({
+  posts,
+  onDelete,
+  t,
+}: {
+  posts: MarketingPost[];
+  onDelete: (id: string) => void;
+  t: TFunc;
+}) {
+  const statusTone: Record<string, string> = {
+    draft: 'bg-gray-100 text-gray-600',
+    approved: 'bg-blue-50 text-blue-700',
+    scheduled: 'bg-indigo-50 text-indigo-700',
+    publishing: 'bg-amber-50 text-amber-700',
+    published: 'bg-emerald-50 text-emerald-700',
+    failed: 'bg-red-50 text-red-700',
+    archived: 'bg-gray-100 text-gray-500',
+  };
+
+  return (
+    <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-gray-900">{t('marketing.autopilot.library')}</h2>
+      {posts.length === 0 ? (
+        <p className="mt-2 text-sm text-gray-400">{t('marketing.autopilot.libraryEmpty')}</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {posts.map((p) => {
+            const deletable = ['draft', 'approved', 'scheduled', 'failed'].includes(p.status);
+            return (
+              <li key={p.id} className="rounded-lg border border-gray-100 p-3">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                      statusTone[p.status] ?? statusTone.draft
+                    }`}
+                  >
+                    {t(`marketing.autopilot.status.${p.status}` as const)}
+                  </span>
+                  <span className="text-xs text-gray-400">{p.channel}</span>
+                  {p.scheduledFor && p.status === 'approved' && (
+                    <span className="text-xs text-gray-500">
+                      {t('marketing.autopilot.scheduledFor')} {new Date(p.scheduledFor).toLocaleString('en-MW')}
+                    </span>
+                  )}
+                  {p.publishedAt && (
+                    <span className="text-xs text-gray-500">
+                      {new Date(p.publishedAt).toLocaleDateString('en-MW')}
+                    </span>
+                  )}
+                  {deletable && (
+                    <button
+                      onClick={() => onDelete(p.id)}
+                      className="ml-auto text-xs text-gray-400 hover:text-red-500"
+                      title={t('marketing.autopilot.delete')}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 line-clamp-2 text-sm text-gray-700">{p.text}</p>
+                {p.status === 'published' && (p.metrics.impressions || p.metrics.reactions || p.metrics.comments) ? (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {p.metrics.impressions ? `${p.metrics.impressions} views` : ''}
+                    {p.metrics.reactions ? ` · ${p.metrics.reactions} reactions` : ''}
+                    {p.metrics.comments ? ` · ${p.metrics.comments} comments` : ''}
+                  </p>
+                ) : null}
+                {p.status === 'failed' && p.error && (
+                  <p className="mt-1 text-xs text-red-600">{p.error}</p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function DraftCard({
   draft,
   t,
@@ -747,6 +964,9 @@ function DraftCard({
   publishing,
   published,
   onPublish,
+  scheduling,
+  scheduled,
+  onSchedule,
 }: {
   draft: MarketingDraft;
   t: TFunc;
@@ -757,7 +977,20 @@ function DraftCard({
   publishing: boolean;
   published: boolean;
   onPublish: () => void;
+  scheduling: boolean;
+  scheduled: boolean;
+  onSchedule: (scheduledFor: string) => void;
 }) {
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState(''); // datetime-local string
+
+  function confirmSchedule() {
+    if (!scheduleAt) return;
+    // datetime-local → ISO (local time interpreted as-is).
+    onSchedule(new Date(scheduleAt).toISOString());
+    setShowSchedule(false);
+    setScheduleAt('');
+  }
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-white px-4 py-2">
@@ -793,8 +1026,8 @@ function DraftCard({
           </p>
         )}
 
-        {/* Phase 0: draft-only actions. Live publishing arrives in Phase 3. */}
-        <div className="mt-4 flex items-center gap-2 border-t border-gray-100 pt-3">
+        {/* Phase 4: save / schedule (autopilot) / publish now. */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
           <button
             onClick={onSave}
             disabled={saving || saved}
@@ -803,6 +1036,36 @@ function DraftCard({
             {saved ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> : <Save className="h-3.5 w-3.5" />}
             {saved ? t('marketing.draftSaved') : saving ? t('marketing.saving') : t('marketing.saveDraft')}
           </button>
+          <button
+            onClick={() => setShowSchedule((v) => !v)}
+            disabled={scheduled || scheduling}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium disabled:opacity-50 ${
+              scheduled
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            {scheduled ? <CheckCircle2 className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+            {scheduled ? t('marketing.autopilot.scheduledShort') : t('marketing.autopilot.schedule')}
+          </button>
+          {showSchedule && !scheduled && (
+            <span className="inline-flex items-center gap-1">
+              <input
+                type="datetime-local"
+                value={scheduleAt}
+                onChange={(e) => setScheduleAt(e.target.value)}
+                className="rounded-md border border-gray-200 px-2 py-1 text-xs focus:border-brand-500 focus:outline-none"
+              />
+              <button
+                onClick={confirmSchedule}
+                disabled={!scheduleAt || scheduling}
+                className="inline-flex items-center gap-1 rounded-lg bg-brand-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+              >
+                {scheduling ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                {t('marketing.autopilot.confirm')}
+              </button>
+            </span>
+          )}
           <button
             onClick={onPublish}
             disabled={!connected || publishing || published}
