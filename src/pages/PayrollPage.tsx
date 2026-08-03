@@ -74,12 +74,17 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
     employment_type: 'permanent', pay_frequency: 'monthly', gross_salary: '',
     payment_method: 'bank_transfer', bank_name: '', bank_account_number: '',
     mobile_money_type: '', mobile_money_number: '', start_date: today(),
-    national_id: '', tpin: '',
+    national_id: '', tpin: '', salary_account_id: '',
   });
 
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
+
+  const { data: postingAccounts = [] } = useQuery({
+    queryKey: ['posting_accounts', businessId],
+    queryFn: () => repos.account.findPostingAccounts(businessId),
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -103,7 +108,8 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
           bank_name: form.bank_name || null, bank_account_number: form.bank_account_number || null,
           mobile_money_type: form.mobile_money_type || null, mobile_money_number: form.mobile_money_number || null,
           start_date: form.start_date, national_id: form.national_id || null,
-          tpin: form.tpin || null, tax_exempt: false, is_active: true,
+          tpin: form.tpin || null, salary_account_id: form.salary_account_id || null,
+          tax_exempt: false, is_active: true,
         })
         .select().single();
 
@@ -227,6 +233,18 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
               </div>
             </div>
           )}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Salary Expense Account</label>
+            <select value={form.salary_account_id} onChange={(e) => set('salary_account_id', e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="">Select a salary expense account…</option>
+              {postingAccounts.filter((account) => account.account_type === 'expense').map((account) => (
+                <option key={account.id} value={account.id}>{account.code} — {account.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Required before approving payroll. Choose the expense account for this employee's gross pay.</p>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -504,8 +522,8 @@ function ApprovePayrollModal({
   const [pensionAccountId, setPensionAccountId] = useState('');
 
   const { data: bankAccounts = [] } = useQuery({
-    queryKey: ['bank_accounts', businessId],
-    queryFn: () => repos.account.findBankAccounts(businessId),
+    queryKey: ['payroll_payment_accounts', businessId],
+    queryFn: () => repos.account.findPayrollPaymentAccounts(businessId),
     enabled: Boolean(businessId),
   });
 
@@ -590,7 +608,7 @@ function ApprovePayrollModal({
         </p>
 
         <div className="mb-4">
-          <label className="mb-1 block text-sm font-medium text-gray-700">Pay From Account</label>
+          <label className="mb-1 block text-sm font-medium text-gray-700">Pay From Bank or Cash Account</label>
           <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
             <option value="">Select an account…</option>
@@ -599,7 +617,7 @@ function ApprovePayrollModal({
             ))}
           </select>
           {bankAccounts.length === 0 && (
-            <p className="mt-1 text-xs text-amber-800">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
+            <p className="mt-1 text-xs text-amber-800">⚠ No bank or cash accounts found. Add a bank account or a Cash on Hand/Petty Cash account in Chart of Accounts first.</p>
           )}
         </div>
 

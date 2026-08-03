@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import type { Row, UpdateDto } from '@/dal/types/database';
@@ -39,10 +39,16 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
     mobile_money_number: employee.mobile_money_number ?? '',
     national_id: employee.national_id ?? '',
     tpin: employee.tpin ?? '',
+    salary_account_id: employee.salary_account_id ?? '',
     is_active: employee.is_active,
   });
 
   const salaryChanged = parseFloat(form.gross_salary) !== Number(employee.gross_salary);
+
+  const { data: postingAccounts = [] } = useQuery({
+    queryKey: ['posting_accounts', employee.business_id],
+    queryFn: () => repos.account.findPostingAccounts(employee.business_id),
+  });
 
   function set<K extends keyof typeof form>(field: K, value: typeof form[K]) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -71,6 +77,7 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
         mobile_money_number: form.mobile_money_number || null,
         national_id: form.national_id || null,
         tpin: form.tpin || null,
+        salary_account_id: form.salary_account_id || null,
         is_active: form.is_active,
       } as never;
 
@@ -209,6 +216,18 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
               </div>
             </div>
           )}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Salary Expense Account</label>
+            <select value={form.salary_account_id} onChange={(e) => set('salary_account_id', e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+              <option value="">Select a salary expense account…</option>
+              {postingAccounts.filter((account) => account.account_type === 'expense').map((account) => (
+                <option key={account.id} value={account.id}>{account.code} — {account.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Required before approving payroll. Choose the expense account for this employee's gross pay.</p>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
