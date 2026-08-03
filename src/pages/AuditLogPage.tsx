@@ -6,6 +6,7 @@ import {
   Eye, Clock, User, Database, FileText,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { escapeHtml, sha256Hex } from '@/lib/html';
 import { supabase } from '@/lib/supabase';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
@@ -307,31 +308,20 @@ export function AuditLogPage() {
   }, [businessId, chainData, tamperCount, showVerify]);
 
   // ── PDF Export (Signed for auditors) ─────────────────────────
-  const handleExportPDF = useCallback(() => {
+  //
+  // The footer carries a real SHA-256 fingerprint of the export content —
+  // computed with Web Crypto over the exact markup above the footer. (It
+  // previously printed 32 random bytes labelled as a SHA-256, which proved
+  // nothing and changed on every export.) An auditor can recompute it by
+  // stripping the footer block and hashing the remainder as UTF-8.
+  // SECURITY: all interpolated values are HTML-escaped (escapeHtml) to
+  // prevent XSS from audit log content.
+  const handleExportPDF = useCallback(async () => {
     if (!logData?.data.length) return;
 
-    // SECURITY: Escape HTML entities to prevent XSS from audit log content
-    const esc = (str: string | null | undefined): string => {
-      if (!str) return "";
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    };
+    const esc = escapeHtml;
 
-    const doc = document.implementation.createHTMLDocument('Audit Log');
-    const style = doc.createElement('style');
-    style.textContent = `
-      body { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; margin: 40px; }
-      h1 { font-size: 18px; margin-bottom: 4px; }
-      .meta { color: #666; margin-bottom: 20px; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-      th { background: #f8f9fa; font-weight: 600; }
-      .hash { font-family: ui-monospace, monospace; font-size: 9px; }
-      .valid { color: #15803d; } .tampered { color: #b91c1c; }
-      .footer { margin-top: 40px; font-size: 9px; color: #666; }
-    `;
-    doc.head.appendChild(style);
-
-    const bodyHTML = `
+    const contentHTML = `
       <h1>Ledgr Audit Log — Signed Export</h1>
       <div class="meta">
         Business: ${esc(currentBusiness?.business?.name) || '—'}<br>
@@ -360,14 +350,34 @@ export function AuditLogPage() {
               </tr>`;
           }).join('')}
         </tbody>
-      </table>
+      </table>`;
+
+    const signature = await sha256Hex(contentHTML);
+
+    const footerHTML = `
       <div class="footer">
-        <strong>Digital Signature (SHA-256 of export):</strong><br>
-        <span class="hash">${Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2,'0')).join('')}</span><br><br>
+        <strong>Export Fingerprint (SHA-256 of the content above):</strong><br>
+        <span class="hash">${signature ?? 'Unavailable — SHA-256 requires a secure (HTTPS) context.'}</span><br><br>
         This document is an immutable export of the append-only audit_log table. Any modification to the source data would break the hash chain shown above.
+        To verify this export, remove this footer, hash the remaining content as UTF-8 with SHA-256, and compare with the fingerprint.
       </div>
     `;
-    doc.body.innerHTML = bodyHTML;
+
+    const doc = document.implementation.createHTMLDocument('Audit Log');
+    const style = doc.createElement('style');
+    style.textContent = `
+      body { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; margin: 40px; }
+      h1 { font-size: 18px; margin-bottom: 4px; }
+      .meta { color: #666; margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+      th { background: #f8f9fa; font-weight: 600; }
+      .hash { font-family: ui-monospace, monospace; font-size: 9px; word-break: break-all; }
+      .valid { color: #15803d; } .tampered { color: #b91c1c; }
+      .footer { margin-top: 40px; font-size: 9px; color: #666; }
+    `;
+    doc.head.appendChild(style);
+    doc.body.innerHTML = contentHTML + footerHTML;
 
     const printWindow = window.open('', '_blank', 'noopener,noreferrer');
     if (printWindow) {

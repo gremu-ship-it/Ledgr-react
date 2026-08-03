@@ -6,6 +6,7 @@ import {
   Users,
   BookUser,
   Package,
+  Boxes,
   BookOpen,
   Percent,
   Landmark,
@@ -62,6 +63,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.inventory',
     items: [
+      { labelKey: 'navigation.items.inventoryOverview', path: '/inventory', icon: Boxes, partnerFeature: 'inventory' },
       { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory' },
       { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory' },
       { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory' },

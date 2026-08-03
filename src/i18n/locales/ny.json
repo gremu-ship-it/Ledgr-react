@@ -79,7 +79,8 @@
       "finance": "Za ndalama",
       "inventory": "Katundu",
       "accounting": "Maakaunti",
-      "organisation": "Bungwe"
+      "organisation": "Bungwe",
+      "support": "Thandizo"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -102,7 +103,10 @@
       "contacts": "Olumikizana",
       "branches": "Ma branch",
       "departments": "Madipatimenti",
-      "settings": "Zokonda"
+      "settings": "Zokonda",
+      "bankReconciliation": "Kugwirizanitsa Banki",
+      "support": "Thandizo",
+      "inventoryOverview": "Stock Yonse"
     }
   },
   "auth": {
@@ -471,5 +475,54 @@
     "joinedAs": "Mwalowa ngati {{role}}. Tikukutumizani ku dashboard…",
     "theBusiness": "bizinesi",
     "member": "membala"
+  },
+  "support": {
+    "title": "Wothandizira",
+    "subtitle": "Mayankho, kukonza zovuta, ndi thandizo la malamulo",
+    "widgetAriaLabel": "Tsegulani wothandizira",
+    "greeting": "Moni! Ndine Wothandizira wa Ledgr. Ndingakuthandizeni kudziwa momwe zinthu zimagwirira ntchito, kukonza zolakwika zomwe mukuona, ndi kuyankha mafunso a malamulo okhudza deta yanu. Sankhani mutu wapansipa kuti muyambe.",
+    "categories": {
+      "query": "Funsani funso",
+      "error": "Fotokozani vuto",
+      "compliance": "Malamulo ndi zinsinsi"
+    },
+    "suggest": {
+      "invoicing": "Ndingapange bwanji ndi kutumiza invoice?",
+      "expenses": "Ndingalembetse bwanji ndalama zochoka?",
+      "reports": "Ndingapange bwanji malipoti a ndalama?",
+      "gettingStarted": "Ndingayakhule bwanji bizinesi yanga?",
+      "crash": "App yaleka kugwira ntchito kapena ikuwonetsa skrini yopanda kanthu",
+      "sync": "Deta yanga sikugwirizana",
+      "login": "Sindikutha kulowa kapena ndili ndi vuto la MFA",
+      "slow": "App ikugwira ntchito mochedwa kapena sayankha",
+      "export": "Ndingatulutse bwanji deta yanga yonse?",
+      "delete": "Ndingachotse bwanji akaunti yanga?",
+      "audit": "Audit log ili kuti?",
+      "gdpr": "Ufulu wanga pa zinsinsi za deta ndi chiyani?"
+    },
+    "attachDiagnostics": "Phatikizani zolakwika zaposachedwa za app kuti tithandize kuzindikira vutoli",
+    "analysing": "Kusanthula…",
+    "error": "Pepani, sindinathe kufikira wothandizira. Onaninso kulumikizana kwanu ndikuyesanso, kapena imelani support@ledgr.app.",
+    "escalated": "Waperekedwa kwa gulu lothandizira",
+    "escalateFooter": "Mukusaukanabe? Imelani gulu lathu pa {{email}} ndipo tizichitapo kanthu — screenshot imathandiza.",
+    "placeholder": "Funsani funso, fotokozani vuto, kapena funsani za malamulo…",
+    "send": "Tumizani uthenga",
+    "enterHint": "Dinani Enter kutumiza · Shift+Enter kuti muyambire mzere watsopano",
+    "complianceQuickLinks": "Malamulo ndi deta — zodzichitirira",
+    "quick": {
+      "export": "Tulutsani deta yanga",
+      "exportDesc": "Dowunilodani deta ya bizinesi yanu (kusuntha deta).",
+      "delete": "Chotsani akaunti yanga",
+      "deleteDesc": "Funsani kuchotsedwa kwamuyaya — pali nthawi yolekera.",
+      "audit": "Audit log",
+      "auditDesc": "Onaninso amene anasintha chiyani, ndi nthawi zake.",
+      "terms": "Mgwirizano ndi malamulo",
+      "termsDesc": "Werengani mgwirizano womwe munavomereza.",
+      "cookies": "Zokonda za cookies ndi zinsinsi",
+      "cookiesDesc": "Sinthani chilolezo ndi zokonda pa kutsatira."
+    },
+    "contactTitle": "Lankhulani ndi munthu",
+    "contactBody": "Wothandizira amayankha mafunso ambiri. Kwa mikangano ya malipiro, zalamulo, kapena zofunika mwadzidzidzi, imelani gulu lathu.",
+    "disclaimer": "Wothandizira amagwiritsa ntchito AI ndipo angapange zolakwika. Onetsetsani zofunikira za ndalama kapena malamulo. Macheza sagwiritsidwa ntchito kuphunzitsa ma model popanda chilolezo chanu."
   }
 }

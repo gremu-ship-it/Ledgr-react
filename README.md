@@ -118,11 +118,7 @@ and the manual approval gate — is in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 | [`SUPPORT_AGENT.md`](SUPPORT_AGENT.md) | In-app AI support agent |
 | [`WHITE_LABEL_SETUP.md`](WHITE_LABEL_SETUP.md) | White-label / rebranding |
 | [`BRANDING_SETUP.md`](BRANDING_SETUP.md) | Branding, theme, PWA manifest |
-| [`SYSTEM_AUDIT.md`](SYSTEM_AUDIT.md) | Security audit findings & remediation log |
-| [`A11Y_REPORT.md`](A11Y_REPORT.md) | Accessibility review & fixes |
-| [`UI_UX_REVIEW.md`](UI_UX_REVIEW.md) | Desktop/mobile UX review & applied fixes |
-| [`ERROR_ANALYSIS.md`](ERROR_ANALYSIS.md) | Error taxonomy & fixes |
-| [`FINAL_CHANGELOG.md`](FINAL_CHANGELOG.md) | UX overhaul changelog |
+| [`docs/archive/`](docs/archive/README.md) | Historical audits & fix reports (System audit, a11y, UX review, error analysis, changelog) |
 
 ## Security notes
 
@@ -132,4 +128,4 @@ and the manual approval gate — is in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 - Row Level Security enabled on all data tables; service-role access is
   Edge-Function-only
 - CORS allowlist on authenticated Edge Functions (`ALLOWED_ORIGINS`)
-- `npm audit` is kept at **0 vulnerabilities** (see `SYSTEM_AUDIT.md`)
+- `npm audit` is kept at **0 vulnerabilities** (see `docs/archive/SYSTEM_AUDIT.md`)

@@ -6,6 +6,7 @@ import {
   Wallet, Receipt, Printer, FileDown,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
+import { escapeHtml } from '@/lib/html';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, AccountSubtype, LoanStatus, ShareTransactionType } from '@/dal/types/database';
@@ -210,7 +211,7 @@ function openRepaymentSchedule(
   const rowsHtml = schedule
     .map(
       (r, i) => `<tr${i % 2 === 0 ? '' : ' class="alt"'}>
-        <td>${r.date}</td>
+        <td>${escapeHtml(r.date)}</td>
         <td class="${r.type}">${r.type === 'actual' ? 'Actual' : 'Projected'}</td>
         <td class="num">${formatMwkDetailed(r.principal)}</td>
         <td class="num">${formatMwkDetailed(r.interest)}</td>
@@ -228,7 +229,7 @@ function openRepaymentSchedule(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Repayment Schedule — ${loan.lender_name}</title>
+  <title>Repayment Schedule — ${escapeHtml(loan.lender_name)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; padding: 40px; color: #111; background: #fff; }
@@ -261,13 +262,13 @@ function openRepaymentSchedule(
 <body>
   <div class="header">
     <div>
-      <h1>${loan.lender_name} — Repayment Schedule</h1>
+      <h1>${escapeHtml(loan.lender_name)} — Repayment Schedule</h1>
       <div class="meta">
         <span><strong>Principal:</strong> ${formatMwkDetailed(principal)}</span>
         <span><strong>Interest Rate:</strong> ${rateDisplay}</span>
         <span><strong>Term:</strong> ${termDisplay}</span>
-        <span><strong>Start Date:</strong> ${loan.start_date}</span>
-        <span><strong>Status:</strong> ${loanStatusLabel(loan.status)}</span>
+        <span><strong>Start Date:</strong> ${escapeHtml(loan.start_date)}</span>
+        <span><strong>Status:</strong> ${escapeHtml(loanStatusLabel(loan.status))}</span>
       </div>
     </div>
     <div class="actions">

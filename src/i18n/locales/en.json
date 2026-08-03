@@ -105,7 +105,8 @@
       "branches": "Branches",
       "departments": "Departments",
       "settings": "Settings",
-      "support": "Support"
+      "support": "Support",
+      "inventoryOverview": "Stock Overview"
     }
   },
   "auth": {

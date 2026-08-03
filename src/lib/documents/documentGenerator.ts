@@ -11,17 +11,11 @@
  */
 
 import type { BusinessBranding, InvoiceLike, InvoiceLineLike, ContactLike } from './types';
+import { escapeHtml } from '@/lib/html';
 
 const DEFAULT_BRAND = '#0E7C5A'; // 5.32:1 AA contrast
 
-function esc(str: string | null | undefined): string {
-  if (!str) return '';
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+const esc = escapeHtml;
 
 function formatMwk(amount: number | string | null | undefined, currency = 'MWK'): string {
   const n = Number(amount ?? 0);

@@ -79,7 +79,8 @@
       "finance": "Finance",
       "inventory": "Stock",
       "accounting": "Comptabilité",
-      "organisation": "Organisation"
+      "organisation": "Organisation",
+      "support": "Aide"
     },
     "items": {
       "ledgrAi": "Ledgr IA",
@@ -102,7 +103,10 @@
       "contacts": "Contacts",
       "branches": "Agences",
       "departments": "Départements",
-      "settings": "Paramètres"
+      "settings": "Paramètres",
+      "bankReconciliation": "Rapprochement bancaire",
+      "support": "Assistance",
+      "inventoryOverview": "Aperçu des stocks"
     }
   },
   "auth": {
@@ -471,5 +475,54 @@
     "joinedAs": "Vous avez rejoint en tant que {{role}}. Redirection vers votre tableau de bord…",
     "theBusiness": "l’entreprise",
     "member": "membre"
+  },
+  "support": {
+    "title": "Assistant d’assistance",
+    "subtitle": "Réponses, dépannage et aide à la conformité",
+    "widgetAriaLabel": "Ouvrir l’assistant d’assistance",
+    "greeting": "Bonjour ! Je suis l’assistant d’assistance Ledgr. Je peux vous expliquer le fonctionnement des fonctionnalités, résoudre les erreurs que vous rencontrez et répondre aux questions de conformité concernant vos données. Choisissez un sujet ci-dessous pour commencer.",
+    "categories": {
+      "query": "Poser une question",
+      "error": "Signaler un problème",
+      "compliance": "Conformité et confidentialité"
+    },
+    "suggest": {
+      "invoicing": "Comment créer et envoyer une facture ?",
+      "expenses": "Comment enregistrer une dépense ?",
+      "reports": "Comment générer des états financiers ?",
+      "gettingStarted": "Comment configurer mon entreprise ?",
+      "crash": "L’application a planté ou affiche un écran vide",
+      "sync": "Mes données ne se synchronisent pas",
+      "login": "Je ne peux pas me connecter ou j’ai un problème de MFA",
+      "slow": "L’application est lente ou ne répond pas",
+      "export": "Comment exporter toutes mes données ?",
+      "delete": "Comment supprimer mon compte ?",
+      "audit": "Où se trouve le journal d’audit ?",
+      "gdpr": "Quels sont mes droits en matière de confidentialité ?"
+    },
+    "attachDiagnostics": "Joindre les erreurs récentes de l’application pour aider au diagnostic",
+    "analysing": "Analyse en cours…",
+    "error": "Désolé, je n’ai pas pu joindre l’assistant. Vérifiez votre connexion et réessayez, ou écrivez à support@ledgr.app.",
+    "escalated": "Transmis à l’équipe d’assistance",
+    "escalateFooter": "Toujours bloqué ? Écrivez à notre équipe à {{email}} et nous nous en occuperons — une capture d’écran aide.",
+    "placeholder": "Posez une question, décrivez un problème ou posez une question de conformité…",
+    "send": "Envoyer le message",
+    "enterHint": "Appuyez sur Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne",
+    "complianceQuickLinks": "Conformité et libre-service des données",
+    "quick": {
+      "export": "Exporter mes données",
+      "exportDesc": "Téléchargez une copie de vos données professionnelles (portabilité des données).",
+      "delete": "Supprimer mon compte",
+      "deleteDesc": "Demander une suppression définitive — un délai de rétractation est prévu.",
+      "audit": "Journal d’audit",
+      "auditDesc": "Vérifiez qui a modifié quoi, avec horodatage.",
+      "terms": "Conditions générales",
+      "termsDesc": "Lisez les conditions que vous avez acceptées.",
+      "cookies": "Paramètres de cookies et de confidentialité",
+      "cookiesDesc": "Gérez le consentement et les préférences de suivi."
+    },
+    "contactTitle": "Parler à un humain",
+    "contactBody": "L’assistant traite la plupart des questions. Pour les litiges de facturation, les questions juridiques ou les urgences, écrivez à notre équipe.",
+    "disclaimer": "L’assistant utilise l’IA et peut se tromper. Vérifiez les informations financières ou de conformité importantes. Les conversations ne servent pas à entraîner des modèles sans votre consentement."
   }
 }

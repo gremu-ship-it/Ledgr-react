@@ -79,7 +79,8 @@
       "finance": "Fedha",
       "inventory": "Stoo",
       "accounting": "Uhasibu",
-      "organisation": "Shirika"
+      "organisation": "Shirika",
+      "support": "Msaada"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -102,7 +103,10 @@
       "contacts": "Mawasiliano",
       "branches": "Matawi",
       "departments": "Idara",
-      "settings": "Mipangilio"
+      "settings": "Mipangilio",
+      "bankReconciliation": "Upatanishaji wa Benki",
+      "support": "Msaada",
+      "inventoryOverview": "Muhtasari wa Hisa"
     }
   },
   "auth": {
@@ -471,5 +475,54 @@
     "joinedAs": "Umejiunga kama {{role}}. Inakuelekeza kwenye dashibodi…",
     "theBusiness": "biashara",
     "member": "mwanachama"
+  },
+  "support": {
+    "title": "Msaidizi",
+    "subtitle": "Majibu, utatuzi wa matatizo na msaada wa uzingatiaji",
+    "widgetAriaLabel": "Fungua msaidizi",
+    "greeting": "Habari! Mimi ni Msaidizi wa Ledgr. Ninaweza kukusaidia kuelewa jinsi vipengele vinavyofanya kazi, kutatua makosa unayoyaona, na kujibu maswali ya uzingatiaji kuhusu data yako. Chagua mada hapa chini ili kuanza.",
+    "categories": {
+      "query": "Uliza swali",
+      "error": "Ripoti tatizo",
+      "compliance": "Uzingatiaji na faragha"
+    },
+    "suggest": {
+      "invoicing": "Je, ninaundaje na kutuma ankara?",
+      "expenses": "Je, ninarekodije gharama?",
+      "reports": "Je, ninaundaje taarifa za kifedha?",
+      "gettingStarted": "Je, ninaanzishaje biashara yangu?",
+      "crash": "Programu imekwama au inaonyesha skrini tupu",
+      "sync": "Data yangu haisawazishwi",
+      "login": "Siwezi kuingia au nina tatizo la MFA",
+      "slow": "Programu ni polepole au haitajibu",
+      "export": "Je, ninasafirishaje data yangu yote?",
+      "delete": "Je, ninaifutaje akaunti yangu?",
+      "audit": "Kumbukumbu ya ukaguzi iko wapi?",
+      "gdpr": "Haki zangu za faragha ya data ni zipi?"
+    },
+    "attachDiagnostics": "Ambatanisha makosa ya hivi karibuni ya programu kusaidia kutambua tatizo",
+    "analysing": "Inachambua…",
+    "error": "Samahani, sikuweza kufikia msaidizi. Tafadhali angalia muunganisho wako na ujaribu tena, au barua pepe support@ledgr.app.",
+    "escalated": "Imepitishwa kwa timu ya msaada",
+    "escalateFooter": "Bado umekwama? Tutumie barua pepe kwa {{email}} na tutashughulikia — picha ya skrini inasaidia.",
+    "placeholder": "Uliza swali, eleza tatizo, au uliza kuhusu uzingatiaji…",
+    "send": "Tuma ujumbe",
+    "enterHint": "Bonyeza Enter kutuma · Shift+Enter kwa mstari mpya",
+    "complianceQuickLinks": "Uzingatiaji na kujihudumia kwa data",
+    "quick": {
+      "export": "Hamisha data yangu",
+      "exportDesc": "Pakua nakala ya data ya biashara yako (uhamishaji wa data).",
+      "delete": "Futa akaunti yangu",
+      "deleteDesc": "Omba kufutwa kabisa — kuna muda wa kusitisha.",
+      "audit": "Kumbukumbu ya ukaguzi",
+      "auditDesc": "Kagua nani alibadilisha nini, kwa muda.",
+      "terms": "Masharti na vigezo",
+      "termsDesc": "Soma masharti uliyokubali.",
+      "cookies": "Mipangilio ya vidakuzi na faragha",
+      "cookiesDesc": "Dhibiti ridhaa na mapendeleo ya ufuatiliaji."
+    },
+    "contactTitle": "Zungumza na binadamu",
+    "contactBody": "Msaidizi anashughulikia maswali mengi. Kwa migogoro ya malipo, masuala ya kisheria, au mambo ya dharura, tutumie barua pepe timu yetu.",
+    "disclaimer": "Msaidizi hutumia AI na anaweza kufanya makosa. Thibitisha maelezo muhimu ya kifedha au uzingatiaji. Mazungumzo hayatumi kufundisha mifano bila ridhaa yako."
   }
 }
