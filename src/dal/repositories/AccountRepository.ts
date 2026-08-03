@@ -80,6 +80,20 @@ export class AccountRepository extends BaseRepository<'accounts'> {
     return data ?? null;
   }
 
+  /** Accounts that may fund payroll disbursements, including physical cash. */
+  async findPayrollPaymentAccounts(businessId: string): Promise<Row<'accounts'>[]> {
+    const { data, error } = await this.client
+      .from('accounts').select('*')
+      .eq('business_id', businessId)
+      .eq('is_group', false)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .or('is_bank_account.eq.true,code.eq.1110,code.eq.1115')
+      .order('name', { ascending: true });
+    if (error) throw toRepositoryError('accounts', error);
+    return data ?? [];
+  }
+
   async findBankAccounts(businessId: string): Promise<Row<'accounts'>[]> {
     const { data, error } = await this.client
       .from('accounts').select('*')

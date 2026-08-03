@@ -267,17 +267,37 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       );
     }
 
+    // Most businesses use the standard 6110 Basic Salaries account. Older
+    // employee records may not have salary_account_id populated, so use that
+    // chart-of-accounts default rather than making payroll approval depend on
+    // the employee's payment method (cash, bank, or mobile money).
+    let defaultSalaryAccountId = await this.findAccountByCode(run.business_id, '6110');
+    if (!defaultSalaryAccountId) {
+      const { data: salaryAccount } = await this.client
+        .from('accounts')
+        .select('id')
+        .eq('business_id', run.business_id)
+        .eq('account_type', 'expense')
+        .eq('is_group', false)
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .ilike('name', '%basic%salary%')
+        .limit(1)
+        .maybeSingle();
+      defaultSalaryAccountId = salaryAccount?.id ?? null;
+    }
+
     const lines: Omit<InsertDto<'journal_lines'>, 'journal_entry_id' | 'business_id'>[] = [];
     let lineNum = 1;
 
-    // One salary expense line per employee (see flagged note above).
+    // One salary expense line per employee (employee override first, then 6110).
     for (const line of run.lines) {
       const employee = await this.findEmployeeById(line.employee_id);
-      const expenseAccountId = employee.salary_account_id;
+      const expenseAccountId = employee.salary_account_id ?? defaultSalaryAccountId;
       if (!expenseAccountId) {
         throw new ValidationError(
           'payroll_runs',
-          `Employee ${employee.id} (${employee.first_name} ${employee.last_name}) has no salary_account_id set.`,
+          `Employee ${employee.id} (${employee.first_name} ${employee.last_name}) has no salary account set, and no default 6110 Basic Salaries account exists.`,
         );
       }
       lines.push({
