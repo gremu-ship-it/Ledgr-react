@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Megaphone,
@@ -15,12 +15,18 @@ import {
   Eye,
   CheckCircle2,
   Package,
+  Sparkles,
+  Pencil,
+  X,
+  Users,
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { useAppStore } from '@/store/useAppStore';
 import {
   callMarketingAgent,
   saveDraft,
+  loadBrandVoice,
+  saveBrandVoice,
   type MarketingMode,
   type MarketingResult,
   type Recommendation,
@@ -124,6 +130,25 @@ export function MarketingAssistantPage() {
   const [savingDraftId, setSavingDraftId] = useState<number>(-1);
   const [savedDraftIds, setSavedDraftIds] = useState<Set<number>>(new Set());
 
+  // Brand voice (Phase 1) — loaded per business, passed into every generation.
+  const [brandVoice, setBrandVoice] = useState('');
+  const [editingVoice, setEditingVoice] = useState(false);
+  const [draftVoice, setDraftVoice] = useState('');
+  const [savingVoice, setSavingVoice] = useState(false);
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    loadBrandVoice(businessId)
+      .then((v) => {
+        if (!cancelled) setBrandVoice(v);
+      })
+      .catch((err) => log.warn('Could not load brand voice', { error: err as Error }));
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
   function switchTab(next: Tab) {
     setTab(next);
     setInput('');
@@ -139,7 +164,7 @@ export function MarketingAssistantPage() {
     setResult(null);
     try {
       const messages = text ? [{ role: 'user' as const, content: text }] : undefined;
-      const res = await callMarketingAgent({ mode: tab, businessId, messages });
+      const res = await callMarketingAgent({ mode: tab, businessId, messages, brandVoice: brandVoice || undefined });
       setResult(res);
     } catch (err) {
       log.error('Marketing agent request failed', err as Error);
@@ -152,6 +177,25 @@ export function MarketingAssistantPage() {
   function loadSample() {
     setError(null);
     setResult(SAMPLE_RESULT[tab]);
+  }
+
+  function startEditVoice() {
+    setDraftVoice(brandVoice);
+    setEditingVoice(true);
+  }
+
+  async function saveVoice() {
+    try {
+      setSavingVoice(true);
+      await saveBrandVoice(businessId, draftVoice);
+      setBrandVoice(draftVoice);
+      setEditingVoice(false);
+    } catch (err) {
+      log.error('Could not save brand voice', err as Error);
+      setError(t('marketing.voiceSaveFailed'));
+    } finally {
+      setSavingVoice(false);
+    }
   }
 
   async function handleSaveDraft(draft: MarketingDraft, index: number) {
@@ -218,6 +262,55 @@ export function MarketingAssistantPage() {
       <div className="mb-4 flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4">
         <ActiveIcon className="mt-0.5 h-5 w-5 shrink-0 text-brand-500" />
         <p className="text-sm text-gray-600">{t(activeTab.descKey)}</p>
+      </div>
+
+      {/* Brand voice & tone (Phase 1) */}
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-brand-500" />
+          <h2 className="text-sm font-semibold text-gray-900">{t('marketing.voice.title')}</h2>
+          {!editingVoice && (
+            <button
+              onClick={startEditVoice}
+              className="ml-auto inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Pencil className="h-3 w-3" /> {brandVoice ? t('marketing.voice.edit') : t('marketing.voice.set')}
+            </button>
+          )}
+        </div>
+
+        {editingVoice ? (
+          <div className="mt-3">
+            <textarea
+              rows={4}
+              value={draftVoice}
+              onChange={(e) => setDraftVoice(e.target.value)}
+              placeholder={t('marketing.voice.placeholder')}
+              className="w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={saveVoice}
+                disabled={savingVoice}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+              >
+                {savingVoice ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {t('marketing.voice.save')}
+              </button>
+              <button
+                onClick={() => setEditingVoice(false)}
+                disabled={savingVoice}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-3.5 w-3.5" /> {t('marketing.voice.cancel')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className={`mt-2 text-sm ${brandVoice ? 'text-gray-700' : 'text-gray-400'}`}>
+            {brandVoice || t('marketing.voice.empty')}
+          </p>
+        )}
       </div>
 
       {/* Prompt input */}
@@ -381,6 +474,13 @@ function RecommendationCard({ rec, t }: { rec: Recommendation; t: TFunc }) {
         <span className="font-medium text-gray-600">{t('marketing.suggestedAction')}:</span>{' '}
         {rec.suggestedAction}
       </p>
+      {rec.targetSegment && (
+        <p className="mt-1 inline-flex items-center gap-1 text-xs text-brand-700">
+          <Users className="h-3.5 w-3.5" />
+          <span className="font-medium text-gray-600">{t('marketing.targetSegment')}:</span>{' '}
+          {rec.targetSegment}
+        </p>
+      )}
       {rec.productRefs && rec.productRefs.length > 0 && (
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <Tag className="h-3.5 w-3.5 text-gray-400" />

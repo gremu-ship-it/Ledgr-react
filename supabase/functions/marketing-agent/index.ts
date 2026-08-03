@@ -149,42 +149,97 @@ function mwk(n: number | null | undefined): string {
   return `MK${Math.round(n).toLocaleString('en-MW')}`;
 }
 
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000;
+
 async function buildMarketingContext(
   authClient: ReturnType<typeof createClient>,
   businessId: string,
 ): Promise<string> {
+  const ninetyDaysAgo = new Date(Date.now() - NINETY_DAYS_MS).toISOString();
+  const nowIso = new Date().toISOString();
+
   // Run reads in parallel; any single failure degrades gracefully rather than
   // blanking the whole context.
-  const [productsRes, balancesRes, invoicesRes, businessRes] = await Promise.allSettled([
-    authClient
-      .from('products')
-      .select('id,name,sku,sale_price,purchase_price,description,reorder_level,category:product_categories(name)')
-      .eq('business_id', businessId)
-      .order('name', { ascending: true })
-      .limit(60),
-    authClient
-      .from('inventory_balances')
-      .select('quantity_on_hand,quantity_available,product:products(name,reorder_level)')
-      .eq('business_id', businessId)
-      .limit(200),
-    authClient
-      .from('invoices')
-      .select('issue_date,status,total_amount,amount_paid,contact:contacts(name)')
-      .eq('business_id', businessId)
-      .order('issue_date', { ascending: false })
-      .limit(60),
-    authClient.from('businesses').select('name,base_currency').eq('id', businessId).maybeSingle(),
-  ]);
+  const [productsRes, balancesRes, invoicesRes, linesRes, overdueRes, customersRes, businessRes] =
+    await Promise.allSettled([
+      authClient
+        .from('products')
+        .select('id,name,sku,sale_price,purchase_price,description,reorder_level,category:product_categories(name)')
+        .eq('business_id', businessId)
+        .order('name', { ascending: true })
+        .limit(80),
+      authClient
+        .from('inventory_balances')
+        .select('quantity_on_hand,quantity_available,product:products(name,reorder_level)')
+        .eq('business_id', businessId)
+        .limit(300),
+      authClient
+        .from('invoices')
+        .select('issue_date,status,total_amount,amount_paid,contact:contacts(name)')
+        .eq('business_id', businessId)
+        .order('issue_date', { ascending: false })
+        .limit(120),
+      // Sales lines over the last 90 days — drives best-sellers & slow-movers.
+      authClient
+        .from('invoice_lines')
+        .select('quantity,line_total,product_id,product:products(name)')
+        .eq('business_id', businessId)
+        .not('product_id', 'is', null)
+        .gte('created_at', ninetyDaysAgo)
+        .limit(1000),
+      // Overdue receivables — drives "chase / cashflow" recommendations.
+      authClient
+        .from('invoices')
+        .select('total_amount,amount_paid,due_date,contact:contacts(name)')
+        .eq('business_id', businessId)
+        .eq('status', 'overdue')
+        .limit(100),
+      // Active customers — drives segments & dormant-customer detection.
+      authClient
+        .from('contacts')
+        .select('id,name')
+        .eq('business_id', businessId)
+        .eq('contact_type', 'customer')
+        .eq('is_active', true)
+        .limit(300),
+      authClient.from('businesses').select('name,base_currency').eq('id', businessId).maybeSingle(),
+    ]);
 
-  const business =
-    businessRes.status === 'fulfilled' ? (businessRes.value.data ?? null) : null;
+  const business = businessRes.status === 'fulfilled' ? (businessRes.value.data ?? null) : null;
   const currency = business?.base_currency || 'MWK';
 
   const lines: string[] = [];
   lines.push(`BUSINESS: ${business?.name ?? 'your business'}`);
   lines.push(`CURRENCY: ${currency}`);
 
-  // Products
+  // ── Recent sales lines → best sellers + the set of products that sold ─────
+  const salesLines =
+    linesRes.status === 'fulfilled'
+      ? ((linesRes.value.data ?? []) as Array<Record<string, unknown>>)
+      : [];
+  const byProduct = new Map<string, { qty: number; revenue: number }>();
+  for (const l of salesLines) {
+    const name = (l.product as { name?: string } | null)?.name;
+    if (!name) continue;
+    const qty = (l.quantity as number | null) ?? 0;
+    const rev = (l.line_total as number | null) ?? 0;
+    const cur = byProduct.get(name) ?? { qty: 0, revenue: 0 };
+    cur.qty += qty;
+    cur.revenue += rev;
+    byProduct.set(name, cur);
+  }
+  const bestSellers = [...byProduct.entries()].sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 8);
+  const soldProductNames = new Set(byProduct.keys());
+
+  lines.push('');
+  lines.push(`BEST SELLERS (last 90 days, ${salesLines.length} lines):`);
+  if (bestSellers.length) {
+    for (const [name, v] of bestSellers) lines.push(`- ${name}: ${v.qty} sold, ${mwk(v.revenue)}`);
+  } else {
+    lines.push('- (no product-linked sales in the last 90 days)');
+  }
+
+  // ── Products catalogue ───────────────────────────────────────────────────
   const products =
     productsRes.status === 'fulfilled'
       ? ((productsRes.value.data ?? []) as Array<Record<string, unknown>>)
@@ -201,44 +256,95 @@ async function buildMarketingContext(
   }
   if (products.length === 0) lines.push('- (no products recorded)');
 
-  // Inventory — flag low / out-of-stock lines
+  // ── Inventory → low stock + slow movers (stocked but not selling) ─────────
   const balances =
     balancesRes.status === 'fulfilled'
       ? ((balancesRes.value.data ?? []) as Array<Record<string, unknown>>)
       : [];
   const low: string[] = [];
   const out: string[] = [];
+  const stocked: { name: string; onHand: number }[] = [];
   for (const b of balances) {
     const onHand = (b.quantity_on_hand as number | null) ?? 0;
     const prod = b.product as { name?: string; reorder_level?: number | null } | null;
-    const reorder = prod?.reorder_level ?? null;
     const name = prod?.name ?? 'item';
     if (onHand <= 0) out.push(name);
-    else if (reorder != null && onHand <= reorder) low.push(`${name} (${onHand} left)`);
+    else {
+      stocked.push({ name, onHand });
+      const reorder = prod?.reorder_level ?? null;
+      if (reorder != null && onHand <= reorder) low.push(`${name} (${onHand} left)`);
+    }
   }
+  // Slow movers = in stock but not in the last-90-days sold set.
+  const slowMovers = stocked
+    .filter((s) => !soldProductNames.has(s.name))
+    .slice(0, 8)
+    .map((s) => `${s.name} (${s.onHand} in stock)`);
+
   lines.push('');
   lines.push('STOCK SIGNALS:');
   lines.push(`- Out of stock: ${out.length ? out.join(', ') : 'none'}`);
   lines.push(`- Low / near reorder: ${low.length ? low.join(', ') : 'none'}`);
+  lines.push(`- Slow movers (stocked, no recent sales): ${slowMovers.length ? slowMovers.join('; ') : 'none'}`);
 
-  // Recent sales — totals + top customers
+  // ── Overdue receivables ──────────────────────────────────────────────────
+  const overdue =
+    overdueRes.status === 'fulfilled'
+      ? ((overdueRes.value.data ?? []) as Array<Record<string, unknown>>)
+      : [];
+  const overdueOutstanding = overdue.reduce(
+    (s, i) => s + Math.max(((i.total_amount as number | null) ?? 0) - ((i.amount_paid as number | null) ?? 0), 0),
+    0,
+  );
+  const debtors = new Map<string, number>();
+  for (const i of overdue) {
+    const name = (i.contact as { name?: string } | null)?.name ?? 'Unknown';
+    const owed = Math.max(((i.total_amount as number | null) ?? 0) - ((i.amount_paid as number | null) ?? 0), 0);
+    if (owed > 0) debtors.set(name, (debtors.get(name) ?? 0) + owed);
+  }
+  const topDebtors = [...debtors.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  lines.push('');
+  lines.push('OVERDUE RECEIVABLES:');
+  lines.push(`- ${overdue.length} overdue invoice(s), ${mwk(overdueOutstanding)} outstanding`);
+  if (topDebtors.length) {
+    lines.push(`- Top debtors: ${topDebtors.map(([n, v]) => `${n} (${mwk(v)})`).join(', ')}`);
+  }
+
+  // ── Customers & segments ─────────────────────────────────────────────────
   const invoices =
     invoicesRes.status === 'fulfilled'
       ? ((invoicesRes.value.data ?? []) as Array<Record<string, unknown>>)
       : [];
-  const totalSales = invoices.reduce((s, i) => s + ((i.total_amount as number | null) ?? 0), 0);
-  const totalPaid = invoices.reduce((s, i) => s + ((i.amount_paid as number | null) ?? 0), 0);
-  const outstanding = Math.max(totalSales - totalPaid, 0);
+  const recentCustomers = new Set<string>();
   const byCustomer = new Map<string, number>();
   for (const i of invoices) {
     const name = (i.contact as { name?: string } | null)?.name ?? 'Unknown';
+    recentCustomers.add(name);
     byCustomer.set(name, (byCustomer.get(name) ?? 0) + ((i.total_amount as number | null) ?? 0));
   }
   const top = [...byCustomer.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const customers =
+    customersRes.status === 'fulfilled'
+      ? ((customersRes.value.data ?? []) as Array<Record<string, unknown>>)
+      : [];
+  const allCustomerNames = new Set(customers.map((c) => String(c.name ?? '')).filter(Boolean));
+  const dormantSample = [...allCustomerNames].filter((n) => !recentCustomers.has(n)).slice(0, 6);
+
+  const totalSales = invoices.reduce((s, i) => s + ((i.total_amount as number | null) ?? 0), 0);
+  const totalPaid = invoices.reduce((s, i) => s + ((i.amount_paid as number | null) ?? 0), 0);
+
   lines.push('');
-  lines.push(`RECENT SALES (last ~${invoices.length} invoices):`);
-  lines.push(`- Total invoiced: ${mwk(totalSales)} | Outstanding: ${mwk(outstanding)}`);
-  lines.push(`- Top customers: ${top.length ? top.map(([n, v]) => `${n} (${mwk(v)})`).join(', ') : 'none'}`);
+  lines.push('CUSTOMERS & SEGMENTS:');
+  lines.push(`- Active customers: ${allCustomerNames.size}`);
+  lines.push(`- Active in last ~120 invoices: ${recentCustomers.size}; dormant: ${Math.max(allCustomerNames.size - recentCustomers.size, 0)}`);
+  if (dormantSample.length) lines.push(`- Dormant customers (sample): ${dormantSample.join(', ')}`);
+  lines.push(`- Top customers (recent): ${top.length ? top.map(([n, v]) => `${n} (${mwk(v)})`).join(', ') : 'none'}`);
+
+  lines.push('');
+  lines.push(`RECENT SALES (sample ~${invoices.length} invoices, now ${nowIso.slice(0, 10)}):`);
+  lines.push(`- Total invoiced: ${mwk(totalSales)} | Outstanding: ${mwk(Math.max(totalSales - totalPaid, 0))}`);
 
   lines.push('');
   lines.push('Use ONLY the data above. Do not invent prices, stock levels, or customer testimonials.');
@@ -255,10 +361,13 @@ function buildSystemPrompt(mode: Mode, context: string, brandVoice?: string): st
     recommendations:
       'Analyze the business data provided and return concrete, prioritised marketing ' +
       'recommendations: promotions, repricing, bundles, cross-sells, and which customers or ' +
-      'segments to target. Every recommendation MUST cite the real data (which product, which ' +
-      'stock signal, which customer). Prefer promoting slow-moving / overstocked lines, ' +
-      're-engaging top or dormant customers, and protecting margin. Populate `recommendations` ' +
-      'and `summary`; you may omit drafts and research.',
+      'segments to target. Prioritise: (a) promoting or bundling SLOW MOVERS (stocked, no recent ' +
+      'sales) — often pairing them with BEST SELLERS; (b) re-engaging DORMANT customers and ' +
+      'rewarding TOP customers; (c) clearing OUT-OF-STALL/low stock or protecting margin; ' +
+      '(d) accelerating OVERDUE receivables where a gentle nudge helps. Every recommendation ' +
+      'MUST cite the real data (which product, which stock signal, which customer/segment) and ' +
+      'set `targetSegment` to say WHO it is aimed at. Populate `recommendations` and `summary`; ' +
+      'you may omit drafts and research.',
     research:
       'You do NOT have live web or social data in this version. Return honest, clearly-labelled ' +
       'GENERAL marketing & growth strategy tailored to this business (its products, customers, ' +
@@ -308,6 +417,7 @@ const MARKETING_TOOL = {
             rationale: { type: 'string', description: 'Why this makes sense, citing real data.' },
             expectedImpact: { type: 'string' },
             suggestedAction: { type: 'string', description: 'The concrete next step.' },
+            targetSegment: { type: 'string', description: 'WHO this is aimed at, e.g. "dormant customers", "top 5 customers", "new walk-ins", "all".' },
             productRefs: { type: 'array', items: { type: 'string' }, description: 'Real product names/SKUs involved.' },
           },
           required: ['title', 'rationale', 'suggestedAction'],

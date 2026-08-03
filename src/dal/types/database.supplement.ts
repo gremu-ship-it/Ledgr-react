@@ -488,6 +488,40 @@ export type SupplementalTables = {
       },
     ]
   }
+  // Added by 20260803000001_marketing_settings.sql (Marketing Agent, Phase 1).
+  // One row per business (PK business_id).
+  marketing_settings: {
+    Row: {
+      business_id: string
+      brand_voice: string
+      post_language: string
+      updated_at: string
+      updated_by: string | null
+    }
+    Insert: {
+      business_id: string
+      brand_voice?: string
+      post_language?: string
+      updated_at?: string
+      updated_by?: string | null
+    }
+    Update: {
+      business_id?: string
+      brand_voice?: string
+      post_language?: string
+      updated_at?: string
+      updated_by?: string | null
+    }
+    Relationships: [
+      {
+        foreignKeyName: "marketing_settings_business_id_fkey"
+        columns: ["business_id"]
+        isOneToOne: false
+        referencedRelation: "businesses"
+        referencedColumns: ["id"]
+      },
+    ]
+  }
 }
 
 export type SupplementalViews = {

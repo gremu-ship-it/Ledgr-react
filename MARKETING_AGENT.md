@@ -15,9 +15,9 @@ assistants, and reuses the same architecture: an Anthropic-powered Supabase Edge
 Function that is auth-gated, rate-limited, and never exposes its API key to the
 browser.
 
-> **Status:** Phase 0 is **implemented** (foundation, draft-only) — see
-> *Implementation status* below. Phases 1–4 remain planned. The open questions at
-> the bottom still need your sign-off before we widen scope; the defaults I built
+> **Status:** Phases 0 and 1 are **implemented** — see *Implementation status*
+> below each phase. Phases 2–4 remain planned. The remaining open questions at
+> the bottom still need your sign-off before we widen scope; the defaults built
 > on are noted there.
 
 ---
@@ -177,6 +177,21 @@ agent.
   bundles, audience segments) with a rationale and the data it used.
 - **Internal-only; this is where the agent builds trust.**
 
+**✅ Phase 1 — DONE (implemented)**
+- Richer server-side context in `marketing-agent`: best sellers (last 90 days
+  from `invoice_lines`), **slow movers** (stocked but no recent sales), overdue
+  receivables + top debtors, and **customer segments** (active/dormant counts,
+  dormant sample, top customers).
+- Sharper recommendations: the tool schema gained `targetSegment` (who a
+  recommendation targets) and the prompt now prioritises slow-mover bundles,
+  dormant-customer re-engagement, and overdue nudges.
+- **Per-business brand voice** — new `marketing_settings` table (migration
+  `20260803000001`) with business-member RLS; editable "Brand voice & tone"
+  panel on the page (`loadBrandVoice` / `saveBrandVoice`), injected into the
+  agent's system prompt so generated posts match the business's voice.
+- `marketing_settings` typed in `database.supplement.ts`.
+- Verified: `typecheck`, `lint` (0 errors), `test` (170 passing), `build`.
+
 ### Phase 2 — Research
 - Integrate a web-search provider (Brave / Serper / Tavily / Bing), key as a
   secret, called server-side from the edge function.
@@ -253,9 +268,9 @@ supabase db push   # or supabase migration up for 20260803000000_marketing_agent
    analysis/drafts, approve-first for public posts? *(Built on: YES — the
    Publish tab is preview-only with a disabled "Publish" button.)*
 2. **Brand-voice profile** — store as a settings row on `businesses`, or a new
-   `marketing_settings` table? *(Built on: the edge function already accepts an
-   optional `brandVoice` string in the request; the UI doesn't collect it yet —
-   Phase 1 will wire a per-business voice field.)*
+   `marketing_settings` table? *(Resolved in Phase 1: a dedicated
+   `marketing_settings` table with an editable "Brand voice & tone" panel on the
+   page, injected into the agent's system prompt.)*
 3. **Web-search provider** — Brave, Serper, Tavily, or Bing for Phase 2?
    *(Built on: none yet — Research mode returns clearly-labelled general
    guidance until a provider key is added.)*

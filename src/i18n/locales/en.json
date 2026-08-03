@@ -575,6 +575,17 @@
       "publishBestseller": "Write a post about my best-selling product",
       "publishRestock": "Announce a restock",
       "publishOffer": "Promote a weekend offer"
-    }
+    },
+    "targetSegment": "Target",
+    "voice": {
+      "title": "Brand voice & tone",
+      "edit": "Edit",
+      "set": "Set voice",
+      "save": "Save",
+      "cancel": "Cancel",
+      "placeholder": "Describe how your business should sound — e.g. 'Warm and practical, Malawian English. Always quote MWK prices. Friendly but professional, no hype or invented offers.'",
+      "empty": "Not set — the assistant uses its default voice. Click 'Set voice' to make posts sound like your business."
+    },
+    "voiceSaveFailed": "Couldn't save the brand voice."
   }
 }

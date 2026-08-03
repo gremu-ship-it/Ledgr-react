@@ -19,6 +19,8 @@ export interface Recommendation {
   rationale: string;
   expectedImpact?: string;
   suggestedAction: string;
+  /** WHO the recommendation targets — e.g. "dormant customers", "top 5 customers". */
+  targetSegment?: string;
   productRefs?: string[];
 }
 
@@ -97,5 +99,32 @@ export async function saveDraft(args: {
   });
   if (error) {
     throw new Error(error.message || 'Could not save draft');
+  }
+}
+
+// ── Brand voice (Phase 1) ──────────────────────────────────────────────────
+// Stored per business in `marketing_settings` and injected into the agent's
+// system prompt so generated content matches the business's voice.
+
+/** Load the business's brand-voice profile (empty string if unset). */
+export async function loadBrandVoice(businessId: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('marketing_settings')
+    .select('brand_voice')
+    .eq('business_id', businessId)
+    .maybeSingle();
+  if (error) {
+    throw new Error(error.message || 'Could not load brand voice');
+  }
+  return data?.brand_voice ?? '';
+}
+
+/** Save the business's brand-voice profile (upsert). */
+export async function saveBrandVoice(businessId: string, brandVoice: string): Promise<void> {
+  const { error } = await supabase
+    .from('marketing_settings')
+    .upsert({ business_id: businessId, brand_voice: brandVoice.slice(0, 2000) });
+  if (error) {
+    throw new Error(error.message || 'Could not save brand voice');
   }
 }
