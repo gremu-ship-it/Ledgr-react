@@ -3,10 +3,11 @@
 // The in-app Marketing Assistant for a Ledgr business. It does three things:
 //   1. recommendations — analyze the business's own products, stock, sales and
 //      customers, and propose promotions, repricing, cross-sells & bundles.
-//   2. research        — general marketing/strategy guidance for the business.
-//      (Live web + social search arrives in Phase 2 — see MARKETING_AGENT.md.
-//       Until then research returns clearly-labelled general guidance, not
-//       invented live stats.)
+//   2. research        — marketing/strategy guidance for the business. When a
+//      web-search provider key is configured (Tavily or Brave), research is
+//      grounded in live web results with citations; otherwise it falls back to
+//      clearly-labelled general guidance (never invented live stats).
+//      See MARKETING_AGENT.md (Phase 2).
 //   3. publish         — draft a product/marketing post (Facebook-style) that the
 //       user reviews in-app. Phase 0 is draft-only: nothing is posted for real.
 //
@@ -23,6 +24,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import * as Sentry from 'npm:@sentry/deno@8';
 import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
+import { searchWeb, webSearchConfigured, type WebSearchResult } from '../_shared/webSearch.ts';
 
 // ── Environment ─────────────────────────────────────────────────────────────
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -96,13 +98,27 @@ interface ResearchBlock {
   note: string;
 }
 
+interface Source {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 interface MarketingResult {
   mode: Mode;
   summary: string;
   recommendations: Recommendation[];
   drafts: Draft[];
   research: ResearchBlock | null;
+  /** Web sources used to ground a research response (empty unless research + search). */
+  sources: Source[];
   escalate: boolean;
+}
+
+function formatSearchResults(results: WebSearchResult[]): string {
+  return results
+    .map((r, i) => `[${i + 1}] ${r.title}\n    ${r.url}\n    ${r.snippet.slice(0, 400)}`)
+    .join('\n');
 }
 
 // ── Rate limiting (per user, per minute) ────────────────────────────────────
@@ -352,10 +368,24 @@ async function buildMarketingContext(
 }
 
 // ── Prompt construction ─────────────────────────────────────────────────────
-function buildSystemPrompt(mode: Mode, context: string, brandVoice?: string): string {
+function buildSystemPrompt(mode: Mode, context: string, brandVoice?: string, liveSearch = false): string {
   const voice = (brandVoice && brandVoice.trim())
     ? `\n\nBRAND VOICE (follow this exactly):\n${brandVoice.trim().slice(0, 1500)}`
     : '';
+
+  const researchGuidance = liveSearch
+    ? 'You have LIVE WEB RESULTS (below). Summarise them into `research.themes` and ' +
+      '`research.opportunities` tailored to this business, and weave the most relevant ' +
+      'points into `summary`. Cite sources by their title/number; do NOT quote prices or ' +
+      'stats that are not in the results. If the results are sparse or off-topic, say so ' +
+      'plainly in `research.note` rather than padding. You may also add `recommendations` ' +
+      'that combine the web findings with the business data.'
+    : 'You do NOT have live web or social data in this version. Return honest, clearly-labelled ' +
+      'GENERAL marketing & growth strategy tailored to this business (its products, customers, ' +
+      'and Malawian SME context). Populate `research` with themes, opportunities, and a short ' +
+      'note that live trend search arrives once a search provider key is configured. Do NOT ' +
+      'fabricate live statistics, follower counts, or competitor prices. You may also add ' +
+      'general `recommendations`.';
 
   const modeGuidance: Record<Mode, string> = {
     recommendations:
@@ -368,12 +398,7 @@ function buildSystemPrompt(mode: Mode, context: string, brandVoice?: string): st
       'MUST cite the real data (which product, which stock signal, which customer/segment) and ' +
       'set `targetSegment` to say WHO it is aimed at. Populate `recommendations` and `summary`; ' +
       'you may omit drafts and research.',
-    research:
-      'You do NOT have live web or social data in this version. Return honest, clearly-labelled ' +
-      'GENERAL marketing & growth strategy tailored to this business (its products, customers, ' +
-      'and Malawian SME context). Populate `research` with themes, opportunities, and a short ' +
-      'note that live trend search is coming later. Do NOT fabricate live statistics, follower ' +
-      'counts, or competitor prices. You may also add general `recommendations`.',
+    research: researchGuidance,
     publish:
       'Draft ready-to-post marketing copy for the business based on its real products and stock. ' +
       'Phase 0 is Facebook-style. Write authentic, non-spammy copy: a hook, the real product ' +
@@ -493,6 +518,7 @@ async function callAnthropic(messages: ChatMessage[], systemPrompt: string): Pro
     recommendations: Array.isArray(input.recommendations) ? input.recommendations.slice(0, 8) : [],
     drafts: Array.isArray(input.drafts) ? input.drafts.slice(0, 5) : [],
     research: input.research && typeof input.research === 'object' ? input.research : null,
+    sources: [], // populated by the caller for research mode (from searchWeb)
     escalate: Boolean(input.escalate),
   };
 }
@@ -565,10 +591,35 @@ serve(async (req) => {
     }
 
     const context = await buildMarketingContext(authClient, businessId);
-    const systemPrompt = buildSystemPrompt(mode, context, brandVoice);
+
+    // ── Phase 2: live web search for research mode ────────────────────────
+    // When a provider key is configured, ground the research response in real
+    // web results; otherwise fall back to clearly-labelled general guidance.
+    let liveSearch = false;
+    let sources: Source[] = [];
+    let promptContext = context;
+    if (mode === 'research' && webSearchConfigured()) {
+      // Prefer the user's instruction as the query; localise to Malawi if not
+      // already mentioned.
+      const lastUser = [...messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+      const baseQuery = (lastUser || 'small business marketing trends and ideas').trim();
+      const localized = /malawi|mwan|nyas/i.test(baseQuery) ? baseQuery : `${baseQuery} Malawi`;
+      const webResults = await searchWeb(localized, 6);
+      if (webResults.length) {
+        liveSearch = true;
+        sources = webResults.map((r) => ({ title: r.title, url: r.url, snippet: r.snippet }));
+        promptContext =
+          context +
+          '\n\nLIVE WEB RESULTS (cite these by [n] title; do not invent beyond them):\n' +
+          formatSearchResults(webResults);
+      }
+    }
+
+    const systemPrompt = buildSystemPrompt(mode, promptContext, brandVoice, liveSearch);
 
     const result: MarketingResult = await callAnthropic(messages, systemPrompt);
     result.mode = mode;
+    result.sources = sources;
 
     return json(result);
   } catch (err) {

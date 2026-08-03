@@ -37,12 +37,20 @@ export interface ResearchBlock {
   note: string;
 }
 
+export interface Source {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
 export interface MarketingResult {
   mode: MarketingMode;
   summary: string;
   recommendations: Recommendation[];
   drafts: MarketingDraft[];
   research: ResearchBlock | null;
+  /** Web sources used to ground a research response (empty unless research + search). */
+  sources: Source[];
   escalate: boolean;
 }
 
@@ -78,6 +86,7 @@ export async function callMarketingAgent(request: MarketingRequest): Promise<Mar
     recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
     drafts: Array.isArray(data.drafts) ? data.drafts : [],
     research: data.research && typeof data.research === 'object' ? data.research : null,
+    sources: Array.isArray(data.sources) ? data.sources : [],
     escalate: Boolean(data.escalate),
   };
 }

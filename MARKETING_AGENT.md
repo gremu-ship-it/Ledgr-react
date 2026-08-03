@@ -15,8 +15,8 @@ assistants, and reuses the same architecture: an Anthropic-powered Supabase Edge
 Function that is auth-gated, rate-limited, and never exposes its API key to the
 browser.
 
-> **Status:** Phases 0 and 1 are **implemented** — see *Implementation status*
-> below each phase. Phases 2–4 remain planned. The remaining open questions at
+> **Status:** Phases 0–2 are **implemented** — see *Implementation status*
+> below each phase. Phases 3–4 remain planned. The remaining open questions at
 > the bottom still need your sign-off before we widen scope; the defaults built
 > on are noted there.
 
@@ -199,6 +199,21 @@ agent.
 - Social side limited to the business's **own** page insights (Graph API read),
   where a connection exists.
 
+**✅ Phase 2 — DONE (implemented)**
+- Provider-agnostic `supabase/functions/_shared/webSearch.ts` — supports
+  **Tavily** (`POST api.tavily.com/search`, Bearer key) and **Brave**
+  (`GET api.search.brave.com/...`, `X-Subscription-Token`). Provider is forced
+  via `WEB_SEARCH_PROVIDER` or auto-detected from whichever key is set; fails
+  soft (returns `[]`, 8s timeout) so research never breaks.
+- `marketing-agent` research mode now grounds responses in **live web results**
+  when a key is configured (query localised to Malawi), and surfaces the sources
+  to the UI via a new `sources[]` field; with no key it keeps the honest
+  general-guidance fallback.
+- UI: a **Sources** card with a "Live web search" badge renders the cited links.
+- Verified: `typecheck`, `lint` (0 errors), `test` (170 passing), `build`.
+- **Note:** "social search" (own-page insights via the Graph API) is deferred to
+  Phase 3, where the Facebook OAuth connection it depends on is built.
+
 ### Phase 3 — Real Facebook publishing
 - Meta Developer App + Facebook Login (OAuth) + request
   `pages_manage_posts`, `pages_read_engagement`, `pages_show_list`.
@@ -247,8 +262,11 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 # Optional — model override (defaults to claude-sonnet-4-20250514):
 supabase secrets set MARKETING_AGENT_MODEL=claude-sonnet-4-20250514
 
-# Phase 2 — web search:
-supabase secrets set WEB_SEARCH_API_KEY=...
+# Phase 2 — web search (set ONE; optional WEB_SEARCH_PROVIDER forces a choice):
+supabase secrets set TAVILY_API_KEY=tvly-...        # https://tavily.com
+#   or
+supabase secrets set BRAVE_API_KEY=...              # https://api.search.brave.com
+# supabase secrets set WEB_SEARCH_PROVIDER=tavily   # 'tavily' | 'brave'
 
 # Phase 3 — Facebook:
 supabase secrets set FB_APP_ID=... FB_APP_SECRET=...
@@ -272,8 +290,9 @@ supabase db push   # or supabase migration up for 20260803000000_marketing_agent
    `marketing_settings` table with an editable "Brand voice & tone" panel on the
    page, injected into the agent's system prompt.)*
 3. **Web-search provider** — Brave, Serper, Tavily, or Bing for Phase 2?
-   *(Built on: none yet — Research mode returns clearly-labelled general
-   guidance until a provider key is added.)*
+   *(Resolved in Phase 2: a provider-agnostic module supports **Tavily** and
+   **Brave**; set one key (`TAVILY_API_KEY` or `BRAVE_API_KEY`) and it
+   auto-detects. Research is live when a key is present, else general guidance.)*
 4. **Facebook scope** — one Business Page per business, or multiple Pages/channels?
    *(Built on: single channel in the preview; `channel` is free-text in the
    schema so this is forward-compatible.)*

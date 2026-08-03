@@ -19,6 +19,7 @@ import {
   Pencil,
   X,
   Users,
+  ExternalLink,
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
 import { useAppStore } from '@/store/useAppStore';
@@ -31,6 +32,7 @@ import {
   type MarketingResult,
   type Recommendation,
   type MarketingDraft,
+  type Source,
 } from '@/lib/marketingAgent';
 
 const log = createLogger('MarketingAssistantPage');
@@ -77,6 +79,7 @@ const SAMPLE_RESULT: Record<Tab, MarketingResult> = {
     escalate: false,
     research: null,
     drafts: [],
+    sources: [],
     recommendations: [
       {
         title: 'Run a bundle on slow-moving stock',
@@ -98,6 +101,9 @@ const SAMPLE_RESULT: Record<Tab, MarketingResult> = {
     },
     recommendations: [],
     drafts: [],
+    sources: [
+      { title: 'Sample Source — SME Marketing (Malawi)', url: 'https://example.com/sme-marketing-malawi', snippet: 'Sample snippet: practical, low-budget marketing ideas for small businesses.' },
+    ],
   },
   publish: {
     mode: 'publish',
@@ -113,6 +119,7 @@ const SAMPLE_RESULT: Record<Tab, MarketingResult> = {
         cta: 'Visit us today or message to order.',
       },
     ],
+    sources: [],
   },
 };
 
@@ -433,6 +440,9 @@ function ResultsView({
       {/* Research */}
       {result.research && <ResearchView research={result.research} t={t} />}
 
+      {/* Sources (Research + live web search) */}
+      {result.sources.length > 0 && <SourcesView sources={result.sources} t={t} />}
+
       {/* Drafts (Publish) */}
       {result.drafts.length > 0 && (
         <div className="space-y-3">
@@ -531,6 +541,36 @@ function ResearchView({
       {research.note && (
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{research.note}</p>
       )}
+    </div>
+  );
+}
+
+function SourcesView({ sources, t }: { sources: Source[]; t: TFunc }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
+        <ExternalLink className="h-4 w-4 text-brand-500" />
+        {t('marketing.sources')}
+        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+          {t('marketing.liveSearch')}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {sources.map((s, i) => (
+          <li key={i} className="text-sm">
+            <a
+              href={s.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-brand-600 hover:underline"
+            >
+              {s.title || s.url}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            {s.snippet && <p className="mt-0.5 text-xs text-gray-500">{s.snippet}</p>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

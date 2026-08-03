@@ -539,7 +539,7 @@
       "description": "The assistant analyses your real products, stock and sales, then proposes promotions, bundles, repricing and who to target. Nothing leaves the app."
     },
     "research": {
-      "description": "General marketing and growth guidance tailored to your business. Live web & social trend search arrives in a later phase — for now this is strategy guidance, not live data."
+      "description": "Get marketing and growth guidance for your business. When a web-search provider is configured, research is grounded in live web results with citations; otherwise you get clearly-labelled general strategy (never invented stats)."
     },
     "publish": "Publish",
     "placeholder": {
@@ -586,6 +586,8 @@
       "placeholder": "Describe how your business should sound — e.g. 'Warm and practical, Malawian English. Always quote MWK prices. Friendly but professional, no hype or invented offers.'",
       "empty": "Not set — the assistant uses its default voice. Click 'Set voice' to make posts sound like your business."
     },
-    "voiceSaveFailed": "Couldn't save the brand voice."
+    "voiceSaveFailed": "Couldn't save the brand voice.",
+    "sources": "Sources",
+    "liveSearch": "Live web search"
   }
 }
