@@ -209,13 +209,56 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       .eq('tax_code', 'paye')
       .eq('is_active', true)
       .maybeSingle();
-    const { data: tprConfig } = await this.client
+    let { data: tprConfig } = await this.client
       .from('tax_configurations')
       .select('*')
       .eq('business_id', run.business_id)
       .eq('tax_code', 'tpr_pension')
       .eq('is_active', true)
       .maybeSingle();
+
+    if (!tprConfig?.tax_payable_account_id) {
+      // Auto-resolve: look for account code '2132' or name containing 'Pension'
+      const { data: pensionAcc } = await this.client
+        .from('accounts')
+        .select('id')
+        .eq('business_id', run.business_id)
+        .is('deleted_at', null)
+        .or('code.eq.2132,name.ilike.%pension%payable%,name.ilike.%pension%')
+        .limit(1)
+        .maybeSingle();
+
+      if (pensionAcc?.id) {
+        if (tprConfig) {
+          await this.client
+            .from('tax_configurations')
+            .update({ tax_payable_account_id: pensionAcc.id })
+            .eq('id', tprConfig.id);
+          tprConfig = { ...tprConfig, tax_payable_account_id: pensionAcc.id };
+        } else {
+          // Auto-create tpr_pension config linked to pensionAcc
+          const { data: newConfig } = await this.client
+            .from('tax_configurations')
+            .insert({
+              business_id: run.business_id,
+              tax_code: 'tpr_pension',
+              name: 'TPR Pension',
+              rate: 0,
+              employer_rate: 10,
+              employee_rate: 5,
+              description: 'Pension Act mandatory contribution — 10% employer, 5% employee',
+              tax_payable_account_id: pensionAcc.id,
+              effective_from: '2011-01-01',
+              is_active: true,
+            } as never)
+            .select()
+            .single();
+          if (newConfig) {
+            tprConfig = newConfig as Row<'tax_configurations'>;
+          }
+        }
+      }
+    }
 
     if (!tprConfig?.tax_payable_account_id) {
       throw new ValidationError(
@@ -262,6 +305,26 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       const firstEmployee = await this.findEmployeeById(run.lines[0].employee_id);
       payeAccountId = firstEmployee.paye_liability_account_id;
     }
+    if (!payeAccountId && totalPaye > 0) {
+      const { data: payeAcc } = await this.client
+        .from('accounts')
+        .select('id')
+        .eq('business_id', run.business_id)
+        .is('deleted_at', null)
+        .or('code.eq.2122,code.eq.2130,name.ilike.%paye%payable%,name.ilike.%paye%')
+        .limit(1)
+        .maybeSingle();
+
+      if (payeAcc?.id) {
+        payeAccountId = payeAcc.id;
+        if (payeConfig) {
+          await this.client
+            .from('tax_configurations')
+            .update({ tax_payable_account_id: payeAcc.id })
+            .eq('id', payeConfig.id);
+        }
+      }
+    }
     if (totalPaye > 0 && !payeAccountId) {
       throw new ValidationError('payroll_runs', `No PAYE payable account resolved (neither tax_configurations nor employee-level).`);
     }
@@ -303,11 +366,25 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     }
 
     if (totalPensionEmployer > 0) {
-      const pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6130');
+      let pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6112');
+      if (!pensionExpenseAccountId) {
+        pensionExpenseAccountId = await this.findAccountByCode(run.business_id, '6130');
+      }
+      if (!pensionExpenseAccountId) {
+        const { data: expAcc } = await this.client
+          .from('accounts')
+          .select('id')
+          .eq('business_id', run.business_id)
+          .is('deleted_at', null)
+          .ilike('name', '%pension%')
+          .limit(1)
+          .maybeSingle();
+        pensionExpenseAccountId = expAcc?.id ?? null;
+      }
       if (!pensionExpenseAccountId) {
         throw new ValidationError(
           'payroll_runs',
-          `No account found with code '6130' (Employer Pension Contributions) for business ${run.business_id}.`,
+          `No account found with code '6112'/'6130' or name 'Employer Pension Contributions' for business ${run.business_id}.`,
         );
       }
       lines.push({

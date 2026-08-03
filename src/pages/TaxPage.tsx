@@ -54,6 +54,8 @@ interface TaxConfigForm {
   effective_from: string;
   effective_to: string;
   is_active: boolean;
+  tax_payable_account_id: string;
+  tax_receivable_account_id: string;
 }
 
 function TaxConfigModal({
@@ -76,6 +78,8 @@ function TaxConfigModal({
       effective_from: existing.effective_from ?? today(),
       effective_to: existing.effective_to ?? '',
       is_active: existing.is_active ?? true,
+      tax_payable_account_id: existing.tax_payable_account_id ?? '',
+      tax_receivable_account_id: existing.tax_receivable_account_id ?? '',
     } : {
       tax_code: 'vat_standard',
       name: '',
@@ -87,9 +91,17 @@ function TaxConfigModal({
       effective_from: today(),
       effective_to: '',
       is_active: true,
+      tax_payable_account_id: '',
+      tax_receivable_account_id: '',
     },
   );
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const { data: postingAccounts = [] } = useQuery({
+    queryKey: ['posting_accounts', businessId],
+    queryFn: () => repos.account.findPostingAccounts(businessId),
+    enabled: Boolean(businessId),
+  });
 
   const isPension = form.tax_code === 'tpr_pension';
 
@@ -127,6 +139,8 @@ function TaxConfigModal({
         effective_from: form.effective_from,
         effective_to: form.effective_to || null,
         is_active: form.is_active,
+        tax_payable_account_id: form.tax_payable_account_id || null,
+        tax_receivable_account_id: form.tax_receivable_account_id || null,
       };
 
       if (existing) {
@@ -200,6 +214,38 @@ function TaxConfigModal({
               <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
                 placeholder="e.g. Standard VAT"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            </div>
+
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Tax Payable Account (Liability)</label>
+              <select value={form.tax_payable_account_id} onChange={(e) => set('tax_payable_account_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">Select a liability account…</option>
+                {postingAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.code} — {acc.name} ({acc.account_type})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Account to credit when recording tax liabilities (e.g. Pension Payable, PAYE Payable, VAT Output).
+              </p>
+            </div>
+
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Tax Receivable Account (Asset, optional)</label>
+              <select value={form.tax_receivable_account_id} onChange={(e) => set('tax_receivable_account_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">Select an asset account…</option>
+                {postingAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.code} — {acc.name} ({acc.account_type})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Account to debit when recording tax receivables/input tax (e.g. VAT Receivable).
+              </p>
             </div>
 
             <div className="col-span-2">
@@ -451,6 +497,15 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
     enabled: Boolean(businessId),
   });
 
+  const { data: postingAccounts = [] } = useQuery({
+    queryKey: ['posting_accounts', businessId],
+    queryFn: () => repos.account.findPostingAccounts(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const accountMap = new Map(postingAccounts.map((a) => [a.id, a]));
+  const unlinkedConfigs = configs.filter((c) => c.is_active && !c.tax_payable_account_id);
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await repos.tax['client']
@@ -465,6 +520,20 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
 
   return (
     <div>
+      {unlinkedConfigs.length > 0 && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl bg-amber-50 p-4 text-sm border border-amber-200 text-amber-800">
+          <AlertCircle className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900">Unlinked Tax Payable Accounts</p>
+            <p className="mt-0.5 text-amber-800">
+              The following tax configuration(s) are missing a linked payable account:{' '}
+              <span className="font-medium">{unlinkedConfigs.map((c) => c.name).join(', ')}</span>.
+              Edit the configuration to link a liability account so payroll approval and tax returns can post journal entries correctly.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex justify-end">
         <button onClick={() => { setEditing(undefined); setShowModal(true); }}
           className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
@@ -493,6 +562,7 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
                 <th scope="col" className="px-4 py-3 text-left">Tax Code</th>
                 <th scope="col" className="px-4 py-3 text-left">Name</th>
                 <th scope="col" className="px-4 py-3 text-right">Rate</th>
+                <th scope="col" className="px-4 py-3 text-left">Payable Account</th>
                 <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">MRA Reference</th>
                 <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Effective From</th>
                 <th scope="col" className="hidden sm:table-cell px-4 py-3 text-left">Effective To</th>
@@ -501,43 +571,55 @@ function TaxConfigsTab({ businessId }: { businessId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {configs.map((cfg) => (
-                <tr key={cfg.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
-                      {cfg.tax_code}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{cfg.name}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                    {cfg.tax_code === 'tpr_pension'
-                      ? `${Number(cfg.employer_rate ?? 0).toFixed(1)}% / ${Number(cfg.employee_rate ?? 0).toFixed(1)}%`
-                      : `${Number(cfg.rate).toFixed(2)}%`}
-                  </td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.mra_reference ?? '—'}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_from}</td>
-                  <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_to ?? '—'}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      cfg.is_active ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {cfg.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => { setEditing(cfg); setShowModal(true); }}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setDeleting(cfg)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {configs.map((cfg) => {
+                const acc = cfg.tax_payable_account_id ? accountMap.get(cfg.tax_payable_account_id) : null;
+                return (
+                  <tr key={cfg.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">
+                        {cfg.tax_code}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-900">{cfg.name}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                      {cfg.tax_code === 'tpr_pension'
+                        ? `${Number(cfg.employer_rate ?? 0).toFixed(1)}% / ${Number(cfg.employee_rate ?? 0).toFixed(1)}%`
+                        : `${Number(cfg.rate).toFixed(2)}%`}
+                    </td>
+                    <td className="px-4 py-3">
+                      {acc ? (
+                        <span className="text-gray-900 font-medium">{acc.code} — {acc.name}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          <AlertCircle className="h-3 w-3" /> Not linked
+                        </span>
+                      )}
+                    </td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.mra_reference ?? '—'}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_from}</td>
+                    <td className="hidden sm:table-cell px-4 py-3 text-gray-500">{cfg.effective_to ?? '—'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                        cfg.is_active ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {cfg.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => { setEditing(cfg); setShowModal(true); }}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => setDeleting(cfg)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

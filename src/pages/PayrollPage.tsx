@@ -501,6 +501,7 @@ function ApprovePayrollModal({
 }) {
   const [alert, setAlert] = useState<Alert | null>(null);
   const [bankAccountId, setBankAccountId] = useState('');
+  const [pensionAccountId, setPensionAccountId] = useState('');
 
   const { data: bankAccounts = [] } = useQuery({
     queryKey: ['bank_accounts', businessId],
@@ -508,10 +509,57 @@ function ApprovePayrollModal({
     enabled: Boolean(businessId),
   });
 
+  const { data: tprConfig } = useQuery({
+    queryKey: ['tax_configurations', businessId, 'tpr_pension'],
+    queryFn: () => repos.tax.findByCode(businessId, 'tpr_pension'),
+    enabled: Boolean(businessId),
+  });
+
+  const { data: postingAccounts = [] } = useQuery({
+    queryKey: ['posting_accounts', businessId],
+    queryFn: () => repos.account.findPostingAccounts(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  // Default pension account selection if unlinked
+  const resolvedPensionAccount = pensionAccountId || tprConfig?.tax_payable_account_id || (
+    postingAccounts.find((a) => a.code === '2132' || a.name.toLowerCase().includes('pension'))?.id ?? ''
+  );
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!userId) throw new Error('Unable to determine the current user. Please sign in again.');
       if (!bankAccountId) throw new Error('Select a bank account for net pay disbursement.');
+
+      // Ensure pension payable account is linked if available
+      const activePensionAccount = pensionAccountId || resolvedPensionAccount;
+      if (activePensionAccount) {
+        if (tprConfig && tprConfig.tax_payable_account_id !== activePensionAccount) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- base client accessor
+          const { error } = await (repos.tax as any).client
+            .from('tax_configurations')
+            .update({ tax_payable_account_id: activePensionAccount })
+            .eq('id', tprConfig.id);
+          if (error) throw new Error(`Failed to link TPR pension account: ${error.message}`);
+        } else if (!tprConfig) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- base client accessor
+          const { error } = await (repos.tax as any).client
+            .from('tax_configurations')
+            .insert({
+              business_id: businessId,
+              tax_code: 'tpr_pension',
+              name: 'TPR Pension',
+              rate: 0,
+              employer_rate: 10,
+              employee_rate: 5,
+              tax_payable_account_id: activePensionAccount,
+              effective_from: '2011-01-01',
+              is_active: true,
+            });
+          if (error) throw new Error(`Failed to create TPR pension config: ${error.message}`);
+        }
+      }
+
       const entryNumber = await nextEntryNumber(businessId);
       await repos.payroll.approve(run.id, userId, entryNumber, bankAccountId);
     },
@@ -541,7 +589,7 @@ function ApprovePayrollModal({
           PAYE and TPR remittances will be generated automatically. This cannot be undone from here.
         </p>
 
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="mb-1 block text-sm font-medium text-gray-700">Pay From Account</label>
           <select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
@@ -552,6 +600,25 @@ function ApprovePayrollModal({
           </select>
           {bankAccounts.length === 0 && (
             <p className="mt-1 text-xs text-amber-800">⚠ No bank accounts found. Mark an account as a bank account in Chart of Accounts first.</p>
+          )}
+        </div>
+
+        <div className="mb-5">
+          <label className="mb-1 block text-sm font-medium text-gray-700">TPR Pension Payable Account</label>
+          <select
+            value={pensionAccountId || resolvedPensionAccount}
+            onChange={(e) => setPensionAccountId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="">Select Pension Payable account…</option>
+            {postingAccounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>{acc.code} — {acc.name}</option>
+            ))}
+          </select>
+          {!tprConfig?.tax_payable_account_id && (
+            <p className="mt-1 text-xs text-amber-700">
+              ⚠ TPR pension payable account is not linked. Linking it here will save it to your tax configuration.
+            </p>
           )}
         </div>
 

@@ -274,7 +274,30 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
       throw new ValidationError('tax_returns', `Tax return ${taxReturnId} has no liability to post.`);
     }
 
-    const config = await this.taxConfigRepo.findByCode(taxReturn.business_id, taxReturn.tax_code, taxReturn.period_end);
+    let config = await this.taxConfigRepo.findByCode(taxReturn.business_id, taxReturn.tax_code, taxReturn.period_end);
+    if (!config?.tax_payable_account_id) {
+      const codeSearch = taxReturn.tax_code === 'tpr_pension' ? '2132' : taxReturn.tax_code === 'paye' ? '2122' : '2121';
+      const nameSearch = taxReturn.tax_code === 'tpr_pension' ? 'pension' : taxReturn.tax_code === 'paye' ? 'paye' : 'vat';
+      const { data: acc } = await this.client
+        .from('accounts')
+        .select('id')
+        .eq('business_id', taxReturn.business_id)
+        .is('deleted_at', null)
+        .or(`code.eq.${codeSearch},name.ilike.%${nameSearch}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (acc?.id) {
+        if (config) {
+          await this.client
+            .from('tax_configurations')
+            .update({ tax_payable_account_id: acc.id })
+            .eq('id', config.id);
+          config = { ...config, tax_payable_account_id: acc.id };
+        }
+      }
+    }
+
     if (!config?.tax_payable_account_id) {
       throw new ValidationError(
         'tax_returns',

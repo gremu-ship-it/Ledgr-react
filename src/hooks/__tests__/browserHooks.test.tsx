@@ -1,10 +1,21 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    auth: {
+      signOut: vi.fn(),
+    },
+  },
+}));
+
 import { useDensity } from '../useDensity';
 import { useIsMobile } from '../useIsMobile';
 import { useOnlineStatus } from '../useOnlineStatus';
+import { useAutoSignOutOnHidden } from '../useAutoSignOutOnHidden';
 import { useAppStore } from '@/store/useAppStore';
+import { supabase } from '@/lib/supabase';
 
 function setViewport(width: number) {
   Object.defineProperty(window, 'innerWidth', { configurable: true, value: width, writable: true });
@@ -74,5 +85,19 @@ describe('browser-facing hooks', () => {
       thClass: 'px-3 py-2',
       rowClass: 'text-[13px]',
     });
+  });
+
+  it('does not sign out user when tab visibility changes to hidden', async () => {
+    const signOutSpy = vi.spyOn(supabase.auth, 'signOut');
+    renderHook(() => useAutoSignOutOnHidden());
+
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+
+    await new Promise((res) => setTimeout(res, 50));
+    expect(signOutSpy).not.toHaveBeenCalled();
+    signOutSpy.mockRestore();
   });
 });
