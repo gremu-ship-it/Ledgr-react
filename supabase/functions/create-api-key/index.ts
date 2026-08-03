@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { sha256Hex } from '../_shared/crypto.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
 
@@ -12,11 +13,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
   });
-}
-
-async function sha256(input: string): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function generateApiKey(): string {
@@ -62,7 +58,7 @@ serve(async (req) => {
     }
 
     const rawKey = generateApiKey();
-    const keyHash = await sha256(rawKey);
+    const keyHash = await sha256Hex(rawKey);
     const keyPrefix = `${rawKey.slice(0, 18)}…`;
 
     const { data: record, error } = await admin

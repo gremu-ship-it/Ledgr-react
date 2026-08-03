@@ -73,7 +73,7 @@ non-`VITE_` secrets in the browser — Edge Function secrets are configured with
 | `npm run build`        | Type-check + production build                   |
 | `npm run typecheck`    | `tsc -b`                                        |
 | `npm run lint`         | ESLint                                          |
-| `npm run test`         | Vitest unit tests (run once)                    |
+| `npm run test`         | Vitest unit tests — `src/**` plus the Edge-Function shared modules in `supabase/functions/_shared/` (they use only Web-standard APIs so their security helpers run under Node) |
 | `npm run test:watch`   | Vitest watch mode                               |
 | `npm run verify`       | typecheck + lint + test + build (what CI runs)  |
 | `npm run preview`      | Serve the production build locally              |

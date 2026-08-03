@@ -568,7 +568,7 @@ export async function createExpenseJournalEntry(
   }
 
   lines.push({
-    line_number:   lineNumber + 1,
+    line_number:   lineNumber,
     account_id:    creditAccount.id,
     description:   isBill
       ? `Payable — Expense ${expense.expense_number}`

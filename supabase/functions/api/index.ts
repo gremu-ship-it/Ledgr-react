@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { hmacSha256Hex, sha256Hex } from '../_shared/crypto.ts';
 import * as Sentry from 'npm:@sentry/deno@8';
 import { z } from 'npm:zod@4.4.3';
 
@@ -125,23 +126,6 @@ function getApiKey(req: Request): string | null {
   return req.headers.get('X-API-Key');
 }
 
-async function sha256(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function hmacSha256(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
-  return Array.from(new Uint8Array(signature)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 function jsonApiResource(type: string, row: Record<string, unknown>) {
   const { id, ...attributes } = row;
   return { type, id: String(id), attributes };
@@ -192,7 +176,7 @@ async function authenticate(req: Request): Promise<{ keyId: string; businessId: 
   const apiKey = getApiKey(req);
   if (!apiKey?.startsWith('ledgr_sk_')) return errorResponse(401, 'Unauthorized', 'Missing or invalid API key.');
 
-  const keyHash = await sha256(apiKey);
+  const keyHash = await sha256Hex(apiKey);
   const { data: key, error } = await supabase
     .from('api_keys')
     .select('id, business_id, revoked_at')
@@ -272,7 +256,7 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
           headers: {
             'Content-Type': 'application/json',
             'X-Ledgr-Event': event,
-            'X-Ledgr-Signature': await hmacSha256(webhook.secret, body),
+            'X-Ledgr-Signature': await hmacSha256Hex(webhook.secret, body),
           },
           body,
         });

@@ -9,7 +9,14 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      // Edge-Function shared modules (_shared/*) deliberately use only
+      // Web-standard APIs so their security helpers (HMAC, SSRF guard,
+      // HTML sanitiser) are unit-testable under Node.
+      'supabase/functions/**/*.test.ts',
+    ],
     globals: false,
   },
 });

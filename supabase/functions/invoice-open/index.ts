@@ -18,6 +18,7 @@
 //     - Fake invoice_delivery_events rows
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import { hmacSha256Hex, timingSafeEqual } from '../_shared/crypto.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -35,25 +36,6 @@ const GIF_HEADERS = {
   'Pragma': 'no-cache',
   'Expires': '0',
 };
-
-async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 serve(async (req) => {
   // Always return the pixel — never leak whether the invoice exists or

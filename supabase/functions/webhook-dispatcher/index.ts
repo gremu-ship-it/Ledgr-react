@@ -1,6 +1,8 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
+import { hmacSha256Hex } from '../_shared/crypto.ts';
+import { isPrivateIp } from '../_shared/urlSafety.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -17,18 +19,6 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
   });
-}
-
-async function hmacSha256(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
-  return Array.from(new Uint8Array(signature)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function assertMember(authHeader: string, businessId: string): Promise<Response | null> {
@@ -52,24 +42,6 @@ async function assertMember(authHeader: string, businessId: string): Promise<Res
   // separately allowlisted below; moving dispatch fully server-side is the
   // next step before arbitrary user-supplied payloads can be eliminated.
   return membership ? null : json({ error: 'Not authorized for this business' }, 403);
-}
-
-function isPrivateIp(address: string): boolean {
-  const ip = address.toLowerCase();
-  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
-  if (v4) {
-    const [a, b, c, d] = v4.slice(1).map(Number);
-    if ([a, b, c, d].some((part) => part > 255)) return true;
-    return a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
-      (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
-  }
-  const normalized = ip.replace(/^\[|\]$/g, '');
-  return normalized === '::1' || normalized === '::' || normalized.startsWith('fc') ||
-    normalized.startsWith('fd') || normalized.startsWith('fe8') || normalized.startsWith('fe9') ||
-    normalized.startsWith('fea') || normalized.startsWith('feb') || normalized.startsWith('2001:db8') ||
-    (normalized.startsWith('::ffff:') && isPrivateIp(normalized.slice(7)));
 }
 
 async function assertPublicWebhookDestination(endpoint: URL): Promise<void> {
@@ -111,7 +83,7 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
           headers: {
             'Content-Type': 'application/json',
             'X-Ledgr-Event': event,
-            'X-Ledgr-Signature': await hmacSha256(webhook.secret, body),
+            'X-Ledgr-Signature': await hmacSha256Hex(webhook.secret, body),
           },
           body,
         });
