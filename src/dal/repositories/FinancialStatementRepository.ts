@@ -581,7 +581,9 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
   //
   // Bank-line scan classification (Investing/Financing only):
   //   1. journal_entries.source_type where it exists:
-  //        fixed_asset_disposal    -> Investing
+  //        fixed_asset_disposal    -> Investing (and the entry's P&L gain/loss
+  //                                 is backed out of Operating so the gain
+  //                                 isn't counted in both sections)
   //        fixed_asset_revaluation -> excluded (no cash impact)
   //        reversal                -> inherits original entry's classification
   //   2. source_type null (manual entries — UNTESTED against real data; no
@@ -629,9 +631,18 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? await this.computeInvestingFinancingMovements(businessId, comparativePeriodStart, comparativePeriodEnd)
       : null;
 
-    const netCashFromOperating = pl.netProfit + pl.totalDepreciationAmortisation + workingCapitalChange;
-    const comparativeNetCashFromOperating = (comparativePl && comparativeWorkingCapitalChange !== null)
-      ? comparativePl.netProfit + comparativePl.totalDepreciationAmortisation + comparativeWorkingCapitalChange
+    // "Other operating movements" = accrual-to-cash adjustments: working
+    // capital change (revenue/spend recognized but cash not yet moved) plus
+    // reversal of disposal gains/losses (full proceeds sit in Investing, so
+    // their P&L component must not also ride inside Net Profit here).
+    const otherOperatingMovements = workingCapitalChange + investingFinancing.disposalGainLossAdjustment;
+    const comparativeOtherOperatingMovements = (comparativeWorkingCapitalChange !== null && comparativeInvestingFinancing)
+      ? comparativeWorkingCapitalChange + comparativeInvestingFinancing.disposalGainLossAdjustment
+      : comparativeWorkingCapitalChange;
+
+    const netCashFromOperating = pl.netProfit + pl.totalDepreciationAmortisation + otherOperatingMovements;
+    const comparativeNetCashFromOperating = (comparativePl && comparativeOtherOperatingMovements !== null)
+      ? comparativePl.netProfit + comparativePl.totalDepreciationAmortisation + comparativeOtherOperatingMovements
       : null;
 
     const netCashFromInvesting = investingFinancing.assetPurchases + investingFinancing.assetDisposalProceeds;
@@ -669,8 +680,8 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       comparativeNetProfit: comparativePl?.netProfit ?? null,
       depreciationAmortisationAddBack: pl.totalDepreciationAmortisation,
       comparativeDepreciationAmortisationAddBack: comparativePl?.totalDepreciationAmortisation ?? null,
-      otherOperatingMovements: workingCapitalChange,
-      comparativeOtherOperatingMovements: comparativeWorkingCapitalChange,
+      otherOperatingMovements,
+      comparativeOtherOperatingMovements,
       netCashFromOperating,
       comparativeNetCashFromOperating,
       assetPurchases: investingFinancing.assetPurchases,
@@ -794,6 +805,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     loanRepayments: number;
     shareCapitalContributions: number;
     drawingsAndDividendsPaid: number;
+    disposalGainLossAdjustment: number;
   }> {
     const accountsRes = await this.client
       .from('accounts').select('*')
@@ -849,6 +861,13 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     let loanRepayments = 0;
     let shareCapitalContributions = 0;
     let drawingsAndDividendsPaid = 0;
+    // IAS 7 indirect method: a disposal's full proceeds are Investing, but
+    // the gain/loss on disposal is ALSO inside Net Profit (gain posts to
+    // 4910 other_income, loss to 6910 operating_expense — see
+    // FixedAssetsJournalService.disposeAsset). Without removing it from
+    // Operating the gain is counted twice and the statement stops
+    // reconciling (opening + movement ≠ closing by exactly the gain).
+    let disposalGainLossAdjustment = 0;
 
     for (const [, entryLines] of byEntry) {
       const cashLines = entryLines.filter((l) => {
@@ -883,6 +902,20 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       }
       if (effectiveSourceType === 'fixed_asset_disposal') {
         assetDisposalProceeds += cashMovement;
+        // Remove the disposal's P&L effect from Operating. In debit-positive
+        // terms, a credit gain line on an Other Income account and a debit
+        // loss line on an Operating Expense account both carry exactly the
+        // NEGATIVE of the entry's profit effect, so one signed sum handles
+        // both directions (as well as any reversal-shaped mix).
+        for (const line of nonCashLines) {
+          const acc = accountMap.get(line.account_id);
+          if (!acc) continue;
+          if (acc.account_subtype !== 'other_income' && acc.account_subtype !== 'operating_expense') {
+            continue;
+          }
+          const signed = line.is_debit ? Number(line.amount_base) : -Number(line.amount_base);
+          disposalGainLossAdjustment += signed;
+        }
         continue;
       }
 
@@ -916,6 +949,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     return {
       assetPurchases, assetDisposalProceeds,
       loanDrawdowns, loanRepayments, shareCapitalContributions, drawingsAndDividendsPaid,
+      disposalGainLossAdjustment,
     };
   }
 
@@ -942,12 +976,24 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       .filter((b) => b.account.account_subtype === subtype && b.account.code !== excludeCode)
       .reduce((s, b) => s + b.balance, 0);
 
-    const drawingsMovement = closingBalances
+    // Drawings / Dividends (3140) is a debit-normal equity account that is
+    // never automatically closed into retained earnings (no period-close
+    // routine posts closing journals — PeriodRepository.close only flips the
+    // is_closed flag). Economically, though, drawings ARE a distribution of
+    // retained earnings, so the Retained Earnings roll-forward presents the
+    // economic position: ledger RE accounts NET of the cumulative drawings
+    // balance, with the period's drawings shown as a movement. Reporting the
+    // raw RE accounts alone overstated both opening and closing equity by
+    // the drawings balance, broke the SOFP tie-out below (off by exactly the
+    // opening drawings balance even in fully closed books), and left the
+    // roll-forward rows not footing (otherMovements was a plug that was off
+    // by the period's net profit).
+    const sumDrawings = (balances: AccountBalance[]) => balances
       .filter((b) => b.account.code === DRAWINGS_DIVIDENDS_CODE)
-      .reduce((s, b) => s + b.balance, 0)
-      - openingBalances
-        .filter((b) => b.account.code === DRAWINGS_DIVIDENDS_CODE)
-        .reduce((s, b) => s + b.balance, 0);
+      .reduce((s, b) => s + b.balance, 0);
+    const drawingsOpening = sumDrawings(openingBalances);
+    const drawingsClosing = sumDrawings(closingBalances);
+    const drawingsMovement = drawingsClosing - drawingsOpening;
 
     const shareCapitalOpening = sumBySubtypeAndCode(openingBalances, 'share_capital');
     const shareCapitalClosing = sumBySubtypeAndCode(closingBalances, 'share_capital');
@@ -970,12 +1016,16 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
 
     const retainedEarnings: EquityRollForwardLine = {
       label: 'Retained Earnings',
-      openingBalance: retainedEarningsOpening,
+      openingBalance: retainedEarningsOpening - drawingsOpening,
       netProfitAllocation: pl.netProfit,
       contributions: 0,
+      // Presented positive: a distribution that REDUCES retained earnings.
       drawingsOrDividends: drawingsMovement,
-      otherMovements: retainedEarningsClosing - retainedEarningsOpening - pl.netProfit - drawingsMovement,
-      closingBalance: retainedEarningsClosing + pl.netProfit,
+      // Residual: journal postings made directly against RE accounts (e.g. a
+      // manual closing entry Dr 3130 / Cr 3140 shows up here).
+      otherMovements: retainedEarningsClosing - retainedEarningsOpening,
+      // Row foots: opening + netProfit + contributions - drawings + other.
+      closingBalance: retainedEarningsClosing - drawingsClosing + pl.netProfit,
     };
 
     const reserves: EquityRollForwardLine = {
