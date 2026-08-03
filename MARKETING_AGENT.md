@@ -15,8 +15,8 @@ assistants, and reuses the same architecture: an Anthropic-powered Supabase Edge
 Function that is auth-gated, rate-limited, and never exposes its API key to the
 browser.
 
-> **Status:** Phases 0–2 are **implemented** — see *Implementation status*
-> below each phase. Phases 3–4 remain planned. The remaining open questions at
+> **Status:** Phases 0–3 are **implemented** — see *Implementation status*
+> below each phase. Phase 4 remains planned. The remaining open questions at
 > the bottom still need your sign-off before we widen scope; the defaults built
 > on are noted there.
 
@@ -222,6 +222,27 @@ agent.
   edge-function module that posts to `/{page-id}/feed`.
 - Approve → Schedule → Publish flow in the UI.
 
+**✅ Phase 3 — DONE (implemented)** — code-complete; you wire your Meta app.
+- `_shared/crypto.ts` — AES-GCM encrypt/decrypt for tokens at rest
+  (`SOCIAL_TOKEN_ENC_KEY` = base64 of 32 bytes).
+- `_shared/facebook.ts` — Graph API v25.0 client: build OAuth URL, exchange code
+  → long-lived user token → `/me/accounts` Page tokens, `POST /{page-id}/feed`.
+- `facebook-auth` edge function — `start` (creates a CSRF `state`, returns the
+  Login URL), browser `callback` (validates state, exchanges tokens, stores the
+  **encrypted** Page token, redirects back to `/marketing`), and `disconnect`.
+- `facebook-publish` edge function — loads + decrypts the Page token, posts to
+  the feed, records `published`/`failed` on `marketing_posts`. **Approve-first**:
+  the user must click Publish; nothing is autonomous.
+- Migration `20260803000002_social_connections` — `social_connections`
+  (business-member RLS; token encrypted) + `social_oauth_states` (service-role).
+- UI — Facebook connection card (Connect/Disconnect), status banner, and the
+  Publish tab's Publish button goes **live** once a Page is connected.
+- `social_connections` typed in `database.supplement.ts`.
+- Verified: `typecheck`, `lint` (0 errors), `test` (170 passing), `build`.
+- **Not done here (needs you):** register the Meta app, add the redirect URI
+  (`<SUPABASE_URL>/functions/v1/facebook-auth`) to *Valid OAuth Redirect URIs*,
+  and submit for App Review for `pages_manage_posts` + `pages_read_engagement`.
+
 ### Phase 4 — Autonomy (the destination)
 - Approved content library + a scheduler (Vercel cron / pg_cron → publish
   runner) that posts on a cadence.
@@ -268,8 +289,14 @@ supabase secrets set TAVILY_API_KEY=tvly-...        # https://tavily.com
 supabase secrets set BRAVE_API_KEY=...              # https://api.search.brave.com
 # supabase secrets set WEB_SEARCH_PROVIDER=tavily   # 'tavily' | 'brave'
 
-# Phase 3 — Facebook:
+# Phase 3 — Facebook (real publishing). Requires a Meta app in App Review for
+# pages_manage_posts + pages_read_engagement, and the redirect URI below added
+# to "Valid OAuth Redirect URIs" in the Meta app dashboard:
+#   <SUPABASE_URL>/functions/v1/facebook-auth
+openssl rand -base64 32 | supabase secrets set SOCIAL_TOKEN_ENC_KEY=-   # token encryption
 supabase secrets set FB_APP_ID=... FB_APP_SECRET=...
+# optional override (defaults to <SUPABASE_URL>/functions/v1/facebook-auth):
+# supabase secrets set FB_REDIRECT_URI=https://your-app.example.com/callback
 
 # Apply the data-model migration
 supabase db push   # or supabase migration up for 20260803000000_marketing_agent.sql
@@ -294,8 +321,9 @@ supabase db push   # or supabase migration up for 20260803000000_marketing_agent
    **Brave**; set one key (`TAVILY_API_KEY` or `BRAVE_API_KEY`) and it
    auto-detects. Research is live when a key is present, else general guidance.)*
 4. **Facebook scope** — one Business Page per business, or multiple Pages/channels?
-   *(Built on: single channel in the preview; `channel` is free-text in the
-   schema so this is forward-compatible.)*
+   *(Resolved in Phase 3: one Page per business (the first the user authorises);
+   `channel` is free-text and `social_connections` supports multiple rows, so
+   multi-page/multi-channel is forward-compatible.)*
 5. **Post languages** — generate English only, or also Chichewa (`ny`) / others
    the business serves? *(Built on: English; the `brandVoice` field is the
    intended lever for language/tone.)*

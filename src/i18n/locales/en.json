@@ -588,6 +588,21 @@
     },
     "voiceSaveFailed": "Couldn't save the brand voice.",
     "sources": "Sources",
-    "liveSearch": "Live web search"
+    "liveSearch": "Live web search",
+    "fb": {
+      "title": "Facebook Page",
+      "connect": "Connect Facebook Page",
+      "disconnect": "Disconnect",
+      "notConnected": "No Facebook Page connected. Connect one to publish posts directly.",
+      "connectedAs": "Connected: {{page}}",
+      "connectToPublish": "Connect to publish",
+      "connectedOk": "Facebook Page connected successfully.",
+      "connectFailed": "Could not connect Facebook",
+      "disconnected": "Facebook Page disconnected.",
+      "disconnectFailed": "Could not disconnect Facebook.",
+      "publishing": "Publishing…",
+      "published": "Posted to your Facebook Page.",
+      "publishFailed": "Publish failed"
+    }
   }
 }

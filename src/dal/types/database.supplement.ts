@@ -522,6 +522,57 @@ export type SupplementalTables = {
       },
     ]
   }
+  // Added by 20260803000002_social_connections.sql (Marketing Agent, Phase 3).
+  social_connections: {
+    Row: {
+      id: string
+      business_id: string
+      provider: string
+      account_id: string
+      account_name: string
+      access_token_encrypted: string
+      scopes: string[]
+      connected_by: string | null
+      connected_at: string
+      revoked_at: string | null
+      created_at: string
+    }
+    Insert: {
+      id?: string
+      business_id: string
+      provider?: string
+      account_id: string
+      account_name?: string
+      access_token_encrypted: string
+      scopes?: string[]
+      connected_by?: string | null
+      connected_at?: string
+      revoked_at?: string | null
+      created_at?: string
+    }
+    Update: {
+      id?: string
+      business_id?: string
+      provider?: string
+      account_id?: string
+      account_name?: string
+      access_token_encrypted?: string
+      scopes?: string[]
+      connected_by?: string | null
+      connected_at?: string
+      revoked_at?: string | null
+      created_at?: string
+    }
+    Relationships: [
+      {
+        foreignKeyName: "social_connections_business_id_fkey"
+        columns: ["business_id"]
+        isOneToOne: false
+        referencedRelation: "businesses"
+        referencedColumns: ["id"]
+      },
+    ]
+  }
 }
 
 export type SupplementalViews = {

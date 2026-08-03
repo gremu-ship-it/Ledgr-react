@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   Megaphone,
@@ -34,6 +35,13 @@ import {
   type MarketingDraft,
   type Source,
 } from '@/lib/marketingAgent';
+import {
+  getFacebookConnection,
+  startFacebookConnect,
+  disconnectFacebook,
+  publishToFacebook,
+  type FacebookConnection,
+} from '@/lib/socialConnections';
 
 const log = createLogger('MarketingAssistantPage');
 
@@ -155,6 +163,96 @@ export function MarketingAssistantPage() {
       cancelled = true;
     };
   }, [businessId]);
+
+  // Facebook connection + publishing (Phase 3).
+  const [fbConnection, setFbConnection] = useState<FacebookConnection | null>(null);
+  const [fbConnecting, setFbConnecting] = useState(false);
+  const [fbStatus, setFbStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [publishingId, setPublishingId] = useState<number>(-1);
+  const [publishedIds, setPublishedIds] = useState<Set<number>>(new Set());
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    getFacebookConnection(businessId)
+      .then((c) => {
+        if (!cancelled) setFbConnection(c);
+      })
+      .catch((err) => log.warn('Could not load Facebook connection', { error: err as Error }));
+    return () => {
+      cancelled = true;
+    };
+  }, [businessId]);
+
+  // Handle the OAuth redirect-back query params (?fb_connected=1 / ?fb_error=...).
+  useEffect(() => {
+    const connected = searchParams.get('fb_connected');
+    const fbError = searchParams.get('fb_error');
+    if (!connected && !fbError) return;
+
+    const applyRedirectResult = async () => {
+      if (connected) {
+        setFbStatus({ kind: 'ok', text: t('marketing.fb.connectedOk') });
+        try {
+          setFbConnection(await getFacebookConnection(businessId));
+        } catch {
+          /* ignore — best-effort refresh */
+        }
+      } else if (fbError) {
+        setFbStatus({ kind: 'error', text: `${t('marketing.fb.connectFailed')}: ${fbError}` });
+      }
+      searchParams.delete('fb_connected');
+      searchParams.delete('fb_error');
+      setSearchParams(searchParams, { replace: true });
+    };
+
+    void applyRedirectResult();
+  }, [searchParams, businessId, t, setSearchParams]);
+
+  async function handleConnect() {
+    try {
+      setFbConnecting(true);
+      setFbStatus(null);
+      const authUrl = await startFacebookConnect(businessId);
+      window.location.href = authUrl;
+    } catch (err) {
+      log.error('Could not start Facebook connect', err as Error);
+      setFbStatus({ kind: 'error', text: t('marketing.fb.connectFailed') });
+      setFbConnecting(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    try {
+      await disconnectFacebook(businessId);
+      setFbConnection(null);
+      setPublishedIds(new Set());
+      setFbStatus({ kind: 'ok', text: t('marketing.fb.disconnected') });
+    } catch (err) {
+      log.error('Could not disconnect Facebook', err as Error);
+      setFbStatus({ kind: 'error', text: t('marketing.fb.disconnectFailed') });
+    }
+  }
+
+  async function handlePublish(draft: MarketingDraft, index: number) {
+    try {
+      setPublishingId(index);
+      setFbStatus(null);
+      const res = await publishToFacebook({ businessId, text: draft.text });
+      if (res.ok) {
+        setPublishedIds((prev) => new Set(prev).add(index));
+        setFbStatus({ kind: 'ok', text: t('marketing.fb.published') });
+      } else {
+        setFbStatus({ kind: 'error', text: `${t('marketing.fb.publishFailed')}${res.error ? `: ${res.error}` : ''}` });
+      }
+    } catch (err) {
+      log.error('Publish failed', err as Error);
+      setFbStatus({ kind: 'error', text: t('marketing.fb.publishFailed') });
+    } finally {
+      setPublishingId(-1);
+    }
+  }
 
   function switchTab(next: Tab) {
     setTab(next);
@@ -320,6 +418,54 @@ export function MarketingAssistantPage() {
         )}
       </div>
 
+      {/* Facebook connection (Phase 3) */}
+      <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Share2 className="h-4 w-4 text-brand-500" />
+          <h2 className="text-sm font-semibold text-gray-900">{t('marketing.fb.title')}</h2>
+          <div className="ml-auto">
+            {fbConnection ? (
+              <button
+                onClick={handleDisconnect}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <X className="h-3 w-3" /> {t('marketing.fb.disconnect')}
+              </button>
+            ) : (
+              <button
+                onClick={handleConnect}
+                disabled={fbConnecting}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-40"
+              >
+                {fbConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+                {t('marketing.fb.connect')}
+              </button>
+            )}
+          </div>
+        </div>
+        <p className={`mt-2 text-sm ${fbConnection ? 'text-gray-700' : 'text-gray-400'}`}>
+          {fbConnection ? t('marketing.fb.connectedAs', { page: fbConnection.pageName }) : t('marketing.fb.notConnected')}
+        </p>
+      </div>
+
+      {/* Facebook status banner (connect/disconnect/publish feedback) */}
+      {fbStatus && (
+        <div
+          className={`mb-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-sm ${
+            fbStatus.kind === 'ok'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-amber-200 bg-amber-50 text-amber-800'
+          }`}
+        >
+          {fbStatus.kind === 'ok' ? (
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+          ) : (
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          )}
+          <span>{fbStatus.text}</span>
+        </div>
+      )}
+
       {/* Prompt input */}
       <div className="mb-3 flex gap-2 items-end">
         <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm focus-within:border-brand-500 focus-within:ring-1 focus-within:ring-brand-500">
@@ -391,6 +537,10 @@ export function MarketingAssistantPage() {
           savingDraftId={savingDraftId}
           savedDraftIds={savedDraftIds}
           onSaveDraft={handleSaveDraft}
+          fbConnected={Boolean(fbConnection)}
+          publishingId={publishingId}
+          publishedIds={publishedIds}
+          onPublish={handlePublish}
         />
       )}
 
@@ -409,12 +559,20 @@ function ResultsView({
   savingDraftId,
   savedDraftIds,
   onSaveDraft,
+  fbConnected,
+  publishingId,
+  publishedIds,
+  onPublish,
 }: {
   result: MarketingResult;
   t: TFunc;
   savingDraftId: number;
   savedDraftIds: Set<number>;
   onSaveDraft: (draft: MarketingDraft, index: number) => void;
+  fbConnected: boolean;
+  publishingId: number;
+  publishedIds: Set<number>;
+  onPublish: (draft: MarketingDraft, index: number) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -454,6 +612,10 @@ function ResultsView({
               saving={savingDraftId === i}
               saved={savedDraftIds.has(i)}
               onSave={() => onSaveDraft(draft, i)}
+              connected={fbConnected}
+              publishing={publishingId === i}
+              published={publishedIds.has(i)}
+              onPublish={() => onPublish(draft, i)}
             />
           ))}
         </div>
@@ -581,12 +743,20 @@ function DraftCard({
   saving,
   saved,
   onSave,
+  connected,
+  publishing,
+  published,
+  onPublish,
 }: {
   draft: MarketingDraft;
   t: TFunc;
   saving: boolean;
   saved: boolean;
   onSave: () => void;
+  connected: boolean;
+  publishing: boolean;
+  published: boolean;
+  onPublish: () => void;
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -634,11 +804,30 @@ function DraftCard({
             {saved ? t('marketing.draftSaved') : saving ? t('marketing.saving') : t('marketing.saveDraft')}
           </button>
           <button
-            disabled
-            title={t('marketing.publishDisabled')}
-            className="cursor-not-allowed rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-medium text-gray-400"
+            onClick={onPublish}
+            disabled={!connected || publishing || published}
+            title={!connected ? t('marketing.fb.connectToPublish') : published ? t('marketing.fb.published') : t('marketing.publish')}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              published
+                ? 'bg-emerald-50 text-emerald-700'
+                : connected
+                  ? 'bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50'
+                  : 'cursor-not-allowed bg-gray-100 text-gray-400'
+            }`}
           >
-            {t('marketing.publish')} · {t('marketing.soon')}
+            {published ? (
+              <>
+                <CheckCircle2 className="h-3.5 w-3.5" /> {t('marketing.fb.published')}
+              </>
+            ) : publishing ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('marketing.fb.publishing')}
+              </>
+            ) : (
+              <>
+                <Share2 className="h-3.5 w-3.5" /> {connected ? t('marketing.publish') : t('marketing.fb.connectToPublish')}
+              </>
+            )}
           </button>
         </div>
       </div>
