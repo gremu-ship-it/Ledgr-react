@@ -105,7 +105,8 @@
       "branches": "Branches",
       "departments": "Departments",
       "settings": "Settings",
-      "support": "Support"
+      "support": "Support",
+      "marketing": "Marketing"
     }
   },
   "auth": {
@@ -523,5 +524,112 @@
     "contactTitle": "Talk to a human",
     "contactBody": "The assistant handles most questions. For billing disputes, legal, or urgent issues, email our team.",
     "disclaimer": "The assistant uses AI and may make mistakes. Verify important financial or compliance details. Conversations are not used to train models without your consent."
+  },
+  "marketing": {
+    "title": "Marketing Assistant",
+    "yourBusiness": "your business",
+    "liveDataFrom": "Live data from {{business}}",
+    "draftOnly": "Draft only",
+    "tab": {
+      "recommendations": "Recommendations",
+      "research": "Research",
+      "publish": "Create posts"
+    },
+    "recommendations": {
+      "description": "The assistant analyses your real products, stock and sales, then proposes promotions, bundles, repricing and who to target. Nothing leaves the app."
+    },
+    "research": {
+      "description": "Get marketing and growth guidance for your business. When a web-search provider is configured, research is grounded in live web results with citations; otherwise you get clearly-labelled general strategy (never invented stats)."
+    },
+    "publish": "Publish",
+    "placeholder": {
+      "recommendations": "e.g. Promote my slow-moving stock",
+      "research": "e.g. What should I focus on this month?",
+      "publish": "e.g. Write a post about my best-selling product"
+    },
+    "generate": "Generate",
+    "generating": "Working…",
+    "loadSample": "Preview a sample result",
+    "error": "Couldn't reach the marketing assistant. If you're running locally, the edge function needs to be deployed first.",
+    "summary": "Summary",
+    "expectedImpact": "Expected impact",
+    "suggestedAction": "Suggested action",
+    "themes": "Themes",
+    "opportunities": "Opportunities",
+    "previewOnly": "Preview only",
+    "cta": "Call to action",
+    "saveDraft": "Save draft",
+    "saving": "Saving…",
+    "draftSaved": "Saved",
+    "draftSaveFailed": "Couldn't save the draft.",
+    "soon": "soon",
+    "publishDisabled": "Live publishing to Facebook arrives in a later phase. For now you can save drafts.",
+    "noBusiness": "Select a business to use the Marketing Assistant.",
+    "disclaimer": "Marketing content is AI-generated and grounded in your business data. Always review before publishing.",
+    "prompt": {
+      "recommendSlow": "Promote my slow-moving stock",
+      "recommendGrow": "How can I grow revenue this month?",
+      "recommendBundle": "Suggest a bundle from my products",
+      "researchFocus": "What marketing should I focus on?",
+      "researchReach": "How do I reach more customers?",
+      "publishBestseller": "Write a post about my best-selling product",
+      "publishRestock": "Announce a restock",
+      "publishOffer": "Promote a weekend offer"
+    },
+    "targetSegment": "Target",
+    "voice": {
+      "title": "Brand voice & tone",
+      "edit": "Edit",
+      "set": "Set voice",
+      "save": "Save",
+      "cancel": "Cancel",
+      "placeholder": "Describe how your business should sound — e.g. 'Warm and practical, Malawian English. Always quote MWK prices. Friendly but professional, no hype or invented offers.'",
+      "empty": "Not set — the assistant uses its default voice. Click 'Set voice' to make posts sound like your business."
+    },
+    "voiceSaveFailed": "Couldn't save the brand voice.",
+    "sources": "Sources",
+    "liveSearch": "Live web search",
+    "fb": {
+      "title": "Facebook Page",
+      "connect": "Connect Facebook Page",
+      "disconnect": "Disconnect",
+      "notConnected": "No Facebook Page connected. Connect one to publish posts directly.",
+      "connectedAs": "Connected: {{page}}",
+      "connectToPublish": "Connect to publish",
+      "connectedOk": "Facebook Page connected successfully.",
+      "connectFailed": "Could not connect Facebook",
+      "disconnected": "Facebook Page disconnected.",
+      "disconnectFailed": "Could not disconnect Facebook.",
+      "publishing": "Publishing…",
+      "published": "Posted to your Facebook Page.",
+      "publishFailed": "Publish failed"
+    },
+    "autopilot": {
+      "title": "Autopilot",
+      "description": "When on, approved scheduled posts are published automatically on their due date, up to your daily cap. You approve every post — nothing is published without your approval.",
+      "enabled": "Autopilot on",
+      "maxPerDay": "Max posts / day",
+      "aiDisclosure": "Add AI-assistant disclosure",
+      "saveFailed": "Could not save autopilot settings.",
+      "scheduled": "Scheduled — the autopilot will publish it at the chosen time.",
+      "scheduleFailed": "Could not schedule the post.",
+      "deleteFailed": "Could not delete the post.",
+      "library": "Content library",
+      "libraryEmpty": "No posts yet. Generate a draft, then save, schedule, or publish it.",
+      "scheduledFor": "Scheduled for",
+      "delete": "Delete",
+      "schedule": "Schedule",
+      "scheduledShort": "Scheduled",
+      "confirm": "Confirm",
+      "status": {
+        "draft": "Draft",
+        "approved": "Approved",
+        "scheduled": "Scheduled",
+        "publishing": "Publishing",
+        "published": "Published",
+        "failed": "Failed",
+        "archived": "Archived"
+      }
+    }
   }
 }
