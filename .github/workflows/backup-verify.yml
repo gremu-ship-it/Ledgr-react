@@ -68,7 +68,7 @@ jobs:
         inventory_items,branches,departments,api_keys,webhooks,subscriptions
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
