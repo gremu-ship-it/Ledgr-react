@@ -54,9 +54,13 @@ jobs:
         env:
           ASTRO_BASE: /Ledgr-react
 
+      # `enablement: true` lets the action enable Pages itself (build_type:
+      # "GitHub Actions") when the repo doesn't already have a Pages site,
+      # instead of failing with "Get Pages site failed / Not Found".
       - uses: actions/configure-pages@v6
         with:
           enablement: true
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
         with:
