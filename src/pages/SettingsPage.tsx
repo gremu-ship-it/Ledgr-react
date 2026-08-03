@@ -20,6 +20,7 @@ import {
   Copy,
   ExternalLink,
   Key,
+  LogOut,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -168,7 +169,10 @@ function AppearanceTab() {
 
         <div>
           <h3 className="mb-2 text-sm font-semibold text-gray-700">Screen Orientation</h3>
-          <p className="mb-3 text-xs text-gray-500">Choose whether the app rotates automatically with your device.</p>
+          <p className="mb-3 text-xs text-gray-500">
+            The installed mobile app is locked to portrait so it never rotates. In a mobile browser,
+            rotation follows your device unless you lock it here.
+          </p>
           <div className="flex gap-2">
             <button
               onClick={() => {
@@ -1719,8 +1723,10 @@ For privacy requests, email privacy@ledgr.app or use the in-app tools.
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
+  const [signingOut, setSigningOut] = useState(false);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -1745,6 +1751,15 @@ export function SettingsPage() {
     queryFn: () => repos.business.findById(businessId!),
     enabled: Boolean(businessId),
   });
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      navigate('/login', { replace: true });
+    }
+  }
 
   if (!businessId) {
     return (
@@ -1785,6 +1800,18 @@ export function SettingsPage() {
                 </button>
               );
             })}
+
+            {/* Log out — always visible at the bottom of the settings nav */}
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 text-left disabled:opacity-60"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                {signingOut ? 'Logging out…' : 'Log out'}
+              </button>
+            </div>
           </nav>
         </aside>
 
