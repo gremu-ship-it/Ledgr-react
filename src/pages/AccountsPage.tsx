@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
-import { handleError } from '@/lib/errorHandler';
+import { handleError, getErrorMessage } from '@/lib/errorHandler';
 import { supabase } from '@/lib/supabase';
 import type { Row, InsertDto } from '@/dal/types/database';
 import {
@@ -33,31 +33,30 @@ import {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
-  { value: 'asset',         label: 'Asset' },
-  { value: 'liability',     label: 'Liability' },
-  { value: 'equity',        label: 'Equity' },
-  { value: 'income',        label: 'Income / Revenue' },
-  { value: 'expense' as AccountType, label: 'Cost of Sales (COGS)' },
-  { value: 'expense',       label: 'Expense' },
+  { value: 'asset',     label: 'Asset' },
+  { value: 'liability', label: 'Liability' },
+  { value: 'equity',    label: 'Equity' },
+  { value: 'income',    label: 'Income / Revenue' },
+  { value: 'expense',   label: 'Expense' },
 ];
 
+// Expense covers both COGS and operating costs; subtype distinguishes them.
 const SUBTYPES: { value: AccountSubtype; label: string; for: AccountType[] }[] = [
-  { value: 'current_asset',        label: 'Current Asset',            for: ['asset'] },
-  { value: 'fixed_asset',          label: 'Fixed Asset (PP&E)',       for: ['asset'] },
-  { value: 'non_current_asset',    label: 'Non-Current Asset',        for: ['asset'] },
-  { value: 'current_liability',    label: 'Current Liability',        for: ['liability'] },
-  { value: 'non_current_liability',label: 'Non-Current Liability',    for: ['liability'] },
-  { value: 'share_capital',        label: 'Share Capital',            for: ['equity'] },
-  { value: 'retained_earnings',    label: 'Retained Earnings',        for: ['equity'] },
-  { value: 'reserves',             label: 'Reserves',                 for: ['equity'] },
-  { value: 'revenue',              label: 'Revenue',                  for: ['income'] },
-  { value: 'other_income',         label: 'Other Income',             for: ['income'] },
-  { value: 'cost_of_sales',        label: 'Cost of Sales',            for: ['expense'] },
-  { value: 'operating_expense',    label: 'Operating Expense',        for: ['expense'] },
-  { value: 'operating_expense',    label: 'Payroll Expense',          for: ['expense'] },
-  { value: 'depreciation_amortisation', label: 'Depreciation & Amortisation', for: ['expense'] },
-  { value: 'finance_cost',         label: 'Finance Cost',             for: ['expense'] },
-  { value: 'tax_expense',          label: 'Tax Expense',              for: ['expense'] },
+  { value: 'current_asset',             label: 'Current Asset',                for: ['asset'] },
+  { value: 'fixed_asset',               label: 'Fixed Asset (PP&E)',           for: ['asset'] },
+  { value: 'non_current_asset',         label: 'Non-Current Asset',            for: ['asset'] },
+  { value: 'current_liability',         label: 'Current Liability',            for: ['liability'] },
+  { value: 'non_current_liability',     label: 'Non-Current Liability',        for: ['liability'] },
+  { value: 'share_capital',             label: 'Share Capital',                for: ['equity'] },
+  { value: 'retained_earnings',         label: 'Retained Earnings',            for: ['equity'] },
+  { value: 'reserves',                  label: 'Reserves',                     for: ['equity'] },
+  { value: 'revenue',                   label: 'Revenue',                      for: ['income'] },
+  { value: 'other_income',              label: 'Other Income',                 for: ['income'] },
+  { value: 'cost_of_sales',             label: 'Cost of Sales',                for: ['expense'] },
+  { value: 'operating_expense',         label: 'Operating Expense',            for: ['expense'] },
+  { value: 'depreciation_amortisation', label: 'Depreciation & Amortisation',  for: ['expense'] },
+  { value: 'finance_cost',              label: 'Finance Cost',                 for: ['expense'] },
+  { value: 'tax_expense',               label: 'Tax Expense',                  for: ['expense'] },
 ];
 
 const TYPE_COLOURS: Record<AccountType, string> = {
@@ -166,10 +165,14 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
     form.normal_balance === 'debit',
   ).warning;
 
-  // Code uniqueness check
-  const codeExists = accounts.some(
-    (a) => a.code === form.code && a.id !== initial?.id,
-  );
+  // Code uniqueness check — trimmed + case-insensitive so DB unique violations
+  // don't surface as opaque "Failed to fetch" after round-trip.
+  const trimmedCodeForCheck = form.code.trim().toLowerCase();
+  const codeExists = trimmedCodeForCheck
+    ? accounts.some(
+        (a) => a.code.toLowerCase() === trimmedCodeForCheck && a.id !== initial?.id,
+      )
+    : false;
 
   const filteredSubtypes = SUBTYPES.filter((s) =>
     s.for.includes(form.account_type),
@@ -180,17 +183,38 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
   );
 
   async function handleSubmit() {
-    if (!form.code.trim()) return setError('Account code is required.');
-    if (!form.name.trim()) return setError('Account name is required.');
-    if (codeExists)        return setError(`Code "${form.code}" is already in use.`);
+    const trimmedCode = form.code.trim();
+    const trimmedName = form.name.trim();
+
+    if (!trimmedCode) return setError('Account code is required.');
+    if (!trimmedName) return setError('Account name is required.');
+    if (!/^[A-Za-z0-9_-]+$/.test(trimmedCode)) {
+      return setError('Code may only contain letters, numbers, dash and underscore.');
+    }
+    if (codeExists) return setError(`Code "${trimmedCode}" is already in use.`);
+
+    // Prevent circular parenting.
+    if (form.parent_id) {
+      const seen = new Set<string>();
+      let cursor: string | null = form.parent_id;
+      while (cursor) {
+        if (seen.has(cursor)) break;
+        if (cursor === initial?.id) {
+          return setError('Parent account cannot be a descendant of this account.');
+        }
+        seen.add(cursor);
+        const parent = accounts.find(a => a.id === cursor);
+        cursor = parent?.parent_id ?? null;
+      }
+    }
 
     setSaving(true); setError('');
     try {
       await onSave({
         ...(isEdit ? { id: initial!.id } : {}),
         business_id:     businessId,
-        code:            form.code.trim(),
-        name:            form.name.trim(),
+        code:            trimmedCode,
+        name:            trimmedName,
         description:     form.description.trim() || null,
         account_type:    form.account_type,
         account_subtype: form.account_subtype,
@@ -200,13 +224,18 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
         is_bank_account: form.is_bank_account,
         parent_id:       form.parent_id || null,
         currency:        form.currency,
-        opening_balance: form.opening_balance,
+        opening_balance: Number.isFinite(form.opening_balance) ? form.opening_balance : 0,
         is_active:       form.is_active,
-      });
+        tax_code:        'none' as const,
+      } as unknown as InsertDto<'accounts'> & { id?: string });
       onClose();
     } catch (e) {
       handleError(e, { module: 'AccountsPage', operation: 'saveAccount', notify: false });
-      setError((e instanceof Error ? e.message : String(e)) || 'Save failed.');
+      const raw = e instanceof Error ? e.message : String(e);
+      const friendly = /failed to fetch|fetch failed|network|load failed/i.test(raw)
+        ? 'Could not reach the server. Please check your internet connection and try again. If it persists, refresh the page.'
+        : raw;
+      setError(getErrorMessage(friendly) || 'Save failed.');
     } finally {
       setSaving(false);
     }
@@ -274,12 +303,12 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
               <label className="mb-1 block text-xs font-medium text-gray-500">Subtype</label>
               <select
                 value={form.account_subtype ?? ''}
-                onChange={e => set('account_subtype', e.target.value || null)}
+                onChange={e => set('account_subtype', (e.target.value || null) as AccountSubtype)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="">— None —</option>
                 {filteredSubtypes.map(s => (
-                  <option key={s.value} value={s.value ?? ''}>{s.label}</option>
+                  <option key={`${s.value}-${s.label}`} value={s.value ?? ''}>{s.label}</option>
                 ))}
               </select>
             </div>
@@ -290,7 +319,7 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
               <label className="mb-1 block text-xs font-medium text-gray-500">Normal Balance</label>
               <select
                 value={form.normal_balance}
-                onChange={e => set('normal_balance', e.target.value)}
+                onChange={e => set('normal_balance', e.target.value as 'debit' | 'credit')}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
               >
                 <option value="debit">Debit</option>
@@ -428,15 +457,9 @@ export function AccountsPage() {
   });
 
   // The template actually stored on the business — the source of truth.
-  // `selectedTemplate` is just what's highlighted in the toggle; it syncs
-  // to this once loaded, and diverges only while the user is picking a
-  // different one to switch to.
   const { data: businessTemplate } = useQuery({
     queryKey: ['business_coa_template', businessId],
     queryFn: async () => {
-      // `coa_template` is typed as `string` in the generated schema (the
-      // database column is free-form text). Cast to the in-app CoaTemplate
-      // union, which is a strict subset of the values the app recognises.
       const { data, error } = await supabase
         .from('businesses')
         .select('coa_template')
@@ -448,10 +471,6 @@ export function AccountsPage() {
     enabled: Boolean(businessId),
   });
 
-  // The template actually stored on the business — the source of truth.
-  // The toggle reads from `pendingTemplate` (override) when the user is
-  // picking a different one to switch to; otherwise it mirrors
-  // `businessTemplate` directly.
   const selectedTemplate = pendingTemplate ?? businessTemplate ?? 'gaap';
   const templateChanged = businessTemplate != null && selectedTemplate !== businessTemplate;
 
@@ -493,15 +512,27 @@ export function AccountsPage() {
     });
   }
 
-  // Save mutation
+  // Save mutation — uses .select() so PostgREST returns a body and errors
+  // surface as structured messages instead of opaque fetch failures.
   const saveMutation = useMutation({
     mutationFn: async (data: InsertDto<'accounts'> & { id?: string }) => {
       if (data.id) {
         const { id, ...patch } = data;
-        const { error } = await supabase.from('accounts').update(patch).eq('id', id);
+        // Ensure tax_code always present on update path.
+        const patchWithTax = { ...(patch as object), tax_code: (patch as { tax_code?: string }).tax_code ?? 'none' } as typeof patch;
+        const { error } = await supabase
+          .from('accounts')
+          .update(patchWithTax as never)
+          .eq('id', id)
+          .select('id')
+          .single();
         if (error) throw new Error(error.message);
       } else {
-        const { error } = await supabase.from('accounts').insert(data);
+        const { error } = await supabase
+          .from('accounts')
+          .insert(data as never)
+          .select('id')
+          .single();
         if (error) throw new Error(error.message);
       }
     },
@@ -511,14 +542,18 @@ export function AccountsPage() {
   // Deactivate mutation
   const deactivateMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('accounts').update({ is_active: false }).eq('id', id);
+      const { error } = await supabase
+        .from('accounts')
+        .update({ is_active: false } as never)
+        .eq('id', id)
+        .select('id')
+        .single();
       if (error) throw new Error(error.message);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['accounts', businessId] }),
   });
 
-  // Repair: seed anything missing for the CURRENT (stored) template — does
-  // not touch template assignment.
+  // Repair: seed anything missing for the CURRENT (stored) template
   async function runRepair() {
     if (!businessId) return;
     setSeeding(true); setSeedMsg(null);
@@ -540,9 +575,7 @@ export function AccountsPage() {
     }
   }
 
-  // Switch: change the business's template, adding new-template accounts
-  // and deactivating old-template-exclusive ones. Requires confirmation
-  // since it changes which accounts are selectable.
+  // Switch template
   async function runSwitch() {
     if (!businessId || !businessTemplate) return;
     const confirmed = window.confirm(
