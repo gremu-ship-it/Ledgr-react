@@ -223,6 +223,20 @@ set is_platform_admin = true
 where id = (select id from auth.users where email = 'you@example.com');
 ```
 
+Once you're a platform admin, an **Admin** section appears in the left
+sidebar with two tools:
+
+- **Businesses** (`/admin/businesses`) — a read-only directory of every
+  registered business and its owner(s), with search. Backed by the
+  `list_all_businesses()` SECURITY DEFINER RPC (migration
+  `20260809000003_admin_business_directory.sql`), which resolves owners from
+  `auth.users`/`business_users` that the client can't read cross-tenant.
+  That same migration grants platform-admin to Gremu Consultancy
+  (`655ad01b-ea0c-45fb-8387-c30f5b0ab12d`), so that account has access
+  automatically.
+- **Admin Billing** (`/admin/billing`) — manually grant/expire plans for
+  offline payments (below).
+
 Then deploy the function if you did not already deploy it in the payment setup step:
 
 ```bash

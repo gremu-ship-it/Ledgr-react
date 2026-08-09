@@ -79,7 +79,8 @@
       "finance": "Fedha",
       "inventory": "Stoo",
       "accounting": "Uhasibu",
-      "organisation": "Shirika"
+      "organisation": "Shirika",
+      "admin": "Usimamizi"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -102,7 +103,9 @@
       "contacts": "Mawasiliano",
       "branches": "Matawi",
       "departments": "Idara",
-      "settings": "Mipangilio"
+      "settings": "Mipangilio",
+      "businesses": "Biashara",
+      "adminBilling": "Bili ya admin"
     }
   },
   "auth": {

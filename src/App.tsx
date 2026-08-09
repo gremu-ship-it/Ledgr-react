@@ -76,6 +76,7 @@ const JournalsPage = lazyPage(() => import('@/pages/JournalsPage'), 'JournalsPag
 const RepairCoaPage = lazyPage(() => import('@/pages/RepairCoaPage'), 'RepairCoaPage');
 const AuditLogPage = lazyPage(() => import('@/pages/AuditLogPage'), 'AuditLogPage');
 const AdminBillingPage = lazyPage(() => import('@/pages/admin/AdminBillingPage'), 'AdminBillingPage');
+const AdminBusinessesPage = lazyPage(() => import('@/pages/admin/AdminBusinessesPage'), 'AdminBusinessesPage');
 const PartnerAdminLayout = lazyPage(() => import('@/pages/partner-admin/PartnerAdminLayout'), 'PartnerAdminLayout');
 const PartnerAdminDashboard = lazyPage(() => import('@/pages/partner-admin/PartnerAdminDashboard'), 'PartnerAdminDashboard');
 const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/PartnerOverviewPage'), 'PartnerOverviewPage');
@@ -144,6 +145,7 @@ function App() {
             {/* Internal admin tools */}
             <Route element={<PlatformAdminRoute />}>
               <Route path="/admin/billing" element={<AdminBillingPage />} />
+              <Route path="/admin/businesses" element={<AdminBusinessesPage />} />
             </Route>
 
             {/* Partner admin portal */}

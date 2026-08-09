@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
-import { ChevronsLeft, ChevronsRight, X, Lock } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'lucide-react';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
+import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { isItemLocked, visibleSectionsFor } from './navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -23,6 +24,7 @@ export function Sidebar() {
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
   const { isFeatureEnabled } = usePartner();
+  const isPlatformAdmin = useIsPlatformAdmin();
   const visibleSections = visibleSectionsFor(isFeatureEnabled, role);
 
   const [isResizing, setIsResizing] = useState(false);
@@ -178,6 +180,64 @@ export function Sidebar() {
               </div>
             );
           })}
+
+          {isPlatformAdmin && (
+            <div className="mb-6 mt-8 border-t border-gray-100 pt-6">
+              {sidebarOpen && (
+                <p className="mb-2 px-3 text-[11px] font-semibold text-gray-400 category-label">
+                  {t('navigation.sections.admin')}
+                </p>
+              )}
+              <ul className="space-y-1">
+                <li>
+                  <NavLink
+                    to="/admin/businesses"
+                    className={({ isActive }) =>
+                      clsx(
+                        'relative flex items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors touch-manipulation',
+                        density === 'compact' ? 'py-1.5' : 'py-2.5',
+                        isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                        !sidebarOpen && 'justify-center',
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <Building2 className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                        {sidebarOpen ? (
+                          <span className="truncate">{t('navigation.items.businesses')}</span>
+                        ) : null}
+                        {isActive && <span className="sr-only"> (current page)</span>}
+                      </>
+                    )}
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink
+                    to="/admin/billing"
+                    className={({ isActive }) =>
+                      clsx(
+                        'relative flex items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors touch-manipulation',
+                        density === 'compact' ? 'py-1.5' : 'py-2.5',
+                        isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                        !sidebarOpen && 'justify-center',
+                      )
+                    }
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <DollarSign className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
+                        {sidebarOpen ? (
+                          <span className="truncate">{t('navigation.items.adminBilling')}</span>
+                        ) : null}
+                        {isActive && <span className="sr-only"> (current page)</span>}
+                      </>
+                    )}
+                  </NavLink>
+                </li>
+              </ul>
+            </div>
+          )}
         </nav>
 
         <div className="border-t border-gray-200 p-3 shrink-0">
