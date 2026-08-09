@@ -16,6 +16,8 @@ Migrations:
 | `20260727000005_partner_invoice_dedupe.sql` | one-invoice-per-period unique index + auto invoice numbering |
 | `20260727000006_schedule_generate_partner_invoices.sql` | monthly pg_cron billing job |
 | `20260727000007_fix_partner_client_rls_recursion.sql` | recursion-safe partner/client and business visibility policies |
+| `20260809000000_protect_partner_commercial_fields.sql` | trigger: partner admins can't edit commercial/billing/routing fields |
+| `20260809000001_partner_admin_management.sql` | SECURITY DEFINER RPCs to list/add/remove partner staff |
 
 Apply with `supabase db push` (or run the SQL in order against your project).
 
@@ -50,6 +52,15 @@ Apply with `supabase db push` (or run the SQL in order against your project).
   brand material only.
 - `partner_invoices` are readable only by that partner's admins; only platform
   admins can create or change them.
+- Commercial/billing/routing fields on `partners` (`client_limit`,
+  `price_per_client`, `billing_currency`, `billing_email`,
+  `billing_contact_name`, `is_active`, `slug`, `custom_domain`) are **platform
+  admin only**. A `before update` trigger
+  (`20260809000000_protect_partner_commercial_fields.sql`) rejects any
+  partner-admin change to them, so a bank can't re-price itself, redirect its
+  invoices, deactivate its own tenant, or re-route/hijack a domain by crafting
+  an API call. Partner admins can still edit branding, onboarding copy and
+  client visibility.
 
 ## 2. Domain routing
 
@@ -112,23 +123,26 @@ app. Routes live under `PartnerAdminRoute` + `PartnerAdminLayout`:
 | `/partner-admin` | list partners; platform admins can create one (name, logo, colour, domain, client limit, lite/full preset) |
 | `/partner-admin/partners/:id` | overview — clients, capacity, enabled modules, isolation state |
 | `/partner-admin/partners/:id/clients` | read-only client roster with usage stats |
-| `/partner-admin/partners/:id/settings` | branding, domains, onboarding copy, feature flags, client limit, isolation, billing contact |
+| `/partner-admin/partners/:id/settings` | branding, domains, onboarding copy, feature flags, client limit, isolation, billing contact, **Team** (partner staff) |
 | `/partner-admin/partners/:id/billing` | partner-level invoices |
 
 Access: platform admins see every partner; partner admins see only the
-partners listed for them in `partner_admins`. Client limit and pricing are
-editable by platform admins only.
+partners listed for them in `partner_admins`. Client limit, pricing, billing
+contact, domains and activation are editable by platform admins only (enforced
+both in the UI and by a DB trigger).
+
+Partner staff are managed from **Settings → Team** (platform admin only): add a
+staff member by email (role `admin` or `viewer`), update their role, or remove
+them. This calls `list_partner_admins` / `add_partner_admin` /
+`remove_partner_admin` (see `20260809000001_partner_admin_management.sql`),
+which resolve the user against `auth.users` server-side and enforce
+authorization inside the SECURITY DEFINER functions.
 
 ## 7. Onboarding a new partner — checklist
 
-```sql
--- 1. Create the partner in the portal (admin.ledgr.com), then link its staff:
-insert into public.partner_admins (partner_id, user_id)
-select p.id, u.id
-  from public.partners p, auth.users u
- where p.slug = 'nbs' and u.email = 'ops@nbs.mw';
-```
-
+1. Create the partner in the portal (admin.ledgr.com), then add its staff
+   under **Settings → Team** (by email; the person must already have a Ledgr
+   account). No raw SQL needed — `add_partner_admin` resolves the user for you.
 2. Point `nbs.ledgr.com` (or the vanity domain) at the deployment.
 3. Set branding + onboarding copy under **Branding & features**.
 4. Choose the **lite** or **full** module preset.

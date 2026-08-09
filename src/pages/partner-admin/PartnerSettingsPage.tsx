@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PartnerRepository } from '@/dal/repositories/PartnerRepository';
+import { PartnerAdminRepository, type PartnerAdminMember } from '@/dal/repositories/PartnerAdminRepository';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { PLATFORM_ROOT_DOMAIN, slugify } from '@/lib/partnerDomain';
 import {
@@ -32,11 +33,21 @@ export function PartnerSettingsPage() {
     enabled: Boolean(id),
   });
 
+  // Partner admin (bank/MFI staff) roster — managed by platform admins only.
+  const { data: team = [], isLoading: teamLoading } = useQuery({
+    queryKey: ['partner-admins', id],
+    queryFn: () => PartnerAdminRepository.list(id),
+    enabled: Boolean(id),
+  });
+
   // Server state is the baseline; local edits are layered on top so the form
   // populates without an effect-driven setState round trip.
   const [edits, setEdits] = useState<UpdatePartnerDto>({});
   const [flagEdits, setFlagEdits] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<'admin' | 'viewer'>('admin');
+  const [teamError, setTeamError] = useState<string | null>(null);
 
   const form = useMemo<UpdatePartnerDto>(() => {
     const base: UpdatePartnerDto = partner
@@ -71,9 +82,20 @@ export function PartnerSettingsPage() {
     return { ...base, ...flagEdits };
   }, [savedFlags, flagEdits]);
 
+  // Partner admins may only edit branding, onboarding copy and client
+  // visibility. Commercial, billing and routing fields (client_limit,
+  // price_per_client, billing_currency, billing_email, billing_contact_name,
+  // is_active, slug, custom_domain) are Ledgr's call — the DB trigger
+  // (20260809000000) rejects them, so never send them for a partner admin.
+  const updatePayload = useMemo(() => {
+    if (isPlatformAdmin) return form;
+    const { name, app_name, logo_url, primary_colour, support_email, support_phone, onboarding_title, onboarding_subtitle, allow_client_visibility } = form;
+    return { name, app_name, logo_url, primary_colour, support_email, support_phone, onboarding_title, onboarding_subtitle, allow_client_visibility };
+  }, [isPlatformAdmin, form]);
+
   const { mutate: save, isPending } = useMutation({
     mutationFn: async () => {
-      await PartnerRepository.update(id, form);
+      await PartnerRepository.update(id, updatePayload);
       await PartnerRepository.setFeatureFlags(id, flags);
     },
     onSuccess: () => {
@@ -85,6 +107,30 @@ export function PartnerSettingsPage() {
       setTimeout(() => setMessage(null), 2500);
     },
     onError: (e: Error) => setMessage(e.message),
+  });
+
+  const { mutate: addMember, isPending: addingMember } = useMutation({
+    mutationFn: async () => {
+      const email = newMemberEmail.trim();
+      if (!email) throw new Error('Enter the staff member’s email.');
+      await PartnerAdminRepository.add(id, email, newMemberRole);
+    },
+    onSuccess: () => {
+      setTeamError(null);
+      setNewMemberEmail('');
+      setNewMemberRole('admin');
+      void queryClient.invalidateQueries({ queryKey: ['partner-admins', id] });
+    },
+    onError: (e: Error) => setTeamError(e.message),
+  });
+
+  const { mutate: removeMember, isPending: removingMember } = useMutation({
+    mutationFn: (emailOrId: string) => PartnerAdminRepository.remove(id, emailOrId),
+    onSuccess: () => {
+      setTeamError(null);
+      void queryClient.invalidateQueries({ queryKey: ['partner-admins', id] });
+    },
+    onError: (e: Error) => setTeamError(e.message),
   });
 
   function set<K extends keyof UpdatePartnerDto>(key: K, value: UpdatePartnerDto[K]) {
@@ -181,16 +227,18 @@ export function PartnerSettingsPage() {
       {/* ── Domains ──────────────────────────────────────────────────── */}
       <Section title="Domains" description="Where the branded app is served from.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Subdomain" hint={`${form.slug || 'slug'}.${PLATFORM_ROOT_DOMAIN}`}>
+          <Field label="Subdomain" hint={`${form.slug || 'slug'}.${PLATFORM_ROOT_DOMAIN}${isPlatformAdmin ? '' : ' · set by Ledgr'}`}>
             <input
-              className={inputCls}
+              disabled={!isPlatformAdmin}
+              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
               value={form.slug ?? ''}
               onChange={(e) => set('slug', slugify(e.target.value))}
             />
           </Field>
-          <Field label="Custom domain" hint="Point a CNAME at the Ledgr app first">
+          <Field label="Custom domain" hint={`${isPlatformAdmin ? 'Point a CNAME at the Ledgr app first' : 'Set by Ledgr'}`}>
             <input
-              className={inputCls}
+              disabled={!isPlatformAdmin}
+              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
               value={form.custom_domain ?? ''}
               onChange={(e) => set('custom_domain', e.target.value.toLowerCase())}
               placeholder="accounting.nbsmw.com"
@@ -274,6 +322,94 @@ export function PartnerSettingsPage() {
         </div>
       </Section>
 
+      {/* ── Team (partner admins) ────────────────────────────────────── */}
+      {isPlatformAdmin && (
+        <Section
+          title="Team"
+          description="Bank/MFI staff who can sign in to the partner admin portal. They have read-only visibility of the partner's clients and can edit this tenant's branding and modules — never client data."
+        >
+          {teamError && (
+            <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{teamError}</div>
+          )}
+
+          {teamLoading ? (
+            <p className="text-sm text-slate-400">Loading team…</p>
+          ) : (
+            <div className="mb-5 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+              {team.length === 0 ? (
+                <p className="p-4 text-sm text-slate-500">No staff linked yet.</p>
+              ) : (
+                team.map((m: PartnerAdminMember) => (
+                  <div key={m.user_id} className="flex items-center justify-between gap-3 px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">{m.name}</div>
+                      <div className="truncate text-xs text-slate-500">{m.email}</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          m.role === 'admin' ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 text-slate-400'
+                        }`}
+                      >
+                        {m.role}
+                      </span>
+                      <button
+                        onClick={() => removeMember(m.email || m.user_id)}
+                        disabled={removingMember}
+                        className="rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          <form
+            className="flex flex-wrap items-end gap-3"
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault();
+              addMember();
+            }}
+          >
+            <label className="min-w-0 flex-1">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Add staff by email</span>
+              <input
+                type="email"
+                className={inputCls}
+                placeholder="staff@nbs.mw"
+                value={newMemberEmail}
+                onChange={(e) => setNewMemberEmail(e.target.value)}
+              />
+            </label>
+            <label>
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Role</span>
+              <select
+                className={inputCls}
+                value={newMemberRole}
+                onChange={(e) => setNewMemberRole(e.target.value as 'admin' | 'viewer')}
+              >
+                <option value="admin">admin</option>
+                <option value="viewer">viewer</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              disabled={addingMember}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+            >
+              {addingMember ? 'Adding…' : 'Add staff'}
+            </button>
+          </form>
+          <p className="mt-3 text-xs text-slate-400">
+            The person must already have a Ledgr account (registered through any business or the partner's
+            sign-up page). ‘viewer’ can only view; ‘admin’ can also edit branding and modules.
+          </p>
+        </Section>
+      )}
+
       {/* ── Isolation & limits ───────────────────────────────────────── */}
       <Section
         title="Clients & isolation"
@@ -317,14 +453,16 @@ export function PartnerSettingsPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Billing contact">
             <input
-              className={inputCls}
+              disabled={!isPlatformAdmin}
+              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
               value={form.billing_contact_name ?? ''}
               onChange={(e) => set('billing_contact_name', e.target.value)}
             />
           </Field>
-          <Field label="Billing email">
+          <Field label="Billing email" hint={isPlatformAdmin ? undefined : 'Set by Ledgr'}>
             <input
-              className={inputCls}
+              disabled={!isPlatformAdmin}
+              className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
               value={form.billing_email ?? ''}
               onChange={(e) => set('billing_email', e.target.value)}
             />
