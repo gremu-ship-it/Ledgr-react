@@ -118,13 +118,28 @@ supabase db push
 This creates `subscription_payments`, adds `plan_tier` / `plan_expires_at`
 to `businesses`, and installs the escalation-guard trigger.
 
-**Important:** `supabase/migrations/20260726000003_schedule_expire_subscriptions.sql`
-contains two placeholders (`<PROJECT_REF>` and `<CRON_SECRET>`) that must be
-replaced with real values before/when this migration runs, since SQL
-migrations can't read Supabase secrets the way Edge Functions do. Edit the
-file (or run the equivalent `select cron.schedule(...)` manually in the SQL
-editor) with your actual project ref and the same `CRON_SECRET` value you
-set in step 2.
+**Important:** the three cron-schedule migrations
+(`20260726...0003`, `20260726...0005`, `20260727...0006`) ship with
+`<PROJECT_REF>` and `<CRON_SECRET>` placeholders, because SQL migrations
+can't read env/secrets at apply time. If the jobs were applied with the
+literal placeholders, they point at a non-resolving URL and never fire —
+see `scripts/cron-jobs.sql`, which re-creates all three jobs with the real
+URLs and is idempotent (safe to run on every deploy).
+
+To create/repair them, replace `<PROJECT_REF>` and `<CRON_SECRET>` with your
+project ref and the same `CRON_SECRET` value set in step 2, then run:
+
+```bash
+sed -e "s|<PROJECT_REF>|<your-project-ref>|g" \
+    -e "s|<CRON_SECRET>|<your-cron-secret>|g" \
+    scripts/cron-jobs.sql > /tmp/cron-jobs.sql
+supabase db query --linked --file /tmp/cron-jobs.sql
+```
+
+(Equivalently, paste the substituted SQL into the Supabase SQL editor.) A
+matching `deploy.yml` change that fills the placeholders before `db push`
+and runs this script on every deploy is provided separately — apply it via
+a commit with `workflows` permission so CI does this automatically.
 
 ### 6. Go live
 
@@ -207,6 +222,20 @@ update public.user_profiles
 set is_platform_admin = true
 where id = (select id from auth.users where email = 'you@example.com');
 ```
+
+Once you're a platform admin, an **Admin** section appears in the left
+sidebar with two tools:
+
+- **Businesses** (`/admin/businesses`) — a read-only directory of every
+  registered business and its owner(s), with search. Backed by the
+  `list_all_businesses()` SECURITY DEFINER RPC (migration
+  `20260809000003_admin_business_directory.sql`), which resolves owners from
+  `auth.users`/`business_users` that the client can't read cross-tenant.
+  That same migration grants platform-admin to Gremu Consultancy
+  (`655ad01b-ea0c-45fb-8387-c30f5b0ab12d`), so that account has access
+  automatically.
+- **Admin Billing** (`/admin/billing`) — manually grant/expire plans for
+  offline payments (below).
 
 Then deploy the function if you did not already deploy it in the payment setup step:
 

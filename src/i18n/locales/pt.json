@@ -79,7 +79,8 @@
       "finance": "Finanças",
       "inventory": "Inventário",
       "accounting": "Contabilidade",
-      "organisation": "Organização"
+      "organisation": "Organização",
+      "admin": "Administração"
     },
     "items": {
       "ledgrAi": "Ledgr IA",
@@ -102,7 +103,9 @@
       "contacts": "Contactos",
       "branches": "Filiais",
       "departments": "Departamentos",
-      "settings": "Definições"
+      "settings": "Definições",
+      "businesses": "Empresas",
+      "adminBilling": "Cobrança admin"
     }
   },
   "auth": {

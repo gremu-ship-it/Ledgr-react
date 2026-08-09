@@ -80,7 +80,8 @@
       "inventory": "Inventory",
       "accounting": "Accounting",
       "organisation": "Organisation",
-      "support": "Help"
+      "support": "Help",
+      "admin": "Admin"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -105,7 +106,9 @@
       "branches": "Branches",
       "departments": "Departments",
       "settings": "Settings",
-      "support": "Support"
+      "support": "Support",
+      "businesses": "Businesses",
+      "adminBilling": "Admin Billing"
     }
   },
   "auth": {

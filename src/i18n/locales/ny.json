@@ -79,7 +79,8 @@
       "finance": "Za ndalama",
       "inventory": "Katundu",
       "accounting": "Maakaunti",
-      "organisation": "Bungwe"
+      "organisation": "Bungwe",
+      "admin": "Kuwongolera"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -102,7 +103,9 @@
       "contacts": "Olumikizana",
       "branches": "Ma branch",
       "departments": "Madipatimenti",
-      "settings": "Zokonda"
+      "settings": "Zokonda",
+      "businesses": "Mabizinesi",
+      "adminBilling": "Malipiro a admin"
     }
   },
   "auth": {
