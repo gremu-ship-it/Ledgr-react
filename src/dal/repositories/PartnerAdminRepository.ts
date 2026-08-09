@@ -52,4 +52,13 @@ export const PartnerAdminRepository = {
     } as never);
     if (error) throw new Error(error.message);
   },
+
+  /** Revoke all staff access for a partner (platform admin only). */
+  async clear(partnerId: string): Promise<number> {
+    const { data, error } = await supabase.rpc('clear_partner_admins' as never, {
+      p_partner_id: partnerId,
+    } as never);
+    if (error) throw new Error(error.message);
+    return Number(data ?? 0);
+  },
 };

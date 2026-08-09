@@ -18,6 +18,7 @@ Migrations:
 | `20260727000007_fix_partner_client_rls_recursion.sql` | recursion-safe partner/client and business visibility policies |
 | `20260809000000_protect_partner_commercial_fields.sql` | trigger: partner admins can't edit commercial/billing/routing fields |
 | `20260809000001_partner_admin_management.sql` | SECURITY DEFINER RPCs to list/add/remove partner staff |
+| `20260809000002_clear_partner_admin_access.sql` | SECURITY DEFINER RPC to revoke all of a partner's staff access |
 
 Apply with `supabase db push` (or run the SQL in order against your project).
 
@@ -137,6 +138,19 @@ them. This calls `list_partner_admins` / `add_partner_admin` /
 `remove_partner_admin` (see `20260809000001_partner_admin_management.sql`),
 which resolve the user against `auth.users` server-side and enforce
 authorization inside the SECURITY DEFINER functions.
+
+**Deactivate vs. end staff access** (both on the partner overview, Ledgr
+admins only):
+- **Deactivate / Reactivate** (`partners.is_active`) is a *commercial soft
+  stop*: the branded domain stops resolving, new sign-ups stop being linked,
+  and monthly billing stops. Existing SME clients keep all their data and
+  modules — they are never affected by deactivation.
+- **End staff access** (`clear_partner_admins`,
+  `20260809000002_clear_partner_admin_access.sql`) removes every
+  `partner_admins` membership, revoking bank/MFI staff access to the admin
+  portal. Deactivation on its own does **not** revoke portal access (the RLS
+  helpers and `getForAdminUser` ignore `is_active`), so ending a relationship
+  requires clearing staff access explicitly.
 
 ## 7. Onboarding a new partner — checklist
 
