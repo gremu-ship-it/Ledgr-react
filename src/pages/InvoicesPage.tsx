@@ -679,7 +679,7 @@ function InvoiceDetail({
               </div>
             </div>
 
-            {/* Line items */}
+            {/* Line items — discount-aware */}
             {isLoading ? (
               <div className="space-y-2">
                 {[...Array(3)].map((_, i) => (
@@ -689,7 +689,12 @@ function InvoiceDetail({
                   />
                 ))}
               </div>
-            ) : (
+            ) : (() => {
+              const linesArr = (withLines?.lines ?? []) as unknown as Array<Row<'invoice_lines'> & { discount_percent?: number; discount_amount?: number }>;
+              const totalDiscount = Number(invoice.discount_amount ?? 0) || linesArr.reduce((s, l) => s + Number(l.discount_amount ?? 0), 0);
+              const grossSubtotal = Number(invoice.subtotal) + totalDiscount;
+              const hasDiscount = totalDiscount > 0.005 || linesArr.some((l) => Number(l.discount_percent ?? 0) > 0);
+              return (
               <div className="overflow-hidden rounded-lg border border-gray-200">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -697,15 +702,22 @@ function InvoiceDetail({
                       <th scope="col" className="px-4 py-2.5 text-left">Description</th>
                       <th scope="col" className="px-4 py-2.5 text-right">Qty</th>
                       <th scope="col" className="px-4 py-2.5 text-right">Unit Price</th>
+                      {hasDiscount && <th scope="col" className="px-4 py-2.5 text-right">Disc %</th>}
+                      {hasDiscount && <th scope="col" className="px-4 py-2.5 text-right">Discount</th>}
                       <th scope="col" className="px-4 py-2.5 text-right">Tax</th>
                       <th scope="col" className="px-4 py-2.5 text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {(withLines?.lines ?? []).map((line) => (
+                    {linesArr.map((line) => {
+                      const discPct = Number((line as unknown as { discount_percent?: number }).discount_percent ?? 0);
+                      const discAmt = Number((line as unknown as { discount_amount?: number }).discount_amount ?? 0);
+                      return (
                       <tr key={line.id}>
                         <td className="px-4 py-3 text-gray-700">
-                          {line.description}
+                          <div>{line.description}</div>
+                          {(line as unknown as { product_name?: string }).product_name ? <div className="text-xs text-gray-500">{String((line as unknown as { product_name?: string }).product_name)}</div> : null}
+                          {discPct > 0 && <div className="text-xs text-emerald-600">{discPct}% off{discAmt > 0 ? ` • -${formatMwkDetailed(discAmt)}` : ''}</div>}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-500">
                           {line.quantity}
@@ -713,6 +725,8 @@ function InvoiceDetail({
                         <td className="px-4 py-3 text-right text-gray-500">
                           {formatMwkDetailed(Number(line.unit_price))}
                         </td>
+                        {hasDiscount && <td className="px-4 py-3 text-right" style={{ color: discPct > 0 ? '#059669' : '#94a3b8' }}>{discPct > 0 ? `${discPct}%` : '—'}</td>}
+                        {hasDiscount && <td className="px-4 py-3 text-right" style={{ color: discAmt > 0 ? '#059669' : '#94a3b8' }}>{discAmt > 0 ? `-${formatMwkDetailed(discAmt)}` : '—'}</td>}
                         <td className="px-4 py-3 text-right text-gray-500">
                           {formatMwkDetailed(Number(line.tax_amount))}
                         </td>
@@ -720,35 +734,53 @@ function InvoiceDetail({
                           {formatMwkDetailed(Number(line.line_total))}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            )}
+              );
+            })()}
 
-            {/* Totals */}
-            <div className="mt-4 flex justify-end">
-              <div className="w-64 space-y-1.5 text-sm">
-                <div className="flex justify-between text-gray-600">
-                  <span>Subtotal</span>
-                  <span>{formatMwkDetailed(Number(invoice.subtotal))}</span>
-                </div>
-                <div className="flex justify-between text-gray-600">
-                  <span>VAT (17.5%)</span>
-                  <span>{formatMwkDetailed(Number(invoice.vat_amount))}</span>
-                </div>
-                {Number(invoice.wht_amount) > 0 && (
+            {/* Totals — discount-aware */}
+            {(() => {
+              const linesArr = (withLines?.lines ?? []) as unknown as Array<Row<'invoice_lines'> & { discount_amount?: number }>;
+              const totalDiscount = Number(invoice.discount_amount ?? 0) || linesArr.reduce((s, l) => s + Number(l.discount_amount ?? 0), 0);
+              const grossSubtotal = Number(invoice.subtotal) + totalDiscount;
+              const hasDiscount = totalDiscount > 0.005;
+              return (
+              <div className="mt-4 flex justify-end">
+                <div className="w-64 space-y-1.5 text-sm">
+                  {hasDiscount ? (
+                    <>
+                      <div className="flex justify-between text-gray-600"><span>Gross Subtotal</span><span>{formatMwkDetailed(grossSubtotal)}</span></div>
+                      <div className="flex justify-between text-emerald-700"><span>Less: Discount</span><span>-{formatMwkDetailed(totalDiscount)}</span></div>
+                      <div className="flex justify-between font-medium text-gray-900"><span>Net Subtotal</span><span>{formatMwkDetailed(Number(invoice.subtotal))}</span></div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-gray-600">
+                      <span>Subtotal</span>
+                      <span>{formatMwkDetailed(Number(invoice.subtotal))}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-gray-600">
-                    <span>WHT</span>
-                    <span>−{formatMwkDetailed(Number(invoice.wht_amount))}</span>
+                    <span>VAT (17.5%)</span>
+                    <span>{formatMwkDetailed(Number(invoice.vat_amount))}</span>
                   </div>
-                )}
-                <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900">
-                  <span>Total</span>
-                  <span>{formatMwkDetailed(Number(invoice.total_amount))}</span>
+                  {Number(invoice.wht_amount) > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>WHT</span>
+                      <span>−{formatMwkDetailed(Number(invoice.wht_amount))}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900">
+                    <span>Total</span>
+                    <span>{formatMwkDetailed(Number(invoice.total_amount))}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+              );
+            })()}
 
             {/* Notes */}
             {invoice.notes && (

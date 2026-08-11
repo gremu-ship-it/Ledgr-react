@@ -145,20 +145,7 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
           return chain;
         };
         return {
-          select: () => ({
-            eq: () => ({
-              eq: (_col2: string, codeVal: string) => ({
-                maybeSingle: async () => ({ data: mockAccounts[codeVal] ?? null, error: null }),
-              }),
-              is: () => ({
-                or: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => ({ data: { id: 'acc-pension-liab' }, error: null }),
-                  }),
-                }),
-              }),
-            }),
-          }),
+          select: () => makeChain({ code: null }),
         };
       }
       if (table === 'journal_entries') {

@@ -681,6 +681,14 @@ export function generateInvoiceDocument(params: {
   const due = total - paid;
   const progress = total > 0 ? Math.min(100, Math.max(0, (paid / total) * 100)) : 0;
 
+  // Discount: invoice header may be 0 for legacy records; fall back to sum of line discounts
+  const headerDiscount = Number(invoice.discount_amount ?? 0);
+  const lineDiscountSum = lines.reduce((s, l) => s + Number(l.discount_amount ?? 0), 0);
+  const totalDiscount = headerDiscount > 0 ? headerDiscount : lineDiscountSum;
+  const hasDiscount = totalDiscount > 0.005 || lines.some((l) => Number(l.discount_percent ?? 0) > 0 || Number(l.discount_amount ?? 0) > 0);
+  const netSubtotal = Number(invoice.subtotal ?? 0);
+  const grossSubtotal = netSubtotal + totalDiscount;
+
   const payRows = (payments || []).map((p) => `
     <div style="display:flex; justify-content:space-between; font-size:8.5pt; padding:6px 0; border-bottom:1px solid #f1f5f9;">
       <div>
@@ -729,35 +737,42 @@ export function generateInvoiceDocument(params: {
   <table>
     <thead>
       <tr>
-        <th scope="col" style="width:50%">Description</th>
-        <th scope="col" class="num" style="width:10%">Qty</th>
-        <th scope="col" class="num" style="width:15%">Unit Price</th>
-        <th scope="col" class="num" style="width:10%">Tax</th>
-        <th scope="col" class="num" style="width:15%">Amount</th>
+        <th scope="col" style="${hasDiscount ? 'width:36%' : 'width:50%'}">Description</th>
+        <th scope="col" class="num" style="width:8%">Qty</th>
+        <th scope="col" class="num" style="width:13%">Unit Price</th>
+        ${hasDiscount ? `<th scope="col" class="num" style="width:8%">Disc %</th><th scope="col" class="num" style="width:10%">Discount</th>` : ''}
+        <th scope="col" class="num" style="${hasDiscount ? 'width:10%' : 'width:10%'}">Tax</th>
+        <th scope="col" class="num" style="${hasDiscount ? 'width:15%' : 'width:15%'}">Amount</th>
       </tr>
     </thead>
     <tbody>
-      ${lines.map((l) => `
+      ${lines.map((l) => {
+        const discPct = Number(l.discount_percent ?? 0);
+        const discAmt = Number(l.discount_amount ?? 0);
+        const showDisc = hasDiscount;
+        return `
         <tr>
           <td>
             <div class="line-desc">${esc(l.description)}</div>
             ${l.product_name ? `<div class="line-sub">${esc(l.product_name)}${l.sku ? ` • SKU: ${esc(l.sku)}` : ''}</div>` : ''}
+            ${showDisc && discPct > 0 ? `<div class="line-sub" style="color:#0E7C5A;">${discPct}% discount${discAmt > 0 ? ` • -${formatMwk(discAmt, currency)}` : ''}</div>` : ''}
           </td>
           <td class="num mono">${Number(l.quantity).toLocaleString()}</td>
           <td class="num">${formatMwk(l.unit_price, currency)}</td>
+          ${showDisc ? `<td class="num" style="${discPct > 0 ? 'color:#0E7C5A; font-weight:600;' : 'color:#94a3b8;'}">${discPct > 0 ? `${discPct}%` : '—'}</td><td class="num" style="${discAmt > 0 ? 'color:#0E7C5A;' : 'color:#94a3b8;'}">${discAmt > 0 ? `- ${formatMwk(discAmt, currency)}` : '—'}</td>` : ''}
           <td class="num">${formatMwk(l.tax_amount ?? 0, currency)}</td>
           <td class="num" style="font-weight:600;">${formatMwk(l.line_total, currency)}</td>
         </tr>
-      `).join('')}
+      `}).join('')}
     </tbody>
   </table>
 
   <div class="totals">
     <div class="totals-box">
-      <div class="totals-row muted"><span>Subtotal</span><span>${formatMwk(invoice.subtotal ?? 0, currency)}</span></div>
+      ${hasDiscount ? `<div class="totals-row muted"><span>Gross Subtotal</span><span>${formatMwk(grossSubtotal, currency)}</span></div><div class="totals-row muted" style="color:#0E7C5A;"><span>Less: Trade Discount</span><span>- ${formatMwk(totalDiscount, currency)}</span></div><div class="totals-row muted" style="font-weight:600;"><span>Net Subtotal</span><span>${formatMwk(netSubtotal, currency)}</span></div>` : `<div class="totals-row muted"><span>Subtotal</span><span>${formatMwk(netSubtotal, currency)}</span></div>`}
       <div class="totals-row muted"><span>VAT</span><span>${formatMwk(invoice.vat_amount ?? 0, currency)}</span></div>
       ${Number(invoice.wht_amount ?? 0) > 0 ? `<div class="totals-row muted"><span>WHT Withheld</span><span>- ${formatMwk(invoice.wht_amount, currency)}</span></div>` : ''}
-      ${Number(invoice.discount_amount ?? 0) > 0 ? `<div class="totals-row muted"><span>Discount</span><span>- ${formatMwk(invoice.discount_amount, currency)}</span></div>` : ''}
+      ${!hasDiscount && totalDiscount > 0 ? `<div class="totals-row muted" style="color:#0E7C5A;"><span>Discount</span><span>- ${formatMwk(totalDiscount, currency)}</span></div>` : ''}
       <div class="totals-row total"><span>Total</span><span>${formatMwk(invoice.total_amount, currency)}</span></div>
       ${paid > 0 ? `
         <div class="totals-row muted"><span>Paid</span><span style="color:#059669;">- ${formatMwk(paid, currency)}</span></div>
