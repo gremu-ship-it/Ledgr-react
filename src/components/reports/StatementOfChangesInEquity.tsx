@@ -17,6 +17,14 @@ function formatAccounting(amount: number, formatCurrency: (value: number) => str
   return amount < 0 ? `(${formatted})` : formatted;
 }
 
+function escHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 const financialStatementRepo = new FinancialStatementRepository(repos.account.db);
 
 interface Props {
@@ -60,8 +68,57 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
     : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
 
+  // Build a clean, fully self-contained table for the PDF. Do NOT export the
+  // on-screen DOM: it relies on Tailwind classes that do not exist inside the
+  // standalone PDF document, which produced unaligned, unstyled output.
+  const buildExportHtml = (): string => {
+    if (!soce) return '';
+    const amount = (value: number) => (value !== 0 ? formatAccounting(value, formatMwk) : '—');
+    const numCell = 'padding:8px 12px; text-align:right; font-size:9pt; border-bottom:1px solid #f1f5f9; font-variant-numeric:tabular-nums; color:#475569;';
+    const thStyle = 'padding:10px 12px; text-align:right; font-size:8pt; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#ffffff;';
+
+    const lineRow = (row: EquityRollForwardLine) => `
+      <tr>
+        <td style="padding:8px 12px; font-size:9pt; font-weight:600; color:#0f172a; border-bottom:1px solid #f1f5f9;">${escHtml(row.label)}</td>
+        <td style="${numCell}">${formatAccounting(row.openingBalance, formatMwk)}</td>
+        <td style="${numCell}">${amount(row.netProfitAllocation)}</td>
+        <td style="${numCell}">${amount(row.contributions)}</td>
+        <td style="${numCell}">${amount(row.drawingsOrDividends)}</td>
+        <td style="${numCell}">${amount(row.otherMovements)}</td>
+        <td style="padding:8px 12px; text-align:right; font-size:9pt; border-bottom:1px solid #f1f5f9; font-variant-numeric:tabular-nums; font-weight:700; color:#0f172a;">${formatAccounting(row.closingBalance, formatMwk)}</td>
+      </tr>`;
+
+    const warning = !soce.reconciles
+      ? `<div style="margin:10px 0 4px; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; font-size:8.5pt; color:#92400e;">${escHtml(t('reports.equityReconciliationWarning'))}</div>`
+      : '';
+
+    return `${warning}
+      <table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:9pt;">
+        <thead><tr style="background:#0f172a;">
+          <th style="${thStyle.replace('text-align:right', 'text-align:left')}"></th>
+          <th style="${thStyle}">${escHtml(t('reports.opening'))}</th>
+          <th style="${thStyle}">${escHtml(t('reports.netProfit'))}</th>
+          <th style="${thStyle}">${escHtml(t('reports.contributions'))}</th>
+          <th style="${thStyle}">${escHtml(t('reports.drawingsDividends'))}</th>
+          <th style="${thStyle}">${escHtml(t('reports.other'))}</th>
+          <th style="${thStyle}">${escHtml(t('reports.closing'))}</th>
+        </tr></thead>
+        <tbody>
+          ${lineRow(soce.shareCapital)}
+          ${lineRow(soce.retainedEarnings)}
+          ${lineRow(soce.reserves)}
+          <tr style="background:#f8fafc;">
+            <td style="padding:10px 12px; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a;">${escHtml(t('reports.totalEquity'))}</td>
+            <td style="padding:10px 12px; text-align:right; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a; font-variant-numeric:tabular-nums;">${formatAccounting(soce.totalOpeningEquity, formatMwk)}</td>
+            <td colspan="4" style="border-top:2px solid #0f172a;"></td>
+            <td style="padding:10px 12px; text-align:right; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a; font-variant-numeric:tabular-nums;">${formatAccounting(soce.totalClosingEquity, formatMwk)}</td>
+          </tr>
+        </tbody>
+      </table>`;
+  };
+
   const handleExportPDF = () => {
-    const htmlContent = document.querySelector('.overflow-x-auto')?.outerHTML || '';
+    if (!soce) return;
     exportReportAsPDF({
       title: t('reports.statementOfChangesInEquity'),
       subtitle: `${periodLabel} — ${brandName}`,
@@ -70,7 +127,7 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
       notes,
       businessName: brandName,
       business: businessBranding,
-      htmlContent,
+      htmlContent: buildExportHtml(),
     });
   };
 

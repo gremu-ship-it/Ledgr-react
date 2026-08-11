@@ -17,6 +17,14 @@ function formatAccounting(amount: number, formatCurrency: (value: number) => str
   return amount < 0 ? `(${formatted})` : formatted;
 }
 
+function escHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 const financialStatementRepo = new FinancialStatementRepository(repos.account.db);
 
 interface Props {
@@ -135,8 +143,75 @@ export function StatementOfProfitOrLoss({
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
     : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
 
+  // Build a clean, fully self-contained table for the PDF. Do NOT export the
+  // on-screen DOM: it relies on Tailwind classes (text-end, font-semibold,
+  // py-1, ps-4, bg-brand-50, …) that do not exist inside the standalone PDF
+  // document, which is what previously produced unaligned, unstyled output.
+  const buildExportHtml = (): string => {
+    if (!pl) return '';
+    const cols = showComparative ? 3 : 2;
+    const numCell = 'padding:7px 12px; text-align:right; font-size:9.5pt; border-bottom:1px solid #f8fafc; font-variant-numeric:tabular-nums;';
+
+    const sectionRows = (section: StatementSection, negate = false): string => {
+      const sign = negate ? -1 : 1;
+      // Skip entirely empty sections — professional statements omit them.
+      if (section.lines.length === 0 && section.subtotal === 0) return '';
+      return `
+        <tr><td colspan="${cols}" style="padding:16px 12px 6px; font-size:8pt; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#94a3b8;">${escHtml(section.label)}</td></tr>
+        ${section.lines.map((line) => `
+          <tr>
+            <td style="padding:7px 12px 7px 26px; font-size:9.5pt; color:#475569; border-bottom:1px solid #f8fafc;">${escHtml(line.name)}</td>
+            <td style="${numCell} color:#334155;">${formatAccounting(sign * line.amount, formatMwk)}</td>
+            ${showComparative ? `<td style="${numCell} color:#64748b;">${line.comparativeAmount !== null ? formatAccounting(sign * line.comparativeAmount, formatMwk) : '—'}</td>` : ''}
+          </tr>`).join('')}
+        <tr>
+          <td style="padding:8px 12px 8px 12px; font-size:9.5pt; font-weight:700; color:#0f172a; border-bottom:2px solid #e2e8f0;">${t('common.total')} ${escHtml(section.label)}</td>
+          <td style="${numCell} font-weight:700; color:#0f172a; border-bottom:2px solid #e2e8f0;">${formatAccounting(sign * section.subtotal, formatMwk)}</td>
+          ${showComparative ? `<td style="${numCell} font-weight:700; color:#475569; border-bottom:2px solid #e2e8f0;">${section.comparativeSubtotal !== null ? formatAccounting(sign * section.comparativeSubtotal, formatMwk) : '—'}</td>` : ''}
+        </tr>`;
+    };
+
+    const keyRow = (label: string, amount: number, comparative: number | null, opts?: { highlight?: boolean }): string => {
+      const dark = opts?.highlight ?? false;
+      const colour = dark ? '#ffffff' : amount < 0 ? '#dc2626' : '#0f172a';
+      const cmpColour = dark ? '#e2e8f0' : (comparative ?? 0) < 0 ? '#dc2626' : '#475569';
+      const rowStyle = dark ? 'background:#0f172a;' : 'background:#f8fafc;';
+      const cell = `padding:${dark ? 12 : 10}px 12px; font-size:${dark ? 10.5 : 9.5}pt; font-weight:700;`;
+      return `
+        <tr style="${rowStyle}">
+          <td style="${cell} color:${dark ? '#ffffff' : '#0f172a'};">${label}</td>
+          <td style="${cell} text-align:right; color:${colour}; font-variant-numeric:tabular-nums;">${formatAccounting(amount, formatMwk)}</td>
+          ${showComparative ? `<td style="${cell} text-align:right; color:${cmpColour}; font-variant-numeric:tabular-nums;">${comparative !== null ? formatAccounting(comparative, formatMwk) : '—'}</td>` : ''}
+        </tr>
+        ${dark ? '' : `<tr><td colspan="${cols}" style="padding:2px;"></td></tr>`}`;
+    };
+
+    return `
+      <table style="width:100%; border-collapse:collapse; margin-top:4px; font-size:9.5pt;">
+        <thead><tr style="background:#0f172a;">
+          <th style="padding:10px 12px; text-align:left; font-size:8pt; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#ffffff;"></th>
+          <th style="padding:10px 12px; text-align:right; font-size:8pt; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#ffffff;">${escHtml(periodLabel)}</th>
+          ${showComparative ? `<th style="padding:10px 12px; text-align:right; font-size:8pt; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#ffffff;">${escHtml(comparativeLabel)}</th>` : ''}
+        </tr></thead>
+        <tbody>
+          ${sectionRows(pl.revenue)}
+          ${sectionRows(pl.costOfSales, true)}
+          ${keyRow(t('reports.grossProfit'), pl.grossProfit, pl.comparativeGrossProfit)}
+          ${sectionRows(pl.otherIncome)}
+          ${sectionRows(pl.operatingExpenses, true)}
+          ${sectionRows(pl.depreciationAmortisation, true)}
+          ${keyRow(t('reports.operatingProfit'), pl.operatingProfit, pl.comparativeOperatingProfit)}
+          ${sectionRows(pl.financeCosts, true)}
+          ${keyRow(t('reports.profitBeforeTax'), pl.profitBeforeTax, pl.comparativeProfitBeforeTax)}
+          ${sectionRows(pl.taxExpense, true)}
+          ${keyRow(t('reports.netProfitLoss'), pl.netProfit, pl.comparativeNetProfit, { highlight: true })}
+        </tbody>
+      </table>
+    `;
+  };
+
   const handleExportPDF = () => {
-    const htmlContent = document.querySelector('.max-w-3xl')?.innerHTML || document.querySelector('.max-w-3xl')?.outerHTML || '';
+    if (!pl) return;
     exportReportAsPDF({
       title: t('reports.statementOfProfitOrLoss'),
       subtitle: `${periodLabel} — ${brandName}`,
@@ -146,7 +221,7 @@ export function StatementOfProfitOrLoss({
       notes,
       businessName: brandName,
       business: businessBranding,
-      htmlContent,
+      htmlContent: buildExportHtml(),
     });
   };
 
