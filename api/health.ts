@@ -21,7 +21,12 @@ interface VercelRequest {
 
 interface VercelResponse {
   setHeader(name: string, value: string): this;
-  status(code: number): { json(body: unknown): this };
+  // Mirrors @vercel/node's VercelResponse: .status() and .json() both return
+  // the response itself so calls chain (res.status(200).json(...)). Declared
+  // on the interface — not as a nested object-literal type — because a `this`
+  // type is only legal in class/interface members (TS2526).
+  status(code: number): VercelResponse;
+  json(body: unknown): this;
 }
 
 export default function handler(_req: VercelRequest, res: VercelResponse) {
