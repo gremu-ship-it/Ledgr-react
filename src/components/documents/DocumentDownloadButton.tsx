@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, FileText, FileDown, ChevronDown, Printer } from 'lucide-react';
+import { Download, FileText, FileDown, ChevronDown } from 'lucide-react';
 
 export type DocType = 'invoice' | 'delivery_note' | 'receipt' | 'quotation' | 'credit_note' | 'expense' | 'payslip' | 'report';
 
@@ -119,7 +119,7 @@ export function DocumentDownloadButton({
           </div>
           <div className="mt-1 border-t border-gray-100 px-3 py-2">
             <p className="flex items-center gap-1.5 text-[10px] text-gray-400">
-              <Printer className="h-3 w-3" /> Print or Save as PDF
+              <Download className="h-3 w-3" /> Downloads a clean PDF file (no browser print headers)
             </p>
           </div>
         </div>
