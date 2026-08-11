@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveAssetAccountLinks } from '../fixedAssetAccounts';
+import { isAssetDepreciable, resolveAssetAccountLinks } from '../fixedAssetAccounts';
 
 describe('resolveAssetAccountLinks', () => {
   it('inherits all required GL links from the selected category', () => {
@@ -40,6 +40,33 @@ describe('resolveAssetAccountLinks', () => {
       depExpenseAccountId: 'category-expense',
       missing: [],
     });
+  });
+
+  it('does not require depreciation accounts for Land', () => {
+    expect(resolveAssetAccountLinks(
+      {},
+      { name: 'Land', asset_account_id: 'land-account' },
+    )).toEqual({
+      assetAccountId: 'land-account',
+      accumulatedDepAccountId: null,
+      depExpenseAccountId: null,
+      missing: [],
+    });
+  });
+
+  it('reports only the cost account when a non-depreciable category has no GL link', () => {
+    expect(resolveAssetAccountLinks({}, { name: 'Land' }).missing).toEqual(['asset account']);
+  });
+
+  it('recognises Land as non-depreciable even before the category is migrated', () => {
+    expect(isAssetDepreciable({}, { name: 'Land' })).toBe(false);
+  });
+
+  it('allows an explicit non-depreciable flag for categories other than Land', () => {
+    expect(resolveAssetAccountLinks(
+      {},
+      { name: 'Freehold Property', is_depreciable: false, asset_account_id: 'property-account' },
+    ).missing).toEqual([]);
   });
 
   it('reports the exact links still missing instead of restarting a vague loop', () => {

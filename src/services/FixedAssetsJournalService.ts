@@ -15,7 +15,10 @@
 
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
-import { resolveAssetAccountLinks } from '@/lib/fixedAssetAccounts';
+import {
+  isAssetDepreciable,
+  resolveAssetAccountLinks,
+} from '@/lib/fixedAssetAccounts';
 import type { Row } from '@/dal/types/database';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -38,19 +41,22 @@ function monthName(dateStr: string): string {
 
 interface ResolvedAssetAccounts {
   assetAccountId: string;
-  accumulatedDepAccountId: string;
-  depExpenseAccountId: string;
+  accumulatedDepAccountId: string | null;
+  depExpenseAccountId: string | null;
+  isDepreciable: boolean;
 }
 
 async function resolveAssetAccounts(
   asset: Row<'fixed_assets'>,
+  categoryOverride?: Row<'asset_categories'> | null,
 ): Promise<ResolvedAssetAccounts> {
-  const needsCategory = !asset.asset_account_id
-    || !asset.accumulated_dep_account_id
-    || !asset.dep_expense_account_id;
-  const category = needsCategory
+  // Always resolve the category when account links are needed: an asset can be
+  // non-depreciable while still inheriting its cost account from the category.
+  // This also keeps older Land rows safe when they still have all three
+  // account overrides populated.
+  const category = categoryOverride === undefined
     ? await repos.asset.findCategoryById(asset.business_id, asset.category_id)
-    : null;
+    : categoryOverride;
   const resolved = resolveAssetAccountLinks(asset, category);
 
   if (resolved.missing.length > 0) {
@@ -63,8 +69,9 @@ async function resolveAssetAccounts(
 
   return {
     assetAccountId: resolved.assetAccountId!,
-    accumulatedDepAccountId: resolved.accumulatedDepAccountId!,
-    depExpenseAccountId: resolved.depExpenseAccountId!,
+    accumulatedDepAccountId: resolved.accumulatedDepAccountId,
+    depExpenseAccountId: resolved.depExpenseAccountId,
+    isDepreciable: isAssetDepreciable(asset, category),
   };
 }
 
@@ -311,6 +318,22 @@ export async function postAssetDepreciation(
       continue;
     }
 
+    // Resolve the policy before checking accounts or doing the arithmetic.
+    // Land and any other non-depreciable category must never reach the
+    // calculation (which would otherwise require a useful life and could turn
+    // a data-entry omission into a posting error).
+    const category = await repos.asset.findCategoryById(businessId, asset.category_id);
+    if (!isAssetDepreciable(asset, category)) {
+      results.push({
+        assetId: asset.id,
+        assetName: asset.name,
+        charge: 0,
+        journalEntryId: '',
+        skipped: 'Non-depreciable asset — no charge due.',
+      });
+      continue;
+    }
+
     // Skip if already posted for this exact period
     const existingSchedules = await repos.asset.findDepreciationSchedule(businessId, asset.id);
     const alreadyPosted = existingSchedules.some(
@@ -326,6 +349,8 @@ export async function postAssetDepreciation(
       });
       continue;
     }
+
+    const resolvedAccounts = await resolveAssetAccounts(asset, category);
 
     const charge = calculateMonthlyDepreciation({
       method: asset.depreciation_method,
@@ -348,7 +373,8 @@ export async function postAssetDepreciation(
       continue;
     }
 
-    const { accumulatedDepAccountId, depExpenseAccountId } = await resolveAssetAccounts(asset);
+    const accumulatedDepAccountId = resolvedAccounts.accumulatedDepAccountId!;
+    const depExpenseAccountId = resolvedAccounts.depExpenseAccountId!;
     const entryNumber = await nextEntryNumber();
     const monthLabel = monthName(period.period_end);
     const description = `Auto-depreciation — ${asset.name} — ${monthLabel}`;
@@ -492,19 +518,26 @@ export async function disposeAsset(
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
   let lineNumber = 1;
 
-  lines.push({
-    line_number: lineNumber++,
-    account_id: accumulatedDepAccountId,
-    description: `${description} — reverse accumulated depreciation`,
-    is_debit: true,
-    amount: asset.accumulated_depreciation,
-    amount_base: asset.accumulated_depreciation,
-    currency: 'MWK',
-    exchange_rate: 1,
-    tax_code: 'none',
-    tax_amount: 0,
-    reconciled: false,
-  });
+  if (asset.accumulated_depreciation > 0 && !accumulatedDepAccountId) {
+    throw new Error(
+      `Asset ${asset.name} has accumulated depreciation but no accumulated depreciation account.`,
+    );
+  }
+  if (asset.accumulated_depreciation > 0) {
+    lines.push({
+      line_number: lineNumber++,
+      account_id: accumulatedDepAccountId!,
+      description: `${description} — reverse accumulated depreciation`,
+      is_debit: true,
+      amount: asset.accumulated_depreciation,
+      amount_base: asset.accumulated_depreciation,
+      currency: 'MWK',
+      exchange_rate: 1,
+      tax_code: 'none',
+      tax_amount: 0,
+      reconciled: false,
+    });
+  }
 
   if (proceeds > 0) {
     lines.push({
