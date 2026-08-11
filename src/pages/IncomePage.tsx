@@ -1073,7 +1073,6 @@ function IncomeList({ businessId }: { businessId: string }) {
     );
 
   return (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     <div ref={containerRef}>
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
       {isMobile ? (

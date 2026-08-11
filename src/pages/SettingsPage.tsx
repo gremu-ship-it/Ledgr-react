@@ -977,10 +977,13 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
   type InviteResponse = { success: boolean; message: string; error?: string; member?: unknown };
 
+  // Capture the reference time once per mount so this derived render value is stable.
+  const [invitationExpiryCheckTime] = useState(() => Date.now());
+
   function isMemberInviteExpired(m: TeamMember): boolean {
     if (!m.invitation_expires_at) return false;
     const t = new Date(m.invitation_expires_at).getTime();
-    return !Number.isNaN(t) && t < Date.now();
+    return !Number.isNaN(t) && t < invitationExpiryCheckTime;
   }
 
   const { data: members = [], isLoading } = useQuery<TeamMember[]>({
