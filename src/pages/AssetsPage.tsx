@@ -9,6 +9,7 @@ import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { createLogger } from '@/lib/logger';
+import { resolveAssetAccountLinks } from '@/lib/fixedAssetAccounts';
 
 const log = createLogger('AssetsPage');
 import type { Row, InsertDto, DepreciationMethod, AssetStatus } from '@/dal/types/database';
@@ -149,7 +150,7 @@ function CategoryModal({
   }
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<Row<'asset_categories'>> => {
       if (!form.name.trim()) throw new Error('Category name is required');
       if (!form.asset_account_id) throw new Error('Asset (cost) account is required');
       if (!form.accumulated_dep_account_id) throw new Error('Accumulated depreciation account is required');
@@ -167,19 +168,21 @@ function CategoryModal({
         dep_expense_account_id: form.dep_expense_account_id,
         is_active: true,
       };
-      if (existing) {
-        const { error } = await repos.asset['client']
-          .from('asset_categories').update(payload as never).eq('id', existing.id);
-        if (error) throw new Error(error.message);
-      } else {
-        const { error } = await repos.asset['client']
-          .from('asset_categories').insert(payload as never);
-        if (error) throw new Error(error.message);
-      }
+
+      return existing
+        ? repos.asset.updateCategory(businessId, existing.id, payload)
+        : repos.asset.createCategory(payload);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset_categories'] });
-      setAlert({ type: 'success', message: existing ? 'Category updated.' : 'Category created.' });
+    onSuccess: (savedCategory) => {
+      queryClient.setQueryData<Row<'asset_categories'>[]>(
+        ['asset_categories', businessId],
+        (current = []) => [
+          ...current.filter((category) => category.id !== savedCategory.id),
+          savedCategory,
+        ].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['asset_categories', businessId] });
+      setAlert({ type: 'success', message: existing ? 'Category and GL defaults saved.' : 'Category created.' });
       setTimeout(onClose, 1000);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
@@ -365,11 +368,23 @@ function AssetModal({
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  const selectedCategory = categories.find((category) => category.id === form.category_id);
+  const resolvedAccountLinks = resolveAssetAccountLinks(form, selectedCategory);
+
   const mutation = useMutation({
     mutationFn: async (): Promise<{ capWarning: string | null }> => {
       if (!form.asset_number.trim()) throw new Error('Asset number is required');
       if (!form.name.trim()) throw new Error('Asset name is required');
       if (!form.category_id) throw new Error('Select a category');
+      if (!selectedCategory) {
+        throw new Error('The selected category is no longer active. Select an active category.');
+      }
+      if (resolvedAccountLinks.missing.length > 0) {
+        throw new Error(
+          `Category "${selectedCategory.name}" is missing: ${resolvedAccountLinks.missing.join(', ')}. ` +
+          'Set all three defaults in the Categories tab, or expand GL Account Overrides below.',
+        );
+      }
       if (!form.funding_account_id) {
         throw new Error('Select the account the asset was paid from (funding account) — it is needed for the capitalisation journal.');
       }
@@ -474,6 +489,14 @@ function AssetModal({
                 <option value="">Select category…</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {selectedCategory && resolvedAccountLinks.missing.length > 0 && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Missing GL links: {resolvedAccountLinks.missing.join(', ')}. Configure the category defaults or use GL Account Overrides below.
+                </p>
+              )}
+              {selectedCategory && resolvedAccountLinks.missing.length === 0 && (
+                <p className="mt-1 text-xs text-emerald-700">All required GL accounts are linked.</p>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
@@ -1430,15 +1453,9 @@ function CategoriesTab({ businessId }: { businessId: string }) {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await repos.asset['client']
-        .from('asset_categories')
-        .update({ is_active: false } as never)
-        .eq('id', id);
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: (id: string) => repos.asset.deactivateCategory(businessId, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset_categories'] });
+      void queryClient.invalidateQueries({ queryKey: ['asset_categories', businessId] });
       setDeleting(undefined);
     },
   });
@@ -1475,6 +1492,7 @@ function CategoriesTab({ businessId }: { businessId: string }) {
                 <th scope="col" className="px-4 py-3 text-right">Useful Life</th>
                 <th scope="col" className="px-4 py-3 text-right">Residual %</th>
                 <th scope="col" className="px-4 py-3 text-right">MRA Rate %</th>
+                <th scope="col" className="px-4 py-3 text-center">GL Defaults</th>
                 <th scope="col" className="px-4 py-3 text-center">Actions</th>
               </tr>
             </thead>
@@ -1486,6 +1504,15 @@ function CategoriesTab({ businessId }: { businessId: string }) {
                   <td className="px-4 py-3 text-right text-gray-500">{cat.useful_life_years ? `${cat.useful_life_years} yrs` : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-500">{Number(cat.residual_percent).toFixed(1)}%</td>
                   <td className="px-4 py-3 text-right text-gray-500">{cat.mra_depreciation_rate != null ? `${Number(cat.mra_depreciation_rate).toFixed(1)}%` : '—'}</td>
+                  <td className="px-4 py-3 text-center">
+                    {resolveAssetAccountLinks(cat).missing.length === 0 ? (
+                      <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">3/3 linked</span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                        {3 - resolveAssetAccountLinks(cat).missing.length}/3 linked
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => { setEditing(cat); setShowModal(true); }}
