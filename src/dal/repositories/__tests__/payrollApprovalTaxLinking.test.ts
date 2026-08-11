@@ -128,19 +128,30 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
       }
       if (table === 'accounts') {
         // chainable mock supporting eq*4 + is + ilike/or + limit + maybeSingle
-        const makeChain = (ref: { code: string | null }) => {
-          const chain: any = {};
-          chain.eq = (_col: string, val?: unknown) => {
-            if (_col === 'code' && typeof val === 'string') ref.code = val;
-            return chain;
-          };
-          chain.is = () => chain;
-          chain.ilike = () => chain;
-          chain.or = () => chain;
-          chain.limit = () => chain;
-          chain.maybeSingle = async () => {
-            if (ref.code) return { data: mockAccounts[ref.code] ?? null, error: null };
-            return { data: { id: 'acc-pension-liab' }, error: null };
+        type AccountRow = { id: string; code: string; name: string };
+        type QueryResult = { data: AccountRow | { id: string } | null; error: null };
+        type QueryChain = {
+          eq: (col: string, val?: unknown) => QueryChain;
+          is: () => QueryChain;
+          ilike: () => QueryChain;
+          or: () => QueryChain;
+          limit: () => QueryChain;
+          maybeSingle: () => Promise<QueryResult>;
+        };
+        const makeChain = (ref: { code: string | null }): QueryChain => {
+          const chain: QueryChain = {
+            eq: (col: string, val?: unknown) => {
+              if (col === 'code' && typeof val === 'string') ref.code = val;
+              return chain;
+            },
+            is: () => chain,
+            ilike: () => chain,
+            or: () => chain,
+            limit: () => chain,
+            maybeSingle: async () => {
+              if (ref.code) return { data: mockAccounts[ref.code] ?? null, error: null };
+              return { data: { id: 'acc-pension-liab' }, error: null };
+            },
           };
           return chain;
         };

@@ -678,16 +678,9 @@ export async function createExpenseJournalEntry(
 
   // Purchase Discount (discount received) — credit-normal contra cost (5175) or other income (4260)
   if (discountAmount > 0.005) {
-    let discountAccount: Row<'accounts'> | null = null;
-    try {
-      discountAccount = await getAccountByCode(businessId, '5175');
-    } catch {
-      try {
-        discountAccount = await getAccountByCode(businessId, '4260');
-      } catch {
-        discountAccount = null;
-      }
-    }
+    const discountAccount = await getAccountByCode(businessId, '5175')
+      .catch(() => getAccountByCode(businessId, '4260'))
+      .catch(() => null);
     if (discountAccount) {
       lines.push({
         line_number:   lineNumber++,

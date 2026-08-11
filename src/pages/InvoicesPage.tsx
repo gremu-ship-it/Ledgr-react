@@ -692,7 +692,6 @@ function InvoiceDetail({
             ) : (() => {
               const linesArr = (withLines?.lines ?? []) as unknown as Array<Row<'invoice_lines'> & { discount_percent?: number; discount_amount?: number }>;
               const totalDiscount = Number(invoice.discount_amount ?? 0) || linesArr.reduce((s, l) => s + Number(l.discount_amount ?? 0), 0);
-              const grossSubtotal = Number(invoice.subtotal) + totalDiscount;
               const hasDiscount = totalDiscount > 0.005 || linesArr.some((l) => Number(l.discount_percent ?? 0) > 0);
               return (
               <div className="overflow-hidden rounded-lg border border-gray-200">
