@@ -9,7 +9,11 @@ import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { createLogger } from '@/lib/logger';
-import { resolveAssetAccountLinks } from '@/lib/fixedAssetAccounts';
+import {
+  isAssetDepreciable,
+  isLandCategoryName,
+  resolveAssetAccountLinks,
+} from '@/lib/fixedAssetAccounts';
 
 const log = createLogger('AssetsPage');
 import type { Row, InsertDto, DepreciationMethod, AssetStatus } from '@/dal/types/database';
@@ -66,7 +70,7 @@ function Alert({ type, message }: { type: 'success' | 'error'; message: string }
 // ── Account Picker (shared) ────────────────────────────────────────────────────
 
 function AccountPicker({
-  label, value, onChange, accounts, required, placeholder,
+  label, value, onChange, accounts, required, placeholder, disabled,
 }: {
   label: string;
   value: string;
@@ -74,14 +78,17 @@ function AccountPicker({
   accounts: Row<'accounts'>[];
   required?: boolean;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-gray-700">
         {label}{required ? ' *' : ''}
       </label>
-      <select value={value} onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}
+        className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${
+          disabled ? 'cursor-not-allowed bg-gray-50 text-gray-400' : ''
+        }`}>
         <option value="">{placeholder ?? 'Select account…'}</option>
         {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
       </select>
@@ -93,6 +100,7 @@ function AccountPicker({
 
 interface CategoryForm {
   name: string;
+  is_depreciable: boolean;
   depreciation_method: DepreciationMethod;
   useful_life_years: string;
   residual_percent: string;
@@ -125,6 +133,7 @@ function CategoryModal({
   const [form, setForm] = useState<CategoryForm>(
     existing ? {
       name: existing.name ?? '',
+      is_depreciable: existing.is_depreciable ?? !isLandCategoryName(existing.name),
       depreciation_method: existing.depreciation_method as DepreciationMethod,
       useful_life_years: String(existing.useful_life_years ?? ''),
       residual_percent: String(existing.residual_percent ?? ''),
@@ -134,6 +143,7 @@ function CategoryModal({
       dep_expense_account_id: existing.dep_expense_account_id ?? '',
     } : {
       name: '',
+      is_depreciable: true,
       depreciation_method: 'straight_line',
       useful_life_years: '',
       residual_percent: '0',
@@ -149,23 +159,61 @@ function CategoryModal({
     setForm((f) => ({ ...f, [field]: value }));
   }
 
+  const isDepreciable = form.is_depreciable && !isLandCategoryName(form.name);
+
+  function setCategoryName(name: string) {
+    setForm((f) => ({
+      ...f,
+      name,
+      ...(isLandCategoryName(name)
+        ? {
+            is_depreciable: false,
+            accumulated_dep_account_id: '',
+            dep_expense_account_id: '',
+          }
+        : {}),
+    }));
+  }
+
+  function setCategoryDepreciable(value: boolean) {
+    setForm((f) => ({
+      ...f,
+      is_depreciable: value,
+      ...(value
+        ? {}
+        : {
+            depreciation_method: 'straight_line' as DepreciationMethod,
+            useful_life_years: '',
+            residual_percent: '0',
+            mra_depreciation_rate: '',
+            accumulated_dep_account_id: '',
+            dep_expense_account_id: '',
+          }),
+    }));
+  }
+
   const mutation = useMutation({
     mutationFn: async (): Promise<Row<'asset_categories'>> => {
       if (!form.name.trim()) throw new Error('Category name is required');
       if (!form.asset_account_id) throw new Error('Asset (cost) account is required');
-      if (!form.accumulated_dep_account_id) throw new Error('Accumulated depreciation account is required');
-      if (!form.dep_expense_account_id) throw new Error('Depreciation expense account is required');
+      if (isDepreciable && !form.accumulated_dep_account_id) {
+        throw new Error('Accumulated depreciation account is required for depreciable categories');
+      }
+      if (isDepreciable && !form.dep_expense_account_id) {
+        throw new Error('Depreciation expense account is required for depreciable categories');
+      }
 
       const payload: InsertDto<'asset_categories'> = {
         business_id: businessId,
         name: form.name.trim(),
-        depreciation_method: form.depreciation_method,
-        useful_life_years: form.useful_life_years ? parseInt(form.useful_life_years) : null,
-        residual_percent: parseFloat(form.residual_percent) || 0,
-        mra_depreciation_rate: form.mra_depreciation_rate ? parseFloat(form.mra_depreciation_rate) : null,
+        is_depreciable: isDepreciable,
+        depreciation_method: isDepreciable ? form.depreciation_method : 'straight_line',
+        useful_life_years: isDepreciable && form.useful_life_years ? parseInt(form.useful_life_years) : null,
+        residual_percent: isDepreciable ? parseFloat(form.residual_percent) || 0 : 0,
+        mra_depreciation_rate: isDepreciable && form.mra_depreciation_rate ? parseFloat(form.mra_depreciation_rate) : null,
         asset_account_id: form.asset_account_id,
-        accumulated_dep_account_id: form.accumulated_dep_account_id,
-        dep_expense_account_id: form.dep_expense_account_id,
+        accumulated_dep_account_id: isDepreciable ? form.accumulated_dep_account_id : null,
+        dep_expense_account_id: isDepreciable ? form.dep_expense_account_id : null,
         is_active: true,
       };
 
@@ -200,34 +248,55 @@ function CategoryModal({
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="mb-1 block text-sm font-medium text-gray-700">Name *</label>
-              <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
+              <input type="text" value={form.name} onChange={(e) => setCategoryName(e.target.value)}
                 placeholder="e.g. Motor Vehicles"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
+            <div className="col-span-2 rounded-lg bg-gray-50 px-3 py-2.5">
+              <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={isDepreciable}
+                  disabled={isLandCategoryName(form.name)}
+                  onChange={(e) => setCategoryDepreciable(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:cursor-not-allowed"
+                />
+                Depreciate assets in this category
+              </label>
+              <p className="mt-1 pl-6 text-xs text-gray-500">
+                Land is non-depreciable. Uncheck this for any other indefinite-life assets; only the cost account is then required.
+              </p>
+            </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Depreciation Method *</label>
-              <select value={form.depreciation_method} onChange={(e) => set('depreciation_method', e.target.value as DepreciationMethod)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
-                {DEPRECIATION_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Depreciation Method {isDepreciable ? '*' : ''}</label>
+              {isDepreciable ? (
+                <select value={form.depreciation_method} onChange={(e) => set('depreciation_method', e.target.value as DepreciationMethod)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                  {DEPRECIATION_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  Not depreciated
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Useful Life (years)</label>
-              <input type="number" min="1" value={form.useful_life_years} onChange={(e) => set('useful_life_years', e.target.value)}
-                placeholder="e.g. 5"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <input type="number" min="1" value={form.useful_life_years} disabled={!isDepreciable}
+                onChange={(e) => set('useful_life_years', e.target.value)} placeholder="e.g. 5"
+                className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${!isDepreciable ? 'cursor-not-allowed bg-gray-50 text-gray-400' : ''}`} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Residual Value (%)</label>
-              <input type="number" min="0" max="100" step="0.01" value={form.residual_percent}
+              <input type="number" min="0" max="100" step="0.01" value={form.residual_percent} disabled={!isDepreciable}
                 onChange={(e) => set('residual_percent', e.target.value)} placeholder="e.g. 10"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${!isDepreciable ? 'cursor-not-allowed bg-gray-50 text-gray-400' : ''}`} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">MRA Depreciation Rate (%)</label>
-              <input type="number" min="0" max="100" step="0.01" value={form.mra_depreciation_rate}
+              <input type="number" min="0" max="100" step="0.01" value={form.mra_depreciation_rate} disabled={!isDepreciable}
                 onChange={(e) => set('mra_depreciation_rate', e.target.value)} placeholder="e.g. 25"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${!isDepreciable ? 'cursor-not-allowed bg-gray-50 text-gray-400' : ''}`} />
             </div>
           </div>
 
@@ -235,6 +304,11 @@ function CategoryModal({
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
               Default GL Accounts — applied to assets in this category unless overridden
             </p>
+            {!isDepreciable && (
+              <p className="mb-3 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                This category is non-depreciable, so only the Asset (Cost) Account is required. No depreciation journals will be posted.
+              </p>
+            )}
             <div className="grid grid-cols-1 gap-4">
               <AccountPicker
                 label="Asset (Cost) Account" required
@@ -244,18 +318,22 @@ function CategoryModal({
                 placeholder="Select asset account…"
               />
               <AccountPicker
-                label="Accumulated Depreciation Account" required
+                label="Accumulated Depreciation Account"
+                required={isDepreciable}
+                disabled={!isDepreciable}
                 value={form.accumulated_dep_account_id}
                 onChange={(v) => set('accumulated_dep_account_id', v)}
                 accounts={assetAccounts}
-                placeholder="Select accumulated depreciation account…"
+                placeholder={isDepreciable ? 'Select accumulated depreciation account…' : 'Not applicable'}
               />
               <AccountPicker
-                label="Depreciation Expense Account" required
+                label="Depreciation Expense Account"
+                required={isDepreciable}
+                disabled={!isDepreciable}
                 value={form.dep_expense_account_id}
                 onChange={(v) => set('dep_expense_account_id', v)}
                 accounts={expenseAccounts}
-                placeholder="Select depreciation expense account…"
+                placeholder={isDepreciable ? 'Select depreciation expense account…' : 'Not applicable'}
               />
             </div>
           </div>
@@ -282,6 +360,7 @@ interface AssetForm {
   name: string;
   description: string;
   category_id: string;
+  is_depreciable: boolean;
   status: AssetStatus;
   acquisition_date: string;
   acquisition_cost: string;
@@ -337,6 +416,10 @@ function AssetModal({
       name: existing.name ?? '',
       description: existing.description ?? '',
       category_id: existing.category_id ?? '',
+      is_depreciable: isAssetDepreciable(
+        existing,
+        categories.find((category) => category.id === existing.category_id),
+      ),
       status: existing.status as AssetStatus,
       acquisition_date: existing.acquisition_date ?? today(),
       acquisition_cost: String(existing.acquisition_cost ?? ''),
@@ -353,7 +436,7 @@ function AssetModal({
       dep_expense_account_id: existing.dep_expense_account_id ?? '',
       funding_account_id: '',
     } : {
-      asset_number: '', name: '', description: '', category_id: '',
+      asset_number: '', name: '', description: '', category_id: '', is_depreciable: true,
       status: 'active', acquisition_date: today(), acquisition_cost: '',
       residual_value: '0', depreciation_method: 'straight_line',
       useful_life_years: '', depreciation_start_date: today(),
@@ -369,7 +452,26 @@ function AssetModal({
   }
 
   const selectedCategory = categories.find((category) => category.id === form.category_id);
+  const isDepreciable = isAssetDepreciable(form, selectedCategory);
   const resolvedAccountLinks = resolveAssetAccountLinks(form, selectedCategory);
+
+  function setCategory(categoryId: string) {
+    const category = categories.find((item) => item.id === categoryId);
+    const categoryIsDepreciable = isAssetDepreciable({}, category);
+    setForm((f) => ({
+      ...f,
+      category_id: categoryId,
+      is_depreciable: categoryIsDepreciable,
+      ...(categoryIsDepreciable
+        ? {}
+        : {
+            depreciation_method: 'straight_line' as DepreciationMethod,
+            useful_life_years: '',
+            accumulated_dep_account_id: '',
+            dep_expense_account_id: '',
+          }),
+    }));
+  }
 
   const mutation = useMutation({
     mutationFn: async (): Promise<{ capWarning: string | null }> => {
@@ -382,7 +484,9 @@ function AssetModal({
       if (resolvedAccountLinks.missing.length > 0) {
         throw new Error(
           `Category "${selectedCategory.name}" is missing: ${resolvedAccountLinks.missing.join(', ')}. ` +
-          'Set all three defaults in the Categories tab, or expand GL Account Overrides below.',
+          isDepreciable
+            ? 'Set all three defaults in the Categories tab, or expand GL Account Overrides below.'
+            : 'Set the asset cost account in the Categories tab, or expand GL Account Overrides below.',
         );
       }
       if (!form.funding_account_id) {
@@ -397,12 +501,13 @@ function AssetModal({
         name: form.name.trim(),
         description: form.description || null,
         category_id: form.category_id,
+        is_depreciable: isDepreciable,
         status: form.status,
         acquisition_date: form.acquisition_date,
         acquisition_cost: cost,
         residual_value: parseFloat(form.residual_value) || 0,
-        depreciation_method: form.depreciation_method,
-        useful_life_years: form.useful_life_years ? parseInt(form.useful_life_years) : null,
+        depreciation_method: isDepreciable ? form.depreciation_method : 'straight_line',
+        useful_life_years: isDepreciable && form.useful_life_years ? parseInt(form.useful_life_years) : null,
         depreciation_start_date: form.depreciation_start_date,
         accumulated_depreciation: existing?.accumulated_depreciation ?? 0,
         serial_number: form.serial_number || null,
@@ -411,8 +516,8 @@ function AssetModal({
         notes: form.notes || null,
         is_active: true,
         asset_account_id: form.asset_account_id || null,
-        accumulated_dep_account_id: form.accumulated_dep_account_id || null,
-        dep_expense_account_id: form.dep_expense_account_id || null,
+        accumulated_dep_account_id: isDepreciable ? form.accumulated_dep_account_id || null : null,
+        dep_expense_account_id: isDepreciable ? form.dep_expense_account_id || null : null,
       };
 
       let saved: Row<'fixed_assets'>;
@@ -484,11 +589,14 @@ function AssetModal({
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Category *</label>
-              <select value={form.category_id} onChange={(e) => set('category_id', e.target.value)}
+              <select value={form.category_id} onChange={(e) => setCategory(e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="">Select category…</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {selectedCategory && !isDepreciable && (
+                <p className="mt-1 text-xs text-blue-700">Non-depreciable category — only the asset cost account is required.</p>
+              )}
               {selectedCategory && resolvedAccountLinks.missing.length > 0 && (
                 <p className="mt-1 text-xs text-amber-700">
                   Missing GL links: {resolvedAccountLinks.missing.join(', ')}. Configure the category defaults or use GL Account Overrides below.
@@ -536,17 +644,23 @@ function AssetModal({
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Depreciation Method *</label>
-              <select value={form.depreciation_method} onChange={(e) => set('depreciation_method', e.target.value as DepreciationMethod)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
-                {DEPRECIATION_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-              </select>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Depreciation Method {isDepreciable ? '*' : ''}</label>
+              {isDepreciable ? (
+                <select value={form.depreciation_method} onChange={(e) => set('depreciation_method', e.target.value as DepreciationMethod)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                  {DEPRECIATION_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-500">
+                  Not depreciated
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Useful Life (years)</label>
-              <input type="number" min="1" value={form.useful_life_years}
+              <input type="number" min="1" value={form.useful_life_years} disabled={!isDepreciable}
                 onChange={(e) => set('useful_life_years', e.target.value)} placeholder="e.g. 5"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+                className={`w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 ${!isDepreciable ? 'cursor-not-allowed bg-gray-50 text-gray-400' : ''}`} />
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-700">Depreciation Start Date *</label>
@@ -601,17 +715,21 @@ function AssetModal({
                 />
                 <AccountPicker
                   label="Accumulated Depreciation Account"
+                  required={isDepreciable}
+                  disabled={!isDepreciable}
                   value={form.accumulated_dep_account_id}
                   onChange={(v) => set('accumulated_dep_account_id', v)}
                   accounts={assetAccounts}
-                  placeholder="Inherit from category"
+                  placeholder={isDepreciable ? 'Inherit from category' : 'Not applicable'}
                 />
                 <AccountPicker
                   label="Depreciation Expense Account"
+                  required={isDepreciable}
+                  disabled={!isDepreciable}
                   value={form.dep_expense_account_id}
                   onChange={(v) => set('dep_expense_account_id', v)}
                   accounts={expenseAccounts}
-                  placeholder="Inherit from category"
+                  placeholder={isDepreciable ? 'Inherit from category' : 'Not applicable'}
                 />
               </div>
             )}
@@ -1351,8 +1469,8 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                     <tr key={`${asset.id}-detail`} className="bg-gray-50">
                       <td colSpan={8} className="px-8 py-3">
                         <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs text-gray-600 sm:grid-cols-4">
-                          <div><span className="text-gray-400">Depreciation Method:</span> {asset.depreciation_method?.replace(/_/g, ' ')}</div>
-                          <div><span className="text-gray-400">Useful Life:</span> {asset.useful_life_years ? `${asset.useful_life_years} years` : '—'}</div>
+                          <div><span className="text-gray-400">Depreciation Method:</span> {isAssetDepreciable(asset, categories.find((category) => category.id === asset.category_id)) ? asset.depreciation_method?.replace(/_/g, ' ') : 'Not depreciated'}</div>
+                          <div><span className="text-gray-400">Useful Life:</span> {isAssetDepreciable(asset, categories.find((category) => category.id === asset.category_id)) && asset.useful_life_years ? `${asset.useful_life_years} years` : '—'}</div>
                           <div><span className="text-gray-400">Acquisition Date:</span> {asset.acquisition_date}</div>
                           <div><span className="text-gray-400">Dep. Start Date:</span> {asset.depreciation_start_date}</div>
                           <div><span className="text-gray-400">Residual Value:</span> {formatMwkDetailed(Number(asset.residual_value))}</div>
@@ -1497,36 +1615,44 @@ function CategoriesTab({ businessId }: { businessId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {categories.map((cat) => (
-                <tr key={cat.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{cat.name}</td>
-                  <td className="px-4 py-3 text-gray-500 capitalize">{cat.depreciation_method?.replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{cat.useful_life_years ? `${cat.useful_life_years} yrs` : '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{Number(cat.residual_percent).toFixed(1)}%</td>
-                  <td className="px-4 py-3 text-right text-gray-500">{cat.mra_depreciation_rate != null ? `${Number(cat.mra_depreciation_rate).toFixed(1)}%` : '—'}</td>
-                  <td className="px-4 py-3 text-center">
-                    {resolveAssetAccountLinks(cat).missing.length === 0 ? (
-                      <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">3/3 linked</span>
-                    ) : (
-                      <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-                        {3 - resolveAssetAccountLinks(cat).missing.length}/3 linked
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => { setEditing(cat); setShowModal(true); }}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button onClick={() => setDeleting(cat)}
-                        className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {categories.map((cat) => {
+                const accountLinks = resolveAssetAccountLinks({}, cat);
+                const categoryIsDepreciable = isAssetDepreciable({}, cat);
+                const requiredAccountCount = categoryIsDepreciable ? 3 : 1;
+                const methodLabel = categoryIsDepreciable
+                  ? cat.depreciation_method?.replace(/_/g, ' ')
+                  : 'Not depreciated';
+                return (
+                  <tr key={cat.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-900">{cat.name}</td>
+                    <td className="px-4 py-3 text-gray-500 capitalize">{methodLabel}</td>
+                    <td className="px-4 py-3 text-right text-gray-500">{categoryIsDepreciable && cat.useful_life_years ? `${cat.useful_life_years} yrs` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-500">{categoryIsDepreciable ? `${Number(cat.residual_percent).toFixed(1)}%` : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-500">{categoryIsDepreciable && cat.mra_depreciation_rate != null ? `${Number(cat.mra_depreciation_rate).toFixed(1)}%` : '—'}</td>
+                    <td className="px-4 py-3 text-center">
+                      {accountLinks.missing.length === 0 ? (
+                        <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">{requiredAccountCount}/{requiredAccountCount} linked</span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          {requiredAccountCount - accountLinks.missing.length}/{requiredAccountCount} linked
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => { setEditing(cat); setShowModal(true); }}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => setDeleting(cat)}
+                          className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -204,6 +204,7 @@ export type Database = {
           depreciation_method: Database["public"]["Enums"]["depreciation_method"]
           id: string
           is_active: boolean
+          is_depreciable: boolean
           mra_depreciation_rate: number | null
           name: string
           residual_percent: number
@@ -218,6 +219,7 @@ export type Database = {
           depreciation_method?: Database["public"]["Enums"]["depreciation_method"]
           id?: string
           is_active?: boolean
+          is_depreciable?: boolean
           mra_depreciation_rate?: number | null
           name: string
           residual_percent?: number
@@ -232,6 +234,7 @@ export type Database = {
           depreciation_method?: Database["public"]["Enums"]["depreciation_method"]
           id?: string
           is_active?: boolean
+          is_depreciable?: boolean
           mra_depreciation_rate?: number | null
           name?: string
           residual_percent?: number
@@ -1988,6 +1991,7 @@ export type Database = {
           insurance_expiry_date: string | null
           insurance_policy_number: string | null
           is_active: boolean
+          is_depreciable: boolean
           last_depreciation_date: string | null
           location: string | null
           name: string
@@ -2035,6 +2039,7 @@ export type Database = {
           insurance_expiry_date?: string | null
           insurance_policy_number?: string | null
           is_active?: boolean
+          is_depreciable?: boolean
           last_depreciation_date?: string | null
           location?: string | null
           name: string
@@ -2082,6 +2087,7 @@ export type Database = {
           insurance_expiry_date?: string | null
           insurance_policy_number?: string | null
           is_active?: boolean
+          is_depreciable?: boolean
           last_depreciation_date?: string | null
           location?: string | null
           name?: string
