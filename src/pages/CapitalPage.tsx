@@ -203,10 +203,6 @@ function openRepaymentSchedule(
     { principal: 0, interest: 0, total: 0 },
   );
 
-  // Open a new tab with the printable schedule
-  const win = window.open('', '_blank', 'noopener,noreferrer');
-  if (!win) return; // popup blocked
-
   const rowsHtml = schedule
     .map(
       (r, i) => `<tr${i % 2 === 0 ? '' : ' class="alt"'}>
@@ -223,7 +219,9 @@ function openRepaymentSchedule(
   const rateDisplay = ratePct != null ? `${ratePct}% p.a.` : '—';
   const termDisplay = term != null ? `${term} months` : '—';
 
-  win.document.write(`<!DOCTYPE html>
+  // Do not pass noopener in window.open features — browsers return null and
+  // document.write never runs (same bug that broke invoice downloads).
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -306,8 +304,25 @@ function openRepaymentSchedule(
     document.querySelector('button')?.focus();
   </script>
 </body>
-</html>`);
-  win.document.close();
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (!win) {
+    // Popup blocked — fall back to file download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `repayment-schedule-${loan.lender_name.replace(/[^\w.-]+/g, '_')}.html`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+  try { win.opener = null; } catch { /* ignore */ }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 // ── Shared UI ──────────────────────────────────────────────────────────────────

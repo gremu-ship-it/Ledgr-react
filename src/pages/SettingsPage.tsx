@@ -958,6 +958,8 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     is_active: boolean;
     invited_at: string | null;
     accepted_at: string | null;
+    invitation_token?: string | null;
+    invitation_expires_at?: string | null;
     created_at: string;
     email: string | null;
     full_name: string | null;
@@ -975,6 +977,12 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
 
   type InviteResponse = { success: boolean; message: string; error?: string; member?: unknown };
 
+  function isMemberInviteExpired(m: TeamMember): boolean {
+    if (!m.invitation_expires_at) return false;
+    const t = new Date(m.invitation_expires_at).getTime();
+    return !Number.isNaN(t) && t < Date.now();
+  }
+
   const { data: members = [], isLoading } = useQuery<TeamMember[]>({
     queryKey: ['team', businessId],
     queryFn: async () => {
@@ -989,19 +997,22 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
         // fallback
       }
 
+      // Include inactive + expired invitations so owners can clean them up
       const { data: rows, error } = await supabase
         .from('business_users')
-        .select('id, user_id, role, invited_at, accepted_at, created_at')
+        .select('id, user_id, role, is_active, invited_at, accepted_at, invitation_token, invitation_expires_at, created_at')
         .eq('business_id', businessId)
-        .eq('is_active', true)
         .order('created_at', { ascending: true });
       if (error) throw new Error(error.message);
       type FallbackRow = {
         id: string;
         user_id: string;
         role: string;
+        is_active: boolean;
         invited_at: string | null;
         accepted_at: string | null;
+        invitation_token: string | null;
+        invitation_expires_at: string | null;
         created_at: string;
       };
       const userIds = (rows ?? []).map((r) => r.user_id);
@@ -1016,9 +1027,11 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
         id: row.id,
         user_id: row.user_id,
         role: row.role,
-        is_active: true,
+        is_active: row.is_active,
         invited_at: row.invited_at ?? null,
         accepted_at: row.accepted_at ?? null,
+        invitation_token: row.invitation_token,
+        invitation_expires_at: row.invitation_expires_at,
         created_at: row.created_at,
         email: null as string | null,
         full_name: profileMap.get(row.user_id) ?? null,
@@ -1028,6 +1041,14 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     },
     enabled: Boolean(businessId),
   });
+
+  const activeMembers = members.filter((m) => m.is_active);
+  const expiredInviteMembers = members.filter(
+    (m) => !m.is_active && Boolean(m.invitation_token) && isMemberInviteExpired(m),
+  );
+  const inactiveMembers = members.filter(
+    (m) => !m.is_active && !m.invitation_token && m.role !== 'owner',
+  );
 
   const { data: activeInvites = [], refetch: refetchInvites } = useQuery<InvitationLink[]>({
     queryKey: ['team-invites', businessId],
@@ -1118,13 +1139,83 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
     mutationFn: async (userId: string) => {
       const { error } = await supabase
         .from('business_users')
-        .update({ is_active: false } as never)
+        .update({
+          is_active: false,
+          invitation_token: null,
+          invitation_expires_at: null,
+          updated_at: new Date().toISOString(),
+        } as never)
         .eq('business_id', businessId)
         .eq('user_id', userId);
       if (error) throw new Error(error.message);
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Team member removed.' });
+      queryClient.invalidateQueries({ queryKey: ['team', businessId] });
+      setTimeout(() => setAlert(null), 3000);
+    },
+    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+  });
+
+  /** Permanently delete expired invitations / inactive roster rows. */
+  const permanentRemoveMutation = useMutation({
+    mutationFn: async (memberId: string) => {
+      const { error: deleteError } = await supabase
+        .from('business_users')
+        .delete()
+        .eq('id', memberId)
+        .eq('business_id', businessId);
+      if (!deleteError) return;
+      // Fallback when RLS only allows soft-delete
+      const { error: softError } = await supabase
+        .from('business_users')
+        .update({
+          is_active: false,
+          invitation_token: null,
+          invitation_expires_at: null,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq('id', memberId)
+        .eq('business_id', businessId);
+      if (softError) throw new Error(deleteError.message || softError.message);
+    },
+    onSuccess: () => {
+      setAlert({ type: 'success', message: 'Member removed from roster.' });
+      queryClient.invalidateQueries({ queryKey: ['team', businessId] });
+      setTimeout(() => setAlert(null), 3000);
+    },
+    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+  });
+
+  const removeAllExpiredMutation = useMutation({
+    mutationFn: async () => {
+      const failures: string[] = [];
+      for (const m of expiredInviteMembers) {
+        const { error: deleteError } = await supabase
+          .from('business_users')
+          .delete()
+          .eq('id', m.id)
+          .eq('business_id', businessId);
+        if (deleteError) {
+          const { error: softError } = await supabase
+            .from('business_users')
+            .update({
+              is_active: false,
+              invitation_token: null,
+              invitation_expires_at: null,
+              updated_at: new Date().toISOString(),
+            } as never)
+            .eq('id', m.id)
+            .eq('business_id', businessId);
+          if (softError) failures.push(m.email ?? m.full_name ?? m.id);
+        }
+      }
+      if (failures.length > 0) {
+        throw new Error(`Could not remove: ${failures.join(', ')}`);
+      }
+    },
+    onSuccess: () => {
+      setAlert({ type: 'success', message: 'Expired invitations removed.' });
       queryClient.invalidateQueries({ queryKey: ['team', businessId] });
       setTimeout(() => setAlert(null), 3000);
     },
@@ -1434,7 +1525,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {members.map((member) => {
+              {activeMembers.map((member) => {
                 const isSelf = member.user_id === currentUser?.id;
                 const displayName = member.full_name || member.profile?.full_name || member.email || 'Unknown User';
                 const initialsSource = member.full_name || member.profile?.full_name || member.email || member.user_id || '?';
@@ -1463,7 +1554,7 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
                         onChange={(e) =>
                           updateRoleMutation.mutate({ userId: member.user_id, role: e.target.value })
                         }
-                        disabled={member.role === 'owner' && currentUser?.id !== member.user_id && !members.some((m) => m.user_id === currentUser?.id && m.role === 'owner')}
+                        disabled={member.role === 'owner' && currentUser?.id !== member.user_id && !activeMembers.some((m) => m.user_id === currentUser?.id && m.role === 'owner')}
                         className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:bg-transparent disabled:border-transparent disabled:font-medium disabled:text-brand-700"
                       >
                         {ROLES.map((r) => (
@@ -1500,6 +1591,135 @@ function TeamMembersTab({ businessId }: { businessId: string }) {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Expired invitations — owners can purge when the role window has passed */}
+      {!isLoading && expiredInviteMembers.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">
+                Expired invitations ({expiredInviteMembers.length})
+              </h3>
+              <p className="text-xs text-gray-500">
+                These invitations are past their expiry date and can no longer be accepted.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Permanently remove all ${expiredInviteMembers.length} expired invitation(s)?`)) {
+                  removeAllExpiredMutation.mutate();
+                }
+              }}
+              disabled={removeAllExpiredMutation.isPending}
+              className="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+            >
+              {removeAllExpiredMutation.isPending ? 'Removing…' : 'Remove all expired'}
+            </button>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/40">
+            <table className="w-full text-sm">
+              <thead className="bg-amber-50 text-xs font-medium uppercase tracking-wide text-amber-800/70">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-left">Invitee</th>
+                  <th scope="col" className="px-4 py-3 text-left">Role</th>
+                  <th scope="col" className="px-4 py-3 text-left">Expired</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100">
+                {expiredInviteMembers.map((member) => {
+                  const displayName = member.full_name || member.email || 'Invited user';
+                  return (
+                    <tr key={member.id}>
+                      <td className="px-4 py-3 font-medium text-gray-800">{displayName}</td>
+                      <td className="px-4 py-3 capitalize text-gray-600">{member.role.replace(/_/g, ' ')}</td>
+                      <td className="px-4 py-3 text-amber-800">
+                        {member.invitation_expires_at
+                          ? new Date(member.invitation_expires_at).toLocaleDateString('en-MW', {
+                              day: '2-digit', month: 'short', year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Permanently remove expired invitation for ${displayName}?`)) {
+                              permanentRemoveMutation.mutate(member.id);
+                            }
+                          }}
+                          disabled={permanentRemoveMutation.isPending}
+                          className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                          title="Remove expired invitation"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Inactive / previously removed members */}
+      {!isLoading && inactiveMembers.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">
+              Inactive members ({inactiveMembers.length})
+            </h3>
+            <p className="text-xs text-gray-500">
+              Previously removed members. Permanently delete them from the roster if needed.
+            </p>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-100 text-xs font-medium uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th scope="col" className="px-4 py-3 text-left">Member</th>
+                  <th scope="col" className="px-4 py-3 text-left">Role</th>
+                  <th scope="col" className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {inactiveMembers.map((member) => {
+                  const displayName = member.full_name || member.email || 'Unknown user';
+                  return (
+                    <tr key={member.id}>
+                      <td className="px-4 py-3 text-gray-700">
+                        <p className="font-medium">{displayName}</p>
+                        {member.email && member.full_name && (
+                          <p className="text-xs text-gray-500">{member.email}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 capitalize text-gray-500">{member.role.replace(/_/g, ' ')}</td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (confirm(`Permanently remove ${displayName} from the roster?`)) {
+                              permanentRemoveMutation.mutate(member.id);
+                            }
+                          }}
+                          disabled={permanentRemoveMutation.isPending}
+                          className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                          title="Permanently remove member"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

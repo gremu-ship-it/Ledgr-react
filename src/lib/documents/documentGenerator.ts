@@ -465,26 +465,80 @@ function renderLetterhead(b: BusinessBranding, title: string, docNumber: string,
   `;
 }
 
+/**
+ * Open a print-ready HTML document.
+ *
+ * IMPORTANT: Do not pass `noopener` in window.open's feature string.
+ * Modern browsers return `null` when noopener is set that way, which made
+ * invoice / delivery-note downloads fail silently (document.write never ran).
+ * We null out `opener` ourselves after open for the same security property.
+ *
+ * Prefer a blob URL so the new tab has a real document to load even if the
+ * opener reference is constrained (e.g. Safari / embedded browsers).
+ */
 function openPrintWindow(title: string, html: string, autoPrint = true): void {
-  const win = window.open('', '_blank', 'noopener,noreferrer');
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  // Open without noopener feature so we retain a usable Window reference.
+  const win = window.open(url, '_blank');
   if (!win) {
-    alert('Please allow popups to download documents');
+    // Fallback: file download if popups are blocked
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title.replace(/[^\w.-]+/g, '_')}.html`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Revoke after the click has a chance to start the download
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return;
   }
-  win.document.write(html);
-  win.document.close();
-  win.document.title = title;
-  win.focus();
-  if (autoPrint) {
-    // Wait for images/fonts
-    const doPrint = () => {
-      setTimeout(() => {
-        // Ignored: the user may abort the print dialog; nothing else to recover.
-        try { win.print(); } catch { /* print aborted */ }
-      }, 600);
-    };
-    if (win.document.readyState === 'complete') doPrint();
-    else win.onload = doPrint;
+
+  // Equivalent security to noopener without losing the window handle
+  try {
+    win.opener = null;
+  } catch {
+    /* cross-origin / locked — ignore */
+  }
+
+  try {
+    win.document.title = title;
+  } catch {
+    /* some browsers lock document until load finishes */
+  }
+
+  // Keep the blob alive long enough for print preview / Save as PDF
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+
+  if (!autoPrint) return;
+
+  let printed = false;
+  const doPrint = () => {
+    if (printed) return;
+    printed = true;
+    setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        /* user aborted print dialog */
+      }
+    }, 400);
+  };
+
+  // Blob URL navigates asynchronously — wait for load when possible
+  try {
+    if (win.document && win.document.readyState === 'complete') {
+      doPrint();
+    } else {
+      win.addEventListener('load', doPrint, { once: true });
+      // Safety net if load never fires (rare)
+      setTimeout(doPrint, 1500);
+    }
+  } catch {
+    setTimeout(doPrint, 800);
   }
 }
 
