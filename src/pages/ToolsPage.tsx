@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { 
   Search, Star, Clock, Lock, ArrowRight, 
   TrendingUp, Users, FileText, Package, Calendar, 
-  CreditCard, BarChart3, Settings 
+  CreditCard, BarChart3, Settings, FileSpreadsheet
 } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/Button';

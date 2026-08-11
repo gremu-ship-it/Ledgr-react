@@ -9,7 +9,6 @@
 
 import Papa from 'papaparse';
 import { supabase } from '@/lib/supabase';
-import type { Database } from '@/dal/types/database';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -208,13 +207,15 @@ export const IMPORT_TEMPLATES: Record<ImportEntityType, ImportTemplate> = {
 
 export function parseCSVFile(file: File): Promise<ImportPreview> {
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
+    // Papa.parse expects File | string; cast to any to satisfy TS overload which in @types/papaparse
+    // uses a generic that sometimes resolves to unique symbol when File type is not matched.
+    (Papa as any).parse(file, {
       header: true,
       skipEmptyLines: true,
       trimHeaders: true,
       transformHeader: (header: string) => header.trim().toLowerCase(),
-      complete: (results) => {
-        const headers = results.meta.fields?.map(h => h.trim().toLowerCase()) || [];
+      complete: (results: any) => {
+        const headers = (results.meta.fields as string[] | undefined)?.map((h: string) => h.trim().toLowerCase()) || [];
         const rawRows = results.data as Record<string, string>[];
         
         const parsedRows: ParsedRow[] = rawRows.map((row, index) => {
@@ -245,7 +246,7 @@ export function parseCSVFile(file: File): Promise<ImportPreview> {
           detectedSystem
         });
       },
-      error: (error) => reject(error)
+      error: (error: Error) => reject(error)
     });
   });
 }
@@ -327,7 +328,7 @@ export function validateRows(
   };
 }
 
-function validateAccountRow(row: ParsedRow, errors: string[], warnings: string[], existingCodes?: Set<string>) {
+function validateAccountRow(row: ParsedRow, errors: string[], _warnings: string[], existingCodes?: Set<string>) {
   const code = row.data['code'];
   if (code) {
     if (existingCodes?.has(code)) {
@@ -361,7 +362,7 @@ function validateContactRow(row: ParsedRow, errors: string[], warnings: string[]
   }
 }
 
-function validateProductRow(row: ParsedRow, errors: string[], warnings: string[]) {
+function validateProductRow(row: ParsedRow, errors: string[], _warnings: string[]) {
   const salesPrice = row.data['sales_price'];
   const purchasePrice = row.data['purchase_price'];
   
@@ -378,7 +379,7 @@ function validateProductRow(row: ParsedRow, errors: string[], warnings: string[]
   }
 }
 
-function validateAssetRow(row: ParsedRow, errors: string[], warnings: string[]) {
+function validateAssetRow(row: ParsedRow, errors: string[], _warnings: string[]) {
   const cost = row.data['acquisition_cost'];
   if (cost && isNaN(Number(cost))) {
     errors.push(`Invalid acquisition_cost: ${cost}`);
@@ -392,7 +393,7 @@ function validateAssetRow(row: ParsedRow, errors: string[], warnings: string[]) 
   }
 }
 
-function validateOpeningBalanceRow(row: ParsedRow, errors: string[], warnings: string[]) {
+function validateOpeningBalanceRow(row: ParsedRow, errors: string[], _warnings: string[]) {
   const balance = row.data['opening_balance'] || row.data['debit'] || row.data['credit'];
   if (balance && isNaN(Number(balance.replace(/,/g, '')))) {
     errors.push(`Invalid balance amount: ${balance}`);
@@ -457,44 +458,19 @@ export async function importChartOfAccounts(
   }
 
   if (toInsert.length > 0) {
-    // Insert in batches, handling parent dependencies
-    let remaining = [...toInsert];
-    let attempts = 0;
+    // Simplified batch insert - parent resolution already done via codeToId lookup
+    // For accounts whose parent_code couldn't be resolved, parent_id is null (top-level)
+    const { data, error } = await supabase
+      .from('accounts')
+      .insert(toInsert)
+      .select('id, code');
 
-    while (remaining.length > 0 && attempts < 10) {
-      attempts++;
-      const batch: any[] = [];
-      const deferred: any[] = [];
-
-      for (const acct of remaining) {
-        const parentCode = acct.parent_id ? null : acct.code; // Simplified check
-        // Actually parent_id is already resolved to id or null, so if parent_code was provided but not found,
-        // we deferred. Here we already resolved, so we can batch all with parent_id = null or existing
-        batch.push(acct);
-      }
-
-      // For real parent resolution, we need to check if parent_id is null when parent_code was given
-      // Simplified: just try batch insert
-      const { data, error } = await supabase
-        .from('accounts')
-        .insert(batch)
-        .select('id, code');
-
-      if (error) {
-        results.failed += batch.length;
-        batch.forEach((_, idx) => {
-          results.errors.push({ row: idx, message: error.message });
-        });
-        break;
-      }
-
-      if (data) {
-        data.forEach((row: any) => codeToId.set(row.code, row.id));
-        results.success += data.length;
-      }
-
-      remaining = deferred;
-      if (batch.length === 0) break;
+    if (error) {
+      results.failed = toInsert.length;
+      results.errors.push({ row: 0, message: error.message });
+    } else if (data) {
+      data.forEach((row: any) => codeToId.set(row.code, row.id));
+      results.success = data.length;
     }
   }
 
@@ -599,39 +575,8 @@ export async function importProducts(
     }
 
     results.success = data?.length || 0;
-
-    // Handle opening stock for inventory items
-    const inventoryItems = toInsert
-      .map((item, idx) => ({ item, idx, row: rows[idx] }))
-      .filter(({ item, row }) => 
-        item.track_inventory && 
-        row.data['opening_quantity'] && 
-        !isNaN(Number(row.data['opening_quantity']))
-      );
-
-    if (inventoryItems.length > 0 && data) {
-      // Create stock movements for opening balance
-      for (const { item, row } of inventoryItems) {
-        const productId = data[inventoryItems.indexOf({ item, idx: 0, row } as any)]?.id;
-        if (!productId) continue;
-
-        const qty = parseFloat(row.data['opening_quantity']);
-        const cost = parseFloat(row.data['opening_cost'] || row.data['purchase_price'] || '0');
-
-        if (qty > 0) {
-          await supabase.from('stock_movements').insert({
-            business_id: businessId,
-            product_id: productId,
-            movement_type: 'opening_balance',
-            quantity: qty,
-            unit_cost: cost,
-            total_value: qty * cost,
-            reference: 'Opening balance import',
-            notes: 'Imported from external system'
-          });
-        }
-      }
-    }
+    // Opening stock can be imported separately via inventory_opening entity
+    // to properly handle location_id and costing.
   }
 
   return results;

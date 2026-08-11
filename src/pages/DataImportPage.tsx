@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
-import { formatMwkDetailed } from '@/lib/formatters';
 import {
   IMPORT_TEMPLATES,
   parseCSVFile,
@@ -17,7 +16,6 @@ import {
   downloadTemplate,
   type ImportEntityType,
   type ImportPreview,
-  type ParsedRow,
   type ImportTemplate
 } from '@/services/dataImportService';
 
@@ -734,7 +732,7 @@ export function DataImportPage() {
               <ul className="mt-2 space-y-1 text-xs text-blue-700">
                 {selectedEntity === 'chart_of_accounts' && <li>• Review your Chart of Accounts in Settings → Chart of Accounts</li>}
                 {selectedEntity === 'opening_balances' && <li>• Check your Statement of Financial Position to verify opening balances</li>}
-                {selectedEntity === ' contacts' && <li>• Your contacts are ready for invoicing</li>}
+                {selectedEntity === 'contacts' && <li>• Your contacts are ready for invoicing</li>}
                 <li>• Continue importing other data types from the import hub</li>
                 <li>• Run your first financial reports to verify data</li>
               </ul>
