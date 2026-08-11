@@ -1573,6 +1573,8 @@ export type Database = {
           business_id: string
           created_at: string
           description: string
+          discount_amount: number
+          discount_percent: number
           expense_id: string
           id: string
           line_number: number
@@ -1590,6 +1592,8 @@ export type Database = {
           business_id: string
           created_at?: string
           description: string
+          discount_amount?: number
+          discount_percent?: number
           expense_id: string
           id?: string
           line_number: number
@@ -1607,6 +1611,8 @@ export type Database = {
           business_id?: string
           created_at?: string
           description?: string
+          discount_amount?: number
+          discount_percent?: number
           expense_id?: string
           id?: string
           line_number?: number
@@ -1800,6 +1806,8 @@ export type Database = {
           reference: string | null
           status: string
           subtotal: number
+          discount_amount: number
+          discount_percent: number
           total_amount: number
           updated_at: string
           vat_amount: number
@@ -1838,6 +1846,8 @@ export type Database = {
           reference?: string | null
           status?: string
           subtotal?: number
+          discount_amount?: number
+          discount_percent?: number
           total_amount?: number
           updated_at?: string
           vat_amount?: number
@@ -1876,6 +1886,8 @@ export type Database = {
           reference?: string | null
           status?: string
           subtotal?: number
+          discount_amount?: number
+          discount_percent?: number
           total_amount?: number
           updated_at?: string
           vat_amount?: number
@@ -2365,6 +2377,7 @@ export type Database = {
           business_id: string
           created_at: string
           description: string
+          discount_amount: number
           discount_percent: number
           id: string
           invoice_id: string
@@ -2383,6 +2396,7 @@ export type Database = {
           business_id: string
           created_at?: string
           description: string
+          discount_amount?: number
           discount_percent?: number
           id?: string
           invoice_id: string
@@ -2401,6 +2415,7 @@ export type Database = {
           business_id?: string
           created_at?: string
           description?: string
+          discount_amount?: number
           discount_percent?: number
           id?: string
           invoice_id?: string
@@ -2603,6 +2618,12 @@ export type Database = {
           original_amount: number | null
           original_currency: string | null
           po_number: string | null
+          project_code: string | null
+          lpo_number: string | null
+          accent_colour: string | null
+          payment_provider: string | null
+          payment_reference: string | null
+          template: string
           rate_date: string | null
           rate_is_stale: boolean
           revenue_account_id: string | null
@@ -2644,6 +2665,12 @@ export type Database = {
           original_amount?: number | null
           original_currency?: string | null
           po_number?: string | null
+          project_code?: string | null
+          lpo_number?: string | null
+          accent_colour?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          template?: string
           rate_date?: string | null
           rate_is_stale?: boolean
           revenue_account_id?: string | null
@@ -2685,6 +2712,12 @@ export type Database = {
           original_amount?: number | null
           original_currency?: string | null
           po_number?: string | null
+          project_code?: string | null
+          lpo_number?: string | null
+          accent_colour?: string | null
+          payment_provider?: string | null
+          payment_reference?: string | null
+          template?: string
           rate_date?: string | null
           rate_is_stale?: boolean
           revenue_account_id?: string | null

@@ -180,6 +180,10 @@ export async function createInvoiceJournalEntry(
   const currency        = invoice.original_currency ?? invoice.currency;
   const exchangeRate     = Number(invoice.exchange_rate);
   const totalFunctional  = Number(invoice.functional_amount ?? invoice.total_amount);
+  const discountAmount   = Number((invoice as unknown as { discount_amount?: number }).discount_amount ?? 0);
+  const discountFunctional = discountAmount * exchangeRate;
+  const grossSubtotal    = subtotal + discountAmount;
+  const grossFunctional  = grossSubtotal * exchangeRate;
   const subtotalFunctional = subtotal * exchangeRate;
   const vatFunctional    = vatAmount * exchangeRate;
 
@@ -203,23 +207,63 @@ export async function createInvoiceJournalEntry(
     reconciled:    false,
   });
 
-  lines.push({
-    line_number:   2,
-    account_id:    revenue.id,
-    description:   `Invoice ${invoiceNumber} — revenue`,
-    is_debit:      false,
-    amount:        subtotal,
-    amount_base:   subtotalFunctional,
-    currency,
-    exchange_rate: exchangeRate,
-    tax_code:      'none',
-    tax_amount:    0,
-    reconciled:    false,
-  });
+  // Gross revenue for disclosure; discount is posted separately to 4130 so
+  // P&L shows Gross Sales vs Sales Discounts (contra-revenue) per IFRS.
+  if (discountAmount > 0.005) {
+    lines.push({
+      line_number:   2,
+      account_id:    revenue.id,
+      description:   `Invoice ${invoiceNumber} — revenue (gross)`,
+      is_debit:      false,
+      amount:        grossSubtotal,
+      amount_base:   grossFunctional,
+      currency,
+      exchange_rate: exchangeRate,
+      tax_code:      'none',
+      tax_amount:    0,
+      reconciled:    false,
+    });
+    // Sales Discounts (4130, debit-normal contra-revenue)
+    try {
+      const discountAccount = await getAccountByCode(businessId, '4130');
+      lines.push({
+        line_number:   3,
+        account_id:    discountAccount.id,
+        description:   `Invoice ${invoiceNumber} — discount allowed`,
+        is_debit:      true,
+        amount:        discountAmount,
+        amount_base:   discountFunctional,
+        currency,
+        exchange_rate: exchangeRate,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
+      });
+    } catch {
+      // 4130 missing (old business before seeding 4260/5175) — fall back to net posting
+      lines[1].amount = subtotal;
+      lines[1].amount_base = subtotalFunctional;
+      lines[1].description = `Invoice ${invoiceNumber} — revenue`;
+    }
+  } else {
+    lines.push({
+      line_number:   2,
+      account_id:    revenue.id,
+      description:   `Invoice ${invoiceNumber} — revenue`,
+      is_debit:      false,
+      amount:        subtotal,
+      amount_base:   subtotalFunctional,
+      currency,
+      exchange_rate: exchangeRate,
+      tax_code:      'none',
+      tax_amount:    0,
+      reconciled:    false,
+    });
+  }
 
   if (vatAmount > 0) {
     lines.push({
-      line_number:   3,
+      line_number:   lines.length + 1,
       account_id:    vatPayable.id,
       description:   `Invoice ${invoiceNumber} — VAT`,
       is_debit:      false,
@@ -344,8 +388,12 @@ export async function createInvoiceReceivableEntry(
   const exchangeRate    = Number(invoice.exchange_rate);
   const totalFunctional = Number(invoice.functional_amount ?? invoice.total_amount);
   const subtotal        = Number(invoice.subtotal);
-  const vatAmount       = Number(invoice.vat_amount);
+  const discountAmount  = Number((invoice as unknown as { discount_amount?: number }).discount_amount ?? 0);
+  const discountFunctional = discountAmount * exchangeRate;
+  const grossSubtotal   = subtotal + discountAmount;
+  const grossFunctional = grossSubtotal * exchangeRate;
   const subtotalFunctional = subtotal * exchangeRate;
+  const vatAmount       = Number(invoice.vat_amount);
   const vatFunctional   = vatAmount * exchangeRate;
 
   const entryNumber = await nextEntryNumber(businessId);
@@ -364,7 +412,45 @@ export async function createInvoiceReceivableEntry(
       tax_amount:    0,
       reconciled:    false,
     },
-    {
+  ];
+
+  if (discountAmount > 0.005) {
+    lines.push({
+      line_number:   2,
+      account_id:    revenue.id,
+      description:   `Invoice ${invoice.invoice_number} — revenue (gross)`,
+      is_debit:      false,
+      amount:        grossSubtotal,
+      amount_base:   grossFunctional,
+      currency,
+      exchange_rate: exchangeRate,
+      tax_code:      'none',
+      tax_amount:    0,
+      reconciled:    false,
+    });
+    try {
+      const discountAccount = await getAccountByCode(businessId, '4130');
+      lines.push({
+        line_number:   3,
+        account_id:    discountAccount.id,
+        description:   `Invoice ${invoice.invoice_number} — discount allowed`,
+        is_debit:      true,
+        amount:        discountAmount,
+        amount_base:   discountFunctional,
+        currency,
+        exchange_rate: exchangeRate,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
+      });
+    } catch {
+      // Fallback to net posting if 4130 not seeded yet
+      lines[1].amount = subtotal;
+      lines[1].amount_base = subtotalFunctional;
+      lines[1].description = `Invoice ${invoice.invoice_number} — revenue`;
+    }
+  } else {
+    lines.push({
       line_number:   2,
       account_id:    revenue.id,
       description:   `Invoice ${invoice.invoice_number} — revenue`,
@@ -376,12 +462,12 @@ export async function createInvoiceReceivableEntry(
       tax_code:      'none',
       tax_amount:    0,
       reconciled:    false,
-    },
-  ];
+    });
+  }
 
   if (vatAmount > 0) {
     lines.push({
-      line_number:   3,
+      line_number:   lines.length + 1,
       account_id:    vatPayable.id,
       description:   `Invoice ${invoice.invoice_number} — VAT`,
       is_debit:      false,
@@ -530,7 +616,9 @@ export async function createExpenseJournalEntry(
   }
 
   const totalAmount = Number(expense.total_amount);
+  const discountAmount = Number((expense as unknown as { discount_amount?: number }).discount_amount ?? 0);
   const allocatedSubtotal = allocations.reduce((s, a) => s + a.amount, 0);
+  // Allocations are net (after discount). Total = net subtotal + VAT should equal total_amount
   const expectedTotal     = allocatedSubtotal + vatAmount;
   if (Math.abs(expectedTotal - totalAmount) > 0.01) {
     throw new Error(
@@ -543,6 +631,7 @@ export async function createExpenseJournalEntry(
 
   const currency      = expense.original_currency ?? expense.currency;
   const exchangeRate   = Number(expense.exchange_rate);
+  const discountFunctional = discountAmount * exchangeRate;
   const vatFunctional  = vatAmount * exchangeRate;
 
   const [vatReceivable, creditors, cash] = await Promise.all([
@@ -556,24 +645,64 @@ export async function createExpenseJournalEntry(
   const entryNumber   = await nextEntryNumber(businessId);
   const totalFunctional = Number(expense.functional_amount ?? totalAmount);
 
+  // For gross disclosure, compute gross allocations proportionally from net
+  const totalNet = allocatedSubtotal;
+  const grossAllocations = discountAmount > 0.005 && totalNet > 0
+    ? allocations.map(a => ({
+        ...a,
+        amount: a.amount + (discountAmount * (a.amount / totalNet)),
+        amount_base: (a.amount + (discountAmount * (a.amount / totalNet))) * exchangeRate,
+      }))
+    : allocations.map(a => ({ ...a, amount_base: a.amount * exchangeRate }));
+
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
   let lineNumber = 1;
 
-  for (const alloc of allocations) {
+  for (const alloc of (discountAmount > 0.005 ? grossAllocations : allocations)) {
     if (alloc.amount <= 0) continue;
+    const amtBase = (alloc as unknown as { amount_base?: number }).amount_base ?? alloc.amount * exchangeRate;
     lines.push({
       line_number:   lineNumber++,
-      account_id:    alloc.accountId,
+      account_id:    (alloc as ExpenseAccountAllocation).accountId,
       description:   alloc.description ?? `Expense ${expense.expense_number}`,
       is_debit:      true,
       amount:        alloc.amount,
-      amount_base:   alloc.amount * exchangeRate,
+      amount_base:   amtBase,
       currency,
       exchange_rate: exchangeRate,
       tax_code:      'none',
       tax_amount:    0,
       reconciled:    false,
     });
+  }
+
+  // Purchase Discount (discount received) — credit-normal contra cost (5175) or other income (4260)
+  if (discountAmount > 0.005) {
+    let discountAccount: Row<'accounts'> | null = null;
+    try {
+      discountAccount = await getAccountByCode(businessId, '5175');
+    } catch {
+      try {
+        discountAccount = await getAccountByCode(businessId, '4260');
+      } catch {
+        discountAccount = null;
+      }
+    }
+    if (discountAccount) {
+      lines.push({
+        line_number:   lineNumber++,
+        account_id:    discountAccount.id,
+        description:   `Purchase discount — Expense ${expense.expense_number}`,
+        is_debit:      false,
+        amount:        discountAmount,
+        amount_base:   discountFunctional,
+        currency,
+        exchange_rate: exchangeRate,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
+      });
+    }
   }
 
   if (vatAmount > 0 && vatReceivable) {

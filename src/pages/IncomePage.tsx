@@ -661,12 +661,17 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const lineCalcs = form.lines.map((l) => {
     const qty      = parseFloat(l.quantity) || 0;
     const price    = parseFloat(l.unit_price) || 0;
-    const subtotal = qty * price * (1 - (parseFloat(l.discount_percent) || 0) / 100);
+    const discPct  = parseFloat(l.discount_percent) || 0;
+    const gross    = qty * price;
+    const discountAmt = gross * discPct / 100;
+    const subtotal = gross - discountAmt;
     const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
     const taxAmount = subtotal * taxRate;
-    return { subtotal, taxRate, taxAmount, lineTotal: subtotal + taxAmount };
+    return { gross, discountAmt, subtotal, taxRate, taxAmount, lineTotal: subtotal + taxAmount };
   });
 
+  const grossSubtotal = lineCalcs.reduce((s, l) => s + l.gross, 0);
+  const totalDiscount = lineCalcs.reduce((s, l) => s + l.discountAmt, 0);
   const subtotal  = lineCalcs.reduce((s, l) => s + l.subtotal, 0);
   const vatAmount = lineCalcs.reduce((s, l) => s + l.taxAmount, 0);
   const total     = lineCalcs.reduce((s, l) => s + l.lineTotal, 0);
@@ -708,8 +713,8 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           rate_date:        rate.rateDate,
           rate_is_stale:    rate.isStale,
           subtotal,
-          discount_amount:  0,
-          discount_percent: 0,
+          discount_amount:  totalDiscount,
+          discount_percent: grossSubtotal > 0 ? (totalDiscount / grossSubtotal) * 100 : 0,
           taxable_amount:   subtotal,
           vat_amount:       vatAmount,
           wht_amount:       0,
@@ -981,7 +986,15 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+              {totalDiscount > 0.005 ? (
+                <>
+                  <div className="flex justify-between text-gray-600"><span>Gross Subtotal</span><span>{formatMwkDetailed(grossSubtotal)}</span></div>
+                  <div className="flex justify-between text-emerald-700"><span>Less: Discount</span><span>- {formatMwkDetailed(totalDiscount)}</span></div>
+                  <div className="flex justify-between font-medium text-gray-900"><span>Net Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+                </>
+              ) : (
+                <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+              )}
               <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwkDetailed(vatAmount)}</span></div>
               <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwkDetailed(total)}</span></div>
             </div>

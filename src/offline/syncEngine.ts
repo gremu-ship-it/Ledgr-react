@@ -159,7 +159,7 @@ async function syncItem(item: QueueItem): Promise<string> {
       await retryNonCritical(async () => {
         const allocations = result.lines.map((l) => ({
           accountId: l.account_id || '',
-          amount: Number(l.line_total),
+          amount: Number((l as unknown as { line_subtotal?: number }).line_subtotal ?? (Number(l.line_total) - Number((l as unknown as { tax_amount?: number }).tax_amount ?? 0))),
           description: l.description || '',
         }));
         if (allocations.length > 0) {

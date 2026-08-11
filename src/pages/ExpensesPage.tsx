@@ -314,6 +314,8 @@ interface ExpenseLine {
   description: string;
   quantity:    string;
   unit_price:  string;
+  /** Percentage discount received (purchase discount) — before line tax */
+  discount_percent: string;
   tax_code:    string;
   account_id:  string;
   product_id:  string;   // NEW
@@ -734,7 +736,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const [form, setForm]   = useState<ExpenseForm>({
     contact_id: '', expense_number: '', expense_date: today(), due_date: '', notes: '',
     branch_id: '', department_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
-    lines: [{ description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', account_id: '', product_id: '' }],
+    lines: [{ description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', account_id: '', product_id: '' }],
   });
 
   const { data: suppliers = [] } = useQuery({
@@ -776,7 +778,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   function addLine() {
     setForm((f) => ({
       ...f,
-      lines: [...f.lines, { description: '', quantity: '1', unit_price: '', tax_code: 'vat_standard', account_id: '', product_id: '' }],
+      lines: [...f.lines, { description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', account_id: '', product_id: '' }],
     }));
   }
 
@@ -787,12 +789,17 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const lineCalcs = form.lines.map((l) => {
     const qty      = parseFloat(l.quantity) || 0;
     const price    = parseFloat(l.unit_price) || 0;
-    const subtotal = qty * price;
+    const discPct  = parseFloat(l.discount_percent) || 0;
+    const gross    = qty * price;
+    const discountAmt = gross * discPct / 100;
+    const subtotal = gross - discountAmt;
     const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
     const taxAmount = subtotal * taxRate;
-    return { subtotal, taxAmount, lineTotal: subtotal + taxAmount };
+    return { gross, discountAmt, subtotal, taxAmount, lineTotal: subtotal + taxAmount };
   });
 
+  const grossSubtotal = lineCalcs.reduce((s, l) => s + l.gross, 0);
+  const totalDiscount = lineCalcs.reduce((s, l) => s + l.discountAmt, 0);
   const subtotal  = lineCalcs.reduce((s, l) => s + l.subtotal, 0);
   const vatAmount = lineCalcs.reduce((s, l) => s + l.taxAmount, 0);
   const total     = lineCalcs.reduce((s, l) => s + l.lineTotal, 0);
@@ -847,6 +854,8 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           rate_date:      rate.rateDate,
           rate_is_stale:  rate.isStale,
           subtotal,
+          discount_amount: totalDiscount,
+          discount_percent: grossSubtotal > 0 ? (totalDiscount / grossSubtotal) * 100 : 0,
           vat_amount:     vatAmount,
           wht_amount:     0,
           total_amount:   total,
@@ -859,7 +868,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         validLines.map((l, idx) => {
           const qty      = parseFloat(l.quantity) || 1;
           const price    = parseFloat(l.unit_price) || 0;
-          const lineSub  = qty * price;
+          const discPct  = parseFloat(l.discount_percent) || 0;
+          const gross    = qty * price;
+          const discountAmt = gross * discPct / 100;
+          const lineSub  = gross - discountAmt;
           const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
           const taxAmt   = lineSub * taxRate;
           return {
@@ -867,6 +879,8 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             description: l.description,
             quantity:    qty,
             unit_price:  price,
+            discount_percent: discPct,
+            discount_amount: discountAmt,
             tax_code:    l.tax_code,
             tax_rate:    taxRate,
             tax_amount:  taxAmt,
@@ -889,7 +903,8 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         validLines.forEach((l, idx) => {
           const qty    = parseFloat(l.quantity) || 1;
           const price  = parseFloat(l.unit_price) || 0;
-          const net    = qty * price;
+          const discPct  = parseFloat(l.discount_percent) || 0;
+          const net    = qty * price * (1 - discPct / 100);
           const acctId = resolvedLineAccountIds[idx];
           allocationMap.set(acctId, (allocationMap.get(acctId) ?? 0) + net);
         });
@@ -1037,9 +1052,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                     <th scope="col" className="px-3 py-2 text-left">Product / Service</th>  {/* NEW */}
                     <th scope="col" className="px-3 py-2 text-left">Description</th>
                     <th scope="col" className="w-40 px-3 py-2 text-left">Category</th>
-                    <th scope="col" className="w-20 px-3 py-2 text-right">Qty</th>
-                    <th scope="col" className="w-32 px-3 py-2 text-right">Unit Price</th>
-                    <th scope="col" className="w-36 px-3 py-2 text-center">Tax</th>
+                    <th scope="col" className="w-16 px-3 py-2 text-right">Qty</th>
+                    <th scope="col" className="w-24 px-3 py-2 text-right">Unit Price</th>
+                    <th scope="col" className="w-20 px-3 py-2 text-right">Disc %</th>
+                    <th scope="col" className="w-28 px-3 py-2 text-center">Tax</th>
                     <th scope="col" className="w-32 px-3 py-2 text-right">Total</th>
                     <th scope="col" className="w-8" />
                   </tr>
@@ -1081,6 +1097,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                           onChange={(e) => setLine(idx, 'unit_price', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" />
                       </td>
+                      <td className="px-3 py-2"><input aria-label="Line discount percentage" type="number" min="0" max="100" value={line.discount_percent} onChange={(e) => setLine(idx, 'discount_percent', e.target.value)} className="w-full rounded bg-transparent px-1 py-0.5 text-right text-sm focus:outline-none focus:ring-1 focus:ring-brand-500" /></td>
                       <td className="px-3 py-2">
                         <select value={line.tax_code} onChange={(e) => setLine(idx, 'tax_code', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
@@ -1104,7 +1121,15 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
           <div className="flex justify-end">
             <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+              {totalDiscount > 0.005 ? (
+                <>
+                  <div className="flex justify-between text-gray-600"><span>Gross Subtotal</span><span>{formatMwkDetailed(grossSubtotal)}</span></div>
+                  <div className="flex justify-between text-emerald-700"><span>Less: Purchase Discount</span><span>- {formatMwkDetailed(totalDiscount)}</span></div>
+                  <div className="flex justify-between font-medium text-gray-900"><span>Net Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+                </>
+              ) : (
+                <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
+              )}
               <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwkDetailed(vatAmount)}</span></div>
               <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwkDetailed(total)}</span></div>
             </div>
@@ -1146,7 +1171,10 @@ function useRetryPosting(businessId: string) {
       const allocationMap = new Map<string, number>();
       for (const l of lines as Row<'expense_lines'>[]) {
         const acctId = l.account_id!;
-        allocationMap.set(acctId, (allocationMap.get(acctId) ?? 0) + Number(l.unit_price) * Number(l.quantity));
+        const gross = Number(l.unit_price) * Number(l.quantity);
+        const discPct = Number((l as unknown as { discount_percent?: number }).discount_percent ?? 0);
+        const net = gross * (1 - discPct / 100);
+        allocationMap.set(acctId, (allocationMap.get(acctId) ?? 0) + net);
       }
       const allocations: ExpenseAccountAllocation[] = Array.from(allocationMap.entries())
         .map(([accountId, amount]) => ({ accountId, amount }));

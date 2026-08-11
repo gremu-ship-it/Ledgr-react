@@ -245,6 +245,7 @@ const COA: AccountSeed[] = [
   { code:'4230', name:'FX Gains',                      account_type:'income', account_subtype:'other_income', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'4200', description:'Foreign exchange gains on currency transactions' },
   { code:'4240', name:'Gain on Disposal of Assets',    account_type:'income', account_subtype:'other_income', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'4200' },
   { code:'4250', name:'Miscellaneous Income',          account_type:'income', account_subtype:'other_income', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'4200' },
+  { code:'4260', name:'Discount Received',             account_type:'income', account_subtype:'other_income', normal_balance:'credit', is_group:false, is_system:false, is_bank_account:false, parent_code:'4200', description:'Trade and settlement discounts received from suppliers' },
 
   // ══════════════════════════════════════════════════
   // 5000s  COST OF SALES
@@ -258,6 +259,7 @@ const COA: AccountSeed[] = [
   { code:'5150', name:'Direct Service Costs',          account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Subcontractors and direct costs of delivering services' },
   { code:'5160', name:'Freight & Delivery Inwards',    account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
   { code:'5170', name:'Purchase Returns & Allowances', account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'5000' },
+  { code:'5175', name:'Purchase Discounts',            account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'credit',is_group:false, is_system:false, is_bank_account:false, parent_code:'5000', description:'Trade and settlement discounts received on purchases — contra cost of sales' },
   { code:'5180', name:'Inventory Adjustments & Shrinkage', account_type:'expense', account_subtype:'cost_of_sales', normal_balance:'debit', is_group:false, is_system:true, is_bank_account:false, parent_code:'5000', description:'Stock write-offs, shrinkage and reconciliation of the stock subledger to the general ledger' },
 
   // ══════════════════════════════════════════════════

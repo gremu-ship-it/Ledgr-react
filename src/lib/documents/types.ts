@@ -61,6 +61,8 @@ export interface InvoiceLineLike {
   description: string;
   quantity: number | string;
   unit_price: number | string;
+  discount_percent?: number | string;
+  discount_amount?: number | string;
   tax_amount?: number | string;
   line_total: number | string;
   product_name?: string;
