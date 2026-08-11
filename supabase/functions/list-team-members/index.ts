@@ -79,10 +79,10 @@ serve(async (req) => {
       });
     }
 
-    // Fetch business_users
+    // Fetch business_users (include invitation expiry so owners can purge expired roles)
     const { data: members, error: membersErr } = await admin
       .from('business_users')
-      .select('id, user_id, role, is_active, invited_at, accepted_at, created_at')
+      .select('id, user_id, role, is_active, invited_at, accepted_at, invitation_token, invitation_expires_at, created_at')
       .eq('business_id', businessId)
       .order('created_at', { ascending: true });
 
@@ -100,6 +100,8 @@ serve(async (req) => {
       is_active: boolean;
       invited_at: string | null;
       accepted_at: string | null;
+      invitation_token: string | null;
+      invitation_expires_at: string | null;
       created_at: string;
     };
     const userIds = (members ?? []).map((m: BusinessUserRow) => m.user_id);
@@ -150,6 +152,8 @@ serve(async (req) => {
       is_active: m.is_active,
       invited_at: m.invited_at,
       accepted_at: m.accepted_at,
+      invitation_token: m.invitation_token,
+      invitation_expires_at: m.invitation_expires_at,
       created_at: m.created_at,
       email: emailMap.get(m.user_id) ?? null,
       full_name: profileMap.get(m.user_id)?.full_name ?? null,

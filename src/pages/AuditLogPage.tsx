@@ -369,11 +369,36 @@ export function AuditLogPage() {
     `;
     doc.body.innerHTML = bodyHTML;
 
-    const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+    // Do not pass noopener in window.open features — browsers return null and
+    // document.write never runs (same bug that broke invoice downloads).
+    const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank');
     if (printWindow) {
-      printWindow.document.write(doc.documentElement.outerHTML);
-      printWindow.document.close();
-      setTimeout(() => printWindow.print(), 300);
+      try { printWindow.opener = null; } catch { /* ignore */ }
+      const triggerPrint = () => {
+        setTimeout(() => {
+          try { printWindow.print(); } catch { /* aborted */ }
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        }, 300);
+      };
+      try {
+        if (printWindow.document.readyState === 'complete') triggerPrint();
+        else printWindow.addEventListener('load', triggerPrint, { once: true });
+      } catch {
+        setTimeout(triggerPrint, 500);
+      }
+    } else {
+      // Popup blocked — fall back to file download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ledgr_audit_log_${new Date().toISOString().slice(0, 10)}.html`;
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
     }
   }, [logData, currentBusiness, showVerify, tamperCount, chainMap]);
 

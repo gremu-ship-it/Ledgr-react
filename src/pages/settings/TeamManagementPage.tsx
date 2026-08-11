@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Trash2, Loader2, AlertCircle,
   Crown, Shield, Calculator, Users, Eye, BarChart3, Mail,
-  Link, Copy, ExternalLink, Plus
+  Link, Copy, ExternalLink, Plus, Clock, UserX
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
@@ -45,8 +45,17 @@ interface Member {
   invited_at: string | null;
   accepted_at: string | null;
   invitation_token: string | null;
+  invitation_expires_at: string | null;
   email: string | null;
   full_name: string | null;
+}
+
+/** True when a pending invitation's role/access window has passed. */
+function isInvitationExpired(member: Member): boolean {
+  if (!member.invitation_expires_at) return false;
+  const expires = new Date(member.invitation_expires_at).getTime();
+  if (Number.isNaN(expires)) return false;
+  return expires < Date.now();
 }
 
 interface InvitationLink {
@@ -579,6 +588,8 @@ export function TeamManagementPage() {
           is_active: boolean;
           invited_at: string | null;
           accepted_at: string | null;
+          invitation_token?: string | null;
+          invitation_expires_at?: string | null;
           email: string | null;
           full_name: string | null;
         }> }).members;
@@ -590,7 +601,8 @@ export function TeamManagementPage() {
             is_active: m.is_active,
             invited_at: m.invited_at,
             accepted_at: m.accepted_at,
-            invitation_token: null,
+            invitation_token: m.invitation_token ?? null,
+            invitation_expires_at: m.invitation_expires_at ?? null,
             email: m.email,
             full_name: m.full_name,
           })),
@@ -599,7 +611,7 @@ export function TeamManagementPage() {
         // Fallback Client-side query
         const { data: directMembers, error: fetchError } = await supabase
           .from('business_users')
-          .select('id, user_id, role, is_active, invited_at, accepted_at, invitation_token')
+          .select('id, user_id, role, is_active, invited_at, accepted_at, invitation_token, invitation_expires_at')
           .eq('business_id', businessId)
           .order('created_at', { ascending: true });
 
@@ -613,6 +625,7 @@ export function TeamManagementPage() {
           invited_at: string | null;
           accepted_at: string | null;
           invitation_token: string | null;
+          invitation_expires_at: string | null;
         };
         const userIds = (directMembers ?? []).map((r) => r.user_id);
         const { data: profiles } = userIds.length === 0
@@ -630,6 +643,7 @@ export function TeamManagementPage() {
           invited_at: row.invited_at,
           accepted_at: row.accepted_at,
           invitation_token: row.invitation_token,
+          invitation_expires_at: row.invitation_expires_at,
           email: null,
           full_name: profileMap.get(row.user_id) ?? null,
         }));
@@ -670,19 +684,27 @@ export function TeamManagementPage() {
     }
   }, [loadMembersAndInvites]);
 
+  /**
+   * Soft-remove (deactivate) an active member — keeps the row for audit history.
+   */
   async function handleRemove(memberId: string, memberUserId: string) {
     if (memberUserId === currentUser?.id) {
       alert('You cannot remove yourself from the business.');
       return;
     }
 
-    if (!window.confirm('Remove this member from the business?')) return;
+    if (!window.confirm('Remove this member from the business? They will lose access immediately.')) return;
 
     setRemoving(memberId);
 
     const { error: removeError } = await supabase
       .from('business_users')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .update({
+        is_active: false,
+        invitation_token: null,
+        invitation_expires_at: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', memberId)
       .eq('business_id', businessId!);
 
@@ -693,7 +715,119 @@ export function TeamManagementPage() {
       return;
     }
 
+    // Keep the row locally as inactive so owners can permanently delete it later
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.id === memberId
+          ? { ...m, is_active: false, invitation_token: null, invitation_expires_at: null }
+          : m,
+      ),
+    );
+  }
+
+  /**
+   * Permanently delete a membership row. Intended for expired invitations and
+   * already-deactivated members so owners can clean the team roster.
+   */
+  async function handlePermanentRemove(memberId: string, memberUserId: string, label: string) {
+    if (memberUserId === currentUser?.id) {
+      alert('You cannot remove yourself from the business.');
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Permanently remove ${label} from this business? This cannot be undone from the team list.`,
+      )
+    ) {
+      return;
+    }
+
+    setRemoving(memberId);
+
+    const { error: deleteError } = await supabase
+      .from('business_users')
+      .delete()
+      .eq('id', memberId)
+      .eq('business_id', businessId!);
+
+    setRemoving(null);
+
+    if (deleteError) {
+      // Some RLS policies only allow soft-delete (is_active=false). Fall back.
+      const { error: softError } = await supabase
+        .from('business_users')
+        .update({
+          is_active: false,
+          invitation_token: null,
+          invitation_expires_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', memberId)
+        .eq('business_id', businessId!);
+
+      if (softError) {
+        setError(deleteError.message || softError.message);
+        return;
+      }
+
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === memberId
+            ? { ...m, is_active: false, invitation_token: null, invitation_expires_at: null }
+            : m,
+        ),
+      );
+      return;
+    }
+
     setMembers((prev) => prev.filter((m) => m.id !== memberId));
+  }
+
+  async function handleRemoveAllExpired() {
+    const expired = members.filter(
+      (m) => !m.is_active && Boolean(m.invitation_token) && isInvitationExpired(m),
+    );
+    if (expired.length === 0) return;
+
+    if (!window.confirm(`Permanently remove all ${expired.length} expired invitation(s)?`)) {
+      return;
+    }
+
+    setRemoving('__all_expired__');
+    const failures: string[] = [];
+
+    for (const member of expired) {
+      const { error: deleteError } = await supabase
+        .from('business_users')
+        .delete()
+        .eq('id', member.id)
+        .eq('business_id', businessId!);
+
+      if (deleteError) {
+        const { error: softError } = await supabase
+          .from('business_users')
+          .update({
+            is_active: false,
+            invitation_token: null,
+            invitation_expires_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', member.id)
+          .eq('business_id', businessId!);
+        if (softError) {
+          failures.push(member.email ?? member.full_name ?? member.id);
+        }
+      }
+    }
+
+    setRemoving(null);
+
+    if (failures.length > 0) {
+      setError(`Could not remove: ${failures.join(', ')}`);
+    }
+
+    await loadMembersAndInvites();
   }
 
   async function handleChangeRole(memberId: string, newRole: UserRole) {
@@ -747,7 +881,18 @@ export function TeamManagementPage() {
   }
 
   const activeMembers = members.filter((m) => m.is_active);
-  const pendingMembers = members.filter((m) => !m.is_active && m.invitation_token);
+  // Pending invitations that are still within their acceptance window
+  const pendingMembers = members.filter(
+    (m) => !m.is_active && m.invitation_token && !isInvitationExpired(m),
+  );
+  // Invitations whose role/access window has expired — owners can purge these
+  const expiredMembers = members.filter(
+    (m) => !m.is_active && Boolean(m.invitation_token) && isInvitationExpired(m),
+  );
+  // Soft-removed members (no longer active, no open invite) — owners can purge
+  const inactiveMembers = members.filter(
+    (m) => !m.is_active && !m.invitation_token && m.role !== 'owner',
+  );
 
   return (
     <div className="space-y-6">
@@ -904,23 +1049,167 @@ export function TeamManagementPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-gray-700">
-                    {member.email ?? 'Invited user'}
+                    {member.email ?? member.full_name ?? 'Invited user'}
                   </p>
-                  {member.invited_at && (
-                    <p className="text-xs text-gray-600">
-                      Invited {new Date(member.invited_at).toLocaleDateString('en-GB', {
-                        day: 'numeric', month: 'short', year: 'numeric',
-                      })}
-                    </p>
-                  )}
+                  <p className="text-xs text-gray-600">
+                    {member.invited_at && (
+                      <>
+                        Invited {new Date(member.invited_at).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </>
+                    )}
+                    {member.invitation_expires_at && (
+                      <>
+                        {member.invited_at ? ' · ' : ''}
+                        Expires {new Date(member.invitation_expires_at).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </>
+                    )}
+                  </p>
                 </div>
                 <RoleBadge role={member.role} />
                 <PermissionGate require="canManageUsers">
                   <button
-                    onClick={() => void handleRemove(member.id, member.user_id)}
+                    onClick={() =>
+                      void handlePermanentRemove(
+                        member.id,
+                        member.user_id,
+                        member.email ?? member.full_name ?? 'this invitation',
+                      )
+                    }
                     disabled={removing === member.id}
                     className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
                     title="Cancel invitation"
+                  >
+                    {removing === member.id
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Trash2 className="h-4 w-4" />
+                    }
+                  </button>
+                </PermissionGate>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Expired invitations — owners/admins can purge these */}
+      {!loading && expiredMembers.length > 0 && (
+        <div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Expired invitations ({expiredMembers.length})
+            </h3>
+            <PermissionGate require="canManageUsers">
+              <button
+                type="button"
+                onClick={() => void handleRemoveAllExpired()}
+                disabled={removing === '__all_expired__'}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:opacity-50"
+              >
+                {removing === '__all_expired__'
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <UserX className="h-3.5 w-3.5" />
+                }
+                Remove all expired
+              </button>
+            </PermissionGate>
+          </div>
+          <p className="mb-2 text-xs text-gray-500">
+            These invitations are past their expiry date and can no longer be accepted. Remove them to clean up the team roster.
+          </p>
+          <div className="divide-y divide-gray-100 rounded-xl border border-amber-200 bg-amber-50/40">
+            {expiredMembers.map((member) => (
+              <div key={member.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-gray-800">
+                    {member.email ?? member.full_name ?? 'Invited user'}
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    Role expired
+                    {member.invitation_expires_at && (
+                      <>
+                        {' '}
+                        on {new Date(member.invitation_expires_at).toLocaleDateString('en-GB', {
+                          day: 'numeric', month: 'short', year: 'numeric',
+                        })}
+                      </>
+                    )}
+                  </p>
+                </div>
+                <RoleBadge role={member.role} />
+                <span className="hidden rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 sm:inline">
+                  Expired
+                </span>
+                <PermissionGate require="canManageUsers">
+                  <button
+                    onClick={() =>
+                      void handlePermanentRemove(
+                        member.id,
+                        member.user_id,
+                        member.email ?? member.full_name ?? 'this expired invitation',
+                      )
+                    }
+                    disabled={removing === member.id || removing === '__all_expired__'}
+                    className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                    title="Remove expired invitation"
+                  >
+                    {removing === member.id
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Trash2 className="h-4 w-4" />
+                    }
+                  </button>
+                </PermissionGate>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Inactive / previously removed members */}
+      {!loading && inactiveMembers.length > 0 && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold text-gray-900">
+            Inactive members ({inactiveMembers.length})
+          </h3>
+          <p className="mb-2 text-xs text-gray-500">
+            Previously removed members. You can permanently delete them from the roster.
+          </p>
+          <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-gray-50">
+            {inactiveMembers.map((member) => (
+              <div key={member.id} className="flex items-center gap-3 px-4 py-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-500">
+                  {(member.full_name ?? member.email ?? '?').charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm text-gray-700">
+                    {member.full_name ?? member.email ?? 'Unknown user'}
+                  </p>
+                  {member.email && member.full_name && (
+                    <p className="truncate text-xs text-gray-500">{member.email}</p>
+                  )}
+                </div>
+                <RoleBadge role={member.role} />
+                <span className="hidden rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600 sm:inline">
+                  Inactive
+                </span>
+                <PermissionGate require="canManageUsers">
+                  <button
+                    onClick={() =>
+                      void handlePermanentRemove(
+                        member.id,
+                        member.user_id,
+                        member.full_name ?? member.email ?? 'this member',
+                      )
+                    }
+                    disabled={removing === member.id}
+                    className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
+                    title="Permanently remove member"
                   >
                     {removing === member.id
                       ? <Loader2 className="h-4 w-4 animate-spin" />
