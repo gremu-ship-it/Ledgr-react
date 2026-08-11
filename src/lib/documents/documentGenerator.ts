@@ -5,14 +5,37 @@
  *
  * Design goals:
  *  - Real end-product: letterhead, footer, signature blocks, professional typography
+ *  - Proper A4 margins: the rendered page is exactly the A4 content width, and
+ *    jsPDF places it with consistent side/top/bottom margins (no full-bleed text)
+ *  - Clean pagination: page breaks land on block/row boundaries (see pagination.ts)
+ *    instead of cutting text or table rows in half at fixed 297mm intervals
  *  - Logo support: embeds business logo if available (via direct <img> plus fallback)
  *  - Brand color theming: uses business brand_color for accents
  *  - Clean, modern, IFRS-friendly report styling
  */
 
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+
 import type { BusinessBranding, InvoiceLike, InvoiceLineLike, ContactLike } from './types';
+import { computePageCuts } from './pagination';
 
 const DEFAULT_BRAND = '#0E7C5A'; // 5.32:1 AA contrast
+
+// ── A4 page geometry ──────────────────────────────────────────────────────────
+// The document is rendered at exactly the printable content width so CSS pixels
+// map 1:1 onto millimetres at 96dpi, then jsPDF adds consistent margins. This
+// replaces the old full-bleed approach where content touched the paper edges.
+const A4_WIDTH_MM = 210;
+const A4_HEIGHT_MM = 297;
+const MARGIN_X_MM = 14;
+const MARGIN_TOP_MM = 14;
+const MARGIN_BOTTOM_MM = 16;
+const CONTENT_WIDTH_MM = A4_WIDTH_MM - MARGIN_X_MM * 2; // 182
+const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - MARGIN_TOP_MM - MARGIN_BOTTOM_MM; // 267
+const CSS_PX_PER_MM = 96 / 25.4; // CSS reference pixel
+const RENDER_WIDTH_PX = Math.round(CONTENT_WIDTH_MM * CSS_PX_PER_MM); // ≈ 688
+const PAGE_HEIGHT_PX = CONTENT_HEIGHT_MM * CSS_PX_PER_MM; // ≈ 1009
 
 function esc(str: string | null | undefined): string {
   if (!str) return '';
@@ -40,6 +63,16 @@ function formatDate(dateStr: string | null | undefined): string {
   } catch {
     return dateStr;
   }
+}
+
+function generatedTimestamp(): string {
+  return new Date().toLocaleString('en-MW', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function brandColorStyle(brand?: string | null, fallback = DEFAULT_BRAND): string {
@@ -85,7 +118,9 @@ function baseStyles(brand: string): string {
       background: white;
     }
     .page {
-      max-width: 210mm;
+      /* Exactly the A4 printable width: 1 css px == 1/96in so the rasterised
+         output maps cleanly onto the pdf page with margins. */
+      width: ${RENDER_WIDTH_PX}px;
       margin: 0 auto;
       background: white;
       position: relative;
@@ -105,6 +140,7 @@ function baseStyles(brand: string): string {
       gap: 14px;
       align-items: flex-start;
       flex: 1;
+      min-width: 0;
     }
     .logo {
       width: 56px;
@@ -150,12 +186,14 @@ function baseStyles(brand: string): string {
     .company-meta strong { color: var(--ink); font-weight: 600; }
     .doc-badge {
       text-align: right;
+      flex-shrink: 0;
+      max-width: 44%;
     }
     .doc-type {
-      font-size: 22pt;
+      font-size: 20pt;
       font-weight: 800;
       letter-spacing: -0.03em;
-      line-height: 1;
+      line-height: 1.05;
       color: var(--ink);
       text-transform: uppercase;
     }
@@ -228,32 +266,32 @@ function baseStyles(brand: string): string {
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      padding: 10px 12px;
+      padding: 9px 12px;
       text-align: left;
       border: none;
     }
-    thead th:first-child { border-top-left-radius: 10px; border-bottom-left-radius: 0; }
-    thead th:last-child { border-top-right-radius: 10px; border-bottom-right-radius: 0; text-align: right; }
+    thead th:first-child { border-top-left-radius: 8px; }
+    thead th:last-child { border-top-right-radius: 8px; text-align: right; }
     thead th.num { text-align: right; }
     tbody td {
-      padding: 10px 12px;
+      padding: 9px 12px;
       border-bottom: 1px solid #f1f5f9;
       vertical-align: top;
+      overflow-wrap: break-word;
     }
     tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: #fafafa; }
     td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     td.mono { font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; }
     .line-desc { font-weight: 600; color: var(--ink); }
     .line-sub { font-size: 8pt; color: var(--muted); margin-top: 2px; }
     /* Totals */
     .totals {
-      margin-top: 8px;
+      margin-top: 10px;
       display: flex;
       justify-content: flex-end;
     }
     .totals-box {
-      width: 300px;
+      width: 280px;
       border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
@@ -261,10 +299,12 @@ function baseStyles(brand: string): string {
     .totals-row {
       display: flex;
       justify-content: space-between;
-      padding: 8px 14px;
+      gap: 12px;
+      padding: 7px 14px;
       font-size: 9.5pt;
       border-bottom: 1px solid #f1f5f9;
     }
+    .totals-row span:last-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
     .totals-row:last-child { border-bottom: none; }
     .totals-row.muted { color: var(--muted); }
     .totals-row.total {
@@ -272,9 +312,8 @@ function baseStyles(brand: string): string {
       color: white;
       font-weight: 700;
       font-size: 10.5pt;
-      padding: 12px 14px;
+      padding: 11px 14px;
     }
-    .totals-row.total span:last-child { font-variant-numeric: tabular-nums; }
     /* Notes, terms, payment */
     .section { margin-top: 20px; }
     .section h3 {
@@ -299,10 +338,6 @@ function baseStyles(brand: string): string {
     }
     .payment-status {
       margin-top: 18px;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 12px;
-      align-items: center;
       border: 1px solid var(--border);
       border-radius: 12px;
       padding: 12px 14px;
@@ -323,6 +358,7 @@ function baseStyles(brand: string): string {
       border-top: 1.5px solid var(--border);
       display: flex;
       justify-content: space-between;
+      gap: 24px;
       font-size: 7.5pt;
       color: var(--muted);
       letter-spacing: 0.02em;
@@ -364,6 +400,7 @@ function baseStyles(brand: string): string {
       padding-top: 8px;
       font-size: 8.5pt;
       color: var(--muted);
+      line-height: 1.9;
     }
     .sig-block strong { color: var(--ink); display: block; font-size: 9.5pt; }
     /* Report */
@@ -397,18 +434,21 @@ function baseStyles(brand: string): string {
     }
     .report-meta strong { color: var(--ink); }
     .watermark {
-      position: fixed;
-      top: 42%;
+      /* Absolute (not fixed) so it is positioned inside the .page element and
+         survives html2canvas rasterisation at a predictable spot. */
+      position: absolute;
+      top: 34%;
       left: 50%;
-      transform: translate(-50%, -50%) rotate(-30deg);
+      transform: translate(-50%, -50%) rotate(-28deg);
       font-size: 72pt;
       font-weight: 900;
       color: var(--ink);
-      opacity: 0.04;
+      opacity: 0.045;
       pointer-events: none;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       z-index: 0;
+      white-space: nowrap;
     }
     @media print {
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -465,80 +505,163 @@ function renderLetterhead(b: BusinessBranding, title: string, docNumber: string,
   `;
 }
 
-/**
- * Open a print-ready HTML document.
- *
- * IMPORTANT: Do not pass `noopener` in window.open's feature string.
- * Modern browsers return `null` when noopener is set that way, which made
- * invoice / delivery-note downloads fail silently (document.write never ran).
- * We null out `opener` ourselves after open for the same security property.
- *
- * Prefer a blob URL so the new tab has a real document to load even if the
- * opener reference is constrained (e.g. Safari / embedded browsers).
- */
-function openPrintWindow(title: string, html: string, autoPrint = true): void {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
+/** Strip any <script> blocks so they never run inside the hidden render frame. */
+function stripScripts(html: string): string {
+  return html.replace(/<script[\s\S]*?<\/script>/gi, '');
+}
 
-  // Open without noopener feature so we retain a usable Window reference.
-  const win = window.open(url, '_blank');
-  if (!win) {
-    // Fallback: file download if popups are blocked
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title.replace(/[^\w.-]+/g, '_')}.html`;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Revoke after the click has a chance to start the download
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    return;
-  }
+/** Build a safe, filesystem-friendly PDF filename from a document title. */
+export function pdfFileName(title: string): string {
+  const base = title
+    .replace(/[^\w.-]+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '');
+  return `${base || 'document'}.pdf`;
+}
 
-  // Equivalent security to noopener without losing the window handle
+/** Wait until the document's images and webfonts are ready to be rasterised. */
+async function waitForRender(doc: Document): Promise<void> {
+  const images = Array.from(doc.querySelectorAll('img'));
+
+  await Promise.all(
+    images
+      .filter((img) => img.complete)
+      .map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve())),
+  );
+
+  await Promise.all(
+    images
+      .filter((img) => !img.complete)
+      .map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            img.addEventListener('load', () => resolve(), { once: true });
+            img.addEventListener('error', () => resolve(), { once: true });
+            // Safety net if the image never fires an event
+            setTimeout(resolve, 5000);
+          }),
+      ),
+  );
+
   try {
-    win.opener = null;
-  } catch {
-    /* cross-origin / locked — ignore */
-  }
-
-  try {
-    win.document.title = title;
-  } catch {
-    /* some browsers lock document until load finishes */
-  }
-
-  // Keep the blob alive long enough for print preview / Save as PDF
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
-  if (!autoPrint) return;
-
-  let printed = false;
-  const doPrint = () => {
-    if (printed) return;
-    printed = true;
-    setTimeout(() => {
-      try {
-        win.focus();
-        win.print();
-      } catch {
-        /* user aborted print dialog */
-      }
-    }, 400);
-  };
-
-  // Blob URL navigates asynchronously — wait for load when possible
-  try {
-    if (win.document && win.document.readyState === 'complete') {
-      doPrint();
-    } else {
-      win.addEventListener('load', doPrint, { once: true });
-      // Safety net if load never fires (rare)
-      setTimeout(doPrint, 1500);
+    if (doc.fonts && doc.fonts.ready) {
+      await doc.fonts.ready;
     }
   } catch {
-    setTimeout(doPrint, 800);
+    /* fonts.ready unavailable — ignore */
+  }
+}
+
+/**
+ * Collect candidate page-break offsets (CSS px from the top of the rendered
+ * page element). Breaking is allowed at the top edge of any direct block child
+ * and of every table row, so a page never starts mid-row or mid-block.
+ */
+function collectBreakPoints(pageEl: HTMLElement): number[] {
+  const pageTop = pageEl.getBoundingClientRect().top;
+  const points: number[] = [];
+  const consider = (el: Element) => {
+    const top = Math.round(el.getBoundingClientRect().top - pageTop);
+    // Ignore tops glued to the very start of the document — that would be a
+    // degenerate first-page cut.
+    if (top > 24) points.push(top);
+  };
+  Array.from(pageEl.children).forEach(consider);
+  pageEl.querySelectorAll('tr, .section, .sig-block, .bill-card').forEach(consider);
+  return points;
+}
+
+/** Draw the small page footer (document label + "Page x of y") on each page. */
+function drawPdfPageFooter(pdf: jsPDF, page: number, pageCount: number, title: string): void {
+  const baseline = A4_HEIGHT_MM - 7;
+  pdf.setDrawColor(226, 232, 240); // slate-200
+  pdf.setLineWidth(0.2);
+  pdf.line(MARGIN_X_MM, baseline - 3, A4_WIDTH_MM - MARGIN_X_MM, baseline - 3);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(148, 163, 184); // slate-400
+  const label = title.length > 60 ? `${title.slice(0, 57)}...` : title;
+  pdf.text(label, MARGIN_X_MM, baseline);
+  pdf.text(`Page ${page} of ${pageCount}`, A4_WIDTH_MM - MARGIN_X_MM, baseline, { align: 'right' });
+}
+
+/**
+ * Generate a real, self-contained .pdf file for the rendered document.
+ *
+ * The standalone HTML is mounted into a hidden same-origin iframe (off-screen,
+ * `srcdoc`), then rasterised with html2canvas and written out with jsPDF.
+ *
+ * Layout contract:
+ *  - `.page` is rendered at exactly the printable A4 content width, so the
+ *    raster maps 1:1 onto the PDF and jsPDF applies consistent margins on all
+ *    sides (previously the image was stretched full-bleed to the paper edge).
+ *  - Page breaks are chosen at measured block/table-row boundaries via
+ *    computePageCuts() instead of blind 297mm slicing, so text lines and table
+ *    rows are never cut in half by a page turn.
+ *  - Every page gets a "Page x of y" footer drawn with real PDF text.
+ *
+ * This deliberately avoids `window.print()` / the browser print dialog, because
+ * Chrome injects the document date, title, blob URL and a "1/1" page footer into
+ * printed output. Producing the PDF directly gives a clean, header-free file.
+ */
+async function renderDocumentPdf(title: string, html: string): Promise<void> {
+  const frame = document.createElement('iframe');
+  frame.style.cssText =
+    `position:fixed; left:-10000px; top:0; width:${RENDER_WIDTH_PX + 32}px; height:1200px; ` +
+    'border:0; visibility:hidden; pointer-events:none; background:#ffffff;';
+  document.body.appendChild(frame);
+
+  try {
+    frame.srcdoc = stripScripts(html);
+
+    await new Promise<void>((resolve) => {
+      frame.addEventListener('load', () => resolve(), { once: true });
+      // Safety net if the load event never fires
+      setTimeout(resolve, 1500);
+    });
+
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) {
+      throw new Error('Failed to load generated document for PDF export');
+    }
+
+    await waitForRender(doc);
+
+    const target = doc.querySelector<HTMLElement>('.page') || doc.body;
+
+    // Choose page breaks at element/row boundaries before rasterising so no
+    // text line is clipped mid-height at a page turn.
+    const totalHeightPx = Math.ceil(target.getBoundingClientRect().height);
+    const cutsPx = computePageCuts({
+      totalHeightPx,
+      pageHeightPx: PAGE_HEIGHT_PX,
+      breakPointsPx: collectBreakPoints(target),
+    });
+
+    const canvas = await html2canvas(target, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const imgHeightMm = (canvas.height * CONTENT_WIDTH_MM) / canvas.width;
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageCount = cutsPx.length;
+
+    cutsPx.forEach((cutPx, index) => {
+      if (index > 0) pdf.addPage();
+      // Slide the tall raster up so this page's cut sits at the top margin;
+      // jsPDF clips anything outside the page bounds (PDF media box).
+      const offsetMm = cutPx / CSS_PX_PER_MM;
+      pdf.addImage(imgData, 'JPEG', MARGIN_X_MM, MARGIN_TOP_MM - offsetMm, CONTENT_WIDTH_MM, imgHeightMm);
+      drawPdfPageFooter(pdf, index + 1, pageCount, title);
+    });
+
+    pdf.save(pdfFileName(title));
+  } finally {
+    frame.remove();
   }
 }
 
@@ -574,7 +697,7 @@ export function generateInvoiceDocument(params: {
 <style>${baseStyles(brand)}</style>
 </head><body>
 <div class="page">
-  ${business.logoUrl ? `<div class="watermark">${esc(statusColor(invoice.status) === '#059669' && invoice.status === 'paid' ? 'PAID' : '')}</div>` : ''}
+  ${invoice.status === 'paid' ? `<div class="watermark">Paid</div>` : ''}
 
   ${renderLetterhead(business, 'Invoice', invoice.invoice_number, invoice.status)}
 
@@ -680,16 +803,14 @@ export function generateInvoiceDocument(params: {
       <div style="margin-top:2px;">${esc(business.email || '')} ${business.email && business.phone ? ' • ' : ''} ${esc(business.phone || '')}</div>
     </div>
     <div style="text-align:right;">
-      <div>Document generated on ${new Date().toLocaleDateString('en-MW', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+      <div>Document generated on ${generatedTimestamp()}</div>
       <div style="margin-top:2px;">This is a computer-generated document • ${esc(invoice.invoice_number)}</div>
     </div>
   </div>
 </div>
-
-<script>window.onload = () => setTimeout(() => { try{ window.print(); }catch(e){} }, 400);</script>
 </body></html>`;
 
-  openPrintWindow(`Invoice ${invoice.invoice_number}`, html);
+  void renderDocumentPdf(`Invoice ${invoice.invoice_number}`, html);
 }
 
 // ── Delivery Note ─────────────────────────────────────────────────────────────
@@ -787,13 +908,12 @@ export function generateDeliveryNoteDocument(params: {
 
   <div class="footer">
     <div><strong>${esc(business.name)}</strong> • Stock Transfer • ${esc(transfer.transfer_number)}</div>
-    <div style="text-align:right;">Generated ${new Date().toLocaleDateString('en-MW')} • Ledgr Warehouse Management</div>
+    <div style="text-align:right;">Generated ${formatDate(new Date().toISOString())} • Ledgr Warehouse Management</div>
   </div>
 </div>
-<script>window.onload = () => setTimeout(() => { try{ window.print(); }catch(e){} }, 400);</script>
 </body></html>`;
 
-  openPrintWindow(`Delivery Note ${transfer.transfer_number}`, html);
+  void renderDocumentPdf(`Delivery Note ${transfer.transfer_number}`, html);
 }
 
 // ── Expense / Receipt ─────────────────────────────────────────────────────────
@@ -852,9 +972,8 @@ export function generateReceiptDocument(params: {
     <div>${formatDate(date)} • Ledgr</div>
   </div>
 </div>
-<script>window.onload=()=>setTimeout(()=>{try{window.print()}catch{}} ,400)</script>
 </body></html>`;
-  openPrintWindow(`${title} ${number}`, html);
+  void renderDocumentPdf(`${title} ${number}`, html);
 }
 
 // ── Professional Report ───────────────────────────────────────────────────────
@@ -882,11 +1001,11 @@ export function generateProfessionalReportDocument(params: {
 
   // Facts summary as KPI cards
   const factsHtml = facts && facts.length
-    ? `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin:14px 0 18px 0;">
+    ? `<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin:14px 0 0 0;">
         ${facts.map((f) => `
           <div style="border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; background:#f8fafc;">
             <div style="font-size:8pt; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:#64748b; margin-bottom:4px;">${esc(f.label)}</div>
-            <div style="font-size:14pt; font-weight:800; letter-spacing:-0.02em; color:#0f172a; font-variant-numeric:tabular-nums;">${formatMwk(f.value, f.currency || curr)}</div>
+            <div style="font-size:13pt; font-weight:800; letter-spacing:-0.02em; color:#0f172a; font-variant-numeric:tabular-nums;">${formatMwk(f.value, f.currency || curr)}</div>
           </div>
         `).join('')}
        </div>`
@@ -909,21 +1028,22 @@ ${baseStyles(brand)}
   display:flex;
   flex-direction:column;
   justify-content:center;
-  min-height:180px;
+  min-height:150px;
   border:1px solid #e2e8f0;
   border-radius:16px;
-  padding:22px 24px;
+  padding:20px 24px;
   background: linear-gradient(135deg, ${brand}0D 0%, ${brand}05 100%);
   margin-bottom:18px;
 }
-.cover h1 { margin:0; font-size:22pt; font-weight:800; letter-spacing:-0.03em; line-height:1.1; }
+.cover h1 { margin:0; font-size:20pt; font-weight:800; letter-spacing:-0.03em; line-height:1.1; }
 .cover .meta { margin-top:10px; font-size:9pt; color:#475569; display:flex; gap:16px; flex-wrap:wrap; }
 </style>
 </head><body>
 <div class="page">
   ${params.isDraft ? `<div class="watermark">DRAFT</div>` : ''}
 
-  <!-- Letterhead -->
+  <!-- Letterhead: brand block only — the document title lives in the cover
+       below so it is not rendered twice. -->
   <div class="letterhead">
     <div class="letterhead-left">
       ${business.logoUrl ? `<img src="${esc(business.logoUrl)}" class="logo" alt="logo" crossorigin="anonymous"/>` : `<div class="logo-fallback">${esc(getInitials(business.name))}</div>`}
@@ -933,12 +1053,10 @@ ${baseStyles(brand)}
         <div class="company-meta">${businessAddressBlock(business)}</div>
       </div>
     </div>
-    <div style="text-align:right; font-size:8pt; color:#64748b; line-height:1.5;">
-      <div><strong style="color:#0f172a; font-size:9pt;">${esc(title)}</strong></div>
-      ${subtitle ? `<div style="color:#334155; max-width:220px;">${esc(subtitle)}</div>` : ''}
-      <div style="margin-top:8px;">Generated: ${new Date().toLocaleDateString('en-MW', { day:'2-digit', month:'long', year:'numeric' })}</div>
+    <div style="text-align:right; font-size:8pt; color:#64748b; line-height:1.55; flex-shrink:0;">
+      <div>Generated: ${formatDate(new Date().toISOString())}</div>
       ${preparerName ? `<div>Prepared by: ${esc(preparerName)}</div>` : ''}
-      ${currency ? `<div>Currency: ${esc(currency)}</div>` : ''}
+      <div>Currency: ${esc(curr)}</div>
     </div>
   </div>
 
@@ -948,7 +1066,7 @@ ${baseStyles(brand)}
     <div class="meta">
       ${period ? `<span><strong>Period:</strong> ${esc(period)}</span>` : ''}
       ${params.dateLabel ? `<span><strong>Date:</strong> ${esc(params.dateLabel)}</span>` : ''}
-      ${currency ? `<span><strong>Currency:</strong> ${esc(currency)}</span>` : ''}
+      <span><strong>Currency:</strong> ${esc(curr)}</span>
       ${preparerName ? `<span><strong>Preparer:</strong> ${esc(preparerName)}</span>` : ''}
     </div>
     ${factsHtml}
@@ -974,12 +1092,11 @@ ${baseStyles(brand)}
       <span style="font-size:7pt;">This document was generated by Ledgr • Confidential • IFRS compliant where applicable</span>
     </div>
     <div style="text-align:right;">
-      Page 1 • ${new Date().toLocaleDateString('en-MW')} • ${esc(business.baseCurrency || 'MWK')}
+      ${formatDate(new Date().toISOString())} • ${esc(curr)}
     </div>
   </div>
 </div>
-<script>window.onload=()=>setTimeout(()=>{try{window.print()}catch{}} ,500)</script>
 </body></html>`;
 
-  openPrintWindow(title, html);
+  void renderDocumentPdf(title, html);
 }
