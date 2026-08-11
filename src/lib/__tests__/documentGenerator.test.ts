@@ -143,6 +143,7 @@ import {
   generateProfessionalReportDocument,
   pdfFileName,
 } from '../documents/documentGenerator';
+import { invoiceLineRowToDocumentLine } from '../documents/types';
 
 const branding = {
   name: 'Acme Agro Ltd',
@@ -228,6 +229,45 @@ describe('documentGenerator PDF pipeline', () => {
     // The .watermark CSS rule always ships with baseStyles; what matters is
     // that no watermark ELEMENT is emitted.
     expect(capturedSrcdoc).not.toContain('<div class="watermark">');
+  });
+
+  it('carries persisted line discounts into the invoice PDF', async () => {
+    const discountedLine = invoiceLineRowToDocumentLine({
+      description: 'Supply of maize seed',
+      quantity: 10,
+      unit_price: 2_500,
+      discount_percent: 10,
+      discount_amount: 2_500,
+      tax_amount: 0,
+      line_total: 22_500,
+    });
+
+    generateInvoiceDocument({
+      business: branding,
+      // A zero header discount exercises the legacy fallback to line values.
+      invoice: {
+        ...sampleInvoice,
+        status: 'sent',
+        subtotal: 22_500,
+        discount_amount: 0,
+        vat_amount: 0,
+        total_amount: 22_500,
+        amount_paid: 0,
+      },
+      lines: [discountedLine],
+    });
+    await flush();
+
+    expect(discountedLine).toMatchObject({
+      discount_percent: 10,
+      discount_amount: 2_500,
+    });
+    expect(capturedSrcdoc).toContain('Disc %');
+    expect(capturedSrcdoc).toContain('10%');
+    expect(capturedSrcdoc).toContain('Less: Trade Discount');
+    expect(capturedSrcdoc).toContain('- MWK 2,500.00');
+    expect(capturedSrcdoc).toContain('Gross Subtotal');
+    expect(capturedSrcdoc).toContain('MWK 25,000.00');
   });
 
   it('paginates tall documents at block boundaries with correct mm offsets', async () => {
