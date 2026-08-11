@@ -47,13 +47,63 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
     ? businessRowToBranding(brandBusiness as Row<'businesses'>)
     : { name: brandName || 'Business', logoUrl: logoUrl || null, brandColor: brandColor || null, baseCurrency: 'MWK' };
 
+  // Build a clean, fully self-contained table for the PDF. Do NOT export the
+  // on-screen DOM: it relies on Tailwind classes that do not exist inside the
+  // standalone PDF document, which produced unaligned, unformatted output
+  // (amounts were also printed raw, without any currency formatting).
+  const buildExportHtml = (): string => {
+    const rowsData = cashFlowData ?? [];
+    const fmt = (value: number | null): string => {
+      const n = Number(value ?? 0);
+      const abs = `MWK ${Math.abs(n).toLocaleString('en-MW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return n < 0 ? `(${abs})` : abs;
+    };
+    const numCell = 'padding:8px 12px; text-align:right; font-size:9.5pt; border-bottom:1px solid #f1f5f9; font-variant-numeric:tabular-nums; color:#334155;';
+    const thStyle = 'padding:10px 12px; text-align:right; font-size:8pt; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:#ffffff;';
+
+    const totals = rowsData.reduce(
+      (acc, row) => ({
+        operating: acc.operating + Number(row.operating ?? 0),
+        investing: acc.investing + Number(row.investing ?? 0),
+        financing: acc.financing + Number(row.financing ?? 0),
+        net_change: acc.net_change + Number(row.net_change ?? 0),
+      }),
+      { operating: 0, investing: 0, financing: 0, net_change: 0 },
+    );
+
+    return `
+      <table style="width:100%; border-collapse:collapse; margin-top:8px; font-size:9.5pt;">
+        <thead><tr style="background:#0f172a;">
+          <th style="${thStyle.replace('text-align:right', 'text-align:left')}">Period</th>
+          <th style="${thStyle}">Operating</th>
+          <th style="${thStyle}">Investing</th>
+          <th style="${thStyle}">Financing</th>
+          <th style="${thStyle}">Net Change</th>
+        </tr></thead>
+        <tbody>
+          ${rowsData.map((row) => `
+            <tr>
+              <td style="padding:8px 12px; font-size:9.5pt; border-bottom:1px solid #f1f5f9; font-weight:600; color:#0f172a;">${row.period ?? ''}</td>
+              <td style="${numCell}">${fmt(row.operating)}</td>
+              <td style="${numCell}">${fmt(row.investing)}</td>
+              <td style="${numCell}">${fmt(row.financing)}</td>
+              <td style="${numCell} font-weight:700; color:#0f172a;">${fmt(row.net_change)}</td>
+            </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f8fafc;">
+            <td style="padding:10px 12px; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a;">Total</td>
+            <td style="padding:10px 12px; text-align:right; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a; font-variant-numeric:tabular-nums;">${fmt(totals.operating)}</td>
+            <td style="padding:10px 12px; text-align:right; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a; font-variant-numeric:tabular-nums;">${fmt(totals.investing)}</td>
+            <td style="padding:10px 12px; text-align:right; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a; font-variant-numeric:tabular-nums;">${fmt(totals.financing)}</td>
+            <td style="padding:10px 12px; text-align:right; font-size:9.5pt; font-weight:700; color:#0f172a; border-top:2px solid #0f172a; font-variant-numeric:tabular-nums;">${fmt(totals.net_change)}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  };
+
   const handleExportPDF = () => {
-    const tableEl = document.querySelector('.rounded-2xl.border table')?.outerHTML;
-    // The template literal is always truthy, so the || fallback must wrap the
-    // table lookup itself — otherwise a missing table exported an empty div.
-    const htmlContent = (tableEl
-      ? `<div style="margin-top:8px;">${tableEl}</div>`
-      : document.querySelector('.space-y-6')?.outerHTML) || '';
+    if (!cashFlowData || cashFlowData.length === 0) return;
     exportReportAsPDF({
       title: t('reports.cash_flow.title'),
       subtitle: `${periodLabel} — ${brandName}`,
@@ -62,7 +112,7 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
       notes,
       businessName: brandName,
       business: businessBranding,
-      htmlContent,
+      htmlContent: buildExportHtml(),
     });
   };
 
