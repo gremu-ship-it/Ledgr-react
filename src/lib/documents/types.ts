@@ -69,6 +69,34 @@ export interface InvoiceLineLike {
   sku?: string | null;
 }
 
+/**
+ * Keep the persisted invoice-line values intact when handing them to the PDF
+ * generator. In particular, discounts live on each line and must not be lost
+ * at the UI/document boundary.
+ */
+export function invoiceLineRowToDocumentLine(
+  line: Pick<
+    Row<'invoice_lines'>,
+    | 'description'
+    | 'quantity'
+    | 'unit_price'
+    | 'discount_percent'
+    | 'discount_amount'
+    | 'tax_amount'
+    | 'line_total'
+  >,
+): InvoiceLineLike {
+  return {
+    description: line.description,
+    quantity: line.quantity,
+    unit_price: line.unit_price,
+    discount_percent: line.discount_percent,
+    discount_amount: line.discount_amount,
+    tax_amount: line.tax_amount,
+    line_total: line.line_total,
+  };
+}
+
 export interface ContactLike {
   name: string;
   trading_name?: string | null;

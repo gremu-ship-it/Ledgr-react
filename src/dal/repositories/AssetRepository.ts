@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Row, InsertDto } from '../types/database';
+import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError } from '../errors/RepositoryError';
+import { NotFoundError, toRepositoryError } from '../errors/RepositoryError';
 
 export class AssetRepository extends BaseRepository<'fixed_assets'> {
   constructor(client: SupabaseClient<Database>) {
@@ -36,6 +36,58 @@ export class AssetRepository extends BaseRepository<'fixed_assets'> {
       .order('name', { ascending: true });
     if (error) throw toRepositoryError('asset_categories', error);
     return data ?? [];
+  }
+
+  async findCategoryById(
+    businessId: string,
+    id: string,
+  ): Promise<Row<'asset_categories'> | null> {
+    const { data, error } = await this.client
+      .from('asset_categories')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw toRepositoryError('asset_categories', error);
+    return data;
+  }
+
+  async createCategory(
+    category: InsertDto<'asset_categories'>,
+  ): Promise<Row<'asset_categories'>> {
+    const { data, error } = await this.client
+      .from('asset_categories')
+      .insert(category)
+      .select('*')
+      .single();
+    if (error) throw toRepositoryError('asset_categories', error);
+    return data;
+  }
+
+  async updateCategory(
+    businessId: string,
+    id: string,
+    category: UpdateDto<'asset_categories'>,
+  ): Promise<Row<'asset_categories'>> {
+    const { data, error } = await this.client
+      .from('asset_categories')
+      .update(category)
+      .eq('business_id', businessId)
+      .eq('id', id)
+      .select('*')
+      .maybeSingle();
+    if (error) throw toRepositoryError('asset_categories', error);
+    // An UPDATE filtered out by RLS returns no error and zero rows. Treat that
+    // as a failed save instead of showing a false "Category updated" message.
+    if (!data) throw new NotFoundError('asset_categories', id);
+    return data;
+  }
+
+  async deactivateCategory(
+    businessId: string,
+    id: string,
+  ): Promise<Row<'asset_categories'>> {
+    return this.updateCategory(businessId, id, { is_active: false });
   }
 
   async recordDepreciation(

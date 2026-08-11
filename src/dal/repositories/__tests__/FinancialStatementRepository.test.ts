@@ -45,6 +45,10 @@ const ACCOUNTS: Array<Record<string, unknown>> = [
   { id: 'a-creditors', code: '2111', name: 'Trade Creditors', account_type: 'liability', account_subtype: 'current_liability', normal_balance: 'credit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
   { id: 'a-sharecap', code: '3110', name: 'Share Capital', account_type: 'equity', account_subtype: 'share_capital', normal_balance: 'credit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
   { id: 'a-drawings', code: '3140', name: 'Drawings / Dividends Paid', account_type: 'equity', account_subtype: 'retained_earnings', normal_balance: 'debit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
+  { id: 'a-revenue', code: '4112', name: 'Service Revenue', account_type: 'income', account_subtype: 'revenue', normal_balance: 'credit', is_group: false, is_system: true, is_bank_account: false, opening_balance: 0 },
+  { id: 'a-sales-discounts', code: '4130', name: 'Sales Discounts', account_type: 'income', account_subtype: 'revenue', normal_balance: 'debit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
+  { id: 'a-cost-of-sales', code: '5100', name: 'Cost of Goods Sold', account_type: 'expense', account_subtype: 'cost_of_sales', normal_balance: 'debit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
+  { id: 'a-purchase-discounts', code: '5175', name: 'Purchase Discounts', account_type: 'expense', account_subtype: 'cost_of_sales', normal_balance: 'credit', is_group: false, is_system: false, is_bank_account: false, opening_balance: 0 },
 ];
 
 const JOURNAL_LINES: Array<Record<string, unknown>> = [
@@ -55,6 +59,10 @@ const JOURNAL_LINES: Array<Record<string, unknown>> = [
   { account_id: 'a-creditors', is_debit: false, amount_base: 20_000 },
   { account_id: 'a-sharecap', is_debit: false, amount_base: 40_000 },
   { account_id: 'a-drawings', is_debit: true, amount_base: 5_000 },
+  { account_id: 'a-revenue', is_debit: false, amount_base: 1_000 },
+  { account_id: 'a-sales-discounts', is_debit: true, amount_base: 100 },
+  { account_id: 'a-cost-of-sales', is_debit: true, amount_base: 400 },
+  { account_id: 'a-purchase-discounts', is_debit: false, amount_base: 50 },
 ];
 
 function makeRepo(): FinancialStatementRepository {
@@ -101,5 +109,27 @@ describe('getSOFP — contra-account presentation', () => {
     expect(sofp.totalLiabilities).toBe(20_000);
     expect(sofp.netAssets).toBe(99_500);
     expect(sofp.totalEquity).toBe(35_000);
+  });
+});
+
+describe('getProfitOrLoss — discount presentation', () => {
+  it('shows allowed and received discounts as reductions of their sections', async () => {
+    const profitOrLoss = await makeRepo().getProfitOrLoss(
+      'biz-1',
+      '2026-01-01',
+      '2026-12-31',
+    );
+
+    expect(profitOrLoss.revenue.lines).toEqual([
+      expect.objectContaining({ code: '4112', amount: 1_000 }),
+      expect.objectContaining({ code: '4130', amount: -100 }),
+    ]);
+    expect(profitOrLoss.totalRevenue).toBe(900);
+    expect(profitOrLoss.costOfSales.lines).toEqual([
+      expect.objectContaining({ code: '5100', amount: 400 }),
+      expect.objectContaining({ code: '5175', amount: -50 }),
+    ]);
+    expect(profitOrLoss.totalCostOfSales).toBe(350);
+    expect(profitOrLoss.grossProfit).toBe(550);
   });
 });

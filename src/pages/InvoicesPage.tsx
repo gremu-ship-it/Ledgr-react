@@ -21,7 +21,11 @@ import { createInvoiceSettlementEntry } from '@/services/journalService';
 import { resolveTransactionRate } from '@/lib/currency';
 import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
 import { generateInvoiceDocument, generateDeliveryNoteDocument, generateReceiptDocument } from '@/lib/documents/documentGenerator';
-import { businessRowToBranding, type BusinessBranding } from '@/lib/documents/types';
+import {
+  businessRowToBranding,
+  invoiceLineRowToDocumentLine,
+  type BusinessBranding,
+} from '@/lib/documents/types';
 import { supabase } from '@/lib/supabase';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
@@ -471,13 +475,7 @@ function InvoiceDetail({
         terms: invoice.terms,
         po_number: invoice.po_number,
       },
-      lines: (withLines?.lines ?? []).map((l) => ({
-        description: l.description,
-        quantity: l.quantity,
-        unit_price: l.unit_price,
-        tax_amount: l.tax_amount,
-        line_total: l.line_total,
-      })),
+      lines: (withLines?.lines ?? []).map(invoiceLineRowToDocumentLine),
       contact: contact
         ? {
             name: contact.name,

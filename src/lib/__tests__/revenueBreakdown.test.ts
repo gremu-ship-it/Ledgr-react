@@ -22,4 +22,33 @@ describe('buildRevenueBreakdown', () => {
       { key: 'description:delivery service', name: 'Delivery service', quantity: 1, invoiceCount: 1, amount: 100 },
     ]);
   });
+
+  it('uses the after-discount line value when calculating net revenue', () => {
+    const rows = buildRevenueBreakdown(
+      [{ id: 'invoice-1', invoice_type: 'invoice', exchange_rate: 1 }],
+      [{
+        invoice_id: 'invoice-1',
+        product_id: 'service',
+        description: 'Consulting service',
+        quantity: 1,
+        // Gross price was 100, less a 10 discount, plus 14.85 VAT.
+        // New invoices leave line_subtotal null, so the report derives the
+        // after-discount amount from line_total less VAT.
+        line_subtotal: null,
+        line_total: 104.85,
+        tax_amount: 14.85,
+      }],
+      new Map([['service', 'Consulting']]),
+    );
+
+    expect(rows).toEqual([
+      {
+        key: 'product:service',
+        name: 'Consulting',
+        quantity: 1,
+        invoiceCount: 1,
+        amount: 90,
+      },
+    ]);
+  });
 });

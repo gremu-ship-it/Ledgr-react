@@ -15,6 +15,7 @@
 
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
+import { resolveAssetAccountLinks } from '@/lib/fixedAssetAccounts';
 import type { Row } from '@/dal/types/database';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -44,31 +45,27 @@ interface ResolvedAssetAccounts {
 async function resolveAssetAccounts(
   asset: Row<'fixed_assets'>,
 ): Promise<ResolvedAssetAccounts> {
-  let assetAccountId = asset.asset_account_id;
-  let accumulatedDepAccountId = asset.accumulated_dep_account_id;
-  let depExpenseAccountId = asset.dep_expense_account_id;
+  const needsCategory = !asset.asset_account_id
+    || !asset.accumulated_dep_account_id
+    || !asset.dep_expense_account_id;
+  const category = needsCategory
+    ? await repos.asset.findCategoryById(asset.business_id, asset.category_id)
+    : null;
+  const resolved = resolveAssetAccountLinks(asset, category);
 
-  if (!assetAccountId || !accumulatedDepAccountId || !depExpenseAccountId) {
-    const categories = await repos.asset.findCategories(asset.business_id);
-    const category = categories.find((c) => c.id === asset.category_id);
-    if (!category) {
-      throw new Error(
-        `Asset ${asset.name} (${asset.asset_number}) has no linked accounts and its category could not be found.`,
-      );
-    }
-    assetAccountId ??= category.asset_account_id;
-    accumulatedDepAccountId ??= category.accumulated_dep_account_id;
-    depExpenseAccountId ??= category.dep_expense_account_id;
-  }
-
-  if (!assetAccountId || !accumulatedDepAccountId || !depExpenseAccountId) {
+  if (resolved.missing.length > 0) {
+    const categoryLabel = category ? `category "${category.name}"` : 'the selected category';
     throw new Error(
-      `Asset ${asset.name} (${asset.asset_number}) is missing one or more required GL account links ` +
-      `(asset / accumulated depreciation / depreciation expense), and its category has no defaults set.`,
+      `Asset ${asset.name} (${asset.asset_number}) is missing: ${resolved.missing.join(', ')}. ` +
+      `Set these as defaults on ${categoryLabel}, or set them under the asset's GL account overrides.`,
     );
   }
 
-  return { assetAccountId, accumulatedDepAccountId, depExpenseAccountId };
+  return {
+    assetAccountId: resolved.assetAccountId!,
+    accumulatedDepAccountId: resolved.accumulatedDepAccountId!,
+    depExpenseAccountId: resolved.depExpenseAccountId!,
+  };
 }
 
 // ── Depreciation calculation (pure, no DB) ────────────────────────────────────
