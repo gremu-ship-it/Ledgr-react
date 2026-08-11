@@ -10,6 +10,9 @@
  *  - Clean, modern, IFRS-friendly report styling
  */
 
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+
 import type { BusinessBranding, InvoiceLike, InvoiceLineLike, ContactLike } from './types';
 
 const DEFAULT_BRAND = '#0E7C5A'; // 5.32:1 AA contrast
@@ -465,80 +468,115 @@ function renderLetterhead(b: BusinessBranding, title: string, docNumber: string,
   `;
 }
 
-/**
- * Open a print-ready HTML document.
- *
- * IMPORTANT: Do not pass `noopener` in window.open's feature string.
- * Modern browsers return `null` when noopener is set that way, which made
- * invoice / delivery-note downloads fail silently (document.write never ran).
- * We null out `opener` ourselves after open for the same security property.
- *
- * Prefer a blob URL so the new tab has a real document to load even if the
- * opener reference is constrained (e.g. Safari / embedded browsers).
- */
-function openPrintWindow(title: string, html: string, autoPrint = true): void {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
+/** Strip any <script> blocks so they never run inside the hidden render frame. */
+function stripScripts(html: string): string {
+  return html.replace(/<script[\s\S]*?<\/script>/gi, '');
+}
 
-  // Open without noopener feature so we retain a usable Window reference.
-  const win = window.open(url, '_blank');
-  if (!win) {
-    // Fallback: file download if popups are blocked
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${title.replace(/[^\w.-]+/g, '_')}.html`;
-    a.rel = 'noopener';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    // Revoke after the click has a chance to start the download
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    return;
-  }
+/** Build a safe, filesystem-friendly PDF filename from a document title. */
+function pdfFileName(title: string): string {
+  const base = title.replace(/[^\w.-]+/g, '_').replace(/^\.+|\.+$/g, '');
+  return `${base || 'document'}.pdf`;
+}
 
-  // Equivalent security to noopener without losing the window handle
-  try {
-    win.opener = null;
-  } catch {
-    /* cross-origin / locked — ignore */
-  }
+/** Wait until the document's images and webfonts are ready to be rasterised. */
+async function waitForRender(doc: Document): Promise<void> {
+  const images = Array.from(doc.querySelectorAll('img'));
+
+  await Promise.all(
+    images
+      .filter((img) => img.complete)
+      .map((img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve())),
+  );
+
+  await Promise.all(
+    images
+      .filter((img) => !img.complete)
+      .map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            img.addEventListener('load', () => resolve(), { once: true });
+            img.addEventListener('error', () => resolve(), { once: true });
+            // Safety net if the image never fires an event
+            setTimeout(resolve, 5000);
+          }),
+      ),
+  );
 
   try {
-    win.document.title = title;
-  } catch {
-    /* some browsers lock document until load finishes */
-  }
-
-  // Keep the blob alive long enough for print preview / Save as PDF
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-
-  if (!autoPrint) return;
-
-  let printed = false;
-  const doPrint = () => {
-    if (printed) return;
-    printed = true;
-    setTimeout(() => {
-      try {
-        win.focus();
-        win.print();
-      } catch {
-        /* user aborted print dialog */
-      }
-    }, 400);
-  };
-
-  // Blob URL navigates asynchronously — wait for load when possible
-  try {
-    if (win.document && win.document.readyState === 'complete') {
-      doPrint();
-    } else {
-      win.addEventListener('load', doPrint, { once: true });
-      // Safety net if load never fires (rare)
-      setTimeout(doPrint, 1500);
+    if (doc.fonts && doc.fonts.ready) {
+      await doc.fonts.ready;
     }
   } catch {
-    setTimeout(doPrint, 800);
+    /* fonts.ready unavailable — ignore */
+  }
+}
+
+/**
+ * Generate a real, self-contained .pdf file for the rendered document.
+ *
+ * The standalone HTML is mounted into a hidden same-origin iframe (off-screen,
+ * `srcdoc`), then rasterised with html2canvas and written out with jsPDF.
+ *
+ * This deliberately avoids `window.print()` / the browser print dialog, because
+ * Chrome injects the document date, title, blob URL and a "1/1" page footer into
+ * printed output. Producing the PDF directly gives a clean, header-free file.
+ */
+async function openPrintWindow(title: string, html: string): Promise<void> {
+  const frame = document.createElement('iframe');
+  frame.style.cssText =
+    'position:fixed; left:-10000px; top:0; width:900px; height:1200px; ' +
+    'border:0; visibility:hidden; pointer-events:none; background:#ffffff;';
+  document.body.appendChild(frame);
+
+  try {
+    frame.srcdoc = stripScripts(html);
+
+    await new Promise<void>((resolve) => {
+      frame.addEventListener('load', () => resolve(), { once: true });
+      // Safety net if the load event never fires
+      setTimeout(resolve, 1500);
+    });
+
+    const doc = frame.contentDocument;
+    if (!doc || !doc.body) {
+      throw new Error('Failed to load generated document for PDF export');
+    }
+
+    await waitForRender(doc);
+
+    const target = doc.querySelector<HTMLElement>('.page') || doc.body;
+    const canvas = await html2canvas(target, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // Fit the full rasterised document to a single A4-width column and slice it
+    // into multiple A4 pages to keep multi-page invoices/delivery notes intact.
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+
+    let heightLeft = imgHeight;
+    let position = 0;
+    let firstPage = true;
+    while (heightLeft > 0) {
+      if (!firstPage) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+      position -= pageHeight;
+      firstPage = false;
+    }
+
+    pdf.save(pdfFileName(title));
+  } finally {
+    frame.remove();
   }
 }
 
