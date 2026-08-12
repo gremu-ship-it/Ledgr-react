@@ -267,6 +267,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     subtypes: Exclude<AccountSubtype, null>[],
     label: string,
     sectionNormalBalance: NormalBalance,
+    explicitlyIncludedAccountIds: ReadonlySet<string> = new Set(),
   ): StatementSection {
     const comparativeMap = comparativeBalances
       ? new Map(comparativeBalances.map((b) => [b.account.id, b.balance]))
@@ -291,17 +292,22 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
         // previously disappeared from every SOFP section and made fixed
         // assets appear missing.
         const subtype = b.account.account_subtype;
-        let subtypeMatches = false;
-        if (subtype !== null) {
-          subtypeMatches = subtypes.includes(subtype);
-        } else {
-          // NULL subtype fallback — only for non-current asset grouping
-          // (code 1500-1599). Without this, a NULL-subtype fixed asset
-          // account is dropped from all sections, breaking Total Assets.
-          if ((subtypes.includes('fixed_asset' as never) || subtypes.includes('non_current_asset' as never))
-            && b.account.account_type === 'asset'
-            && b.account.code.startsWith('15')) {
-            subtypeMatches = true;
+        // An asset register can deliberately point at a custom GL account.
+        // That account is still PPE even when an old/custom chart assigned it
+        // `other_asset` (or a non-15xx code), so honour the explicit link.
+        let subtypeMatches = explicitlyIncludedAccountIds.has(b.account.id);
+        if (!subtypeMatches) {
+          if (subtype !== null) {
+            subtypeMatches = subtypes.includes(subtype);
+          } else {
+            // NULL subtype fallback — only for non-current asset grouping
+            // (code 1500-1599). Without this, a NULL-subtype fixed asset
+            // account is dropped from all sections, breaking Total Assets.
+            if ((subtypes.includes('fixed_asset' as never) || subtypes.includes('non_current_asset' as never))
+              && b.account.account_type === 'asset'
+              && b.account.code.startsWith('15')) {
+              subtypeMatches = true;
+            }
           }
         }
         if (!subtypeMatches) return false;
@@ -345,12 +351,37 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? await this.computeBalances(businessId, { asOfDate: comparativeDate, includeOpeningBalances: true })
       : null;
 
+    // Asset forms post capitalisation journals to fixed_assets.asset_account_id.
+    // The account can be a custom account whose subtype/code is not one of the
+    // standard fixed-asset classifications, which previously made a correctly
+    // posted fixed-asset journal disappear from Non-Current Assets entirely.
+    // Treat the explicit register-to-GL relationship as authoritative.
+    let fixedAssetAccountIds = new Set<string>();
+    try {
+      const { data, error } = await this.client
+        .from('fixed_assets')
+        .select('asset_account_id')
+        .eq('business_id', businessId)
+        .is('deleted_at', null);
+      if (!error) {
+        fixedAssetAccountIds = new Set(
+          ((data ?? []) as Array<{ asset_account_id: string | null }>)
+            .map((asset) => asset.asset_account_id)
+            .filter((id): id is string => Boolean(id)),
+        );
+      }
+    } catch {
+      // The standard subtype-based path remains available if this optional
+      // register lookup fails (for example in an older deployment).
+    }
+
     const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit');
     let nonCurrentAssets = this.buildSection(
       balances, comparativeBalances,
       ['non_current_asset', 'fixed_asset'],
       'Non-Current Assets',
       'debit',
+      fixedAssetAccountIds,
     );
     const currentLiabilities = this.buildSection(balances, comparativeBalances, ['current_liability'], 'Current Liabilities', 'credit');
     const nonCurrentLiabilities = this.buildSection(balances, comparativeBalances, ['non_current_liability'], 'Non-Current Liabilities', 'credit');

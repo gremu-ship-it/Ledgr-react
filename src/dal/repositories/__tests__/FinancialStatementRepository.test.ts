@@ -110,6 +110,28 @@ describe('getSOFP — contra-account presentation', () => {
     expect(sofp.netAssets).toBe(99_500);
     expect(sofp.totalEquity).toBe(35_000);
   });
+
+  it('includes a fixed asset linked to a custom GL account despite its subtype', async () => {
+    const customAccount = {
+      ...ACCOUNTS[3],
+      id: 'a-custom-ppe',
+      code: 'PPE-01',
+      name: 'Custom Equipment Account',
+      account_subtype: 'other_asset',
+    };
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([customAccount]);
+        if (table === 'fixed_assets') return tableStub([{ asset_account_id: 'a-custom-ppe' }]);
+        return tableStub([{ account_id: 'a-custom-ppe', is_debit: true, amount_base: 75_000 }]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    expect(sofp.nonCurrentAssets.subtotal).toBe(75_000);
+    expect(sofp.totalAssets).toBe(75_000);
+  });
 });
 
 describe('getProfitOrLoss — discount presentation', () => {
