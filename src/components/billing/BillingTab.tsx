@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { CheckCircle2, XCircle, Loader2, X, Check, Star, Lock, ShieldCheck, ExternalLink } from 'lucide-react';
 import { pushSuccess, pushError } from '@/lib/notifications';
@@ -226,12 +227,12 @@ export function BillingTab() {
                     <button onClick={() => quickGrant('enterprise', 365)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">1 year</button>
                   </div>
 
-                  <a
-                    href={`/admin/billing?business=${businessId}`}
+                  <Link
+                    to={`/admin/billing?business=${encodeURIComponent(businessId)}`}
                     className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 hover:underline"
                   >
                     Open full grant form (custom amount / notes) <ExternalLink className="h-3 w-3" />
-                  </a>
+                  </Link>
                 </div>
               </div>
 
