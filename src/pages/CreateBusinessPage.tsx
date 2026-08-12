@@ -575,7 +575,12 @@ export function CreateBusinessPage() {
     }
 
     setLoading(false);
-    navigate('/dashboard', { replace: true });
+    // For new users, offer data import from previous system
+    // Check if user wants to import - redirect to import hub with new business flag
+    const params = new URLSearchParams();
+    params.set('new', 'true');
+    params.set('business', businessId as string);
+    navigate(`/import?${params.toString()}`, { replace: true });
   }
 
   const isLastStep = step === 4;

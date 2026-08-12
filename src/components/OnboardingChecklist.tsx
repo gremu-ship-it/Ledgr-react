@@ -26,6 +26,13 @@ export function OnboardingChecklist({ className, compact = false }: OnboardingCh
   // For now we derive from simple heuristics (you can wire to real data)
   const steps: OnboardingStep[] = React.useMemo(() => [
     {
+      id: 0,
+      label: "Import from previous system",
+      description: "Migrate from QuickBooks, Xero, Excel",
+      path: "/import",
+      completed: false,
+    },
+    {
       id: 1,
       label: "Add business information",
       description: "Tell us about your company",

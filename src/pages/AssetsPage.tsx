@@ -119,16 +119,30 @@ function CategoryModal({
 }) {
   const queryClient = useQueryClient();
 
-  const { data: assetAccounts = [] } = useQuery({
+  const { data: assetAccountsRaw = [] } = useQuery({
     queryKey: ['accounts_by_type', businessId, 'asset'],
     queryFn: () => repos.account.findByType(businessId, 'asset'),
     enabled: Boolean(businessId),
   });
-  const { data: expenseAccounts = [] } = useQuery({
+  const { data: expenseAccountsRaw = [] } = useQuery({
     queryKey: ['accounts_by_type', businessId, 'expense'],
     queryFn: () => repos.account.findByType(businessId, 'expense'),
     enabled: Boolean(businessId),
   });
+
+  // Filter to only non-current / fixed asset accounts for the PPE pickers.
+  // Without this, a user could pick a current_asset account (e.g. Trading Stock)
+  // as the asset cost account, which would make the fixed asset appear under
+  // Current Assets in the SOFP instead of Non-Current Assets.
+  const assetAccounts = assetAccountsRaw.filter(
+    (a) => a.account_subtype === 'fixed_asset' || a.account_subtype === 'non_current_asset' || a.code.startsWith('15'),
+  );
+  const expenseAccounts = expenseAccountsRaw.filter(
+    (a) => a.account_subtype === 'depreciation_amortisation' || a.code.startsWith('68'),
+  );
+  // Fallback to raw lists if filtering yields nothing (e.g. custom COA without standard codes)
+  const assetAccountsForPicker = assetAccounts.length > 0 ? assetAccounts : assetAccountsRaw;
+  const expenseAccountsForPicker = expenseAccounts.length > 0 ? expenseAccounts : expenseAccountsRaw;
 
   const [form, setForm] = useState<CategoryForm>(
     existing ? {
@@ -314,7 +328,7 @@ function CategoryModal({
                 label="Asset (Cost) Account" required
                 value={form.asset_account_id}
                 onChange={(v) => set('asset_account_id', v)}
-                accounts={assetAccounts}
+                accounts={assetAccountsForPicker}
                 placeholder="Select asset account…"
               />
               <AccountPicker
@@ -323,7 +337,7 @@ function CategoryModal({
                 disabled={!isDepreciable}
                 value={form.accumulated_dep_account_id}
                 onChange={(v) => set('accumulated_dep_account_id', v)}
-                accounts={assetAccounts}
+                accounts={assetAccountsForPicker}
                 placeholder={isDepreciable ? 'Select accumulated depreciation account…' : 'Not applicable'}
               />
               <AccountPicker
@@ -332,7 +346,7 @@ function CategoryModal({
                 disabled={!isDepreciable}
                 value={form.dep_expense_account_id}
                 onChange={(v) => set('dep_expense_account_id', v)}
-                accounts={expenseAccounts}
+                accounts={expenseAccountsForPicker}
                 placeholder={isDepreciable ? 'Select depreciation expense account…' : 'Not applicable'}
               />
             </div>
@@ -392,12 +406,12 @@ function AssetModal({
     Boolean(existing?.asset_account_id || existing?.accumulated_dep_account_id || existing?.dep_expense_account_id),
   );
 
-  const { data: assetAccounts = [] } = useQuery({
+  const { data: assetAccountsRaw = [] } = useQuery({
     queryKey: ['accounts_by_type', businessId, 'asset'],
     queryFn: () => repos.account.findByType(businessId, 'asset'),
     enabled: Boolean(businessId),
   });
-  const { data: expenseAccounts = [] } = useQuery({
+  const { data: expenseAccountsRaw = [] } = useQuery({
     queryKey: ['accounts_by_type', businessId, 'expense'],
     queryFn: () => repos.account.findByType(businessId, 'expense'),
     enabled: Boolean(businessId),
@@ -409,6 +423,15 @@ function AssetModal({
     enabled: Boolean(businessId),
   });
   const fundingAccounts = allAccounts.filter((a) => !a.is_group);
+
+  const assetAccountsFiltered = assetAccountsRaw.filter(
+    (a) => a.account_subtype === 'fixed_asset' || a.account_subtype === 'non_current_asset' || a.code.startsWith('15'),
+  );
+  const expenseAccountsFiltered = expenseAccountsRaw.filter(
+    (a) => a.account_subtype === 'depreciation_amortisation' || a.code.startsWith('68'),
+  );
+  const assetAccounts = assetAccountsFiltered.length > 0 ? assetAccountsFiltered : assetAccountsRaw;
+  const expenseAccounts = expenseAccountsFiltered.length > 0 ? expenseAccountsFiltered : expenseAccountsRaw;
 
   const [form, setForm] = useState<AssetForm>(
     existing ? {
@@ -1345,30 +1368,55 @@ function AssetRegisterTab({ businessId, userId }: { businessId: string; userId: 
                 const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
                 const idx = (name: string) => headers.indexOf(name);
 
+                const categoryById = new Map(categories.map(c => [c.id, c]));
+                const categoryByName = new Map(categories.map(c => [c.name.trim().toLowerCase(), c]));
+
                 for (let i = 1; i < lines.length; i++) {
                   const cols = lines[i].split(',').map(c => c.trim());
                   if (!cols[idx('asset_number')]) continue;
 
                   try {
+                    const rawCategoryId = cols[idx('category_id')] || cols[idx('category')] || '';
+                    let resolvedCategory: Row<'asset_categories'> | undefined;
+                    if (rawCategoryId) {
+                      resolvedCategory = categoryById.get(rawCategoryId) ?? categoryByName.get(rawCategoryId.toLowerCase());
+                    }
+
+                    const acquisitionCost = parseFloat(cols[idx('acquisition_cost')] || '0') || 0;
+                    const residualValue = parseFloat(cols[idx('residual_value')] || '0') || 0;
+                    const accumulatedDep = parseFloat(cols[idx('accumulated_depreciation')] || '0') || 0;
+                    const netBookValue = acquisitionCost - accumulatedDep;
+                    const isDepreciable = resolvedCategory ? isAssetDepreciable({}, resolvedCategory) : true;
+
                     await repos.asset['client'].from('fixed_assets').insert({
                       business_id: businessId,
                       asset_number: cols[idx('asset_number')],
                       name: cols[idx('name')] || 'Imported Asset',
-                      category_id: cols[idx('category_id')] || null,
+                      category_id: resolvedCategory?.id ?? (rawCategoryId || null),
                       acquisition_date: cols[idx('acquisition_date')] || today(),
-                      acquisition_cost: parseFloat(cols[idx('acquisition_cost')] || '0'),
-                      residual_value: parseFloat(cols[idx('residual_value')] || '0'),
-                      depreciation_method: (cols[idx('depreciation_method')] || 'straight_line') as Database['public']['Enums']['depreciation_method'],
-                      useful_life_years: parseInt(cols[idx('useful_life_years')] || '5'),
+                      acquisition_cost: acquisitionCost,
+                      residual_value: residualValue,
+                      depreciation_method: (cols[idx('depreciation_method')] || resolvedCategory?.depreciation_method || 'straight_line') as Database['public']['Enums']['depreciation_method'],
+                      useful_life_years: parseInt(cols[idx('useful_life_years')] || String(resolvedCategory?.useful_life_years ?? '5')),
                       depreciation_start_date: cols[idx('depreciation_start_date')] || cols[idx('acquisition_date')] || today(),
+                      accumulated_depreciation: accumulatedDep,
+                      net_book_value: netBookValue,
+                      is_depreciable: isDepreciable,
                       status: 'active',
                       is_active: true,
+                      asset_account_id: resolvedCategory?.asset_account_id ?? null,
+                      accumulated_dep_account_id: isDepreciable ? resolvedCategory?.accumulated_dep_account_id ?? null : null,
+                      dep_expense_account_id: isDepreciable ? resolvedCategory?.dep_expense_account_id ?? null : null,
+                      location: cols[idx('location')] || null,
+                      serial_number: cols[idx('serial_number')] || null,
+                      notes: cols[idx('notes')] || null,
                     } as never);
                   } catch (err) {
                     log.error('CSV import row failed', err as Error);
                   }
                 }
                 queryClient.invalidateQueries({ queryKey: ['assets'] });
+                queryClient.invalidateQueries({ queryKey: ['sofp'] });
                 e.target.value = '';
               }}
             />

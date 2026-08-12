@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { 
   Search, Star, Clock, Lock, ArrowRight, 
   TrendingUp, Users, FileText, Package, Calendar, 
-  CreditCard, BarChart3, Settings 
+  CreditCard, BarChart3, Settings, FileSpreadsheet
 } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
 import { Button } from '@/components/ui/Button';
@@ -40,6 +40,7 @@ const ALL_TOOLS: Tool[] = [
   { id: 'payroll', label: 'Payroll', description: 'Employee salary management', icon: Users, path: '/payroll', category: 'advanced', requiresPlan: 'growth' },
   { id: 'assets', label: 'Fixed Assets', description: 'Track company assets', icon: Package, path: '/assets', category: 'advanced', requiresPlan: 'growth' },
   { id: 'bank', label: 'Bank Reconciliation', description: 'Reconcile bank statements', icon: CreditCard, path: '/bank-reconcile', category: 'advanced', requiresPlan: 'pro' },
+  { id: 'import', label: 'Data Import', description: 'Migrate from QuickBooks, Xero, Sage, Excel', icon: FileSpreadsheet, path: '/import', category: 'accounting' },
 ];
 
 export default function ToolsPage() {
