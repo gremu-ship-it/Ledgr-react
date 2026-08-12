@@ -60,6 +60,7 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
 
     const mockAccounts: Record<string, { id: string; code: string; name: string }> = {
       '2132': { id: 'acc-pension-liab', code: '2132', name: 'Pension Payable' },
+      '6110': { id: 'acc-salary-exp', code: '6110', name: 'Basic Salaries' },
       '6112': { id: 'acc-pension-exp', code: '6112', name: 'Employer Pension Contributions' },
     };
 
@@ -108,7 +109,7 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
       if (table === 'tax_configurations') {
         return {
           select: () => ({
-            eq: (_col: string, _val: string) => ({
+            eq: () => ({
               eq: (_col2: string, val2: string) => ({
                 eq: () => ({
                   maybeSingle: async () => {
@@ -126,21 +127,25 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
         };
       }
       if (table === 'accounts') {
+        // chainable mock supporting eq*4 + is + ilike/or + limit + maybeSingle
+        const makeChain = (ref: { code: string | null }) => {
+          const chain: any = {};
+          chain.eq = (_col: string, val?: unknown) => {
+            if (_col === 'code' && typeof val === 'string') ref.code = val;
+            return chain;
+          };
+          chain.is = () => chain;
+          chain.ilike = () => chain;
+          chain.or = () => chain;
+          chain.limit = () => chain;
+          chain.maybeSingle = async () => {
+            if (ref.code) return { data: mockAccounts[ref.code] ?? null, error: null };
+            return { data: { id: 'acc-pension-liab' }, error: null };
+          };
+          return chain;
+        };
         return {
-          select: () => ({
-            eq: (_col: string, _val: string) => ({
-              eq: (_col2: string, codeVal: string) => ({
-                maybeSingle: async () => ({ data: mockAccounts[codeVal] ?? null, error: null }),
-              }),
-              is: () => ({
-                or: () => ({
-                  limit: () => ({
-                    maybeSingle: async () => ({ data: { id: 'acc-pension-liab' }, error: null }),
-                  }),
-                }),
-              }),
-            }),
-          }),
+          select: () => makeChain({ code: null }),
         };
       }
       if (table === 'journal_entries') {
