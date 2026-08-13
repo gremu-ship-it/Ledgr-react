@@ -87,6 +87,16 @@ STAGING_SUPABASE_DB_URL='postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/po
   rebuilt from that evidence and certified against this phase's evidence-based
   version.
 
+**No-password variant (recommended):**
+`scripts/database/capture-staging-schema-via-api.sh` performs the same capture
+over the Supabase Management API
+(`POST https://api.supabase.com/v1/projects/{ref}/database/query`) using
+`SUPABASE_ACCESS_TOKEN` — the same token the deploy workflow already uses — so
+**no database password is required**. Same isolation guards, same artifacts
+(JSON + rendered `.txt` per query), same redaction, and it reports partial
+failures instead of fabricating output. The GitHub Actions workflow
+`.github/workflows/capture-staging-schema.yml` uses this variant.
+
 ## 5. Backup & restore
 
 CI workflow `.github/workflows/backup-verify.yml` restores the latest Supabase
