@@ -96,6 +96,9 @@ export async function enqueue<T extends QueueOperationType>(
     localUpdatedAt: options?.localUpdatedAt,
     createdAt: new Date().toISOString(),
     attemptCount: 0,
+    // Idempotency key: a stable, unique value so a retried sync can recognise
+    // an already-committed record instead of inserting a duplicate.
+    clientKey: crypto.randomUUID(),
   };
 
   const localId = await offlineDB.queue.add(item);

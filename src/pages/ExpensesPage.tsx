@@ -1121,7 +1121,13 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                       <td className="px-3 py-2">
                         <select value={line.tax_code} onChange={(e) => setLine(idx, 'tax_code', e.target.value)}
                           className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500">
-                          {TAX_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          {TAX_OPTIONS.map((t) => (
+                            <option key={t.value} value={t.value}>
+                              {t.value === 'vat_standard'
+                                ? `VAT ${(effectiveVatRate * 100).toFixed(1).replace(/\.0$/, '')}%`
+                                : t.label}
+                            </option>
+                          ))}
                         </select>
                       </td>
                       <td className="px-3 py-2 text-right text-sm font-medium">{formatMwkDetailed(lineCalcs[idx]?.lineTotal ?? 0)}</td>

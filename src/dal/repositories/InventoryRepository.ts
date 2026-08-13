@@ -134,10 +134,35 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
    */
   async recordMovement(
     movement: InsertDto<'stock_movements'>,
+    clientKey?: string,
   ): Promise<{ movement: Row<'stock_movements'>; balance: Row<'inventory_balances'> }> {
+    // Idempotency for offline sync retries: a retried movement must not double
+    // the stock quantity (the insert fires a balance-updating trigger).
+    if (clientKey) {
+      const existing = await this.findMovementByClientKey(movement.business_id!, clientKey);
+      if (existing) {
+        const balance = await this.findBalance(
+          movement.business_id!,
+          movement.product_id!,
+          movement.location_id!,
+        );
+        if (!balance) {
+          throw toRepositoryError('inventory_balances', {
+            message: `inventory_balances not found for product ${movement.product_id}`,
+            code: 'LEDGR001',
+          });
+        }
+        return { movement: existing, balance };
+      }
+    }
+
+    const movementRow: InsertDto<'stock_movements'> = clientKey
+      ? ({ ...movement, client_key: clientKey } as InsertDto<'stock_movements'>)
+      : movement;
+
     const { data: createdMovement, error: movementError } = await this.client
       .from('stock_movements')
-      .insert(movement as never)
+      .insert(movementRow as never)
       .select('*')
       .single();
     if (movementError) throw toRepositoryError('stock_movements', movementError);
@@ -154,6 +179,22 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       });
     }
     return { movement: createdMovement, balance };
+  }
+
+  /** Idempotency lookup: find a stock movement previously recorded under a client_key. */
+  private async findMovementByClientKey(
+    businessId: string,
+    clientKey: string,
+  ): Promise<Row<'stock_movements'> | null> {
+    const { data, error } = await this.client
+      .from('stock_movements')
+      .select('*')
+      .eq('business_id', businessId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- client_key added by migration 20260813000003, not yet in generated types
+      .eq('client_key' as any, clientKey)
+      .maybeSingle();
+    if (error) throw toRepositoryError('stock_movements', error);
+    return (data as Row<'stock_movements'> | null) ?? null;
   }
 
   /**

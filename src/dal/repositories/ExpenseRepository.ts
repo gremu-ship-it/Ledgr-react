@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError } from '../errors/RepositoryError';
+import { toRepositoryError, ValidationError } from '../errors/RepositoryError';
 
 export interface ExpenseWithLines {
   expense: Row<'expenses'>;
@@ -82,8 +82,28 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
   async createWithLines(
     expense: InsertDto<'expenses'>,
     lines: Omit<InsertDto<'expense_lines'>, 'expense_id' | 'business_id'>[],
+    clientKey?: string,
   ): Promise<ExpenseWithLines> {
-    const createdExpense = await this.create(expense);
+    // Idempotency for offline sync retries: return the existing expense if
+    // this client_key was already committed, rather than duplicating it.
+    if (clientKey) {
+      const existing = await this.findByClientKey(expense.business_id, clientKey);
+      if (existing) {
+        const { data: existingLines } = await this.client
+          .from('expense_lines')
+          .select('*')
+          .eq('expense_id', existing.id)
+          .eq('business_id', existing.business_id)
+          .order('line_number', { ascending: true });
+        return { expense: existing, lines: existingLines ?? [] };
+      }
+    }
+
+    const header: InsertDto<'expenses'> = clientKey
+      ? ({ ...expense, client_key: clientKey } as InsertDto<'expenses'>)
+      : expense;
+
+    const createdExpense = await this.create(header);
 
     const lineRows: InsertDto<'expense_lines'>[] = lines.map((line) => ({
       ...line,
@@ -122,10 +142,36 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
    */
   async recordPayment(
     payment: InsertDto<'expense_payments'>,
+    clientKey?: string,
   ): Promise<{ payment: Row<'expense_payments'>; expense: Row<'expenses'> }> {
+    // Idempotency: a retried offline sync must not insert a duplicate payment
+    // and re-increment amount_paid.
+    if (clientKey) {
+      const existing = await this.findPaymentByClientKey(payment.business_id, clientKey);
+      if (existing) {
+        const expense = await this.findById(payment.expense_id);
+        return { payment: existing, expense };
+      }
+    }
+
+    // FIX [C-03 void/credit-note payment control]: enforce at the repository
+    // layer. The DB trigger (20260813000002) is the backstop; this check gives
+    // a clear error before the insert round-trip.
+    const expense = await this.findById(payment.expense_id);
+    if (expense.status === 'void') {
+      throw new ValidationError(
+        'expense_payments',
+        `Cannot record a payment against a void expense (${payment.expense_id}).`,
+      );
+    }
+
+    const paymentRow: InsertDto<'expense_payments'> = clientKey
+      ? ({ ...payment, client_key: clientKey } as InsertDto<'expense_payments'>)
+      : payment;
+
     const { data: paymentData, error: paymentError } = await this.client
       .from('expense_payments')
-      .insert(payment as never)
+      .insert(paymentRow as never)
       .select('*')
       .single();
 
@@ -143,6 +189,32 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
 
     const updatedExpense = await this.findById(payment.expense_id);
     return { payment: paymentData, expense: updatedExpense };
+  }
+
+  /** Idempotency lookup: find an expense previously created under a client_key. */
+  private async findByClientKey(businessId: string, clientKey: string): Promise<Row<'expenses'> | null> {
+    const { data, error } = await this.client
+      .from('expenses')
+      .select('*')
+      .eq('business_id', businessId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- client_key added by migration 20260813000003, not yet in generated types
+      .eq('client_key' as any, clientKey)
+      .maybeSingle();
+    if (error) throw toRepositoryError('expenses', error);
+    return (data as Row<'expenses'> | null) ?? null;
+  }
+
+  /** Idempotency lookup: find a payment previously recorded under a client_key. */
+  private async findPaymentByClientKey(businessId: string, clientKey: string): Promise<Row<'expense_payments'> | null> {
+    const { data, error } = await this.client
+      .from('expense_payments')
+      .select('*')
+      .eq('business_id', businessId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- client_key added by migration 20260813000003, not yet in generated types
+      .eq('client_key' as any, clientKey)
+      .maybeSingle();
+    if (error) throw toRepositoryError('expense_payments', error);
+    return (data as Row<'expense_payments'> | null) ?? null;
   }
 
   /**
