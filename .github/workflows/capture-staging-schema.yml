@@ -1,31 +1,38 @@
 # ============================================================================
 # Ledgr — Phase 8A.1 — Capture staging schema (READ-ONLY, manual trigger)
 # ============================================================================
-# Runs scripts/database/capture-staging-schema.sh against the STAGING
-# Supabase project using the repository's existing staging credentials.
+# Runs scripts/database/capture-staging-schema-via-api.sh against the STAGING
+# Supabase project using the repository's existing credentials:
+#
+#     secrets.SUPABASE_ACCESS_TOKEN            (already used by deploy.yml)
+#     vars.SUPABASE_PROJECT_REF_STAGING        (already used by deploy.yml)
+#     vars.SUPABASE_PROJECT_REF_PROD           (isolation check only)
+#
+# NO database password is needed: queries are transported over the Supabase
+# Management API (POST /v1/projects/{ref}/database/query) authenticated with
+# the access token. Only read-only statements are issued (SELECT/SHOW/
+# pg_get_*def — see scripts/database/capture-staging-schema.sql).
 #
 # SAFETY
 # ------
 #   * workflow_dispatch ONLY — never runs automatically.
 #   * Hardcoded to staging. There is no production option anywhere in this
-#     file, and the capture script itself refuses to run unless:
+#     file, and the capture script refuses to run unless:
 #         LEDGR_ENV=staging
 #         STAGING_SUPABASE_PROJECT_REF != PRODUCTION_SUPABASE_PROJECT_REF
-#         STAGING_SUPABASE_DB_URL points at db.<staging-ref>.supabase.co
-#   * The script issues only SELECT / SHOW / pg_get_*def statements and
-#     redacts JWTs/keys/tokens/passwords from the captured artifacts.
-#   * The staging DB URL is a repository secret; it is injected as an
-#     environment variable and never printed (GitHub also masks it in logs).
+#   * The access token is injected as an environment variable, never logged
+#     (GitHub masks secrets in logs); the capture script redacts JWTs/keys/
+#     tokens/passwords from the captured artifacts.
 #   * The captured artifacts are committed back ONLY under
 #     artifacts/database/capture/ — nothing else is touched.
 #
 # USAGE
 # -----
 #   1. GitHub → Actions → "Capture staging schema (read-only)".
-#   2. "Run workflow" → Branch: arena/019ffae7-ledgr-react → Run workflow.
-#   3. When the run finishes green, the capture lands on the branch at
-#      artifacts/database/capture/ (and as a downloadable artifact
-#      "staging-schema-capture").
+#   2. "Run workflow" → Branch: pick a branch that contains this workflow file
+#      (main or arena/019ffae7-ledgr-react) → keep ref default → Run workflow.
+#   3. When the run finishes green, the capture lands at
+#      artifacts/database/capture/ (and as artifact "staging-schema-capture").
 # ============================================================================
 name: Capture staging schema (read-only)
 
@@ -54,7 +61,7 @@ jobs:
       LEDGR_ENV: staging
       STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
       PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
-      STAGING_SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL_STAGING }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,31 +69,21 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
 
-      - name: Install postgresql-client (psql)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client
-          psql --version
-
       - name: Verify environment isolation (no connection made yet)
         run: |
           set -euo pipefail
           test "$LEDGR_ENV" = "staging"
           test -n "$STAGING_SUPABASE_PROJECT_REF"  || { echo "::error::STAGING_SUPABASE_PROJECT_REF is empty"; exit 1; }
           test -n "$PRODUCTION_SUPABASE_PROJECT_REF" || { echo "::error::PRODUCTION_SUPABASE_PROJECT_REF is empty"; exit 1; }
-          test -n "$STAGING_SUPABASE_DB_URL"       || { echo "::error::STAGING_SUPABASE_DB_URL is empty"; exit 1; }
+          test -n "$SUPABASE_ACCESS_TOKEN"         || { echo "::error::SUPABASE_ACCESS_TOKEN is empty"; exit 1; }
           if [[ "$STAGING_SUPABASE_PROJECT_REF" == "$PRODUCTION_SUPABASE_PROJECT_REF" ]]; then
             echo "::error::ENVIRONMENT ISOLATION FAILURE — staging ref equals production ref. Not connecting."
             exit 1
           fi
-          case "$STAGING_SUPABASE_DB_URL" in
-            *"db.${STAGING_SUPABASE_PROJECT_REF}.supabase.co"*) : ;;
-            *) echo "::error::STAGING_SUPABASE_DB_URL does not point at db.${STAGING_SUPABASE_PROJECT_REF}.supabase.co. Not connecting."; exit 1 ;;
-          esac
           echo "Isolation verified: staging ref ${STAGING_SUPABASE_PROJECT_REF} != production ref ${PRODUCTION_SUPABASE_PROJECT_REF}"
 
-      - name: Run read-only schema capture
-        run: bash scripts/database/capture-staging-schema.sh
+      - name: Run read-only schema capture (Management API)
+        run: bash scripts/database/capture-staging-schema-via-api.sh
 
       - name: Show captured artifact list
         run: |
