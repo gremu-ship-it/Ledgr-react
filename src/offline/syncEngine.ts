@@ -78,7 +78,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           nextInvoice = { ...nextInvoice, contact_id: walkIn.id };
         }
       }
-      const result = await repos.invoice.createWithLines(nextInvoice, lines);
+      const result = await repos.invoice.createWithLines(nextInvoice, lines, item.clientKey);
       await retryNonCritical(async () => {
         if (item.operationType === 'income') {
           await createInvoiceJournalEntry(
@@ -129,7 +129,7 @@ async function syncItem(item: QueueItem): Promise<string> {
         const realNumber = await repos.business.reserveNextExpenseNumber(item.businessId);
         nextExpense = { ...nextExpense, expense_number: realNumber };
       }
-      const result = await repos.expense.createWithLines(nextExpense, lines);
+      const result = await repos.expense.createWithLines(nextExpense, lines, item.clientKey);
 
       // PERPETUAL INVENTORY: the queued line carries whatever account the
       // form picked while offline, where the products table wasn't
@@ -180,7 +180,7 @@ async function syncItem(item: QueueItem): Promise<string> {
 
     case 'invoice_payment': {
       const { payment } = item.payload as InvoicePaymentQueuePayload;
-      const result = await repos.invoice.recordPayment(payment);
+      const result = await repos.invoice.recordPayment(payment, item.clientKey);
       await retryNonCritical(async () => {
         await createInvoiceSettlementEntry(
           item.businessId,
@@ -196,7 +196,7 @@ async function syncItem(item: QueueItem): Promise<string> {
 
     case 'expense_payment': {
       const { payment } = item.payload as ExpensePaymentQueuePayload;
-      const result = await repos.expense.recordPayment(payment);
+      const result = await repos.expense.recordPayment(payment, item.clientKey);
       await retryNonCritical(async () => {
         await createExpenseSettlementEntry(
           item.businessId,
@@ -216,13 +216,13 @@ async function syncItem(item: QueueItem): Promise<string> {
         ...l,
         business_id: item.businessId,
       }));
-      const result = await repos.payroll.createWithLines(run, linesWithBusiness);
+      const result = await repos.payroll.createWithLines(run, linesWithBusiness, item.clientKey);
       return result.id;
     }
 
     case 'stock_movement': {
       const { movement } = item.payload as StockMovementQueuePayload;
-      const result = await repos.inventory.recordMovement(movement);
+      const result = await repos.inventory.recordMovement(movement, item.clientKey);
       return result.movement.id;
     }
 

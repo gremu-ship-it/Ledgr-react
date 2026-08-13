@@ -81,6 +81,14 @@ export interface QueueItem {
   /** Set once this item itself syncs successfully — lets children resolve their FK. */
   resolvedServerId?: string;
 
+  /**
+   * Stable idempotency key generated once at enqueue time and passed through
+   * to the server insert. Lets a retried sync detect that the record already
+   * exists (server committed but the local 'synced' mark was lost) instead of
+   * creating a duplicate. Backed by a unique (business_id, client_key) index.
+   */
+  clientKey?: string;
+
   /** Client-side timestamp of when the user performed the action (ISO string). */
   createdAt: string;
 

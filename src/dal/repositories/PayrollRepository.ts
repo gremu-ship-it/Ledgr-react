@@ -38,10 +38,23 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
   async createWithLines(
     run: InsertDto<'payroll_runs'>,
     lines: Omit<InsertDto<'payroll_employee_lines'>, 'payroll_run_id'>[],
+    clientKey?: string,
   ): Promise<PayrollRunWithLines> {
+    // Idempotency for offline sync retries: return the existing run if this
+    // client_key was already committed, instead of duplicating it (and its
+    // employee lines, which would double the payroll liability).
+    if (clientKey) {
+      const existing = await this.findByClientKey(run.business_id, clientKey);
+      if (existing) return existing;
+    }
+
+    const header: InsertDto<'payroll_runs'> = clientKey
+      ? ({ ...run, client_key: clientKey } as InsertDto<'payroll_runs'>)
+      : run;
+
     const { data: payrollRun, error: runError } = await this.client
       .from('payroll_runs')
-      .insert(run as never)
+      .insert(header as never)
       .select()
       .single();
     if (runError) throw toRepositoryError('payroll_runs', runError);
@@ -61,6 +74,23 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       ...(payrollRun as Row<'payroll_runs'>),
       lines: (insertedLines ?? []) as Row<'payroll_employee_lines'>[],
     };
+  }
+
+  /** Idempotency lookup: find a payroll run previously created under a client_key. */
+  private async findByClientKey(businessId: string, clientKey: string): Promise<PayrollRunWithLines | null> {
+    const { data, error } = await this.client
+      .from('payroll_runs')
+      .select('*, lines:payroll_employee_lines(*)')
+      .eq('business_id', businessId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- client_key added by migration 20260813000003, not yet in generated types
+      .eq('client_key' as any, clientKey)
+      .single();
+    if (error) {
+      // PGRST116 = "no rows returned" — treat as "not found", not an error.
+      if ((error as { code?: string }).code === 'PGRST116') return null;
+      throw toRepositoryError('payroll_runs', error);
+    }
+    return data as PayrollRunWithLines;
   }
 
   async findEmployees(businessId: string): Promise<Row<'employees'>[]> {
