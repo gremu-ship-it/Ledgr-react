@@ -448,7 +448,7 @@ function InvoiceDetail({
       ? Number(invoice.amount_due)
       : Number(invoice.total_amount) - Number(invoice.amount_paid);
 
-  const canPay = !['paid', 'void', 'voided', 'credit_note', 'credited'].includes(invoice.status);
+  const canPay = !['paid', 'void', 'credit_note'].includes(invoice.status);
 
   const businessBranding: BusinessBranding = businessData
     ? businessRowToBranding(businessData as Row<'businesses'>)
@@ -1094,7 +1094,7 @@ function InvoiceList({
           {filtered.map((inv) => {
             const amountDue = inv.amount_due !== null ? Number(inv.amount_due) : Number(inv.total_amount) - Number(inv.amount_paid);
             const isSel = selectedIds.has(inv.id);
-            const canPay = !['paid', 'void', 'voided', 'credit_note', 'credited'].includes(inv.status) && amountDue > 0;
+            const canPay = !['paid', 'void', 'credit_note'].includes(inv.status) && amountDue > 0;
             return (
               <SwipeableRow
                 key={inv.id}

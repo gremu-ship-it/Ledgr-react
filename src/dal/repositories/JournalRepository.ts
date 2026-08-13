@@ -4,6 +4,7 @@ import type { Json } from '../types/database.generated';
 import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
+import { paymentStatusFromAmounts } from '@/lib/paymentStatus';
 
 const log = createLogger('JournalRepository');
 
@@ -289,26 +290,13 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       .maybeSingle();
 
     if (invPayment) {
-      await this.client.rpc('increment_amount_paid', {
-        p_table: 'invoices',
-        p_id: invPayment.invoice_id,
-        p_amount: -invPayment.amount,
+      await this.backOutPayment({
+        table: 'invoices',
+        parentId: invPayment.invoice_id,
+        paymentId: invPayment.id,
+        amount: Number(invPayment.amount),
+        nextStatus: (totalAmount, amountPaid) => paymentStatusFromAmounts(totalAmount, amountPaid),
       });
-
-      const { data: inv } = await this.client
-        .from('invoices')
-        .select('*')
-        .eq('id', invPayment.invoice_id)
-        .single();
-      if (inv) {
-        const nextStatus = (Number(inv.amount_paid) - Number(invPayment.amount)) <= 0 ? 'sent' : 'partially_paid';
-        await this.client
-          .from('invoices')
-          .update({ status: nextStatus } as never)
-          .eq('id', inv.id);
-      }
-
-      await this.client.from('invoice_payments').delete().eq('id', invPayment.id);
     }
 
     // Check if reversing an expense payment
@@ -319,26 +307,15 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       .maybeSingle();
 
     if (expPayment) {
-      await this.client.rpc('increment_amount_paid', {
-        p_table: 'expenses',
-        p_id: expPayment.expense_id,
-        p_amount: -expPayment.amount,
+      await this.backOutPayment({
+        table: 'expenses',
+        parentId: expPayment.expense_id,
+        paymentId: expPayment.id,
+        amount: Number(expPayment.amount),
+        // An expense that loses its payment returns to the approved-but-
+        // unpaid state (expense status model is draft → approved → paid).
+        nextStatus: () => 'approved',
       });
-
-      const { data: exp } = await this.client
-        .from('expenses')
-        .select('*')
-        .eq('id', expPayment.expense_id)
-        .single();
-      if (exp) {
-        const nextStatus = (Number(exp.amount_paid) - Number(expPayment.amount)) <= 0 ? 'sent' : 'partially_paid';
-        await this.client
-          .from('expenses')
-          .update({ status: nextStatus } as never)
-          .eq('id', exp.id);
-      }
-
-      await this.client.from('expense_payments').delete().eq('id', expPayment.id);
     }
 
     // FIX: Auto-void the source record when its journal entry is reversed.
@@ -363,6 +340,65 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
     });
 
     return { entry: postedReversal, lines: reversal.lines };
+  }
+
+  /**
+   * Back out a single recorded payment during journal reversal.
+   *
+   * FIX [payment reversal regression — C-02]:
+   * The previous inline version called `increment_amount_paid` with a NEGATIVE
+   * amount while the RPC rejected `p_amount <= 0`, and it discarded the RPC
+   * error object — so the decrement silently failed and the invoice was left
+   * with `amount_paid` still at the paid total while `status` was recomputed
+   * to partially_paid/sent. Now:
+   *   1. The RPC accepts a negative back-out (20260813000001) and the error is
+   *      captured and thrown, so a failed back-out cannot look successful.
+   *   2. Status is recomputed from the post-back-out `amount_paid` (single
+   *      source of truth via `paymentStatusFromAmounts`), not from a stale
+   *      pre-decrement estimate.
+   *
+   * The decrement, status update and payment-row removal are still three
+   * separate round-trips (the repository has no transaction wrapper). A
+   * failure between them leaves a recoverable but incomplete state; the thrown
+   * error surfaces it rather than hiding it.
+   */
+  private async backOutPayment(params: {
+    table: 'invoices' | 'expenses';
+    parentId: string;
+    paymentId: string;
+    amount: number;
+    nextStatus: (totalAmount: number, amountPaid: number) => string;
+  }): Promise<void> {
+    const { error: rpcError } = await this.client.rpc('increment_amount_paid', {
+      p_table: params.table,
+      p_id: params.parentId,
+      p_amount: -params.amount,
+    });
+    if (rpcError) throw toRepositoryError(params.table, rpcError);
+
+    const { data, error: fetchError } = await this.client
+      .from(params.table)
+      .select('*')
+      .eq('id', params.parentId)
+      .single();
+    if (fetchError) throw toRepositoryError(params.table, fetchError);
+
+    if (data) {
+      const row = data as unknown as { total_amount: number; amount_paid: number };
+      const status = params.nextStatus(Number(row.total_amount), Number(row.amount_paid));
+      const { error: updateError } = await this.client
+        .from(params.table)
+        .update({ status } as never)
+        .eq('id', params.parentId);
+      if (updateError) throw toRepositoryError(params.table, updateError);
+    }
+
+    const paymentsTable = params.table === 'invoices' ? 'invoice_payments' : 'expense_payments';
+    const { error: deleteError } = await this.client
+      .from(paymentsTable)
+      .delete()
+      .eq('id', params.paymentId);
+    if (deleteError) throw toRepositoryError(paymentsTable, deleteError);
   }
 
   private async findPeriodIdForDate(businessId: string, date: string): Promise<string | null> {
