@@ -160,10 +160,19 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
     const periodLabel = payrollRun.period_start.slice(0, 7);
 
     const existing = await this.findByPeriod(payrollRun.business_id, 'paye', periodLabel);
-    if (existing) return existing;
+    if (existing) {
+      const updatedGross = Number(existing.gross_amount) + Number(payrollRun.total_paye);
+      const updatedDue = Number(existing.amount_due) + Number(payrollRun.total_paye);
+      return this.update(existing.id, {
+        gross_amount: updatedGross,
+        amount_due: updatedDue,
+      } as never);
+    }
 
-    // Due: last day of the month the payroll period falls in.
-    const dueDate = this.lastDayOfMonth(payrollRun.period_end);
+    // Due: 14th of the following month, matching MRA requirements.
+    const end = new Date(payrollRun.period_end);
+    const nextMonth = new Date(end.getFullYear(), end.getMonth() + 1, 14);
+    const dueDate = nextMonth.toISOString().slice(0, 10);
 
     const dto: InsertDto<'tax_returns'> = {
       business_id: payrollRun.business_id,
@@ -197,12 +206,19 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
   ): Promise<Row<'tax_returns'>> {
     const periodLabel = payrollRun.period_start.slice(0, 7);
 
-    const existing = await this.findByPeriod(payrollRun.business_id, 'tpr_pension', periodLabel);
-    if (existing) return existing;
-
     const totalEmployer = lines.reduce((sum, l) => sum + Number(l.pension_employer), 0);
     const totalEmployee = lines.reduce((sum, l) => sum + Number(l.pension_employee), 0);
     const total = Math.round((totalEmployer + totalEmployee) * 100) / 100;
+
+    const existing = await this.findByPeriod(payrollRun.business_id, 'tpr_pension', periodLabel);
+    if (existing) {
+      const updatedGross = Number(existing.gross_amount) + total;
+      const updatedDue = Number(existing.amount_due) + total;
+      return this.update(existing.id, {
+        gross_amount: updatedGross,
+        amount_due: updatedDue,
+      } as never);
+    }
 
     // TPR remittance due date: MRA/pension regulator practice is 15 days
     // after month end. FLAGGED: not independently confirmed — verify
@@ -388,7 +404,9 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
       .select('id')
       .eq('business_id', businessId)
       .gte(parentDateColumn as never, periodStart)
-      .lte(parentDateColumn as never, periodEnd);
+      .lte(parentDateColumn as never, periodEnd)
+      .not('status', 'in', '("void", "draft")')
+      .is('deleted_at', null);
     if (parentErr) throw toRepositoryError(parentTable, parentErr);
     const parentIds = (parents ?? []).map((p: { id: string }) => p.id);
     if (parentIds.length === 0) return 0;

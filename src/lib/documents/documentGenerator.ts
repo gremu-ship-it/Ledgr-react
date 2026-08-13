@@ -825,7 +825,7 @@ export function generateInvoiceDocument(params: {
 </div>
 </body></html>`;
 
-  void renderDocumentPdf(`Invoice ${invoice.invoice_number}`, html);
+  return renderDocumentPdf(`Invoice ${invoice.invoice_number}`, html);
 }
 
 // ── Delivery Note ─────────────────────────────────────────────────────────────
@@ -928,7 +928,7 @@ export function generateDeliveryNoteDocument(params: {
 </div>
 </body></html>`;
 
-  void renderDocumentPdf(`Delivery Note ${transfer.transfer_number}`, html);
+  return renderDocumentPdf(`Delivery Note ${transfer.transfer_number}`, html);
 }
 
 // ── Expense / Receipt ─────────────────────────────────────────────────────────
@@ -988,7 +988,7 @@ export function generateReceiptDocument(params: {
   </div>
 </div>
 </body></html>`;
-  void renderDocumentPdf(`${title} ${number}`, html);
+  return renderDocumentPdf(`${title} ${number}`, html);
 }
 
 // ── Professional Report ───────────────────────────────────────────────────────
@@ -1113,5 +1113,5 @@ ${baseStyles(brand)}
 </div>
 </body></html>`;
 
-  void renderDocumentPdf(title, html);
+  return renderDocumentPdf(title, html);
 }

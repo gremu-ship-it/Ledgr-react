@@ -96,15 +96,15 @@ export const IMPORT_TEMPLATES: Record<ImportEntityType, ImportTemplate> = {
     entityType: 'products',
     label: 'Products & Services',
     description: 'Import your inventory items and services',
-    headers: ['name', 'sku', 'description', 'product_type', 'unit', 'sales_price', 'purchase_price', 'track_inventory', 'opening_quantity', 'opening_cost', 'category', 'tax_code'],
+    headers: ['name', 'sku', 'description', 'product_type', 'unit_of_measure', 'sale_price', 'purchase_price', 'track_inventory', 'opening_quantity', 'opening_cost', 'category', 'sales_tax_code', 'purchase_tax_code'],
     requiredHeaders: ['name'],
     exampleRows: [
-      { name: 'Maize Flour 50kg', sku: 'MF-50', description: 'Premium maize flour', product_type: 'inventory', unit: 'bag', sales_price: '25000', purchase_price: '20000', track_inventory: 'true', opening_quantity: '100', opening_cost: '20000', category: 'Flour', tax_code: 'vat_standard' },
-      { name: 'Consulting Service', sku: 'CONS-001', description: 'Business consulting', product_type: 'service', unit: 'hour', sales_price: '50000', purchase_price: '', track_inventory: 'false', opening_quantity: '', opening_cost: '', category: 'Services', tax_code: 'vat_standard' },
+      { name: 'Maize Flour 50kg', sku: 'MF-50', description: 'Premium maize flour', product_type: 'inventory', unit_of_measure: 'bag', sale_price: '25000', purchase_price: '20000', track_inventory: 'true', opening_quantity: '100', opening_cost: '20000', category: 'Flour', sales_tax_code: 'vat_standard', purchase_tax_code: 'vat_standard' },
+      { name: 'Consulting Service', sku: 'CONS-001', description: 'Business consulting', product_type: 'service', unit_of_measure: 'hour', sale_price: '50000', purchase_price: '', track_inventory: 'false', opening_quantity: '', opening_cost: '', category: 'Services', sales_tax_code: 'vat_standard', purchase_tax_code: 'vat_standard' },
     ],
     systemMappings: {
-      quickbooks: { 'Product/Service Name': 'name', 'SKU': 'sku', 'Sales Price': 'sales_price', 'Cost': 'purchase_price' },
-      xero: { 'Item Code': 'sku', 'Item Name': 'name', 'Sales Price': 'sales_price' },
+      quickbooks: { 'Product/Service Name': 'name', 'SKU': 'sku', 'Sales Price': 'sale_price', 'Cost': 'purchase_price' },
+      xero: { 'Item Code': 'sku', 'Item Name': 'name', 'Sales Price': 'sale_price' },
     }
   },
   opening_balances: {
@@ -209,12 +209,12 @@ export function parseCSVFile(file: File): Promise<ImportPreview> {
   return new Promise((resolve, reject) => {
     // Papa.parse expects File | string; cast to any to satisfy TS overload which in @types/papaparse
     // uses a generic that sometimes resolves to unique symbol when File type is not matched.
-    (Papa as any).parse(file, {
+    (Papa as unknown as { parse: (file: unknown, config: unknown) => void }).parse(file, {
       header: true,
       skipEmptyLines: true,
       trimHeaders: true,
       transformHeader: (header: string) => header.trim().toLowerCase(),
-      complete: (results: any) => {
+      complete: (results: Papa.ParseResult<Record<string, string>>) => {
         const headers = (results.meta.fields as string[] | undefined)?.map((h: string) => h.trim().toLowerCase()) || [];
         const rawRows = results.data as Record<string, string>[];
         
@@ -293,20 +293,20 @@ export function validateRows(
     // Entity-specific validations
     switch (entityType) {
       case 'chart_of_accounts':
-        validateAccountRow(row, errors, warnings, existingCodes);
+        validateAccountRow(row, errors, existingCodes);
         break;
       case 'contacts':
         validateContactRow(row, errors, warnings);
         break;
       case 'products':
-        validateProductRow(row, errors, warnings);
+        validateProductRow(row, errors);
         break;
       case 'fixed_assets':
-        validateAssetRow(row, errors, warnings);
+        validateAssetRow(row, errors);
         break;
       case 'opening_balances':
       case 'trial_balance':
-        validateOpeningBalanceRow(row, errors, warnings);
+        validateOpeningBalanceRow(row, errors);
         break;
       default:
         break;
@@ -328,7 +328,7 @@ export function validateRows(
   };
 }
 
-function validateAccountRow(row: ParsedRow, errors: string[], _warnings: string[], existingCodes?: Set<string>) {
+function validateAccountRow(row: ParsedRow, errors: string[], existingCodes?: Set<string>) {
   const code = row.data['code'];
   if (code) {
     if (existingCodes?.has(code)) {
@@ -362,12 +362,12 @@ function validateContactRow(row: ParsedRow, errors: string[], warnings: string[]
   }
 }
 
-function validateProductRow(row: ParsedRow, errors: string[], _warnings: string[]) {
-  const salesPrice = row.data['sales_price'];
+function validateProductRow(row: ParsedRow, errors: string[]) {
+  const salePrice = row.data['sale_price'];
   const purchasePrice = row.data['purchase_price'];
   
-  if (salesPrice && isNaN(Number(salesPrice))) {
-    errors.push(`Invalid sales_price: ${salesPrice}`);
+  if (salePrice && isNaN(Number(salePrice))) {
+    errors.push(`Invalid sale_price: ${salePrice}`);
   }
   if (purchasePrice && isNaN(Number(purchasePrice))) {
     errors.push(`Invalid purchase_price: ${purchasePrice}`);
@@ -379,7 +379,7 @@ function validateProductRow(row: ParsedRow, errors: string[], _warnings: string[
   }
 }
 
-function validateAssetRow(row: ParsedRow, errors: string[], _warnings: string[]) {
+function validateAssetRow(row: ParsedRow, errors: string[]) {
   const cost = row.data['acquisition_cost'];
   if (cost && isNaN(Number(cost))) {
     errors.push(`Invalid acquisition_cost: ${cost}`);
@@ -393,7 +393,7 @@ function validateAssetRow(row: ParsedRow, errors: string[], _warnings: string[])
   }
 }
 
-function validateOpeningBalanceRow(row: ParsedRow, errors: string[], _warnings: string[]) {
+function validateOpeningBalanceRow(row: ParsedRow, errors: string[]) {
   const balance = row.data['opening_balance'] || row.data['debit'] || row.data['credit'];
   if (balance && isNaN(Number(balance.replace(/,/g, '')))) {
     errors.push(`Invalid balance amount: ${balance}`);
@@ -407,7 +407,7 @@ export async function importChartOfAccounts(
   rows: ParsedRow[]
 ): Promise<ImportResult> {
   const results: ImportResult = { success: 0, failed: 0, errors: [] };
-  const toInsert: any[] = [];
+  const toInsert: Record<string, unknown>[] = [];
 
   // Get existing accounts to check duplicates and resolve parent_code
   const { data: existingAccounts } = await supabase
@@ -433,7 +433,7 @@ export async function importChartOfAccounts(
       continue;
     }
 
-    const accountType = row.data['account_type']?.toLowerCase() as any;
+    const accountType = row.data['account_type']?.toLowerCase() as "asset" | "liability" | "equity" | "income" | "expense";
     const accountSubtype = row.data['account_subtype']?.toLowerCase() || null;
     const normalBalance = row.data['normal_balance']?.toLowerCase() || 
       (['asset', 'expense'].includes(accountType) ? 'debit' : 'credit');
@@ -462,14 +462,14 @@ export async function importChartOfAccounts(
     // For accounts whose parent_code couldn't be resolved, parent_id is null (top-level)
     const { data, error } = await supabase
       .from('accounts')
-      .insert(toInsert)
+      .insert(toInsert as never)
       .select('id, code');
 
     if (error) {
       results.failed = toInsert.length;
       results.errors.push({ row: 0, message: error.message });
     } else if (data) {
-      data.forEach((row: any) => codeToId.set(row.code, row.id));
+      data.forEach((row: { code: string; id: string }) => codeToId.set(row.code, row.id));
       results.success = data.length;
     }
   }
@@ -482,7 +482,7 @@ export async function importContacts(
   rows: ParsedRow[]
 ): Promise<ImportResult> {
   const results: ImportResult = { success: 0, failed: 0, errors: [] };
-  const toInsert: any[] = [];
+  const toInsert: Record<string, unknown>[] = [];
 
   for (const row of rows) {
     if (!row.isValid) {
@@ -515,7 +515,7 @@ export async function importContacts(
   if (toInsert.length > 0) {
     const { data, error } = await supabase
       .from('contacts')
-      .insert(toInsert)
+      .insert(toInsert as never)
       .select('id');
 
     if (error) {
@@ -537,7 +537,7 @@ export async function importProducts(
   rows: ParsedRow[]
 ): Promise<ImportResult> {
   const results: ImportResult = { success: 0, failed: 0, errors: [] };
-  const toInsert: any[] = [];
+  const toInsert: Record<string, unknown>[] = [];
 
   for (const row of rows) {
     if (!row.isValid) {
@@ -551,19 +551,20 @@ export async function importProducts(
       name: row.data['name']?.trim(),
       sku: row.data['sku']?.trim() || null,
       description: row.data['description']?.trim() || null,
-      unit: row.data['unit']?.trim() || 'each',
-      sales_price: row.data['sales_price'] ? parseFloat(row.data['sales_price']) : 0,
+      unit_of_measure: row.data['unit_of_measure']?.trim() || 'each',
+      sale_price: row.data['sale_price'] ? parseFloat(row.data['sale_price']) : 0,
       purchase_price: row.data['purchase_price'] ? parseFloat(row.data['purchase_price']) : null,
       track_inventory: row.data['track_inventory']?.toLowerCase() === 'true' || false,
       is_active: true,
-      tax_code: row.data['tax_code'] || 'none'
+      sales_tax_code: row.data['sales_tax_code'] || 'none',
+      purchase_tax_code: row.data['purchase_tax_code'] || 'none'
     });
   }
 
   if (toInsert.length > 0) {
     const { data, error } = await supabase
       .from('products')
-      .insert(toInsert)
+      .insert(toInsert as never)
       .select('id');
 
     if (error) {
@@ -644,13 +645,23 @@ export async function importOpeningBalances(
   return results;
 }
 
+export interface AssetCategory {
+  id: string;
+  name: string;
+  useful_life_years?: number | null;
+  depreciation_method?: string | null;
+  asset_account_id?: string | null;
+  accumulated_dep_account_id?: string | null;
+  dep_expense_account_id?: string | null;
+}
+
 export async function importFixedAssets(
   businessId: string,
   rows: ParsedRow[],
-  categories: any[]
+  categories: AssetCategory[]
 ): Promise<ImportResult> {
   const results: ImportResult = { success: 0, failed: 0, errors: [] };
-  const toInsert: any[] = [];
+  const toInsert: Record<string, unknown>[] = [];
 
   const categoryByName = new Map(categories.map(c => [c.name.toLowerCase(), c]));
 
@@ -694,7 +705,7 @@ export async function importFixedAssets(
   if (toInsert.length > 0) {
     const { data, error } = await supabase
       .from('fixed_assets')
-      .insert(toInsert)
+      .insert(toInsert as never)
       .select('id');
 
     if (error) {
@@ -718,7 +729,7 @@ export function downloadTemplate(entityType: ImportEntityType) {
   const csvContent = [
     template.headers.join(','),
     ...template.exampleRows.map(row => 
-      template.headers.map(h => `"${(row as any)[h] || ''}"`).join(',')
+      template.headers.map(h => `"${row[h] || ''}"`).join(',')
     )
   ].join('\n');
 
@@ -744,7 +755,7 @@ export async function executeImport(
   businessId: string,
   entityType: ImportEntityType,
   rows: ParsedRow[],
-  options?: { categories?: any[] }
+  options?: { categories?: AssetCategory[] }
 ): Promise<ImportResult> {
   switch (entityType) {
     case 'chart_of_accounts':

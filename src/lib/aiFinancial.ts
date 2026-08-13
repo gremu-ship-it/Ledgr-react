@@ -299,6 +299,7 @@ export async function detectAdvancedAnomalies(businessId: string): Promise<Anoma
 // 3. Cash Flow Forecast (improved)
 // ──────────────────────────────────────────────────────────────
 export async function generateCashFlowForecast(businessId: string): Promise<CashForecast> {
+  throw new Error("Cash flow forecast is currently unavailable.");
   const today = new Date();
   const threeMonthsAgo = new Date(today);
   threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);

@@ -77,7 +77,9 @@ function StatusBadge({ status }: { status: string }) {
     partially_paid: 'bg-amber-50 text-amber-700',
     paid: 'bg-brand-50 text-brand-700',
     overdue: 'bg-red-50 text-red-700',
+    void: 'bg-gray-100 text-gray-400',
     voided: 'bg-gray-100 text-gray-400',
+    credit_note: 'bg-gray-100 text-gray-400',
     credited: 'bg-gray-100 text-gray-400',
   };
   return (
@@ -407,6 +409,9 @@ function InvoiceDetail({
   onBack: () => void;
 }) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { logoUrl, businessName, tradingName, business: businessData } = useBrandTheme();
 
@@ -443,7 +448,7 @@ function InvoiceDetail({
       ? Number(invoice.amount_due)
       : Number(invoice.total_amount) - Number(invoice.amount_paid);
 
-  const canPay = !['paid', 'voided', 'credited'].includes(invoice.status);
+  const canPay = !['paid', 'void', 'voided', 'credit_note', 'credited'].includes(invoice.status);
 
   const businessBranding: BusinessBranding = businessData
     ? businessRowToBranding(businessData as Row<'businesses'>)
@@ -456,107 +461,140 @@ function InvoiceDetail({
         brandColor: '#0E7C5A',
       };
 
-  const handleDownloadInvoice = () => {
-    generateInvoiceDocument({
-      business: businessBranding,
-      invoice: {
-        invoice_number: invoice.invoice_number,
-        issue_date: invoice.issue_date,
-        due_date: invoice.due_date,
-        status: invoice.status,
-        subtotal: invoice.subtotal,
-        vat_amount: invoice.vat_amount,
-        wht_amount: invoice.wht_amount,
-        discount_amount: invoice.discount_amount,
-        total_amount: invoice.total_amount,
-        amount_paid: invoice.amount_paid,
-        currency: invoice.currency,
-        notes: invoice.notes,
-        terms: invoice.terms,
-        po_number: invoice.po_number,
-      },
-      lines: (withLines?.lines ?? []).map(invoiceLineRowToDocumentLine),
-      contact: contact
-        ? {
-            name: contact.name,
-            trading_name: contact.trading_name,
-            email: contact.email,
-            phone: contact.phone,
-            address_line1: contact.address_line1,
-            address_line2: contact.address_line2,
-            city: contact.city,
-            country: contact.country,
-            tpin: contact.tpin,
-            vat_number: contact.vat_number,
-          }
-        : null,
-      payments: payments.map((p) => ({
-        payment_date: p.payment_date,
-        amount: p.amount,
-        payment_method: p.payment_method,
-        reference: p.reference,
-      })),
-    });
+  const handleDownloadInvoice = async () => {
+    setIsDownloading(true);
+    setDownloadSuccess(false);
+    setDownloadError(null);
+    try {
+      await generateInvoiceDocument({
+        business: businessBranding,
+        invoice: {
+          invoice_number: invoice.invoice_number,
+          issue_date: invoice.issue_date,
+          due_date: invoice.due_date,
+          status: invoice.status,
+          subtotal: invoice.subtotal,
+          vat_amount: invoice.vat_amount,
+          wht_amount: invoice.wht_amount,
+          discount_amount: invoice.discount_amount,
+          total_amount: invoice.total_amount,
+          amount_paid: invoice.amount_paid,
+          currency: invoice.currency,
+          notes: invoice.notes,
+          terms: invoice.terms,
+          po_number: invoice.po_number,
+        },
+        lines: (withLines?.lines ?? []).map(invoiceLineRowToDocumentLine),
+        contact: contact
+          ? {
+              name: contact.name,
+              trading_name: contact.trading_name,
+              email: contact.email,
+              phone: contact.phone,
+              address_line1: contact.address_line1,
+              address_line2: contact.address_line2,
+              city: contact.city,
+              country: contact.country,
+              tpin: contact.tpin,
+              vat_number: contact.vat_number,
+            }
+          : null,
+        payments: payments.map((p) => ({
+          payment_date: p.payment_date,
+          amount: p.amount,
+          payment_method: p.payment_method,
+          reference: p.reference,
+        })),
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      setDownloadError((err as Error).message || String(err));
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
-  const handleDownloadReceipt = () => {
-    // Receipt after payment - professional
-    const curr = invoice.currency || 'MWK';
-    generateReceiptDocument({
-      business: businessBranding,
-      title: 'Payment Receipt',
-      number: `RCPT-${invoice.invoice_number}`,
-      date: new Date().toISOString(),
-      status: 'paid',
-      from: {
-        name: businessBranding.name,
-        details: [
-          businessBranding.addressLine1 || '',
-          businessBranding.city || '',
-          businessBranding.phone || '',
-          businessBranding.email || '',
-        ].filter(Boolean),
-      },
-      to: contact
-        ? {
-            name: contact.name,
-            details: [contact.email || '', contact.phone || ''].filter(Boolean),
-          }
-        : undefined,
-      lines: [
-        { description: `Payment for Invoice ${invoice.invoice_number}`, amount: invoice.amount_paid },
-      ],
-      totals: [
-        { label: 'Invoice Total', value: invoice.total_amount },
-        { label: 'Amount Paid', value: invoice.amount_paid, bold: true },
-        { label: 'Balance Due', value: amountDue, isTotal: true },
-      ],
-      currency: curr,
-      notes: `Receipt for invoice ${invoice.invoice_number}. Thank you for your payment.`,
-    });
+  const handleDownloadReceipt = async () => {
+    setIsDownloading(true);
+    setDownloadSuccess(false);
+    setDownloadError(null);
+    try {
+      // Receipt after payment - professional
+      const curr = invoice.currency || 'MWK';
+      await generateReceiptDocument({
+        business: businessBranding,
+        title: 'Payment Receipt',
+        number: `RCPT-${invoice.invoice_number}`,
+        date: new Date().toISOString(),
+        status: 'paid',
+        from: {
+          name: businessBranding.name,
+          details: [
+            businessBranding.addressLine1 || '',
+            businessBranding.city || '',
+            businessBranding.phone || '',
+            businessBranding.email || '',
+          ].filter(Boolean),
+        },
+        to: contact
+          ? {
+              name: contact.name,
+              details: [contact.email || '', contact.phone || ''].filter(Boolean),
+            }
+          : undefined,
+        lines: [
+          { description: `Payment for Invoice ${invoice.invoice_number}`, amount: invoice.amount_paid },
+        ],
+        totals: [
+          { label: 'Invoice Total', value: invoice.total_amount },
+          { label: 'Amount Paid', value: invoice.amount_paid, bold: true },
+          { label: 'Balance Due', value: amountDue, isTotal: true },
+        ],
+        currency: curr,
+        notes: `Receipt for invoice ${invoice.invoice_number}. Thank you for your payment.`,
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      setDownloadError((err as Error).message || String(err));
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
-  const handleDownloadDeliveryNote = () => {
-    // Create a delivery note from invoice lines
-    generateDeliveryNoteDocument({
-      business: businessBranding,
-      transfer: {
-        transfer_number: `DN-${invoice.invoice_number}`,
-        status: 'dispatched',
-        created_at: invoice.issue_date,
-        dispatched_at: new Date().toISOString(),
-        notes: invoice.notes,
-        from_location_name: businessBranding.name,
-        to_location_name: contact?.name || 'Customer',
-      },
-      lines: (withLines?.lines ?? []).map((l) => ({
-        product_name: l.description,
-        sku: null,
-        quantity_requested: Number(l.quantity),
-        quantity_dispatched: Number(l.quantity),
-        quantity_received: undefined,
-      })),
-    });
+  const handleDownloadDeliveryNote = async () => {
+    setIsDownloading(true);
+    setDownloadSuccess(false);
+    setDownloadError(null);
+    try {
+      // Create a delivery note from invoice lines
+      await generateDeliveryNoteDocument({
+        business: businessBranding,
+        transfer: {
+          transfer_number: `DN-${invoice.invoice_number}`,
+          status: 'dispatched',
+          created_at: invoice.issue_date,
+          dispatched_at: new Date().toISOString(),
+          notes: invoice.notes,
+          from_location_name: businessBranding.name,
+          to_location_name: contact?.name || 'Customer',
+        },
+        lines: (withLines?.lines ?? []).map((l) => ({
+          product_name: l.description,
+          sku: null,
+          quantity_requested: Number(l.quantity),
+          quantity_dispatched: Number(l.quantity),
+          quantity_received: undefined,
+        })),
+      });
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      setDownloadError((err as Error).message || String(err));
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -615,6 +653,23 @@ function InvoiceDetail({
           )}
         </div>
       </div>
+
+      {isDownloading && (
+        <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800 flex items-center gap-2">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+          Generating document... Please wait.
+        </div>
+      )}
+      {downloadSuccess && (
+        <div className="mb-4 rounded-xl bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+          ✓ Document generated and downloaded successfully!
+        </div>
+      )}
+      {downloadError && (
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+          ⚠️ Failed to generate document: {downloadError}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
         {/* Main invoice card */}
@@ -1039,7 +1094,7 @@ function InvoiceList({
           {filtered.map((inv) => {
             const amountDue = inv.amount_due !== null ? Number(inv.amount_due) : Number(inv.total_amount) - Number(inv.amount_paid);
             const isSel = selectedIds.has(inv.id);
-            const canPay = !['paid', 'voided', 'credited'].includes(inv.status) && amountDue > 0;
+            const canPay = !['paid', 'void', 'voided', 'credit_note', 'credited'].includes(inv.status) && amountDue > 0;
             return (
               <SwipeableRow
                 key={inv.id}

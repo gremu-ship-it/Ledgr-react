@@ -194,7 +194,8 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
       .eq('business_id', businessId)
       .then((r) => ({ count: r.count ?? 0 }));
 
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
     const next = String(count + 1).padStart(4, '0');
-    return `TRF-${next}`;
+    return `TRF-${next}-${rand}`;
   }
 }

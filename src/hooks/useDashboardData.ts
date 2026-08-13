@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { repos } from '@/lib/repositories';
+import { supabase } from '@/lib/supabase';
+import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
+
+const financialStatementRepo = new FinancialStatementRepository(supabase);
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
@@ -104,6 +108,19 @@ export function useMonthlyIncome(businessId?: string) {
   });
 }
 
+export function useMonthlyProfitLossReport(businessId?: string) {
+  return useQuery({
+    queryKey: ['profit_loss', 'monthly_report', businessId],
+    queryFn: async () => {
+      const anchor = await fetchLatestRecordDate(businessId!);
+      const { from, to } = getMonthRange(anchor);
+      return financialStatementRepo.getProfitOrLoss(businessId!, from, to);
+    },
+    enabled: Boolean(businessId),
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export function useMonthlyExpenses(businessId?: string) {
   return useQuery({
     queryKey: ['expenses', 'monthly', businessId],
@@ -112,7 +129,7 @@ export function useMonthlyExpenses(businessId?: string) {
       const { from, to } = getMonthRange(anchor);
       const rows = await repos.expense.findByDateRange(businessId!, from, to);
       return rows
-        .filter((r) => r.status !== 'void')
+        .filter((r) => r.status !== 'void' && r.status !== 'draft')
         .reduce((sum, r) => sum + Number(r.functional_amount ?? r.total_amount), 0);
     },
     enabled: Boolean(businessId),
@@ -138,7 +155,7 @@ export function useMonthlyExpenseVat(businessId?: string) {
       const { from, to } = getMonthRange(anchor);
       const rows = await repos.expense.findByDateRange(businessId!, from, to);
       return rows
-        .filter((r) => r.status !== 'void')
+        .filter((r) => r.status !== 'void' && r.status !== 'draft')
         .reduce((sum, r) => sum + Number(r.vat_amount) * Number(r.exchange_rate || 1), 0);
     },
     enabled: Boolean(businessId),

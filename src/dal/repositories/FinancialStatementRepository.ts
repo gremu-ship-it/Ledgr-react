@@ -376,7 +376,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     }
 
     const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit');
-    let nonCurrentAssets = this.buildSection(
+    const nonCurrentAssets = this.buildSection(
       balances, comparativeBalances,
       ['non_current_asset', 'fixed_asset'],
       'Non-Current Assets',

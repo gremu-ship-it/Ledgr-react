@@ -16,6 +16,7 @@ import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 import { createLogger } from '@/lib/logger';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
@@ -177,8 +178,6 @@ function ProductSelect({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const VAT_RATE = 0.175;
-
 const PAYMENT_METHODS = [
   { value: 'cash', label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -250,7 +249,10 @@ function StatusBadge({ status }: { status: string }) {
     partially_paid: 'bg-amber-50 text-amber-700',
     paid: 'bg-brand-50 text-brand-700',
     overdue: 'bg-red-50 text-red-700',
+    void: 'bg-gray-100 text-gray-400',
     voided: 'bg-gray-100 text-gray-400',
+    credit_note: 'bg-gray-100 text-gray-400',
+    credited: 'bg-gray-100 text-gray-400',
     viewed: 'bg-purple-50 text-purple-700',
   };
   return (
@@ -403,7 +405,8 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
               values.department_id || null,
             );
           } catch (err) {
-            log.warn('Journal entry failed (non-critical)', { error: err });
+            log.error('Journal entry failed', { error: err });
+            throw new Error(`Accounting journal entry failed: ${(err as Error).message}`, { cause: err });
           }
 
           // Releases stock and posts DR Cost of Sales / CR Inventory in the
@@ -658,6 +661,10 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     setForm((f) => ({ ...f, lines: f.lines.filter((_, i) => i !== idx) }));
   }
 
+  const { business: businessData } = useBrandTheme();
+  const isVatRegistered = businessData?.vat_registered ?? false;
+  const effectiveVatRate = isVatRegistered ? 0.175 : 0;
+
   const lineCalcs = form.lines.map((l) => {
     const qty      = parseFloat(l.quantity) || 0;
     const price    = parseFloat(l.unit_price) || 0;
@@ -665,7 +672,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     const gross    = qty * price;
     const discountAmt = gross * discPct / 100;
     const subtotal = gross - discountAmt;
-    const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
+    const taxRate  = l.tax_code === 'vat_standard' ? effectiveVatRate : 0;
     const taxAmount = subtotal * taxRate;
     return { gross, discountAmt, subtotal, taxRate, taxAmount, lineTotal: subtotal + taxAmount };
   });
@@ -735,7 +742,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           const qty      = parseFloat(l.quantity) || 1;
           const price    = parseFloat(l.unit_price) || 0;
           const lineSub  = qty * price * (1 - (parseFloat(l.discount_percent) || 0) / 100);
-          const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
+          const taxRate  = l.tax_code === 'vat_standard' ? effectiveVatRate : 0;
           const taxAmt   = lineSub * taxRate;
           const product  = l.product_id ? products.find((p) => p.id === l.product_id) : undefined;
           return {
@@ -757,7 +764,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
       // createWithLines returns the inserted row; no need to refetch the
       // whole invoice list to find it.
-      if (created) {
+      if (created && created.status !== 'draft') {
         try {
           await createInvoiceReceivableEntry(
             businessId,

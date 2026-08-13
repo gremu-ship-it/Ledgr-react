@@ -281,12 +281,72 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
 
     await this.update(originalId, { reversed_by: reversal.entry.id, status: 'reversed' });
 
+    // Check if reversing an invoice payment
+    const { data: invPayment } = await this.client
+      .from('invoice_payments')
+      .select('*')
+      .eq('journal_entry_id', originalId)
+      .maybeSingle();
+
+    if (invPayment) {
+      await this.client.rpc('increment_amount_paid', {
+        p_table: 'invoices',
+        p_id: invPayment.invoice_id,
+        p_amount: -invPayment.amount,
+      });
+
+      const { data: inv } = await this.client
+        .from('invoices')
+        .select('*')
+        .eq('id', invPayment.invoice_id)
+        .single();
+      if (inv) {
+        const nextStatus = (Number(inv.amount_paid) - Number(invPayment.amount)) <= 0 ? 'sent' : 'partially_paid';
+        await this.client
+          .from('invoices')
+          .update({ status: nextStatus } as never)
+          .eq('id', inv.id);
+      }
+
+      await this.client.from('invoice_payments').delete().eq('id', invPayment.id);
+    }
+
+    // Check if reversing an expense payment
+    const { data: expPayment } = await this.client
+      .from('expense_payments')
+      .select('*')
+      .eq('journal_entry_id', originalId)
+      .maybeSingle();
+
+    if (expPayment) {
+      await this.client.rpc('increment_amount_paid', {
+        p_table: 'expenses',
+        p_id: expPayment.expense_id,
+        p_amount: -expPayment.amount,
+      });
+
+      const { data: exp } = await this.client
+        .from('expenses')
+        .select('*')
+        .eq('id', expPayment.expense_id)
+        .single();
+      if (exp) {
+        const nextStatus = (Number(exp.amount_paid) - Number(expPayment.amount)) <= 0 ? 'sent' : 'partially_paid';
+        await this.client
+          .from('expenses')
+          .update({ status: nextStatus } as never)
+          .eq('id', exp.id);
+      }
+
+      await this.client.from('expense_payments').delete().eq('id', expPayment.id);
+    }
+
     // FIX: Auto-void the source record when its journal entry is reversed.
     // A reversal means "this whole transaction was wrong" — so the linked
     // invoice/expense/payroll run must be voided too, otherwise it keeps
     // counting in dashboard/report totals even though its ledger effect
     // has been fully reversed.
-    if (original.source_id && original.source_type && original.source_type !== 'reversal') {
+    if (!invPayment && !expPayment && original.source_id && original.source_type && original.source_type !== 'reversal') {
       await this.voidSourceRecord(original.source_type, original.source_id, postedBy, reason);
     }
 

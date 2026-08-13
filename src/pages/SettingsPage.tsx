@@ -25,6 +25,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
+import { MFASetup } from '@/components/auth/MFASetup';
 import type { Row } from '@/dal/types/database';
 import { useCookieConsent } from '@/lib/cookieConsent';
 import { DataExportButton } from '@/components/DataExportButton';
@@ -32,6 +33,7 @@ import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BillingTab } from '@/components/billing/BillingTab';
+import { TeamManagementPage } from '@/pages/settings/TeamManagementPage';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { handleError } from '@/lib/errorHandler';
 
@@ -895,6 +897,15 @@ function SecurityTab() {
         </div>
       </div>
 
+      {/* Two-Factor Authentication */}
+      <div className="rounded-2xl border border-gray-200 p-5 bg-white">
+        <h3 className="mb-2 text-sm font-semibold text-gray-900">Two-Factor Authentication (2FA)</h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Secure your account with a secondary verification method using a TOTP authenticator app.
+        </p>
+        <MFASetup />
+      </div>
+
       {/* Session info */}
       <div className="rounded-2xl border border-gray-200 p-5">
         <h3 className="mb-2 text-sm font-semibold text-gray-900">Active Session</h3>
@@ -934,7 +945,7 @@ const ROLES = [
   'staff',
 ] as const;
 
-function TeamMembersTab({ businessId }: { businessId: string }) {
+export function TeamMembersTab({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showInvite, setShowInvite] = useState(false);
@@ -1875,11 +1886,11 @@ function PrivacyTab() {
           <p className="mb-3 text-xs text-gray-500">
             In compliance with Malawi tax law and international accounting standards, financial records
             (journals, invoices, payroll, etc.) are retained for a minimum of 7 years. After this period,
-            records are automatically archived to cold storage (read-only, encrypted). Personal data is
+            records will be archived to cold storage (read-only, encrypted, planned feature). Personal data is
             handled according to your deletion request above.
           </p>
           <p className="text-[10px] text-gray-700">
-            Archiving is performed nightly by a secure background job. You can request early archival of
+            Archiving is a planned feature. You can request early archival of
             specific periods by contacting support.
           </p>
         </div>
@@ -1913,7 +1924,7 @@ We collect account information, business financial records, and usage data as de
 - For security, audit logging, and fraud prevention
 
 ## Data Retention
-Financial records are retained for 7 years as required by law, then archived to cold storage.
+Financial records are retained for 7 years as required by law, then archived to cold storage (planned feature).
 
 ## Your Rights
 You have the right to access, portability, and erasure of your personal data (see Settings → Privacy).
@@ -2057,7 +2068,7 @@ export function SettingsPage() {
                 )}
                 {activeTab === 'profile' && <UserProfileTab />}
                 {activeTab === 'security' && <SecurityTab />}
-                {activeTab === 'team' && <TeamMembersTab businessId={businessId} />}
+                {activeTab === 'team' && <TeamManagementPage />}
                 {activeTab === 'api' && (
                   <PlanGate capability="webhooks" featureName="API & Webhooks" fallback="lock">
                     <WebhookSettings />

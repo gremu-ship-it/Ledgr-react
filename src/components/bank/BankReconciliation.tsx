@@ -302,6 +302,18 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
       announce(msg, 'assertive');
       return;
     }
+    if (lines.length > 0) {
+      const msg = 'Please match all bank statement lines before saving and locking.';
+      alert(msg);
+      announce(msg, 'assertive');
+      return;
+    }
+    if (!reconciled) {
+      const msg = `Reconciliation difference must be zero (current difference: ${difference.toFixed(2)}).`;
+      alert(msg);
+      announce(msg, 'assertive');
+      return;
+    }
     setBusy(true);
     try {
       const date = pairs.at(-1)?.bank.date || new Date().toISOString().slice(0, 10);
@@ -665,7 +677,7 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
           <button
             type="button"
             onClick={finalize}
-            disabled={busy || !bankAccount || (!lines.length && !pairs.length)}
+            disabled={busy || !bankAccount || (!lines.length && !pairs.length) || lines.length > 0 || !reconciled}
             className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Lock className="h-4 w-4" aria-hidden="true" />

@@ -10,6 +10,7 @@ import { SwipeableRow } from '@/components/mobile/SwipeableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { repos } from '@/lib/repositories';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
@@ -112,23 +113,37 @@ async function addStockForBranchPurchase(
     return;
   }
 
-  const movements = linesWithProducts.map((line) => ({
-    business_id: businessId,
-    product_id: line.productId,
-    location_id: targetLocation.id,
-    movement_type: 'purchase' as const,
-    movement_date: new Date().toISOString().slice(0, 10),
-    // Positive: stock is arriving at this location as part of the purchase.
-    quantity: line.quantity,
-    unit_cost: line.unitCost,
-    source_type: 'expense',
-    source_id: sourceId,
-    reference,
-    created_by: createdBy,
-  }));
+  const movements = [];
+  for (const line of linesWithProducts) {
+    const product = await repos.inventory.db
+      .from('products')
+      .select('track_inventory')
+      .eq('id', line.productId)
+      .maybeSingle()
+      .then((r) => r.data);
+
+    if (product && product.track_inventory) {
+      movements.push({
+        business_id: businessId,
+        product_id: line.productId,
+        location_id: targetLocation.id,
+        movement_type: 'purchase' as const,
+        movement_date: new Date().toISOString().slice(0, 10),
+        // Positive: stock is arriving at this location as part of the purchase.
+        quantity: line.quantity,
+        unit_cost: line.unitCost,
+        source_type: 'expense',
+        source_id: sourceId,
+        reference,
+        created_by: createdBy,
+      });
+    }
+  }
 
   try {
-    await repos.inventory.recordMovements(movements);
+    if (movements.length > 0) {
+      await repos.inventory.recordMovements(movements);
+    }
   } catch (err) {
     log.error('Stock addition failed for purchase', err as Error, { reference });
   }
@@ -273,8 +288,6 @@ function ProductSelect({
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const VAT_RATE = 0.175;
-
 const PAYMENT_METHODS = [
   { value: 'cash',          label: 'Cash' },
   { value: 'bank_transfer', label: 'Bank Transfer' },
@@ -381,6 +394,9 @@ function ExpenseEmptyState({ onRecord }: { onRecord: () => void }) {
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const { business: businessData } = useBrandTheme();
+  const isVatRegistered = businessData?.vat_registered ?? false;
+  const effectiveVatRate = isVatRegistered ? 0.175 : 0;
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
   const { data: departments = [] } = useDepartments(businessId);
@@ -401,7 +417,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       if (!values.description.trim()) throw new Error('Description is required');
       if (!values.account_id) throw new Error('Please select an expense category');
 
-      const netAmount   = values.include_vat ? rawAmount / 1.175 : rawAmount;
+      const netAmount   = values.include_vat ? rawAmount / (1 + effectiveVatRate) : rawAmount;
       const vatAmount   = values.include_vat ? rawAmount - netAmount : 0;
       const totalAmount = rawAmount;
       const qty         = parseFloat(values.quantity) || 1;
@@ -466,7 +482,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
           quantity:     qty,
           unit_price:   qty > 0 ? netAmount / qty : netAmount,
           tax_code:     values.include_vat ? 'vat_standard' : 'none',
-          tax_rate:     values.include_vat ? VAT_RATE : 0,
+          tax_rate:     values.include_vat ? effectiveVatRate : 0,
           tax_amount:   vatAmount,
           line_total:   totalAmount,
           account_id:   resolvedAccountId,
@@ -786,6 +802,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     setForm((f) => ({ ...f, lines: f.lines.filter((_, i) => i !== idx) }));
   }
 
+  const { business: businessData } = useBrandTheme();
+  const isVatRegistered = businessData?.vat_registered ?? false;
+  const effectiveVatRate = isVatRegistered ? 0.175 : 0;
+
   const lineCalcs = form.lines.map((l) => {
     const qty      = parseFloat(l.quantity) || 0;
     const price    = parseFloat(l.unit_price) || 0;
@@ -793,7 +813,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     const gross    = qty * price;
     const discountAmt = gross * discPct / 100;
     const subtotal = gross - discountAmt;
-    const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
+    const taxRate  = l.tax_code === 'vat_standard' ? effectiveVatRate : 0;
     const taxAmount = subtotal * taxRate;
     return { gross, discountAmt, subtotal, taxAmount, lineTotal: subtotal + taxAmount };
   });
@@ -872,7 +892,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           const gross    = qty * price;
           const discountAmt = gross * discPct / 100;
           const lineSub  = gross - discountAmt;
-          const taxRate  = l.tax_code === 'vat_standard' ? VAT_RATE : 0;
+          const taxRate  = l.tax_code === 'vat_standard' ? effectiveVatRate : 0;
           const taxAmt   = lineSub * taxRate;
           return {
             line_number: idx + 1,

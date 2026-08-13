@@ -78,7 +78,9 @@ Deno.serve(async (req) => {
         .select('id')
         .eq('business_id', business.id)
         .gte('issue_date', periodStartStr)
-        .lte('issue_date', periodEndStr);
+        .lte('issue_date', periodEndStr)
+        .not('status', 'in', '("void", "draft")')
+        .is('deleted_at', null);
       const invoiceIds = (invoices ?? []).map((i) => i.id);
 
       let outputTax = 0;
@@ -99,7 +101,9 @@ Deno.serve(async (req) => {
         .select('id')
         .eq('business_id', business.id)
         .gte('expense_date', periodStartStr)
-        .lte('expense_date', periodEndStr);
+        .lte('expense_date', periodEndStr)
+        .not('status', 'in', '("void", "draft")')
+        .is('deleted_at', null);
       const expenseIds = (expenses ?? []).map((e) => e.id);
 
       let inputTax = 0;
