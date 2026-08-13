@@ -26,9 +26,9 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import {
   useMonthlyIncome,
-  useMonthlyExpenses,
   useOutstandingInvoices,
   useMonthlyExpenseVat,
+  useMonthlyProfitLossReport,
 } from '@/hooks/useDashboardData';
 import { formatMwk, formatMwkCompact } from '@/lib/formatters';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -186,7 +186,6 @@ export function MobileDashboard() {
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
 
   const income = useMonthlyIncome(businessId);
-  const expenses = useMonthlyExpenses(businessId);
   const outstanding = useOutstandingInvoices(businessId);
 
   const lowStock = useQuery({
@@ -196,8 +195,16 @@ export function MobileDashboard() {
     staleTime: 1000 * 60 * 5,
   });
 
-  const netProfit =
-    income.data !== undefined && expenses.data !== undefined ? income.data.totalAmount - expenses.data : undefined;
+  const plReport = useMonthlyProfitLossReport(businessId);
+  const netProfit = plReport.data?.netProfit;
+  const totalIncomeValue = plReport.data ? (plReport.data.totalRevenue + plReport.data.totalOtherIncome) : undefined;
+  const totalExpensesValue = plReport.data ? (
+    plReport.data.totalCostOfSales +
+    plReport.data.totalOperatingExpenses +
+    plReport.data.totalDepreciationAmortisation +
+    plReport.data.totalFinanceCosts +
+    plReport.data.totalTaxExpense
+  ) : undefined;
 
   const expenseVat = useMonthlyExpenseVat(businessId);
   const outputVat = income.data?.vatAmount ?? 0;
@@ -302,7 +309,7 @@ export function MobileDashboard() {
           )}
         />
         <div className="relative z-10">
-          {income.isLoading || expenses.isLoading ? (
+          {plReport.isLoading ? (
             <div className="animate-pulse space-y-4">
               <div className="h-3 w-24 rounded bg-white/20" />
               <div className="h-10 w-48 rounded bg-white/20" />
@@ -311,7 +318,7 @@ export function MobileDashboard() {
           ) : (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Current Balance</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Net Profit (this month)</p>
                 <button
                   type="button"
                   onClick={() => setBalanceVisible((visible) => !visible)}
@@ -359,8 +366,8 @@ export function MobileDashboard() {
       <MobileOnboardingChecklist />
 
       <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Income" value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)} valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={income.isLoading} onClick={() => navigate('/income')} />
-        <StatCard label="Expenses" value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)} valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={expenses.isLoading} onClick={() => navigate('/expenses')} />
+        <StatCard label="Income" value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)} valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={plReport.isLoading || income.isLoading} onClick={() => navigate('/income')} />
+        <StatCard label="Expenses" value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)} valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={plReport.isLoading} onClick={() => navigate('/expenses')} />
         <StatCard label="Outstanding" value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)} valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} tone="info" icon={FileText} isLoading={outstanding.isLoading} onClick={() => navigate('/invoices')} />
         <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={netVat >= 0 ? 'Payable to MRA' : 'Refundable'} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} onClick={() => navigate('/tax')} />
       </div>

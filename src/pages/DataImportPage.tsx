@@ -16,12 +16,13 @@ import {
   downloadTemplate,
   type ImportEntityType,
   type ImportPreview,
-  type ImportTemplate
+  type ImportTemplate,
+  type ImportResult
 } from '@/services/dataImportService';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const ENTITY_ICONS: Record<ImportEntityType, any> = {
+const ENTITY_ICONS: Record<ImportEntityType, React.ComponentType<{ className?: string }>> = {
   chart_of_accounts: Building2,
   contacts: Users,
   products: Package,
@@ -49,12 +50,7 @@ const ENTITY_CATEGORIES = [
   {
     label: 'Operations',
     description: 'Historical transactions and assets',
-    entities: ['fixed_assets', 'inventory_opening', 'invoices', 'bills'] as ImportEntityType[]
-  },
-  {
-    label: 'Additional',
-    description: 'Bank, employees and more',
-    entities: ['bank_transactions', 'employees'] as ImportEntityType[]
+    entities: ['fixed_assets'] as ImportEntityType[]
   }
 ];
 
@@ -184,7 +180,7 @@ export function DataImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [isParsing, setIsParsing] = useState(false);
-  const [importResult, setImportResult] = useState<any>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const { data: categories = [] } = useQuery({
@@ -476,7 +472,7 @@ export function DataImportPage() {
                       {template.exampleRows.slice(0, 2).map((row, idx) => (
                         <tr key={idx} className="border-b border-gray-100 last:border-0">
                           {template.headers.slice(0, 4).map(h => (
-                            <td key={h} className="py-1 pr-3 text-gray-700 truncate max-w-[120px]">{(row as any)[h]}</td>
+                            <td key={h} className="py-1 pr-3 text-gray-700 truncate max-w-[120px]">{row[h]}</td>
                           ))}
                         </tr>
                       ))}
@@ -685,7 +681,7 @@ export function DataImportPage() {
                 <div className="mt-4 max-h-40 overflow-y-auto rounded-lg bg-red-50 p-3 text-left">
                   <p className="text-xs font-medium text-red-800">Errors:</p>
                   <ul className="mt-1 space-y-1">
-                    {importResult.errors.slice(0, 5).map((err: any, idx: number) => (
+                    {importResult.errors.slice(0, 5).map((err, idx) => (
                       <li key={idx} className="text-xs text-red-700">
                         Row {err.row}: {err.message}
                       </li>

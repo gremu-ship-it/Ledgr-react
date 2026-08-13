@@ -222,6 +222,9 @@ export function OfflineQueueDrawer() {
                   {isSyncing ? 'Syncing' : 'Sync now'}
                 </button>
               </div>
+              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 text-[11px] text-blue-800 leading-normal">
+                <strong>Offline scope:</strong> Quick cash income/expense only; invoices, payments, and transfers require active internet connection.
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto">

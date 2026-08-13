@@ -412,6 +412,10 @@ serve(async (req) => {
         return response(jsonApiDocument(route.resource, data), 201);
       }
 
+      if (route.resource === 'invoices' || route.resource === 'expenses') {
+        throw new Error(`Creating ${route.resource} via the API is currently disabled. This endpoint is reserved for future draft-import workflows.`);
+      }
+
       // Explicit schemas prevent callers from writing lifecycle, audit,
       // payment, ownership, or soft-delete columns through the service role.
       const safeAttrs = route.resource === 'invoices'

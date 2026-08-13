@@ -396,7 +396,7 @@ export function AiInsightsPage() {
 
       {forecastFailed && (
         <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Cash flow forecast is unavailable right now, so no projection is shown. Other insights on this page are unaffected.
+          ⚠️ [Unavailable / Experimental] Cash flow forecast is unavailable right now. Cash-account forecast logic is pending implementation. Other insights are unaffected.
         </div>
       )}
 

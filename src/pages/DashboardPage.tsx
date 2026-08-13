@@ -9,6 +9,7 @@ import {
   useOutstandingInvoices,
   useIncomeExpenseTrend,
   useRecentJournalEntries,
+  useMonthlyProfitLossReport,
 } from '@/hooks/useDashboardData';
 import { IncomeExpenseChart } from '@/components/dashboard/IncomeExpenseChart';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
@@ -154,11 +155,21 @@ export function DashboardPage() {
   const outstanding = useOutstandingInvoices(businessId);
   const trend = useIncomeExpenseTrend(businessId, 6);
   const recentEntries = useRecentJournalEntries(businessId, 10);
+  const plReport = useMonthlyProfitLossReport(businessId);
 
-  const netProfit =
-    income.data !== undefined && expenses.data !== undefined ? income.data.totalAmount - expenses.data : undefined;
-  const netIsLoading = income.isLoading || expenses.isLoading;
-  const netIsError = income.isError || expenses.isError;
+  // Reconciled P&L values
+  const netProfit = plReport.data?.netProfit;
+  const totalIncomeValue = plReport.data ? (plReport.data.totalRevenue + plReport.data.totalOtherIncome) : undefined;
+  const totalExpensesValue = plReport.data ? (
+    plReport.data.totalCostOfSales +
+    plReport.data.totalOperatingExpenses +
+    plReport.data.totalDepreciationAmortisation +
+    plReport.data.totalFinanceCosts +
+    plReport.data.totalTaxExpense
+  ) : undefined;
+
+  const netIsLoading = plReport.isLoading;
+  const netIsError = plReport.isError;
 
   const outputVat = income.data?.vatAmount ?? 0;
   const inputVat = expenseVat.data ?? 0;
@@ -212,21 +223,21 @@ export function DashboardPage() {
         />
         <KpiCard
           label={t('dashboard.totalIncome')}
-          value={income.data ? formatMwkCompact(income.data.totalAmount) : formatMwkCompact(0)}
-          valueTitle={income.data ? formatMwk(income.data.totalAmount) : formatMwk(0)}
+          value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)}
+          valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)}
           sub={income.data ? t('dashboard.collected', { amount: formatMwk(income.data.amountPaid) }) : undefined}
           trendUp
-          isLoading={income.isLoading}
-          isError={income.isError}
+          isLoading={plReport.isLoading || income.isLoading}
+          isError={plReport.isError || income.isError}
         />
         <KpiCard
           label={t('dashboard.totalExpenses')}
-          value={expenses.data !== undefined ? formatMwkCompact(expenses.data) : formatMwkCompact(0)}
-          valueTitle={expenses.data !== undefined ? formatMwk(expenses.data) : formatMwk(0)}
+          value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)}
+          valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)}
           sub={t('dashboard.thisMonth')}
           trendUp={false}
-          isLoading={expenses.isLoading}
-          isError={expenses.isError}
+          isLoading={plReport.isLoading}
+          isError={plReport.isError}
         />
         <KpiCard
           label={t('dashboard.accountsReceivable')}

@@ -476,6 +476,17 @@ export async function deductStockAndPostCogs(
     const costLines: SaleCostLine[] = [];
     const movements = [];
     for (const line of linesWithProducts) {
+      const product = await repos.inventory.db
+        .from('products')
+        .select('track_inventory')
+        .eq('id', line.productId)
+        .maybeSingle()
+        .then((r) => r.data);
+
+      if (!product || !product.track_inventory) {
+        continue;
+      }
+
       const balance = await repos.inventory.findBalance(businessId, line.productId, targetLocation.id);
       const unitCost = balance ? Number(balance.average_cost) : 0;
       costLines.push({ productId: line.productId, quantity: line.quantity, unitCost });
@@ -505,7 +516,7 @@ export async function deductStockAndPostCogs(
       `Stock deduction failed for invoice ${invoice.invoice_number}.`,
       err as Error,
     );
-    return { costLines: [], cogsEntryId: null };
+    throw new Error(`Stock deduction failed for invoice ${invoice.invoice_number}: ${(err as Error).message}`, { cause: err });
   }
 }
 

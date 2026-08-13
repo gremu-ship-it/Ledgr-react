@@ -428,9 +428,23 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       // line — confirm if other_deductions need a separate payable account.
     }
 
+    // Resolve Salaries/Wages Payable liability account (e.g. code '2130' or containing 'Salary Payable')
+    let salariesPayableAccountId = await this.findAccountByCode(run.business_id, '2130');
+    if (!salariesPayableAccountId) {
+      const { data: payableAcc } = await this.client
+        .from('accounts')
+        .select('id')
+        .eq('business_id', run.business_id)
+        .is('deleted_at', null)
+        .or('code.eq.2120,code.eq.2130,name.ilike.%salary%payable%,name.ilike.%salaries%payable%,name.ilike.%wages%payable%')
+        .limit(1)
+        .maybeSingle();
+      salariesPayableAccountId = payableAcc?.id ?? bankAccountId;
+    }
+
     lines.push({
-      account_id: bankAccountId,
-      description: `Net pay — ${run.run_number}`,
+      account_id: salariesPayableAccountId,
+      description: `Net pay payable — ${run.run_number}`,
       is_debit: false,
       amount: totalNetPay,
       amount_base: totalNetPay,

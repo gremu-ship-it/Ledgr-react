@@ -102,6 +102,9 @@ function CreateTransferModal({
   isLoading: boolean;
   errorMessage?: string | null;
 }) {
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const businessId = currentBusiness?.business?.id;
+
   const [fromId, setFromId] = useState('');
   const [toId, setToId]     = useState('');
   const [notes, setNotes]   = useState('');
@@ -113,11 +116,36 @@ function CreateTransferModal({
 
   const addLine    = () => setLines((l) => [...l, { productId: '', quantityRequested: 1, unitCost: 0 }]);
   const removeLine = (i: number) => setLines((l) => l.filter((_, idx) => idx !== i));
+
+  const handleFromLocationChange = (newFromId: string) => {
+    setFromId(newFromId);
+    if (!businessId) return;
+    lines.forEach((line, i) => {
+      if (line.productId) {
+        repos.inventory.findBalance(businessId, line.productId, newFromId).then((bal) => {
+          const p = products.find((prod) => prod.id === line.productId);
+          const cost = bal ? Number(bal.average_cost) : Number(p?.purchase_price || 0);
+          setLines((curr) => curr.map((currLine, currIdx) => 
+            currIdx === i ? { ...currLine, unitCost: cost } : currLine
+          ));
+        }).catch(() => {});
+      }
+    });
+  };
+
   const updateLine = (i: number, field: keyof TransferLineForm, value: string | number) =>
     setLines((l) => l.map((line, idx) => {
       if (idx !== i) return line;
       if (field === 'productId') {
         const p = products.find((p) => p.id === value);
+        if (p && fromId && businessId) {
+          repos.inventory.findBalance(businessId, p.id, fromId).then((bal) => {
+            const cost = bal ? Number(bal.average_cost) : Number(p.purchase_price || 0);
+            setLines((curr) => curr.map((currLine, currIdx) => 
+              currIdx === i ? { ...currLine, unitCost: cost } : currLine
+            ));
+          }).catch(() => {});
+        }
         return { ...line, productId: value as string, unitCost: p ? Number(p.purchase_price) : 0 };
       }
       return { ...line, [field]: value };
@@ -143,7 +171,7 @@ function CreateTransferModal({
         <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-500">From Location</label>
-            <select value={fromId} onChange={(e) => setFromId(e.target.value)}
+            <select value={fromId} onChange={(e) => handleFromLocationChange(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none">
               <option value="">Select…</option>
               {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}

@@ -87,8 +87,8 @@ export class IncomeRepository extends BaseRepository<'invoices'> {
   }> {
     const invoices = await this.findByDateRange(businessId, fromDate, toDate);
 
-    // Exclude voided invoices only — credit_notes ARE revenue adjustments
-    const active = invoices.filter((inv) => inv.status !== 'void');
+    // Exclude void and draft invoices only — credit_notes ARE revenue adjustments
+    const active = invoices.filter((inv) => inv.status !== 'void' && inv.status !== 'draft');
 
     const totals = active.reduce(
       (acc, inv) => ({
