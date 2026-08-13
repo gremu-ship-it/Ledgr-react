@@ -1,0 +1,115 @@
+# ============================================================================
+# Ledgr — Phase 8A.1 — Capture staging schema (READ-ONLY, manual trigger)
+# ============================================================================
+# Runs scripts/database/capture-staging-schema.sh against the STAGING
+# Supabase project using the repository's existing staging credentials.
+#
+# SAFETY
+# ------
+#   * workflow_dispatch ONLY — never runs automatically.
+#   * Hardcoded to staging. There is no production option anywhere in this
+#     file, and the capture script itself refuses to run unless:
+#         LEDGR_ENV=staging
+#         STAGING_SUPABASE_PROJECT_REF != PRODUCTION_SUPABASE_PROJECT_REF
+#         STAGING_SUPABASE_DB_URL points at db.<staging-ref>.supabase.co
+#   * The script issues only SELECT / SHOW / pg_get_*def statements and
+#     redacts JWTs/keys/tokens/passwords from the captured artifacts.
+#   * The staging DB URL is a repository secret; it is injected as an
+#     environment variable and never printed (GitHub also masks it in logs).
+#   * The captured artifacts are committed back ONLY under
+#     artifacts/database/capture/ — nothing else is touched.
+#
+# USAGE
+# -----
+#   1. GitHub → Actions → "Capture staging schema (read-only)".
+#   2. "Run workflow" → Branch: arena/019ffae7-ledgr-react → Run workflow.
+#   3. When the run finishes green, the capture lands on the branch at
+#      artifacts/database/capture/ (and as a downloadable artifact
+#      "staging-schema-capture").
+# ============================================================================
+name: Capture staging schema (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch/ref to run the capture tooling from
+        required: false
+        default: arena/019ffae7-ledgr-react
+
+permissions:
+  contents: write   # commit the redacted capture back to the branch
+  actions: write    # upload the capture as a workflow artifact
+
+concurrency:
+  group: capture-staging-schema
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    name: Capture staging schema
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      LEDGR_ENV: staging
+      STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+      STAGING_SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL_STAGING }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Install postgresql-client (psql)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          psql --version
+
+      - name: Verify environment isolation (no connection made yet)
+        run: |
+          set -euo pipefail
+          test "$LEDGR_ENV" = "staging"
+          test -n "$STAGING_SUPABASE_PROJECT_REF"  || { echo "::error::STAGING_SUPABASE_PROJECT_REF is empty"; exit 1; }
+          test -n "$PRODUCTION_SUPABASE_PROJECT_REF" || { echo "::error::PRODUCTION_SUPABASE_PROJECT_REF is empty"; exit 1; }
+          test -n "$STAGING_SUPABASE_DB_URL"       || { echo "::error::STAGING_SUPABASE_DB_URL is empty"; exit 1; }
+          if [[ "$STAGING_SUPABASE_PROJECT_REF" == "$PRODUCTION_SUPABASE_PROJECT_REF" ]]; then
+            echo "::error::ENVIRONMENT ISOLATION FAILURE — staging ref equals production ref. Not connecting."
+            exit 1
+          fi
+          case "$STAGING_SUPABASE_DB_URL" in
+            *"db.${STAGING_SUPABASE_PROJECT_REF}.supabase.co"*) : ;;
+            *) echo "::error::STAGING_SUPABASE_DB_URL does not point at db.${STAGING_SUPABASE_PROJECT_REF}.supabase.co. Not connecting."; exit 1 ;;
+          esac
+          echo "Isolation verified: staging ref ${STAGING_SUPABASE_PROJECT_REF} != production ref ${PRODUCTION_SUPABASE_PROJECT_REF}"
+
+      - name: Run read-only schema capture
+        run: bash scripts/database/capture-staging-schema.sh
+
+      - name: Show captured artifact list
+        run: |
+          find artifacts/database/capture -type f -printf '%f\n' | sort
+          echo "---- server version ----"
+          cat artifacts/database/capture/server_version.txt 2>/dev/null || true
+
+      - name: Upload capture as workflow artifact (fallback if push is blocked)
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-schema-capture
+          path: artifacts/database/capture/
+          if-no-files-found: error
+
+      - name: Commit redacted capture back to the branch
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/database/capture/
+          if git diff --cached --quiet; then
+            echo "No capture files changed — nothing to commit."
+            exit 0
+          fi
+          git commit -m "Phase 8A.1: read-only staging schema capture [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "Capture committed to ${GITHUB_REF_NAME}."
