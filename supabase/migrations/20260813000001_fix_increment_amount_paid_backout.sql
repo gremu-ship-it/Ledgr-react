@@ -47,7 +47,7 @@ begin
   -- Zero is a no-op and almost certainly a caller bug; negative is a valid
   -- back-out (payment reversal).
   if p_amount = 0 then
-    raise exception 'Amount must be non-zero', p_amount
+    raise exception 'Amount must be non-zero: %', p_amount
       using errcode = '22023';
   end if;
 
