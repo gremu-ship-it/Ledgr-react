@@ -1,0 +1,1358 @@
+{
+  "meta": {
+    "fresh_database": "PostgreSQL 18.4 (embedded-postgres 18.4), replayed from 57 repository migrations on a disposable instance",
+    "staging_evidence": "database.generated.ts (live-staging-derived) + migrations + supplement"
+  },
+  "comparisons": {
+    "tables": [
+      {
+        "table": "accounting_periods",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "accounts",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "accounts_admin_delete",
+          "accounts_member_read",
+          "accounts_partner_admin_read",
+          "accounts_platform_admin_read",
+          "accounts_writer_insert",
+          "accounts_writer_update"
+        ]
+      },
+      {
+        "table": "ai_insights_usage",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "api_keys",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "api_usage",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "asset_categories",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "asset_categories_admin_delete",
+          "asset_categories_member_read",
+          "asset_categories_platform_admin_read",
+          "asset_categories_writer_insert",
+          "asset_categories_writer_update"
+        ]
+      },
+      {
+        "table": "audit_log",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [
+          {
+            "column": "changed_fields",
+            "fresh": "text[]",
+            "stagingEvidence": "string[] | null"
+          },
+          {
+            "column": "ip_address",
+            "fresh": "inet",
+            "stagingEvidence": "unknown"
+          }
+        ],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "bank_statement_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "match_method",
+          "match_confidence",
+          "locked_at"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "bank_statements",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "reconciled_at",
+          "reconciled_by",
+          "is_locked",
+          "locked_at"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "bank_statements_reconciled_by_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "branches",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "branches_admin_delete",
+          "branches_member_read",
+          "branches_platform_admin_read",
+          "branches_writer_insert",
+          "branches_writer_update"
+        ]
+      },
+      {
+        "table": "budget_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "budgets",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "business_invitations",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "business_invitations_business_access"
+        ]
+      },
+      {
+        "table": "business_terms_acceptances",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "business_users",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "businesses",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "businesses_member_read",
+          "businesses_partner_admin_read",
+          "businesses_partner_peer_read",
+          "businesses_platform_admin_read",
+          "businesses_update"
+        ]
+      },
+      {
+        "table": "contacts",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "contacts_admin_delete",
+          "contacts_member_read",
+          "contacts_platform_admin_read",
+          "contacts_writer_insert",
+          "contacts_writer_update"
+        ]
+      },
+      {
+        "table": "currencies",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "departments",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "departments_admin_delete",
+          "departments_member_read",
+          "departments_platform_admin_read",
+          "departments_writer_insert",
+          "departments_writer_update"
+        ]
+      },
+      {
+        "table": "depreciation_schedules",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "depreciation_schedules_admin_delete",
+          "depreciation_schedules_member_read",
+          "depreciation_schedules_platform_admin_read",
+          "depreciation_schedules_writer_insert",
+          "depreciation_schedules_writer_update"
+        ]
+      },
+      {
+        "table": "employee_allowances",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "employee_allowances_payroll_delete",
+          "employee_allowances_payroll_insert",
+          "employee_allowances_payroll_read",
+          "employee_allowances_payroll_update"
+        ]
+      },
+      {
+        "table": "employee_deductions",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "employee_deductions_payroll_delete",
+          "employee_deductions_payroll_insert",
+          "employee_deductions_payroll_read",
+          "employee_deductions_payroll_update"
+        ]
+      },
+      {
+        "table": "employees",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "employees_payroll_delete",
+          "employees_payroll_insert",
+          "employees_payroll_read",
+          "employees_payroll_update"
+        ]
+      },
+      {
+        "table": "exchange_rates",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "exchange_rates_created_by_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "exchange_rates_business_read",
+          "exchange_rates_business_write"
+        ]
+      },
+      {
+        "table": "expense_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "expense_payments",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "exchange_rate_used",
+          "functional_currency"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "expense_payments_functional_currency_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "expenses",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "exchange_rate_used",
+          "functional_currency"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "expenses_functional_currency_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "fixed_assets",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "fixed_assets_admin_delete",
+          "fixed_assets_member_read",
+          "fixed_assets_platform_admin_read",
+          "fixed_assets_writer_insert",
+          "fixed_assets_writer_update"
+        ]
+      },
+      {
+        "table": "fx_revaluations",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "fx_revaluations_created_by_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "fx_revaluations_business_read"
+        ]
+      },
+      {
+        "table": "inventory_balances",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "inventory_locations",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "inventory_locations_admin_delete",
+          "inventory_locations_member_read",
+          "inventory_locations_platform_admin_read",
+          "inventory_locations_writer_insert",
+          "inventory_locations_writer_update"
+        ]
+      },
+      {
+        "table": "invoice_delivery_events",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "invoice_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "invoice_payments",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "exchange_rate_used",
+          "functional_currency"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "invoice_payments_functional_currency_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "invoices",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "exchange_rate_used",
+          "functional_currency"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "invoices_functional_currency_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "journal_entries",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "journal_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [
+          "exchange_rate_used",
+          "functional_currency",
+          "functional_amount"
+        ],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "journal_lines_functional_currency_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "loan_repayments",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "loan_repayments_bank_account_id_fkey",
+          "loan_repayments_business_id_fkey",
+          "loan_repayments_journal_entry_id_fkey",
+          "loan_repayments_loan_id_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "loan_repayments_business_access"
+        ]
+      },
+      {
+        "table": "loans",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "loans_business_id_fkey",
+          "loans_drawdown_journal_id_fkey",
+          "loans_interest_expense_account_id_fkey",
+          "loans_loan_account_id_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "loans_business_access"
+        ]
+      },
+      {
+        "table": "partner_admins",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "partner_clients",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "partner_feature_flags",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "partner_invoices",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "partners",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "paye_bands",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "payroll_employee_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "payroll_employee_lines_payroll_delete",
+          "payroll_employee_lines_payroll_insert",
+          "payroll_employee_lines_payroll_read",
+          "payroll_employee_lines_payroll_update"
+        ]
+      },
+      {
+        "table": "payroll_runs",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "payroll_runs_payroll_delete",
+          "payroll_runs_payroll_insert",
+          "payroll_runs_payroll_read",
+          "payroll_runs_payroll_update"
+        ]
+      },
+      {
+        "table": "product_categories",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "products",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "profiles",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "recurring_invoices",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "share_transactions",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [
+          "share_transactions_bank_account_id_fkey",
+          "share_transactions_business_id_fkey",
+          "share_transactions_journal_entry_id_fkey",
+          "share_transactions_share_account_id_fkey"
+        ],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "share_transactions_business_access"
+        ]
+      },
+      {
+        "table": "stock_movements",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "stock_transfer_lines",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "stock_transfers",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "subscription_payments",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "subscription_payments_platform_admin_read",
+          "subscription_payments_read"
+        ]
+      },
+      {
+        "table": "subscription_reminders_sent",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "support_agent_usage",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "tax_alerts",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "tax_alerts_business_access"
+        ]
+      },
+      {
+        "table": "tax_configurations",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "tax_payments",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "tax_payments_business_access"
+        ]
+      },
+      {
+        "table": "tax_returns",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": [
+          "tax_returns_business_access"
+        ]
+      },
+      {
+        "table": "user_profiles",
+        "status": "PRESENT IN BOTH",
+        "missing_from_fresh": [],
+        "extra_in_fresh": [],
+        "type_differences": [],
+        "fk_only_in_fresh": [],
+        "fk_only_in_staging_evidence": [],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "policies": []
+      },
+      {
+        "table": "webhook_deliveries",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      },
+      {
+        "table": "webhooks",
+        "status": "EXTRA IN FRESH (migration-created; staging evidence predates it)"
+      }
+    ],
+    "views": {
+      "fresh": [
+        "v_cash_flow",
+        "v_inventory_ledger_variance",
+        "v_partner_client_usage"
+      ],
+      "staging_evidence": [
+        "v_ar_ageing",
+        "v_asset_register",
+        "v_cash_flow",
+        "v_reorder_alerts",
+        "v_trial_balance"
+      ],
+      "missing_from_fresh": [
+        "v_ar_ageing",
+        "v_asset_register",
+        "v_reorder_alerts",
+        "v_trial_balance"
+      ],
+      "extra_in_fresh": [
+        "v_inventory_ledger_variance",
+        "v_partner_client_usage"
+      ]
+    },
+    "functions": {
+      "fresh_count": 106,
+      "staging_evidence_count": 14,
+      "staging_evidence_missing_from_fresh": [
+        "accept_invitation",
+        "create_business_with_owner",
+        "current_user_role",
+        "get_enum_values",
+        "get_user_role",
+        "invite_member",
+        "log_manual_audit_event",
+        "seed_new_business",
+        "verify_audit_chain"
+      ],
+      "fresh_has_pg_trgm_show_trgm": true,
+      "fresh_has_show_limit": true
+    },
+    "enums": {
+      "fresh": [
+        {
+          "name": "account_subtype",
+          "labels": [
+            "current_asset",
+            "non_current_asset",
+            "fixed_asset",
+            "current_liability",
+            "non_current_liability",
+            "share_capital",
+            "retained_earnings",
+            "reserves",
+            "revenue",
+            "other_income",
+            "cost_of_sales",
+            "operating_expense",
+            "finance_cost",
+            "tax_expense",
+            "depreciation_amortisation"
+          ]
+        },
+        {
+          "name": "account_type",
+          "labels": [
+            "asset",
+            "liability",
+            "equity",
+            "income",
+            "expense"
+          ]
+        },
+        {
+          "name": "asset_status",
+          "labels": [
+            "active",
+            "disposed",
+            "fully_depreciated",
+            "impaired",
+            "under_construction"
+          ]
+        },
+        {
+          "name": "currency_code",
+          "labels": [
+            "MWK",
+            "USD",
+            "EUR",
+            "GBP",
+            "ZAR",
+            "ZMW",
+            "TZS",
+            "KES",
+            "UGX"
+          ]
+        },
+        {
+          "name": "depreciation_method",
+          "labels": [
+            "straight_line",
+            "reducing_balance",
+            "units_of_production",
+            "sum_of_years_digits"
+          ]
+        },
+        {
+          "name": "invoice_status",
+          "labels": [
+            "draft",
+            "sent",
+            "partially_paid",
+            "paid",
+            "overdue",
+            "void",
+            "credit_note"
+          ]
+        },
+        {
+          "name": "journal_status",
+          "labels": [
+            "draft",
+            "posted",
+            "reversed"
+          ]
+        },
+        {
+          "name": "payment_method",
+          "labels": [
+            "cash",
+            "bank_transfer",
+            "cheque",
+            "airtel_money",
+            "tnm_mpamba",
+            "card",
+            "other"
+          ]
+        },
+        {
+          "name": "payroll_status",
+          "labels": [
+            "draft",
+            "approved",
+            "paid",
+            "void"
+          ]
+        },
+        {
+          "name": "stock_movement_type",
+          "labels": [
+            "purchase",
+            "sale",
+            "adjustment_in",
+            "adjustment_out",
+            "transfer_in",
+            "transfer_out",
+            "return_in",
+            "return_out",
+            "opening_balance",
+            "write_off"
+          ]
+        },
+        {
+          "name": "tax_alert_channel",
+          "labels": [
+            "email",
+            "sms"
+          ]
+        },
+        {
+          "name": "tax_alert_status",
+          "labels": [
+            "pending",
+            "sent",
+            "failed"
+          ]
+        },
+        {
+          "name": "tax_alert_type",
+          "labels": [
+            "14_day",
+            "7_day",
+            "1_day",
+            "due_date"
+          ]
+        },
+        {
+          "name": "tax_code",
+          "labels": [
+            "vat_standard",
+            "vat_zero",
+            "vat_exempt",
+            "paye",
+            "wht_15",
+            "wht_20",
+            "wht_10",
+            "cit",
+            "fbt",
+            "none",
+            "tpr_pension"
+          ]
+        },
+        {
+          "name": "tax_return_status",
+          "labels": [
+            "pending",
+            "filed",
+            "paid",
+            "overdue",
+            "void"
+          ]
+        },
+        {
+          "name": "user_role",
+          "labels": [
+            "owner",
+            "admin",
+            "accountant",
+            "payroll_manager",
+            "supervisor",
+            "data_entry",
+            "inventory_manager",
+            "sales_clerk",
+            "auditor",
+            "viewer",
+            "purchasing_officer",
+            "warehouse_worker",
+            "sales_manager",
+            "customer_service_rep",
+            "tax_compliance_officer",
+            "treasury_manager",
+            "asset_manager",
+            "board_member",
+            "branch_manager"
+          ]
+        }
+      ],
+      "staging_evidence": {
+        "account_subtype": [
+          "current_asset",
+          "non_current_asset",
+          "fixed_asset",
+          "current_liability",
+          "non_current_liability",
+          "share_capital",
+          "retained_earnings",
+          "reserves",
+          "revenue",
+          "other_income",
+          "cost_of_sales",
+          "operating_expense",
+          "finance_cost",
+          "tax_expense",
+          "depreciation_amortisation"
+        ],
+        "account_type": [
+          "asset",
+          "liability",
+          "equity",
+          "income",
+          "expense"
+        ],
+        "asset_status": [
+          "active",
+          "disposed",
+          "fully_depreciated",
+          "impaired",
+          "under_construction"
+        ],
+        "currency_code": [
+          "MWK",
+          "USD",
+          "EUR",
+          "GBP",
+          "ZAR",
+          "ZMW",
+          "TZS",
+          "KES",
+          "UGX"
+        ],
+        "depreciation_method": [
+          "straight_line",
+          "reducing_balance",
+          "units_of_production",
+          "sum_of_years_digits"
+        ],
+        "invoice_status": [
+          "draft",
+          "sent",
+          "partially_paid",
+          "paid",
+          "overdue",
+          "void",
+          "credit_note"
+        ],
+        "journal_status": [
+          "draft",
+          "posted",
+          "reversed"
+        ],
+        "payment_method": [
+          "cash",
+          "bank_transfer",
+          "cheque",
+          "airtel_money",
+          "tnm_mpamba",
+          "card",
+          "other"
+        ],
+        "payroll_status": [
+          "draft",
+          "approved",
+          "paid",
+          "void"
+        ],
+        "stock_movement_type": [
+          "purchase",
+          "sale",
+          "adjustment_in",
+          "adjustment_out",
+          "transfer_in",
+          "transfer_out",
+          "return_in",
+          "return_out",
+          "opening_balance",
+          "write_off"
+        ],
+        "tax_alert_channel": [
+          "email",
+          "sms"
+        ],
+        "tax_alert_status": [
+          "pending",
+          "sent",
+          "failed"
+        ],
+        "tax_alert_type": [
+          "14_day",
+          "7_day",
+          "1_day",
+          "due_date"
+        ],
+        "tax_code": [
+          "vat_standard",
+          "vat_zero",
+          "vat_exempt",
+          "paye",
+          "wht_15",
+          "wht_20",
+          "wht_10",
+          "cit",
+          "fbt",
+          "none",
+          "tpr_pension"
+        ],
+        "tax_return_status": [
+          "pending",
+          "filed",
+          "paid",
+          "overdue",
+          "void"
+        ],
+        "user_role": [
+          "owner",
+          "admin",
+          "accountant",
+          "payroll_manager",
+          "supervisor",
+          "data_entry",
+          "inventory_manager",
+          "sales_clerk",
+          "auditor",
+          "viewer",
+          "purchasing_officer",
+          "warehouse_worker",
+          "sales_manager",
+          "customer_service_rep",
+          "tax_compliance_officer",
+          "treasury_manager",
+          "asset_manager",
+          "board_member",
+          "branch_manager"
+        ]
+      },
+      "diff": []
+    },
+    "extensions": {
+      "fresh": [
+        "pg_cron",
+        "pg_net",
+        "pg_trgm",
+        "pgcrypto",
+        "plpgsql"
+      ],
+      "note": "pg_cron/pg_net are stubs in the harness; pg_trgm was installed by the harness (not by any migration) to test the show_trgm hypothesis"
+    },
+    "cron": {
+      "fresh_jobs": [
+        {
+          "jobid": "1",
+          "schedule": "0 1 * * *",
+          "command": "\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/expire-subscriptions',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  ",
+          "active": true
+        },
+        {
+          "jobid": "2",
+          "schedule": "0 8 * * *",
+          "command": "\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/send-renewal-reminders',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  ",
+          "active": true
+        },
+        {
+          "jobid": "3",
+          "schedule": "0 2 1 * *",
+          "command": "\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/generate-partner-invoices',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  ",
+          "active": true
+        }
+      ],
+      "note": "stub cron.schedule records; real staging jobs contain <PROJECT_REF>/<CRON_SECRET> placeholders resolved at deploy time"
+    }
+  }
+}
