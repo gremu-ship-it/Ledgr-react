@@ -1,27 +1,5 @@
 {
   "server_version": "18.4",
-  "extensions": [
-    {
-      "extname": "pg_cron",
-      "extversion": "1.0"
-    },
-    {
-      "extname": "pg_net",
-      "extversion": "1.0"
-    },
-    {
-      "extname": "pg_trgm",
-      "extversion": "1.6"
-    },
-    {
-      "extname": "pgcrypto",
-      "extversion": "1.4"
-    },
-    {
-      "extname": "plpgsql",
-      "extversion": "1.0"
-    }
-  ],
   "enums": [
     {
       "name": "account_subtype",
@@ -152,29 +130,15 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "accounting_periods_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "accounting_periods_pkey",
-          "def": "CREATE UNIQUE INDEX accounting_periods_pkey ON public.accounting_periods USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "accounts": {
       "columns": [
@@ -347,9 +311,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "accounts_branch_id_fkey",
@@ -372,63 +333,9 @@
           "def": "FOREIGN KEY (parent_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "accounts_pkey",
-          "def": "CREATE UNIQUE INDEX accounts_pkey ON public.accounts USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "accounts_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "accounts_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "accounts_partner_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_partner_business_admin(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "accounts_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "accounts_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "accounts_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "ai_insights_usage": {
       "columns": [
@@ -451,29 +358,11 @@
           "default_expr": "1"
         }
       ],
+      "fks": [],
       "pk": [
         "user_id",
         "window_start"
-      ],
-      "fks": [],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "ai_insights_usage_pkey",
-          "def": "CREATE UNIQUE INDEX ai_insights_usage_pkey ON public.ai_insights_usage USING btree (user_id, window_start)"
-        },
-        {
-          "name": "ai_insights_usage_window_idx",
-          "def": "CREATE INDEX ai_insights_usage_window_idx ON public.ai_insights_usage USING btree (window_start)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      ]
     },
     "api_keys": {
       "columns": [
@@ -532,9 +421,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "api_keys_business_id_fkey",
@@ -545,52 +431,9 @@
           "def": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "api_keys_key_hash_key",
-          "def": "UNIQUE (key_hash)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "api_keys_key_hash_key",
-          "def": "CREATE UNIQUE INDEX api_keys_key_hash_key ON public.api_keys USING btree (key_hash)"
-        },
-        {
-          "name": "api_keys_pkey",
-          "def": "CREATE UNIQUE INDEX api_keys_pkey ON public.api_keys USING btree (id)"
-        },
-        {
-          "name": "idx_api_keys_active_hash",
-          "def": "CREATE INDEX idx_api_keys_active_hash ON public.api_keys USING btree (key_hash) WHERE (revoked_at IS NULL)"
-        },
-        {
-          "name": "idx_api_keys_business",
-          "def": "CREATE INDEX idx_api_keys_business ON public.api_keys USING btree (business_id, created_at DESC)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "api_keys_business_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "(EXISTS ( SELECT 1\n   FROM business_users bu\n  WHERE ((bu.business_id = api_keys.business_id) AND (bu.user_id = auth.uid()) AND (bu.is_active = true) AND ((bu.role)::text = ANY (ARRAY['owner'::text, 'admin'::text])))))",
-          "with_check": null
-        },
-        {
-          "policyname": "api_keys_business_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))",
-          "with_check": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "api_usage": {
       "columns": [
@@ -631,41 +474,15 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "api_usage_api_key_id_fkey",
           "def": "FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "api_usage_api_key_id_window_uidx",
-          "def": "CREATE UNIQUE INDEX api_usage_api_key_id_window_uidx ON public.api_usage USING btree (api_key_id, window_start) WHERE (api_key_id IS NOT NULL)"
-        },
-        {
-          "name": "api_usage_bucket_window_uidx",
-          "def": "CREATE UNIQUE INDEX api_usage_bucket_window_uidx ON public.api_usage USING btree (api_key, window_start) WHERE (api_key IS NOT NULL)"
-        },
-        {
-          "name": "api_usage_pkey",
-          "def": "CREATE UNIQUE INDEX api_usage_pkey ON public.api_usage USING btree (id)"
-        },
-        {
-          "name": "idx_api_usage_key_window",
-          "def": "CREATE INDEX idx_api_usage_key_window ON public.api_usage USING btree (api_key, window_start)"
-        }
-      ],
-      "rls": {
-        "enabled": false,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "asset_categories": {
       "columns": [
@@ -748,9 +565,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "asset_categories_accumulated_dep_account_id_fkey",
@@ -769,56 +583,9 @@
           "def": "FOREIGN KEY (dep_expense_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "asset_categories_pkey",
-          "def": "CREATE UNIQUE INDEX asset_categories_pkey ON public.asset_categories USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "asset_categories_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "asset_categories_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "asset_categories_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "asset_categories_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "asset_categories_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "audit_log": {
       "columns": [
@@ -931,24 +698,10 @@
           "default_expr": null
         }
       ],
+      "fks": [],
       "pk": [
         "id"
-      ],
-      "fks": [],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "audit_log_pkey",
-          "def": "CREATE UNIQUE INDEX audit_log_pkey ON public.audit_log USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      ]
     },
     "bank_statement_lines": {
       "columns": [
@@ -1043,9 +796,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "bank_statement_lines_business_id_fkey",
@@ -1060,29 +810,8 @@
           "def": "FOREIGN KEY (statement_id) REFERENCES bank_statements(id)"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "bank_statement_lines_match_method_check",
-          "def": "CHECK ((match_method = ANY (ARRAY['manual'::text, 'ai'::text, 'created'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "bank_statement_lines_pkey",
-          "def": "CREATE UNIQUE INDEX bank_statement_lines_pkey ON public.bank_statement_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": [
-        {
-          "tgname": "bank_line_locked_guard",
-          "def": "CREATE TRIGGER bank_line_locked_guard BEFORE DELETE OR UPDATE ON public.bank_statement_lines FOR EACH ROW EXECUTE FUNCTION prevent_locked_bank_line_change()"
-        }
+      "pk": [
+        "id"
       ]
     },
     "bank_statements": {
@@ -1166,9 +895,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "bank_statements_account_id_fkey",
@@ -1183,20 +909,9 @@
           "def": "FOREIGN KEY (reconciled_by) REFERENCES auth.users(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "bank_statements_pkey",
-          "def": "CREATE UNIQUE INDEX bank_statements_pkey ON public.bank_statements USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "branches": {
       "columns": [
@@ -1261,65 +976,15 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "branches_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "branches_pkey",
-          "def": "CREATE UNIQUE INDEX branches_pkey ON public.branches USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "branches_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "branches_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "branches_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "branches_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "branches_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "budget_lines": {
       "columns": [
@@ -1450,9 +1115,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "budget_lines_account_id_fkey",
@@ -1475,20 +1137,9 @@
           "def": "FOREIGN KEY (department_id) REFERENCES departments(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "budget_lines_pkey",
-          "def": "CREATE UNIQUE INDEX budget_lines_pkey ON public.budget_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "budgets": {
       "columns": [
@@ -1559,29 +1210,15 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "budgets_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "budgets_pkey",
-          "def": "CREATE UNIQUE INDEX budgets_pkey ON public.budgets USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "business_invitations": {
       "columns": [
@@ -1646,58 +1283,15 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "business_invitations_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [
-        {
-          "conname": "business_invitations_token_key",
-          "def": "UNIQUE (token)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "business_invitations_pkey",
-          "def": "CREATE UNIQUE INDEX business_invitations_pkey ON public.business_invitations USING btree (id)"
-        },
-        {
-          "name": "business_invitations_token_key",
-          "def": "CREATE UNIQUE INDEX business_invitations_token_key ON public.business_invitations USING btree (token)"
-        },
-        {
-          "name": "idx_business_invitations_business",
-          "def": "CREATE INDEX idx_business_invitations_business ON public.business_invitations USING btree (business_id)"
-        },
-        {
-          "name": "idx_business_invitations_email",
-          "def": "CREATE INDEX idx_business_invitations_email ON public.business_invitations USING btree (lower(email))"
-        },
-        {
-          "name": "idx_business_invitations_token",
-          "def": "CREATE INDEX idx_business_invitations_token ON public.business_invitations USING btree (token)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "business_invitations_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "business_terms_acceptances": {
       "columns": [
@@ -1738,9 +1332,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "business_terms_acceptances_business_id_fkey",
@@ -1751,33 +1342,9 @@
           "def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT"
         }
       ],
-      "uniques": [
-        {
-          "conname": "business_terms_acceptances_business_id_user_id_terms_versio_key",
-          "def": "UNIQUE (business_id, user_id, terms_version)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "business_terms_acceptances_business_id_idx",
-          "def": "CREATE INDEX business_terms_acceptances_business_id_idx ON public.business_terms_acceptances USING btree (business_id)"
-        },
-        {
-          "name": "business_terms_acceptances_business_id_user_id_terms_versio_key",
-          "def": "CREATE UNIQUE INDEX business_terms_acceptances_business_id_user_id_terms_versio_key ON public.business_terms_acceptances USING btree (business_id, user_id, terms_version)"
-        },
-        {
-          "name": "business_terms_acceptances_pkey",
-          "def": "CREATE UNIQUE INDEX business_terms_acceptances_pkey ON public.business_terms_acceptances USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "business_users": {
       "columns": [
@@ -1860,9 +1427,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "business_users_branch_id_fkey",
@@ -1873,29 +1437,9 @@
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "business_users_business_id_user_id_key",
-          "def": "UNIQUE (business_id, user_id)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "business_users_business_id_user_id_key",
-          "def": "CREATE UNIQUE INDEX business_users_business_id_user_id_key ON public.business_users USING btree (business_id, user_id)"
-        },
-        {
-          "name": "business_users_pkey",
-          "def": "CREATE UNIQUE INDEX business_users_pkey ON public.business_users USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "businesses": {
       "columns": [
@@ -2110,78 +1654,14 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "businesses_base_currency_fkey",
           "def": "FOREIGN KEY (base_currency) REFERENCES currencies(code)"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "businesses_plan_tier_check",
-          "def": "CHECK ((plan_tier = ANY (ARRAY['free'::text, 'growth'::text, 'pro'::text, 'enterprise'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "businesses_pkey",
-          "def": "CREATE UNIQUE INDEX businesses_pkey ON public.businesses USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "businesses_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(id)",
-          "with_check": null
-        },
-        {
-          "policyname": "businesses_partner_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_partner_business_admin(id)",
-          "with_check": null
-        },
-        {
-          "policyname": "businesses_partner_peer_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_read_partner_peer_business(id)",
-          "with_check": null
-        },
-        {
-          "policyname": "businesses_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "businesses_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(id)",
-          "with_check": "can_admin_business_data(id)"
-        }
-      ],
-      "triggers": [
-        {
-          "tgname": "trg_enforce_plan_tier_change",
-          "def": "CREATE TRIGGER trg_enforce_plan_tier_change BEFORE UPDATE ON public.businesses FOR EACH ROW EXECUTE FUNCTION enforce_plan_tier_change()"
-        },
-        {
-          "tgname": "trg_prevent_functional_currency_change",
-          "def": "CREATE TRIGGER trg_prevent_functional_currency_change BEFORE UPDATE OF base_currency ON public.businesses FOR EACH ROW EXECUTE FUNCTION prevent_functional_currency_change()"
-        }
+      "pk": [
+        "id"
       ]
     },
     "contacts": {
@@ -2349,9 +1829,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "contacts_ap_account_id_fkey",
@@ -2366,56 +1843,9 @@
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "contacts_pkey",
-          "def": "CREATE UNIQUE INDEX contacts_pkey ON public.contacts USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "contacts_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "contacts_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "contacts_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "contacts_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "contacts_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "currencies": {
       "columns": [
@@ -2468,29 +1898,10 @@
           "default_expr": "now()"
         }
       ],
+      "fks": [],
       "pk": [
         "code"
-      ],
-      "fks": [],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "currencies_code_check",
-          "def": "CHECK (((code = upper(code)) AND (char_length(code) = 3)))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "currencies_pkey",
-          "def": "CREATE UNIQUE INDEX currencies_pkey ON public.currencies USING btree (code)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      ]
     },
     "departments": {
       "columns": [
@@ -2561,9 +1972,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "departments_branch_id_fkey",
@@ -2574,56 +1982,9 @@
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "departments_pkey",
-          "def": "CREATE UNIQUE INDEX departments_pkey ON public.departments USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "departments_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "departments_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "departments_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "departments_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "departments_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "depreciation_schedules": {
       "columns": [
@@ -2706,9 +2067,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "depreciation_schedules_asset_id_fkey",
@@ -2723,56 +2081,9 @@
           "def": "FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "depreciation_schedules_pkey",
-          "def": "CREATE UNIQUE INDEX depreciation_schedules_pkey ON public.depreciation_schedules USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "depreciation_schedules_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "depreciation_schedules_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "depreciation_schedules_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "depreciation_schedules_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "depreciation_schedules_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "employee_allowances": {
       "columns": [
@@ -2837,9 +2148,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "employee_allowances_business_id_fkey",
@@ -2850,49 +2158,9 @@
           "def": "FOREIGN KEY (employee_id) REFERENCES employees(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "employee_allowances_pkey",
-          "def": "CREATE UNIQUE INDEX employee_allowances_pkey ON public.employee_allowances USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "employee_allowances_payroll_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "employee_allowances_payroll_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_payroll(business_id)"
-        },
-        {
-          "policyname": "employee_allowances_payroll_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_view_payroll(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "employee_allowances_payroll_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_payroll(business_id)",
-          "with_check": "can_write_payroll(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "employee_deductions": {
       "columns": [
@@ -2975,9 +2243,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "employee_deductions_business_id_fkey",
@@ -2992,49 +2257,9 @@
           "def": "FOREIGN KEY (liability_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "employee_deductions_pkey",
-          "def": "CREATE UNIQUE INDEX employee_deductions_pkey ON public.employee_deductions USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "employee_deductions_payroll_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "employee_deductions_payroll_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_payroll(business_id)"
-        },
-        {
-          "policyname": "employee_deductions_payroll_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_view_payroll(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "employee_deductions_payroll_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_payroll(business_id)",
-          "with_check": "can_write_payroll(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "employees": {
       "columns": [
@@ -3261,9 +2486,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "employees_branch_id_fkey",
@@ -3286,49 +2508,9 @@
           "def": "FOREIGN KEY (salary_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "employees_pkey",
-          "def": "CREATE UNIQUE INDEX employees_pkey ON public.employees USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "employees_payroll_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "employees_payroll_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_payroll(business_id)"
-        },
-        {
-          "policyname": "employees_payroll_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_view_payroll(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "employees_payroll_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_payroll(business_id)",
-          "with_check": "can_write_payroll(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "exchange_rates": {
       "columns": [
@@ -3387,9 +2569,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "exchange_rates_business_id_fkey",
@@ -3408,57 +2587,9 @@
           "def": "FOREIGN KEY (to_currency) REFERENCES currencies(code)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "exchange_rates_business_id_from_currency_to_currency_rate_d_key",
-          "def": "UNIQUE (business_id, from_currency, to_currency, rate_date)"
-        }
-      ],
-      "checks": [
-        {
-          "conname": "exchange_rates_rate_check",
-          "def": "CHECK ((rate > (0)::numeric))"
-        },
-        {
-          "conname": "exchange_rates_source_check",
-          "def": "CHECK ((source = ANY (ARRAY['manual'::text, 'frankfurter'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "exchange_rates_business_id_from_currency_to_currency_rate_d_key",
-          "def": "CREATE UNIQUE INDEX exchange_rates_business_id_from_currency_to_currency_rate_d_key ON public.exchange_rates USING btree (business_id, from_currency, to_currency, rate_date)"
-        },
-        {
-          "name": "exchange_rates_pkey",
-          "def": "CREATE UNIQUE INDEX exchange_rates_pkey ON public.exchange_rates USING btree (id)"
-        },
-        {
-          "name": "idx_exchange_rates_lookup",
-          "def": "CREATE INDEX idx_exchange_rates_lookup ON public.exchange_rates USING btree (business_id, from_currency, to_currency, rate_date DESC)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "exchange_rates_business_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        },
-        {
-          "policyname": "exchange_rates_business_write",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "expense_lines": {
       "columns": [
@@ -3565,9 +2696,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "expense_lines_account_id_fkey",
@@ -3586,20 +2714,9 @@
           "def": "FOREIGN KEY (product_id) REFERENCES products(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "expense_lines_pkey",
-          "def": "CREATE UNIQUE INDEX expense_lines_pkey ON public.expense_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "expense_payments": {
       "columns": [
@@ -3728,10 +2845,13 @@
           "type": "text",
           "notnull": false,
           "default_expr": null
+        },
+        {
+          "name": "client_key",
+          "type": "uuid",
+          "notnull": false,
+          "default_expr": null
         }
-      ],
-      "pk": [
-        "id"
       ],
       "fks": [
         {
@@ -3763,20 +2883,9 @@
           "def": "FOREIGN KEY (original_currency) REFERENCES currencies(code)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "expense_payments_pkey",
-          "def": "CREATE UNIQUE INDEX expense_payments_pkey ON public.expense_payments USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "expenses": {
       "columns": [
@@ -4019,10 +3128,13 @@
           "type": "text",
           "notnull": false,
           "default_expr": null
+        },
+        {
+          "name": "client_key",
+          "type": "uuid",
+          "notnull": false,
+          "default_expr": null
         }
-      ],
-      "pk": [
-        "id"
       ],
       "fks": [
         {
@@ -4062,20 +3174,9 @@
           "def": "FOREIGN KEY (original_currency) REFERENCES currencies(code)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "expenses_pkey",
-          "def": "CREATE UNIQUE INDEX expenses_pkey ON public.expenses USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "fixed_assets": {
       "columns": [
@@ -4356,9 +3457,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "fixed_assets_accumulated_dep_account_id_fkey",
@@ -4405,56 +3503,9 @@
           "def": "FOREIGN KEY (supplier_id) REFERENCES contacts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "fixed_assets_pkey",
-          "def": "CREATE UNIQUE INDEX fixed_assets_pkey ON public.fixed_assets USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "fixed_assets_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "fixed_assets_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "fixed_assets_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "fixed_assets_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "fixed_assets_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "fx_revaluations": {
       "columns": [
@@ -4531,9 +3582,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "fx_revaluations_business_id_fkey",
@@ -4552,42 +3600,9 @@
           "def": "FOREIGN KEY (reversal_entry_id) REFERENCES journal_entries(id)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "fx_revaluations_business_id_revaluation_date_key",
-          "def": "UNIQUE (business_id, revaluation_date)"
-        }
-      ],
-      "checks": [
-        {
-          "conname": "fx_revaluations_status_check",
-          "def": "CHECK ((status = ANY (ARRAY['posted'::text, 'reversed'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "fx_revaluations_business_id_revaluation_date_key",
-          "def": "CREATE UNIQUE INDEX fx_revaluations_business_id_revaluation_date_key ON public.fx_revaluations USING btree (business_id, revaluation_date)"
-        },
-        {
-          "name": "fx_revaluations_pkey",
-          "def": "CREATE UNIQUE INDEX fx_revaluations_pkey ON public.fx_revaluations USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "fx_revaluations_business_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "inventory_balances": {
       "columns": [
@@ -4652,9 +3667,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "inventory_balances_business_id_fkey",
@@ -4669,29 +3681,9 @@
           "def": "FOREIGN KEY (product_id) REFERENCES products(id)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "inventory_balances_business_id_product_id_location_id_key",
-          "def": "UNIQUE (business_id, product_id, location_id)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "inventory_balances_business_id_product_id_location_id_key",
-          "def": "CREATE UNIQUE INDEX inventory_balances_business_id_product_id_location_id_key ON public.inventory_balances USING btree (business_id, product_id, location_id)"
-        },
-        {
-          "name": "inventory_balances_pkey",
-          "def": "CREATE UNIQUE INDEX inventory_balances_pkey ON public.inventory_balances USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "inventory_locations": {
       "columns": [
@@ -4744,9 +3736,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "inventory_locations_branch_id_fkey",
@@ -4757,56 +3746,9 @@
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "inventory_locations_pkey",
-          "def": "CREATE UNIQUE INDEX inventory_locations_pkey ON public.inventory_locations USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "inventory_locations_admin_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "inventory_locations_member_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_business_member(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "inventory_locations_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "inventory_locations_writer_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_business_data(business_id)"
-        },
-        {
-          "policyname": "inventory_locations_writer_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_business_data(business_id)",
-          "with_check": "can_write_business_data(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "invoice_delivery_events": {
       "columns": [
@@ -4853,9 +3795,6 @@
           "default_expr": "'{}'::jsonb"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "invoice_delivery_events_business_id_fkey",
@@ -4866,29 +3805,9 @@
           "def": "FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "invoice_delivery_events_event_type_check",
-          "def": "CHECK ((event_type = ANY (ARRAY['sent'::text, 'opened'::text, 'viewed'::text, 'reminder'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "invoice_delivery_events_invoice_idx",
-          "def": "CREATE INDEX invoice_delivery_events_invoice_idx ON public.invoice_delivery_events USING btree (invoice_id, occurred_at)"
-        },
-        {
-          "name": "invoice_delivery_events_pkey",
-          "def": "CREATE UNIQUE INDEX invoice_delivery_events_pkey ON public.invoice_delivery_events USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": false,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "invoice_lines": {
       "columns": [
@@ -4995,9 +3914,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "fk_invoice_line_product",
@@ -5016,20 +3932,9 @@
           "def": "FOREIGN KEY (invoice_id) REFERENCES invoices(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "invoice_lines_pkey",
-          "def": "CREATE UNIQUE INDEX invoice_lines_pkey ON public.invoice_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "invoice_payments": {
       "columns": [
@@ -5158,10 +4063,13 @@
           "type": "text",
           "notnull": false,
           "default_expr": null
+        },
+        {
+          "name": "client_key",
+          "type": "uuid",
+          "notnull": false,
+          "default_expr": null
         }
-      ],
-      "pk": [
-        "id"
       ],
       "fks": [
         {
@@ -5193,20 +4101,9 @@
           "def": "FOREIGN KEY (original_currency) REFERENCES currencies(code)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "invoice_payments_pkey",
-          "def": "CREATE UNIQUE INDEX invoice_payments_pkey ON public.invoice_payments USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "invoices": {
       "columns": [
@@ -5491,10 +4388,13 @@
           "type": "text",
           "notnull": false,
           "default_expr": null
+        },
+        {
+          "name": "client_key",
+          "type": "uuid",
+          "notnull": false,
+          "default_expr": null
         }
-      ],
-      "pk": [
-        "id"
       ],
       "fks": [
         {
@@ -5542,25 +4442,9 @@
           "def": "FOREIGN KEY (revenue_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "invoices_template_check",
-          "def": "CHECK ((template = ANY (ARRAY['professional'::text, 'minimal'::text, 'ngo'::text, 'government'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "invoices_pkey",
-          "def": "CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "journal_entries": {
       "columns": [
@@ -5685,9 +4569,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "journal_entries_branch_id_fkey",
@@ -5718,20 +4599,9 @@
           "def": "FOREIGN KEY (reversed_by) REFERENCES journal_entries(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "journal_entries_pkey",
-          "def": "CREATE UNIQUE INDEX journal_entries_pkey ON public.journal_entries USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "journal_lines": {
       "columns": [
@@ -5886,9 +4756,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "journal_lines_account_id_fkey",
@@ -5923,20 +4790,9 @@
           "def": "FOREIGN KEY (original_currency) REFERENCES currencies(code)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "journal_lines_pkey",
-          "def": "CREATE UNIQUE INDEX journal_lines_pkey ON public.journal_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "loan_repayments": {
       "columns": [
@@ -6019,9 +4875,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "loan_repayments_bank_account_id_fkey",
@@ -6040,36 +4893,9 @@
           "def": "FOREIGN KEY (loan_id) REFERENCES loans(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_loan_repayments_business",
-          "def": "CREATE INDEX idx_loan_repayments_business ON public.loan_repayments USING btree (business_id)"
-        },
-        {
-          "name": "idx_loan_repayments_loan",
-          "def": "CREATE INDEX idx_loan_repayments_loan ON public.loan_repayments USING btree (loan_id)"
-        },
-        {
-          "name": "loan_repayments_pkey",
-          "def": "CREATE UNIQUE INDEX loan_repayments_pkey ON public.loan_repayments USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "loan_repayments_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "loans": {
       "columns": [
@@ -6170,9 +4996,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "loans_business_id_fkey",
@@ -6191,36 +5014,9 @@
           "def": "FOREIGN KEY (loan_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_loans_business",
-          "def": "CREATE INDEX idx_loans_business ON public.loans USING btree (business_id)"
-        },
-        {
-          "name": "idx_loans_status",
-          "def": "CREATE INDEX idx_loans_status ON public.loans USING btree (business_id, status)"
-        },
-        {
-          "name": "loans_pkey",
-          "def": "CREATE UNIQUE INDEX loans_pkey ON public.loans USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "loans_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "partner_admins": {
       "columns": [
@@ -6249,10 +5045,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "partner_id",
-        "user_id"
-      ],
       "fks": [
         {
           "conname": "partner_admins_partner_id_fkey",
@@ -6263,44 +5055,10 @@
           "def": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "partner_admins_role_check",
-          "def": "CHECK ((role = ANY (ARRAY['admin'::text, 'viewer'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "idx_partner_admins_user",
-          "def": "CREATE INDEX idx_partner_admins_user ON public.partner_admins USING btree (user_id)"
-        },
-        {
-          "name": "partner_admins_pkey",
-          "def": "CREATE UNIQUE INDEX partner_admins_pkey ON public.partner_admins USING btree (partner_id, user_id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "partner_admins_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "((user_id = auth.uid()) OR is_partner_admin(auth.uid(), partner_id))",
-          "with_check": null
-        },
-        {
-          "policyname": "partner_admins_write",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": "is_platform_admin(auth.uid())"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "partner_id",
+        "user_id"
+      ]
     },
     "partner_clients": {
       "columns": [
@@ -6323,10 +5081,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "partner_id",
-        "business_id"
-      ],
       "fks": [
         {
           "conname": "partner_clients_business_id_fkey",
@@ -6337,43 +5091,9 @@
           "def": "FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_partner_clients_partner",
-          "def": "CREATE INDEX idx_partner_clients_partner ON public.partner_clients USING btree (partner_id)"
-        },
-        {
-          "name": "partner_clients_pkey",
-          "def": "CREATE UNIQUE INDEX partner_clients_pkey ON public.partner_clients USING btree (partner_id, business_id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "partner_clients_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_read_partner_client(partner_id, business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "partner_clients_write",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "is_partner_admin(auth.uid(), partner_id)",
-          "with_check": "is_partner_admin(auth.uid(), partner_id)"
-        }
-      ],
-      "triggers": [
-        {
-          "tgname": "trg_enforce_partner_client_limit",
-          "def": "CREATE TRIGGER trg_enforce_partner_client_limit BEFORE INSERT ON public.partner_clients FOR EACH ROW EXECUTE FUNCTION enforce_partner_client_limit()"
-        }
+      "pk": [
+        "partner_id",
+        "business_id"
       ]
     },
     "partner_feature_flags": {
@@ -6397,49 +5117,16 @@
           "default_expr": "false"
         }
       ],
-      "pk": [
-        "partner_id",
-        "feature_key"
-      ],
       "fks": [
         {
           "conname": "partner_feature_flags_partner_id_fkey",
           "def": "FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_partner_feature_flags_partner",
-          "def": "CREATE INDEX idx_partner_feature_flags_partner ON public.partner_feature_flags USING btree (partner_id)"
-        },
-        {
-          "name": "partner_feature_flags_pkey",
-          "def": "CREATE UNIQUE INDEX partner_feature_flags_pkey ON public.partner_feature_flags USING btree (partner_id, feature_key)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "partner_feature_flags_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "true",
-          "with_check": null
-        },
-        {
-          "policyname": "partner_feature_flags_write",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "is_partner_admin(auth.uid(), partner_id)",
-          "with_check": "is_partner_admin(auth.uid(), partner_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "partner_id",
+        "feature_key"
+      ]
     },
     "partner_invoices": {
       "columns": [
@@ -6522,61 +5209,14 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "partner_invoices_partner_id_fkey",
           "def": "FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "partner_invoices_status_check",
-          "def": "CHECK ((status = ANY (ARRAY['draft'::text, 'sent'::text, 'paid'::text, 'overdue'::text, 'void'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "idx_partner_invoices_partner",
-          "def": "CREATE INDEX idx_partner_invoices_partner ON public.partner_invoices USING btree (partner_id)"
-        },
-        {
-          "name": "partner_invoices_period_key",
-          "def": "CREATE UNIQUE INDEX partner_invoices_period_key ON public.partner_invoices USING btree (partner_id, period_start) WHERE ((period_start IS NOT NULL) AND (status <> 'void'::text))"
-        },
-        {
-          "name": "partner_invoices_pkey",
-          "def": "CREATE UNIQUE INDEX partner_invoices_pkey ON public.partner_invoices USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "partner_invoices_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_partner_admin(auth.uid(), partner_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "partner_invoices_write",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": "is_platform_admin(auth.uid())"
-        }
-      ],
-      "triggers": [
-        {
-          "tgname": "trg_set_partner_invoice_number",
-          "def": "CREATE TRIGGER trg_set_partner_invoice_number BEFORE INSERT ON public.partner_invoices FOR EACH ROW EXECUTE FUNCTION set_partner_invoice_number()"
-        }
+      "pk": [
+        "id"
       ]
     },
     "partners": {
@@ -6708,71 +5348,9 @@
           "default_expr": "'MWK'::text"
         }
       ],
+      "fks": [],
       "pk": [
         "id"
-      ],
-      "fks": [],
-      "uniques": [
-        {
-          "conname": "partners_domain_key",
-          "def": "UNIQUE (domain)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "partners_custom_domain_key",
-          "def": "CREATE UNIQUE INDEX partners_custom_domain_key ON public.partners USING btree (lower(custom_domain)) WHERE (custom_domain IS NOT NULL)"
-        },
-        {
-          "name": "partners_domain_key",
-          "def": "CREATE UNIQUE INDEX partners_domain_key ON public.partners USING btree (domain)"
-        },
-        {
-          "name": "partners_pkey",
-          "def": "CREATE UNIQUE INDEX partners_pkey ON public.partners USING btree (id)"
-        },
-        {
-          "name": "partners_slug_key",
-          "def": "CREATE UNIQUE INDEX partners_slug_key ON public.partners USING btree (slug) WHERE (slug IS NOT NULL)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "partners_admin_write",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": "is_platform_admin(auth.uid())"
-        },
-        {
-          "policyname": "partners_partner_admin_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "is_partner_admin(auth.uid(), id)",
-          "with_check": "is_partner_admin(auth.uid(), id)"
-        },
-        {
-          "policyname": "partners_public_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "true",
-          "with_check": null
-        }
-      ],
-      "triggers": [
-        {
-          "tgname": "trg_protect_partner_commercial_fields",
-          "def": "CREATE TRIGGER trg_protect_partner_commercial_fields BEFORE UPDATE ON public.partners FOR EACH ROW EXECUTE FUNCTION protect_partner_commercial_fields()"
-        },
-        {
-          "tgname": "trg_seed_partner_feature_flags",
-          "def": "CREATE TRIGGER trg_seed_partner_feature_flags AFTER INSERT ON public.partners FOR EACH ROW EXECUTE FUNCTION seed_partner_feature_flags()"
-        }
       ]
     },
     "paye_bands": {
@@ -6838,29 +5416,15 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "paye_bands_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "paye_bands_pkey",
-          "def": "CREATE UNIQUE INDEX paye_bands_pkey ON public.paye_bands USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "payroll_employee_lines": {
       "columns": [
@@ -6997,9 +5561,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "payroll_employee_lines_business_id_fkey",
@@ -7014,49 +5575,9 @@
           "def": "FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "payroll_employee_lines_pkey",
-          "def": "CREATE UNIQUE INDEX payroll_employee_lines_pkey ON public.payroll_employee_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "payroll_employee_lines_payroll_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "payroll_employee_lines_payroll_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_payroll(business_id)"
-        },
-        {
-          "policyname": "payroll_employee_lines_payroll_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_view_payroll(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "payroll_employee_lines_payroll_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_payroll(business_id)",
-          "with_check": "can_write_payroll(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "payroll_runs": {
       "columns": [
@@ -7185,10 +5706,13 @@
           "type": "timestamp with time zone",
           "notnull": true,
           "default_expr": "now()"
+        },
+        {
+          "name": "client_key",
+          "type": "uuid",
+          "notnull": false,
+          "default_expr": null
         }
-      ],
-      "pk": [
-        "id"
       ],
       "fks": [
         {
@@ -7200,49 +5724,9 @@
           "def": "FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "payroll_runs_pkey",
-          "def": "CREATE UNIQUE INDEX payroll_runs_pkey ON public.payroll_runs USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "payroll_runs_payroll_delete",
-          "cmd": "DELETE",
-          "roles": "{public}",
-          "using_expr": "can_admin_business_data(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "payroll_runs_payroll_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "can_write_payroll(business_id)"
-        },
-        {
-          "policyname": "payroll_runs_payroll_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "can_view_payroll(business_id)",
-          "with_check": null
-        },
-        {
-          "policyname": "payroll_runs_payroll_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "can_write_payroll(business_id)",
-          "with_check": "can_write_payroll(business_id)"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "product_categories": {
       "columns": [
@@ -7277,9 +5761,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "product_categories_business_id_fkey",
@@ -7290,20 +5771,9 @@
           "def": "FOREIGN KEY (parent_id) REFERENCES product_categories(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "product_categories_pkey",
-          "def": "CREATE UNIQUE INDEX product_categories_pkey ON public.product_categories USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "products": {
       "columns": [
@@ -7464,9 +5934,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "products_business_id_fkey",
@@ -7493,20 +5960,9 @@
           "def": "FOREIGN KEY (sales_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "products_pkey",
-          "def": "CREATE UNIQUE INDEX products_pkey ON public.products USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "profiles": {
       "columns": [
@@ -7523,24 +5979,10 @@
           "default_expr": "gen_random_uuid()"
         }
       ],
+      "fks": [],
       "pk": [
         "id"
-      ],
-      "fks": [],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "profiles_pkey",
-          "def": "CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      ]
     },
     "recurring_invoices": {
       "columns": [
@@ -7593,9 +6035,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "recurring_invoices_business_id_fkey",
@@ -7606,29 +6045,9 @@
           "def": "FOREIGN KEY (template_invoice_id) REFERENCES invoices(id)"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "recurring_invoices_frequency_check",
-          "def": "CHECK ((frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "recurring_invoices_due_idx",
-          "def": "CREATE INDEX recurring_invoices_due_idx ON public.recurring_invoices USING btree (next_run_date) WHERE active"
-        },
-        {
-          "name": "recurring_invoices_pkey",
-          "def": "CREATE UNIQUE INDEX recurring_invoices_pkey ON public.recurring_invoices USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": false,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "share_transactions": {
       "columns": [
@@ -7711,9 +6130,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "share_transactions_bank_account_id_fkey",
@@ -7732,36 +6148,9 @@
           "def": "FOREIGN KEY (share_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_share_transactions_business",
-          "def": "CREATE INDEX idx_share_transactions_business ON public.share_transactions USING btree (business_id)"
-        },
-        {
-          "name": "idx_share_transactions_type",
-          "def": "CREATE INDEX idx_share_transactions_type ON public.share_transactions USING btree (business_id, transaction_type)"
-        },
-        {
-          "name": "share_transactions_pkey",
-          "def": "CREATE UNIQUE INDEX share_transactions_pkey ON public.share_transactions USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "share_transactions_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "stock_movements": {
       "columns": [
@@ -7854,10 +6243,13 @@
           "type": "numeric",
           "notnull": true,
           "default_expr": null
+        },
+        {
+          "name": "client_key",
+          "type": "uuid",
+          "notnull": false,
+          "default_expr": null
         }
-      ],
-      "pk": [
-        "id"
       ],
       "fks": [
         {
@@ -7873,20 +6265,9 @@
           "def": "FOREIGN KEY (product_id) REFERENCES products(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "stock_movements_pkey",
-          "def": "CREATE UNIQUE INDEX stock_movements_pkey ON public.stock_movements USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "stock_transfer_lines": {
       "columns": [
@@ -7951,9 +6332,6 @@
           "default_expr": null
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "stock_transfer_lines_business_id_fkey",
@@ -7968,20 +6346,9 @@
           "def": "FOREIGN KEY (transfer_id) REFERENCES stock_transfers(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "stock_transfer_lines_pkey",
-          "def": "CREATE UNIQUE INDEX stock_transfer_lines_pkey ON public.stock_transfer_lines USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "stock_transfers": {
       "columns": [
@@ -8076,9 +6443,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "stock_transfers_approved_by_fkey",
@@ -8105,20 +6469,9 @@
           "def": "FOREIGN KEY (to_location_id) REFERENCES inventory_locations(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "stock_transfers_pkey",
-          "def": "CREATE UNIQUE INDEX stock_transfers_pkey ON public.stock_transfers USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "subscription_payments": {
       "columns": [
@@ -8219,78 +6572,14 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "subscription_payments_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [
-        {
-          "conname": "subscription_payments_tx_ref_key",
-          "def": "UNIQUE (tx_ref)"
-        }
-      ],
-      "checks": [
-        {
-          "conname": "subscription_payments_billing_cycle_check",
-          "def": "CHECK ((billing_cycle = ANY (ARRAY['monthly'::text, 'annual'::text, 'custom'::text])))"
-        },
-        {
-          "conname": "subscription_payments_status_check",
-          "def": "CHECK ((status = ANY (ARRAY['pending'::text, 'success'::text, 'failed'::text, 'cancelled'::text])))"
-        },
-        {
-          "conname": "subscription_payments_target_plan_tier_check",
-          "def": "CHECK ((target_plan_tier = ANY (ARRAY['growth'::text, 'pro'::text, 'enterprise'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "idx_subscription_payments_business",
-          "def": "CREATE INDEX idx_subscription_payments_business ON public.subscription_payments USING btree (business_id, created_at DESC)"
-        },
-        {
-          "name": "idx_subscription_payments_status",
-          "def": "CREATE INDEX idx_subscription_payments_status ON public.subscription_payments USING btree (status) WHERE (status = 'pending'::text)"
-        },
-        {
-          "name": "subscription_payments_pkey",
-          "def": "CREATE UNIQUE INDEX subscription_payments_pkey ON public.subscription_payments USING btree (id)"
-        },
-        {
-          "name": "subscription_payments_tx_ref_key",
-          "def": "CREATE UNIQUE INDEX subscription_payments_tx_ref_key ON public.subscription_payments USING btree (tx_ref)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "subscription_payments_platform_admin_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "is_platform_admin(auth.uid())",
-          "with_check": null
-        },
-        {
-          "policyname": "subscription_payments_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": [
-        {
-          "tgname": "trg_subscription_payments_updated_at",
-          "def": "CREATE TRIGGER trg_subscription_payments_updated_at BEFORE UPDATE ON public.subscription_payments FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
-        }
+      "pk": [
+        "id"
       ]
     },
     "subscription_reminders_sent": {
@@ -8326,43 +6615,15 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "subscription_reminders_sent_business_id_fkey",
           "def": "FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [
-        {
-          "conname": "subscription_reminders_sent_business_id_plan_expires_at_day_key",
-          "def": "UNIQUE (business_id, plan_expires_at, days_before)"
-        }
-      ],
-      "checks": [
-        {
-          "conname": "subscription_reminders_sent_days_before_check",
-          "def": "CHECK ((days_before = ANY (ARRAY[7, 3, 1])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "subscription_reminders_sent_business_id_plan_expires_at_day_key",
-          "def": "CREATE UNIQUE INDEX subscription_reminders_sent_business_id_plan_expires_at_day_key ON public.subscription_reminders_sent USING btree (business_id, plan_expires_at, days_before)"
-        },
-        {
-          "name": "subscription_reminders_sent_pkey",
-          "def": "CREATE UNIQUE INDEX subscription_reminders_sent_pkey ON public.subscription_reminders_sent USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "support_agent_usage": {
       "columns": [
@@ -8385,29 +6646,11 @@
           "default_expr": "1"
         }
       ],
+      "fks": [],
       "pk": [
         "user_id",
         "window_start"
-      ],
-      "fks": [],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "support_agent_usage_pkey",
-          "def": "CREATE UNIQUE INDEX support_agent_usage_pkey ON public.support_agent_usage USING btree (user_id, window_start)"
-        },
-        {
-          "name": "support_agent_usage_window_idx",
-          "def": "CREATE INDEX support_agent_usage_window_idx ON public.support_agent_usage USING btree (window_start)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      ]
     },
     "tax_alerts": {
       "columns": [
@@ -8466,9 +6709,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "tax_alerts_business_id_fkey",
@@ -8479,41 +6719,9 @@
           "def": "FOREIGN KEY (tax_return_id) REFERENCES tax_returns(id)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "tax_alerts_tax_return_id_alert_type_channel_key",
-          "def": "UNIQUE (tax_return_id, alert_type, channel)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_tax_alerts_scheduled",
-          "def": "CREATE INDEX idx_tax_alerts_scheduled ON public.tax_alerts USING btree (scheduled_for) WHERE (status = 'pending'::tax_alert_status)"
-        },
-        {
-          "name": "tax_alerts_pkey",
-          "def": "CREATE UNIQUE INDEX tax_alerts_pkey ON public.tax_alerts USING btree (id)"
-        },
-        {
-          "name": "tax_alerts_tax_return_id_alert_type_channel_key",
-          "def": "CREATE UNIQUE INDEX tax_alerts_tax_return_id_alert_type_channel_key ON public.tax_alerts USING btree (tax_return_id, alert_type, channel)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "tax_alerts_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "tax_configurations": {
       "columns": [
@@ -8614,9 +6822,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "tax_configurations_business_id_fkey",
@@ -8631,20 +6836,9 @@
           "def": "FOREIGN KEY (tax_receivable_account_id) REFERENCES accounts(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "tax_configurations_pkey",
-          "def": "CREATE UNIQUE INDEX tax_configurations_pkey ON public.tax_configurations USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "tax_payments": {
       "columns": [
@@ -8727,9 +6921,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "tax_payments_bank_account_id_fkey",
@@ -8748,36 +6939,9 @@
           "def": "FOREIGN KEY (tax_return_id) REFERENCES tax_returns(id)"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_tax_payments_business",
-          "def": "CREATE INDEX idx_tax_payments_business ON public.tax_payments USING btree (business_id)"
-        },
-        {
-          "name": "idx_tax_payments_return",
-          "def": "CREATE INDEX idx_tax_payments_return ON public.tax_payments USING btree (tax_return_id)"
-        },
-        {
-          "name": "tax_payments_pkey",
-          "def": "CREATE UNIQUE INDEX tax_payments_pkey ON public.tax_payments USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "tax_payments_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "tax_returns": {
       "columns": [
@@ -8908,9 +7072,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "tax_returns_business_id_fkey",
@@ -8921,53 +7082,8 @@
           "def": "FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)"
         }
       ],
-      "uniques": [
-        {
-          "conname": "tax_returns_business_id_tax_code_period_label_key",
-          "def": "UNIQUE (business_id, tax_code, period_label)"
-        }
-      ],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_tax_returns_business",
-          "def": "CREATE INDEX idx_tax_returns_business ON public.tax_returns USING btree (business_id)"
-        },
-        {
-          "name": "idx_tax_returns_due_date",
-          "def": "CREATE INDEX idx_tax_returns_due_date ON public.tax_returns USING btree (due_date) WHERE (status = ANY (ARRAY['pending'::tax_return_status, 'filed'::tax_return_status]))"
-        },
-        {
-          "name": "idx_tax_returns_status",
-          "def": "CREATE INDEX idx_tax_returns_status ON public.tax_returns USING btree (business_id, status)"
-        },
-        {
-          "name": "tax_returns_business_id_tax_code_period_label_key",
-          "def": "CREATE UNIQUE INDEX tax_returns_business_id_tax_code_period_label_key ON public.tax_returns USING btree (business_id, tax_code, period_label)"
-        },
-        {
-          "name": "tax_returns_pkey",
-          "def": "CREATE UNIQUE INDEX tax_returns_pkey ON public.tax_returns USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "tax_returns_business_access",
-          "cmd": "ALL",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": [
-        {
-          "tgname": "trg_tax_returns_updated_at",
-          "def": "CREATE TRIGGER trg_tax_returns_updated_at BEFORE UPDATE ON public.tax_returns FOR EACH ROW EXECUTE FUNCTION set_updated_at()"
-        }
+      "pk": [
+        "id"
       ]
     },
     "user_profiles": {
@@ -9039,29 +7155,10 @@
           "default_expr": "now()"
         }
       ],
+      "fks": [],
       "pk": [
         "id"
-      ],
-      "fks": [],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "user_profiles_preferred_language_check",
-          "def": "CHECK ((preferred_language = ANY (ARRAY['en'::text, 'ny'::text, 'sw'::text, 'fr'::text, 'pt'::text])))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "user_profiles_pkey",
-          "def": "CREATE UNIQUE INDEX user_profiles_pkey ON public.user_profiles USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [],
-      "triggers": []
+      ]
     },
     "webhook_deliveries": {
       "columns": [
@@ -9120,41 +7217,15 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "webhook_deliveries_webhook_id_fkey",
           "def": "FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE"
         }
       ],
-      "uniques": [],
-      "checks": [],
-      "indexes": [
-        {
-          "name": "idx_webhook_deliveries_webhook",
-          "def": "CREATE INDEX idx_webhook_deliveries_webhook ON public.webhook_deliveries USING btree (webhook_id, created_at DESC)"
-        },
-        {
-          "name": "webhook_deliveries_pkey",
-          "def": "CREATE UNIQUE INDEX webhook_deliveries_pkey ON public.webhook_deliveries USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "webhook_deliveries_business_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "(webhook_id IN ( SELECT w.id\n   FROM (webhooks w\n     JOIN business_users bu ON ((bu.business_id = w.business_id)))\n  WHERE ((bu.user_id = auth.uid()) AND (bu.is_active = true))))",
-          "with_check": null
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     },
     "webhooks": {
       "columns": [
@@ -9219,9 +7290,6 @@
           "default_expr": "now()"
         }
       ],
-      "pk": [
-        "id"
-      ],
       "fks": [
         {
           "conname": "webhooks_business_id_fkey",
@@ -9232,59 +7300,9 @@
           "def": "FOREIGN KEY (created_by) REFERENCES auth.users(id)"
         }
       ],
-      "uniques": [],
-      "checks": [
-        {
-          "conname": "webhooks_safe_https_url",
-          "def": "CHECK (((url ~* '^https://'::text) AND (url !~* '^https://[^/]*@'::text) AND (url !~* '^https://(localhost|localhost\\\\.|127\\\\.|0\\\\.|10\\\\.|192\\\\.168\\\\.|169\\\\.254\\\\.|172\\\\.(1[6-9]|2[0-9]|3[0-1])\\\\.|\\[::1\\]|\\[fc|\\[fd|\\[fe80:)'::text)))"
-        },
-        {
-          "conname": "webhooks_url_check",
-          "def": "CHECK ((url ~* '^https://'::text))"
-        }
-      ],
-      "indexes": [
-        {
-          "name": "idx_webhooks_business_active",
-          "def": "CREATE INDEX idx_webhooks_business_active ON public.webhooks USING btree (business_id, is_active)"
-        },
-        {
-          "name": "idx_webhooks_events",
-          "def": "CREATE INDEX idx_webhooks_events ON public.webhooks USING gin (events)"
-        },
-        {
-          "name": "webhooks_pkey",
-          "def": "CREATE UNIQUE INDEX webhooks_pkey ON public.webhooks USING btree (id)"
-        }
-      ],
-      "rls": {
-        "enabled": true,
-        "forced": false
-      },
-      "policies": [
-        {
-          "policyname": "webhooks_business_insert",
-          "cmd": "INSERT",
-          "roles": "{public}",
-          "using_expr": null,
-          "with_check": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))"
-        },
-        {
-          "policyname": "webhooks_business_read",
-          "cmd": "SELECT",
-          "roles": "{public}",
-          "using_expr": "(EXISTS ( SELECT 1\n   FROM business_users bu\n  WHERE ((bu.business_id = webhooks.business_id) AND (bu.user_id = auth.uid()) AND (bu.is_active = true) AND ((bu.role)::text = ANY (ARRAY['owner'::text, 'admin'::text])))))",
-          "with_check": null
-        },
-        {
-          "policyname": "webhooks_business_update",
-          "cmd": "UPDATE",
-          "roles": "{public}",
-          "using_expr": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))",
-          "with_check": "(business_id IN ( SELECT business_users.business_id\n   FROM business_users\n  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))"
-        }
-      ],
-      "triggers": []
+      "pk": [
+        "id"
+      ]
     }
   },
   "views": [
@@ -9299,877 +7317,6 @@
     {
       "name": "v_partner_client_usage",
       "def": " SELECT pc.partner_id,\n    b.id AS business_id,\n    b.name AS business_name,\n    b.plan_tier,\n    b.is_active,\n    pc.created_at AS onboarded_at,\n    ( SELECT count(*) AS count\n           FROM journal_entries je\n          WHERE (je.business_id = b.id)) AS journal_entry_count,\n    ( SELECT count(*) AS count\n           FROM invoices i\n          WHERE (i.business_id = b.id)) AS invoice_count,\n    ( SELECT count(*) AS count\n           FROM business_users bu\n          WHERE ((bu.business_id = b.id) AND bu.is_active)) AS user_count,\n    ( SELECT max(je.created_at) AS max\n           FROM journal_entries je\n          WHERE (je.business_id = b.id)) AS last_activity_at\n   FROM (partner_clients pc\n     JOIN businesses b ON ((b.id = pc.business_id)))\n  WHERE ((b.deleted_at IS NULL) AND is_partner_admin(auth.uid(), pc.partner_id));"
-    }
-  ],
-  "matviews": [],
-  "functions": [
-    {
-      "name": "add_partner_admin",
-      "args": "p_partner_id uuid, p_user_email_or_id text, p_role text",
-      "result": "void",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.add_partner_admin(p_partner_id uuid, p_user_email_or_id text, p_role text DEFAULT 'admin'::text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_user_id uuid;\nbegin\n  if not public.is_platform_admin(auth.uid()) then\n    raise exception 'Only Ledgr (platform admin) can add partner admins.'\n      using errcode = 'insufficient_privilege';\n  end if;\n\n  if p_role is null or p_role not in ('admin', 'viewer') then\n    raise exception 'Partner admin role must be \"admin\" or \"viewer\".';\n  end if;\n\n  if not exists (select 1 from public.partners where id = p_partner_id) then\n    raise exception 'Partner not found.';\n  end if;\n\n  if p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then\n    select id into v_user_id from auth.users where id = p_user_email_or_id::uuid;\n  else\n    select id into v_user_id from auth.users\n     where lower(email) = lower(trim(p_user_email_or_id));\n  end if;\n\n  if v_user_id is null then\n    raise exception 'No registered Ledgr user found for \"%\". Ask them to create an account first.', p_user_email_or_id;\n  end if;\n\n  insert into public.partner_admins (partner_id, user_id, role)\n  values (p_partner_id, v_user_id, p_role)\n  on conflict (partner_id, user_id)\n  do update set role = excluded.role; -- keep original created_at\nend;\n$function$\n"
-    },
-    {
-      "name": "apply_subscription_payment",
-      "args": "p_tx_ref text, p_status text, p_gateway_reference text, p_raw_response jsonb",
-      "result": "subscription_payments",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.apply_subscription_payment(p_tx_ref text, p_status text, p_gateway_reference text, p_raw_response jsonb)\n RETURNS subscription_payments\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_payment public.subscription_payments;\nbegin\n  if p_status not in ('success', 'failed', 'cancelled') then\n    raise exception 'Invalid subscription payment status: %', p_status;\n  end if;\n\n  select * into v_payment\n  from public.subscription_payments\n  where tx_ref = p_tx_ref\n  for update;\n\n  if not found then\n    raise exception 'Unknown subscription payment tx_ref: %', p_tx_ref;\n  end if;\n\n  -- Already resolved — don't reprocess (e.g. webhook arrives after the\n  -- user's own post-redirect verification already settled it).\n  if v_payment.status <> 'pending' then\n    return v_payment;\n  end if;\n\n  update public.subscription_payments\n  set status = p_status,\n      gateway_reference = coalesce(p_gateway_reference, gateway_reference),\n      raw_response = coalesce(p_raw_response, raw_response)\n  where tx_ref = p_tx_ref\n  returning * into v_payment;\n\n  if p_status = 'success' then\n    update public.businesses\n    set plan_tier = v_payment.target_plan_tier,\n        plan_expires_at = v_payment.plan_expires_at,\n        plan_updated_at = now()\n    where id = v_payment.business_id;\n  end if;\n\n  return v_payment;\nend;\n$function$\n"
-    },
-    {
-      "name": "armor",
-      "args": "bytea, text[], text[]",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.armor(bytea, text[], text[])\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_armor$function$\n"
-    },
-    {
-      "name": "armor",
-      "args": "bytea",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.armor(bytea)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_armor$function$\n"
-    },
-    {
-      "name": "backfill_and_recalculate_inventory",
-      "args": "p_business_id uuid",
-      "result": "TABLE(out_business_id uuid, sales_backfilled integer, purchases_backfilled integer, balances_updated integer)",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.backfill_and_recalculate_inventory(p_business_id uuid DEFAULT NULL::uuid)\n RETURNS TABLE(out_business_id uuid, sales_backfilled integer, purchases_backfilled integer, balances_updated integer)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_sales_count INT := 0;\n  v_purchases_count INT := 0;\n  v_balances_count INT := 0;\n  v_biz_record RECORD;\n  v_default_loc_id UUID;\nBEGIN\n  -- BUG 3 FIX: only the service role may reconcile \"every business\" (NULL).\n  -- Any other caller must name a business it can write to.\n  IF auth.role() IS DISTINCT FROM 'service_role' THEN\n    IF p_business_id IS NULL THEN\n      RAISE EXCEPTION 'business_id is required.'\n        USING ERRCODE = '22004'; -- null_value_not_allowed\n    END IF;\n\n    IF NOT public.can_write_business_data(p_business_id) THEN\n      RAISE EXCEPTION 'You do not have permission to reconcile inventory for this business.'\n        USING ERRCODE = '42501'; -- insufficient_privilege\n    END IF;\n  END IF;\n\n  FOR v_biz_record IN\n    SELECT id FROM public.businesses\n    WHERE (p_business_id IS NULL OR id = p_business_id)\n      AND is_active = true\n      AND deleted_at IS NULL\n  LOOP\n    -- 1. Ensure at least one default warehouse location exists for this business\n    SELECT id INTO v_default_loc_id\n    FROM public.inventory_locations\n    WHERE business_id = v_biz_record.id AND is_active = true\n    ORDER BY is_default DESC, created_at ASC\n    LIMIT 1;\n\n    IF v_default_loc_id IS NULL THEN\n      INSERT INTO public.inventory_locations (\n        business_id, name, is_default, is_active, created_at, updated_at\n      )\n      VALUES (\n        v_biz_record.id, 'Main Warehouse', true, true, now(), now()\n      )\n      RETURNING id INTO v_default_loc_id;\n    END IF;\n\n    -- 2. Backfill missing stock movements for past purchases (expenses) FIRST,\n    -- so the sales backfill below can price each sale off the purchase\n    -- history that predates it.\n    WITH missing_purchases AS (\n      SELECT\n        e.business_id,\n        el.product_id,\n        COALESCE(\n          (SELECT loc.id FROM public.inventory_locations loc WHERE loc.branch_id = e.branch_id AND loc.is_active = true LIMIT 1),\n          v_default_loc_id\n        ) AS location_id,\n        'purchase'::public.stock_movement_type AS movement_type,\n        e.expense_date AS movement_date,\n        el.quantity AS quantity, -- positive for purchases\n        el.unit_price AS unit_cost,\n        'expense' AS source_type,\n        e.id AS source_id,\n        e.expense_number AS reference,\n        e.created_by\n      FROM public.expenses e\n      JOIN public.expense_lines el ON el.expense_id = e.id\n      JOIN public.products p ON p.id = el.product_id\n      WHERE e.business_id = v_biz_record.id\n        AND e.deleted_at IS NULL\n        AND p.track_inventory\n        AND el.product_id IS NOT NULL\n        AND el.quantity > 0\n        -- Skip if a stock movement for this expense & product already exists\n        AND NOT EXISTS (\n          SELECT 1 FROM public.stock_movements sm\n          WHERE sm.business_id = e.business_id\n            AND sm.source_id = e.id\n            AND sm.source_type = 'expense'\n            AND sm.product_id = el.product_id\n        )\n    ),\n    inserted_purchases AS (\n      INSERT INTO public.stock_movements (\n        business_id, product_id, location_id, movement_type,\n        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, created_at\n      )\n      SELECT\n        business_id, product_id, location_id, movement_type,\n        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, now()\n      FROM missing_purchases\n      RETURNING id\n    )\n    SELECT COUNT(*) INTO v_purchases_count FROM inserted_purchases;\n\n    -- 3. Backfill missing stock movements for past sales (invoices).\n    --\n    -- BUG 1 FIX: cost each backfilled sale at the weighted-average cost of\n    -- that product's inbound movements up to (and including) the sale date\n    -- — never at il.unit_price, which is what the customer was charged and\n    -- has nothing to do with what the stock cost the business. Falls back\n    -- to the product's current purchase_price only when no purchase history\n    -- exists for that product at all (e.g. opening stock was never\n    -- recorded), and to 0 as a last resort — matching buildCogsPostings'\n    -- existing \"skip zero-cost lines rather than invent a number\" rule.\n    WITH missing_sales AS (\n      SELECT\n        i.business_id,\n        il.product_id,\n        COALESCE(\n          (SELECT loc.id FROM public.inventory_locations loc WHERE loc.branch_id = i.branch_id AND loc.is_active = true LIMIT 1),\n          v_default_loc_id\n        ) AS location_id,\n        'sale'::public.stock_movement_type AS movement_type,\n        i.issue_date AS movement_date,\n        -il.quantity AS quantity, -- negative for sales\n        COALESCE(\n          (\n            SELECT SUM(sm2.quantity * sm2.unit_cost) / NULLIF(SUM(sm2.quantity), 0)\n            FROM public.stock_movements sm2\n            WHERE sm2.business_id = i.business_id\n              AND sm2.product_id = il.product_id\n              AND sm2.quantity > 0\n              AND sm2.movement_date <= i.issue_date\n          ),\n          p.purchase_price,\n          0\n        ) AS unit_cost,\n        'invoice' AS source_type,\n        i.id AS source_id,\n        i.invoice_number AS reference,\n        i.created_by\n      FROM public.invoices i\n      JOIN public.invoice_lines il ON il.invoice_id = i.id\n      JOIN public.products p ON p.id = il.product_id\n      WHERE i.business_id = v_biz_record.id\n        AND i.deleted_at IS NULL\n        AND p.track_inventory\n        AND il.product_id IS NOT NULL\n        AND il.quantity > 0\n        -- Skip if a stock movement for this invoice & product already exists\n        AND NOT EXISTS (\n          SELECT 1 FROM public.stock_movements sm\n          WHERE sm.business_id = i.business_id\n            AND sm.source_id = i.id\n            AND sm.source_type = 'invoice'\n            AND sm.product_id = il.product_id\n        )\n    ),\n    inserted_sales AS (\n      INSERT INTO public.stock_movements (\n        business_id, product_id, location_id, movement_type,\n        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, created_at\n      )\n      SELECT\n        business_id, product_id, location_id, movement_type,\n        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, now()\n      FROM missing_sales\n      RETURNING id\n    )\n    SELECT COUNT(*) INTO v_sales_count FROM inserted_sales;\n\n    -- 4. Recalculate inventory_balances from stock_movements.\n    --\n    -- BUG 2 FIX: weighted-average cost over INBOUND movements only\n    -- (Σ inbound qty × inbound cost ÷ Σ inbound qty), matching how\n    -- average_cost is defined everywhere else in the app (see\n    -- inventoryValuation.ts). The previous AVG(ABS(unit_cost)) blended sale\n    -- prices and purchase costs together with no quantity weighting.\n    WITH calc_balances AS (\n      SELECT\n        sm.business_id,\n        sm.product_id,\n        sm.location_id,\n        COALESCE(SUM(sm.quantity), 0) AS calc_quantity_on_hand,\n        COALESCE(\n          SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity * sm.unit_cost ELSE 0 END)\n            / NULLIF(SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity ELSE 0 END), 0),\n          0\n        ) AS calc_avg_cost,\n        MAX(sm.created_at) AS last_movement\n      FROM public.stock_movements sm\n      WHERE sm.business_id = v_biz_record.id\n      GROUP BY sm.business_id, sm.product_id, sm.location_id\n    ),\n    upserted_balances AS (\n      INSERT INTO public.inventory_balances (\n        business_id, product_id, location_id, quantity_on_hand, quantity_reserved,\n        average_cost, last_movement_at, updated_at\n      )\n      SELECT\n        cb.business_id, cb.product_id, cb.location_id, cb.calc_quantity_on_hand, 0,\n        cb.calc_avg_cost, cb.last_movement, now()\n      FROM calc_balances cb\n      ON CONFLICT (business_id, product_id, location_id)\n      DO UPDATE SET\n        quantity_on_hand = EXCLUDED.quantity_on_hand,\n        average_cost = CASE WHEN EXCLUDED.average_cost > 0 THEN EXCLUDED.average_cost ELSE inventory_balances.average_cost END,\n        last_movement_at = EXCLUDED.last_movement_at,\n        updated_at = now()\n      RETURNING id\n    )\n    SELECT COUNT(*) INTO v_balances_count FROM upserted_balances;\n\n    RETURN QUERY SELECT v_biz_record.id, v_sales_count, v_purchases_count, v_balances_count;\n  END LOOP;\nEND;\n$function$\n"
-    },
-    {
-      "name": "business_partner_id",
-      "args": "bid uuid",
-      "result": "uuid",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.business_partner_id(bid uuid)\n RETURNS uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select partner_id from public.partner_clients where business_id = bid limit 1;\n$function$\n"
-    },
-    {
-      "name": "can_admin_business_data",
-      "args": "p_business_id uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_admin_business_data(p_business_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.business_users bu\n    where bu.business_id = p_business_id\n      and bu.user_id = auth.uid()\n      and bu.is_active = true\n      and bu.role::text in ('owner', 'admin')\n  );\n$function$\n"
-    },
-    {
-      "name": "can_read_audit",
-      "args": "p_business_id uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_read_audit(p_business_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.business_users bu\n    where bu.business_id = p_business_id\n      and bu.user_id = auth.uid()\n      and bu.is_active = true\n      and bu.role::text in (\n        -- The pre-existing 'auditor' tier, preserved exactly, plus\n        -- board_member as an oversight role. Deliberately NOT widened to\n        -- every member: the audit log records who did what.\n        'owner', 'admin', 'accountant', 'payroll_manager', 'auditor',\n        'board_member'\n      )\n  );\n$function$\n"
-    },
-    {
-      "name": "can_read_partner_client",
-      "args": "pid uuid, bid uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_read_partner_client(pid uuid, bid uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select\n    public.is_partner_admin(auth.uid(), pid)\n    or exists (\n      select 1\n        from public.business_users bu\n       where bu.business_id = bid\n         and bu.user_id = auth.uid()\n         and bu.is_active\n    )\n    or (\n      exists (\n        select 1\n          from public.partners p\n         where p.id = pid\n           and p.allow_client_visibility\n      )\n      and exists (\n        select 1\n          from public.partner_clients mine\n          join public.business_users bu on bu.business_id = mine.business_id\n         where mine.partner_id = pid\n           and bu.user_id = auth.uid()\n           and bu.is_active\n      )\n    );\n$function$\n"
-    },
-    {
-      "name": "can_read_partner_peer_business",
-      "args": "bid uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_read_partner_peer_business(bid uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n      from public.partner_clients target\n      join public.partners p on p.id = target.partner_id\n     where target.business_id = bid\n       and p.allow_client_visibility\n       and exists (\n         select 1\n           from public.partner_clients mine\n           join public.business_users bu on bu.business_id = mine.business_id\n          where mine.partner_id = target.partner_id\n            and bu.user_id = auth.uid()\n            and bu.is_active\n       )\n  );\n$function$\n"
-    },
-    {
-      "name": "can_view_payroll",
-      "args": "p_business_id uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_view_payroll(p_business_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.business_users bu\n    where bu.business_id = p_business_id\n      and bu.user_id = auth.uid()\n      and bu.is_active = true\n      and bu.role::text in (\n        -- Mirrors canViewPayroll in src/hooks/usePermissions.ts.\n        'owner', 'admin', 'accountant', 'payroll_manager'\n      )\n  );\n$function$\n"
-    },
-    {
-      "name": "can_write_business_data",
-      "args": "p_business_id uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_write_business_data(p_business_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.business_users bu\n    where bu.business_id = p_business_id\n      and bu.user_id = auth.uid()\n      and bu.is_active = true\n      and bu.role::text in (\n        -- Mirrors canWrite in src/hooks/usePermissions.ts. Keep in sync.\n        'owner',\n        'admin',\n        'accountant',\n        'supervisor',\n        'data_entry',\n        'inventory_manager',\n        'sales_clerk',\n        'purchasing_officer',\n        'warehouse_worker',\n        'sales_manager',\n        'customer_service_rep',\n        'tax_compliance_officer',\n        'treasury_manager',\n        'asset_manager',\n        'branch_manager'\n        -- Deliberately absent: payroll_manager (payroll only), auditor,\n        -- viewer, board_member.\n      )\n  );\n$function$\n"
-    },
-    {
-      "name": "can_write_payroll",
-      "args": "p_business_id uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.can_write_payroll(p_business_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.business_users bu\n    where bu.business_id = p_business_id\n      and bu.user_id = auth.uid()\n      and bu.is_active = true\n      and bu.role::text in (\n        -- Mirrors canWritePayroll in src/hooks/usePermissions.ts.\n        -- (TeamManagementPage.tsx's matrix also lists supervisor; the hook\n        -- does not, and the hook is what runs. Following the hook.)\n        'owner', 'admin', 'accountant', 'payroll_manager'\n      )\n  );\n$function$\n"
-    },
-    {
-      "name": "clear_partner_admins",
-      "args": "p_partner_id uuid",
-      "result": "integer",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.clear_partner_admins(p_partner_id uuid)\n RETURNS integer\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_removed integer;\nbegin\n  if not public.is_platform_admin(auth.uid()) then\n    raise exception 'Only Ledgr (platform admin) can revoke a partner''s staff access.'\n      using errcode = 'insufficient_privilege';\n  end if;\n\n  if not exists (select 1 from public.partners where id = p_partner_id) then\n    raise exception 'Partner not found.';\n  end if;\n\n  delete from public.partner_admins\n   where partner_id = p_partner_id;\n  get diagnostics v_removed = row_count;\n\n  return v_removed;\nend;\n$function$\n"
-    },
-    {
-      "name": "consume_api_rate_limit",
-      "args": "p_bucket text, p_limit integer, p_window_start timestamp with time zone",
-      "result": "boolean",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.consume_api_rate_limit(p_bucket text, p_limit integer, p_window_start timestamp with time zone)\n RETURNS boolean\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_count integer;\nbegin\n  if p_bucket is null or length(p_bucket) = 0 or p_limit < 1 then\n    raise exception 'Invalid rate limit arguments' using errcode = '22023';\n  end if;\n\n  insert into public.api_usage (api_key, count, window_start)\n  values (p_bucket, 1, p_window_start)\n  on conflict (api_key, window_start) where api_key is not null do update\n    set count = public.api_usage.count + 1\n    where public.api_usage.count < p_limit\n  returning count into v_count;\n\n  return v_count is not null;\nend;\n$function$\n"
-    },
-    {
-      "name": "create_api_journal_entry",
-      "args": "p_business_id uuid, p_entry jsonb, p_lines jsonb",
-      "result": "jsonb",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.create_api_journal_entry(p_business_id uuid, p_entry jsonb, p_lines jsonb)\n RETURNS jsonb\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_entry public.journal_entries;\n  v_debits numeric;\n  v_credits numeric;\nbegin\n  if jsonb_typeof(p_entry) <> 'object' or jsonb_typeof(p_lines) <> 'array'\n     or jsonb_array_length(p_lines) < 2 then\n    raise exception 'A journal entry needs a header and at least two lines.' using errcode = '22023';\n  end if;\n\n  if exists (\n    select 1\n    from jsonb_to_recordset(p_lines) as l(account_id uuid, amount_base numeric, is_debit boolean)\n    left join public.accounts a on a.id = l.account_id and a.business_id = p_business_id\n    where l.account_id is null or l.amount_base is null or l.amount_base <= 0 or l.is_debit is null or a.id is null\n  ) then\n    raise exception 'Every journal line must have a business account, a positive amount_base, and debit/credit side.' using errcode = '22023';\n  end if;\n\n  select coalesce(sum(case when l.is_debit then l.amount_base else 0 end), 0),\n         coalesce(sum(case when not l.is_debit then l.amount_base else 0 end), 0)\n    into v_debits, v_credits\n  from jsonb_to_recordset(p_lines) as l(amount_base numeric, is_debit boolean);\n\n  if abs(v_debits - v_credits) > 0.005 then\n    raise exception 'Journal entry lines do not balance in functional currency.' using errcode = '22023';\n  end if;\n\n  insert into public.journal_entries (\n    business_id, entry_number, entry_date, description, reference, currency,\n    exchange_rate, branch_id, department_id, period_id, source_type, source_id, status\n  )\n  values (\n    p_business_id,\n    p_entry->>'entry_number',\n    (p_entry->>'entry_date')::date,\n    p_entry->>'description',\n    nullif(p_entry->>'reference', ''),\n    coalesce(nullif(p_entry->>'currency', ''), 'MWK'),\n    coalesce((p_entry->>'exchange_rate')::numeric, 1),\n    nullif(p_entry->>'branch_id', '')::uuid,\n    nullif(p_entry->>'department_id', '')::uuid,\n    nullif(p_entry->>'period_id', '')::uuid,\n    nullif(p_entry->>'source_type', ''),\n    nullif(p_entry->>'source_id', '')::uuid,\n    'draft'\n  ) returning * into v_entry;\n\n  insert into public.journal_lines (\n    journal_entry_id, business_id, line_number, account_id, is_debit, amount,\n    amount_base, currency, exchange_rate, description, branch_id, department_id,\n    tax_code, tax_amount, original_currency, original_amount, rate_date, rate_is_stale\n  )\n  select v_entry.id, p_business_id, l.line_number, l.account_id, l.is_debit,\n         l.amount, l.amount_base, coalesce(l.currency, v_entry.currency),\n         coalesce(l.exchange_rate, v_entry.exchange_rate), l.description,\n         l.branch_id, l.department_id, l.tax_code, coalesce(l.tax_amount, 0),\n         l.original_currency, l.original_amount, l.rate_date, coalesce(l.rate_is_stale, false)\n  from jsonb_to_recordset(p_lines) as l(\n    line_number integer, account_id uuid, is_debit boolean, amount numeric,\n    amount_base numeric, currency text, exchange_rate numeric, description text,\n    branch_id uuid, department_id uuid, tax_code public.tax_code, tax_amount numeric,\n    original_currency text, original_amount numeric, rate_date date, rate_is_stale boolean\n  );\n\n  return to_jsonb(v_entry);\nend;\n$function$\n"
-    },
-    {
-      "name": "crypt",
-      "args": "text, text",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.crypt(text, text)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_crypt$function$\n"
-    },
-    {
-      "name": "current_partner_ids",
-      "args": "uid uuid",
-      "result": "SETOF uuid",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.current_partner_ids(uid uuid)\n RETURNS SETOF uuid\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select partner_id from public.partner_admins where user_id = uid;\n$function$\n"
-    },
-    {
-      "name": "dearmor",
-      "args": "text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.dearmor(text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_dearmor$function$\n"
-    },
-    {
-      "name": "decrypt",
-      "args": "bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.decrypt(bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_decrypt$function$\n"
-    },
-    {
-      "name": "decrypt_iv",
-      "args": "bytea, bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.decrypt_iv(bytea, bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$\n"
-    },
-    {
-      "name": "diagnose_user_login",
-      "args": "p_user_email_or_id text",
-      "result": "TABLE(check_name text, status text, detail text)",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.diagnose_user_login(p_user_email_or_id text)\n RETURNS TABLE(check_name text, status text, detail text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_user_id       UUID;\n  v_email         TEXT;\n  v_confirmed_at  TIMESTAMPTZ;\n  v_banned_until  TIMESTAMPTZ;\n  v_visible_count INT;\n  v_total_count   INT;\nBEGIN\n  IF p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN\n    SELECT id, email, email_confirmed_at, banned_until\n      INTO v_user_id, v_email, v_confirmed_at, v_banned_until\n      FROM auth.users WHERE id = p_user_email_or_id::UUID;\n  ELSE\n    SELECT id, email, email_confirmed_at, banned_until\n      INTO v_user_id, v_email, v_confirmed_at, v_banned_until\n      FROM auth.users WHERE LOWER(email) = LOWER(TRIM(p_user_email_or_id));\n  END IF;\n\n  IF v_user_id IS NULL THEN\n    RETURN QUERY SELECT\n      'auth.users'::TEXT, 'FAIL'::TEXT,\n      format('No user matches \"%s\".', p_user_email_or_id);\n    RETURN;\n  END IF;\n\n  RETURN QUERY SELECT\n    'auth.users'::TEXT, 'OK'::TEXT,\n    format('Found %s (%s).', v_email, v_user_id);\n\n  -- Supabase rejects signInWithPassword with \"Email not confirmed\" when a\n  -- dashboard-created user was never marked confirmed.\n  RETURN QUERY SELECT\n    'email_confirmed'::TEXT,\n    (CASE WHEN v_confirmed_at IS NOT NULL THEN 'OK' ELSE 'FAIL' END)::TEXT,\n    (CASE WHEN v_confirmed_at IS NOT NULL\n          THEN format('Confirmed at %s.', v_confirmed_at)\n          ELSE 'NOT confirmed — login fails with \"Email not confirmed\". '\n               'Tick \"Auto Confirm User\" in the dashboard, or run: '\n               'update auth.users set email_confirmed_at = now() where id = ''' || v_user_id || ''';'\n     END)::TEXT;\n\n  RETURN QUERY SELECT\n    'not_banned'::TEXT,\n    (CASE WHEN v_banned_until IS NULL OR v_banned_until < now() THEN 'OK' ELSE 'FAIL' END)::TEXT,\n    COALESCE('Banned until ' || v_banned_until, 'Not banned.')::TEXT;\n\n  RETURN QUERY SELECT\n    'user_profiles'::TEXT,\n    (CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)\n          THEN 'OK' ELSE 'WARN' END)::TEXT,\n    (CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)\n          THEN 'Profile row present.'\n          ELSE 'No user_profiles row. Not fatal, but name/language/admin flags '\n               'will be empty. grant_user_business_access() creates one.'\n     END)::TEXT;\n\n  SELECT count(*) INTO v_total_count\n    FROM public.business_users WHERE user_id = v_user_id;\n\n  -- This predicate is the exact one the app uses.\n  SELECT count(*) INTO v_visible_count\n    FROM public.business_users bu\n    JOIN public.businesses b ON b.id = bu.business_id\n   WHERE bu.user_id = v_user_id\n     AND bu.is_active = true\n     AND b.is_active = true\n     AND b.deleted_at IS NULL;\n\n  RETURN QUERY SELECT\n    'visible_memberships'::TEXT,\n    (CASE WHEN v_visible_count > 0 THEN 'OK' ELSE 'FAIL' END)::TEXT,\n    format(\n      '%s of %s membership row(s) are visible to the app. %s',\n      v_visible_count, v_total_count,\n      CASE WHEN v_visible_count = 0\n           THEN 'User signs in but is redirected to /create-business. '\n                'Fix with grant_user_business_access().'\n           ELSE '' END\n    );\n\n  RETURN QUERY\n    SELECT\n      'membership'::TEXT,\n      (CASE WHEN bu.is_active AND b.is_active AND b.deleted_at IS NULL\n            THEN 'OK' ELSE 'HIDDEN' END)::TEXT,\n      format(\n        'business=%s (%s) role=%s bu.is_active=%s b.is_active=%s b.deleted_at=%s',\n        b.name, b.id, bu.role, bu.is_active, b.is_active,\n        COALESCE(b.deleted_at::TEXT, 'null')\n      )\n    FROM public.business_users bu\n    JOIN public.businesses b ON b.id = bu.business_id\n   WHERE bu.user_id = v_user_id;\nEND;\n$function$\n"
-    },
-    {
-      "name": "digest",
-      "args": "text, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.digest(text, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_digest$function$\n"
-    },
-    {
-      "name": "digest",
-      "args": "bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.digest(bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_digest$function$\n"
-    },
-    {
-      "name": "encrypt",
-      "args": "bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.encrypt(bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_encrypt$function$\n"
-    },
-    {
-      "name": "encrypt_iv",
-      "args": "bytea, bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.encrypt_iv(bytea, bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_encrypt_iv$function$\n"
-    },
-    {
-      "name": "enforce_partner_client_limit",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.enforce_partner_client_limit()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  lim int;\n  used int;\nbegin\n  select client_limit into lim from public.partners where id = new.partner_id;\n  if lim is null then\n    return new;\n  end if;\n  select count(*) into used from public.partner_clients where partner_id = new.partner_id;\n  if used >= lim then\n    raise exception 'Partner client limit reached (% of %)', used, lim\n      using errcode = 'check_violation';\n  end if;\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "enforce_plan_tier_change",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.enforce_plan_tier_change()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.plan_tier is distinct from old.plan_tier then\n    -- Edge functions (webhook / verify / cron) use the service role key\n    -- and are the only path allowed to *raise* plan_tier, since that only\n    -- happens after a gateway-confirmed payment. Any other caller\n    -- (the owner's own browser, including direct REST/devtools calls)\n    -- may still lower it — e.g. the self-serve \"Downgrade\" button.\n    if auth.role() <> 'service_role' and public.plan_tier_rank(new.plan_tier) > public.plan_tier_rank(old.plan_tier) then\n      raise exception 'Upgrading plan_tier requires a confirmed payment — use the Billing tab to check out.'\n        using errcode = '42501';\n    end if;\n  end if;\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "fips_mode",
-      "args": "",
-      "result": "boolean",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.fips_mode()\n RETURNS boolean\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_check_fipsmode$function$\n"
-    },
-    {
-      "name": "gen_random_bytes",
-      "args": "integer",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gen_random_bytes(integer)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_random_bytes$function$\n"
-    },
-    {
-      "name": "gen_random_uuid",
-      "args": "",
-      "result": "uuid",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gen_random_uuid()\n RETURNS uuid\n LANGUAGE c\n PARALLEL SAFE\nAS '$libdir/pgcrypto', $function$pg_random_uuid$function$\n"
-    },
-    {
-      "name": "gen_salt",
-      "args": "text, integer",
-      "result": "text",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gen_salt(text, integer)\n RETURNS text\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_gen_salt_rounds$function$\n"
-    },
-    {
-      "name": "gen_salt",
-      "args": "text",
-      "result": "text",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gen_salt(text)\n RETURNS text\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_gen_salt$function$\n"
-    },
-    {
-      "name": "gin_extract_query_trgm",
-      "args": "text, internal, smallint, internal, internal, internal, internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gin_extract_query_trgm(text, internal, smallint, internal, internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gin_extract_query_trgm$function$\n"
-    },
-    {
-      "name": "gin_extract_value_trgm",
-      "args": "text, internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gin_extract_value_trgm(text, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gin_extract_value_trgm$function$\n"
-    },
-    {
-      "name": "gin_trgm_consistent",
-      "args": "internal, smallint, text, integer, internal, internal, internal, internal",
-      "result": "boolean",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gin_trgm_consistent(internal, smallint, text, integer, internal, internal, internal, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gin_trgm_consistent$function$\n"
-    },
-    {
-      "name": "gin_trgm_triconsistent",
-      "args": "internal, smallint, text, integer, internal, internal, internal",
-      "result": "\"char\"",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gin_trgm_triconsistent(internal, smallint, text, integer, internal, internal, internal)\n RETURNS \"char\"\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gin_trgm_triconsistent$function$\n"
-    },
-    {
-      "name": "grant_user_business_access",
-      "args": "p_user_email_or_id text, p_business_id uuid, p_role text",
-      "result": "TABLE(out_user_id uuid, out_business_id uuid, out_role text, out_action text)",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.grant_user_business_access(p_user_email_or_id text, p_business_id uuid, p_role text DEFAULT 'viewer'::text)\n RETURNS TABLE(out_user_id uuid, out_business_id uuid, out_role text, out_action text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_user_id   UUID;\n  v_role_enum user_role;\n  v_existing  RECORD;\n  v_action    TEXT;\nBEGIN\n  -- Validate the role against the live enum.\n  BEGIN\n    v_role_enum := p_role::user_role;\n  EXCEPTION WHEN OTHERS THEN\n    RAISE EXCEPTION\n      'Invalid role \"%\". Valid roles: %',\n      p_role,\n      (SELECT string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder)\n         FROM pg_enum e\n         JOIN pg_type t ON t.oid = e.enumtypid\n        WHERE t.typname = 'user_role');\n  END;\n\n  -- Resolve the user by UUID or email.\n  IF p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN\n    SELECT id INTO v_user_id FROM auth.users WHERE id = p_user_email_or_id::UUID;\n  ELSE\n    SELECT id INTO v_user_id FROM auth.users\n     WHERE LOWER(email) = LOWER(TRIM(p_user_email_or_id));\n  END IF;\n\n  IF v_user_id IS NULL THEN\n    RAISE EXCEPTION 'User \"%\" was not found in auth.users.', p_user_email_or_id;\n  END IF;\n\n  -- The business must exist and be live, otherwise the app's !inner join\n  -- silently drops the membership and the user still sees nothing.\n  IF NOT EXISTS (\n    SELECT 1 FROM public.businesses\n     WHERE id = p_business_id AND is_active = true AND deleted_at IS NULL\n  ) THEN\n    RAISE EXCEPTION\n      'Business % does not exist, is inactive, or is soft-deleted. '\n      'The app filters these out, so the membership would be invisible.',\n      p_business_id;\n  END IF;\n\n  -- Ensure a user_profiles row exists. findUserProfile() uses maybeSingle()\n  -- so a missing row is not fatal, but the profile drives display name and\n  -- preferred_language, and several RLS helpers read from this table.\n  INSERT INTO public.user_profiles (id)\n  VALUES (v_user_id)\n  ON CONFLICT (id) DO NOTHING;\n\n  SELECT id, is_active, role INTO v_existing\n    FROM public.business_users\n   WHERE business_id = p_business_id AND user_id = v_user_id;\n\n  IF v_existing.id IS NULL THEN\n    v_action := 'created';\n  ELSIF v_existing.is_active THEN\n    v_action := 'updated';\n  ELSE\n    v_action := 'reactivated';\n  END IF;\n\n  INSERT INTO public.business_users (\n    business_id, user_id, role, is_active, accepted_at, created_at, updated_at\n  )\n  VALUES (\n    p_business_id, v_user_id, v_role_enum, true, now(), now(), now()\n  )\n  -- NB: the conflicting row is referenced by the bare table name here.\n  -- Schema-qualifying it (\"public.business_users.accepted_at\") is rejected by\n  -- Postgres with \"invalid reference to FROM-clause entry\".\n  ON CONFLICT (business_id, user_id) DO UPDATE\n    SET role        = EXCLUDED.role,\n        is_active   = true,\n        accepted_at = COALESCE(business_users.accepted_at, now()),\n        updated_at  = now();\n\n  RETURN QUERY SELECT v_user_id, p_business_id, p_role, v_action;\nEND;\n$function$\n"
-    },
-    {
-      "name": "gtrgm_compress",
-      "args": "internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_compress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_compress$function$\n"
-    },
-    {
-      "name": "gtrgm_consistent",
-      "args": "internal, text, smallint, oid, internal",
-      "result": "boolean",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_consistent(internal, text, smallint, oid, internal)\n RETURNS boolean\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_consistent$function$\n"
-    },
-    {
-      "name": "gtrgm_decompress",
-      "args": "internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_decompress(internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_decompress$function$\n"
-    },
-    {
-      "name": "gtrgm_distance",
-      "args": "internal, text, smallint, oid, internal",
-      "result": "double precision",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_distance(internal, text, smallint, oid, internal)\n RETURNS double precision\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_distance$function$\n"
-    },
-    {
-      "name": "gtrgm_in",
-      "args": "cstring",
-      "result": "gtrgm",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_in(cstring)\n RETURNS gtrgm\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_in$function$\n"
-    },
-    {
-      "name": "gtrgm_options",
-      "args": "internal",
-      "result": "void",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_options(internal)\n RETURNS void\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE\nAS '$libdir/pg_trgm', $function$gtrgm_options$function$\n"
-    },
-    {
-      "name": "gtrgm_out",
-      "args": "gtrgm",
-      "result": "cstring",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_out(gtrgm)\n RETURNS cstring\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_out$function$\n"
-    },
-    {
-      "name": "gtrgm_penalty",
-      "args": "internal, internal, internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_penalty(internal, internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_penalty$function$\n"
-    },
-    {
-      "name": "gtrgm_picksplit",
-      "args": "internal, internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_picksplit(internal, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_picksplit$function$\n"
-    },
-    {
-      "name": "gtrgm_same",
-      "args": "gtrgm, gtrgm, internal",
-      "result": "internal",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_same(gtrgm, gtrgm, internal)\n RETURNS internal\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_same$function$\n"
-    },
-    {
-      "name": "gtrgm_union",
-      "args": "internal, internal",
-      "result": "gtrgm",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.gtrgm_union(internal, internal)\n RETURNS gtrgm\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$gtrgm_union$function$\n"
-    },
-    {
-      "name": "hmac",
-      "args": "text, text, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.hmac(text, text, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_hmac$function$\n"
-    },
-    {
-      "name": "hmac",
-      "args": "bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.hmac(bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pg_hmac$function$\n"
-    },
-    {
-      "name": "increment_amount_paid",
-      "args": "p_table text, p_id uuid, p_amount numeric",
-      "result": "void",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.increment_amount_paid(p_table text, p_id uuid, p_amount numeric)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nBEGIN\n  -- Validate table name to prevent SQL injection\n  IF p_table NOT IN ('invoices', 'expenses') THEN\n    RAISE EXCEPTION 'Invalid table name: %. Must be \"invoices\" or \"expenses\"', p_table;\n  END IF;\n\n  -- Validate amount is positive\n  IF p_amount <= 0 THEN\n    RAISE EXCEPTION 'Amount must be positive, got %', p_amount;\n  END IF;\n\n  -- Execute atomic increment\n  IF p_table = 'invoices' THEN\n    UPDATE invoices\n    SET amount_paid = amount_paid + p_amount\n    WHERE id = p_id;\n\n    IF NOT FOUND THEN\n      RAISE EXCEPTION 'Invoice not found: %', p_id;\n    END IF;\n  ELSIF p_table = 'expenses' THEN\n    UPDATE expenses\n    SET amount_paid = amount_paid + p_amount\n    WHERE id = p_id;\n\n    IF NOT FOUND THEN\n      RAISE EXCEPTION 'Expense not found: %', p_id;\n    END IF;\n  END IF;\nEND;\n$function$\n"
-    },
-    {
-      "name": "is_business_member",
-      "args": "p_business_id uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.is_business_member(p_business_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1\n    from public.business_users bu\n    where bu.business_id = p_business_id\n      and bu.user_id = auth.uid()\n      and bu.is_active = true\n  );\n$function$\n"
-    },
-    {
-      "name": "is_partner_admin",
-      "args": "uid uuid, pid uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.is_partner_admin(uid uuid, pid uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select exists (\n    select 1 from public.partner_admins pa\n     where pa.user_id = uid and pa.partner_id = pid\n  ) or public.is_platform_admin(uid);\n$function$\n"
-    },
-    {
-      "name": "is_partner_business_admin",
-      "args": "bid uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.is_partner_business_admin(bid uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n      from public.partner_clients pc\n     where pc.business_id = bid\n       and public.is_partner_admin(auth.uid(), pc.partner_id)\n  );\n$function$\n"
-    },
-    {
-      "name": "is_platform_admin",
-      "args": "uid uuid",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.is_platform_admin(uid uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select coalesce((select is_platform_admin from public.user_profiles where id = uid), false);\n$function$\n"
-    },
-    {
-      "name": "list_all_businesses",
-      "args": "",
-      "result": "TABLE(out_business_id uuid, out_business_name text, out_trading_name text, out_email text, out_phone text, out_plan_tier text, out_created_at timestamp with time zone, out_owner_emails text, out_owner_names text)",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.list_all_businesses()\n RETURNS TABLE(out_business_id uuid, out_business_name text, out_trading_name text, out_email text, out_phone text, out_plan_tier text, out_created_at timestamp with time zone, out_owner_emails text, out_owner_names text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not public.is_platform_admin(auth.uid()) then\n    raise exception 'Only Ledgr (platform admin) can list all businesses.'\n      using errcode = 'insufficient_privilege';\n  end if;\n\n  return query\n    select\n      b.id,\n      b.name::text,\n      b.trading_name::text,\n      b.email::text,\n      b.phone::text,\n      b.plan_tier::text,\n      b.created_at,\n      coalesce(string_agg(au.email, ', ' order by au.email), '')::text,\n      coalesce(string_agg(coalesce(nullif(up.full_name, ''), au.email), ', ' order by au.email), '')::text\n    from public.businesses b\n    left join public.business_users bu\n      on bu.business_id = b.id and bu.role = 'owner' and bu.is_active = true\n    left join auth.users au on au.id = bu.user_id\n    left join public.user_profiles up on up.id = bu.user_id\n   where b.deleted_at is null\n   group by b.id\n   order by b.created_at desc;\nend;\n$function$\n"
-    },
-    {
-      "name": "list_partner_admins",
-      "args": "p_partner_id uuid",
-      "result": "TABLE(out_user_id uuid, out_email text, out_name text, out_role text, out_created_at timestamp with time zone)",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.list_partner_admins(p_partner_id uuid)\n RETURNS TABLE(out_user_id uuid, out_email text, out_name text, out_role text, out_created_at timestamp with time zone)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not public.is_partner_admin(auth.uid(), p_partner_id) then\n    raise exception 'Not authorized to view admins for this partner.'\n      using errcode = 'insufficient_privilege';\n  end if;\n\n  return query\n    select\n      pa.user_id,\n      au.email::text,\n      coalesce(nullif(up.full_name, ''), au.email)::text,\n      pa.role::text,\n      pa.created_at\n    from public.partner_admins pa\n    join auth.users au on au.id = pa.user_id\n    left join public.user_profiles up on up.id = pa.user_id\n   where pa.partner_id = p_partner_id\n   order by au.email asc;\nend;\n$function$\n"
-    },
-    {
-      "name": "pgp_armor_headers",
-      "args": "text, OUT key text, OUT value text",
-      "result": "SETOF record",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_armor_headers(text, OUT key text, OUT value text)\n RETURNS SETOF record\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_armor_headers$function$\n"
-    },
-    {
-      "name": "pgp_key_id",
-      "args": "bytea",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_key_id(bytea)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_key_id_w$function$\n"
-    },
-    {
-      "name": "pgp_pub_decrypt",
-      "args": "bytea, bytea, text",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_decrypt(bytea, bytea, text)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_pub_decrypt",
-      "args": "bytea, bytea",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_decrypt(bytea, bytea)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_pub_decrypt",
-      "args": "bytea, bytea, text, text",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_decrypt(bytea, bytea, text, text)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_decrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_pub_decrypt_bytea",
-      "args": "bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_pub_decrypt_bytea",
-      "args": "bytea, bytea, text, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea, text, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_pub_decrypt_bytea",
-      "args": "bytea, bytea",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_decrypt_bytea(bytea, bytea)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_decrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_pub_encrypt",
-      "args": "text, bytea",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_encrypt(text, bytea)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_pub_encrypt",
-      "args": "text, bytea, text",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_encrypt(text, bytea, text)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_encrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_pub_encrypt_bytea",
-      "args": "bytea, bytea, text",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea, text)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_pub_encrypt_bytea",
-      "args": "bytea, bytea",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_pub_encrypt_bytea(bytea, bytea)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_pub_encrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_sym_decrypt",
-      "args": "bytea, text",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_decrypt(bytea, text)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_decrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_sym_decrypt",
-      "args": "bytea, text, text",
-      "result": "text",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_decrypt(bytea, text, text)\n RETURNS text\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_decrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_sym_decrypt_bytea",
-      "args": "bytea, text, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_decrypt_bytea(bytea, text, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_sym_decrypt_bytea",
-      "args": "bytea, text",
-      "result": "bytea",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_decrypt_bytea(bytea, text)\n RETURNS bytea\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_decrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_sym_encrypt",
-      "args": "text, text",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_encrypt(text, text)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_sym_encrypt",
-      "args": "text, text, text",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_encrypt(text, text, text)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_encrypt_text$function$\n"
-    },
-    {
-      "name": "pgp_sym_encrypt_bytea",
-      "args": "bytea, text",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_encrypt_bytea(bytea, text)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$\n"
-    },
-    {
-      "name": "pgp_sym_encrypt_bytea",
-      "args": "bytea, text, text",
-      "result": "bytea",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.pgp_sym_encrypt_bytea(bytea, text, text)\n RETURNS bytea\n LANGUAGE c\n PARALLEL SAFE STRICT\nAS '$libdir/pgcrypto', $function$pgp_sym_encrypt_bytea$function$\n"
-    },
-    {
-      "name": "plan_tier_rank",
-      "args": "tier text",
-      "result": "integer",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.plan_tier_rank(tier text)\n RETURNS integer\n LANGUAGE sql\n IMMUTABLE\nAS $function$\n  select case tier\n    when 'free' then 0\n    when 'growth' then 1\n    when 'pro' then 2\n    when 'enterprise' then 3\n    else -1\n  end;\n$function$\n"
-    },
-    {
-      "name": "prevent_functional_currency_change",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.prevent_functional_currency_change()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if tg_op = 'UPDATE' and new.base_currency is distinct from old.base_currency then\n    raise exception 'Functional currency cannot be changed after business creation (IAS 21). Create a new business if the functional currency changes.';\n  end if;\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "prevent_locked_bank_line_change",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.prevent_locked_bank_line_change()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if exists (select 1 from public.bank_statements s where s.id = coalesce(old.statement_id, new.statement_id) and s.is_locked) then\n    raise exception 'This bank reconciliation period is locked';\n  end if;\n  return coalesce(new, old);\nend; $function$\n"
-    },
-    {
-      "name": "protect_partner_commercial_fields",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.protect_partner_commercial_fields()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  if not public.is_platform_admin(auth.uid()) and (\n        old.client_limit         is distinct from new.client_limit\n    or  old.price_per_client     is distinct from new.price_per_client\n    or  old.billing_currency     is distinct from new.billing_currency\n    or  old.billing_email        is distinct from new.billing_email\n    or  old.billing_contact_name is distinct from new.billing_contact_name\n    or  old.is_active            is distinct from new.is_active\n    or  old.slug                 is distinct from new.slug\n    or  old.custom_domain        is distinct from new.custom_domain\n  ) then\n    raise exception 'Only Ledgr (platform admin) can change a partner''s commercial, billing or routing settings (client_limit, price_per_client, billing_currency, billing_email, billing_contact_name, is_active, slug, custom_domain).'\n      using errcode = 'check_violation';\n  end if;\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "record_business_terms_acceptance",
-      "args": "p_business_id uuid, p_terms_version text",
-      "result": "timestamp with time zone",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.record_business_terms_acceptance(p_business_id uuid, p_terms_version text)\n RETURNS timestamp with time zone\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_accepted_at TIMESTAMPTZ;\nBEGIN\n  IF auth.uid() IS NULL THEN\n    RAISE EXCEPTION 'You must be signed in to accept the Terms and Conditions.';\n  END IF;\n\n  IF p_terms_version <> '1.1' THEN\n    RAISE EXCEPTION 'The supplied Terms and Conditions version is not current.';\n  END IF;\n\n  IF NOT EXISTS (\n    SELECT 1\n    FROM public.business_users\n    WHERE business_id = p_business_id\n      AND user_id = auth.uid()\n      AND role = 'owner'\n      AND is_active = true\n  ) THEN\n    RAISE EXCEPTION 'Only an active business owner can record Terms and Conditions acceptance.';\n  END IF;\n\n  INSERT INTO public.business_terms_acceptances (business_id, user_id, terms_version)\n  VALUES (p_business_id, auth.uid(), p_terms_version)\n  ON CONFLICT (business_id, user_id, terms_version) DO UPDATE\n    SET accepted_at = business_terms_acceptances.accepted_at\n  RETURNING accepted_at INTO v_accepted_at;\n\n  RETURN v_accepted_at;\nEND;\n$function$\n"
-    },
-    {
-      "name": "remove_partner_admin",
-      "args": "p_partner_id uuid, p_user_email_or_id text",
-      "result": "void",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.remove_partner_admin(p_partner_id uuid, p_user_email_or_id text)\n RETURNS void\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_user_id uuid;\nbegin\n  if not public.is_platform_admin(auth.uid()) then\n    raise exception 'Only Ledgr (platform admin) can remove partner admins.'\n      using errcode = 'insufficient_privilege';\n  end if;\n\n  if p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then\n    select id into v_user_id from auth.users where id = p_user_email_or_id::uuid;\n  else\n    select id into v_user_id from auth.users\n     where lower(email) = lower(trim(p_user_email_or_id));\n  end if;\n\n  if v_user_id is null then\n    raise exception 'User \"%\" was not found.', p_user_email_or_id;\n  end if;\n\n  delete from public.partner_admins\n   where partner_id = p_partner_id and user_id = v_user_id;\nend;\n$function$\n"
-    },
-    {
-      "name": "reserve_next_document_number",
-      "args": "p_business_id uuid, p_kind text",
-      "result": "text",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.reserve_next_document_number(p_business_id uuid, p_kind text)\n RETURNS text\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\ndeclare\n  v_number integer;\n  v_prefix text;\n  v_allowed boolean;\nbegin\n  if p_kind not in ('invoice', 'expense', 'payroll') then\n    raise exception 'Unknown document kind %. Expected invoice, expense or payroll.', p_kind\n      using errcode = '22023';\n  end if;\n\n  -- Payroll numbers are reserved only by payroll roles; everything else by the\n  -- general writer set. Checked before the row is touched.\n  if p_kind = 'payroll' then\n    v_allowed := public.can_write_payroll(p_business_id);\n  else\n    v_allowed := public.can_write_business_data(p_business_id);\n  end if;\n\n  if not v_allowed then\n    raise exception 'You do not have permission to record % documents for this business.', p_kind\n      using errcode = '42501';   -- insufficient_privilege, mapped to UnauthorizedError\n  end if;\n\n  -- Atomic read-and-increment. The row lock serialises concurrent callers, so\n  -- two users cannot receive the same number.\n  if p_kind = 'invoice' then\n    update public.businesses\n       set invoice_next_number = invoice_next_number + 1,\n           updated_at          = now()\n     where id = p_business_id\n       and deleted_at is null\n    returning invoice_next_number - 1, coalesce(invoice_prefix, 'INV')\n      into v_number, v_prefix;\n\n  elsif p_kind = 'expense' then\n    update public.businesses\n       set expense_next_number = expense_next_number + 1,\n           updated_at          = now()\n     where id = p_business_id\n       and deleted_at is null\n    returning expense_next_number - 1, coalesce(expense_prefix, 'EXP')\n      into v_number, v_prefix;\n\n  else\n    update public.businesses\n       set payroll_next_number = payroll_next_number + 1,\n           updated_at          = now()\n     where id = p_business_id\n       and deleted_at is null\n    returning payroll_next_number - 1, coalesce(payroll_prefix, 'PAY')\n      into v_number, v_prefix;\n  end if;\n\n  -- Distinguish a genuinely absent business from a permission problem. The\n  -- permission case already returned above, so reaching here means no row.\n  if v_number is null then\n    raise exception 'Business % does not exist or has been deleted.', p_business_id\n      using errcode = 'P0002';   -- no_data_found\n  end if;\n\n  return v_prefix || '-' || lpad(v_number::text, 4, '0');\nend;\n$function$\n"
-    },
-    {
-      "name": "seed_partner_feature_flags",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.seed_partner_feature_flags()\n RETURNS trigger\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nbegin\n  insert into public.partner_feature_flags (partner_id, feature_key, enabled)\n  values\n    (new.id, 'ai_advisor', true),\n    (new.id, 'payroll', true),\n    (new.id, 'inventory', true),\n    (new.id, 'multi_currency', true),\n    (new.id, 'bank_reconciliation', true)\n  on conflict (partner_id, feature_key) do nothing;\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "set_limit",
-      "args": "real",
-      "result": "real",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.set_limit(real)\n RETURNS real\n LANGUAGE c\n STRICT\nAS '$libdir/pg_trgm', $function$set_limit$function$\n"
-    },
-    {
-      "name": "set_partner_invoice_number",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.set_partner_invoice_number()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  if new.invoice_number is null then\n    new.invoice_number := 'PINV-' || lpad(nextval('public.partner_invoice_number_seq')::text, 6, '0');\n  end if;\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "set_updated_at",
-      "args": "",
-      "result": "trigger",
-      "volatility": "v",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.set_updated_at()\n RETURNS trigger\n LANGUAGE plpgsql\nAS $function$\nbegin\n  new.updated_at = now();\n  return new;\nend;\n$function$\n"
-    },
-    {
-      "name": "set_user_business_access",
-      "args": "p_user_email_or_id text, p_business_ids uuid[], p_role text, p_revoke_others boolean",
-      "result": "TABLE(out_business_id uuid, out_business_name text, out_role text, out_action text)",
-      "volatility": "v",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.set_user_business_access(p_user_email_or_id text, p_business_ids uuid[], p_role text DEFAULT 'viewer'::text, p_revoke_others boolean DEFAULT false)\n RETURNS TABLE(out_business_id uuid, out_business_name text, out_role text, out_action text)\n LANGUAGE plpgsql\n SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\nDECLARE\n  v_user_id     UUID;\n  v_role_enum   user_role;\n  v_biz_id      UUID;\n  v_invalid     UUID[];\n  v_revoked     INT := 0;\nBEGIN\n  IF p_business_ids IS NULL OR array_length(p_business_ids, 1) IS NULL THEN\n    RAISE EXCEPTION 'p_business_ids must contain at least one business id.';\n  END IF;\n\n  -- Validate the role against the live enum, and list the real options on\n  -- failure rather than the stale hardcoded list the old function printed.\n  BEGIN\n    v_role_enum := p_role::user_role;\n  EXCEPTION WHEN OTHERS THEN\n    RAISE EXCEPTION 'Invalid role \"%\". Valid roles: %',\n      p_role,\n      (SELECT string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder)\n         FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid\n        WHERE t.typname = 'user_role');\n  END;\n\n  -- Resolve the user by UUID or email.\n  IF p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN\n    SELECT id INTO v_user_id FROM auth.users WHERE id = p_user_email_or_id::UUID;\n  ELSE\n    SELECT id INTO v_user_id FROM auth.users\n     WHERE LOWER(email) = LOWER(TRIM(p_user_email_or_id));\n  END IF;\n\n  IF v_user_id IS NULL THEN\n    RAISE EXCEPTION 'User \"%\" was not found in auth.users.', p_user_email_or_id;\n  END IF;\n\n  -- Reject the whole call if ANY target business is missing/inactive/deleted.\n  -- The app filters those out, so a membership pointing at one would be\n  -- invisible and would look like the grant silently failed.\n  SELECT array_agg(t.id) INTO v_invalid\n    FROM unnest(p_business_ids) AS t(id)\n   WHERE NOT EXISTS (\n     SELECT 1 FROM public.businesses b\n      WHERE b.id = t.id AND b.is_active = true AND b.deleted_at IS NULL\n   );\n\n  IF v_invalid IS NOT NULL THEN\n    RAISE EXCEPTION\n      'These business ids do not exist, are inactive, or are soft-deleted: %. '\n      'No changes were made.', v_invalid;\n  END IF;\n\n  -- Grant/reactivate each target business first, so the revoke step below can\n  -- never transiently leave the user with nothing.\n  FOREACH v_biz_id IN ARRAY p_business_ids LOOP\n    RETURN QUERY\n    WITH prior AS (\n      SELECT bu.id, bu.is_active\n        FROM public.business_users bu\n       WHERE bu.business_id = v_biz_id AND bu.user_id = v_user_id\n    ),\n    upsert AS (\n      INSERT INTO public.business_users (\n        business_id, user_id, role, is_active, accepted_at, created_at, updated_at\n      )\n      VALUES (v_biz_id, v_user_id, v_role_enum, true, now(), now(), now())\n      ON CONFLICT (business_id, user_id) DO UPDATE\n        SET role        = EXCLUDED.role,\n            is_active   = true,\n            -- Preserve the original acceptance timestamp; the old function\n            -- left it untouched on conflict, so rows reactivated after an\n            -- invite could keep a NULL accepted_at.\n            accepted_at = COALESCE(business_users.accepted_at, now()),\n            updated_at  = now()\n      RETURNING business_id\n    )\n    SELECT\n      v_biz_id,\n      b.name::TEXT,\n      p_role::TEXT,\n      (CASE\n         WHEN NOT EXISTS (SELECT 1 FROM prior)          THEN 'created'\n         WHEN (SELECT p.is_active FROM prior p)         THEN 'updated'\n         ELSE 'reactivated'\n       END)::TEXT\n    FROM upsert u\n    JOIN public.businesses b ON b.id = u.business_id;\n  END LOOP;\n\n  -- Opt-in exclusivity. Only reachable once the grants above have succeeded.\n  IF p_revoke_others THEN\n    UPDATE public.business_users\n       SET is_active = false, updated_at = now()\n     WHERE user_id = v_user_id\n       AND NOT (business_id = ANY (p_business_ids))\n       AND is_active = true;\n    GET DIAGNOSTICS v_revoked = ROW_COUNT;\n\n    -- Belt and braces: verify the user still has somewhere to land. If not,\n    -- abort the whole transaction rather than lock them out.\n    IF NOT EXISTS (\n      SELECT 1\n        FROM public.business_users bu\n        JOIN public.businesses b ON b.id = bu.business_id\n       WHERE bu.user_id = v_user_id\n         AND bu.is_active = true\n         AND b.is_active = true\n         AND b.deleted_at IS NULL\n    ) THEN\n      RAISE EXCEPTION\n        'Aborted: revoking other memberships would leave user % with no '\n        'visible business, locking them out of the app.', p_user_email_or_id;\n    END IF;\n\n    RAISE NOTICE 'Deactivated % other membership(s) for %.',\n      v_revoked, p_user_email_or_id;\n  END IF;\nEND;\n$function$\n"
-    },
-    {
-      "name": "show_limit",
-      "args": "",
-      "result": "real",
-      "volatility": "s",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.show_limit()\n RETURNS real\n LANGUAGE c\n STABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$show_limit$function$\n"
-    },
-    {
-      "name": "show_trgm",
-      "args": "text",
-      "result": "text[]",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.show_trgm(text)\n RETURNS text[]\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$show_trgm$function$\n"
-    },
-    {
-      "name": "similarity",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.similarity(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$similarity$function$\n"
-    },
-    {
-      "name": "similarity_dist",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.similarity_dist(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$similarity_dist$function$\n"
-    },
-    {
-      "name": "similarity_op",
-      "args": "text, text",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.similarity_op(text, text)\n RETURNS boolean\n LANGUAGE c\n STABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$similarity_op$function$\n"
-    },
-    {
-      "name": "strict_word_similarity",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.strict_word_similarity(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$strict_word_similarity$function$\n"
-    },
-    {
-      "name": "strict_word_similarity_commutator_op",
-      "args": "text, text",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.strict_word_similarity_commutator_op(text, text)\n RETURNS boolean\n LANGUAGE c\n STABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$strict_word_similarity_commutator_op$function$\n"
-    },
-    {
-      "name": "strict_word_similarity_dist_commutator_op",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_commutator_op(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$strict_word_similarity_dist_commutator_op$function$\n"
-    },
-    {
-      "name": "strict_word_similarity_dist_op",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_op(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$strict_word_similarity_dist_op$function$\n"
-    },
-    {
-      "name": "strict_word_similarity_op",
-      "args": "text, text",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.strict_word_similarity_op(text, text)\n RETURNS boolean\n LANGUAGE c\n STABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$strict_word_similarity_op$function$\n"
-    },
-    {
-      "name": "user_has_role",
-      "args": "p_business_id uuid, p_min_role user_role",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": true,
-      "def": "CREATE OR REPLACE FUNCTION public.user_has_role(p_business_id uuid, p_min_role user_role)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO 'public'\nAS $function$\n  select case p_min_role::text\n    -- Read tier. Every active member, so master data and transactional lists\n    -- populate for all roles. Payroll tables no longer use this tier.\n    when 'viewer'          then public.is_business_member(p_business_id)\n\n    -- Oversight read (audit_log).\n    when 'auditor'         then public.can_read_audit(p_business_id)\n\n    -- Payroll tier, kept narrow.\n    when 'payroll_manager' then public.can_view_payroll(p_business_id)\n\n    -- General write tier: the canWrite set from usePermissions.ts.\n    when 'accountant'      then public.can_write_business_data(p_business_id)\n\n    -- Administrative / destructive.\n    when 'admin'           then public.can_admin_business_data(p_business_id)\n    when 'owner'           then exists (\n                                  select 1\n                                  from public.business_users bu\n                                  where bu.business_id = p_business_id\n                                    and bu.user_id = auth.uid()\n                                    and bu.is_active = true\n                                    and bu.role::text = 'owner'\n                                )\n\n    -- Unknown tier denies, matching the original NULL-returning behaviour but\n    -- explicitly.\n    else false\n  end;\n$function$\n"
-    },
-    {
-      "name": "word_similarity",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.word_similarity(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$word_similarity$function$\n"
-    },
-    {
-      "name": "word_similarity_commutator_op",
-      "args": "text, text",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.word_similarity_commutator_op(text, text)\n RETURNS boolean\n LANGUAGE c\n STABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$word_similarity_commutator_op$function$\n"
-    },
-    {
-      "name": "word_similarity_dist_commutator_op",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.word_similarity_dist_commutator_op(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$word_similarity_dist_commutator_op$function$\n"
-    },
-    {
-      "name": "word_similarity_dist_op",
-      "args": "text, text",
-      "result": "real",
-      "volatility": "i",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.word_similarity_dist_op(text, text)\n RETURNS real\n LANGUAGE c\n IMMUTABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$word_similarity_dist_op$function$\n"
-    },
-    {
-      "name": "word_similarity_op",
-      "args": "text, text",
-      "result": "boolean",
-      "volatility": "s",
-      "security_definer": false,
-      "def": "CREATE OR REPLACE FUNCTION public.word_similarity_op(text, text)\n RETURNS boolean\n LANGUAGE c\n STABLE PARALLEL SAFE STRICT\nAS '$libdir/pg_trgm', $function$word_similarity_op$function$\n"
-    }
-  ],
-  "cron_jobs": [
-    {
-      "jobid": "1",
-      "schedule": "0 1 * * *",
-      "command": "\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/expire-subscriptions',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  ",
-      "active": true
-    },
-    {
-      "jobid": "2",
-      "schedule": "0 8 * * *",
-      "command": "\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/send-renewal-reminders',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  ",
-      "active": true
-    },
-    {
-      "jobid": "3",
-      "schedule": "0 2 1 * *",
-      "command": "\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/generate-partner-invoices',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  ",
-      "active": true
     }
   ]
 }

@@ -7,12 +7,10 @@
 #
 # IMPORTANT — PostgreSQL version:
 #   `[db] major_version` must equal the STAGING database's major version.
-#   Phase 8A.1 could NOT verify it (live capture unavailable: no credentials,
-#   Supabase network blocked). The value below (17) is the Supabase CLI
-#   default at the time of writing. Verify with:
-#     psql "$STAGING_SUPABASE_DB_URL" -c "show server_version;"
-#   The Phase 8A.1 disposable replay used PostgreSQL 18.4 (embedded-postgres)
-#   as a stand-in; all 57 migrations replayed successfully on it.
+#   VERIFIED against the live staging database via the Phase 8A.1 read-only
+#   capture (2026-08-15): SHOW server_version returned 17.6, so major_version
+#   = 17 is correct. (The Phase 8A.1 disposable replay additionally confirmed
+#   all 55 migrations replay on PostgreSQL 18.4.)
 # ============================================================================
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
