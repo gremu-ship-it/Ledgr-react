@@ -1,17 +1,10 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
-
+/* eslint-disable */
+// Phase 8A.1 artifact — approximate types regenerated from the fresh
+// database (all repository migrations replayed; mirrors live staging).
+// Replace with exact `supabase gen types typescript` output when possible.
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
+  __InternalSupabase: { PostgrestVersion: "14.5" }
   public: {
     Tables: {
       accounting_periods: {
@@ -1628,6 +1621,7 @@ export type Database = {
           reference: string | null
           exchange_rate_used: number | null
           functional_currency: string | null
+          client_key: string | null
         }
         Insert: {
           bank_account_id?: string | null
@@ -1643,6 +1637,7 @@ export type Database = {
           reference?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Update: {
           amount?: number
@@ -1666,6 +1661,7 @@ export type Database = {
           reference?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Relationships: [
           {
@@ -1761,6 +1757,7 @@ export type Database = {
           wht_amount: number
           exchange_rate_used: number | null
           functional_currency: string | null
+          client_key: string | null
         }
         Insert: {
           ap_account_id?: string | null
@@ -1790,6 +1787,7 @@ export type Database = {
           updated_at?: string
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Update: {
           amount_paid?: number
@@ -1832,6 +1830,7 @@ export type Database = {
           wht_amount?: number
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Relationships: [
           {
@@ -2421,6 +2420,7 @@ export type Database = {
           reference: string | null
           exchange_rate_used: number | null
           functional_currency: string | null
+          client_key: string | null
         }
         Insert: {
           bank_account_id?: string | null
@@ -2436,6 +2436,7 @@ export type Database = {
           reference?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Update: {
           amount?: number
@@ -2459,6 +2460,7 @@ export type Database = {
           reference?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Relationships: [
           {
@@ -2561,6 +2563,7 @@ export type Database = {
           wht_amount: number
           exchange_rate_used: number | null
           functional_currency: string | null
+          client_key: string | null
         }
         Insert: {
           amount_due?: number | null
@@ -2593,6 +2596,7 @@ export type Database = {
           viewed_at?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Update: {
           amount_due?: number | null
@@ -2642,6 +2646,7 @@ export type Database = {
           wht_amount?: number
           exchange_rate_used?: number | null
           functional_currency?: string | null
+          client_key?: string | null
         }
         Relationships: [
           {
@@ -3479,6 +3484,7 @@ export type Database = {
           total_other_deductions: number
           total_paye: number
           updated_at: string
+          client_key: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -3491,6 +3497,7 @@ export type Database = {
           paye_filed_at?: string | null
           paye_return_ref?: string | null
           updated_at?: string
+          client_key?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -3514,6 +3521,7 @@ export type Database = {
           total_other_deductions?: number
           total_paye?: number
           updated_at?: string
+          client_key?: string | null
         }
         Relationships: [
           {
@@ -3839,6 +3847,7 @@ export type Database = {
           source_type: string | null
           total_cost: number | null
           unit_cost: number
+          client_key: string | null
         }
         Insert: {
           created_at?: string
@@ -3849,6 +3858,7 @@ export type Database = {
           source_id?: string | null
           source_type?: string | null
           total_cost?: number | null
+          client_key?: string | null
         }
         Update: {
           business_id?: string
@@ -3866,6 +3876,7 @@ export type Database = {
           source_type?: string | null
           total_cost?: number | null
           unit_cost?: number
+          client_key?: string | null
         }
         Relationships: [
           {
@@ -4552,678 +4563,11 @@ export type Database = {
       }
     }
     Views: {
-      v_cash_flow: {
-        Row: {
-        }
-        Insert: {
-          [_ in never]: never
-        }
-        Update: {
-          [_ in never]: never
-        }
-        Relationships: []
-      }
-      v_inventory_ledger_variance: {
-        Row: {
-        }
-        Insert: {
-          [_ in never]: never
-        }
-        Update: {
-          [_ in never]: never
-        }
-        Relationships: []
-      }
-      v_partner_client_usage: {
-        Row: {
-        }
-        Insert: {
-          [_ in never]: never
-        }
-        Update: {
-          [_ in never]: never
-        }
-        Relationships: []
-      }
+      v_cash_flow: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
+      v_inventory_ledger_variance: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
+      v_partner_client_usage: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
     }
-    Functions: {
-      add_partner_admin: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      apply_subscription_payment: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      armor: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      armor: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      backfill_and_recalculate_inventory: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      business_partner_id: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_admin_business_data: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_read_audit: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_read_partner_client: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_read_partner_peer_business: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_view_payroll: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_write_business_data: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      can_write_payroll: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      clear_partner_admins: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      consume_api_rate_limit: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      create_api_journal_entry: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      crypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      current_partner_ids: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      dearmor: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      decrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      decrypt_iv: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      diagnose_user_login: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      digest: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      digest: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      encrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      encrypt_iv: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      enforce_partner_client_limit: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      enforce_plan_tier_change: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      fips_mode: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gen_random_bytes: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gen_random_uuid: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gen_salt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gen_salt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gin_extract_query_trgm: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gin_extract_value_trgm: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gin_trgm_consistent: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gin_trgm_triconsistent: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      grant_user_business_access: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_compress: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_consistent: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_decompress: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_distance: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_in: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_options: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_out: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_penalty: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_picksplit: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_same: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      gtrgm_union: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      hmac: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      hmac: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      increment_amount_paid: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      is_business_member: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      is_partner_admin: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      is_partner_business_admin: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      is_platform_admin: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      list_all_businesses: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      list_partner_admins: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_armor_headers: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_key_id: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_decrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_decrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_decrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_decrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_decrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_decrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_encrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_encrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_encrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_pub_encrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_decrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_decrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_decrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_decrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_encrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_encrypt: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_encrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      pgp_sym_encrypt_bytea: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      plan_tier_rank: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      prevent_functional_currency_change: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      prevent_locked_bank_line_change: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      protect_partner_commercial_fields: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      record_business_terms_acceptance: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      remove_partner_admin: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      reserve_next_document_number: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      seed_partner_feature_flags: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      set_limit: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      set_partner_invoice_number: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      set_updated_at: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      set_user_business_access: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      show_limit: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      show_trgm: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      similarity: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      similarity_dist: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      similarity_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      strict_word_similarity: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      strict_word_similarity_commutator_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      strict_word_similarity_dist_commutator_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      strict_word_similarity_dist_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      strict_word_similarity_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      user_has_role: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      word_similarity: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      word_similarity_commutator_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      word_similarity_dist_commutator_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      word_similarity_dist_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-      word_similarity_op: {
-        Args: {
-          [_ in never]: never
-        }
-        Returns: undefined
-      }
-    }
+    Functions: { [_ in never]: never }
     Enums: {
       account_subtype:
         | "current_asset"
@@ -5355,8 +4699,6 @@ export type Database = {
         | "board_member"
         | "branch_manager"
     }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+    CompositeTypes: { [_ in never]: never }
   }
 }

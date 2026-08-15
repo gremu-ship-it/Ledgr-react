@@ -113,10 +113,11 @@ where n.nspname = 'public'
 order by i.relname;
 
 -- @artifact sequences
-select s.relname, format_type(t.typbasetype, t.typtypmod)
+-- join pg_sequence for the data type (pg_class.reltype is 0 for sequences)
+select s.relname, format_type(seq.seqtypid, NULL)
 from pg_class s
 join pg_namespace n on n.oid = s.relnamespace
-join pg_type t on t.oid = s.reltype
+join pg_sequence seq on seq.seqrelid = s.oid
 where s.relkind = 'S' and n.nspname = 'public'
 order by 1;
 
