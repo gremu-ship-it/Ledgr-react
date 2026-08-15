@@ -2826,7 +2826,7 @@
           "name": "rate_is_stale",
           "type": "boolean",
           "notnull": true,
-          "default_expr": null
+          "default_expr": "false"
         },
         {
           "name": "reference",
@@ -3037,7 +3037,7 @@
           "name": "rate_is_stale",
           "type": "boolean",
           "notnull": true,
-          "default_expr": null
+          "default_expr": "false"
         },
         {
           "name": "receipt_filename",
@@ -4044,7 +4044,7 @@
           "name": "rate_is_stale",
           "type": "boolean",
           "notnull": true,
-          "default_expr": null
+          "default_expr": "false"
         },
         {
           "name": "reference",
@@ -4309,7 +4309,7 @@
           "name": "rate_is_stale",
           "type": "boolean",
           "notnull": true,
-          "default_expr": null
+          "default_expr": "false"
         },
         {
           "name": "revenue_account_id",
@@ -4711,7 +4711,7 @@
           "name": "rate_is_stale",
           "type": "boolean",
           "notnull": true,
-          "default_expr": null
+          "default_expr": "false"
         },
         {
           "name": "reconciled",
@@ -7128,7 +7128,7 @@
           "name": "is_platform_admin",
           "type": "boolean",
           "notnull": true,
-          "default_expr": null
+          "default_expr": "false"
         },
         {
           "name": "phone",
@@ -7307,6 +7307,14 @@
   },
   "views": [
     {
+      "name": "v_ar_ageing",
+      "def": " SELECT i.business_id,\n    i.contact_id,\n    c.name AS contact_name,\n    i.id AS invoice_id,\n    i.invoice_number,\n    i.issue_date,\n    i.due_date,\n    i.currency,\n    i.total_amount,\n    i.amount_paid,\n    COALESCE(i.amount_due, (COALESCE(i.functional_amount, i.total_amount) - i.amount_paid)) AS amount_due,\n        CASE\n            WHEN ((i.due_date IS NULL) OR (i.due_date >= CURRENT_DATE)) THEN 0\n            ELSE (CURRENT_DATE - i.due_date)\n        END AS days_overdue,\n        CASE\n            WHEN ((i.due_date IS NULL) OR (i.due_date >= CURRENT_DATE)) THEN 'current'::text\n            WHEN ((CURRENT_DATE - i.due_date) <= 30) THEN '1-30'::text\n            WHEN ((CURRENT_DATE - i.due_date) <= 60) THEN '31-60'::text\n            WHEN ((CURRENT_DATE - i.due_date) <= 90) THEN '61-90'::text\n            ELSE '90+'::text\n        END AS ageing_bucket\n   FROM (invoices i\n     LEFT JOIN contacts c ON ((c.id = i.contact_id)))\n  WHERE ((i.deleted_at IS NULL) AND (i.invoice_type = 'invoice'::text) AND (i.status = ANY (ARRAY['sent'::invoice_status, 'partially_paid'::invoice_status, 'overdue'::invoice_status])));"
+    },
+    {
+      "name": "v_asset_register",
+      "def": " SELECT fa.business_id,\n    fa.asset_number,\n    fa.name,\n    fa.acquisition_cost,\n    fa.acquisition_date,\n    fa.depreciable_amount,\n    fa.residual_value,\n    fa.accumulated_depreciation,\n    fa.depreciation_method,\n    fa.last_depreciation_date,\n    COALESCE(fa.net_book_value, (fa.acquisition_cost - fa.accumulated_depreciation)) AS net_book_value,\n    fa.status,\n    cat.name AS category,\n    br.name AS branch,\n    dept.name AS department\n   FROM (((fixed_assets fa\n     LEFT JOIN asset_categories cat ON ((cat.id = fa.category_id)))\n     LEFT JOIN branches br ON ((br.id = fa.branch_id)))\n     LEFT JOIN departments dept ON ((dept.id = fa.department_id)))\n  WHERE (fa.deleted_at IS NULL);"
+    },
+    {
       "name": "v_cash_flow",
       "def": " WITH account_meta AS (\n         SELECT a.id,\n            a.business_id,\n            a.code,\n            a.account_subtype,\n                CASE\n                    WHEN a.is_bank_account THEN true\n                    WHEN (a.code = ANY (ARRAY['1110'::text, '1115'::text, '1125'::text, '1126'::text])) THEN true\n                    ELSE false\n                END AS is_cash_equivalent\n           FROM accounts a\n          WHERE (a.deleted_at IS NULL)\n        ), posted_entries AS (\n         SELECT je.id AS entry_id,\n            je.business_id,\n            je.source_type,\n            je.reversal_of,\n            to_char((je.entry_date)::timestamp with time zone, 'YYYY-MM'::text) AS period\n           FROM journal_entries je\n          WHERE (je.status = ANY (ARRAY['posted'::journal_status, 'reversed'::journal_status]))\n        ), effective_entries AS (\n         SELECT pe.entry_id,\n            pe.business_id,\n            pe.period,\n                CASE\n                    WHEN ((pe.source_type = 'reversal'::text) AND (pe.reversal_of IS NOT NULL)) THEN COALESCE(( SELECT je_orig.source_type\n                       FROM journal_entries je_orig\n                      WHERE (je_orig.id = pe.reversal_of)), 'reversal'::text)\n                    ELSE pe.source_type\n                END AS effective_source_type\n           FROM posted_entries pe\n        ), enriched_lines AS (\n         SELECT ee.entry_id,\n            ee.business_id,\n            ee.period,\n            ee.effective_source_type,\n            jl.is_debit,\n            jl.amount_base,\n            am.code AS account_code,\n            am.account_subtype,\n            am.is_cash_equivalent\n           FROM ((effective_entries ee\n             JOIN journal_lines jl ON ((jl.journal_entry_id = ee.entry_id)))\n             JOIN account_meta am ON ((am.id = jl.account_id)))\n        ), cash_per_entry AS (\n         SELECT el.entry_id,\n            el.business_id,\n            el.period,\n            sum(\n                CASE\n                    WHEN el.is_cash_equivalent THEN\n                    CASE\n                        WHEN el.is_debit THEN el.amount_base\n                        ELSE (- el.amount_base)\n                    END\n                    ELSE (0)::numeric\n                END) AS net_cash\n           FROM enriched_lines el\n          GROUP BY el.entry_id, el.business_id, el.period\n         HAVING bool_or(el.is_cash_equivalent)\n        ), classification_per_entry AS (\n         SELECT cpe_1.entry_id,\n            cpe_1.business_id,\n            cpe_1.period,\n            cpe_1.net_cash,\n                CASE\n                    WHEN bool_or((el.effective_source_type = 'fixed_asset_revaluation'::text)) THEN 'excluded'::text\n                    WHEN bool_or((el.effective_source_type = 'fixed_asset_disposal'::text)) THEN 'investing'::text\n                    WHEN bool_and(el.is_cash_equivalent) THEN 'operating'::text\n                    WHEN bool_or((el.account_subtype = 'fixed_asset'::account_subtype)) THEN 'investing'::text\n                    WHEN bool_or((el.account_code = ANY (ARRAY['2140'::text, '2145'::text, '2510'::text, '2511'::text, '2512'::text, '2515'::text]))) THEN 'financing'::text\n                    WHEN bool_or((el.account_code = '3140'::text)) THEN 'financing'::text\n                    WHEN bool_or((el.account_subtype = 'share_capital'::account_subtype)) THEN 'financing'::text\n                    ELSE 'operating'::text\n                END AS classification\n           FROM (cash_per_entry cpe_1\n             JOIN enriched_lines el ON ((el.entry_id = cpe_1.entry_id)))\n          GROUP BY cpe_1.entry_id, cpe_1.business_id, cpe_1.period, cpe_1.net_cash\n        )\n SELECT cpe.business_id,\n    cpe.period,\n    COALESCE(sum(\n        CASE\n            WHEN (cls.classification = 'operating'::text) THEN cpe.net_cash\n            ELSE (0)::numeric\n        END), (0)::numeric) AS operating,\n    COALESCE(sum(\n        CASE\n            WHEN (cls.classification = 'investing'::text) THEN cpe.net_cash\n            ELSE (0)::numeric\n        END), (0)::numeric) AS investing,\n    COALESCE(sum(\n        CASE\n            WHEN (cls.classification = 'financing'::text) THEN cpe.net_cash\n            ELSE (0)::numeric\n        END), (0)::numeric) AS financing,\n    COALESCE(sum(\n        CASE\n            WHEN (cls.classification = ANY (ARRAY['operating'::text, 'investing'::text, 'financing'::text])) THEN cpe.net_cash\n            ELSE (0)::numeric\n        END), (0)::numeric) AS net_change\n   FROM (cash_per_entry cpe\n     JOIN classification_per_entry cls USING (entry_id))\n  GROUP BY cpe.business_id, cpe.period;"
     },
@@ -7317,6 +7325,14 @@
     {
       "name": "v_partner_client_usage",
       "def": " SELECT pc.partner_id,\n    b.id AS business_id,\n    b.name AS business_name,\n    b.plan_tier,\n    b.is_active,\n    pc.created_at AS onboarded_at,\n    ( SELECT count(*) AS count\n           FROM journal_entries je\n          WHERE (je.business_id = b.id)) AS journal_entry_count,\n    ( SELECT count(*) AS count\n           FROM invoices i\n          WHERE (i.business_id = b.id)) AS invoice_count,\n    ( SELECT count(*) AS count\n           FROM business_users bu\n          WHERE ((bu.business_id = b.id) AND bu.is_active)) AS user_count,\n    ( SELECT max(je.created_at) AS max\n           FROM journal_entries je\n          WHERE (je.business_id = b.id)) AS last_activity_at\n   FROM (partner_clients pc\n     JOIN businesses b ON ((b.id = pc.business_id)))\n  WHERE ((b.deleted_at IS NULL) AND is_partner_admin(auth.uid(), pc.partner_id));"
+    },
+    {
+      "name": "v_reorder_alerts",
+      "def": " SELECT ib.business_id,\n    ib.product_id,\n    p.name AS product_name,\n    p.sku,\n    l.name AS location_name,\n    ib.quantity_on_hand,\n    ib.quantity_reserved,\n    ib.quantity_available,\n    ib.average_cost,\n    p.reorder_level,\n    p.reorder_quantity,\n    COALESCE((p.reorder_quantity * ib.average_cost), (0)::numeric) AS estimated_reorder_cost\n   FROM ((inventory_balances ib\n     JOIN products p ON (((p.id = ib.product_id) AND (p.business_id = ib.business_id) AND (p.track_inventory = true) AND (p.is_active = true) AND (p.deleted_at IS NULL))))\n     LEFT JOIN inventory_locations l ON (((l.id = ib.location_id) AND (l.business_id = ib.business_id))))\n  WHERE ((p.reorder_level IS NOT NULL) AND (COALESCE(ib.quantity_available, ib.quantity_on_hand) <= p.reorder_level));"
+    },
+    {
+      "name": "v_trial_balance",
+      "def": " SELECT a.business_id,\n    a.code,\n    a.name,\n    a.account_type,\n    a.account_subtype,\n    a.normal_balance,\n    COALESCE(sum(\n        CASE\n            WHEN jl.is_debit THEN jl.amount_base\n            ELSE (0)::numeric\n        END), (0)::numeric) AS total_debits,\n    COALESCE(sum(\n        CASE\n            WHEN jl.is_debit THEN (0)::numeric\n            ELSE jl.amount_base\n        END), (0)::numeric) AS total_credits,\n        CASE\n            WHEN (a.normal_balance = 'credit'::text) THEN (- COALESCE(sum(\n            CASE\n                WHEN jl.is_debit THEN jl.amount_base\n                ELSE (- jl.amount_base)\n            END), (0)::numeric))\n            ELSE COALESCE(sum(\n            CASE\n                WHEN jl.is_debit THEN jl.amount_base\n                ELSE (- jl.amount_base)\n            END), (0)::numeric)\n        END AS balance\n   FROM ((accounts a\n     LEFT JOIN journal_lines jl ON (((jl.account_id = a.id) AND (jl.business_id = a.business_id))))\n     LEFT JOIN journal_entries je ON (((je.id = jl.journal_entry_id) AND (je.business_id = a.business_id) AND (je.status = ANY (ARRAY['posted'::journal_status, 'reversed'::journal_status])))))\n  WHERE (a.deleted_at IS NULL)\n  GROUP BY a.id, a.business_id, a.code, a.name, a.account_type, a.account_subtype, a.normal_balance;"
     }
   ]
 }

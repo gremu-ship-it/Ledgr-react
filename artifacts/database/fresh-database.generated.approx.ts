@@ -1634,6 +1634,7 @@ export type Database = {
           original_amount?: number | null
           original_currency?: string | null
           rate_date?: string | null
+          rate_is_stale?: boolean
           reference?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
@@ -1777,6 +1778,7 @@ export type Database = {
           original_amount?: number | null
           original_currency?: string | null
           rate_date?: string | null
+          rate_is_stale?: boolean
           receipt_filename?: string | null
           receipt_mime_type?: string | null
           receipt_size_bytes?: number | null
@@ -2433,6 +2435,7 @@ export type Database = {
           original_amount?: number | null
           original_currency?: string | null
           rate_date?: string | null
+          rate_is_stale?: boolean
           reference?: string | null
           exchange_rate_used?: number | null
           functional_currency?: string | null
@@ -2589,6 +2592,7 @@ export type Database = {
           payment_reference?: string | null
           template?: string
           rate_date?: string | null
+          rate_is_stale?: boolean
           revenue_account_id?: string | null
           sent_at?: string | null
           terms?: string | null
@@ -2877,6 +2881,7 @@ export type Database = {
           original_amount?: number | null
           original_currency?: string | null
           rate_date?: string | null
+          rate_is_stale?: boolean
           reconciled_at?: string | null
           tax_code?: Database["public"]["Enums"]["tax_code"] | null
           exchange_rate_used?: number | null
@@ -4454,6 +4459,7 @@ export type Database = {
           deletion_finalized_at?: string | null
           deletion_requested_at?: string | null
           id?: string
+          is_platform_admin?: boolean
           phone?: string | null
           preferred_language?: string | null
           preferred_currency?: Database["public"]["Enums"]["currency_code"] | null
@@ -4563,9 +4569,13 @@ export type Database = {
       }
     }
     Views: {
+      v_ar_ageing: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
+      v_asset_register: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
       v_cash_flow: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
       v_inventory_ledger_variance: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
       v_partner_client_usage: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
+      v_reorder_alerts: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
+      v_trial_balance: { Row: { [_ in never]: never }, Insert: { [_ in never]: never }, Update: { [_ in never]: never }, Relationships: [] }
     }
     Functions: { [_ in never]: never }
     Enums: {
