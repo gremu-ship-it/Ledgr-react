@@ -1,0 +1,195 @@
+FOREIGN KEY (business_id) REFERENCES businesses(id)	accounting_periods	businesses
+FOREIGN KEY (branch_id) REFERENCES branches(id)	accounts	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	accounts	businesses
+FOREIGN KEY (currency) REFERENCES currencies(code)	accounts	currencies
+FOREIGN KEY (department_id) REFERENCES departments(id)	accounts	departments
+FOREIGN KEY (parent_id) REFERENCES accounts(id)	accounts	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	api_keys	businesses
+FOREIGN KEY (created_by) REFERENCES auth.users(id)	api_keys	auth.users
+FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE CASCADE	api_usage	api_keys
+FOREIGN KEY (accumulated_dep_account_id) REFERENCES accounts(id)	asset_categories	accounts
+FOREIGN KEY (asset_account_id) REFERENCES accounts(id)	asset_categories	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	asset_categories	businesses
+FOREIGN KEY (dep_expense_account_id) REFERENCES accounts(id)	asset_categories	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	bank_statement_lines	businesses
+FOREIGN KEY (journal_line_id) REFERENCES journal_lines(id)	bank_statement_lines	journal_lines
+FOREIGN KEY (statement_id) REFERENCES bank_statements(id)	bank_statement_lines	bank_statements
+FOREIGN KEY (account_id) REFERENCES accounts(id)	bank_statements	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	bank_statements	businesses
+FOREIGN KEY (reconciled_by) REFERENCES auth.users(id)	bank_statements	auth.users
+FOREIGN KEY (business_id) REFERENCES businesses(id)	branches	businesses
+FOREIGN KEY (account_id) REFERENCES accounts(id)	budget_lines	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	budget_lines	branches
+FOREIGN KEY (budget_id) REFERENCES budgets(id)	budget_lines	budgets
+FOREIGN KEY (business_id) REFERENCES businesses(id)	budget_lines	businesses
+FOREIGN KEY (department_id) REFERENCES departments(id)	budget_lines	departments
+FOREIGN KEY (business_id) REFERENCES businesses(id)	budgets	businesses
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	business_invitations	businesses
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	business_terms_acceptances	businesses
+FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE RESTRICT	business_terms_acceptances	auth.users
+FOREIGN KEY (branch_id) REFERENCES branches(id)	business_users	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	business_users	businesses
+FOREIGN KEY (base_currency) REFERENCES currencies(code)	businesses	currencies
+FOREIGN KEY (ap_account_id) REFERENCES accounts(id)	contacts	accounts
+FOREIGN KEY (ar_account_id) REFERENCES accounts(id)	contacts	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	contacts	businesses
+FOREIGN KEY (branch_id) REFERENCES branches(id)	departments	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	departments	businesses
+FOREIGN KEY (asset_id) REFERENCES fixed_assets(id)	depreciation_schedules	fixed_assets
+FOREIGN KEY (business_id) REFERENCES businesses(id)	depreciation_schedules	businesses
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	depreciation_schedules	journal_entries
+FOREIGN KEY (business_id) REFERENCES businesses(id)	employee_allowances	businesses
+FOREIGN KEY (employee_id) REFERENCES employees(id)	employee_allowances	employees
+FOREIGN KEY (business_id) REFERENCES businesses(id)	employee_deductions	businesses
+FOREIGN KEY (employee_id) REFERENCES employees(id)	employee_deductions	employees
+FOREIGN KEY (liability_account_id) REFERENCES accounts(id)	employee_deductions	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	employees	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	employees	businesses
+FOREIGN KEY (department_id) REFERENCES departments(id)	employees	departments
+FOREIGN KEY (paye_liability_account_id) REFERENCES accounts(id)	employees	accounts
+FOREIGN KEY (salary_account_id) REFERENCES accounts(id)	employees	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	exchange_rates	businesses
+FOREIGN KEY (created_by) REFERENCES auth.users(id)	exchange_rates	auth.users
+FOREIGN KEY (from_currency) REFERENCES currencies(code)	exchange_rates	currencies
+FOREIGN KEY (to_currency) REFERENCES currencies(code)	exchange_rates	currencies
+FOREIGN KEY (account_id) REFERENCES accounts(id)	expense_lines	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	expense_lines	businesses
+FOREIGN KEY (expense_id) REFERENCES expenses(id)	expense_lines	expenses
+FOREIGN KEY (product_id) REFERENCES products(id)	expense_lines	products
+FOREIGN KEY (bank_account_id) REFERENCES accounts(id)	expense_payments	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	expense_payments	businesses
+FOREIGN KEY (currency) REFERENCES currencies(code)	expense_payments	currencies
+FOREIGN KEY (expense_id) REFERENCES expenses(id)	expense_payments	expenses
+FOREIGN KEY (functional_currency) REFERENCES currencies(code)	expense_payments	currencies
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	expense_payments	journal_entries
+FOREIGN KEY (original_currency) REFERENCES currencies(code)	expense_payments	currencies
+FOREIGN KEY (ap_account_id) REFERENCES accounts(id)	expenses	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	expenses	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	expenses	businesses
+FOREIGN KEY (contact_id) REFERENCES contacts(id)	expenses	contacts
+FOREIGN KEY (currency) REFERENCES currencies(code)	expenses	currencies
+FOREIGN KEY (department_id) REFERENCES departments(id)	expenses	departments
+FOREIGN KEY (functional_currency) REFERENCES currencies(code)	expenses	currencies
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	expenses	journal_entries
+FOREIGN KEY (original_currency) REFERENCES currencies(code)	expenses	currencies
+FOREIGN KEY (accumulated_dep_account_id) REFERENCES accounts(id)	fixed_assets	accounts
+FOREIGN KEY (asset_account_id) REFERENCES accounts(id)	fixed_assets	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	fixed_assets	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	fixed_assets	businesses
+FOREIGN KEY (category_id) REFERENCES asset_categories(id)	fixed_assets	asset_categories
+FOREIGN KEY (dep_expense_account_id) REFERENCES accounts(id)	fixed_assets	accounts
+FOREIGN KEY (department_id) REFERENCES departments(id)	fixed_assets	departments
+FOREIGN KEY (disposal_journal_id) REFERENCES journal_entries(id)	fixed_assets	journal_entries
+FOREIGN KEY (purchase_journal_id) REFERENCES journal_entries(id)	fixed_assets	journal_entries
+FOREIGN KEY (revaluation_surplus_account) REFERENCES accounts(id)	fixed_assets	accounts
+FOREIGN KEY (supplier_id) REFERENCES contacts(id)	fixed_assets	contacts
+FOREIGN KEY (product_id) REFERENCES products(id)	invoice_lines	products
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	fx_revaluations	businesses
+FOREIGN KEY (created_by) REFERENCES auth.users(id)	fx_revaluations	auth.users
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	fx_revaluations	journal_entries
+FOREIGN KEY (reversal_entry_id) REFERENCES journal_entries(id)	fx_revaluations	journal_entries
+FOREIGN KEY (business_id) REFERENCES businesses(id)	inventory_balances	businesses
+FOREIGN KEY (location_id) REFERENCES inventory_locations(id)	inventory_balances	inventory_locations
+FOREIGN KEY (product_id) REFERENCES products(id)	inventory_balances	products
+FOREIGN KEY (branch_id) REFERENCES branches(id)	inventory_locations	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	inventory_locations	businesses
+FOREIGN KEY (business_id) REFERENCES businesses(id)	invoice_delivery_events	businesses
+FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE	invoice_delivery_events	invoices
+FOREIGN KEY (account_id) REFERENCES accounts(id)	invoice_lines	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	invoice_lines	businesses
+FOREIGN KEY (invoice_id) REFERENCES invoices(id)	invoice_lines	invoices
+FOREIGN KEY (bank_account_id) REFERENCES accounts(id)	invoice_payments	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	invoice_payments	businesses
+FOREIGN KEY (currency) REFERENCES currencies(code)	invoice_payments	currencies
+FOREIGN KEY (functional_currency) REFERENCES currencies(code)	invoice_payments	currencies
+FOREIGN KEY (invoice_id) REFERENCES invoices(id)	invoice_payments	invoices
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	invoice_payments	journal_entries
+FOREIGN KEY (original_currency) REFERENCES currencies(code)	invoice_payments	currencies
+FOREIGN KEY (ar_account_id) REFERENCES accounts(id)	invoices	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	invoices	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	invoices	businesses
+FOREIGN KEY (contact_id) REFERENCES contacts(id)	invoices	contacts
+FOREIGN KEY (credit_note_for) REFERENCES invoices(id)	invoices	invoices
+FOREIGN KEY (currency) REFERENCES currencies(code)	invoices	currencies
+FOREIGN KEY (department_id) REFERENCES departments(id)	invoices	departments
+FOREIGN KEY (functional_currency) REFERENCES currencies(code)	invoices	currencies
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	invoices	journal_entries
+FOREIGN KEY (original_currency) REFERENCES currencies(code)	invoices	currencies
+FOREIGN KEY (revenue_account_id) REFERENCES accounts(id)	invoices	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	journal_entries	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	journal_entries	businesses
+FOREIGN KEY (currency) REFERENCES currencies(code)	journal_entries	currencies
+FOREIGN KEY (department_id) REFERENCES departments(id)	journal_entries	departments
+FOREIGN KEY (period_id) REFERENCES accounting_periods(id)	journal_entries	accounting_periods
+FOREIGN KEY (reversal_of) REFERENCES journal_entries(id)	journal_entries	journal_entries
+FOREIGN KEY (reversed_by) REFERENCES journal_entries(id)	journal_entries	journal_entries
+FOREIGN KEY (account_id) REFERENCES accounts(id)	journal_lines	accounts
+FOREIGN KEY (branch_id) REFERENCES branches(id)	journal_lines	branches
+FOREIGN KEY (business_id) REFERENCES businesses(id)	journal_lines	businesses
+FOREIGN KEY (currency) REFERENCES currencies(code)	journal_lines	currencies
+FOREIGN KEY (department_id) REFERENCES departments(id)	journal_lines	departments
+FOREIGN KEY (functional_currency) REFERENCES currencies(code)	journal_lines	currencies
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	journal_lines	journal_entries
+FOREIGN KEY (original_currency) REFERENCES currencies(code)	journal_lines	currencies
+FOREIGN KEY (bank_account_id) REFERENCES accounts(id)	loan_repayments	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	loan_repayments	businesses
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	loan_repayments	journal_entries
+FOREIGN KEY (loan_id) REFERENCES loans(id)	loan_repayments	loans
+FOREIGN KEY (business_id) REFERENCES businesses(id)	loans	businesses
+FOREIGN KEY (drawdown_journal_id) REFERENCES journal_entries(id)	loans	journal_entries
+FOREIGN KEY (interest_expense_account_id) REFERENCES accounts(id)	loans	accounts
+FOREIGN KEY (loan_account_id) REFERENCES accounts(id)	loans	accounts
+FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE	partner_admins	partners
+FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE	partner_admins	auth.users
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	partner_clients	businesses
+FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE	partner_clients	partners
+FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE	partner_feature_flags	partners
+FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE CASCADE	partner_invoices	partners
+FOREIGN KEY (business_id) REFERENCES businesses(id)	paye_bands	businesses
+FOREIGN KEY (business_id) REFERENCES businesses(id)	payroll_employee_lines	businesses
+FOREIGN KEY (employee_id) REFERENCES employees(id)	payroll_employee_lines	employees
+FOREIGN KEY (payroll_run_id) REFERENCES payroll_runs(id)	payroll_employee_lines	payroll_runs
+FOREIGN KEY (business_id) REFERENCES businesses(id)	payroll_runs	businesses
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	payroll_runs	journal_entries
+FOREIGN KEY (business_id) REFERENCES businesses(id)	product_categories	businesses
+FOREIGN KEY (parent_id) REFERENCES product_categories(id)	product_categories	product_categories
+FOREIGN KEY (business_id) REFERENCES businesses(id)	products	businesses
+FOREIGN KEY (category_id) REFERENCES product_categories(id)	products	product_categories
+FOREIGN KEY (cogs_account_id) REFERENCES accounts(id)	products	accounts
+FOREIGN KEY (inventory_account_id) REFERENCES accounts(id)	products	accounts
+FOREIGN KEY (purchase_account_id) REFERENCES accounts(id)	products	accounts
+FOREIGN KEY (sales_account_id) REFERENCES accounts(id)	products	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	recurring_invoices	businesses
+FOREIGN KEY (template_invoice_id) REFERENCES invoices(id)	recurring_invoices	invoices
+FOREIGN KEY (bank_account_id) REFERENCES accounts(id)	share_transactions	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	share_transactions	businesses
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	share_transactions	journal_entries
+FOREIGN KEY (share_account_id) REFERENCES accounts(id)	share_transactions	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	stock_movements	businesses
+FOREIGN KEY (location_id) REFERENCES inventory_locations(id)	stock_movements	inventory_locations
+FOREIGN KEY (product_id) REFERENCES products(id)	stock_movements	products
+FOREIGN KEY (business_id) REFERENCES businesses(id)	stock_transfer_lines	businesses
+FOREIGN KEY (product_id) REFERENCES products(id)	stock_transfer_lines	products
+FOREIGN KEY (transfer_id) REFERENCES stock_transfers(id)	stock_transfer_lines	stock_transfers
+FOREIGN KEY (approved_by) REFERENCES user_profiles(id)	stock_transfers	user_profiles
+FOREIGN KEY (business_id) REFERENCES businesses(id)	stock_transfers	businesses
+FOREIGN KEY (from_location_id) REFERENCES inventory_locations(id)	stock_transfers	inventory_locations
+FOREIGN KEY (received_by) REFERENCES user_profiles(id)	stock_transfers	user_profiles
+FOREIGN KEY (requested_by) REFERENCES user_profiles(id)	stock_transfers	user_profiles
+FOREIGN KEY (to_location_id) REFERENCES inventory_locations(id)	stock_transfers	inventory_locations
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	subscription_payments	businesses
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	subscription_reminders_sent	businesses
+FOREIGN KEY (business_id) REFERENCES businesses(id)	tax_alerts	businesses
+FOREIGN KEY (tax_return_id) REFERENCES tax_returns(id)	tax_alerts	tax_returns
+FOREIGN KEY (business_id) REFERENCES businesses(id)	tax_configurations	businesses
+FOREIGN KEY (tax_payable_account_id) REFERENCES accounts(id)	tax_configurations	accounts
+FOREIGN KEY (tax_receivable_account_id) REFERENCES accounts(id)	tax_configurations	accounts
+FOREIGN KEY (bank_account_id) REFERENCES accounts(id)	tax_payments	accounts
+FOREIGN KEY (business_id) REFERENCES businesses(id)	tax_payments	businesses
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	tax_payments	journal_entries
+FOREIGN KEY (tax_return_id) REFERENCES tax_returns(id)	tax_payments	tax_returns
+FOREIGN KEY (business_id) REFERENCES businesses(id)	tax_returns	businesses
+FOREIGN KEY (journal_entry_id) REFERENCES journal_entries(id)	tax_returns	journal_entries
+FOREIGN KEY (webhook_id) REFERENCES webhooks(id) ON DELETE CASCADE	webhook_deliveries	webhooks
+FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE	webhooks	businesses
+FOREIGN KEY (created_by) REFERENCES auth.users(id)	webhooks	auth.users

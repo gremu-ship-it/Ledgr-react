@@ -1,0 +1,979 @@
+accounting_periods	business_id	uuid	True			
+accounting_periods	closed_at	timestamp with time zone	False			
+accounting_periods	closed_by	text	False			
+accounting_periods	created_at	timestamp with time zone	True	now()		
+accounting_periods	id	uuid	True	gen_random_uuid()		
+accounting_periods	is_closed	boolean	True			
+accounting_periods	name	text	True			
+accounting_periods	period_end	date	True			
+accounting_periods	period_start	date	True			
+accounting_periods	updated_at	timestamp with time zone	True	now()		
+accounts	account_subtype	account_subtype	False			
+accounts	account_type	account_type	True			
+accounts	bank_account_number	text	False			
+accounts	bank_branch	text	False			
+accounts	bank_name	text	False			
+accounts	branch_id	uuid	False			
+accounts	business_id	uuid	True			
+accounts	code	text	True			
+accounts	created_at	timestamp with time zone	True	now()		
+accounts	currency	text	True			
+accounts	deleted_at	timestamp with time zone	False			
+accounts	department_id	uuid	False			
+accounts	description	text	False			
+accounts	id	uuid	True	gen_random_uuid()		
+accounts	is_active	boolean	True	true		
+accounts	is_bank_account	boolean	True			
+accounts	is_group	boolean	True			
+accounts	is_system	boolean	True			
+accounts	mobile_money_number	text	False			
+accounts	mobile_money_type	text	False			
+accounts	name	text	True			
+accounts	normal_balance	text	True			
+accounts	notes	text	False			
+accounts	opening_balance	numeric	True			
+accounts	opening_balance_date	text	False			
+accounts	parent_id	uuid	False			
+accounts	tax_code	tax_code	False			
+accounts	updated_at	timestamp with time zone	True	now()		
+ai_insights_usage	user_id	uuid	True			
+ai_insights_usage	window_start	timestamp with time zone	True			
+ai_insights_usage	count	integer	True	1		
+api_keys	id	uuid	True	gen_random_uuid()		
+api_keys	business_id	uuid	True			
+api_keys	name	text	True			
+api_keys	key_hash	text	True			
+api_keys	key_prefix	text	True			
+api_keys	last_used_at	timestamp with time zone	False			
+api_keys	created_by	uuid	False			
+api_keys	created_at	timestamp with time zone	True	now()		
+api_keys	revoked_at	timestamp with time zone	False			
+api_usage	id	uuid	True	gen_random_uuid()		
+api_usage	api_key	text	False			
+api_usage	count	integer	False	0		
+api_usage	window_start	timestamp with time zone	False	date_trunc('minute'::text, now())		
+api_usage	created_at	timestamp with time zone	False	now()		
+api_usage	api_key_id	uuid	False			
+asset_categories	accumulated_dep_account_id	uuid	False			
+asset_categories	asset_account_id	uuid	False			
+asset_categories	business_id	uuid	True			
+asset_categories	created_at	timestamp with time zone	True	now()		
+asset_categories	dep_expense_account_id	uuid	False			
+asset_categories	depreciation_method	depreciation_method	True			
+asset_categories	id	uuid	True	gen_random_uuid()		
+asset_categories	is_active	boolean	True	true		
+asset_categories	is_depreciable	boolean	True	true		
+asset_categories	mra_depreciation_rate	numeric	False			
+asset_categories	name	text	True			
+asset_categories	residual_percent	numeric	True			
+asset_categories	useful_life_years	numeric	False			
+audit_log	business_id	uuid	True			
+audit_log	changed_fields	text[]	False			
+audit_log	entry_hash	text	False			
+audit_log	event_type	text	True			
+audit_log	id	bigint	True	nextval('audit_log_id_seq'::regclass)		
+audit_log	ip_address	inet	True			
+audit_log	new_values	jsonb	False			
+audit_log	notes	text	False			
+audit_log	occurred_at	timestamp with time zone	True			
+audit_log	old_values	jsonb	False			
+audit_log	prev_hash	text	False			
+audit_log	resource_id	text	False			
+audit_log	resource_ref	text	False			
+audit_log	resource_type	text	True			
+audit_log	session_id	text	False			
+audit_log	user_agent	text	False			
+audit_log	user_email	text	False			
+audit_log	user_id	uuid	False			
+bank_statement_lines	balance	numeric	False			
+bank_statement_lines	business_id	uuid	True			
+bank_statement_lines	created_at	timestamp with time zone	True	now()		
+bank_statement_lines	credit_amount	numeric	True			
+bank_statement_lines	debit_amount	numeric	True			
+bank_statement_lines	description	text	True			
+bank_statement_lines	id	uuid	True	gen_random_uuid()		
+bank_statement_lines	is_reconciled	boolean	True			
+bank_statement_lines	journal_line_id	uuid	False			
+bank_statement_lines	reference	text	False			
+bank_statement_lines	statement_id	uuid	True			
+bank_statement_lines	transaction_date	date	True			
+bank_statement_lines	match_method	text	False			
+bank_statement_lines	match_confidence	numeric(5,4)	False			
+bank_statement_lines	locked_at	timestamp with time zone	False			
+bank_statements	account_id	uuid	True			
+bank_statements	business_id	uuid	True			
+bank_statements	closing_balance	numeric	True			
+bank_statements	created_at	timestamp with time zone	True	now()		
+bank_statements	id	uuid	True	gen_random_uuid()		
+bank_statements	opening_balance	numeric	True			
+bank_statements	source	text	False			
+bank_statements	statement_date	date	True			
+bank_statements	uploaded_by	text	False			
+bank_statements	reconciled_at	timestamp with time zone	False			
+bank_statements	reconciled_by	uuid	False			
+bank_statements	is_locked	boolean	True	false		
+bank_statements	locked_at	timestamp with time zone	False			
+branches	business_id	uuid	True			
+branches	code	text	False			
+branches	created_at	timestamp with time zone	True	now()		
+branches	deleted_at	timestamp with time zone	False			
+branches	id	uuid	True	gen_random_uuid()		
+branches	is_active	boolean	True	true		
+branches	location	text	False			
+branches	manager_id	text	False			
+branches	name	text	True			
+branches	updated_at	timestamp with time zone	True	now()		
+budget_lines	account_id	uuid	True			
+budget_lines	annual_total	numeric	False			
+budget_lines	branch_id	uuid	False			
+budget_lines	budget_id	uuid	True			
+budget_lines	business_id	uuid	True			
+budget_lines	created_at	timestamp with time zone	True	now()		
+budget_lines	department_id	uuid	False			
+budget_lines	id	uuid	True	gen_random_uuid()		
+budget_lines	m01_amount	numeric	True			
+budget_lines	m02_amount	numeric	True			
+budget_lines	m03_amount	numeric	True			
+budget_lines	m04_amount	numeric	True			
+budget_lines	m05_amount	numeric	True			
+budget_lines	m06_amount	numeric	True			
+budget_lines	m07_amount	numeric	True			
+budget_lines	m08_amount	numeric	True			
+budget_lines	m09_amount	numeric	True			
+budget_lines	m10_amount	numeric	True			
+budget_lines	m11_amount	numeric	True			
+budget_lines	m12_amount	numeric	True			
+budget_lines	notes	text	False			
+budgets	business_id	uuid	True			
+budgets	created_at	timestamp with time zone	True	now()		
+budgets	created_by	text	False			
+budgets	fiscal_year	text	True			
+budgets	id	uuid	True	gen_random_uuid()		
+budgets	is_active	boolean	True	true		
+budgets	name	text	True			
+budgets	notes	text	False			
+budgets	period_end	date	True			
+budgets	period_start	date	True			
+budgets	updated_at	timestamp with time zone	True	now()		
+business_invitations	id	uuid	True	gen_random_uuid()		
+business_invitations	business_id	uuid	True			
+business_invitations	email	text	False			
+business_invitations	role	user_role	True			
+business_invitations	token	text	True			
+business_invitations	invited_by	uuid	False			
+business_invitations	invited_at	timestamp with time zone	True	now()		
+business_invitations	expires_at	timestamp with time zone	True	(now() + '7 days'::interval)		
+business_invitations	accepted_at	timestamp with time zone	False			
+business_invitations	accepted_by	uuid	False			
+business_terms_acceptances	id	uuid	True	gen_random_uuid()		
+business_terms_acceptances	business_id	uuid	True			
+business_terms_acceptances	user_id	uuid	True			
+business_terms_acceptances	terms_version	text	True			
+business_terms_acceptances	accepted_at	timestamp with time zone	True	now()		
+business_terms_acceptances	created_at	timestamp with time zone	True	now()		
+business_users	accepted_at	timestamp with time zone	False			
+business_users	branch_id	uuid	False			
+business_users	business_id	uuid	True			
+business_users	created_at	timestamp with time zone	True	now()		
+business_users	id	uuid	True	gen_random_uuid()		
+business_users	invitation_expires_at	timestamp with time zone	False			
+business_users	invitation_token	text	False			
+business_users	invited_at	timestamp with time zone	False			
+business_users	invited_by	uuid	False			
+business_users	is_active	boolean	True	true		
+business_users	role	user_role	True			
+business_users	updated_at	timestamp with time zone	True	now()		
+business_users	user_id	uuid	True			
+businesses	address_line1	text	False			
+businesses	address_line2	text	False			
+businesses	base_currency	text	True			
+businesses	brand_color	text	False			
+businesses	city	text	False			
+businesses	coa_template	text	True			
+businesses	country	text	False			
+businesses	created_at	timestamp with time zone	True	now()		
+businesses	default_payment_method	payment_method	False			
+businesses	deleted_at	timestamp with time zone	False			
+businesses	email	text	False			
+businesses	expense_next_number	integer	True			
+businesses	expense_prefix	text	False			
+businesses	financial_year_start	text	True			
+businesses	id	uuid	True	gen_random_uuid()		
+businesses	invoice_next_number	integer	True			
+businesses	invoice_prefix	text	False			
+businesses	is_active	boolean	True	true		
+businesses	logo_url	text	False			
+businesses	name	text	True			
+businesses	payroll_next_number	integer	True			
+businesses	payroll_prefix	text	False			
+businesses	phone	text	False			
+businesses	plan_expires_at	timestamp with time zone	False			
+businesses	plan_tier	text	True	'free'::text		
+businesses	plan_updated_at	timestamp with time zone	False			
+businesses	registration_number	text	False			
+businesses	timezone	text	True			
+businesses	tpin	text	False			
+businesses	trading_name	text	False			
+businesses	updated_at	timestamp with time zone	True	now()		
+businesses	vat_number	text	False			
+businesses	vat_period	text	False			
+businesses	vat_registered	boolean	True			
+businesses	website	text	False			
+contacts	address_line1	text	False			
+contacts	address_line2	text	False			
+contacts	ap_account_id	uuid	False			
+contacts	ar_account_id	uuid	False			
+contacts	business_id	uuid	True			
+contacts	city	text	False			
+contacts	contact_type	text	True			
+contacts	country	text	False			
+contacts	created_at	timestamp with time zone	True	now()		
+contacts	credit_limit	numeric	False			
+contacts	credit_terms_days	numeric	False			
+contacts	currency	currency_code	False			
+contacts	deleted_at	timestamp with time zone	False			
+contacts	email	text	False			
+contacts	id	uuid	True	gen_random_uuid()		
+contacts	is_active	boolean	True	true		
+contacts	mobile_money_number	text	False			
+contacts	mobile_money_type	text	False			
+contacts	name	text	True			
+contacts	notes	text	False			
+contacts	phone	text	False			
+contacts	tpin	text	False			
+contacts	trading_name	text	False			
+contacts	updated_at	timestamp with time zone	True	now()		
+contacts	vat_number	text	False			
+contacts	wht_exempt	boolean	True			
+contacts	wht_exemption_ref	text	False			
+currencies	code	text	True			
+currencies	name	text	True			
+currencies	symbol	text	True	''::text		
+currencies	decimal_places	integer	True	2		
+currencies	is_active	boolean	True	true		
+currencies	is_primary	boolean	True	false		
+currencies	is_frankfurter_supported	boolean	True	false		
+currencies	created_at	timestamp with time zone	True	now()		
+departments	branch_id	uuid	False			
+departments	business_id	uuid	True			
+departments	code	text	False			
+departments	cost_centre	text	False			
+departments	created_at	timestamp with time zone	True	now()		
+departments	deleted_at	timestamp with time zone	False			
+departments	head_user_id	text	False			
+departments	id	uuid	True	gen_random_uuid()		
+departments	is_active	boolean	True	true		
+departments	name	text	True			
+departments	updated_at	timestamp with time zone	True	now()		
+depreciation_schedules	accumulated_to_date	numeric	True			
+depreciation_schedules	asset_id	uuid	True			
+depreciation_schedules	business_id	uuid	True			
+depreciation_schedules	created_at	timestamp with time zone	True	now()		
+depreciation_schedules	depreciation_charge	numeric	True			
+depreciation_schedules	id	uuid	True	gen_random_uuid()		
+depreciation_schedules	journal_entry_id	uuid	False			
+depreciation_schedules	net_book_value	numeric	True			
+depreciation_schedules	period_end	date	True			
+depreciation_schedules	period_start	date	True			
+depreciation_schedules	posted	boolean	True			
+depreciation_schedules	posted_at	timestamp with time zone	False			
+depreciation_schedules	posted_by	text	False			
+employee_allowances	amount	numeric	True			
+employee_allowances	business_id	uuid	True			
+employee_allowances	created_at	timestamp with time zone	True	now()		
+employee_allowances	effective_from	date	True			
+employee_allowances	effective_to	date	False			
+employee_allowances	employee_id	uuid	True			
+employee_allowances	id	uuid	True	gen_random_uuid()		
+employee_allowances	is_active	boolean	True	true		
+employee_allowances	is_taxable	boolean	True			
+employee_allowances	name	text	True			
+employee_deductions	amount	numeric	True			
+employee_deductions	business_id	uuid	True			
+employee_deductions	created_at	timestamp with time zone	True	now()		
+employee_deductions	deduction_type	text	True			
+employee_deductions	effective_from	date	True			
+employee_deductions	effective_to	date	False			
+employee_deductions	employee_id	uuid	True			
+employee_deductions	id	uuid	True	gen_random_uuid()		
+employee_deductions	is_active	boolean	True	true		
+employee_deductions	liability_account_id	uuid	False			
+employee_deductions	name	text	True			
+employee_deductions	percentage	numeric	True			
+employee_deductions	pre_tax	boolean	True			
+employees	bank_account_number	text	False			
+employees	bank_branch	text	False			
+employees	bank_name	text	False			
+employees	branch_id	uuid	False			
+employees	business_id	uuid	True			
+employees	created_at	timestamp with time zone	True	now()		
+employees	currency	currency_code	True			
+employees	date_of_birth	date	False			
+employees	deleted_at	timestamp with time zone	False			
+employees	department_id	uuid	False			
+employees	email	text	False			
+employees	employee_number	text	True			
+employees	employment_type	text	True			
+employees	end_date	date	False			
+employees	first_name	text	True			
+employees	gender	text	False			
+employees	gross_salary	numeric	True			
+employees	id	uuid	True	gen_random_uuid()		
+employees	is_active	boolean	True	true		
+employees	job_title	text	False			
+employees	last_name	text	True			
+employees	mobile_money_number	text	False			
+employees	mobile_money_type	text	False			
+employees	national_id	text	False			
+employees	notes	text	False			
+employees	pay_frequency	text	True			
+employees	paye_code	text	False			
+employees	paye_liability_account_id	uuid	False			
+employees	paye_tax_class	text	False			
+employees	payment_method	payment_method	True			
+employees	phone	text	False			
+employees	probation_end_date	text	False			
+employees	salary_account_id	uuid	False			
+employees	start_date	date	True			
+employees	tax_exempt	boolean	True			
+employees	tpin	text	False			
+employees	updated_at	timestamp with time zone	True	now()		
+exchange_rates	id	uuid	True	gen_random_uuid()		
+exchange_rates	business_id	uuid	True			
+exchange_rates	from_currency	text	True			
+exchange_rates	to_currency	text	True			
+exchange_rates	rate	numeric(20,10)	True			
+exchange_rates	rate_date	date	True			
+exchange_rates	source	text	True	'manual'::text		
+exchange_rates	created_by	uuid	False			
+exchange_rates	created_at	timestamp with time zone	True	now()		
+expense_lines	account_id	uuid	False			
+expense_lines	business_id	uuid	True			
+expense_lines	created_at	timestamp with time zone	True	now()		
+expense_lines	description	text	True			
+expense_lines	discount_amount	numeric	True	0		
+expense_lines	discount_percent	numeric	True	0		
+expense_lines	expense_id	uuid	True			
+expense_lines	id	uuid	True	gen_random_uuid()		
+expense_lines	line_number	numeric	True			
+expense_lines	line_subtotal	numeric	False			
+expense_lines	line_total	numeric	True			
+expense_lines	product_id	uuid	False			
+expense_lines	quantity	numeric	True			
+expense_lines	tax_amount	numeric	True			
+expense_lines	tax_code	tax_code	True			
+expense_lines	tax_rate	numeric	True			
+expense_lines	unit_price	numeric	True			
+expense_payments	amount	numeric	True			
+expense_payments	bank_account_id	uuid	False			
+expense_payments	business_id	uuid	True			
+expense_payments	created_at	timestamp with time zone	True	now()		
+expense_payments	created_by	text	False			
+expense_payments	currency	text	True			
+expense_payments	exchange_rate	numeric(20,10)	True			
+expense_payments	expense_id	uuid	True			
+expense_payments	functional_amount	numeric	False			
+expense_payments	id	uuid	True	gen_random_uuid()		
+expense_payments	journal_entry_id	uuid	False			
+expense_payments	notes	text	False			
+expense_payments	original_amount	numeric	False			
+expense_payments	original_currency	text	False			
+expense_payments	payment_date	date	True			
+expense_payments	payment_method	payment_method	True			
+expense_payments	rate_date	date	False			
+expense_payments	rate_is_stale	boolean	True			
+expense_payments	reference	text	False			
+expense_payments	exchange_rate_used	numeric(20,10)	False	exchange_rate		s
+expense_payments	functional_currency	text	False			
+expense_payments	client_key	uuid	False			
+expenses	amount_paid	numeric	True			
+expenses	ap_account_id	uuid	False			
+expenses	approved_at	timestamp with time zone	False			
+expenses	approved_by	text	False			
+expenses	branch_id	uuid	False			
+expenses	business_id	uuid	True			
+expenses	contact_id	uuid	False			
+expenses	created_at	timestamp with time zone	True	now()		
+expenses	created_by	text	False			
+expenses	currency	text	True			
+expenses	deleted_at	timestamp with time zone	False			
+expenses	department_id	uuid	False			
+expenses	due_date	date	False			
+expenses	exchange_rate	numeric(20,10)	True			
+expenses	expense_date	date	True			
+expenses	expense_number	text	True			
+expenses	expense_type	text	True			
+expenses	functional_amount	numeric	False			
+expenses	id	uuid	True	gen_random_uuid()		
+expenses	journal_entry_id	uuid	False			
+expenses	notes	text	False			
+expenses	original_amount	numeric	False			
+expenses	original_currency	text	False			
+expenses	rate_date	date	False			
+expenses	rate_is_stale	boolean	True			
+expenses	receipt_filename	text	False			
+expenses	receipt_mime_type	text	False			
+expenses	receipt_size_bytes	numeric	False			
+expenses	receipt_url	text	False			
+expenses	reference	text	False			
+expenses	status	text	True			
+expenses	subtotal	numeric	True			
+expenses	discount_amount	numeric	True	0		
+expenses	discount_percent	numeric	True	0		
+expenses	total_amount	numeric	True			
+expenses	updated_at	timestamp with time zone	True	now()		
+expenses	vat_amount	numeric	True			
+expenses	wht_amount	numeric	True			
+expenses	exchange_rate_used	numeric(20,10)	False	exchange_rate		s
+expenses	functional_currency	text	False			
+expenses	client_key	uuid	False			
+fixed_assets	accumulated_dep_account_id	uuid	False			
+fixed_assets	accumulated_depreciation	numeric	True			
+fixed_assets	acquisition_cost	numeric	True			
+fixed_assets	acquisition_date	date	True			
+fixed_assets	asset_account_id	uuid	False			
+fixed_assets	asset_number	text	True			
+fixed_assets	branch_id	uuid	False			
+fixed_assets	business_id	uuid	True			
+fixed_assets	category_id	uuid	True			
+fixed_assets	created_at	timestamp with time zone	True	now()		
+fixed_assets	created_by	text	False			
+fixed_assets	deleted_at	timestamp with time zone	False			
+fixed_assets	dep_expense_account_id	uuid	False			
+fixed_assets	department_id	uuid	False			
+fixed_assets	depreciable_amount	numeric	False			
+fixed_assets	depreciation_method	depreciation_method	True			
+fixed_assets	depreciation_rate	numeric	False			
+fixed_assets	depreciation_start_date	text	True			
+fixed_assets	description	text	False			
+fixed_assets	disposal_date	date	False			
+fixed_assets	disposal_journal_id	uuid	False			
+fixed_assets	disposal_proceeds	numeric	False			
+fixed_assets	id	uuid	True	gen_random_uuid()		
+fixed_assets	image_url	text	False			
+fixed_assets	insurance_expiry_date	text	False			
+fixed_assets	insurance_policy_number	text	False			
+fixed_assets	is_active	boolean	True	true		
+fixed_assets	is_depreciable	boolean	True	true		
+fixed_assets	last_depreciation_date	text	False			
+fixed_assets	location	text	False			
+fixed_assets	name	text	True			
+fixed_assets	net_book_value	numeric	False			
+fixed_assets	notes	text	False			
+fixed_assets	purchase_invoice_ref	text	False			
+fixed_assets	purchase_journal_id	uuid	False			
+fixed_assets	residual_value	numeric	True			
+fixed_assets	revaluation_date	text	False			
+fixed_assets	revaluation_surplus_account	uuid	False			
+fixed_assets	revalued_amount	numeric	False			
+fixed_assets	serial_number	text	False			
+fixed_assets	status	asset_status	True			
+fixed_assets	supplier_id	uuid	False			
+fixed_assets	updated_at	timestamp with time zone	True	now()		
+fixed_assets	useful_life_months	numeric	False			
+fixed_assets	useful_life_years	numeric	False			
+fixed_assets	warranty_expiry_date	text	False			
+fx_revaluations	id	uuid	True	gen_random_uuid()		
+fx_revaluations	business_id	uuid	True			
+fx_revaluations	revaluation_date	date	True			
+fx_revaluations	journal_entry_id	uuid	False			
+fx_revaluations	reversal_entry_id	uuid	False			
+fx_revaluations	total_unrealised_gain	numeric(18,2)	True	0		
+fx_revaluations	total_unrealised_loss	numeric(18,2)	True	0		
+fx_revaluations	line_count	integer	True	0		
+fx_revaluations	closing_rate_source	text	True	'manual/cache'::text		
+fx_revaluations	status	text	True	'posted'::text		
+fx_revaluations	created_by	uuid	False			
+fx_revaluations	created_at	timestamp with time zone	True	now()		
+inventory_balances	average_cost	numeric	True			
+inventory_balances	business_id	uuid	True			
+inventory_balances	id	uuid	True	gen_random_uuid()		
+inventory_balances	last_movement_at	timestamp with time zone	False			
+inventory_balances	location_id	uuid	True			
+inventory_balances	product_id	uuid	True			
+inventory_balances	quantity_available	numeric	False			
+inventory_balances	quantity_on_hand	numeric	True			
+inventory_balances	quantity_reserved	numeric	True			
+inventory_balances	updated_at	timestamp with time zone	True	now()		
+inventory_locations	branch_id	uuid	False			
+inventory_locations	business_id	uuid	True			
+inventory_locations	code	text	False			
+inventory_locations	created_at	timestamp with time zone	True	now()		
+inventory_locations	id	uuid	True	gen_random_uuid()		
+inventory_locations	is_active	boolean	True	true		
+inventory_locations	is_default	boolean	True			
+inventory_locations	name	text	True			
+invoice_delivery_events	id	uuid	True	gen_random_uuid()		
+invoice_delivery_events	business_id	uuid	True			
+invoice_delivery_events	invoice_id	uuid	True			
+invoice_delivery_events	event_type	text	True			
+invoice_delivery_events	reminder_stage	text	False			
+invoice_delivery_events	occurred_at	timestamp with time zone	True	now()		
+invoice_delivery_events	metadata	jsonb	True	'{}'::jsonb		
+invoice_lines	account_id	uuid	False			
+invoice_lines	business_id	uuid	True			
+invoice_lines	created_at	timestamp with time zone	True	now()		
+invoice_lines	description	text	True			
+invoice_lines	discount_amount	numeric	True	0		
+invoice_lines	discount_percent	numeric	True			
+invoice_lines	id	uuid	True	gen_random_uuid()		
+invoice_lines	invoice_id	uuid	True			
+invoice_lines	line_number	numeric	True			
+invoice_lines	line_subtotal	numeric	False			
+invoice_lines	line_total	numeric	True			
+invoice_lines	product_id	uuid	False			
+invoice_lines	quantity	numeric	True			
+invoice_lines	tax_amount	numeric	True			
+invoice_lines	tax_code	tax_code	True			
+invoice_lines	tax_rate	numeric	True			
+invoice_lines	unit_price	numeric	True			
+invoice_payments	amount	numeric	True			
+invoice_payments	bank_account_id	uuid	False			
+invoice_payments	business_id	uuid	True			
+invoice_payments	created_at	timestamp with time zone	True	now()		
+invoice_payments	created_by	text	False			
+invoice_payments	currency	text	True			
+invoice_payments	exchange_rate	numeric(20,10)	True			
+invoice_payments	functional_amount	numeric	False			
+invoice_payments	id	uuid	True	gen_random_uuid()		
+invoice_payments	invoice_id	uuid	True			
+invoice_payments	journal_entry_id	uuid	False			
+invoice_payments	notes	text	False			
+invoice_payments	original_amount	numeric	False			
+invoice_payments	original_currency	text	False			
+invoice_payments	payment_date	date	True			
+invoice_payments	payment_method	payment_method	True			
+invoice_payments	rate_date	date	False			
+invoice_payments	rate_is_stale	boolean	True			
+invoice_payments	reference	text	False			
+invoice_payments	exchange_rate_used	numeric(20,10)	False	exchange_rate		s
+invoice_payments	functional_currency	text	False			
+invoice_payments	client_key	uuid	False			
+invoices	amount_due	numeric	False			
+invoices	amount_paid	numeric	True			
+invoices	ar_account_id	uuid	False			
+invoices	branch_id	uuid	False			
+invoices	business_id	uuid	True			
+invoices	contact_id	uuid	True			
+invoices	created_at	timestamp with time zone	True	now()		
+invoices	created_by	text	False			
+invoices	credit_note_for	uuid	False			
+invoices	currency	text	True			
+invoices	deleted_at	timestamp with time zone	False			
+invoices	department_id	uuid	False			
+invoices	discount_amount	numeric	True			
+invoices	discount_percent	numeric	True			
+invoices	due_date	date	False			
+invoices	exchange_rate	numeric(20,10)	True			
+invoices	functional_amount	numeric	False			
+invoices	id	uuid	True	gen_random_uuid()		
+invoices	invoice_number	text	True			
+invoices	invoice_type	text	True			
+invoices	issue_date	date	True			
+invoices	journal_entry_id	uuid	False			
+invoices	notes	text	False			
+invoices	original_amount	numeric	False			
+invoices	original_currency	text	False			
+invoices	po_number	text	False			
+invoices	project_code	text	False			
+invoices	lpo_number	text	False			
+invoices	accent_colour	text	False			
+invoices	payment_provider	text	False			
+invoices	payment_reference	text	False			
+invoices	template	text	True	'professional'::text		
+invoices	rate_date	date	False			
+invoices	rate_is_stale	boolean	True			
+invoices	revenue_account_id	uuid	False			
+invoices	sent_at	timestamp with time zone	False			
+invoices	status	invoice_status	True			
+invoices	subtotal	numeric	True			
+invoices	taxable_amount	numeric	True			
+invoices	terms	text	False			
+invoices	total_amount	numeric	True			
+invoices	updated_at	timestamp with time zone	True	now()		
+invoices	vat_amount	numeric	True			
+invoices	viewed_at	timestamp with time zone	False			
+invoices	wht_amount	numeric	True			
+invoices	exchange_rate_used	numeric(20,10)	False	exchange_rate		s
+invoices	functional_currency	text	False			
+invoices	client_key	uuid	False			
+journal_entries	branch_id	uuid	False			
+journal_entries	business_id	uuid	True			
+journal_entries	created_at	timestamp with time zone	True	now()		
+journal_entries	created_by	text	False			
+journal_entries	currency	text	True			
+journal_entries	department_id	uuid	False			
+journal_entries	description	text	True			
+journal_entries	entry_date	date	True			
+journal_entries	entry_number	text	True			
+journal_entries	exchange_rate	numeric(20,10)	True			
+journal_entries	id	uuid	True	gen_random_uuid()		
+journal_entries	period_id	uuid	False			
+journal_entries	posted_at	timestamp with time zone	False			
+journal_entries	posted_by	text	False			
+journal_entries	reference	text	False			
+journal_entries	reversal_of	uuid	False			
+journal_entries	reversed_by	uuid	False			
+journal_entries	source_id	text	False			
+journal_entries	source_type	text	False			
+journal_entries	status	journal_status	True			
+journal_lines	account_id	uuid	True			
+journal_lines	amount	numeric	True			
+journal_lines	amount_base	numeric	True			
+journal_lines	branch_id	uuid	False			
+journal_lines	business_id	uuid	True			
+journal_lines	created_at	timestamp with time zone	True	now()		
+journal_lines	currency	text	True			
+journal_lines	department_id	uuid	False			
+journal_lines	description	text	False			
+journal_lines	exchange_rate	numeric(20,10)	True			
+journal_lines	id	uuid	True	gen_random_uuid()		
+journal_lines	is_debit	boolean	True			
+journal_lines	journal_entry_id	uuid	True			
+journal_lines	line_number	numeric	True			
+journal_lines	original_amount	numeric	False			
+journal_lines	original_currency	text	False			
+journal_lines	rate_date	date	False			
+journal_lines	rate_is_stale	boolean	True			
+journal_lines	reconciled	boolean	True			
+journal_lines	reconciled_at	timestamp with time zone	False			
+journal_lines	tax_amount	numeric	True			
+journal_lines	tax_code	tax_code	False			
+journal_lines	exchange_rate_used	numeric(20,10)	False	exchange_rate		s
+journal_lines	functional_currency	text	False			
+journal_lines	functional_amount	numeric(18,2)	False			
+loan_repayments	id	uuid	True	gen_random_uuid()		
+loan_repayments	business_id	uuid	True			
+loan_repayments	loan_id	uuid	True			
+loan_repayments	repayment_date	date	True			
+loan_repayments	amount	numeric	True			
+loan_repayments	principal_portion	numeric	True			
+loan_repayments	interest_portion	numeric	True			
+loan_repayments	bank_account_id	uuid	False			
+loan_repayments	journal_entry_id	uuid	False			
+loan_repayments	reference	text	False			
+loan_repayments	notes	text	False			
+loan_repayments	created_by	uuid	False			
+loan_repayments	created_at	timestamp with time zone	True	now()		
+loans	id	uuid	True	gen_random_uuid()		
+loans	business_id	uuid	True			
+loans	lender_name	text	True			
+loans	description	text	False			
+loans	loan_account_id	uuid	True			
+loans	interest_expense_account_id	uuid	False			
+loans	principal_amount	numeric	True			
+loans	interest_rate_pct	numeric	False			
+loans	term_months	integer	False			
+loans	start_date	date	True			
+loans	first_payment_date	date	False			
+loans	status	text	True	'active'::text		
+loans	drawdown_journal_id	uuid	False			
+loans	created_by	uuid	False			
+loans	created_at	timestamp with time zone	True	now()		
+loans	updated_at	timestamp with time zone	True	now()		
+partner_admins	partner_id	uuid	True			
+partner_admins	user_id	uuid	True			
+partner_admins	role	text	True	'admin'::text		
+partner_admins	created_at	timestamp with time zone	True	now()		
+partner_clients	partner_id	uuid	True			
+partner_clients	business_id	uuid	True			
+partner_clients	created_at	timestamp with time zone	False	now()		
+partner_feature_flags	partner_id	uuid	True			
+partner_feature_flags	feature_key	text	True			
+partner_feature_flags	enabled	boolean	False	false		
+partner_invoices	id	uuid	True	gen_random_uuid()		
+partner_invoices	partner_id	uuid	False			
+partner_invoices	amount	numeric(15,2)	False	0		
+partner_invoices	currency	text	False	'MWK'::text		
+partner_invoices	status	text	False	'draft'::text		
+partner_invoices	created_at	timestamp with time zone	False	now()		
+partner_invoices	updated_at	timestamp with time zone	False	now()		
+partner_invoices	invoice_number	text	False			
+partner_invoices	period_start	date	False			
+partner_invoices	period_end	date	False			
+partner_invoices	due_date	date	False			
+partner_invoices	client_count	integer	True	0		
+partner_invoices	notes	text	False			
+partners	id	uuid	True	gen_random_uuid()		
+partners	name	text	True			
+partners	domain	text	False			
+partners	logo_url	text	False			
+partners	primary_colour	text	False	'#1a3a5c'::text		
+partners	support_email	text	False			
+partners	app_name	text	False	'Ledgr'::text		
+partners	client_limit	integer	False	100		
+partners	is_active	boolean	False	true		
+partners	billing_email	text	False			
+partners	created_at	timestamp with time zone	False	now()		
+partners	updated_at	timestamp with time zone	False	now()		
+partners	slug	text	False			
+partners	custom_domain	text	False			
+partners	onboarding_title	text	False			
+partners	onboarding_subtitle	text	False			
+partners	support_phone	text	False			
+partners	allow_client_visibility	boolean	True	false		
+partners	billing_contact_name	text	False			
+partners	price_per_client	numeric(15,2)	True	0		
+partners	billing_currency	text	True	'MWK'::text		
+paye_bands	band_from	numeric	True			
+paye_bands	band_label	text	False			
+paye_bands	band_to	numeric	False			
+paye_bands	business_id	uuid	True			
+paye_bands	created_at	timestamp with time zone	True	now()		
+paye_bands	effective_from	date	True			
+paye_bands	effective_to	date	False			
+paye_bands	fiscal_year	text	True			
+paye_bands	id	uuid	True	gen_random_uuid()		
+paye_bands	rate	numeric	True			
+payroll_employee_lines	basic_salary	numeric	True			
+payroll_employee_lines	business_id	uuid	True			
+payroll_employee_lines	created_at	timestamp with time zone	True	now()		
+payroll_employee_lines	employee_id	uuid	True			
+payroll_employee_lines	gross_pay	numeric	True			
+payroll_employee_lines	id	uuid	True	gen_random_uuid()		
+payroll_employee_lines	net_pay	numeric	True			
+payroll_employee_lines	notes	text	False			
+payroll_employee_lines	other_deductions	numeric	True			
+payroll_employee_lines	paid_at	timestamp with time zone	False			
+payroll_employee_lines	paye_bands_json	jsonb	False			
+payroll_employee_lines	paye_deduction	numeric	True			
+payroll_employee_lines	paye_taxable_income	numeric	True			
+payroll_employee_lines	payment_method	payment_method	True			
+payroll_employee_lines	payment_ref	text	False			
+payroll_employee_lines	payroll_run_id	uuid	True			
+payroll_employee_lines	payslip_generated	boolean	True			
+payroll_employee_lines	payslip_url	text	False			
+payroll_employee_lines	pension_employee	numeric	True			
+payroll_employee_lines	pension_employer	numeric	True			
+payroll_employee_lines	total_allowances	numeric	True			
+payroll_employee_lines	total_deductions	numeric	True			
+payroll_runs	approved_at	timestamp with time zone	False			
+payroll_runs	approved_by	text	False			
+payroll_runs	business_id	uuid	True			
+payroll_runs	created_at	timestamp with time zone	True	now()		
+payroll_runs	created_by	text	False			
+payroll_runs	id	uuid	True	gen_random_uuid()		
+payroll_runs	journal_entry_id	uuid	False			
+payroll_runs	notes	text	False			
+payroll_runs	pay_date	date	True			
+payroll_runs	paye_filed_at	timestamp with time zone	False			
+payroll_runs	paye_return_ref	text	False			
+payroll_runs	payroll_period	text	True			
+payroll_runs	period_end	date	True			
+payroll_runs	period_start	date	True			
+payroll_runs	run_number	text	True			
+payroll_runs	status	payroll_status	True			
+payroll_runs	total_gross	numeric	True			
+payroll_runs	total_net	numeric	True			
+payroll_runs	total_other_deductions	numeric	True			
+payroll_runs	total_paye	numeric	True			
+payroll_runs	updated_at	timestamp with time zone	True	now()		
+payroll_runs	client_key	uuid	False			
+product_categories	business_id	uuid	True			
+product_categories	created_at	timestamp with time zone	True	now()		
+product_categories	id	uuid	True	gen_random_uuid()		
+product_categories	name	text	True			
+product_categories	parent_id	uuid	False			
+products	barcode	text	False			
+products	business_id	uuid	True			
+products	category_id	uuid	False			
+products	cogs_account_id	uuid	False			
+products	created_at	timestamp with time zone	True	now()		
+products	currency	currency_code	True			
+products	deleted_at	timestamp with time zone	False			
+products	description	text	False			
+products	id	uuid	True	gen_random_uuid()		
+products	image_url	text	False			
+products	inventory_account_id	uuid	False			
+products	is_active	boolean	True	true		
+products	name	text	True			
+products	product_type	text	True			
+products	purchase_account_id	uuid	False			
+products	purchase_price	numeric	True			
+products	purchase_tax_code	tax_code	True			
+products	reorder_level	numeric	False			
+products	reorder_quantity	numeric	False			
+products	sale_price	numeric	True			
+products	sales_account_id	uuid	False			
+products	sales_tax_code	tax_code	True			
+products	sku	text	False			
+products	track_inventory	boolean	True			
+products	unit_of_measure	text	False			
+products	updated_at	timestamp with time zone	True	now()		
+profiles	full_name	text	False			
+profiles	id	uuid	True	gen_random_uuid()		
+recurring_invoices	id	uuid	True	gen_random_uuid()		
+recurring_invoices	business_id	uuid	True			
+recurring_invoices	template_invoice_id	uuid	True			
+recurring_invoices	frequency	text	True			
+recurring_invoices	next_run_date	date	True			
+recurring_invoices	auto_send	boolean	True	true		
+recurring_invoices	active	boolean	True	true		
+recurring_invoices	created_at	timestamp with time zone	True	now()		
+share_transactions	id	uuid	True	gen_random_uuid()		
+share_transactions	business_id	uuid	True			
+share_transactions	shareholder_name	text	True			
+share_transactions	transaction_type	text	True			
+share_transactions	shares_count	numeric	False			
+share_transactions	amount	numeric	True			
+share_transactions	share_account_id	uuid	True			
+share_transactions	bank_account_id	uuid	False			
+share_transactions	journal_entry_id	uuid	False			
+share_transactions	reference	text	False			
+share_transactions	notes	text	False			
+share_transactions	created_by	uuid	False			
+share_transactions	created_at	timestamp with time zone	True	now()		
+stock_movements	business_id	uuid	True			
+stock_movements	created_at	timestamp with time zone	True	now()		
+stock_movements	created_by	text	False			
+stock_movements	id	uuid	True	gen_random_uuid()		
+stock_movements	location_id	uuid	True			
+stock_movements	movement_date	date	True			
+stock_movements	movement_type	stock_movement_type	True			
+stock_movements	notes	text	False			
+stock_movements	product_id	uuid	True			
+stock_movements	quantity	numeric	True			
+stock_movements	reference	text	False			
+stock_movements	source_id	text	False			
+stock_movements	source_type	text	False			
+stock_movements	total_cost	numeric	False			
+stock_movements	unit_cost	numeric	True			
+stock_movements	client_key	uuid	False			
+stock_transfer_lines	business_id	uuid	True			
+stock_transfer_lines	created_at	timestamp with time zone	True	now()		
+stock_transfer_lines	id	uuid	True	gen_random_uuid()		
+stock_transfer_lines	notes	text	False			
+stock_transfer_lines	product_id	uuid	True			
+stock_transfer_lines	quantity_dispatched	numeric	False			
+stock_transfer_lines	quantity_received	numeric	False			
+stock_transfer_lines	quantity_requested	numeric	True			
+stock_transfer_lines	transfer_id	uuid	True			
+stock_transfer_lines	unit_cost	numeric	True			
+stock_transfers	approved_at	timestamp with time zone	False			
+stock_transfers	approved_by	uuid	False			
+stock_transfers	business_id	uuid	True			
+stock_transfers	created_at	timestamp with time zone	True	now()		
+stock_transfers	dispatched_at	timestamp with time zone	False			
+stock_transfers	from_location_id	uuid	True			
+stock_transfers	id	uuid	True	gen_random_uuid()		
+stock_transfers	notes	text	False			
+stock_transfers	received_at	timestamp with time zone	False			
+stock_transfers	received_by	uuid	False			
+stock_transfers	requested_by	uuid	False			
+stock_transfers	status	text	True			
+stock_transfers	to_location_id	uuid	True			
+stock_transfers	transfer_number	text	True			
+stock_transfers	updated_at	timestamp with time zone	True	now()		
+subscription_payments	id	uuid	True	gen_random_uuid()		
+subscription_payments	business_id	uuid	True			
+subscription_payments	tx_ref	text	True			
+subscription_payments	gateway	text	True	'paychangu'::text		
+subscription_payments	gateway_reference	text	False			
+subscription_payments	target_plan_tier	text	True			
+subscription_payments	billing_cycle	text	True			
+subscription_payments	amount	numeric	True			
+subscription_payments	currency	text	True	'MWK'::text		
+subscription_payments	status	text	True	'pending'::text		
+subscription_payments	checkout_url	text	False			
+subscription_payments	plan_expires_at	timestamp with time zone	False			
+subscription_payments	initiated_by	uuid	False			
+subscription_payments	raw_response	jsonb	False			
+subscription_payments	created_at	timestamp with time zone	True	now()		
+subscription_payments	updated_at	timestamp with time zone	True	now()		
+subscription_reminders_sent	id	uuid	True	gen_random_uuid()		
+subscription_reminders_sent	business_id	uuid	True			
+subscription_reminders_sent	plan_expires_at	timestamp with time zone	True			
+subscription_reminders_sent	days_before	integer	True			
+subscription_reminders_sent	sent_at	timestamp with time zone	True	now()		
+support_agent_usage	user_id	uuid	True			
+support_agent_usage	window_start	timestamp with time zone	True			
+support_agent_usage	count	integer	True	1		
+tax_alerts	id	uuid	True	gen_random_uuid()		
+tax_alerts	business_id	uuid	True			
+tax_alerts	tax_return_id	uuid	True			
+tax_alerts	alert_type	tax_alert_type	True			
+tax_alerts	scheduled_for	date	True			
+tax_alerts	sent_at	timestamp with time zone	False			
+tax_alerts	channel	tax_alert_channel	True	'email'::tax_alert_channel		
+tax_alerts	status	tax_alert_status	True	'pending'::tax_alert_status		
+tax_alerts	created_at	timestamp with time zone	True	now()		
+tax_configurations	business_id	uuid	True			
+tax_configurations	created_at	timestamp with time zone	True	now()		
+tax_configurations	description	text	False			
+tax_configurations	effective_from	date	True			
+tax_configurations	effective_to	date	False			
+tax_configurations	employee_rate	numeric	False			
+tax_configurations	employer_rate	numeric	False			
+tax_configurations	id	uuid	True	gen_random_uuid()		
+tax_configurations	is_active	boolean	True	true		
+tax_configurations	mra_reference	text	False			
+tax_configurations	name	text	True			
+tax_configurations	rate	numeric	True			
+tax_configurations	tax_code	tax_code	True			
+tax_configurations	tax_payable_account_id	uuid	False			
+tax_configurations	tax_receivable_account_id	uuid	False			
+tax_configurations	updated_at	timestamp with time zone	True	now()		
+tax_payments	id	uuid	True	gen_random_uuid()		
+tax_payments	business_id	uuid	True			
+tax_payments	tax_return_id	uuid	True			
+tax_payments	payment_date	date	True	CURRENT_DATE		
+tax_payments	amount	numeric	True			
+tax_payments	payment_method	payment_method	True	'bank_transfer'::payment_method		
+tax_payments	bank_account_id	uuid	False			
+tax_payments	reference	text	False			
+tax_payments	receipt_path	text	False			
+tax_payments	journal_entry_id	uuid	False			
+tax_payments	notes	text	False			
+tax_payments	created_by	uuid	False			
+tax_payments	created_at	timestamp with time zone	True	now()		
+tax_returns	id	uuid	True	gen_random_uuid()		
+tax_returns	business_id	uuid	True			
+tax_returns	tax_code	tax_code	True			
+tax_returns	period_label	text	True			
+tax_returns	period_start	date	True			
+tax_returns	period_end	date	True			
+tax_returns	due_date	date	True			
+tax_returns	output_tax	numeric	True	0		
+tax_returns	input_tax	numeric	True	0		
+tax_returns	gross_amount	numeric	True	0		
+tax_returns	amount_due	numeric	True	0		
+tax_returns	amount_paid	numeric	True	0		
+tax_returns	status	tax_return_status	True	'pending'::tax_return_status		
+tax_returns	journal_entry_id	uuid	False			
+tax_returns	filed_ref	text	False			
+tax_returns	filed_at	timestamp with time zone	False			
+tax_returns	source_type	text	False			
+tax_returns	source_id	uuid	False			
+tax_returns	created_by	uuid	False			
+tax_returns	created_at	timestamp with time zone	True	now()		
+tax_returns	updated_at	timestamp with time zone	True	now()		
+user_profiles	avatar_url	text	False			
+user_profiles	created_at	timestamp with time zone	True	now()		
+user_profiles	deletion_finalized_at	timestamp with time zone	False			
+user_profiles	deletion_requested_at	timestamp with time zone	False			
+user_profiles	full_name	text	True			
+user_profiles	id	uuid	True	gen_random_uuid()		
+user_profiles	is_platform_admin	boolean	True			
+user_profiles	phone	text	False			
+user_profiles	preferred_language	text	False	'en'::text		
+user_profiles	preferred_currency	currency_code	False			
+user_profiles	updated_at	timestamp with time zone	True	now()		
+webhook_deliveries	id	uuid	True	gen_random_uuid()		
+webhook_deliveries	webhook_id	uuid	True			
+webhook_deliveries	event	text	True			
+webhook_deliveries	payload	jsonb	True			
+webhook_deliveries	status_code	integer	False			
+webhook_deliveries	response_body	text	False			
+webhook_deliveries	attempt	integer	True	1		
+webhook_deliveries	delivered_at	timestamp with time zone	False			
+webhook_deliveries	created_at	timestamp with time zone	True	now()		
+webhooks	id	uuid	True	gen_random_uuid()		
+webhooks	business_id	uuid	True			
+webhooks	url	text	True			
+webhooks	events	text[]	True	'{}'::text[]		
+webhooks	secret	text	True	encode(gen_random_bytes(32), 'hex'::text)		
+webhooks	is_active	boolean	True	true		
+webhooks	last_triggered_at	timestamp with time zone	False			
+webhooks	created_by	uuid	False			
+webhooks	created_at	timestamp with time zone	True	now()		
+webhooks	updated_at	timestamp with time zone	True	now()		

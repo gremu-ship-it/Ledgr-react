@@ -1,0 +1,157 @@
+v_cash_flow	 WITH account_meta AS (
+         SELECT a.id,
+            a.business_id,
+            a.code,
+            a.account_subtype,
+                CASE
+                    WHEN a.is_bank_account THEN true
+                    WHEN (a.code = ANY (ARRAY['1110'::text, '1115'::text, '1125'::text, '1126'::text])) THEN true
+                    ELSE false
+                END AS is_cash_equivalent
+           FROM accounts a
+          WHERE (a.deleted_at IS NULL)
+        ), posted_entries AS (
+         SELECT je.id AS entry_id,
+            je.business_id,
+            je.source_type,
+            je.reversal_of,
+            to_char((je.entry_date)::timestamp with time zone, 'YYYY-MM'::text) AS period
+           FROM journal_entries je
+          WHERE (je.status = ANY (ARRAY['posted'::journal_status, 'reversed'::journal_status]))
+        ), effective_entries AS (
+         SELECT pe.entry_id,
+            pe.business_id,
+            pe.period,
+                CASE
+                    WHEN ((pe.source_type = 'reversal'::text) AND (pe.reversal_of IS NOT NULL)) THEN COALESCE(( SELECT je_orig.source_type
+                       FROM journal_entries je_orig
+                      WHERE (je_orig.id = pe.reversal_of)), 'reversal'::text)
+                    ELSE pe.source_type
+                END AS effective_source_type
+           FROM posted_entries pe
+        ), enriched_lines AS (
+         SELECT ee.entry_id,
+            ee.business_id,
+            ee.period,
+            ee.effective_source_type,
+            jl.is_debit,
+            jl.amount_base,
+            am.code AS account_code,
+            am.account_subtype,
+            am.is_cash_equivalent
+           FROM ((effective_entries ee
+             JOIN journal_lines jl ON ((jl.journal_entry_id = ee.entry_id)))
+             JOIN account_meta am ON ((am.id = jl.account_id)))
+        ), cash_per_entry AS (
+         SELECT el.entry_id,
+            el.business_id,
+            el.period,
+            sum(
+                CASE
+                    WHEN el.is_cash_equivalent THEN
+                    CASE
+                        WHEN el.is_debit THEN el.amount_base
+                        ELSE (- el.amount_base)
+                    END
+                    ELSE (0)::numeric
+                END) AS net_cash
+           FROM enriched_lines el
+          GROUP BY el.entry_id, el.business_id, el.period
+         HAVING bool_or(el.is_cash_equivalent)
+        ), classification_per_entry AS (
+         SELECT cpe_1.entry_id,
+            cpe_1.business_id,
+            cpe_1.period,
+            cpe_1.net_cash,
+                CASE
+                    WHEN bool_or((el.effective_source_type = 'fixed_asset_revaluation'::text)) THEN 'excluded'::text
+                    WHEN bool_or((el.effective_source_type = 'fixed_asset_disposal'::text)) THEN 'investing'::text
+                    WHEN bool_and(el.is_cash_equivalent) THEN 'operating'::text
+                    WHEN bool_or((el.account_subtype = 'fixed_asset'::account_subtype)) THEN 'investing'::text
+                    WHEN bool_or((el.account_code = ANY (ARRAY['2140'::text, '2145'::text, '2510'::text, '2511'::text, '2512'::text, '2515'::text]))) THEN 'financing'::text
+                    WHEN bool_or((el.account_code = '3140'::text)) THEN 'financing'::text
+                    WHEN bool_or((el.account_subtype = 'share_capital'::account_subtype)) THEN 'financing'::text
+                    ELSE 'operating'::text
+                END AS classification
+           FROM (cash_per_entry cpe_1
+             JOIN enriched_lines el ON ((el.entry_id = cpe_1.entry_id)))
+          GROUP BY cpe_1.entry_id, cpe_1.business_id, cpe_1.period, cpe_1.net_cash
+        )
+ SELECT cpe.business_id,
+    cpe.period,
+    COALESCE(sum(
+        CASE
+            WHEN (cls.classification = 'operating'::text) THEN cpe.net_cash
+            ELSE (0)::numeric
+        END), (0)::numeric) AS operating,
+    COALESCE(sum(
+        CASE
+            WHEN (cls.classification = 'investing'::text) THEN cpe.net_cash
+            ELSE (0)::numeric
+        END), (0)::numeric) AS investing,
+    COALESCE(sum(
+        CASE
+            WHEN (cls.classification = 'financing'::text) THEN cpe.net_cash
+            ELSE (0)::numeric
+        END), (0)::numeric) AS financing,
+    COALESCE(sum(
+        CASE
+            WHEN (cls.classification = ANY (ARRAY['operating'::text, 'investing'::text, 'financing'::text])) THEN cpe.net_cash
+            ELSE (0)::numeric
+        END), (0)::numeric) AS net_change
+   FROM (cash_per_entry cpe
+     JOIN classification_per_entry cls USING (entry_id))
+  GROUP BY cpe.business_id, cpe.period;
+v_inventory_ledger_variance	 WITH subledger AS (
+         SELECT ib.business_id,
+            COALESCE(sum((ib.quantity_on_hand * ib.average_cost)), (0)::numeric) AS subledger_value
+           FROM inventory_balances ib
+          GROUP BY ib.business_id
+        ), ledger AS (
+         SELECT a.business_id,
+            COALESCE(sum(
+                CASE
+                    WHEN jl.is_debit THEN jl.amount_base
+                    ELSE (- jl.amount_base)
+                END), (0)::numeric) AS ledger_balance
+           FROM ((accounts a
+             LEFT JOIN journal_lines jl ON ((jl.account_id = a.id)))
+             LEFT JOIN journal_entries je ON (((je.id = jl.journal_entry_id) AND (je.status = ANY (ARRAY['posted'::journal_status, 'reversed'::journal_status])))))
+          WHERE ((a.code ~~ '114%'::text) AND (a.is_group = false) AND (a.deleted_at IS NULL))
+          GROUP BY a.business_id
+        )
+ SELECT b.id AS business_id,
+    b.name AS business_name,
+    COALESCE(s.subledger_value, (0)::numeric) AS stock_on_hand_value,
+    COALESCE(l.ledger_balance, (0)::numeric) AS inventory_ledger_balance,
+    (COALESCE(s.subledger_value, (0)::numeric) - COALESCE(l.ledger_balance, (0)::numeric)) AS variance,
+        CASE
+            WHEN (abs((COALESCE(s.subledger_value, (0)::numeric) - COALESCE(l.ledger_balance, (0)::numeric))) < 0.01) THEN 'reconciled'::text
+            WHEN (COALESCE(s.subledger_value, (0)::numeric) > COALESCE(l.ledger_balance, (0)::numeric)) THEN 'missing from balance sheet'::text
+            ELSE 'overstated on balance sheet'::text
+        END AS status
+   FROM ((businesses b
+     LEFT JOIN subledger s ON ((s.business_id = b.id)))
+     LEFT JOIN ledger l ON ((l.business_id = b.id)))
+  WHERE (b.deleted_at IS NULL);
+v_partner_client_usage	 SELECT pc.partner_id,
+    b.id AS business_id,
+    b.name AS business_name,
+    b.plan_tier,
+    b.is_active,
+    pc.created_at AS onboarded_at,
+    ( SELECT count(*) AS count
+           FROM journal_entries je
+          WHERE (je.business_id = b.id)) AS journal_entry_count,
+    ( SELECT count(*) AS count
+           FROM invoices i
+          WHERE (i.business_id = b.id)) AS invoice_count,
+    ( SELECT count(*) AS count
+           FROM business_users bu
+          WHERE ((bu.business_id = b.id) AND bu.is_active)) AS user_count,
+    ( SELECT max(je.created_at) AS max
+           FROM journal_entries je
+          WHERE (je.business_id = b.id)) AS last_activity_at
+   FROM (partner_clients pc
+     JOIN businesses b ON ((b.id = pc.business_id)))
+  WHERE ((b.deleted_at IS NULL) AND is_partner_admin(auth.uid(), pc.partner_id));

@@ -1,0 +1,5 @@
+expense_payments	exchange_rate_used	exchange_rate
+expenses	exchange_rate_used	exchange_rate
+invoice_payments	exchange_rate_used	exchange_rate
+invoices	exchange_rate_used	exchange_rate
+journal_lines	exchange_rate_used	exchange_rate

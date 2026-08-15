@@ -1,0 +1,1651 @@
+add_partner_admin(p_partner_id uuid, p_user_email_or_id text, p_role text)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.add_partner_admin(p_partner_id uuid, p_user_email_or_id text, p_role text DEFAULT 'admin'::text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_user_id uuid;
+begin
+  if not public.is_platform_admin(auth.uid()) then
+    raise exception 'Only Ledgr (platform admin) can add partner admins.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_role is null or p_role not in ('admin', 'viewer') then
+    raise exception 'Partner admin role must be "admin" or "viewer".';
+  end if;
+
+  if not exists (select 1 from public.partners where id = p_partner_id) then
+    raise exception 'Partner not found.';
+  end if;
+
+  if p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    select id into v_user_id from auth.users where id = p_user_email_or_id::uuid;
+  else
+    select id into v_user_id from auth.users
+     where lower(email) = lower(trim(p_user_email_or_id));
+  end if;
+
+  if v_user_id is null then
+    raise exception 'No registered Ledgr user found for "%". Ask them to create an account first.', p_user_email_or_id;
+  end if;
+
+  insert into public.partner_admins (partner_id, user_id, role)
+  values (p_partner_id, v_user_id, p_role)
+  on conflict (partner_id, user_id)
+  do update set role = excluded.role; -- keep original created_at
+end;
+$function$
+
+apply_subscription_payment(p_tx_ref text, p_status text, p_gateway_reference text, p_raw_response jsonb)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.apply_subscription_payment(p_tx_ref text, p_status text, p_gateway_reference text, p_raw_response jsonb)
+ RETURNS subscription_payments
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_payment public.subscription_payments;
+begin
+  if p_status not in ('success', 'failed', 'cancelled') then
+    raise exception 'Invalid subscription payment status: %', p_status;
+  end if;
+
+  select * into v_payment
+  from public.subscription_payments
+  where tx_ref = p_tx_ref
+  for update;
+
+  if not found then
+    raise exception 'Unknown subscription payment tx_ref: %', p_tx_ref;
+  end if;
+
+  -- Already resolved — don't reprocess (e.g. webhook arrives after the
+  -- user's own post-redirect verification already settled it).
+  if v_payment.status <> 'pending' then
+    return v_payment;
+  end if;
+
+  update public.subscription_payments
+  set status = p_status,
+      gateway_reference = coalesce(p_gateway_reference, gateway_reference),
+      raw_response = coalesce(p_raw_response, raw_response)
+  where tx_ref = p_tx_ref
+  returning * into v_payment;
+
+  if p_status = 'success' then
+    update public.businesses
+    set plan_tier = v_payment.target_plan_tier,
+        plan_expires_at = v_payment.plan_expires_at,
+        plan_updated_at = now()
+    where id = v_payment.business_id;
+  end if;
+
+  return v_payment;
+end;
+$function$
+
+backfill_and_recalculate_inventory(p_business_id uuid)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.backfill_and_recalculate_inventory(p_business_id uuid DEFAULT NULL::uuid)
+ RETURNS TABLE(out_business_id uuid, sales_backfilled integer, purchases_backfilled integer, balances_updated integer)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_sales_count INT := 0;
+  v_purchases_count INT := 0;
+  v_balances_count INT := 0;
+  v_biz_record RECORD;
+  v_default_loc_id UUID;
+BEGIN
+  -- BUG 3 FIX: only the service role may reconcile "every business" (NULL).
+  -- Any other caller must name a business it can write to.
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    IF p_business_id IS NULL THEN
+      RAISE EXCEPTION 'business_id is required.'
+        USING ERRCODE = '22004'; -- null_value_not_allowed
+    END IF;
+
+    IF NOT public.can_write_business_data(p_business_id) THEN
+      RAISE EXCEPTION 'You do not have permission to reconcile inventory for this business.'
+        USING ERRCODE = '42501'; -- insufficient_privilege
+    END IF;
+  END IF;
+
+  FOR v_biz_record IN
+    SELECT id FROM public.businesses
+    WHERE (p_business_id IS NULL OR id = p_business_id)
+      AND is_active = true
+      AND deleted_at IS NULL
+  LOOP
+    -- 1. Ensure at least one default warehouse location exists for this business
+    SELECT id INTO v_default_loc_id
+    FROM public.inventory_locations
+    WHERE business_id = v_biz_record.id AND is_active = true
+    ORDER BY is_default DESC, created_at ASC
+    LIMIT 1;
+
+    IF v_default_loc_id IS NULL THEN
+      INSERT INTO public.inventory_locations (
+        business_id, name, is_default, is_active, created_at, updated_at
+      )
+      VALUES (
+        v_biz_record.id, 'Main Warehouse', true, true, now(), now()
+      )
+      RETURNING id INTO v_default_loc_id;
+    END IF;
+
+    -- 2. Backfill missing stock movements for past purchases (expenses) FIRST,
+    -- so the sales backfill below can price each sale off the purchase
+    -- history that predates it.
+    WITH missing_purchases AS (
+      SELECT
+        e.business_id,
+        el.product_id,
+        COALESCE(
+          (SELECT loc.id FROM public.inventory_locations loc WHERE loc.branch_id = e.branch_id AND loc.is_active = true LIMIT 1),
+          v_default_loc_id
+        ) AS location_id,
+        'purchase'::public.stock_movement_type AS movement_type,
+        e.expense_date AS movement_date,
+        el.quantity AS quantity, -- positive for purchases
+        el.unit_price AS unit_cost,
+        'expense' AS source_type,
+        e.id AS source_id,
+        e.expense_number AS reference,
+        e.created_by
+      FROM public.expenses e
+      JOIN public.expense_lines el ON el.expense_id = e.id
+      JOIN public.products p ON p.id = el.product_id
+      WHERE e.business_id = v_biz_record.id
+        AND e.deleted_at IS NULL
+        AND p.track_inventory
+        AND el.product_id IS NOT NULL
+        AND el.quantity > 0
+        -- Skip if a stock movement for this expense & product already exists
+        AND NOT EXISTS (
+          SELECT 1 FROM public.stock_movements sm
+          WHERE sm.business_id = e.business_id
+            AND sm.source_id = e.id
+            AND sm.source_type = 'expense'
+            AND sm.product_id = el.product_id
+        )
+    ),
+    inserted_purchases AS (
+      INSERT INTO public.stock_movements (
+        business_id, product_id, location_id, movement_type,
+        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, created_at
+      )
+      SELECT
+        business_id, product_id, location_id, movement_type,
+        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, now()
+      FROM missing_purchases
+      RETURNING id
+    )
+    SELECT COUNT(*) INTO v_purchases_count FROM inserted_purchases;
+
+    -- 3. Backfill missing stock movements for past sales (invoices).
+    --
+    -- BUG 1 FIX: cost each backfilled sale at the weighted-average cost of
+    -- that product's inbound movements up to (and including) the sale date
+    -- — never at il.unit_price, which is what the customer was charged and
+    -- has nothing to do with what the stock cost the business. Falls back
+    -- to the product's current purchase_price only when no purchase history
+    -- exists for that product at all (e.g. opening stock was never
+    -- recorded), and to 0 as a last resort — matching buildCogsPostings'
+    -- existing "skip zero-cost lines rather than invent a number" rule.
+    WITH missing_sales AS (
+      SELECT
+        i.business_id,
+        il.product_id,
+        COALESCE(
+          (SELECT loc.id FROM public.inventory_locations loc WHERE loc.branch_id = i.branch_id AND loc.is_active = true LIMIT 1),
+          v_default_loc_id
+        ) AS location_id,
+        'sale'::public.stock_movement_type AS movement_type,
+        i.issue_date AS movement_date,
+        -il.quantity AS quantity, -- negative for sales
+        COALESCE(
+          (
+            SELECT SUM(sm2.quantity * sm2.unit_cost) / NULLIF(SUM(sm2.quantity), 0)
+            FROM public.stock_movements sm2
+            WHERE sm2.business_id = i.business_id
+              AND sm2.product_id = il.product_id
+              AND sm2.quantity > 0
+              AND sm2.movement_date <= i.issue_date
+          ),
+          p.purchase_price,
+          0
+        ) AS unit_cost,
+        'invoice' AS source_type,
+        i.id AS source_id,
+        i.invoice_number AS reference,
+        i.created_by
+      FROM public.invoices i
+      JOIN public.invoice_lines il ON il.invoice_id = i.id
+      JOIN public.products p ON p.id = il.product_id
+      WHERE i.business_id = v_biz_record.id
+        AND i.deleted_at IS NULL
+        AND p.track_inventory
+        AND il.product_id IS NOT NULL
+        AND il.quantity > 0
+        -- Skip if a stock movement for this invoice & product already exists
+        AND NOT EXISTS (
+          SELECT 1 FROM public.stock_movements sm
+          WHERE sm.business_id = i.business_id
+            AND sm.source_id = i.id
+            AND sm.source_type = 'invoice'
+            AND sm.product_id = il.product_id
+        )
+    ),
+    inserted_sales AS (
+      INSERT INTO public.stock_movements (
+        business_id, product_id, location_id, movement_type,
+        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, created_at
+      )
+      SELECT
+        business_id, product_id, location_id, movement_type,
+        movement_date, quantity, unit_cost, source_type, source_id, reference, created_by, now()
+      FROM missing_sales
+      RETURNING id
+    )
+    SELECT COUNT(*) INTO v_sales_count FROM inserted_sales;
+
+    -- 4. Recalculate inventory_balances from stock_movements.
+    --
+    -- BUG 2 FIX: weighted-average cost over INBOUND movements only
+    -- (Σ inbound qty × inbound cost ÷ Σ inbound qty), matching how
+    -- average_cost is defined everywhere else in the app (see
+    -- inventoryValuation.ts). The previous AVG(ABS(unit_cost)) blended sale
+    -- prices and purchase costs together with no quantity weighting.
+    WITH calc_balances AS (
+      SELECT
+        sm.business_id,
+        sm.product_id,
+        sm.location_id,
+        COALESCE(SUM(sm.quantity), 0) AS calc_quantity_on_hand,
+        COALESCE(
+          SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity * sm.unit_cost ELSE 0 END)
+            / NULLIF(SUM(CASE WHEN sm.quantity > 0 THEN sm.quantity ELSE 0 END), 0),
+          0
+        ) AS calc_avg_cost,
+        MAX(sm.created_at) AS last_movement
+      FROM public.stock_movements sm
+      WHERE sm.business_id = v_biz_record.id
+      GROUP BY sm.business_id, sm.product_id, sm.location_id
+    ),
+    upserted_balances AS (
+      INSERT INTO public.inventory_balances (
+        business_id, product_id, location_id, quantity_on_hand, quantity_reserved,
+        average_cost, last_movement_at, updated_at
+      )
+      SELECT
+        cb.business_id, cb.product_id, cb.location_id, cb.calc_quantity_on_hand, 0,
+        cb.calc_avg_cost, cb.last_movement, now()
+      FROM calc_balances cb
+      ON CONFLICT (business_id, product_id, location_id)
+      DO UPDATE SET
+        quantity_on_hand = EXCLUDED.quantity_on_hand,
+        average_cost = CASE WHEN EXCLUDED.average_cost > 0 THEN EXCLUDED.average_cost ELSE inventory_balances.average_cost END,
+        last_movement_at = EXCLUDED.last_movement_at,
+        updated_at = now()
+      RETURNING id
+    )
+    SELECT COUNT(*) INTO v_balances_count FROM upserted_balances;
+
+    RETURN QUERY SELECT v_biz_record.id, v_sales_count, v_purchases_count, v_balances_count;
+  END LOOP;
+END;
+$function$
+
+business_partner_id(bid uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.business_partner_id(bid uuid)
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select partner_id from public.partner_clients where business_id = bid limit 1;
+$function$
+
+can_admin_business_data(p_business_id uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.can_admin_business_data(p_business_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.business_users bu
+    where bu.business_id = p_business_id
+      and bu.user_id = auth.uid()
+      and bu.is_active = true
+      and bu.role::text in ('owner', 'admin')
+  );
+$function$
+
+can_read_audit(p_business_id uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.can_read_audit(p_business_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.business_users bu
+    where bu.business_id = p_business_id
+      and bu.user_id = auth.uid()
+      and bu.is_active = true
+      and bu.role::text in (
+        -- The pre-existing 'auditor' tier, preserved exactly, plus
+        -- board_member as an oversight role. Deliberately NOT widened to
+        -- every member: the audit log records who did what.
+        'owner', 'admin', 'accountant', 'payroll_manager', 'auditor',
+        'board_member'
+      )
+  );
+$function$
+
+can_read_partner_client(pid uuid, bid uuid)	s	true	postgres	["search_path=\"\""]	CREATE OR REPLACE FUNCTION public.can_read_partner_client(pid uuid, bid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select
+    public.is_partner_admin(auth.uid(), pid)
+    or exists (
+      select 1
+        from public.business_users bu
+       where bu.business_id = bid
+         and bu.user_id = auth.uid()
+         and bu.is_active
+    )
+    or (
+      exists (
+        select 1
+          from public.partners p
+         where p.id = pid
+           and p.allow_client_visibility
+      )
+      and exists (
+        select 1
+          from public.partner_clients mine
+          join public.business_users bu on bu.business_id = mine.business_id
+         where mine.partner_id = pid
+           and bu.user_id = auth.uid()
+           and bu.is_active
+      )
+    );
+$function$
+
+can_read_partner_peer_business(bid uuid)	s	true	postgres	["search_path=\"\""]	CREATE OR REPLACE FUNCTION public.can_read_partner_peer_business(bid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select exists (
+    select 1
+      from public.partner_clients target
+      join public.partners p on p.id = target.partner_id
+     where target.business_id = bid
+       and p.allow_client_visibility
+       and exists (
+         select 1
+           from public.partner_clients mine
+           join public.business_users bu on bu.business_id = mine.business_id
+          where mine.partner_id = target.partner_id
+            and bu.user_id = auth.uid()
+            and bu.is_active
+       )
+  );
+$function$
+
+can_view_payroll(p_business_id uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.can_view_payroll(p_business_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.business_users bu
+    where bu.business_id = p_business_id
+      and bu.user_id = auth.uid()
+      and bu.is_active = true
+      and bu.role::text in (
+        -- Mirrors canViewPayroll in src/hooks/usePermissions.ts.
+        'owner', 'admin', 'accountant', 'payroll_manager'
+      )
+  );
+$function$
+
+can_write_business_data(p_business_id uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.can_write_business_data(p_business_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.business_users bu
+    where bu.business_id = p_business_id
+      and bu.user_id = auth.uid()
+      and bu.is_active = true
+      and bu.role::text in (
+        -- Mirrors canWrite in src/hooks/usePermissions.ts. Keep in sync.
+        'owner',
+        'admin',
+        'accountant',
+        'supervisor',
+        'data_entry',
+        'inventory_manager',
+        'sales_clerk',
+        'purchasing_officer',
+        'warehouse_worker',
+        'sales_manager',
+        'customer_service_rep',
+        'tax_compliance_officer',
+        'treasury_manager',
+        'asset_manager',
+        'branch_manager'
+        -- Deliberately absent: payroll_manager (payroll only), auditor,
+        -- viewer, board_member.
+      )
+  );
+$function$
+
+can_write_payroll(p_business_id uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.can_write_payroll(p_business_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.business_users bu
+    where bu.business_id = p_business_id
+      and bu.user_id = auth.uid()
+      and bu.is_active = true
+      and bu.role::text in (
+        -- Mirrors canWritePayroll in src/hooks/usePermissions.ts.
+        -- (TeamManagementPage.tsx's matrix also lists supervisor; the hook
+        -- does not, and the hook is what runs. Following the hook.)
+        'owner', 'admin', 'accountant', 'payroll_manager'
+      )
+  );
+$function$
+
+clear_partner_admins(p_partner_id uuid)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.clear_partner_admins(p_partner_id uuid)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_removed integer;
+begin
+  if not public.is_platform_admin(auth.uid()) then
+    raise exception 'Only Ledgr (platform admin) can revoke a partner''s staff access.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if not exists (select 1 from public.partners where id = p_partner_id) then
+    raise exception 'Partner not found.';
+  end if;
+
+  delete from public.partner_admins
+   where partner_id = p_partner_id;
+  get diagnostics v_removed = row_count;
+
+  return v_removed;
+end;
+$function$
+
+consume_api_rate_limit(p_bucket text, p_limit integer, p_window_start timestamp with time zone)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.consume_api_rate_limit(p_bucket text, p_limit integer, p_window_start timestamp with time zone)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_count integer;
+begin
+  if p_bucket is null or length(p_bucket) = 0 or p_limit < 1 then
+    raise exception 'Invalid rate limit arguments' using errcode = '22023';
+  end if;
+
+  insert into public.api_usage (api_key, count, window_start)
+  values (p_bucket, 1, p_window_start)
+  on conflict (api_key, window_start) where api_key is not null do update
+    set count = public.api_usage.count + 1
+    where public.api_usage.count < p_limit
+  returning count into v_count;
+
+  return v_count is not null;
+end;
+$function$
+
+create_api_journal_entry(p_business_id uuid, p_entry jsonb, p_lines jsonb)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.create_api_journal_entry(p_business_id uuid, p_entry jsonb, p_lines jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_entry public.journal_entries;
+  v_debits numeric;
+  v_credits numeric;
+begin
+  if jsonb_typeof(p_entry) <> 'object' or jsonb_typeof(p_lines) <> 'array'
+     or jsonb_array_length(p_lines) < 2 then
+    raise exception 'A journal entry needs a header and at least two lines.' using errcode = '22023';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(p_lines) as l(account_id uuid, amount_base numeric, is_debit boolean)
+    left join public.accounts a on a.id = l.account_id and a.business_id = p_business_id
+    where l.account_id is null or l.amount_base is null or l.amount_base <= 0 or l.is_debit is null or a.id is null
+  ) then
+    raise exception 'Every journal line must have a business account, a positive amount_base, and debit/credit side.' using errcode = '22023';
+  end if;
+
+  select coalesce(sum(case when l.is_debit then l.amount_base else 0 end), 0),
+         coalesce(sum(case when not l.is_debit then l.amount_base else 0 end), 0)
+    into v_debits, v_credits
+  from jsonb_to_recordset(p_lines) as l(amount_base numeric, is_debit boolean);
+
+  if abs(v_debits - v_credits) > 0.005 then
+    raise exception 'Journal entry lines do not balance in functional currency.' using errcode = '22023';
+  end if;
+
+  insert into public.journal_entries (
+    business_id, entry_number, entry_date, description, reference, currency,
+    exchange_rate, branch_id, department_id, period_id, source_type, source_id, status
+  )
+  values (
+    p_business_id,
+    p_entry->>'entry_number',
+    (p_entry->>'entry_date')::date,
+    p_entry->>'description',
+    nullif(p_entry->>'reference', ''),
+    coalesce(nullif(p_entry->>'currency', ''), 'MWK'),
+    coalesce((p_entry->>'exchange_rate')::numeric, 1),
+    nullif(p_entry->>'branch_id', '')::uuid,
+    nullif(p_entry->>'department_id', '')::uuid,
+    nullif(p_entry->>'period_id', '')::uuid,
+    nullif(p_entry->>'source_type', ''),
+    nullif(p_entry->>'source_id', '')::uuid,
+    'draft'
+  ) returning * into v_entry;
+
+  insert into public.journal_lines (
+    journal_entry_id, business_id, line_number, account_id, is_debit, amount,
+    amount_base, currency, exchange_rate, description, branch_id, department_id,
+    tax_code, tax_amount, original_currency, original_amount, rate_date, rate_is_stale
+  )
+  select v_entry.id, p_business_id, l.line_number, l.account_id, l.is_debit,
+         l.amount, l.amount_base, coalesce(l.currency, v_entry.currency),
+         coalesce(l.exchange_rate, v_entry.exchange_rate), l.description,
+         l.branch_id, l.department_id, l.tax_code, coalesce(l.tax_amount, 0),
+         l.original_currency, l.original_amount, l.rate_date, coalesce(l.rate_is_stale, false)
+  from jsonb_to_recordset(p_lines) as l(
+    line_number integer, account_id uuid, is_debit boolean, amount numeric,
+    amount_base numeric, currency text, exchange_rate numeric, description text,
+    branch_id uuid, department_id uuid, tax_code public.tax_code, tax_amount numeric,
+    original_currency text, original_amount numeric, rate_date date, rate_is_stale boolean
+  );
+
+  return to_jsonb(v_entry);
+end;
+$function$
+
+current_partner_ids(uid uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.current_partner_ids(uid uuid)
+ RETURNS SETOF uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select partner_id from public.partner_admins where user_id = uid;
+$function$
+
+diagnose_user_login(p_user_email_or_id text)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.diagnose_user_login(p_user_email_or_id text)
+ RETURNS TABLE(check_name text, status text, detail text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id       UUID;
+  v_email         TEXT;
+  v_confirmed_at  TIMESTAMPTZ;
+  v_banned_until  TIMESTAMPTZ;
+  v_visible_count INT;
+  v_total_count   INT;
+BEGIN
+  IF p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    SELECT id, email, email_confirmed_at, banned_until
+      INTO v_user_id, v_email, v_confirmed_at, v_banned_until
+      FROM auth.users WHERE id = p_user_email_or_id::UUID;
+  ELSE
+    SELECT id, email, email_confirmed_at, banned_until
+      INTO v_user_id, v_email, v_confirmed_at, v_banned_until
+      FROM auth.users WHERE LOWER(email) = LOWER(TRIM(p_user_email_or_id));
+  END IF;
+
+  IF v_user_id IS NULL THEN
+    RETURN QUERY SELECT
+      'auth.users'::TEXT, 'FAIL'::TEXT,
+      format('No user matches "%s".', p_user_email_or_id);
+    RETURN;
+  END IF;
+
+  RETURN QUERY SELECT
+    'auth.users'::TEXT, 'OK'::TEXT,
+    format('Found %s (%s).', v_email, v_user_id);
+
+  -- Supabase rejects signInWithPassword with "Email not confirmed" when a
+  -- dashboard-created user was never marked confirmed.
+  RETURN QUERY SELECT
+    'email_confirmed'::TEXT,
+    (CASE WHEN v_confirmed_at IS NOT NULL THEN 'OK' ELSE 'FAIL' END)::TEXT,
+    (CASE WHEN v_confirmed_at IS NOT NULL
+          THEN format('Confirmed at %s.', v_confirmed_at)
+          ELSE 'NOT confirmed — login fails with "Email not confirmed". '
+               'Tick "Auto Confirm User" in the dashboard, or run: '
+               'update auth.users set email_confirmed_at = now() where id = ''' || v_user_id || ''';'
+     END)::TEXT;
+
+  RETURN QUERY SELECT
+    'not_banned'::TEXT,
+    (CASE WHEN v_banned_until IS NULL OR v_banned_until < now() THEN 'OK' ELSE 'FAIL' END)::TEXT,
+    COALESCE('Banned until ' || v_banned_until, 'Not banned.')::TEXT;
+
+  RETURN QUERY SELECT
+    'user_profiles'::TEXT,
+    (CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)
+          THEN 'OK' ELSE 'WARN' END)::TEXT,
+    (CASE WHEN EXISTS (SELECT 1 FROM public.user_profiles WHERE id = v_user_id)
+          THEN 'Profile row present.'
+          ELSE 'No user_profiles row. Not fatal, but name/language/admin flags '
+               'will be empty. grant_user_business_access() creates one.'
+     END)::TEXT;
+
+  SELECT count(*) INTO v_total_count
+    FROM public.business_users WHERE user_id = v_user_id;
+
+  -- This predicate is the exact one the app uses.
+  SELECT count(*) INTO v_visible_count
+    FROM public.business_users bu
+    JOIN public.businesses b ON b.id = bu.business_id
+   WHERE bu.user_id = v_user_id
+     AND bu.is_active = true
+     AND b.is_active = true
+     AND b.deleted_at IS NULL;
+
+  RETURN QUERY SELECT
+    'visible_memberships'::TEXT,
+    (CASE WHEN v_visible_count > 0 THEN 'OK' ELSE 'FAIL' END)::TEXT,
+    format(
+      '%s of %s membership row(s) are visible to the app. %s',
+      v_visible_count, v_total_count,
+      CASE WHEN v_visible_count = 0
+           THEN 'User signs in but is redirected to /create-business. '
+                'Fix with grant_user_business_access().'
+           ELSE '' END
+    );
+
+  RETURN QUERY
+    SELECT
+      'membership'::TEXT,
+      (CASE WHEN bu.is_active AND b.is_active AND b.deleted_at IS NULL
+            THEN 'OK' ELSE 'HIDDEN' END)::TEXT,
+      format(
+        'business=%s (%s) role=%s bu.is_active=%s b.is_active=%s b.deleted_at=%s',
+        b.name, b.id, bu.role, bu.is_active, b.is_active,
+        COALESCE(b.deleted_at::TEXT, 'null')
+      )
+    FROM public.business_users bu
+    JOIN public.businesses b ON b.id = bu.business_id
+   WHERE bu.user_id = v_user_id;
+END;
+$function$
+
+enforce_expense_payment_allowed()	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.enforce_expense_payment_allowed()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_status text;
+begin
+  select status into v_status
+    from public.expenses
+   where id = new.expense_id;
+
+  if v_status = 'void' then
+    raise exception 'Cannot record a payment against a void expense.'
+      using errcode = '22023';
+  end if;
+
+  return new;
+end;
+$function$
+
+enforce_invoice_payment_allowed()	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.enforce_invoice_payment_allowed()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_status text;
+begin
+  select status into v_status
+    from public.invoices
+   where id = new.invoice_id;
+
+  if v_status in ('void', 'credit_note') then
+    raise exception 'Cannot record a payment against a % invoice.', v_status
+      using errcode = '22023';
+  end if;
+
+  return new;
+end;
+$function$
+
+enforce_partner_client_limit()	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.enforce_partner_client_limit()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  lim int;
+  used int;
+begin
+  select client_limit into lim from public.partners where id = new.partner_id;
+  if lim is null then
+    return new;
+  end if;
+  select count(*) into used from public.partner_clients where partner_id = new.partner_id;
+  if used >= lim then
+    raise exception 'Partner client limit reached (% of %)', used, lim
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$function$
+
+enforce_plan_tier_change()	v	false	postgres		CREATE OR REPLACE FUNCTION public.enforce_plan_tier_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.plan_tier is distinct from old.plan_tier then
+    -- Edge functions (webhook / verify / cron) use the service role key
+    -- and are the only path allowed to *raise* plan_tier, since that only
+    -- happens after a gateway-confirmed payment. Any other caller
+    -- (the owner's own browser, including direct REST/devtools calls)
+    -- may still lower it — e.g. the self-serve "Downgrade" button.
+    if auth.role() <> 'service_role' and public.plan_tier_rank(new.plan_tier) > public.plan_tier_rank(old.plan_tier) then
+      raise exception 'Upgrading plan_tier requires a confirmed payment — use the Billing tab to check out.'
+        using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$function$
+
+gin_extract_query_trgm(text, internal, smallint, internal, internal, internal, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gin_extract_query_trgm(text, internal, smallint, internal, internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_extract_query_trgm$function$
+
+gin_extract_value_trgm(text, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gin_extract_value_trgm(text, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_extract_value_trgm$function$
+
+gin_trgm_consistent(internal, smallint, text, integer, internal, internal, internal, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gin_trgm_consistent(internal, smallint, text, integer, internal, internal, internal, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_trgm_consistent$function$
+
+gin_trgm_triconsistent(internal, smallint, text, integer, internal, internal, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gin_trgm_triconsistent(internal, smallint, text, integer, internal, internal, internal)
+ RETURNS "char"
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_trgm_triconsistent$function$
+
+grant_user_business_access(p_user_email_or_id text, p_business_id uuid, p_role text)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.grant_user_business_access(p_user_email_or_id text, p_business_id uuid, p_role text DEFAULT 'viewer'::text)
+ RETURNS TABLE(out_user_id uuid, out_business_id uuid, out_role text, out_action text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id   UUID;
+  v_role_enum user_role;
+  v_existing  RECORD;
+  v_action    TEXT;
+BEGIN
+  -- Validate the role against the live enum.
+  BEGIN
+    v_role_enum := p_role::user_role;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION
+      'Invalid role "%". Valid roles: %',
+      p_role,
+      (SELECT string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder)
+         FROM pg_enum e
+         JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'user_role');
+  END;
+
+  -- Resolve the user by UUID or email.
+  IF p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    SELECT id INTO v_user_id FROM auth.users WHERE id = p_user_email_or_id::UUID;
+  ELSE
+    SELECT id INTO v_user_id FROM auth.users
+     WHERE LOWER(email) = LOWER(TRIM(p_user_email_or_id));
+  END IF;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'User "%" was not found in auth.users.', p_user_email_or_id;
+  END IF;
+
+  -- The business must exist and be live, otherwise the app's !inner join
+  -- silently drops the membership and the user still sees nothing.
+  IF NOT EXISTS (
+    SELECT 1 FROM public.businesses
+     WHERE id = p_business_id AND is_active = true AND deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION
+      'Business % does not exist, is inactive, or is soft-deleted. '
+      'The app filters these out, so the membership would be invisible.',
+      p_business_id;
+  END IF;
+
+  -- Ensure a user_profiles row exists. findUserProfile() uses maybeSingle()
+  -- so a missing row is not fatal, but the profile drives display name and
+  -- preferred_language, and several RLS helpers read from this table.
+  INSERT INTO public.user_profiles (id)
+  VALUES (v_user_id)
+  ON CONFLICT (id) DO NOTHING;
+
+  SELECT id, is_active, role INTO v_existing
+    FROM public.business_users
+   WHERE business_id = p_business_id AND user_id = v_user_id;
+
+  IF v_existing.id IS NULL THEN
+    v_action := 'created';
+  ELSIF v_existing.is_active THEN
+    v_action := 'updated';
+  ELSE
+    v_action := 'reactivated';
+  END IF;
+
+  INSERT INTO public.business_users (
+    business_id, user_id, role, is_active, accepted_at, created_at, updated_at
+  )
+  VALUES (
+    p_business_id, v_user_id, v_role_enum, true, now(), now(), now()
+  )
+  -- NB: the conflicting row is referenced by the bare table name here.
+  -- Schema-qualifying it ("public.business_users.accepted_at") is rejected by
+  -- Postgres with "invalid reference to FROM-clause entry".
+  ON CONFLICT (business_id, user_id) DO UPDATE
+    SET role        = EXCLUDED.role,
+        is_active   = true,
+        accepted_at = COALESCE(business_users.accepted_at, now()),
+        updated_at  = now();
+
+  RETURN QUERY SELECT v_user_id, p_business_id, p_role, v_action;
+END;
+$function$
+
+gtrgm_compress(internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_compress$function$
+
+gtrgm_consistent(internal, text, smallint, oid, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_consistent(internal, text, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_consistent$function$
+
+gtrgm_decompress(internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_decompress$function$
+
+gtrgm_distance(internal, text, smallint, oid, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_distance(internal, text, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_distance$function$
+
+gtrgm_in(cstring)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_in(cstring)
+ RETURNS gtrgm
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_in$function$
+
+gtrgm_options(internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_options(internal)
+ RETURNS void
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE
+AS '$libdir/pg_trgm', $function$gtrgm_options$function$
+
+gtrgm_out(gtrgm)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_out(gtrgm)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_out$function$
+
+gtrgm_penalty(internal, internal, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_penalty$function$
+
+gtrgm_picksplit(internal, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_picksplit$function$
+
+gtrgm_same(gtrgm, gtrgm, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_same(gtrgm, gtrgm, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_same$function$
+
+gtrgm_union(internal, internal)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.gtrgm_union(internal, internal)
+ RETURNS gtrgm
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_union$function$
+
+increment_amount_paid(p_table text, p_id uuid, p_amount numeric)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.increment_amount_paid(p_table text, p_id uuid, p_amount numeric)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  -- Validate table name to prevent SQL injection.
+  if p_table not in ('invoices', 'expenses') then
+    raise exception 'Invalid table name: %. Must be "invoices" or "expenses"', p_table
+      using errcode = '22023';
+  end if;
+
+  -- Zero is a no-op and almost certainly a caller bug; negative is a valid
+  -- back-out (payment reversal).
+  if p_amount = 0 then
+    raise exception 'Amount must be non-zero: %', p_amount
+      using errcode = '22023';
+  end if;
+
+  if p_table = 'invoices' then
+    -- Ownership: caller must be a writer of this invoice's business.
+    if not exists (
+      select 1 from public.invoices i
+      where i.id = p_id
+        and public.can_write_business_data(i.business_id)
+    ) then
+      raise exception 'Invoice % not found or you lack permission to update it', p_id
+        using errcode = 'P0002';
+    end if;
+
+    update public.invoices
+       set amount_paid = amount_paid + p_amount
+     where id = p_id
+       and amount_paid + p_amount >= 0;
+
+    if not found then
+      raise exception 'Reversal exceeds amount paid for invoice %', p_id
+        using errcode = '22023';
+    end if;
+
+  elsif p_table = 'expenses' then
+    if not exists (
+      select 1 from public.expenses e
+      where e.id = p_id
+        and public.can_write_business_data(e.business_id)
+    ) then
+      raise exception 'Expense % not found or you lack permission to update it', p_id
+        using errcode = 'P0002';
+    end if;
+
+    update public.expenses
+       set amount_paid = amount_paid + p_amount
+     where id = p_id
+       and amount_paid + p_amount >= 0;
+
+    if not found then
+      raise exception 'Reversal exceeds amount paid for expense %', p_id
+        using errcode = '22023';
+    end if;
+  end if;
+end;
+$function$
+
+is_business_member(p_business_id uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.is_business_member(p_business_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.business_users bu
+    where bu.business_id = p_business_id
+      and bu.user_id = auth.uid()
+      and bu.is_active = true
+  );
+$function$
+
+is_partner_admin(uid uuid, pid uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.is_partner_admin(uid uuid, pid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from public.partner_admins pa
+     where pa.user_id = uid and pa.partner_id = pid
+  ) or public.is_platform_admin(uid);
+$function$
+
+is_partner_business_admin(bid uuid)	s	true	postgres	["search_path=\"\""]	CREATE OR REPLACE FUNCTION public.is_partner_business_admin(bid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select exists (
+    select 1
+      from public.partner_clients pc
+     where pc.business_id = bid
+       and public.is_partner_admin(auth.uid(), pc.partner_id)
+  );
+$function$
+
+is_platform_admin(uid uuid)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.is_platform_admin(uid uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select coalesce((select is_platform_admin from public.user_profiles where id = uid), false);
+$function$
+
+list_all_businesses()	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.list_all_businesses()
+ RETURNS TABLE(out_business_id uuid, out_business_name text, out_trading_name text, out_email text, out_phone text, out_plan_tier text, out_created_at timestamp with time zone, out_owner_emails text, out_owner_names text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_platform_admin(auth.uid()) then
+    raise exception 'Only Ledgr (platform admin) can list all businesses.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+    select
+      b.id,
+      b.name::text,
+      b.trading_name::text,
+      b.email::text,
+      b.phone::text,
+      b.plan_tier::text,
+      b.created_at,
+      coalesce(string_agg(au.email, ', ' order by au.email), '')::text,
+      coalesce(string_agg(coalesce(nullif(up.full_name, ''), au.email), ', ' order by au.email), '')::text
+    from public.businesses b
+    left join public.business_users bu
+      on bu.business_id = b.id and bu.role = 'owner' and bu.is_active = true
+    left join auth.users au on au.id = bu.user_id
+    left join public.user_profiles up on up.id = bu.user_id
+   where b.deleted_at is null
+   group by b.id
+   order by b.created_at desc;
+end;
+$function$
+
+list_partner_admins(p_partner_id uuid)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.list_partner_admins(p_partner_id uuid)
+ RETURNS TABLE(out_user_id uuid, out_email text, out_name text, out_role text, out_created_at timestamp with time zone)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_partner_admin(auth.uid(), p_partner_id) then
+    raise exception 'Not authorized to view admins for this partner.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  return query
+    select
+      pa.user_id,
+      au.email::text,
+      coalesce(nullif(up.full_name, ''), au.email)::text,
+      pa.role::text,
+      pa.created_at
+    from public.partner_admins pa
+    join auth.users au on au.id = pa.user_id
+    left join public.user_profiles up on up.id = pa.user_id
+   where pa.partner_id = p_partner_id
+   order by au.email asc;
+end;
+$function$
+
+plan_tier_rank(tier text)	i	false	postgres		CREATE OR REPLACE FUNCTION public.plan_tier_rank(tier text)
+ RETURNS integer
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  select case tier
+    when 'free' then 0
+    when 'growth' then 1
+    when 'pro' then 2
+    when 'enterprise' then 3
+    else -1
+  end;
+$function$
+
+prevent_functional_currency_change()	v	false	postgres		CREATE OR REPLACE FUNCTION public.prevent_functional_currency_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if tg_op = 'UPDATE' and new.base_currency is distinct from old.base_currency then
+    raise exception 'Functional currency cannot be changed after business creation (IAS 21). Create a new business if the functional currency changes.';
+  end if;
+  return new;
+end;
+$function$
+
+prevent_locked_bank_line_change()	v	false	postgres		CREATE OR REPLACE FUNCTION public.prevent_locked_bank_line_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if exists (select 1 from public.bank_statements s where s.id = coalesce(old.statement_id, new.statement_id) and s.is_locked) then
+    raise exception 'This bank reconciliation period is locked';
+  end if;
+  return coalesce(new, old);
+end; $function$
+
+protect_partner_commercial_fields()	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.protect_partner_commercial_fields()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_platform_admin(auth.uid()) and (
+        old.client_limit         is distinct from new.client_limit
+    or  old.price_per_client     is distinct from new.price_per_client
+    or  old.billing_currency     is distinct from new.billing_currency
+    or  old.billing_email        is distinct from new.billing_email
+    or  old.billing_contact_name is distinct from new.billing_contact_name
+    or  old.is_active            is distinct from new.is_active
+    or  old.slug                 is distinct from new.slug
+    or  old.custom_domain        is distinct from new.custom_domain
+  ) then
+    raise exception 'Only Ledgr (platform admin) can change a partner''s commercial, billing or routing settings (client_limit, price_per_client, billing_currency, billing_email, billing_contact_name, is_active, slug, custom_domain).'
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end;
+$function$
+
+record_business_terms_acceptance(p_business_id uuid, p_terms_version text)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.record_business_terms_acceptance(p_business_id uuid, p_terms_version text)
+ RETURNS timestamp with time zone
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_accepted_at TIMESTAMPTZ;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'You must be signed in to accept the Terms and Conditions.';
+  END IF;
+
+  IF p_terms_version <> '1.1' THEN
+    RAISE EXCEPTION 'The supplied Terms and Conditions version is not current.';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.business_users
+    WHERE business_id = p_business_id
+      AND user_id = auth.uid()
+      AND role = 'owner'
+      AND is_active = true
+  ) THEN
+    RAISE EXCEPTION 'Only an active business owner can record Terms and Conditions acceptance.';
+  END IF;
+
+  INSERT INTO public.business_terms_acceptances (business_id, user_id, terms_version)
+  VALUES (p_business_id, auth.uid(), p_terms_version)
+  ON CONFLICT (business_id, user_id, terms_version) DO UPDATE
+    SET accepted_at = business_terms_acceptances.accepted_at
+  RETURNING accepted_at INTO v_accepted_at;
+
+  RETURN v_accepted_at;
+END;
+$function$
+
+remove_partner_admin(p_partner_id uuid, p_user_email_or_id text)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.remove_partner_admin(p_partner_id uuid, p_user_email_or_id text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_user_id uuid;
+begin
+  if not public.is_platform_admin(auth.uid()) then
+    raise exception 'Only Ledgr (platform admin) can remove partner admins.'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    select id into v_user_id from auth.users where id = p_user_email_or_id::uuid;
+  else
+    select id into v_user_id from auth.users
+     where lower(email) = lower(trim(p_user_email_or_id));
+  end if;
+
+  if v_user_id is null then
+    raise exception 'User "%" was not found.', p_user_email_or_id;
+  end if;
+
+  delete from public.partner_admins
+   where partner_id = p_partner_id and user_id = v_user_id;
+end;
+$function$
+
+reserve_next_document_number(p_business_id uuid, p_kind text)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.reserve_next_document_number(p_business_id uuid, p_kind text)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_number integer;
+  v_prefix text;
+  v_allowed boolean;
+begin
+  if p_kind not in ('invoice', 'expense', 'payroll') then
+    raise exception 'Unknown document kind %. Expected invoice, expense or payroll.', p_kind
+      using errcode = '22023';
+  end if;
+
+  -- Payroll numbers are reserved only by payroll roles; everything else by the
+  -- general writer set. Checked before the row is touched.
+  if p_kind = 'payroll' then
+    v_allowed := public.can_write_payroll(p_business_id);
+  else
+    v_allowed := public.can_write_business_data(p_business_id);
+  end if;
+
+  if not v_allowed then
+    raise exception 'You do not have permission to record % documents for this business.', p_kind
+      using errcode = '42501';   -- insufficient_privilege, mapped to UnauthorizedError
+  end if;
+
+  -- Atomic read-and-increment. The row lock serialises concurrent callers, so
+  -- two users cannot receive the same number.
+  if p_kind = 'invoice' then
+    update public.businesses
+       set invoice_next_number = invoice_next_number + 1,
+           updated_at          = now()
+     where id = p_business_id
+       and deleted_at is null
+    returning invoice_next_number - 1, coalesce(invoice_prefix, 'INV')
+      into v_number, v_prefix;
+
+  elsif p_kind = 'expense' then
+    update public.businesses
+       set expense_next_number = expense_next_number + 1,
+           updated_at          = now()
+     where id = p_business_id
+       and deleted_at is null
+    returning expense_next_number - 1, coalesce(expense_prefix, 'EXP')
+      into v_number, v_prefix;
+
+  else
+    update public.businesses
+       set payroll_next_number = payroll_next_number + 1,
+           updated_at          = now()
+     where id = p_business_id
+       and deleted_at is null
+    returning payroll_next_number - 1, coalesce(payroll_prefix, 'PAY')
+      into v_number, v_prefix;
+  end if;
+
+  -- Distinguish a genuinely absent business from a permission problem. The
+  -- permission case already returned above, so reaching here means no row.
+  if v_number is null then
+    raise exception 'Business % does not exist or has been deleted.', p_business_id
+      using errcode = 'P0002';   -- no_data_found
+  end if;
+
+  return v_prefix || '-' || lpad(v_number::text, 4, '0');
+end;
+$function$
+
+seed_partner_feature_flags()	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.seed_partner_feature_flags()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  insert into public.partner_feature_flags (partner_id, feature_key, enabled)
+  values
+    (new.id, 'ai_advisor', true),
+    (new.id, 'payroll', true),
+    (new.id, 'inventory', true),
+    (new.id, 'multi_currency', true),
+    (new.id, 'bank_reconciliation', true)
+  on conflict (partner_id, feature_key) do nothing;
+  return new;
+end;
+$function$
+
+set_limit(real)	v	false	supabase_admin		CREATE OR REPLACE FUNCTION public.set_limit(real)
+ RETURNS real
+ LANGUAGE c
+ STRICT
+AS '$libdir/pg_trgm', $function$set_limit$function$
+
+set_partner_invoice_number()	v	false	postgres		CREATE OR REPLACE FUNCTION public.set_partner_invoice_number()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.invoice_number is null then
+    new.invoice_number := 'PINV-' || lpad(nextval('public.partner_invoice_number_seq')::text, 6, '0');
+  end if;
+  return new;
+end;
+$function$
+
+set_updated_at()	v	false	postgres		CREATE OR REPLACE FUNCTION public.set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+set_user_business_access(p_user_email_or_id text, p_business_ids uuid[], p_role text, p_revoke_others boolean)	v	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.set_user_business_access(p_user_email_or_id text, p_business_ids uuid[], p_role text DEFAULT 'viewer'::text, p_revoke_others boolean DEFAULT false)
+ RETURNS TABLE(out_business_id uuid, out_business_name text, out_role text, out_action text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id     UUID;
+  v_role_enum   user_role;
+  v_biz_id      UUID;
+  v_invalid     UUID[];
+  v_revoked     INT := 0;
+BEGIN
+  IF p_business_ids IS NULL OR array_length(p_business_ids, 1) IS NULL THEN
+    RAISE EXCEPTION 'p_business_ids must contain at least one business id.';
+  END IF;
+
+  -- Validate the role against the live enum, and list the real options on
+  -- failure rather than the stale hardcoded list the old function printed.
+  BEGIN
+    v_role_enum := p_role::user_role;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE EXCEPTION 'Invalid role "%". Valid roles: %',
+      p_role,
+      (SELECT string_agg(e.enumlabel, ', ' ORDER BY e.enumsortorder)
+         FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid
+        WHERE t.typname = 'user_role');
+  END;
+
+  -- Resolve the user by UUID or email.
+  IF p_user_email_or_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+    SELECT id INTO v_user_id FROM auth.users WHERE id = p_user_email_or_id::UUID;
+  ELSE
+    SELECT id INTO v_user_id FROM auth.users
+     WHERE LOWER(email) = LOWER(TRIM(p_user_email_or_id));
+  END IF;
+
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'User "%" was not found in auth.users.', p_user_email_or_id;
+  END IF;
+
+  -- Reject the whole call if ANY target business is missing/inactive/deleted.
+  -- The app filters those out, so a membership pointing at one would be
+  -- invisible and would look like the grant silently failed.
+  SELECT array_agg(t.id) INTO v_invalid
+    FROM unnest(p_business_ids) AS t(id)
+   WHERE NOT EXISTS (
+     SELECT 1 FROM public.businesses b
+      WHERE b.id = t.id AND b.is_active = true AND b.deleted_at IS NULL
+   );
+
+  IF v_invalid IS NOT NULL THEN
+    RAISE EXCEPTION
+      'These business ids do not exist, are inactive, or are soft-deleted: %. '
+      'No changes were made.', v_invalid;
+  END IF;
+
+  -- Grant/reactivate each target business first, so the revoke step below can
+  -- never transiently leave the user with nothing.
+  FOREACH v_biz_id IN ARRAY p_business_ids LOOP
+    RETURN QUERY
+    WITH prior AS (
+      SELECT bu.id, bu.is_active
+        FROM public.business_users bu
+       WHERE bu.business_id = v_biz_id AND bu.user_id = v_user_id
+    ),
+    upsert AS (
+      INSERT INTO public.business_users (
+        business_id, user_id, role, is_active, accepted_at, created_at, updated_at
+      )
+      VALUES (v_biz_id, v_user_id, v_role_enum, true, now(), now(), now())
+      ON CONFLICT (business_id, user_id) DO UPDATE
+        SET role        = EXCLUDED.role,
+            is_active   = true,
+            -- Preserve the original acceptance timestamp; the old function
+            -- left it untouched on conflict, so rows reactivated after an
+            -- invite could keep a NULL accepted_at.
+            accepted_at = COALESCE(business_users.accepted_at, now()),
+            updated_at  = now()
+      RETURNING business_id
+    )
+    SELECT
+      v_biz_id,
+      b.name::TEXT,
+      p_role::TEXT,
+      (CASE
+         WHEN NOT EXISTS (SELECT 1 FROM prior)          THEN 'created'
+         WHEN (SELECT p.is_active FROM prior p)         THEN 'updated'
+         ELSE 'reactivated'
+       END)::TEXT
+    FROM upsert u
+    JOIN public.businesses b ON b.id = u.business_id;
+  END LOOP;
+
+  -- Opt-in exclusivity. Only reachable once the grants above have succeeded.
+  IF p_revoke_others THEN
+    UPDATE public.business_users
+       SET is_active = false, updated_at = now()
+     WHERE user_id = v_user_id
+       AND NOT (business_id = ANY (p_business_ids))
+       AND is_active = true;
+    GET DIAGNOSTICS v_revoked = ROW_COUNT;
+
+    -- Belt and braces: verify the user still has somewhere to land. If not,
+    -- abort the whole transaction rather than lock them out.
+    IF NOT EXISTS (
+      SELECT 1
+        FROM public.business_users bu
+        JOIN public.businesses b ON b.id = bu.business_id
+       WHERE bu.user_id = v_user_id
+         AND bu.is_active = true
+         AND b.is_active = true
+         AND b.deleted_at IS NULL
+    ) THEN
+      RAISE EXCEPTION
+        'Aborted: revoking other memberships would leave user % with no '
+        'visible business, locking them out of the app.', p_user_email_or_id;
+    END IF;
+
+    RAISE NOTICE 'Deactivated % other membership(s) for %.',
+      v_revoked, p_user_email_or_id;
+  END IF;
+END;
+$function$
+
+show_limit()	s	false	supabase_admin		CREATE OR REPLACE FUNCTION public.show_limit()
+ RETURNS real
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$show_limit$function$
+
+show_trgm(text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.show_trgm(text)
+ RETURNS text[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$show_trgm$function$
+
+similarity(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity$function$
+
+similarity_dist(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.similarity_dist(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity_dist$function$
+
+similarity_op(text, text)	s	false	supabase_admin		CREATE OR REPLACE FUNCTION public.similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity_op$function$
+
+strict_word_similarity(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.strict_word_similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity$function$
+
+strict_word_similarity_commutator_op(text, text)	s	false	supabase_admin		CREATE OR REPLACE FUNCTION public.strict_word_similarity_commutator_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_commutator_op$function$
+
+strict_word_similarity_dist_commutator_op(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_commutator_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_dist_commutator_op$function$
+
+strict_word_similarity_dist_op(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_dist_op$function$
+
+strict_word_similarity_op(text, text)	s	false	supabase_admin		CREATE OR REPLACE FUNCTION public.strict_word_similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_op$function$
+
+user_has_role(p_business_id uuid, p_min_role user_role)	s	true	postgres	["search_path=public"]	CREATE OR REPLACE FUNCTION public.user_has_role(p_business_id uuid, p_min_role user_role)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select case p_min_role::text
+    -- Read tier. Every active member, so master data and transactional lists
+    -- populate for all roles. Payroll tables no longer use this tier.
+    when 'viewer'          then public.is_business_member(p_business_id)
+
+    -- Oversight read (audit_log).
+    when 'auditor'         then public.can_read_audit(p_business_id)
+
+    -- Payroll tier, kept narrow.
+    when 'payroll_manager' then public.can_view_payroll(p_business_id)
+
+    -- General write tier: the canWrite set from usePermissions.ts.
+    when 'accountant'      then public.can_write_business_data(p_business_id)
+
+    -- Administrative / destructive.
+    when 'admin'           then public.can_admin_business_data(p_business_id)
+    when 'owner'           then exists (
+                                  select 1
+                                  from public.business_users bu
+                                  where bu.business_id = p_business_id
+                                    and bu.user_id = auth.uid()
+                                    and bu.is_active = true
+                                    and bu.role::text = 'owner'
+                                )
+
+    -- Unknown tier denies, matching the original NULL-returning behaviour but
+    -- explicitly.
+    else false
+  end;
+$function$
+
+word_similarity(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.word_similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity$function$
+
+word_similarity_commutator_op(text, text)	s	false	supabase_admin		CREATE OR REPLACE FUNCTION public.word_similarity_commutator_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_commutator_op$function$
+
+word_similarity_dist_commutator_op(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.word_similarity_dist_commutator_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_dist_commutator_op$function$
+
+word_similarity_dist_op(text, text)	i	false	supabase_admin		CREATE OR REPLACE FUNCTION public.word_similarity_dist_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_dist_op$function$
+
+word_similarity_op(text, text)	s	false	supabase_admin		CREATE OR REPLACE FUNCTION public.word_similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_op$function$
+

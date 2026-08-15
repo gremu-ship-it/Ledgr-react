@@ -1,0 +1,12 @@
+UNIQUE (key_hash)	api_keys
+UNIQUE (token)	business_invitations
+UNIQUE (business_id, user_id, terms_version)	business_terms_acceptances
+UNIQUE (business_id, user_id)	business_users
+UNIQUE (business_id, from_currency, to_currency, rate_date)	exchange_rates
+UNIQUE (business_id, revaluation_date)	fx_revaluations
+UNIQUE (business_id, product_id, location_id)	inventory_balances
+UNIQUE (domain)	partners
+UNIQUE (tx_ref)	subscription_payments
+UNIQUE (business_id, plan_expires_at, days_before)	subscription_reminders_sent
+UNIQUE (tax_return_id, alert_type, channel)	tax_alerts
+UNIQUE (business_id, tax_code, period_label)	tax_returns

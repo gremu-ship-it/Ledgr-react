@@ -1,0 +1,11 @@
+auth
+cron
+extensions
+graphql
+graphql_public
+net
+public
+realtime
+storage
+supabase_migrations
+vault

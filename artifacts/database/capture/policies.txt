@@ -1,0 +1,141 @@
+public	accounts	accounts_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	accounts	accounts_member_read	SELECT	{public}	is_business_member(business_id)	
+public	accounts	accounts_partner_admin_read	SELECT	{public}	is_partner_business_admin(business_id)	
+public	accounts	accounts_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	accounts	accounts_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	accounts	accounts_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	api_keys	api_keys_business_read	SELECT	{public}	(EXISTS ( SELECT 1
+   FROM business_users bu
+  WHERE ((bu.business_id = api_keys.business_id) AND (bu.user_id = auth.uid()) AND (bu.is_active = true) AND ((bu.role)::text = ANY (ARRAY['owner'::text, 'admin'::text])))))	
+public	api_keys	api_keys_business_update	UPDATE	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))
+public	asset_categories	asset_categories_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	asset_categories	asset_categories_member_read	SELECT	{public}	is_business_member(business_id)	
+public	asset_categories	asset_categories_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	asset_categories	asset_categories_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	asset_categories	asset_categories_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	branches	branches_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	branches	branches_member_read	SELECT	{public}	is_business_member(business_id)	
+public	branches	branches_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	branches	branches_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	branches	branches_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	business_invitations	business_invitations_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	businesses	businesses_member_read	SELECT	{public}	is_business_member(id)	
+public	businesses	businesses_partner_admin_read	SELECT	{public}	is_partner_business_admin(id)	
+public	businesses	businesses_partner_peer_read	SELECT	{public}	can_read_partner_peer_business(id)	
+public	businesses	businesses_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	businesses	businesses_update	UPDATE	{public}	can_admin_business_data(id)	can_admin_business_data(id)
+public	contacts	contacts_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	contacts	contacts_member_read	SELECT	{public}	is_business_member(business_id)	
+public	contacts	contacts_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	contacts	contacts_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	contacts	contacts_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	currencies	currencies_read	SELECT	{authenticated}	true	
+public	departments	departments_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	departments	departments_member_read	SELECT	{public}	is_business_member(business_id)	
+public	departments	departments_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	departments	departments_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	departments	departments_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	depreciation_schedules	depreciation_schedules_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	depreciation_schedules	depreciation_schedules_member_read	SELECT	{public}	is_business_member(business_id)	
+public	depreciation_schedules	depreciation_schedules_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	depreciation_schedules	depreciation_schedules_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	depreciation_schedules	depreciation_schedules_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	employee_allowances	employee_allowances_payroll_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	employee_allowances	employee_allowances_payroll_insert	INSERT	{public}		can_write_payroll(business_id)
+public	employee_allowances	employee_allowances_payroll_read	SELECT	{public}	can_view_payroll(business_id)	
+public	employee_allowances	employee_allowances_payroll_update	UPDATE	{public}	can_write_payroll(business_id)	can_write_payroll(business_id)
+public	employee_deductions	employee_deductions_payroll_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	employee_deductions	employee_deductions_payroll_insert	INSERT	{public}		can_write_payroll(business_id)
+public	employee_deductions	employee_deductions_payroll_read	SELECT	{public}	can_view_payroll(business_id)	
+public	employee_deductions	employee_deductions_payroll_update	UPDATE	{public}	can_write_payroll(business_id)	can_write_payroll(business_id)
+public	employees	employees_payroll_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	employees	employees_payroll_insert	INSERT	{public}		can_write_payroll(business_id)
+public	employees	employees_payroll_read	SELECT	{public}	can_view_payroll(business_id)	
+public	employees	employees_payroll_update	UPDATE	{public}	can_write_payroll(business_id)	can_write_payroll(business_id)
+public	exchange_rates	exchange_rates_business_read	SELECT	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	exchange_rates	exchange_rates_business_write	INSERT	{public}		(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))
+public	fixed_assets	fixed_assets_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	fixed_assets	fixed_assets_member_read	SELECT	{public}	is_business_member(business_id)	
+public	fixed_assets	fixed_assets_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	fixed_assets	fixed_assets_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	fixed_assets	fixed_assets_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	fx_revaluations	fx_revaluations_business_read	SELECT	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	inventory_locations	inventory_locations_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	inventory_locations	inventory_locations_member_read	SELECT	{public}	is_business_member(business_id)	
+public	inventory_locations	inventory_locations_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	inventory_locations	inventory_locations_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	inventory_locations	inventory_locations_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	invoice_delivery_events	invoice_delivery_events_member_read	SELECT	{public}	is_business_member(business_id)	
+public	invoice_delivery_events	invoice_delivery_events_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	loan_repayments	loan_repayments_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	loans	loans_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	partner_admins	partner_admins_read	SELECT	{public}	((user_id = auth.uid()) OR is_partner_admin(auth.uid(), partner_id))	
+public	partner_admins	partner_admins_write	ALL	{public}	is_platform_admin(auth.uid())	is_platform_admin(auth.uid())
+public	partner_clients	partner_clients_read	SELECT	{public}	can_read_partner_client(partner_id, business_id)	
+public	partner_clients	partner_clients_write	ALL	{public}	is_partner_admin(auth.uid(), partner_id)	is_partner_admin(auth.uid(), partner_id)
+public	partner_feature_flags	partner_feature_flags_read	SELECT	{public}	true	
+public	partner_feature_flags	partner_feature_flags_write	ALL	{public}	is_partner_admin(auth.uid(), partner_id)	is_partner_admin(auth.uid(), partner_id)
+public	partner_invoices	partner_invoices_read	SELECT	{public}	is_partner_admin(auth.uid(), partner_id)	
+public	partner_invoices	partner_invoices_write	ALL	{public}	is_platform_admin(auth.uid())	is_platform_admin(auth.uid())
+public	partners	partners_admin_write	ALL	{public}	is_platform_admin(auth.uid())	is_platform_admin(auth.uid())
+public	partners	partners_partner_admin_update	UPDATE	{public}	is_partner_admin(auth.uid(), id)	is_partner_admin(auth.uid(), id)
+public	partners	partners_public_read	SELECT	{public}	true	
+public	payroll_employee_lines	payroll_employee_lines_payroll_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	payroll_employee_lines	payroll_employee_lines_payroll_insert	INSERT	{public}		can_write_payroll(business_id)
+public	payroll_employee_lines	payroll_employee_lines_payroll_read	SELECT	{public}	can_view_payroll(business_id)	
+public	payroll_employee_lines	payroll_employee_lines_payroll_update	UPDATE	{public}	can_write_payroll(business_id)	can_write_payroll(business_id)
+public	payroll_runs	payroll_runs_payroll_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	payroll_runs	payroll_runs_payroll_insert	INSERT	{public}		can_write_payroll(business_id)
+public	payroll_runs	payroll_runs_payroll_read	SELECT	{public}	can_view_payroll(business_id)	
+public	payroll_runs	payroll_runs_payroll_update	UPDATE	{public}	can_write_payroll(business_id)	can_write_payroll(business_id)
+public	recurring_invoices	recurring_invoices_admin_delete	DELETE	{public}	can_admin_business_data(business_id)	
+public	recurring_invoices	recurring_invoices_member_read	SELECT	{public}	is_business_member(business_id)	
+public	recurring_invoices	recurring_invoices_writer_insert	INSERT	{public}		can_write_business_data(business_id)
+public	recurring_invoices	recurring_invoices_writer_update	UPDATE	{public}	can_write_business_data(business_id)	can_write_business_data(business_id)
+public	share_transactions	share_transactions_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	subscription_payments	subscription_payments_platform_admin_read	SELECT	{public}	is_platform_admin(auth.uid())	
+public	subscription_payments	subscription_payments_read	SELECT	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	tax_alerts	tax_alerts_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	tax_payments	tax_payments_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	tax_returns	tax_returns_business_access	ALL	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true))))	
+public	webhook_deliveries	webhook_deliveries_business_read	SELECT	{public}	(webhook_id IN ( SELECT w.id
+   FROM (webhooks w
+     JOIN business_users bu ON ((bu.business_id = w.business_id)))
+  WHERE ((bu.user_id = auth.uid()) AND (bu.is_active = true))))	
+public	webhooks	webhooks_business_insert	INSERT	{public}		(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))
+public	webhooks	webhooks_business_read	SELECT	{public}	(EXISTS ( SELECT 1
+   FROM business_users bu
+  WHERE ((bu.business_id = webhooks.business_id) AND (bu.user_id = auth.uid()) AND (bu.is_active = true) AND ((bu.role)::text = ANY (ARRAY['owner'::text, 'admin'::text])))))	
+public	webhooks	webhooks_business_update	UPDATE	{public}	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))	(business_id IN ( SELECT business_users.business_id
+   FROM business_users
+  WHERE ((business_users.user_id = auth.uid()) AND (business_users.is_active = true) AND (business_users.role = ANY (ARRAY['owner'::user_role, 'admin'::user_role])))))

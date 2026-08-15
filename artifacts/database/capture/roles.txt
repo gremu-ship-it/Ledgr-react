@@ -1,0 +1,15 @@
+anon	False	False	False	False	False
+authenticated	False	False	False	False	False
+authenticator	False	False	False	True	False
+dashboard_user	False	True	True	False	True
+postgres	False	True	True	True	True
+service_role	False	False	False	False	False
+supabase_admin	True	True	True	True	True
+supabase_auth_admin	False	True	False	True	False
+supabase_etl_admin	False	False	False	True	True
+supabase_functions_admin	False	True	False	True	False
+supabase_privileged_role	False	False	False	False	False
+supabase_read_only_user	False	False	False	True	False
+supabase_realtime_admin	False	False	False	False	False
+supabase_replication_admin	False	False	False	True	True
+supabase_storage_admin	False	True	False	True	False

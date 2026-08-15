@@ -1,0 +1,18 @@
+CHECK ((match_method = ANY (ARRAY['manual'::text, 'ai'::text, 'created'::text])))	bank_statement_lines
+CHECK ((plan_tier = ANY (ARRAY['free'::text, 'growth'::text, 'pro'::text, 'enterprise'::text])))	businesses
+CHECK (((code = upper(code)) AND (char_length(code) = 3)))	currencies
+CHECK ((rate > (0)::numeric))	exchange_rates
+CHECK ((source = ANY (ARRAY['manual'::text, 'frankfurter'::text])))	exchange_rates
+CHECK ((status = ANY (ARRAY['posted'::text, 'reversed'::text])))	fx_revaluations
+CHECK ((event_type = ANY (ARRAY['sent'::text, 'opened'::text, 'viewed'::text, 'reminder'::text])))	invoice_delivery_events
+CHECK ((template = ANY (ARRAY['professional'::text, 'minimal'::text, 'ngo'::text, 'government'::text])))	invoices
+CHECK ((role = ANY (ARRAY['admin'::text, 'viewer'::text])))	partner_admins
+CHECK ((status = ANY (ARRAY['draft'::text, 'sent'::text, 'paid'::text, 'overdue'::text, 'void'::text])))	partner_invoices
+CHECK ((frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text])))	recurring_invoices
+CHECK ((billing_cycle = ANY (ARRAY['monthly'::text, 'annual'::text, 'custom'::text])))	subscription_payments
+CHECK ((status = ANY (ARRAY['pending'::text, 'success'::text, 'failed'::text, 'cancelled'::text])))	subscription_payments
+CHECK ((target_plan_tier = ANY (ARRAY['growth'::text, 'pro'::text, 'enterprise'::text])))	subscription_payments
+CHECK ((days_before = ANY (ARRAY[7, 3, 1])))	subscription_reminders_sent
+CHECK ((preferred_language = ANY (ARRAY['en'::text, 'ny'::text, 'sw'::text, 'fr'::text, 'pt'::text])))	user_profiles
+CHECK (((url ~* '^https://'::text) AND (url !~* '^https://[^/]*@'::text) AND (url !~* '^https://(localhost|localhost\\.|127\\.|0\\.|10\\.|192\\.168\\.|169\\.254\\.|172\\.(1[6-9]|2[0-9]|3[0-1])\\.|\[::1\]|\[fc|\[fd|\[fe80:)'::text)))	webhooks
+CHECK ((url ~* '^https://'::text))	webhooks
