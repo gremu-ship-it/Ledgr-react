@@ -572,6 +572,18 @@ begin
     raise exception 'This invitation is for a different email address.' using errcode = '42501';
   end if;
 
+  -- Ensure a user_profiles row exists (mirrors grant_user_business_access,
+  -- 20260728000003: membership-granting paths guarantee a profile).
+  insert into public.user_profiles (id, full_name)
+  values (
+    v_user_id,
+    coalesce(
+      (select raw_user_meta_data->>'full_name' from auth.users where id = v_user_id),
+      (select split_part(email, '@', 1) from auth.users where id = v_user_id)
+    )
+  )
+  on conflict (id) do nothing;
+
   -- Already an active member? (reactivate and return success)
   select role, is_active into v_role, v_active
     from public.business_users
