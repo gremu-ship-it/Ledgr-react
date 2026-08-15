@@ -159,8 +159,11 @@ where c.relkind in ('r','p') and n.nspname = 'public'
 order by 1;
 
 -- @artifact policies
+-- NOTE: pg_policies.qual / with_check are already text (PG >= 14); using
+-- pg_get_expr() here fails with "function pg_get_expr(text, integer) does
+-- not exist". Select the expression text directly.
 select schemaname, tablename, policyname, cmd, roles::text,
-       pg_get_expr(qual, 0), pg_get_expr(with_check, 0)
+       qual, with_check
 from pg_policies
 where schemaname = 'public'
 order by tablename, policyname;
@@ -187,7 +190,7 @@ order by id;
 
 -- @artifact storage_policies
 select p.policyname, p.tablename, p.cmd, p.roles::text,
-       pg_get_expr(p.qual, 0), pg_get_expr(p.with_check, 0)
+       p.qual, p.with_check
 from pg_policies p
 where p.schemaname = 'storage'
 order by p.tablename, p.policyname;
