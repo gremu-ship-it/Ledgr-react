@@ -28,8 +28,10 @@ supabase gen types typescript \
 ```
 
 - Use the **direct** host (`db.<ref>.supabase.co:5432`), not the pooler.
-- The password is the `ledgr-staging` DB password (the one set during
-  Phase 8A.1 setup; rotate it afterwards — see the final report).
+- The password is the **current** `ledgr-staging` DB password — it was
+  rotated on 2026-08-15 (Phase 9); do not reuse the earlier value. If you
+  change it again, update `SUPABASE_DB_PASSWORD_STAGING` in GitHub Secrets
+  (the Deploy workflow needs it) and re-run this command.
 - Do **not** hand-edit the generated file (Phase 9.1 rule).
 
 ## 3. What the regenerated file will contain (expected)

@@ -20,11 +20,19 @@ export interface PayeBand {
  * MRA fallback bands, used when a business has not configured its own for the
  * current fiscal year. Kept as an exported constant so tests (and the UI) can
  * assert against the same numbers the calculation uses.
+ *
+ * APPROVED 2026-08-15 (Phase 9.2): the MRA structure effective 30 Dec 2025
+ * (0% to K170,000 / 30% to K1,570,000 / 35% to K10,000,000 / 40% above,
+ * MONTHLY). Ledgr's model stores ANNUAL bands (see calculatePAYE), so these
+ * are the annual equivalents (monthly x 12). Keep in sync with
+ * supabase/migrations/20260816000000_phase9_paye_reference_data.sql and
+ * docs/database/phase-9-reference-data.md.
  */
 export const FALLBACK_PAYE_BANDS: PayeBand[] = [
-  { band_from: 0, band_to: 1_200_000, rate: 0 },
-  { band_from: 1_200_000, band_to: 2_400_000, rate: 25 },
-  { band_from: 2_400_000, band_to: null, rate: 35 },
+  { band_from: 0, band_to: 2_040_000, rate: 0 },
+  { band_from: 2_040_000, band_to: 18_840_000, rate: 30 },
+  { band_from: 18_840_000, band_to: 120_000_000, rate: 35 },
+  { band_from: 120_000_000, band_to: null, rate: 40 },
 ];
 
 /**

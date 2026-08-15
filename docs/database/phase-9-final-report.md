@@ -16,10 +16,14 @@ for the remainder. Key results:
 
 - **Reference data:** the applicable Malawi PAYE bands were researched from
   authoritative sources (MCCCI quoting the MRA statement, effective
-  30 Dec 2025) and classified **[VERIFIED]**; the reference-data migration
-  is **pending approval** per the phase's governance rule. Related statutory
-  values already implemented correctly in the app: **VAT 17.5%** (new rate
-  confirmed in code) and **pension 5%/10%** (seeded `tpr_pension`).
+  30 Dec 2025), classified **[VERIFIED]**, **approved by the stakeholder on
+  2026-08-15**, and delivered as `20260816000000_phase9_paye_reference_data.sql`
+  (10/10 reference tests pass). **A model finding was resolved before
+  creation:** Ledgr stores ANNUAL bands, so the migration seeds annual
+  equivalents of the gazetted monthly bands; the app's stale fallback bands
+  were updated to the same approved structure (previously a latent defect).
+  Related statutory values already implemented correctly: **VAT 17.5%** and
+  **pension 5%/10%**.
 - **Exact type regeneration:** analysis complete; the regeneration command
   is specified but **must run on a networked machine** (sandbox has no
   Supabase network access). All 10 supplement entries will become obsolete
@@ -42,15 +46,24 @@ for the remainder. Key results:
 | 4 | Legacy storage restrictions (size/MIME) | No evidence; buckets functional without limits |
 | 5 | Hosted-staging browser/UI validation | **The Phase 9 deliverable** — script provided, execution required |
 
-## 3. Reference data verification — PARTIAL (approved values ready)
+## 3. Reference data verification — ✅ APPROVED + migration created
 
 - **PAYE bands [VERIFIED]** (effective 30 Dec 2025, current for 2026/27):
   0% ≤ 170,000 · 30% 170,000.01–1,570,000 · 35% 1,570,000.01–10,000,000 ·
   40% > 10,000,000. Five sources agree incl. MCCCI/MRA statement; one
-  outlier rejected.
-- **VAT 17.5%** — [VERIFIED] and confirmed implemented in code
-  (`effectiveVatRate = 0.175`).
+  outlier rejected. **Approved by stakeholder 2026-08-15.**
+- **Migration** `20260816000000_phase9_paye_reference_data.sql` created —
+  annual equivalents per Ledgr's model; idempotent; preserves custom bands;
+  sanity guard. **10/10 reference tests pass** (seeding, preservation,
+  idempotency, 5 statutory PAYE cases incl. 99,000 / 570,500 / 4,170,500).
+- **App fallback bands updated** (`FALLBACK_PAYE_BANDS` in `paye.ts`) to the
+  approved structure + 12 unit tests — fixes a latent defect (obsolete
+  pre-2026 rates for businesses without DB bands).
+- **VAT 17.5%** — [VERIFIED] and confirmed implemented in code.
 - **Pension 5%/10%** — [VERIFIED] and implemented (`tpr_pension` seed).
+- **Model note (documented, not changed):** PAYE is computed on gross;
+  pension is NOT deducted pre-PAYE (the MRA framework permits it). Flagged
+  for the release review.
 - **Not modelled (documented limitations, NOT inserted):** TEVETA 1% levy,
   0.05% bank-transfer levy.
 - Full governance: `phase-9-reference-data.md`.
@@ -146,6 +159,8 @@ Historical defects surfaced from repository docs
 | P9-001 | P3 | TEVETA 1% employer levy not modelled in payroll schema | Documented limitation; enhancement request |
 | P9-002 | P3 | 0.05% bank-transfer levy not modelled | Documented limitation; enhancement request |
 | P9-003 | P4 | `database.generated.ts` still reflects pre-8B state | Fix in progress (9.1 — regeneration required) |
+| P9-004 | P3 (fixed) | `FALLBACK_PAYE_BANDS` in `paye.ts` held the obsolete pre-2026 structure (businesses without DB bands would under/over-withhold) | **Fixed 2026-08-15** — updated to the approved structure; 12 unit tests pin it |
+| P9-005 | P3 (documented) | Ledgr computes PAYE on gross (pension not pre-PAYE-deducted) | Documented model note; release-review item (not a reference-data defect) |
 | (none) | P0/P1 | No P0/P1 defects discovered to date | — |
 
 ## 16. Remaining UNKNOWNs
@@ -186,9 +201,9 @@ history. Fresh chains remain verified regardless.
 ## 🟡 YELLOW — NOT YET READY; SPECIFIC REMEDIATIONS REQUIRED
 
 **Required before GREEN (in order):**
-1. **Approve the PAYE reference-data migration** (values already [VERIFIED]
-   in `phase-9-reference-data.md`) → create + replay + run the payroll test
-   cases.
+1. ✅ **PAYE reference data approved + migration created and tested**
+   (`20260816000000_phase9_paye_reference_data.sql`, 10/10 tests). Remaining:
+   merge the PR and let the staging deploy apply it, then run Journey H.
 2. **Run the hosted-staging browser test script** (`phase-9-browser-test-
    script.md`, journeys A–M) with fake data; record results; resolve any
    P0/P1 findings. The discount and PDF regressions are mandatory items.

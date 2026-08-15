@@ -1,8 +1,10 @@
 # Phase 9.2 — Reference Data Governance: Malawi PAYE
 
-**Status:** RESEARCH COMPLETE — values identified and classified; **migration
-PENDING APPROVAL** (per Phase 9.2: "Create a reviewed reference-data migration
-only after the values are approved").
+**Status:** ✅ **APPROVED 2026-08-15** by the Ledgr stakeholder, and the
+reference-data migration is created (`20260816000000_phase9_paye_reference_data.sql`)
+with all Phase 9.2 governance requirements (deterministic, idempotent, no
+customer data, effective dates documented, preserves customised business
+configurations).
 
 ## 1. Applicable statutory tax period
 
@@ -82,64 +84,65 @@ Evidence from the repository (`PayrollRepository.ts`):
   until bands are added. This is what the approved reference-data migration
   fixes.
 
-## 7. Draft reference-data migration — PENDING APPROVAL ⛔
+## 7. Approved reference-data migration — `20260816000000_phase9_paye_reference_data.sql`
 
-> **Not yet created as a migration file.** Per Phase 9.2, this is the
-> candidate that becomes `supabase/migrations/2026XXXX_phase9_paye_reference_data.sql`
-> **only after approval** (a human with authority over Ledgr's reference data
-> must confirm the values in §3).
+**IMPORTANT — Ledgr stores ANNUAL bands.** Ledgr's payroll model
+(`src/lib/paye.ts` + `PayrollPage`) applies bands to `gross × 12` and returns
+monthly tax, so `paye_bands.band_from/band_to` are **annual** amounts. The
+migration therefore stores the **annual equivalents** of the gazetted monthly
+bands (monthly × 12):
 
-Candidate design (deterministic, idempotent, no customer data, auditable,
-never overwrites customised rows):
+| band_from (annual) | band_to (annual) | rate | monthly equivalent |
+|---|---|---|---|
+| 0 | 2,040,000 | 0% | ≤ 170,000 |
+| 2,040,000 | 18,840,000 | 30% | 170,001–1,570,000 |
+| 18,840,000 | 120,000,000 | 35% | 1,570,001–10,000,000 |
+| 120,000,000 | NULL | 40% | > 10,000,000 |
 
-```sql
--- Phase 9.2 — Malawi PAYE reference data (approved 2025/26 mid-year rates)
--- Effective 30 Dec 2025; current for FY 2026/27.
--- Idempotent: inserts bands ONLY for businesses/years that have none.
--- Does NOT update or delete existing paye_bands rows (customised configs
--- are preserved). Values: see docs/database/phase-9-reference-data.md §3.
-insert into public.paye_bands
-  (business_id, band_from, band_to, band_label, rate, fiscal_year,
-   effective_from, effective_to)
-select b.id, v.band_from, v.band_to, v.band_label, v.rate, '2026/27',
-       '2026-01-01'::date, null
-from public.businesses b
-cross join (values
-  (0::numeric, 170000::numeric, '0%', 0::numeric),
-  (170000.01, 1570000, '30%', 30),
-  (1570000.01, 10000000, '35%', 35),
-  (10000000.01, null, '40%', 40)
-) as v(band_from, band_to, band_label, rate)
-where b.deleted_at is null
-  and not exists (
-    select 1 from public.paye_bands p
-    where p.business_id = b.id and p.fiscal_year = '2026/27'
-  );
-```
+Properties (all required by Phase 9.2):
+- deterministic, idempotent (re-apply adds nothing — tested);
+- no customer data;
+- effective_from `2025-12-30` (statutory date), fiscal_year `2026/27`;
+- inserts ONLY for (business, fiscal_year) pairs with **no** existing bands —
+  customised configurations are never overwritten or deleted (tested with a
+  custom-band business);
+- sanity guard: no business may end with more than 4 bands for the year.
 
-Post-approval steps: create the migration, replay all migrations on the
-disposable database, then run the payroll calculation tests (§8) against the
-approved bands.
+The app's fallback constant `FALLBACK_PAYE_BANDS` (`src/lib/paye.ts`) was
+updated to the same approved structure so **new businesses** without DB bands
+compute the correct PAYE too (previously it held the obsolete pre-2026 rates —
+a latent defect, now fixed and pinned by tests).
 
-## 8. Payroll calculation test plan (after approval)
+## 8. Payroll calculation test results (approved) — 10/10 PASS
 
-| Case | Gross/month | Expected PAYE (per §3) |
-|---|---|---|
-| Below threshold | 150,000 | 0 |
-| At threshold | 170,000 | 0 |
-| 500,000 | 500,000 | (500,000−170,000)×30% = 99,000 |
-| 2,000,000 | 2,000,000 | (1,570,000−170,000)×30% + (2,000,000−1,570,000)×35% = 420,000 + 150,500 = 570,500 |
-| 12,000,000 | 12,000,000 | 420,000 + (10,000,000−1,570,000)×35% + (12,000,000−10,000,000)×40% = 420,000 + 2,950,500 + 800,000 = 4,170,500 |
-| Open top band | verified | band_to NULL handled |
+`tests/database/paye_reference.test.js` (62-migration replay):
+- 4 approved bands seeded for a default business (0/30/35/40, effective
+  2025-12-30) ✅
+- custom business bands preserved (not overwritten) ✅
+- idempotent re-apply ✅ · top band open-ended ✅ · sanity guard ✅
 
-These exact cases are added to `tests/database/paye_reference.test.js` once
-the migration is approved.
+| Case | Gross/month | Expected PAYE | Actual | Result |
+|---|---|---|---|---|
+| Below threshold | 125,000 | 0 | 0 | ✅ |
+| At threshold | 170,000 | 0 | 0 | ✅ |
+| 500,000 | 500,000 | 99,000 | 99,000 | ✅ |
+| 2,000,000 | 2,000,000 | 570,500 | 570,500 | ✅ |
+| 12,000,000 | 12,000,000 | 4,170,500 | 4,170,500 | ✅ |
+
+Unit tests (`src/lib/__tests__/paye.test.ts`, 12 cases) pin the same
+arithmetic incl. marginal-band boundaries and monotonicity.
+
+**Model note (documented, not changed):** the app computes PAYE on gross
+salary (pension is deducted after PAYE in net pay). The MRA framework permits
+employee pension as a pre-PAYE deduction; Ledgr's existing model does not do
+that. This is a business-logic decision for Ledgr ownership, NOT a reference-
+data defect — flagged for the release review.
 
 ## 9. Classification summary
 
 | Item | Classification |
 |---|---|
-| PAYE bands (0/170k, 30%→1.57m, 35%→10m, 40%+) | [VERIFIED] — 5 sources incl. MCCCI quoting MRA |
+| PAYE bands (0/170k, 30%→1.57m, 35%→10m, 40%+) | [VERIFIED] — 5 sources incl. MCCCI quoting MRA; **APPROVED 2026-08-15; migration created** |
 | VAT 17.5% | [VERIFIED] — and already in the app |
 | Pension 5%/10% | [VERIFIED] — already in the app (`tpr_pension`) |
 | TEVETA 1%, bank levy 0.05% | [VERIFIED as real levies] — NOT modelled; documented limitation |
