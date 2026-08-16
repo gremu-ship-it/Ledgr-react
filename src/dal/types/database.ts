@@ -12,24 +12,17 @@
  * regenerating database.generated.ts — this file won't pick it up automatically.
  */
 import type { Database as GeneratedDatabase } from './database.generated'
-import type { SupplementalTables, SupplementalViews } from './database.supplement'
 
 /**
- * The generated schema plus the relations `supabase gen types` hasn't picked
- * up yet (partner/white-label tables, public API + webhook tables). See
- * database.supplement.ts for why that gap exists and how to close it.
+ * The generated schema. Phase 9.1 regenerated database.generated.ts directly
+ * from the live staging database, so the former hand-written supplement
+ * (database.supplement.ts) is obsolete and has been deleted — every table and
+ * view it covered is now part of the generated output.
  *
  * Everything downstream — the `supabase` client, Row/InsertDto/UpdateDto,
- * TableName — resolves through this merged type, so the supplemental tables
- * are fully type-checked at call sites instead of being reached through an
- * untyped client.
+ * TableName — resolves through this type.
  */
-export type Database = Omit<GeneratedDatabase, 'public'> & {
-  public: Omit<GeneratedDatabase['public'], 'Tables' | 'Views'> & {
-    Tables: GeneratedDatabase['public']['Tables'] & SupplementalTables
-    Views: GeneratedDatabase['public']['Views'] & SupplementalViews
-  }
-}
+export type Database = GeneratedDatabase
 
 // ---------------------------------------------------------------------------
 // Enum convenience aliases — exact members from live DB enum table

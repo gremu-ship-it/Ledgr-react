@@ -279,7 +279,7 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
    * should be.
    *
    * `backfill_and_recalculate_inventory` is not in the generated Supabase
-   * types (see database.supplement.ts for why the generated file lags
+   * types (see phase-9-type-regeneration.md for the regeneration)
    * behind migrations) — cast the client narrowly to this RPC's exact
    * signature rather than casting to `any`, following the pattern used for
    * `record_business_terms_acceptance` in CreateBusinessPage.
