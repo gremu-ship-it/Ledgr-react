@@ -325,8 +325,8 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
     const amount = Number(taxReturn.amount_due);
     const lines = expenseAccountId
       ? [
-          { account_id: expenseAccountId, description: `${taxReturn.tax_code} liability — ${taxReturn.period_label}`, is_debit: true, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 1, tax_code: 'none' as const, tax_amount: 0 },
-          { account_id: config.tax_payable_account_id, description: `${taxReturn.tax_code} payable — ${taxReturn.period_label}`, is_debit: false, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 2, tax_code: 'none' as const, tax_amount: 0 },
+          { account_id: expenseAccountId, description: `${taxReturn.tax_code} liability — ${taxReturn.period_label}`, is_debit: true, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 1, tax_code: 'none' as const, tax_amount: 0, reconciled: false as const },
+          { account_id: config.tax_payable_account_id, description: `${taxReturn.tax_code} payable — ${taxReturn.period_label}`, is_debit: false, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 2, tax_code: 'none' as const, tax_amount: 0, reconciled: false as const },
         ]
       : // VAT case: liability already sits in the VAT clearing accounts from
         // each invoice/expense posting; this just reclassifies net-due into
@@ -334,8 +334,8 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
         // already credit a VAT payable account — if so, this second posting
         // would double-count. Verify against how invoices currently post VAT.
         [
-          { account_id: config.tax_receivable_account_id ?? config.tax_payable_account_id, description: `Net VAT reclass — ${taxReturn.period_label}`, is_debit: true, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 1, tax_code: 'none' as const, tax_amount: 0 },
-          { account_id: config.tax_payable_account_id, description: `VAT payable — ${taxReturn.period_label}`, is_debit: false, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 2, tax_code: 'none' as const, tax_amount: 0 },
+          { account_id: config.tax_receivable_account_id ?? config.tax_payable_account_id, description: `Net VAT reclass — ${taxReturn.period_label}`, is_debit: true, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 1, tax_code: 'none' as const, tax_amount: 0, reconciled: false as const },
+          { account_id: config.tax_payable_account_id, description: `VAT payable — ${taxReturn.period_label}`, is_debit: false, amount, amount_base: amount, currency: 'MWK', exchange_rate: 1, line_number: 2, tax_code: 'none' as const, tax_amount: 0, reconciled: false as const },
         ];
 
     const { entry } = await this.journalRepo.createBalancedEntry(

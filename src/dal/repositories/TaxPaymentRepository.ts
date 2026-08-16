@@ -120,6 +120,7 @@ export class TaxPaymentRepository extends BaseRepository<'tax_payments'> {
           line_number: 1,
           tax_code: 'none',
           tax_amount: 0,
+          reconciled: false as const,
         },
         {
           account_id: params.bankAccountId,
@@ -132,6 +133,7 @@ export class TaxPaymentRepository extends BaseRepository<'tax_payments'> {
           line_number: 2,
           tax_code: 'none',
           tax_amount: 0,
+          reconciled: false as const,
         },
       ],
     );

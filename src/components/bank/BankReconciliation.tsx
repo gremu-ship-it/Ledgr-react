@@ -257,6 +257,9 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
           reference: bank.reference || null,
           source_type: 'bank_import',
           created_by: user?.id,
+          currency: 'MWK' as const,
+          exchange_rate: 1,
+          status: 'draft' as const,
         })
         .select('id')
         .single();
