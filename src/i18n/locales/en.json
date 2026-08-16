@@ -124,6 +124,7 @@
     "signInSubtitle": "Sign in to your account",
     "emailNotVerified": "Your email address is not yet verified. Check your inbox for the confirmation link.",
     "incorrectCredentials": "Incorrect email or password. Please try again.",
+    "serviceUnavailable": "We couldn't sign you in because of a temporary service problem — your password may still be correct. Please try again in a few minutes, and contact support if it continues.",
     "enterMfaCode": "Enter the 6-digit code from your authenticator app.",
     "invalidMfaCode": "Invalid code. Check your authenticator app and try again.",
     "twoFactor": "Two-factor authentication",
