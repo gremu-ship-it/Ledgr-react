@@ -4,6 +4,7 @@ import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, ShoppingCart, Bu
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { createLogger } from '@/lib/logger';
+import { VAT_STANDARD_RATE } from '@/lib/vat';
 import { repos } from '@/lib/repositories';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
@@ -26,7 +27,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
   const queryClient = useQueryClient();
   const { business: businessData } = useBrandTheme();
   const isVatRegistered = businessData?.vat_registered ?? false;
-  const effectiveVatRate = isVatRegistered ? 0.175 : 0;
+  const effectiveVatRate = isVatRegistered ? VAT_STANDARD_RATE : 0;
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Row<'accounts'> | null>(null);

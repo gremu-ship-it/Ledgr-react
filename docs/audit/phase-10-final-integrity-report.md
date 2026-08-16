@@ -11,6 +11,14 @@ staging (verified via prior captures) · production (read-only observations;
 > (DB suite runs, code inspection, config inspection, deployment history).
 > Items requiring a browser/hosted-staging interaction are classified
 > **BLOCKED**, not PASS.
+>
+> **Update (2026-08-16, Phase 10.1 remediation — PR #105):** findings A-01
+> (build-time env guard), A-02 (narrow catch + backfill), A-03 (amount_due
+> trigger), A-04 (CHECK constraints) and A-05 (VAT constant) are FIXED with
+> regression evidence in `docs/audit/phase-10-remediation-report.md`. A-06
+> (staging Vercel deploy) is diagnosed and requires a Vercel dashboard
+> action; A-07…A-12 unchanged. Certification remains 🟡 YELLOW — see the
+> remediation report §9.
 
 ---
 

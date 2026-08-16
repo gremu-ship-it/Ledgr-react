@@ -42,6 +42,7 @@ import { webhookService } from '@/services/webhook/WebhookService';
 import { usageService } from '@/lib/billing/UsageService';
 import { getPlan, normalizePlanTier } from '@/lib/billing/plans';
 import { createLogger } from '@/lib/logger';
+import { isMissingAccountError } from '@/lib/journalErrors';
 
 const log = createLogger('JournalService');
 
@@ -239,8 +240,17 @@ export async function createInvoiceJournalEntry(
         tax_amount:    0,
         reconciled:    false,
       });
-    } catch {
-      // 4130 missing (old business before seeding 4260/5175) — fall back to net posting
+    } catch (err) {
+      // Phase 10 A-02: fall back to net posting ONLY when 4130 is genuinely
+      // missing — and log it. Any other error (network, RLS, DB) propagates
+      // instead of silently changing the accounting disclosure. The
+      // 20260817000002 migration backfills 4130 for legacy businesses, so
+      // this path is expected to be dead code going forward.
+      if (!isMissingAccountError(err)) throw err;
+      log.warn(
+        `Account 4130 missing for business ${businessId} — posting NET revenue for invoice ${invoiceNumber} (discount no longer disclosed). Run ensureChartOfAccounts / backfill migration 20260817000002 to restore gross disclosure.`,
+        { businessId, invoiceNumber },
+      );
       lines[1].amount = subtotal;
       lines[1].amount_base = subtotalFunctional;
       lines[1].description = `Invoice ${invoiceNumber} — revenue`;
@@ -443,8 +453,16 @@ export async function createInvoiceReceivableEntry(
         tax_amount:    0,
         reconciled:    false,
       });
-    } catch {
-      // Fallback to net posting if 4130 not seeded yet
+    } catch (err) {
+      // Phase 10 A-02: fall back to net posting ONLY when 4130 is genuinely
+      // missing — and log it. Any other error propagates instead of silently
+      // changing the accounting disclosure. Backfill migration
+      // 20260817000002 makes this path dead code for legacy businesses.
+      if (!isMissingAccountError(err)) throw err;
+      log.warn(
+        `Account 4130 missing for business ${businessId} — posting NET revenue for invoice ${invoice.invoice_number} (discount no longer disclosed). Run ensureChartOfAccounts / backfill migration 20260817000002 to restore gross disclosure.`,
+        { businessId, invoiceNumber: invoice.invoice_number },
+      );
       lines[1].amount = subtotal;
       lines[1].amount_base = subtotalFunctional;
       lines[1].description = `Invoice ${invoice.invoice_number} — revenue`;
@@ -680,7 +698,18 @@ export async function createExpenseJournalEntry(
   if (discountAmount > 0.005) {
     const discountAccount = await getAccountByCode(businessId, '5175')
       .catch(() => getAccountByCode(businessId, '4260'))
-      .catch(() => null);
+      .catch((err) => {
+        // Phase 10 A-02: 4260 lookup failed — only tolerate "missing account";
+        // anything else must surface.
+        if (!isMissingAccountError(err)) throw err;
+        return null;
+      });
+    if (!discountAccount) {
+      log.warn(
+        `Purchase discount accounts 5175/4260 missing for business ${businessId} — discount line omitted for expense ${expense.expense_number}; the balance guard will reject the entry. Backfill migration 20260817000002 adds both accounts.`,
+        { businessId, expenseNumber: expense.expense_number },
+      );
+    }
     if (discountAccount) {
       lines.push({
         line_number:   lineNumber++,

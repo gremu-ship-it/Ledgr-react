@@ -9,6 +9,7 @@ import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicat
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { formatMwkDetailed } from '@/lib/formatters';
+import { VAT_STANDARD_RATE, VAT_STANDARD_RATE_PERCENT } from '@/lib/vat';
 import { useAppStore } from '@/store/useAppStore';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { repos } from '@/lib/repositories';
@@ -298,7 +299,7 @@ const PAYMENT_METHODS = [
 ];
 
 const TAX_OPTIONS = [
-  { value: 'vat_standard', label: 'VAT 17.5%' },
+  { value: 'vat_standard', label: `VAT ${VAT_STANDARD_RATE_PERCENT}%` },
   { value: 'vat_exempt',   label: 'VAT Exempt' },
   { value: 'vat_zero',     label: 'VAT Zero Rated' },
   { value: 'none',         label: 'No Tax' },
@@ -396,7 +397,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { business: businessData } = useBrandTheme();
   const isVatRegistered = businessData?.vat_registered ?? false;
-  const effectiveVatRate = isVatRegistered ? 0.175 : 0;
+  const effectiveVatRate = isVatRegistered ? VAT_STANDARD_RATE : 0;
   const { data: accounts = [] } = useExpenseAccounts(businessId);
   const { data: branches = [] }  = useBranches(businessId);
   const { data: departments = [] } = useDepartments(businessId);
@@ -687,7 +688,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               onChange={(e) => set('include_vat', e.target.checked)}
               className="h-4 w-4 rounded border-gray-300 text-brand-500" />
             <label htmlFor="include_vat" className="text-sm text-gray-700">
-              Amount includes VAT (17.5%) — split automatically
+              Amount includes VAT ({VAT_STANDARD_RATE_PERCENT}%) — split automatically
             </label>
           </div>
 
@@ -804,7 +805,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
   const { business: businessData } = useBrandTheme();
   const isVatRegistered = businessData?.vat_registered ?? false;
-  const effectiveVatRate = isVatRegistered ? 0.175 : 0;
+  const effectiveVatRate = isVatRegistered ? VAT_STANDARD_RATE : 0;
 
   const lineCalcs = form.lines.map((l) => {
     const qty      = parseFloat(l.quantity) || 0;
@@ -1156,7 +1157,7 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               ) : (
                 <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>{formatMwkDetailed(subtotal)}</span></div>
               )}
-              <div className="flex justify-between text-gray-600"><span>VAT (17.5%)</span><span>{formatMwkDetailed(vatAmount)}</span></div>
+              <div className="flex justify-between text-gray-600"><span>VAT ({VAT_STANDARD_RATE_PERCENT}%)</span><span>{formatMwkDetailed(vatAmount)}</span></div>
               <div className="flex justify-between border-t border-gray-200 pt-1.5 font-semibold text-gray-900"><span>Total</span><span>{formatMwkDetailed(total)}</span></div>
             </div>
           </div>
