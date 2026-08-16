@@ -44,6 +44,7 @@
 --   [VERIFIED] account columns: accounts (code, name, account_type,
 --              account_subtype, normal_balance)
 -- ────────────────────────────────────────────────────────────────────────────
+drop view if exists public.v_trial_balance;
 create or replace view public.v_trial_balance as
 select
   a.business_id,
@@ -85,6 +86,7 @@ comment on view public.v_trial_balance is
 --              days_overdue = current_date - due_date (0 when not overdue);
 --              no bucket-label evidence exists in the repository
 -- ────────────────────────────────────────────────────────────────────────────
+drop view if exists public.v_ar_ageing;
 create or replace view public.v_ar_ageing as
 select
   i.business_id,
@@ -133,6 +135,7 @@ comment on view public.v_ar_ageing is
 --              fully_depreciated/disposed? disposed assets keep deleted_at
 --              null in the app; status column carries the state)
 -- ────────────────────────────────────────────────────────────────────────────
+drop view if exists public.v_asset_register;
 create or replace view public.v_asset_register as
 select
   fa.business_id,
@@ -169,6 +172,7 @@ comment on view public.v_asset_register is
 --              (column name implies it; no direct evidence)
 --   [INFERRED] only tracked, active, non-deleted products
 -- ────────────────────────────────────────────────────────────────────────────
+drop view if exists public.v_reorder_alerts;
 create or replace view public.v_reorder_alerts as
 select
   ib.business_id,
