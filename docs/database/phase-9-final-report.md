@@ -56,6 +56,7 @@ for the remainder. Key results:
   annual equivalents per Ledgr's model; idempotent; preserves custom bands;
   sanity guard. **10/10 reference tests pass** (seeding, preservation,
   idempotency, 5 statutory PAYE cases incl. 99,000 / 570,500 / 4,170,500).
+  **Applied to staging on the 2026-08-16 green deploy.**
 - **App fallback bands updated** (`FALLBACK_PAYE_BANDS` in `paye.ts`) to the
   approved structure + 12 unit tests — fixes a latent defect (obsolete
   pre-2026 rates for businesses without DB bands).
@@ -161,6 +162,7 @@ Historical defects surfaced from repository docs
 | P9-003 | P4 | `database.generated.ts` still reflects pre-8B state | Fix in progress (9.1 — regeneration required) |
 | P9-004 | P3 (fixed) | `FALLBACK_PAYE_BANDS` in `paye.ts` held the obsolete pre-2026 structure (businesses without DB bands would under/over-withhold) | **Fixed 2026-08-15** — updated to the approved structure; 12 unit tests pin it |
 | P9-005 | P3 (documented) | Ledgr computes PAYE on gross (pension not pre-PAYE-deducted) | Documented model note; release-review item (not a reference-data defect) |
+| P9-006 | P1 (fixed) | 8B.1 migration failed on staging: unqualified pgcrypto `digest()`/`gen_random_bytes()` (extensions schema) | **Fixed (PR #98)** — schema-qualified; staging deploy green 2026-08-16 |
 | (none) | P0/P1 | No P0/P1 defects discovered to date | — |
 
 ## 16. Remaining UNKNOWNs
@@ -202,8 +204,11 @@ history. Fresh chains remain verified regardless.
 
 **Required before GREEN (in order):**
 1. ✅ **PAYE reference data approved + migration created and tested**
-   (`20260816000000_phase9_paye_reference_data.sql`, 10/10 tests). Remaining:
-   merge the PR and let the staging deploy apply it, then run Journey H.
+   (`20260816000000_phase9_paye_reference_data.sql`, 10/10 tests) **and
+   applied to staging** — the 2026-08-16 deploy (after the pgcrypto-schema
+   fix, PR #98) is fully green: all 62 migrations applied via
+   `Link & migrate staging database`, edge functions deployed, frontend on
+   Vercel. Remaining: run Journey H (payroll) in the browser.
 2. **Run the hosted-staging browser test script** (`phase-9-browser-test-
    script.md`, journeys A–M) with fake data; record results; resolve any
    P0/P1 findings. The discount and PDF regressions are mandatory items.
