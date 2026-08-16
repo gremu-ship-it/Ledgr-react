@@ -50,159 +50,207 @@
 -- which reflects the live staging enum order)
 -- ────────────────────────────────────────────────────────────────────────────
 
-create type account_subtype as enum (
-  'current_asset',
-  'non_current_asset',
-  'fixed_asset',
-  'current_liability',
-  'non_current_liability',
-  'share_capital',
-  'retained_earnings',
-  'reserves',
-  'revenue',
-  'other_income',
-  'cost_of_sales',
-  'operating_expense',
-  'finance_cost',
-  'tax_expense',
-  'depreciation_amortisation'
-);
+-- account_subtype
+do $$ begin
+  if to_regtype('public.account_subtype') is null then
+    create type account_subtype as enum (
+      'current_asset',
+      'non_current_asset',
+      'fixed_asset',
+      'current_liability',
+      'non_current_liability',
+      'share_capital',
+      'retained_earnings',
+      'reserves',
+      'revenue',
+      'other_income',
+      'cost_of_sales',
+      'operating_expense',
+      'finance_cost',
+      'tax_expense',
+      'depreciation_amortisation'
+    );
+  end if;
+end $$;
 
-create type account_type as enum (
-  'asset',
-  'liability',
-  'equity',
-  'income',
-  'expense'
-);
+-- account_type
+do $$ begin
+  if to_regtype('public.account_type') is null then
+    create type account_type as enum (
+      'asset',
+      'liability',
+      'equity',
+      'income',
+      'expense'
+    );
+  end if;
+end $$;
 
-create type asset_status as enum (
-  'active',
-  'disposed',
-  'fully_depreciated',
-  'impaired',
-  'under_construction'
-);
+-- asset_status
+do $$ begin
+  if to_regtype('public.asset_status') is null then
+    create type asset_status as enum (
+      'active',
+      'disposed',
+      'fully_depreciated',
+      'impaired',
+      'under_construction'
+    );
+  end if;
+end $$;
 
-create type currency_code as enum (
-  'MWK',
-  'USD',
-  'EUR',
-  'GBP',
-  'ZAR',
-  'ZMW',
-  'TZS',
-  'KES',
-  'UGX'
-);
+-- currency_code
+do $$ begin
+  if to_regtype('public.currency_code') is null then
+    create type currency_code as enum (
+      'MWK',
+      'USD',
+      'EUR',
+      'GBP',
+      'ZAR',
+      'ZMW',
+      'TZS',
+      'KES',
+      'UGX'
+    );
+  end if;
+end $$;
 
-create type depreciation_method as enum (
-  'straight_line',
-  'reducing_balance',
-  'units_of_production',
-  'sum_of_years_digits'
-);
+-- depreciation_method
+do $$ begin
+  if to_regtype('public.depreciation_method') is null then
+    create type depreciation_method as enum (
+      'straight_line',
+      'reducing_balance',
+      'units_of_production',
+      'sum_of_years_digits'
+    );
+  end if;
+end $$;
 
-create type invoice_status as enum (
-  'draft',
-  'sent',
-  'partially_paid',
-  'paid',
-  'overdue',
-  'void',
-  'credit_note'
-);
+-- invoice_status
+do $$ begin
+  if to_regtype('public.invoice_status') is null then
+    create type invoice_status as enum (
+      'draft',
+      'sent',
+      'partially_paid',
+      'paid',
+      'overdue',
+      'void',
+      'credit_note'
+    );
+  end if;
+end $$;
 
-create type journal_status as enum (
-  'draft',
-  'posted',
-  'reversed'
-);
+-- journal_status
+do $$ begin
+  if to_regtype('public.journal_status') is null then
+    create type journal_status as enum (
+      'draft',
+      'posted',
+      'reversed'
+    );
+  end if;
+end $$;
 
-create type payment_method as enum (
-  'cash',
-  'bank_transfer',
-  'cheque',
-  'airtel_money',
-  'tnm_mpamba',
-  'card',
-  'other'
-);
+-- payment_method
+do $$ begin
+  if to_regtype('public.payment_method') is null then
+    create type payment_method as enum (
+      'cash',
+      'bank_transfer',
+      'cheque',
+      'airtel_money',
+      'tnm_mpamba',
+      'card',
+      'other'
+    );
+  end if;
+end $$;
 
-create type payroll_status as enum (
-  'draft',
-  'approved',
-  'paid',
-  'void'
-);
+-- payroll_status
+do $$ begin
+  if to_regtype('public.payroll_status') is null then
+    create type payroll_status as enum (
+      'draft',
+      'approved',
+      'paid',
+      'void'
+    );
+  end if;
+end $$;
 
-create type stock_movement_type as enum (
-  'purchase',
-  'sale',
-  'adjustment_in',
-  'adjustment_out',
-  'transfer_in',
-  'transfer_out',
-  'return_in',
-  'return_out',
-  'opening_balance',
-  'write_off'
-);
+-- stock_movement_type
+do $$ begin
+  if to_regtype('public.stock_movement_type') is null then
+    create type stock_movement_type as enum (
+      'purchase',
+      'sale',
+      'adjustment_in',
+      'adjustment_out',
+      'transfer_in',
+      'transfer_out',
+      'return_in',
+      'return_out',
+      'opening_balance',
+      'write_off'
+    );
+  end if;
+end $$;
 
-create type tax_code as enum (
-  'vat_standard',
-  'vat_zero',
-  'vat_exempt',
-  'paye',
-  'wht_15',
-  'wht_20',
-  'wht_10',
-  'cit',
-  'fbt',
-  'none',
-  'tpr_pension'
-);
+-- tax_code
+do $$ begin
+  if to_regtype('public.tax_code') is null then
+    create type tax_code as enum (
+      'vat_standard',
+      'vat_zero',
+      'vat_exempt',
+      'paye',
+      'wht_15',
+      'wht_20',
+      'wht_10',
+      'cit',
+      'fbt',
+      'none',
+      'tpr_pension'
+    );
+  end if;
+end $$;
 
-create type user_role as enum (
-  'owner',
-  'admin',
-  'accountant',
-  'payroll_manager',
-  'supervisor',
-  'data_entry',
-  'inventory_manager',
-  'sales_clerk',
-  'auditor',
-  'viewer',
-  'purchasing_officer',
-  'warehouse_worker',
-  'sales_manager',
-  'customer_service_rep',
-  'tax_compliance_officer',
-  'treasury_manager',
-  'asset_manager',
-  'board_member',
-  'branch_manager'
-);
-
-
--- ────────────────────────────────────────────────────────────────────────────
--- EXTENSIONS
---   pgcrypto is created by 20260727000000; pg_cron/pg_net by 20260726000003.
---   None are duplicated here (migrations own them). gen_random_uuid() is
---   built into PostgreSQL 13+ so no extension is required for the PK defaults.
---   pg_trgm: EVIDENCED on staging by database.generated.ts — show_limit() and
---   show_trgm(text) are pg_trgm extension functions and both appear in the
---   live-staging-derived function list. Created here so the fresh database
---   reproduces them (verified: PostgreSQL 18 pg_trgm provides both).
--- ────────────────────────────────────────────────────────────────────────────
+-- user_role
+do $$ begin
+  if to_regtype('public.user_role') is null then
+    create type user_role as enum (
+      'owner',
+      'admin',
+      'accountant',
+      'payroll_manager',
+      'supervisor',
+      'data_entry',
+      'inventory_manager',
+      'sales_clerk',
+      'auditor',
+      'viewer',
+      'purchasing_officer',
+      'warehouse_worker',
+      'sales_manager',
+      'customer_service_rep',
+      'tax_compliance_officer',
+      'treasury_manager',
+      'asset_manager',
+      'board_member',
+      'branch_manager'
+    );
+  end if;
+end $$;
 
 create extension if not exists pg_trgm;
 
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE currencies  (base dependency: 13 base tables hold FKs to currencies.code)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.currencies (
+create table if not exists public.currencies (
   code text primary key check (code = upper(code) and char_length(code) = 3),
   name text not null,
   symbol text not null default '',
@@ -218,7 +266,7 @@ alter table public.currencies enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE audit_log  (18 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.audit_log (
+create table if not exists public.audit_log (
     business_id uuid not null  -- [INFERRED] verify against live staging
 ,
     changed_fields text[]  -- [CONVENTION]
@@ -262,7 +310,7 @@ alter table public.audit_log enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE businesses  (35 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.businesses (
+create table if not exists public.businesses (
     address_line1 text  -- [CONVENTION]
 ,
     address_line2 text  -- [CONVENTION]
@@ -336,6 +384,7 @@ create table public.businesses (
     constraint businesses_plan_tier_check check (plan_tier in ('free', 'growth', 'pro', 'enterprise'))  -- [EVIDENCED] 20260726000001_add_business_plan_tier.sql
 );
 
+alter table public.businesses drop constraint if exists businesses_base_currency_fkey;
 alter table public.businesses add constraint businesses_base_currency_fkey foreign key (base_currency) references public.currencies(code);
 
 alter table public.businesses enable row level security;
@@ -344,7 +393,7 @@ alter table public.businesses enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE paye_bands  (10 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.paye_bands (
+create table if not exists public.paye_bands (
     band_from numeric not null  -- [CONVENTION]
 ,
     band_label text  -- [CONVENTION]
@@ -366,6 +415,7 @@ create table public.paye_bands (
     rate numeric not null  -- [CONVENTION]
 );
 
+alter table public.paye_bands drop constraint if exists paye_bands_business_id_fkey;
 alter table public.paye_bands add constraint paye_bands_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.paye_bands enable row level security;
@@ -374,7 +424,7 @@ alter table public.paye_bands enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE product_categories  (5 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.product_categories (
+create table if not exists public.product_categories (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     created_at timestamptz not null default now()  -- [CONVENTION]
@@ -386,7 +436,9 @@ create table public.product_categories (
     parent_id uuid  -- [EVIDENCED] FK
 );
 
+alter table public.product_categories drop constraint if exists product_categories_business_id_fkey;
 alter table public.product_categories add constraint product_categories_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.product_categories drop constraint if exists product_categories_parent_id_fkey;
 alter table public.product_categories add constraint product_categories_parent_id_fkey foreign key (parent_id) references public.product_categories(id);
 
 alter table public.product_categories enable row level security;
@@ -395,7 +447,7 @@ alter table public.product_categories enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE profiles  (2 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.profiles (
+create table if not exists public.profiles (
     full_name text  -- [CONVENTION]
 ,
     id uuid primary key default gen_random_uuid()  -- [CONVENTION]
@@ -407,7 +459,7 @@ alter table public.profiles enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE user_profiles  (11 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.user_profiles (
+create table if not exists public.user_profiles (
     avatar_url text  -- [CONVENTION]
 ,
     created_at timestamptz not null default now()  -- [CONVENTION]
@@ -439,7 +491,7 @@ alter table public.user_profiles enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE accounting_periods  (10 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.accounting_periods (
+create table if not exists public.accounting_periods (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     closed_at timestamptz  -- [CONVENTION]
@@ -461,6 +513,7 @@ create table public.accounting_periods (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.accounting_periods drop constraint if exists accounting_periods_business_id_fkey;
 alter table public.accounting_periods add constraint accounting_periods_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.accounting_periods enable row level security;
@@ -469,7 +522,7 @@ alter table public.accounting_periods enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE branches  (10 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.branches (
+create table if not exists public.branches (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     code text  -- [CONVENTION]
@@ -491,6 +544,7 @@ create table public.branches (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.branches drop constraint if exists branches_business_id_fkey;
 alter table public.branches add constraint branches_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.branches enable row level security;
@@ -499,7 +553,7 @@ alter table public.branches enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE budgets  (11 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.budgets (
+create table if not exists public.budgets (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     created_at timestamptz not null default now()  -- [CONVENTION]
@@ -523,6 +577,7 @@ create table public.budgets (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.budgets drop constraint if exists budgets_business_id_fkey;
 alter table public.budgets add constraint budgets_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.budgets enable row level security;
@@ -531,7 +586,7 @@ alter table public.budgets enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE business_users  (13 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.business_users (
+create table if not exists public.business_users (
     accepted_at timestamptz  -- [CONVENTION]
 ,
     branch_id uuid  -- [EVIDENCED] FK
@@ -561,7 +616,9 @@ create table public.business_users (
     unique (business_id, user_id)  -- [EVIDENCED] migrations use ON CONFLICT on these columns (20260728000003/20260728000002)
 );
 
+alter table public.business_users drop constraint if exists business_users_branch_id_fkey;
 alter table public.business_users add constraint business_users_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.business_users drop constraint if exists business_users_business_id_fkey;
 alter table public.business_users add constraint business_users_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.business_users enable row level security;
@@ -570,7 +627,7 @@ alter table public.business_users enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE departments  (11 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.departments (
+create table if not exists public.departments (
     branch_id uuid  -- [EVIDENCED] FK
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -594,7 +651,9 @@ create table public.departments (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.departments drop constraint if exists departments_branch_id_fkey;
 alter table public.departments add constraint departments_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.departments drop constraint if exists departments_business_id_fkey;
 alter table public.departments add constraint departments_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.departments enable row level security;
@@ -603,7 +662,7 @@ alter table public.departments enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE inventory_locations  (8 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.inventory_locations (
+create table if not exists public.inventory_locations (
     branch_id uuid  -- [EVIDENCED] FK
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -621,7 +680,9 @@ create table public.inventory_locations (
     name text not null  -- [CONVENTION]
 );
 
+alter table public.inventory_locations drop constraint if exists inventory_locations_branch_id_fkey;
 alter table public.inventory_locations add constraint inventory_locations_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.inventory_locations drop constraint if exists inventory_locations_business_id_fkey;
 alter table public.inventory_locations add constraint inventory_locations_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.inventory_locations enable row level security;
@@ -630,7 +691,7 @@ alter table public.inventory_locations enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE journal_entries  (20 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.journal_entries (
+create table if not exists public.journal_entries (
     branch_id uuid  -- [EVIDENCED] FK
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -672,12 +733,19 @@ create table public.journal_entries (
     status journal_status not null  -- [EVIDENCED] enum
 );
 
+alter table public.journal_entries drop constraint if exists journal_entries_branch_id_fkey;
 alter table public.journal_entries add constraint journal_entries_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.journal_entries drop constraint if exists journal_entries_business_id_fkey;
 alter table public.journal_entries add constraint journal_entries_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.journal_entries drop constraint if exists journal_entries_currency_fkey;
 alter table public.journal_entries add constraint journal_entries_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.journal_entries drop constraint if exists journal_entries_department_id_fkey;
 alter table public.journal_entries add constraint journal_entries_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.journal_entries drop constraint if exists journal_entries_period_id_fkey;
 alter table public.journal_entries add constraint journal_entries_period_id_fkey foreign key (period_id) references public.accounting_periods(id);
+alter table public.journal_entries drop constraint if exists journal_entries_reversal_of_fkey;
 alter table public.journal_entries add constraint journal_entries_reversal_of_fkey foreign key (reversal_of) references public.journal_entries(id);
+alter table public.journal_entries drop constraint if exists journal_entries_reversed_by_fkey;
 alter table public.journal_entries add constraint journal_entries_reversed_by_fkey foreign key (reversed_by) references public.journal_entries(id);
 
 alter table public.journal_entries enable row level security;
@@ -686,7 +754,7 @@ alter table public.journal_entries enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE payroll_runs  (21 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.payroll_runs (
+create table if not exists public.payroll_runs (
     approved_at timestamptz  -- [CONVENTION]
 ,
     approved_by text  -- [CONVENTION]
@@ -730,7 +798,9 @@ create table public.payroll_runs (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.payroll_runs drop constraint if exists payroll_runs_business_id_fkey;
 alter table public.payroll_runs add constraint payroll_runs_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.payroll_runs drop constraint if exists payroll_runs_journal_entry_id_fkey;
 alter table public.payroll_runs add constraint payroll_runs_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
 
 alter table public.payroll_runs enable row level security;
@@ -739,7 +809,7 @@ alter table public.payroll_runs enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE stock_transfers  (15 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.stock_transfers (
+create table if not exists public.stock_transfers (
     approved_at timestamptz  -- [CONVENTION]
 ,
     approved_by uuid  -- [EVIDENCED] FK
@@ -771,11 +841,17 @@ create table public.stock_transfers (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.stock_transfers drop constraint if exists stock_transfers_approved_by_fkey;
 alter table public.stock_transfers add constraint stock_transfers_approved_by_fkey foreign key (approved_by) references public.user_profiles(id);
+alter table public.stock_transfers drop constraint if exists stock_transfers_business_id_fkey;
 alter table public.stock_transfers add constraint stock_transfers_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.stock_transfers drop constraint if exists stock_transfers_from_location_id_fkey;
 alter table public.stock_transfers add constraint stock_transfers_from_location_id_fkey foreign key (from_location_id) references public.inventory_locations(id);
+alter table public.stock_transfers drop constraint if exists stock_transfers_received_by_fkey;
 alter table public.stock_transfers add constraint stock_transfers_received_by_fkey foreign key (received_by) references public.user_profiles(id);
+alter table public.stock_transfers drop constraint if exists stock_transfers_requested_by_fkey;
 alter table public.stock_transfers add constraint stock_transfers_requested_by_fkey foreign key (requested_by) references public.user_profiles(id);
+alter table public.stock_transfers drop constraint if exists stock_transfers_to_location_id_fkey;
 alter table public.stock_transfers add constraint stock_transfers_to_location_id_fkey foreign key (to_location_id) references public.inventory_locations(id);
 
 alter table public.stock_transfers enable row level security;
@@ -784,7 +860,7 @@ alter table public.stock_transfers enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE accounts  (28 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.accounts (
+create table if not exists public.accounts (
     account_subtype account_subtype  -- [EVIDENCED] enum
 ,
     account_type account_type not null  -- [EVIDENCED] enum
@@ -842,10 +918,15 @@ create table public.accounts (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.accounts drop constraint if exists accounts_branch_id_fkey;
 alter table public.accounts add constraint accounts_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.accounts drop constraint if exists accounts_business_id_fkey;
 alter table public.accounts add constraint accounts_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.accounts drop constraint if exists accounts_currency_fkey;
 alter table public.accounts add constraint accounts_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.accounts drop constraint if exists accounts_department_id_fkey;
 alter table public.accounts add constraint accounts_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.accounts drop constraint if exists accounts_parent_id_fkey;
 alter table public.accounts add constraint accounts_parent_id_fkey foreign key (parent_id) references public.accounts(id);
 
 alter table public.accounts enable row level security;
@@ -854,7 +935,7 @@ alter table public.accounts enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE asset_categories  (13 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.asset_categories (
+create table if not exists public.asset_categories (
     accumulated_dep_account_id uuid  -- [EVIDENCED] FK
 ,
     asset_account_id uuid  -- [EVIDENCED] FK
@@ -882,9 +963,13 @@ create table public.asset_categories (
     useful_life_years numeric  -- [CONVENTION]
 );
 
+alter table public.asset_categories drop constraint if exists asset_categories_accumulated_dep_account_id_fkey;
 alter table public.asset_categories add constraint asset_categories_accumulated_dep_account_id_fkey foreign key (accumulated_dep_account_id) references public.accounts(id);
+alter table public.asset_categories drop constraint if exists asset_categories_asset_account_id_fkey;
 alter table public.asset_categories add constraint asset_categories_asset_account_id_fkey foreign key (asset_account_id) references public.accounts(id);
+alter table public.asset_categories drop constraint if exists asset_categories_business_id_fkey;
 alter table public.asset_categories add constraint asset_categories_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.asset_categories drop constraint if exists asset_categories_dep_expense_account_id_fkey;
 alter table public.asset_categories add constraint asset_categories_dep_expense_account_id_fkey foreign key (dep_expense_account_id) references public.accounts(id);
 
 alter table public.asset_categories enable row level security;
@@ -893,7 +978,7 @@ alter table public.asset_categories enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE bank_statements  (9 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.bank_statements (
+create table if not exists public.bank_statements (
     account_id uuid not null  -- [EVIDENCED] FK
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -913,7 +998,9 @@ create table public.bank_statements (
     uploaded_by text  -- [CONVENTION]
 );
 
+alter table public.bank_statements drop constraint if exists bank_statements_account_id_fkey;
 alter table public.bank_statements add constraint bank_statements_account_id_fkey foreign key (account_id) references public.accounts(id);
+alter table public.bank_statements drop constraint if exists bank_statements_business_id_fkey;
 alter table public.bank_statements add constraint bank_statements_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.bank_statements enable row level security;
@@ -922,7 +1009,7 @@ alter table public.bank_statements enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE budget_lines  (21 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.budget_lines (
+create table if not exists public.budget_lines (
     account_id uuid not null  -- [EVIDENCED] FK
 ,
     annual_total numeric  -- [CONVENTION]
@@ -966,10 +1053,15 @@ create table public.budget_lines (
     notes text  -- [CONVENTION]
 );
 
+alter table public.budget_lines drop constraint if exists budget_lines_account_id_fkey;
 alter table public.budget_lines add constraint budget_lines_account_id_fkey foreign key (account_id) references public.accounts(id);
+alter table public.budget_lines drop constraint if exists budget_lines_branch_id_fkey;
 alter table public.budget_lines add constraint budget_lines_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.budget_lines drop constraint if exists budget_lines_budget_id_fkey;
 alter table public.budget_lines add constraint budget_lines_budget_id_fkey foreign key (budget_id) references public.budgets(id);
+alter table public.budget_lines drop constraint if exists budget_lines_business_id_fkey;
 alter table public.budget_lines add constraint budget_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.budget_lines drop constraint if exists budget_lines_department_id_fkey;
 alter table public.budget_lines add constraint budget_lines_department_id_fkey foreign key (department_id) references public.departments(id);
 
 alter table public.budget_lines enable row level security;
@@ -978,7 +1070,7 @@ alter table public.budget_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE contacts  (27 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.contacts (
+create table if not exists public.contacts (
     address_line1 text  -- [CONVENTION]
 ,
     address_line2 text  -- [CONVENTION]
@@ -1034,8 +1126,11 @@ create table public.contacts (
     wht_exemption_ref text  -- [CONVENTION]
 );
 
+alter table public.contacts drop constraint if exists contacts_ap_account_id_fkey;
 alter table public.contacts add constraint contacts_ap_account_id_fkey foreign key (ap_account_id) references public.accounts(id);
+alter table public.contacts drop constraint if exists contacts_ar_account_id_fkey;
 alter table public.contacts add constraint contacts_ar_account_id_fkey foreign key (ar_account_id) references public.accounts(id);
+alter table public.contacts drop constraint if exists contacts_business_id_fkey;
 alter table public.contacts add constraint contacts_business_id_fkey foreign key (business_id) references public.businesses(id);
 
 alter table public.contacts enable row level security;
@@ -1044,7 +1139,7 @@ alter table public.contacts enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE employees  (37 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.employees (
+create table if not exists public.employees (
     bank_account_number text  -- [CONVENTION]
 ,
     bank_branch text  -- [CONVENTION]
@@ -1120,10 +1215,15 @@ create table public.employees (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.employees drop constraint if exists employees_branch_id_fkey;
 alter table public.employees add constraint employees_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.employees drop constraint if exists employees_business_id_fkey;
 alter table public.employees add constraint employees_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.employees drop constraint if exists employees_department_id_fkey;
 alter table public.employees add constraint employees_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.employees drop constraint if exists employees_paye_liability_account_id_fkey;
 alter table public.employees add constraint employees_paye_liability_account_id_fkey foreign key (paye_liability_account_id) references public.accounts(id);
+alter table public.employees drop constraint if exists employees_salary_account_id_fkey;
 alter table public.employees add constraint employees_salary_account_id_fkey foreign key (salary_account_id) references public.accounts(id);
 
 alter table public.employees enable row level security;
@@ -1132,7 +1232,7 @@ alter table public.employees enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE expenses  (38 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.expenses (
+create table if not exists public.expenses (
     amount_paid numeric not null  -- [CONVENTION]
 ,
     ap_account_id uuid  -- [EVIDENCED] FK
@@ -1210,13 +1310,21 @@ create table public.expenses (
     wht_amount numeric not null  -- [CONVENTION]
 );
 
+alter table public.expenses drop constraint if exists expenses_ap_account_id_fkey;
 alter table public.expenses add constraint expenses_ap_account_id_fkey foreign key (ap_account_id) references public.accounts(id);
+alter table public.expenses drop constraint if exists expenses_branch_id_fkey;
 alter table public.expenses add constraint expenses_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.expenses drop constraint if exists expenses_business_id_fkey;
 alter table public.expenses add constraint expenses_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.expenses drop constraint if exists expenses_contact_id_fkey;
 alter table public.expenses add constraint expenses_contact_id_fkey foreign key (contact_id) references public.contacts(id);
+alter table public.expenses drop constraint if exists expenses_currency_fkey;
 alter table public.expenses add constraint expenses_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.expenses drop constraint if exists expenses_department_id_fkey;
 alter table public.expenses add constraint expenses_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.expenses drop constraint if exists expenses_journal_entry_id_fkey;
 alter table public.expenses add constraint expenses_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
+alter table public.expenses drop constraint if exists expenses_original_currency_fkey;
 alter table public.expenses add constraint expenses_original_currency_fkey foreign key (original_currency) references public.currencies(code);
 
 alter table public.expenses enable row level security;
@@ -1225,7 +1333,7 @@ alter table public.expenses enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE fixed_assets  (46 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.fixed_assets (
+create table if not exists public.fixed_assets (
     accumulated_dep_account_id uuid  -- [EVIDENCED] FK
 ,
     accumulated_depreciation numeric not null  -- [CONVENTION]
@@ -1319,16 +1427,27 @@ create table public.fixed_assets (
     warranty_expiry_date text  -- [CONVENTION]
 );
 
+alter table public.fixed_assets drop constraint if exists fixed_assets_accumulated_dep_account_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_accumulated_dep_account_id_fkey foreign key (accumulated_dep_account_id) references public.accounts(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_asset_account_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_asset_account_id_fkey foreign key (asset_account_id) references public.accounts(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_branch_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_business_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_category_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_category_id_fkey foreign key (category_id) references public.asset_categories(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_dep_expense_account_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_dep_expense_account_id_fkey foreign key (dep_expense_account_id) references public.accounts(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_department_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_disposal_journal_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_disposal_journal_id_fkey foreign key (disposal_journal_id) references public.journal_entries(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_purchase_journal_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_purchase_journal_id_fkey foreign key (purchase_journal_id) references public.journal_entries(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_revaluation_surplus_account_fkey;
 alter table public.fixed_assets add constraint fixed_assets_revaluation_surplus_account_fkey foreign key (revaluation_surplus_account) references public.accounts(id);
+alter table public.fixed_assets drop constraint if exists fixed_assets_supplier_id_fkey;
 alter table public.fixed_assets add constraint fixed_assets_supplier_id_fkey foreign key (supplier_id) references public.contacts(id);
 
 alter table public.fixed_assets enable row level security;
@@ -1337,7 +1456,7 @@ alter table public.fixed_assets enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE invoices  (45 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.invoices (
+create table if not exists public.invoices (
     amount_due numeric  -- [CONVENTION]
 ,
     amount_paid numeric not null  -- [CONVENTION]
@@ -1431,15 +1550,25 @@ create table public.invoices (
     constraint invoices_template_check check (template in ('professional', 'minimal', 'ngo', 'government'))  -- [EVIDENCED] 20260725000001_invoice_automation.sql
 );
 
+alter table public.invoices drop constraint if exists invoices_ar_account_id_fkey;
 alter table public.invoices add constraint invoices_ar_account_id_fkey foreign key (ar_account_id) references public.accounts(id);
+alter table public.invoices drop constraint if exists invoices_branch_id_fkey;
 alter table public.invoices add constraint invoices_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.invoices drop constraint if exists invoices_business_id_fkey;
 alter table public.invoices add constraint invoices_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.invoices drop constraint if exists invoices_contact_id_fkey;
 alter table public.invoices add constraint invoices_contact_id_fkey foreign key (contact_id) references public.contacts(id);
+alter table public.invoices drop constraint if exists invoices_credit_note_for_fkey;
 alter table public.invoices add constraint invoices_credit_note_for_fkey foreign key (credit_note_for) references public.invoices(id);
+alter table public.invoices drop constraint if exists invoices_currency_fkey;
 alter table public.invoices add constraint invoices_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.invoices drop constraint if exists invoices_department_id_fkey;
 alter table public.invoices add constraint invoices_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.invoices drop constraint if exists invoices_journal_entry_id_fkey;
 alter table public.invoices add constraint invoices_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
+alter table public.invoices drop constraint if exists invoices_original_currency_fkey;
 alter table public.invoices add constraint invoices_original_currency_fkey foreign key (original_currency) references public.currencies(code);
+alter table public.invoices drop constraint if exists invoices_revenue_account_id_fkey;
 alter table public.invoices add constraint invoices_revenue_account_id_fkey foreign key (revenue_account_id) references public.accounts(id);
 
 alter table public.invoices enable row level security;
@@ -1448,7 +1577,7 @@ alter table public.invoices enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE journal_lines  (22 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.journal_lines (
+create table if not exists public.journal_lines (
     account_id uuid not null  -- [EVIDENCED] FK
 ,
     amount numeric not null  -- [CONVENTION]
@@ -1494,12 +1623,19 @@ create table public.journal_lines (
     tax_code tax_code  -- [EVIDENCED] enum
 );
 
+alter table public.journal_lines drop constraint if exists journal_lines_account_id_fkey;
 alter table public.journal_lines add constraint journal_lines_account_id_fkey foreign key (account_id) references public.accounts(id);
+alter table public.journal_lines drop constraint if exists journal_lines_branch_id_fkey;
 alter table public.journal_lines add constraint journal_lines_branch_id_fkey foreign key (branch_id) references public.branches(id);
+alter table public.journal_lines drop constraint if exists journal_lines_business_id_fkey;
 alter table public.journal_lines add constraint journal_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.journal_lines drop constraint if exists journal_lines_currency_fkey;
 alter table public.journal_lines add constraint journal_lines_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.journal_lines drop constraint if exists journal_lines_department_id_fkey;
 alter table public.journal_lines add constraint journal_lines_department_id_fkey foreign key (department_id) references public.departments(id);
+alter table public.journal_lines drop constraint if exists journal_lines_journal_entry_id_fkey;
 alter table public.journal_lines add constraint journal_lines_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
+alter table public.journal_lines drop constraint if exists journal_lines_original_currency_fkey;
 alter table public.journal_lines add constraint journal_lines_original_currency_fkey foreign key (original_currency) references public.currencies(code);
 
 alter table public.journal_lines enable row level security;
@@ -1508,7 +1644,7 @@ alter table public.journal_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE payroll_employee_lines  (22 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.payroll_employee_lines (
+create table if not exists public.payroll_employee_lines (
     basic_salary numeric not null  -- [CONVENTION]
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -1554,8 +1690,11 @@ create table public.payroll_employee_lines (
     total_deductions numeric not null  -- [CONVENTION]
 );
 
+alter table public.payroll_employee_lines drop constraint if exists payroll_employee_lines_business_id_fkey;
 alter table public.payroll_employee_lines add constraint payroll_employee_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.payroll_employee_lines drop constraint if exists payroll_employee_lines_employee_id_fkey;
 alter table public.payroll_employee_lines add constraint payroll_employee_lines_employee_id_fkey foreign key (employee_id) references public.employees(id);
+alter table public.payroll_employee_lines drop constraint if exists payroll_employee_lines_payroll_run_id_fkey;
 alter table public.payroll_employee_lines add constraint payroll_employee_lines_payroll_run_id_fkey foreign key (payroll_run_id) references public.payroll_runs(id);
 
 alter table public.payroll_employee_lines enable row level security;
@@ -1564,7 +1703,7 @@ alter table public.payroll_employee_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE products  (26 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.products (
+create table if not exists public.products (
     barcode text  -- [CONVENTION]
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -1618,11 +1757,17 @@ create table public.products (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.products drop constraint if exists products_business_id_fkey;
 alter table public.products add constraint products_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.products drop constraint if exists products_category_id_fkey;
 alter table public.products add constraint products_category_id_fkey foreign key (category_id) references public.product_categories(id);
+alter table public.products drop constraint if exists products_cogs_account_id_fkey;
 alter table public.products add constraint products_cogs_account_id_fkey foreign key (cogs_account_id) references public.accounts(id);
+alter table public.products drop constraint if exists products_inventory_account_id_fkey;
 alter table public.products add constraint products_inventory_account_id_fkey foreign key (inventory_account_id) references public.accounts(id);
+alter table public.products drop constraint if exists products_purchase_account_id_fkey;
 alter table public.products add constraint products_purchase_account_id_fkey foreign key (purchase_account_id) references public.accounts(id);
+alter table public.products drop constraint if exists products_sales_account_id_fkey;
 alter table public.products add constraint products_sales_account_id_fkey foreign key (sales_account_id) references public.accounts(id);
 
 alter table public.products enable row level security;
@@ -1631,7 +1776,7 @@ alter table public.products enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE stock_movements  (15 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.stock_movements (
+create table if not exists public.stock_movements (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     created_at timestamptz not null default now()  -- [CONVENTION]
@@ -1663,8 +1808,11 @@ create table public.stock_movements (
     unit_cost numeric not null  -- [CONVENTION]
 );
 
+alter table public.stock_movements drop constraint if exists stock_movements_business_id_fkey;
 alter table public.stock_movements add constraint stock_movements_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.stock_movements drop constraint if exists stock_movements_location_id_fkey;
 alter table public.stock_movements add constraint stock_movements_location_id_fkey foreign key (location_id) references public.inventory_locations(id);
+alter table public.stock_movements drop constraint if exists stock_movements_product_id_fkey;
 alter table public.stock_movements add constraint stock_movements_product_id_fkey foreign key (product_id) references public.products(id);
 
 alter table public.stock_movements enable row level security;
@@ -1673,7 +1821,7 @@ alter table public.stock_movements enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE stock_transfer_lines  (10 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.stock_transfer_lines (
+create table if not exists public.stock_transfer_lines (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     created_at timestamptz not null default now()  -- [CONVENTION]
@@ -1695,8 +1843,11 @@ create table public.stock_transfer_lines (
     unit_cost numeric not null  -- [CONVENTION]
 );
 
+alter table public.stock_transfer_lines drop constraint if exists stock_transfer_lines_business_id_fkey;
 alter table public.stock_transfer_lines add constraint stock_transfer_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.stock_transfer_lines drop constraint if exists stock_transfer_lines_product_id_fkey;
 alter table public.stock_transfer_lines add constraint stock_transfer_lines_product_id_fkey foreign key (product_id) references public.products(id);
+alter table public.stock_transfer_lines drop constraint if exists stock_transfer_lines_transfer_id_fkey;
 alter table public.stock_transfer_lines add constraint stock_transfer_lines_transfer_id_fkey foreign key (transfer_id) references public.stock_transfers(id);
 
 alter table public.stock_transfer_lines enable row level security;
@@ -1705,7 +1856,7 @@ alter table public.stock_transfer_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE tax_configurations  (16 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.tax_configurations (
+create table if not exists public.tax_configurations (
     business_id uuid not null  -- [EVIDENCED] FK
 ,
     created_at timestamptz not null default now()  -- [CONVENTION]
@@ -1739,8 +1890,11 @@ create table public.tax_configurations (
     updated_at timestamptz not null default now()  -- [CONVENTION]
 );
 
+alter table public.tax_configurations drop constraint if exists tax_configurations_business_id_fkey;
 alter table public.tax_configurations add constraint tax_configurations_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.tax_configurations drop constraint if exists tax_configurations_tax_payable_account_id_fkey;
 alter table public.tax_configurations add constraint tax_configurations_tax_payable_account_id_fkey foreign key (tax_payable_account_id) references public.accounts(id);
+alter table public.tax_configurations drop constraint if exists tax_configurations_tax_receivable_account_id_fkey;
 alter table public.tax_configurations add constraint tax_configurations_tax_receivable_account_id_fkey foreign key (tax_receivable_account_id) references public.accounts(id);
 
 alter table public.tax_configurations enable row level security;
@@ -1749,7 +1903,7 @@ alter table public.tax_configurations enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE bank_statement_lines  (12 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.bank_statement_lines (
+create table if not exists public.bank_statement_lines (
     balance numeric  -- [CONVENTION]
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -1775,8 +1929,11 @@ create table public.bank_statement_lines (
     transaction_date date not null  -- [EVIDENCED]
 );
 
+alter table public.bank_statement_lines drop constraint if exists bank_statement_lines_business_id_fkey;
 alter table public.bank_statement_lines add constraint bank_statement_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.bank_statement_lines drop constraint if exists bank_statement_lines_journal_line_id_fkey;
 alter table public.bank_statement_lines add constraint bank_statement_lines_journal_line_id_fkey foreign key (journal_line_id) references public.journal_lines(id);
+alter table public.bank_statement_lines drop constraint if exists bank_statement_lines_statement_id_fkey;
 alter table public.bank_statement_lines add constraint bank_statement_lines_statement_id_fkey foreign key (statement_id) references public.bank_statements(id);
 
 alter table public.bank_statement_lines enable row level security;
@@ -1785,7 +1942,7 @@ alter table public.bank_statement_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE depreciation_schedules  (13 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.depreciation_schedules (
+create table if not exists public.depreciation_schedules (
     accumulated_to_date numeric not null  -- [CONVENTION]
 ,
     asset_id uuid not null  -- [EVIDENCED] FK
@@ -1813,8 +1970,11 @@ create table public.depreciation_schedules (
     posted_by text  -- [CONVENTION]
 );
 
+alter table public.depreciation_schedules drop constraint if exists depreciation_schedules_asset_id_fkey;
 alter table public.depreciation_schedules add constraint depreciation_schedules_asset_id_fkey foreign key (asset_id) references public.fixed_assets(id);
+alter table public.depreciation_schedules drop constraint if exists depreciation_schedules_business_id_fkey;
 alter table public.depreciation_schedules add constraint depreciation_schedules_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.depreciation_schedules drop constraint if exists depreciation_schedules_journal_entry_id_fkey;
 alter table public.depreciation_schedules add constraint depreciation_schedules_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
 
 alter table public.depreciation_schedules enable row level security;
@@ -1823,7 +1983,7 @@ alter table public.depreciation_schedules enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE employee_allowances  (10 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.employee_allowances (
+create table if not exists public.employee_allowances (
     amount numeric not null  -- [CONVENTION]
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -1845,7 +2005,9 @@ create table public.employee_allowances (
     name text not null  -- [CONVENTION]
 );
 
+alter table public.employee_allowances drop constraint if exists employee_allowances_business_id_fkey;
 alter table public.employee_allowances add constraint employee_allowances_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.employee_allowances drop constraint if exists employee_allowances_employee_id_fkey;
 alter table public.employee_allowances add constraint employee_allowances_employee_id_fkey foreign key (employee_id) references public.employees(id);
 
 alter table public.employee_allowances enable row level security;
@@ -1854,7 +2016,7 @@ alter table public.employee_allowances enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE employee_deductions  (13 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.employee_deductions (
+create table if not exists public.employee_deductions (
     amount numeric not null  -- [CONVENTION]
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -1882,8 +2044,11 @@ create table public.employee_deductions (
     pre_tax boolean not null  -- [CONVENTION]
 );
 
+alter table public.employee_deductions drop constraint if exists employee_deductions_business_id_fkey;
 alter table public.employee_deductions add constraint employee_deductions_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.employee_deductions drop constraint if exists employee_deductions_employee_id_fkey;
 alter table public.employee_deductions add constraint employee_deductions_employee_id_fkey foreign key (employee_id) references public.employees(id);
+alter table public.employee_deductions drop constraint if exists employee_deductions_liability_account_id_fkey;
 alter table public.employee_deductions add constraint employee_deductions_liability_account_id_fkey foreign key (liability_account_id) references public.accounts(id);
 
 alter table public.employee_deductions enable row level security;
@@ -1892,7 +2057,7 @@ alter table public.employee_deductions enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE expense_lines  (17 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.expense_lines (
+create table if not exists public.expense_lines (
     account_id uuid  -- [EVIDENCED] FK
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -1928,9 +2093,13 @@ create table public.expense_lines (
     unit_price numeric not null  -- [CONVENTION]
 );
 
+alter table public.expense_lines drop constraint if exists expense_lines_account_id_fkey;
 alter table public.expense_lines add constraint expense_lines_account_id_fkey foreign key (account_id) references public.accounts(id);
+alter table public.expense_lines drop constraint if exists expense_lines_business_id_fkey;
 alter table public.expense_lines add constraint expense_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.expense_lines drop constraint if exists expense_lines_expense_id_fkey;
 alter table public.expense_lines add constraint expense_lines_expense_id_fkey foreign key (expense_id) references public.expenses(id);
+alter table public.expense_lines drop constraint if exists expense_lines_product_id_fkey;
 alter table public.expense_lines add constraint expense_lines_product_id_fkey foreign key (product_id) references public.products(id);
 
 alter table public.expense_lines enable row level security;
@@ -1939,7 +2108,7 @@ alter table public.expense_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE expense_payments  (19 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.expense_payments (
+create table if not exists public.expense_payments (
     amount numeric not null  -- [CONVENTION]
 ,
     bank_account_id uuid  -- [EVIDENCED] FK
@@ -1979,11 +2148,17 @@ create table public.expense_payments (
     reference text  -- [CONVENTION]
 );
 
+alter table public.expense_payments drop constraint if exists expense_payments_bank_account_id_fkey;
 alter table public.expense_payments add constraint expense_payments_bank_account_id_fkey foreign key (bank_account_id) references public.accounts(id);
+alter table public.expense_payments drop constraint if exists expense_payments_business_id_fkey;
 alter table public.expense_payments add constraint expense_payments_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.expense_payments drop constraint if exists expense_payments_currency_fkey;
 alter table public.expense_payments add constraint expense_payments_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.expense_payments drop constraint if exists expense_payments_expense_id_fkey;
 alter table public.expense_payments add constraint expense_payments_expense_id_fkey foreign key (expense_id) references public.expenses(id);
+alter table public.expense_payments drop constraint if exists expense_payments_journal_entry_id_fkey;
 alter table public.expense_payments add constraint expense_payments_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
+alter table public.expense_payments drop constraint if exists expense_payments_original_currency_fkey;
 alter table public.expense_payments add constraint expense_payments_original_currency_fkey foreign key (original_currency) references public.currencies(code);
 
 alter table public.expense_payments enable row level security;
@@ -1992,7 +2167,7 @@ alter table public.expense_payments enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE inventory_balances  (10 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.inventory_balances (
+create table if not exists public.inventory_balances (
     average_cost numeric not null  -- [CONVENTION]
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -2016,8 +2191,11 @@ create table public.inventory_balances (
     unique (business_id, product_id, location_id)  -- [EVIDENCED] migrations use ON CONFLICT on these columns (20260728000003/20260728000002)
 );
 
+alter table public.inventory_balances drop constraint if exists inventory_balances_business_id_fkey;
 alter table public.inventory_balances add constraint inventory_balances_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.inventory_balances drop constraint if exists inventory_balances_location_id_fkey;
 alter table public.inventory_balances add constraint inventory_balances_location_id_fkey foreign key (location_id) references public.inventory_locations(id);
+alter table public.inventory_balances drop constraint if exists inventory_balances_product_id_fkey;
 alter table public.inventory_balances add constraint inventory_balances_product_id_fkey foreign key (product_id) references public.products(id);
 
 alter table public.inventory_balances enable row level security;
@@ -2026,7 +2204,7 @@ alter table public.inventory_balances enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE invoice_lines  (17 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.invoice_lines (
+create table if not exists public.invoice_lines (
     account_id uuid  -- [EVIDENCED] FK
 ,
     business_id uuid not null  -- [EVIDENCED] FK
@@ -2062,9 +2240,13 @@ create table public.invoice_lines (
     unit_price numeric not null  -- [CONVENTION]
 );
 
+alter table public.invoice_lines drop constraint if exists fk_invoice_line_product;
 alter table public.invoice_lines add constraint fk_invoice_line_product foreign key (product_id) references public.products(id);
+alter table public.invoice_lines drop constraint if exists invoice_lines_account_id_fkey;
 alter table public.invoice_lines add constraint invoice_lines_account_id_fkey foreign key (account_id) references public.accounts(id);
+alter table public.invoice_lines drop constraint if exists invoice_lines_business_id_fkey;
 alter table public.invoice_lines add constraint invoice_lines_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.invoice_lines drop constraint if exists invoice_lines_invoice_id_fkey;
 alter table public.invoice_lines add constraint invoice_lines_invoice_id_fkey foreign key (invoice_id) references public.invoices(id);
 
 alter table public.invoice_lines enable row level security;
@@ -2073,7 +2255,7 @@ alter table public.invoice_lines enable row level security;
 -- ────────────────────────────────────────────────────────────────────────────
 -- TABLE invoice_payments  (19 columns)
 -- ────────────────────────────────────────────────────────────────────────────
-create table public.invoice_payments (
+create table if not exists public.invoice_payments (
     amount numeric not null  -- [CONVENTION]
 ,
     bank_account_id uuid  -- [EVIDENCED] FK
@@ -2113,11 +2295,17 @@ create table public.invoice_payments (
     reference text  -- [CONVENTION]
 );
 
+alter table public.invoice_payments drop constraint if exists invoice_payments_bank_account_id_fkey;
 alter table public.invoice_payments add constraint invoice_payments_bank_account_id_fkey foreign key (bank_account_id) references public.accounts(id);
+alter table public.invoice_payments drop constraint if exists invoice_payments_business_id_fkey;
 alter table public.invoice_payments add constraint invoice_payments_business_id_fkey foreign key (business_id) references public.businesses(id);
+alter table public.invoice_payments drop constraint if exists invoice_payments_currency_fkey;
 alter table public.invoice_payments add constraint invoice_payments_currency_fkey foreign key (currency) references public.currencies(code);
+alter table public.invoice_payments drop constraint if exists invoice_payments_invoice_id_fkey;
 alter table public.invoice_payments add constraint invoice_payments_invoice_id_fkey foreign key (invoice_id) references public.invoices(id);
+alter table public.invoice_payments drop constraint if exists invoice_payments_journal_entry_id_fkey;
 alter table public.invoice_payments add constraint invoice_payments_journal_entry_id_fkey foreign key (journal_entry_id) references public.journal_entries(id);
+alter table public.invoice_payments drop constraint if exists invoice_payments_original_currency_fkey;
 alter table public.invoice_payments add constraint invoice_payments_original_currency_fkey foreign key (original_currency) references public.currencies(code);
 
 alter table public.invoice_payments enable row level security;
