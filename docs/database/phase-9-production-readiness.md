@@ -11,7 +11,7 @@ access; the browser journeys are specified in
 |---|---|---|---|
 | 1 | **Environment isolation** | **PASS** | Staging project `bkxzgkurcqvccsdjmqzg` is distinct from production `hsuhuvuxfuufrlejsatw` (verified live in Phase 8A.1 capture run; isolation guard passed; deploy pipeline green on the dedicated staging project). |
 | 2 | **Database reproducibility** | **PASS** | 8A.1: live staging == fresh replay 1:1 (65/65 tables, 16/16 enums, 195/195 FKs, 11/11 triggers, 3/3 cron). 8B: 61/61 migrations replay clean; 93/93 assertions. |
-| 3 | **Reference data** | **PARTIAL** | PAYE bands researched + [VERIFIED] (9.2) but **migration pending approval** → payroll reference data BLOCKED. VAT 17.5% and pension 10/5 confirmed already implemented. |
+| 3 | **Reference data** | **PASS** | PAYE bands [VERIFIED] + **approved** + migration created and **applied to staging** (green deploy 2026-08-16). VAT 17.5% and pension 10/5 confirmed already implemented. |
 | 4 | **Authentication** | **PARTIAL** | Supabase auth configured (signUp/session flows in code; RegisterPage tested at DB layer). Browser registration (Journey A) pending. |
 | 5 | **Business onboarding** | **PARTIAL** | `create_business_with_owner` + COA + owner membership verified end-to-end at DB layer (8B.1, 8B.5). Browser onboarding (Journey A) pending. |
 | 6 | **Roles/permissions** | **PASS** (DB) / **BLOCKED** (UI) | Role model + RLS tiering verified (8B.3: 41/41 incl. role denials). UI role gating (Journey B) pending browser run. |
@@ -20,7 +20,7 @@ access; the browser journeys are specified in
 | 9 | **Purchases** | **PARTIAL** | Stock receipt + journal verified at DB layer. UI pending. |
 | 10 | **Inventory** | **PARTIAL** | Quantity identity + reorder alerts verified at DB layer. UI pending. |
 | 11 | **Expenses** | **PARTIAL** | Expense + payment + balanced journal verified at DB layer. UI pending. |
-| 12 | **Payroll** | **BLOCKED** | PAYE reference data not yet approved (9.2); payroll tax correctness must NOT be certified before approval + test cases pass. |
+| 12 | **Payroll** | **PARTIAL** | PAYE reference data approved + applied to staging; DB-layer PAYE cases verified (99,000 / 570,500 / 4,170,500). Browser payroll run (Journey H) pending. |
 | 13 | **Bank reconciliation** | **PARTIAL** | Statement/lines/lock-guard verified at DB layer. UI matching flow pending. |
 | 14 | **Financial reporting** | **PARTIAL** | Trial balance equation + 4 views verified at DB layer (8B.2, 8B.6). Report UI + PDF cross-reconciliation (Journey I) pending. |
 | 15 | **PDFs** | **PARTIAL** | Async builder + error propagation verified in code (H-08 fix present; `documentGenerator.ts` reviewed). Browser generate/download/open incl. Chrome+Safari (regression #2) pending. |
