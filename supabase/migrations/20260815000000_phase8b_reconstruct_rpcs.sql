@@ -33,6 +33,7 @@
 --   [INFERRED] no current call sites in src/ (legacy helpers); semantics from
 --              the business_users membership model used everywhere
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.current_user_role(uuid);
 create or replace function public.current_user_role(p_business_id uuid)
 returns public.user_role
 language sql
@@ -48,6 +49,7 @@ as $$
    limit 1;
 $$;
 
+drop function if exists public.get_user_role(uuid);
 create or replace function public.get_user_role(p_business_id uuid)
 returns public.user_role
 language sql
@@ -68,6 +70,7 @@ $$;
 --   [VERIFIED] signature: database.generated.ts Functions section
 --   [INFERRED] implementation (no callers in repo; standard pg_enum lookup)
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.get_enum_values(text);
 create or replace function public.get_enum_values(p_enum_name text)
 returns text[]
 language sql
@@ -98,6 +101,7 @@ $$;
 --   mirror Supabase (the initial unqualified version failed on real staging
 --   with SQLSTATE 42883).
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.audit_chain_hash(text, uuid, uuid, timestamptz, text, text, text, text, jsonb, jsonb, text);
 create or replace function public.audit_chain_hash(
   p_prev_hash text,
   p_business_id uuid,
@@ -149,6 +153,7 @@ $$;
 --              function — NOT fabricated here. PAYE bands are only seeded
 --              when the caller supplies them in p_biz -> 'paye_bands'.
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.seed_new_business(jsonb);
 create or replace function public.seed_new_business(p_biz jsonb)
 returns void
 language plpgsql
@@ -409,6 +414,7 @@ $$;
 --   [INFERRED] audit entry 'business_created' (no evidence the legacy RPC
 --              logged creation; harmless and consistent with audit model)
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.create_business_with_owner(text, text, text, text, text, boolean, text, text, text, text, text, text, text, text, text, text, text, text);
 create or replace function public.create_business_with_owner(
   p_name text,
   p_trading_name text,
@@ -539,6 +545,7 @@ $$;
 --   [INFERRED] error wording (page matches 'already a member', 'Invalid or
 --              expired', 'Invitation not found')
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.accept_invitation(text);
 create or replace function public.accept_invitation(p_token text)
 returns jsonb
 language plpgsql
@@ -636,6 +643,7 @@ $$;
 --   [VERIFIED] business_invitations shape from migration 20260723000001
 --              (token unique, expires_at default now()+7 days)
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.invite_member(uuid, text, public.user_role);
 create or replace function public.invite_member(
   p_business_id uuid,
   p_email text,
@@ -703,6 +711,7 @@ $$;
 --              the RPC has no client-IP source)
 --   Permission: caller must be able to write business data (writers).
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.log_manual_audit_event(uuid, text, text, text, text, jsonb, jsonb, text);
 create or replace function public.log_manual_audit_event(
   p_business_id uuid,
   p_event_type text,
@@ -765,6 +774,7 @@ $$;
 --   Permission: can_read_audit roles (owner/admin/accountant/payroll_manager/
 --               auditor/board_member per 20260728000009).
 -- ────────────────────────────────────────────────────────────────────────────
+drop function if exists public.verify_audit_chain(uuid, text);
 create or replace function public.verify_audit_chain(
   p_business_id uuid,
   p_resource_type text default null
