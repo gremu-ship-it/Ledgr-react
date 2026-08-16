@@ -91,7 +91,9 @@ export class AssetRepository extends BaseRepository<'fixed_assets'> {
   }
 
   async recordDepreciation(
-    schedule: InsertDto<'depreciation_schedules'> & { journal_entry_id: string },
+    // `posted`/`posted_at`/`posted_by` are set by this function (posting the
+    // schedule); callers supply the draft schedule fields only.
+    schedule: Omit<InsertDto<'depreciation_schedules'>, 'posted' | 'posted_at' | 'posted_by'> & { journal_entry_id: string },
     postedBy: string,
   ): Promise<{ schedule: Row<'depreciation_schedules'>; asset: Row<'fixed_assets'> }> {
     const { data, error } = await this.client

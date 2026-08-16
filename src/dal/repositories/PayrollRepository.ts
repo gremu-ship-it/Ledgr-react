@@ -341,6 +341,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
         line_number: lineNum++,
         tax_code: 'none',
         tax_amount: 0,
+        reconciled: false as const,
       });
     }
 
@@ -389,6 +390,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
         exchange_rate: 1,
         line_number: lineNum++,
         tax_code: 'paye',
+        reconciled: false as const,
         tax_amount: totalPaye,
       });
     }
@@ -412,6 +414,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
         line_number: lineNum++,
         tax_code: 'tpr_pension',
         tax_amount: totalPension,
+        reconciled: false as const,
       });
     }
 
@@ -448,6 +451,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
         line_number: lineNum++,
         tax_code: 'tpr_pension',
         tax_amount: totalPensionEmployer,
+        reconciled: false as const,
       });
     }
 
@@ -483,6 +487,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       line_number: lineNum + 1,
       tax_code: 'none',
       tax_amount: 0,
+      reconciled: false as const,
     });
 
     const { entry } = await journalRepo.createBalancedEntry(
