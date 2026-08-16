@@ -91,6 +91,12 @@ $$;
 -- audit_chain_hash — shared canonical hash for the audit chain
 --   [INFERRED] algorithm (see log_manual_audit_event). Centralised so
 --              writers and verifiers can never drift apart.
+--   NOTE: digest() is a pgcrypto function. On Supabase, pgcrypto is installed
+--   in the `extensions` schema (confirmed by the Phase 8A.1 live capture:
+--   pgcrypto 1.3 -> extensions), so the call is schema-qualified. The
+--   disposable replay harness must install pgcrypto WITH SCHEMA extensions to
+--   mirror Supabase (the initial unqualified version failed on real staging
+--   with SQLSTATE 42883).
 -- ────────────────────────────────────────────────────────────────────────────
 create or replace function public.audit_chain_hash(
   p_prev_hash text,
@@ -111,7 +117,7 @@ immutable
 security definer
 set search_path = public
 as $$
-  select encode(digest(
+  select encode(extensions.digest(
     coalesce(p_prev_hash, '')
     || chr(1) || p_business_id::text
     || chr(1) || coalesce(p_user_id::text, '')
@@ -643,7 +649,7 @@ as $$
 declare
   v_user_id   uuid := auth.uid();
   v_caller    record;
-  v_token     text := encode(gen_random_bytes(32), 'hex');
+  v_token     text := encode(extensions.gen_random_bytes(32), 'hex');
 begin
   if v_user_id is null then
     raise exception 'You must be signed in.' using errcode = '42501';
