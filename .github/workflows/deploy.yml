@@ -113,7 +113,7 @@ jobs:
       - name: Link & migrate staging database
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
       - name: Set Edge Function secrets (staging)
         run: |
           supabase secrets set \
@@ -214,7 +214,7 @@ jobs:
       - name: Link & migrate production database
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --password "$SUPABASE_DB_PASSWORD"
+          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
       - name: Set Edge Function secrets (production)
         run: |
           supabase secrets set \
