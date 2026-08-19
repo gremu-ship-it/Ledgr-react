@@ -13,6 +13,39 @@
  * inventoryValuation.ts).
  */
 
+export interface CapitalisationJournalRef {
+  source_id: string | null;
+  status: string;
+  entry_date?: string | null;
+}
+
+/**
+ * Returns assets whose acquisition has an effective GL posting.
+ *
+ * A draft is not capitalisation: it is ignored by the SOFP balance query and
+ * can be left behind when the create-entry step succeeds but posting fails.
+ * Treating that draft as effective caused the asset to be excluded from both
+ * the GL section and the register fallback, leaving Non-Current Assets at
+ * zero. Reversed entries are ineffective for the same reason.
+ *
+ * `asOfDate` is used by point-in-time reports so a later posting cannot hide a
+ * register asset from an earlier statement date.
+ */
+export function postedCapitalisedAssetIds(
+  entries: CapitalisationJournalRef[],
+  asOfDate?: string,
+): Set<string> {
+  return new Set(
+    entries
+      .filter((entry) => {
+        if (entry.status !== 'posted' || !entry.source_id) return false;
+        if (!asOfDate) return true;
+        return Boolean(entry.entry_date && entry.entry_date <= asOfDate);
+      })
+      .map((entry) => entry.source_id as string),
+  );
+}
+
 export interface CapitalisationLineParams {
   assetAccountId: string;
   fundingAccountId: string;

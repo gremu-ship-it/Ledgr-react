@@ -71,13 +71,20 @@ export function buildFixedAssetCheck(input: FixedAssetCheckInput): IntegrityChec
     );
   }
 
-  const ok = Math.abs(depVariance) <= INTEGRITY_TOLERANCE;
+  // A cost variance can be legitimate after revaluation, so it remains a
+  // warning rather than changing `ok`. It must not, however, be described as
+  // a clean tie: the report UI surfaces checks with findings as well as hard
+  // failures so missing capitalisation is visible to the reviewer.
+  const depreciationTies = Math.abs(depVariance) <= INTEGRITY_TOLERANCE;
+  const costTies = Math.abs(costVariance) <= INTEGRITY_TOLERANCE;
   return {
     key: 'fixed-assets',
-    ok,
-    summary: ok
-      ? `Fixed-asset register ties to GL across ${input.registerAssetCount} asset(s).`
-      : 'Fixed-asset register does not tie to the general ledger.',
+    ok: depreciationTies,
+    summary: !depreciationTies
+      ? 'Fixed-asset register does not tie to the general ledger.'
+      : !costTies
+        ? 'Fixed-asset depreciation ties, but register cost differs from the general ledger.'
+        : `Fixed-asset register ties to GL across ${input.registerAssetCount} asset(s).`,
     findings,
   };
 }

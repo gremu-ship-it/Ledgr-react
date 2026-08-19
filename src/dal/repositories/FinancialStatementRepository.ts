@@ -3,6 +3,7 @@ import type { Database, Row, AccountSubtype } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import { asNormalBalance, toStatementSide, type NormalBalance } from '@/lib/statementPresentation';
+import { postedCapitalisedAssetIds } from '@/lib/fixedAssetCapitalisation';
 import {
   buildBankReconciliationCheck,
   buildFixedAssetCheck,
@@ -351,28 +352,51 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? await this.computeBalances(businessId, { asOfDate: comparativeDate, includeOpeningBalances: true })
       : null;
 
-    // Asset forms post capitalisation journals to fixed_assets.asset_account_id.
-    // The account can be a custom account whose subtype/code is not one of the
-    // standard fixed-asset classifications, which previously made a correctly
-    // posted fixed-asset journal disappear from Non-Current Assets entirely.
-    // Treat the explicit register-to-GL relationship as authoritative.
-    let fixedAssetAccountIds = new Set<string>();
+    // Capitalisation/depreciation journals use the asset's GL overrides and
+    // fall back to its category defaults. Those accounts can be custom rows
+    // whose subtype/code is outside the standard fixed-asset classifications.
+    // The old report only inspected fixed_assets.asset_account_id, so an asset
+    // inheriting a custom category account could have a valid POSTED journal
+    // and still disappear from Non-Current Assets. Resolve both levels and
+    // include cost plus accumulated-depreciation accounts explicitly.
+    const fixedAssetRelatedAccountIds = new Set<string>();
     try {
       const { data, error } = await this.client
         .from('fixed_assets')
-        .select('asset_account_id')
+        .select('asset_account_id, accumulated_dep_account_id, category_id')
         .eq('business_id', businessId)
         .is('deleted_at', null);
       if (!error) {
-        fixedAssetAccountIds = new Set(
-          ((data ?? []) as Array<{ asset_account_id: string | null }>)
-            .map((asset) => asset.asset_account_id)
-            .filter((id): id is string => Boolean(id)),
-        );
+        const assetLinks = (data ?? []) as Array<{
+          asset_account_id: string | null;
+          accumulated_dep_account_id: string | null;
+          category_id: string | null;
+        }>;
+        for (const asset of assetLinks) {
+          if (asset.asset_account_id) fixedAssetRelatedAccountIds.add(asset.asset_account_id);
+          if (asset.accumulated_dep_account_id) fixedAssetRelatedAccountIds.add(asset.accumulated_dep_account_id);
+        }
+
+        const categoryIds = [...new Set(
+          assetLinks.map((asset) => asset.category_id).filter((id): id is string => Boolean(id)),
+        )];
+        if (categoryIds.length > 0) {
+          const categories = await this.client
+            .from('asset_categories')
+            .select('asset_account_id, accumulated_dep_account_id')
+            .eq('business_id', businessId)
+            .in('id', categoryIds);
+          if (!categories.error) {
+            for (const category of categories.data ?? []) {
+              if (category.asset_account_id) fixedAssetRelatedAccountIds.add(category.asset_account_id);
+              if (category.accumulated_dep_account_id) fixedAssetRelatedAccountIds.add(category.accumulated_dep_account_id);
+            }
+          }
+        }
       }
     } catch {
       // The standard subtype-based path remains available if this optional
-      // register lookup fails (for example in an older deployment).
+      // register/category lookup fails (for example in an older deployment).
     }
 
     const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit');
@@ -381,7 +405,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ['non_current_asset', 'fixed_asset'],
       'Non-Current Assets',
       'debit',
-      fixedAssetAccountIds,
+      fixedAssetRelatedAccountIds,
     );
     const currentLiabilities = this.buildSection(balances, comparativeBalances, ['current_liability'], 'Current Liabilities', 'credit');
     const nonCurrentLiabilities = this.buildSection(balances, comparativeBalances, ['non_current_liability'], 'Non-Current Liabilities', 'credit');
@@ -441,32 +465,31 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
         if (activeAsOfDate.length > 0) {
           const capRes = await this.client
             .from('journal_entries')
-            .select('source_id')
+            .select('source_id, status, entry_date')
             .eq('business_id', businessId)
             .eq('source_type', 'fixed_asset_acquisition')
-            .neq('status', 'reversed');
+            .eq('status', 'posted')
+            .lte('entry_date', asOfDate);
 
-          let capitalisedIds = new Set<string>();
-          if (!capRes.error) {
-            capitalisedIds = new Set(
-              ((capRes.data ?? []) as Array<{ source_id: string | null }>)
-                .map((r) => r.source_id)
-                .filter((id): id is string => Boolean(id)),
-            );
-          }
-
+          // Do not assume every asset is uncapitalised when this lookup fails:
+          // adding the whole register on top of existing GL balances would
+          // double-count assets. The outer best-effort guard retains GL-only
+          // reporting in that case.
+          if (capRes.error) throw toRepositoryError('journal_entries', capRes.error);
+          const capitalisationRefs = capRes.data ?? [];
+          const capitalisedIds = postedCapitalisedAssetIds(capitalisationRefs, asOfDate);
           const uncapitalised = activeAsOfDate.filter((a) => !capitalisedIds.has(a.id));
 
-          // For comparative date, same logic — only assets acquired by that date
-          // and not yet disposed by that date, and lacking a capitalisation entry
-          // as of now (we don't have historical capitalisation state, so use current
-          // capitalised set as approximation).
+          // For a comparative date, evaluate journal effectiveness at that
+          // date too. A later posting must not make an earlier statement omit
+          // the register fallback.
           let comparativeUncapitalised: typeof activeAsOfDate = [];
           if (comparativeDate) {
+            const comparativeCapitalisedIds = postedCapitalisedAssetIds(capitalisationRefs, comparativeDate);
             comparativeUncapitalised = registerAssets.filter((a) => {
               if (a.acquisition_date > comparativeDate) return false;
               if (a.disposal_date && a.disposal_date <= comparativeDate) return false;
-              return !capitalisedIds.has(a.id);
+              return !comparativeCapitalisedIds.has(a.id);
             });
           }
 

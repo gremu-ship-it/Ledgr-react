@@ -132,6 +132,105 @@ describe('getSOFP — contra-account presentation', () => {
     expect(sofp.nonCurrentAssets.subtotal).toBe(75_000);
     expect(sofp.totalAssets).toBe(75_000);
   });
+
+  it('includes a custom GL account inherited from the asset category', async () => {
+    const customAccount = {
+      ...ACCOUNTS[3],
+      id: 'a-category-ppe',
+      code: 'CUSTOM-PPE',
+      name: 'Category Equipment Account',
+      account_subtype: 'other_asset',
+    };
+    const fixedAsset = {
+      id: 'asset-category-linked',
+      asset_number: 'FA-CAT-1',
+      name: 'Category-linked equipment',
+      category_id: 'category-1',
+      asset_account_id: null,
+      accumulated_dep_account_id: null,
+      acquisition_date: '2026-01-01',
+      acquisition_cost: 80_000,
+      accumulated_depreciation: 0,
+      net_book_value: 80_000,
+      status: 'active',
+      disposal_date: null,
+    };
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([customAccount]);
+        if (table === 'journal_lines') {
+          return tableStub([{ account_id: 'a-category-ppe', is_debit: true, amount_base: 80_000 }]);
+        }
+        if (table === 'fixed_assets') return tableStub([fixedAsset]);
+        if (table === 'asset_categories') {
+          return tableStub([{
+            id: 'category-1',
+            asset_account_id: 'a-category-ppe',
+            accumulated_dep_account_id: null,
+          }]);
+        }
+        if (table === 'journal_entries') {
+          return tableStub([{
+            source_id: 'asset-category-linked',
+            status: 'posted',
+            entry_date: '2026-01-01',
+          }]);
+        }
+        return tableStub([]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    expect(sofp.nonCurrentAssets.lines).toEqual([
+      expect.objectContaining({ code: 'CUSTOM-PPE', amount: 80_000 }),
+    ]);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(80_000);
+  });
+
+  it('shows the register NBV when a failed capitalisation left only a draft journal', async () => {
+    const account = { ...ACCOUNTS[3], opening_balance: 0 };
+    const fixedAsset = {
+      id: 'asset-with-draft',
+      asset_number: 'FA-DRAFT-1',
+      name: 'Equipment awaiting posting',
+      category_id: 'category-1',
+      asset_account_id: 'a-buildings',
+      accumulated_dep_account_id: null,
+      acquisition_date: '2026-01-01',
+      acquisition_cost: 60_000,
+      accumulated_depreciation: 5_000,
+      net_book_value: 55_000,
+      status: 'active',
+      disposal_date: null,
+    };
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([account]);
+        if (table === 'fixed_assets') return tableStub([fixedAsset]);
+        if (table === 'asset_categories') return tableStub([]);
+        if (table === 'journal_entries') {
+          return tableStub([{
+            source_id: 'asset-with-draft',
+            status: 'draft',
+            entry_date: '2026-01-01',
+          }]);
+        }
+        return tableStub([]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    expect(sofp.nonCurrentAssets.lines).toEqual([
+      expect.objectContaining({
+        code: 'FA-DRAFT-1',
+        name: 'Equipment awaiting posting (register — pending capitalisation)',
+        amount: 55_000,
+      }),
+    ]);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(55_000);
+  });
 });
 
 describe('getProfitOrLoss — discount presentation', () => {
