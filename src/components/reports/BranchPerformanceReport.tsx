@@ -1,6 +1,7 @@
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import {
   AlertTriangle,
   BarChart3,
@@ -235,32 +236,29 @@ export function BranchPerformanceReport({
   const { data, isLoading, error } = useQuery({
     queryKey: ['branch_performance', businessId, periodStart, periodEnd],
     queryFn: async () => {
-      const [branches, linesResult] = await Promise.all([
+      const [branches, lines] = await Promise.all([
         repos.branch.findByBusiness(businessId),
-        repos.journal.db
-          .from('journal_lines')
-          .select(`
-            branch_id,
-            is_debit,
-            amount_base,
-            accounts!inner(id, code, name, account_subtype, normal_balance),
-            journal_entries!inner(branch_id, entry_date, status, business_id)
-          `)
-          .eq('business_id', businessId)
-          .eq('journal_entries.business_id', businessId)
-          .gte('journal_entries.entry_date', periodStart)
-          .lte('journal_entries.entry_date', periodEnd)
-          .in('journal_entries.status', ['posted', 'reversed']),
+        fetchAllRows<JournalLineForBranchReport>(
+          repos.journal.db
+            .from('journal_lines')
+            .select(`
+              branch_id,
+              is_debit,
+              amount_base,
+              accounts!inner(id, code, name, account_subtype, normal_balance),
+              journal_entries!inner(branch_id, entry_date, status, business_id)
+            `)
+            .eq('business_id', businessId)
+            .eq('journal_entries.business_id', businessId)
+            .gte('journal_entries.entry_date', periodStart)
+            .lte('journal_entries.entry_date', periodEnd)
+            .in('journal_entries.status', ['posted', 'reversed']),
+        ),
       ]);
-
-      if (linesResult.error) throw new Error(linesResult.error.message);
 
       return {
         branches: branches as BranchRef[],
-        rows: buildBranchPerformance(
-          branches as BranchRef[],
-          (linesResult.data ?? []) as unknown as JournalLineForBranchReport[],
-        ),
+        rows: buildBranchPerformance(branches as BranchRef[], lines),
       };
     },
     enabled: Boolean(businessId && periodStart && periodEnd),

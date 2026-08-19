@@ -4,6 +4,7 @@ import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import { asNormalBalance, toStatementSide, type NormalBalance } from '@/lib/statementPresentation';
 import { postedCapitalisedAssetIds } from '@/lib/fixedAssetCapitalisation';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import {
   buildBankReconciliationCheck,
   buildFixedAssetCheck,
@@ -1078,7 +1079,11 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ((accountsRes.data ?? []) as Row<'accounts'>[]).map((a) => [a.id, a]),
     );
 
-    const linesRes = await this.client
+    type LineRow = {
+      journal_entry_id: string; account_id: string; is_debit: boolean; amount_base: number;
+      journal_entries: { entry_date: string; status: string; source_type: string | null; reversal_of: string | null };
+    };
+    const linesQuery = this.client
       .from('journal_lines')
       .select('journal_entry_id, account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id, source_type, reversal_of)')
       .eq('business_id', businessId)
@@ -1086,13 +1091,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       .gte('journal_entries.entry_date', periodStart)
       .lte('journal_entries.entry_date', periodEnd)
       .in('journal_entries.status', ['posted', 'reversed']);
-    if (linesRes.error) throw toRepositoryError('journal_lines', linesRes.error);
-
-    type LineRow = {
-      journal_entry_id: string; account_id: string; is_debit: boolean; amount_base: number;
-      journal_entries: { entry_date: string; status: string; source_type: string | null; reversal_of: string | null };
-    };
-    const lines = (linesRes.data ?? []) as unknown as LineRow[];
+    const lines = await fetchAllRows<LineRow>(linesQuery);
 
     const byEntry = new Map<string, LineRow[]>();
     for (const line of lines) {
@@ -1350,19 +1349,19 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const functionalCurrency = ((businessRes.data as { base_currency?: string } | null)?.base_currency) || 'MWK';
 
     // Foreign-currency journal lines touching posted/reversed entries.
-    const fxLinesRes = await this.client
+    const fxLinesQuery = this.client
       .from('journal_lines')
       .select('currency, amount_base, exchange_rate, rate_is_stale, journal_entries!inner(status, entry_number, business_id)')
       .eq('business_id', businessId)
       .eq('journal_entries.business_id', businessId)
       .in('journal_entries.status', ['posted', 'reversed']);
-    if (fxLinesRes.error) throw toRepositoryError('journal_lines', fxLinesRes.error);
-    const foreignLines: FxLineSample[] = [];
-    let staleRateCount = 0;
-    for (const l of (fxLinesRes.data ?? []) as unknown as Array<{
+    const fxLines = await fetchAllRows<{
       currency: string | null; amount_base: number; exchange_rate: number | null;
       rate_is_stale: boolean | null; journal_entries: { entry_number: string };
-    }>) {
+    }>(fxLinesQuery);
+    const foreignLines: FxLineSample[] = [];
+    let staleRateCount = 0;
+    for (const l of fxLines) {
       if (!l.currency || l.currency.toUpperCase() === functionalCurrency.toUpperCase()) continue;
       foreignLines.push({
         entryNumber: l.journal_entries?.entry_number ?? null,
