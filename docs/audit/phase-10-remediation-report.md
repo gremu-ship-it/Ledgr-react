@@ -17,7 +17,7 @@ via PR and reach production only through the tagged/approved deploy path).
 | A-03 | P2 | `invoices.amount_due` never set (NULL) | **FIXED** (DB-layer, all paths) | Trigger `sync_invoice_amount_due` + backfill migration `20260817000000`; audit assertion now passes (customer balance 47587.50) |
 | A-04 | P2 | No DB CHECK for negative quantity/stock | **FIXED** | Migration `20260817000001` — 10 CHECK constraints, NOT VALID + validated on clean DB, warns (does not abort) on legacy violations |
 | A-05 | P2 | VAT `0.175` duplicated ×4 | **FIXED** | `src/lib/vat.ts` single source; 4 rate sites + 4 label sites updated; rate verified current (17.5% effective Jan 2026, MRA) |
-| A-06 | P2 (ops) | Staging frontend Vercel deploy failing | **OPEN — user action required** | Diagnosis below; sandbox cannot reach Vercel |
+| A-06 | P2 (ops) | Staging frontend Vercel deploy failing | **CLOSED 2026-08-19** | Root cause: stale `VERCEL_TOKEN` secret. Token rotated → staging deploy fully green (frontend + DB migrations), run 32277346045 |
 | A-07 | P3 | `as any` / `as never` spread | **OPEN** (deferred, non-blocking) | — |
 | A-08 | P3 | No alert on catastrophic frontend errors | **OPEN** (Sentry alert rules — user dashboard action) | — |
 | A-09…A-12 | BLOCKED | Browser journeys, backup-restore, UI tenant matrix, AI/offline | **BLOCKED** unchanged | Need user's browser on hosted staging |
@@ -148,44 +148,130 @@ FAIL→PASS.
 
 ---
 
-## 7. A-06 — staging Vercel deploy (OPEN — user action)
+## 7. A-06 — staging Vercel deploy (CONFIRMED — project lives in the wrong account)
 
-**Facts (from GitHub run history, jobs API):**
-- Every `main` push since **13:58 UTC** fails at exactly the step
-  "Deploy frontend to Vercel (staging)". All earlier steps (incl. local
-  `npm run build`) pass.
-- The 15:00 UTC `workflow_dispatch` PRODUCTION deploy succeeded end-to-end
-  with the identical workflow mechanics — so the failure is specific to the
-  staging project.
-- `VERCEL_PROJECT_ID_STAGING` = `prj_AFgEgjFL7NTWoyFLKlkGlHlOv0V9` (the new
-  Phase 8A.1 project). The last successful staging deploy (13:15 UTC) ran
-  before this project was wired in. **Timing strongly implicates the new
-  staging project itself.**
+**Confirmed root cause (2026-08-19, from the failed step log):**
 
-**Most likely causes (in order):**
-1. The new project lives under a different Vercel account/team than
-   `team_ABA9J00MCqgkKSmDAWvrnr5b` → the deploy token (team-scoped) can't see it.
-2. Project settings (framework preset / build command / output directory)
-   differ from the working project `prj_hMyLCYtJzeTD1bpOl8D9sEdszAYn`.
-3. The project id string is wrong/typo'd.
+```
+Error: Project not found ({"VERCEL_PROJECT_ID":"prj_AFgEgjFL7NTWoyFLKlkGlHlOv0V9","VERCEL_ORG_ID":"team_ABA9J00MCqgkKSmDAWvrnr5b"})
+```
 
-**Required user steps (sandbox cannot reach Vercel):**
-1. Vercel dashboard → confirm `prj_AFgEgjFL7NTWoyFLKlkGlHlOv0V9` exists and
-   is under the SAME team as the token (`team_ABA9J00MCqgkKSmDAWvrnr5b`).
-   If it was created while logged into a personal account, move it into the
-   team (or create a fresh project from inside the team).
-2. Compare Settings → General with the working project (Framework Preset:
-   Vite; Build Command: `npm run build`; Output: `dist`).
-3. Rename the project to `ledgr-react-staging` (its current URL
-   `ledgr-react-prod.vercel.app` is confusing and conflicts semantically with
-   production) and update `APP_URL_STAGING` / `ALLOWED_ORIGINS_STAGING` in
-   GitHub repo variables to `https://ledgr-react-staging.vercel.app` (note:
-   the current value has a trailing slash — remove it).
-4. Read the failed step log in the GitHub UI (Actions → Deploy → run → the
-   red "Deploy frontend to Vercel (staging)" step). The sandbox's log API
-   returns EOF for these runs, so the exact error text is only visible in
-   the UI. Paste it here if the above doesn't resolve it.
-5. Re-run: `Actions → Deploy → Run workflow → environment: staging`.
+**The project id `prj_AFg…` is correct for the staging app** (confirmed by the
+owner on 2026-08-19) — so this is an **account/org mismatch, not a wrong id**:
+the CLI looks up `prj_AFg…` inside the org `team_ABA9J00…` (the `gremu` team,
+whose slug appears in the working production project's URLs) and does not find
+it there. That means the staging project **lives under a different Vercel
+account** (most likely the owner's personal account, because the project was
+created while logged in there, or a different team). The same token deploys
+production fine (`prj_hMyL…` + `team_ABA9J00…` → `vercel.com/gremu/ledgr-react`),
+so the token/team are not the problem — only the account the staging project
+belongs to.
+
+**How to confirm (30 seconds):** open the staging project in the Vercel
+dashboard. The URL slug before the project name is the account that owns it:
+`vercel.com/gremu/…` = the `gremu` team (works), `vercel.com/<your-username>/…`
+= your personal account (this is the mismatch). Also note the repo's GitHub
+integration shows a project named `ledgr-react-prod` in team `gremu` that
+deploys previews — if that is the real staging project, its id is the one to
+use (dashboard → Settings → General → Project ID).
+
+**CLOSED 2026-08-19 — verified green end-to-end:** after the owner rotated
+`VERCEL_TOKEN` in GitHub, the staging workflow run 32277346045 (commit
+`4c1aa41`, main incl. #109 fixed-assets + #110 CORS) completed **success**
+through every step: Build → Vercel deploy → **Link & migrate staging DB**
+(Phase 10.1 + 10.2 migrations applied, incl. the 15xx subtype repair) →
+edge-function secrets → edge functions. Staging is now live with the
+current main at https://ledgr-react-prod.vercel.app.
+
+**Root cause: stale `VERCEL_TOKEN` secret in GitHub.**
+With a freshly created token the owner ran `vercel deploy --prod` from the
+repo checkout and it **succeeded** (Inspect
+`vercel.com/gremu/ledgr-react-prod/qXxArpY1…`, Production
+`ledgr-react-prod-edg024aga-gremu.vercel.app`, **Aliased
+`ledgr-react-prod.vercel.app`**, Ready in 43s). The same token earlier
+resolved `GET /v9/projects/prj_AFg…?teamId=team_ABA9J00…` via the Vercel API,
+and the GitHub `staging` environment has no secrets/variables that could
+override the repository values. Every variable in the chain (id, org, repo
+variables, environment overrides) was verified correct — leaving only the
+**`VERCEL_TOKEN` secret** (created 3 weeks ago, before the staging project
+existed) as the failure point: the CLI printed the (correct) id and org but
+never the token, and a stale/rotated/personal-account token returns
+"Project not found" for a team project exactly as observed.
+
+**Fix (owner):** GitHub → Settings → Secrets and variables → Actions →
+Secrets → `VERCEL_TOKEN` → Update with a working token (the one just proven,
+or a fresh one), then re-run `Deploy → Run workflow → environment: staging`
+(or push to main). Note the token pasted into chat should be rotated after
+staging is confirmed green.
+
+**Update 2026-08-19 (evidence chain complete — id and team are BOTH correct):**
+the owner pasted the staging project's deployment card — project **in the
+`gremu` team**, deployment `ledgr-react-staging-ip4ms2few-gremu.vercel.app`,
+domain `ledgr-react-prod.vercel.app`, status **Ready** — and then the project
+settings page: `vercel.com/gremu/ledgr-react-prod` → **Project ID
+`prj_AFgEgjFL7NTWoyFLKlkGlHlOv0V9`**. So the id in the variable and the
+project in the team MATCH the dashboard exactly, and the production deploy
+works with the same `VERCEL_ORG_ID`/token. Yet the CLI still returns
+"Project not found". The failure must therefore be in **what the workflow
+actually receives**, not in Vercel. GitHub Actions precedence is the prime
+suspect: for a job with `environment: staging`, **environment-level secrets
+and variables override repository-level ones**, and **organization-level
+variables override repository-level ones**. If the `staging` environment (or
+an organization) carries its own `VERCEL_TOKEN`, `VERCEL_ORG_ID` or
+`VERCEL_PROJECT_ID_STAGING` — e.g. a token created while logged into the
+owner's personal account, or a stale id — the staging job silently uses
+THAT value, producing exactly this error while repository values look
+perfect.
+
+**Checklist (owner, in order):**
+1. GitHub → Settings → **Environments** → `staging` (and `Production`) →
+   inspect **Environment secrets** (`VERCEL_TOKEN`) and **Environment
+   variables** (`VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_STAGING`, …). Any value
+   there overrides the repository values for the staging job.
+2. GitHub → Settings → **Organization** → Secrets and variables → check the
+   same names at org level (org overrides repo).
+3. Re-type the repository variable `VERCEL_PROJECT_ID_STAGING` from scratch
+   (delete + re-add) — a trailing newline/space pasted from a code block
+   breaks id matching.
+4. Decisive local test with a FRESH token (Vercel → Account Settings →
+   Tokens → create):
+   ```bash
+   npm i -g vercel
+   vercel inspect prj_AFgEgjFL7NTWoyFLKlkGlHlOv0V9 --token <NEW> --scope team_ABA9J00MCqgkKSmDAWvrnr5b
+   ```
+   - resolves → the Actions-side values (env/org overrides, whitespace, or
+     the token secret itself) are the problem;
+   - "not found" without `--scope` but found with it → project lives in the
+     personal account, not gremu (two same-named projects exist).
+
+**Fix (pick one):**
+
+1. **Move the staging project into the `gremu` team (keeps `prj_AFg…`):**
+   Vercel dashboard → open the staging project → Settings → General →
+   **Move Project** → choose the `gremu` team. The id stays `prj_AFg…`, the
+   URL stays `ledgr-react-prod.vercel.app`, and the existing
+   `VERCEL_PROJECT_ID_STAGING` variable starts working with no other change.
+2. **Use the id of the project that already exists in `gremu`:**
+   `vercel.com/gremu/ledgr-react-prod` → Settings → General → **Project ID**,
+   then set **`VERCEL_PROJECT_ID_STAGING`** to that `prj_…` value
+   (GitHub → Settings → Secrets and variables → Actions → Variables).
+3. **Create a fresh staging project inside the `gremu` team** (also fixes the
+   confusing `ledgr-react-prod` name): switch the dashboard to team `gremu` →
+   New Project → import the repo → name it `ledgr-react-staging` → Framework
+   **Vite**, Build **`npm run build`**, Output **`dist`** → use its new id in
+   `VERCEL_PROJECT_ID_STAGING` and update `APP_URL_STAGING` /
+   `ALLOWED_ORIGINS_STAGING` to `https://ledgr-react-staging.vercel.app`
+   (drop the trailing slash).
+
+Then re-run: Actions → Deploy → Run workflow → environment: `staging`
+(or push to main).
+
+**After staging deploys:** the "Link & migrate staging database" step will
+apply the Phase 10 + 10.2 migrations to staging Supabase
+(`bkxzgkurcqvccsdjmqzg`), including the 15xx fixed-asset subtype repair
+(logged via `RAISE NOTICE` in the deploy output). Confirm
+`SUPABASE_DB_PASSWORD_STAGING` matches the rotated staging DB password
+before running, or that step will fail at `supabase link`.
 
 ---
 
@@ -228,6 +314,26 @@ certification below GREEN:
 Once A-06 is resolved by the user (Vercel team/project check) and the
 browser journeys A–M from `phase-9-browser-test-script.md` pass on hosted
 staging, the certification can be upgraded to GREEN.
+
+---
+
+## 10. Repository-variable audit (2026-08-19) — pre-deploy checklist
+
+User supplied the full Repository-variables list. Findings:
+
+| Variable | Value | Verdict |
+|---|---|---|
+| `VERCEL_ORG_ID` | `team_ABA9J00MCqgkKSmDAWvrnr5b` | ✅ correct (deploy token's team) |
+| `VERCEL_PROJECT_ID_PROD` | `prj_hMyLCYtJzeTD1bpOl8D9sEdszAYn` | ✅ correct (production deploys work) |
+| `VERCEL_PROJECT_ID_STAGING` | `prj_AFgEgjFL7NTWoyFLKlkGlHlOv0V9` | ⚠️ correct **id**, but "Project not found" in the org → the staging project lives in a **different Vercel account** (likely the owner's personal account). Move it into the `gremu` team (Settings → General → Move Project), or use the id of the project that already exists in `gremu`, or create a fresh one in the team. |
+| `VITE_SUPABASE_URL_STAGING` | `https://bkxzgkurcqvccsdjmqzg.supabase.co` | ✅ correct (staging ref) |
+| `VITE_SUPABASE_URL_PROD` | **MISSING** | ❌ **blocks the next production deploy**: deploy.yml reads `vars.VITE_SUPABASE_URL_PROD`; with the Phase 10.1 prebuild env guard in main (#108), an empty value fails "Build frontend" at `npm run build`. Add it: `https://hsuhuvuxfuufrlejsatw.supabase.co` (prod ref `hsuhuvuxfuufrlejsatw`). |
+| `VITE_SUPABASE_ANON_KEY_PROD` | (secret, not in this list) | ⚠️ confirm it still exists — required for the same reason. |
+| `ALLOWED_ORIGINS_STAGING` / `APP_URL_STAGING` | `https://ledgr-react-prod.vercel.app/` | ⚠️ trailing slash: browsers send `Origin` without one; the edge-function allowlist matched exactly, so **all staging edge-function calls failed CORS**. Fixed in code (PR #110 strips trailing slashes); still worth removing the slash from the values. |
+| `ALLOWED_ORIGINS_PROD` / `APP_URL_PROD` | `https://ledgr-react.vercel.app` | ✅ clean |
+| `SUPABASE_PROJECT_REF` (legacy) | `hsuhuvuxfuufrlejsatw` | ℹ️ unused by deploy.yml (which uses `_STAGING`/`_PROD`) — removable. |
+
+**Suggested fix order:** (1) add `VITE_SUPABASE_URL_PROD`; (2) move/point the staging Vercel project into the `gremu` team; (3) clean the two staging trailing slashes; (4) re-run staging deploy (watch "Link & migrate staging database" — `SUPABASE_DB_PASSWORD_STAGING` must match the rotated staging DB password); (5) merge #109 + #110, then tag `v*`/dispatch production and approve the environment gate.
 
 ---
 
