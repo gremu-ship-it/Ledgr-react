@@ -269,6 +269,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     label: string,
     sectionNormalBalance: NormalBalance,
     explicitlyIncludedAccountIds: ReadonlySet<string> = new Set(),
+    subtypeOverrides: ReadonlyMap<string, Exclude<AccountSubtype, null>> = new Map(),
   ): StatementSection {
     const comparativeMap = comparativeBalances
       ? new Map(comparativeBalances.map((b) => [b.account.id, b.balance]))
@@ -284,18 +285,20 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     // An account is now shown when EITHER period has a balance.
     const relevant = balances
       .filter((b) => {
-        // Primary filter: subtype must be in the requested list.
-        // Fallback: for Non-Current Assets section (which requests
-        // non_current_asset + fixed_asset), also include asset accounts
-        // whose code starts with 15 (the PPE / non-current range) even if
-        // subtype is NULL/misclassified. This handles legacy rows and
-        // custom accounts that were created without a subtype, which
-        // previously disappeared from every SOFP section and made fixed
-        // assets appear missing.
-        const subtype = b.account.account_subtype;
+        // Phase 10.2: a subtype override wins over the stored value. The
+        // SOFP sections are driven by account_subtype, but the 1500-1599
+        // range is the documented Non-Current Assets range (see
+        // seedChartOfAccounts.ts header: "1500s Non-Current Assets"). Legacy
+        // rows and manual edits can leave a 15xx asset account with a NULL,
+        // mis-set or non-asset subtype, which either drops it from every
+        // section or routes it to the wrong one. getSOFP supplies an override
+        // that classifies every 15xx asset account as fixed_asset, so these
+        // accounts always land in Non-Current Assets (and never double-count
+        // in another section, because the override applies to every section).
+        const subtype = subtypeOverrides.get(b.account.id) ?? b.account.account_subtype;
         // An asset register can deliberately point at a custom GL account.
         // That account is still PPE even when an old/custom chart assigned it
-        // `other_asset` (or a non-15xx code), so honour the explicit link.
+        // a non-PPE subtype (or a non-15xx code), so honour the explicit link.
         let subtypeMatches = explicitlyIncludedAccountIds.has(b.account.id);
         if (!subtypeMatches) {
           if (subtype !== null) {
@@ -352,6 +355,29 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ? await this.computeBalances(businessId, { asOfDate: comparativeDate, includeOpeningBalances: true })
       : null;
 
+    // Phase 10.2 — "restore fixed assets to Non-Current Assets".
+    // The 1500-1599 code range is the documented Non-Current Assets range
+    // (seedChartOfAccounts.ts header). Legacy data and manual edits can leave
+    // a 15xx ASSET account with account_subtype NULL, 'current_asset' or any
+    // other non-asset value, which drops it from Non-Current Assets (or
+    // misroutes it to Current Assets). Override the subtype for statement
+    // classification — every section sees the same override, so an account
+    // can never appear in two sections. Deliberately reclassified accounts
+    // should use a code outside the 15xx range (or be flagged by the
+    // integrity audit), but the statement must not silently omit PPE.
+    const subtypeOverrides = new Map<string, Exclude<AccountSubtype, null>>();
+    for (const b of balances) {
+      const { account } = b;
+      if (
+        account.account_type === 'asset'
+        && account.code.startsWith('15')
+        && account.account_subtype !== 'fixed_asset'
+        && account.account_subtype !== 'non_current_asset'
+      ) {
+        subtypeOverrides.set(account.id, 'fixed_asset');
+      }
+    }
+
     // Capitalisation/depreciation journals use the asset's GL overrides and
     // fall back to its category defaults. Those accounts can be custom rows
     // whose subtype/code is outside the standard fixed-asset classifications.
@@ -399,21 +425,24 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       // register/category lookup fails (for example in an older deployment).
     }
 
-    const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit');
+    const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit', new Set(), subtypeOverrides);
     const nonCurrentAssets = this.buildSection(
       balances, comparativeBalances,
       ['non_current_asset', 'fixed_asset'],
       'Non-Current Assets',
       'debit',
       fixedAssetRelatedAccountIds,
+      subtypeOverrides,
     );
-    const currentLiabilities = this.buildSection(balances, comparativeBalances, ['current_liability'], 'Current Liabilities', 'credit');
-    const nonCurrentLiabilities = this.buildSection(balances, comparativeBalances, ['non_current_liability'], 'Non-Current Liabilities', 'credit');
+    const currentLiabilities = this.buildSection(balances, comparativeBalances, ['current_liability'], 'Current Liabilities', 'credit', new Set(), subtypeOverrides);
+    const nonCurrentLiabilities = this.buildSection(balances, comparativeBalances, ['non_current_liability'], 'Non-Current Liabilities', 'credit', new Set(), subtypeOverrides);
     const equity = this.buildSection(
       balances, comparativeBalances,
       ['share_capital', 'retained_earnings', 'reserves'],
       'Equity',
       'credit',
+      new Set(),
+      subtypeOverrides,
     );
 
     // ── Fixed-assets register fallback ─────────────────────────────────────
