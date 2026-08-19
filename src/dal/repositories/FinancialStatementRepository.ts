@@ -214,11 +214,6 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       query = query.lte('journal_entries.entry_date', options.dateTo);
     }
 
-    const { data: lines, error: linesError } = await query;
-    if (linesError) throw toRepositoryError('journal_lines', linesError);
-
-    const allLines = (lines ?? []) as { account_id: string; is_debit: boolean; amount_base: number }[];
-
     // Phase 10.2d — FIX [PostgREST silent 1000-row truncation]:
     // PostgREST caps a response at `db-max-rows` (default 1000) unless the
     // client requests a range. A business with more than 1000 journal lines
@@ -226,9 +221,21 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     // rows beyond the cap — most visibly the 2023–2025 fixed-asset
     // capitalisation lines, leaving Non-Current Assets at zero while
     // Current Assets (recent lines within the window) still showed.
-    // Loop over pages of 1000 until a short page is returned. This must use
-    // a stable ORDER so pages do not overlap or skip under concurrent
-    // inserts (PostgREST defaults to insertion order, which is unstable).
+    //
+    // Phase 10.2f — FIX [unstable pagination order]: the FIRST fetch must use
+    // the SAME ORDER BY as the subsequent pages, otherwise page 1 is rows
+    // 0..999 in PostgREST's unspecified order while pages 2+ are ordered by
+    // id — with random UUIDs those windows do not partition the data, so
+    // rows are silently skipped (the 1331/1343 capitalisation lines) and
+    // others double-counted. Applying ORDER BY id to the base query makes
+    // every page a consistent slice of the same sequence.
+    query = query.order('id', { ascending: true });
+
+    const { data: lines, error: linesError } = await query;
+    if (linesError) throw toRepositoryError('journal_lines', linesError);
+
+    const allLines = (lines ?? []) as { account_id: string; is_debit: boolean; amount_base: number }[];
+
     if (allLines.length >= 1000) {
       const PAGE = 1000;
       let from = allLines.length;
@@ -236,7 +243,6 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       // `count` guards against an infinite loop if a page ever returns 0.
       for (let count = PAGE; count >= PAGE && from < 100_000; from += PAGE) {
         const { data: next, error: nextError } = await query
-          .order('id', { ascending: true })
           .range(from, from + PAGE - 1);
         if (nextError) throw toRepositoryError('journal_lines', nextError);
         const page = (next ?? []) as typeof allLines;
