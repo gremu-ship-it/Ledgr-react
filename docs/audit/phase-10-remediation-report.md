@@ -378,3 +378,40 @@ through `20260817000001` (CHECKs), `20260817000002` (discount-account
 backfill) and `20260819000000` (15xx subtype repair). If invoice creation in
 production was failing with 428C9 before the re-run, that was the leftover
 trigger from the aborted run — the fixed migration removes it.
+
+---
+
+## 12. Fixed-assets saga — full resolution (2026-08-19)
+
+**Symptom:** Eagle Nova Horizon Holdings (IFRS) showed **zero** Non-Current
+Assets in production while GAAP businesses were fine; staging worked.
+
+**Diagnosis chain (each step ruled out the previous theory):**
+1. Subtypes wrong? → No — all 15xx/13xx accounts `fixed_asset`/`non_current_asset`.
+2. Journal data missing? → No — SQL replica returned 23,850,000 across
+   1331/1343/1511 (posted, correct business_id, within date).
+3. Cache / PWA? → No — incognito still zero.
+4. Deployed bundle? → No — production ran the #109 code.
+5. **Root cause — PostgREST silent 1000-row truncation:** Eagle Nova has
+   **1,641** journal lines; the app's balance query (no `.range()`) silently
+   dropped everything past row 1000 — the 2023–2025 fixed-asset
+   capitalisation lines — so Non-Current Assets read 0.00 while Current
+   Assets (recent lines inside the window) still showed.
+6. **Second bug in the first fix:** pagination fetched page 1 unordered and
+   pages 2+ ordered by `id` (random UUIDs) → windows didn't partition the
+   data → 1331/1343 skipped while 1511 (by luck in page 1) showed. Fixed by
+   applying `ORDER BY id` to the base query before the first fetch.
+
+**Fixes (all merged, production green):**
+- #114: `computeBalances` paginates (SOFP).
+- #116: consistent `ORDER BY id` across all pages (hotfix).
+- #115: the same pagination pattern applied to the other 5 unbounded
+  `journal_lines` reads (P&L, FX integrity, Branch Performance, period
+  close, AI analysis, inventory ledger) via shared `src/lib/paginateQuery.ts`.
+
+**Verified in production:** Eagle Nova's SOFP now shows **23,850,000**
+Non-Current Assets (1331 Motor Vehicles 14.5M, 1343 Computer Equipment
+0.85M, 1511 Land 8.5M). User confirmed "23m all assets showing".
+
+**Regression risk closed:** any business with > 1000 journal lines was
+silently under-reporting in those reports; all such reads now page correctly.
