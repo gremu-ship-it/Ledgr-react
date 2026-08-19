@@ -4,6 +4,7 @@ import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import { asNormalBalance, toStatementSide, type NormalBalance } from '@/lib/statementPresentation';
 import { postedCapitalisedAssetIds } from '@/lib/fixedAssetCapitalisation';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import {
   buildBankReconciliationCheck,
   buildFixedAssetCheck,
@@ -214,11 +215,6 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       query = query.lte('journal_entries.entry_date', options.dateTo);
     }
 
-    const { data: lines, error: linesError } = await query;
-    if (linesError) throw toRepositoryError('journal_lines', linesError);
-
-    const allLines = (lines ?? []) as { account_id: string; is_debit: boolean; amount_base: number }[];
-
     // Phase 10.2d — FIX [PostgREST silent 1000-row truncation]:
     // PostgREST caps a response at `db-max-rows` (default 1000) unless the
     // client requests a range. A business with more than 1000 journal lines
@@ -226,24 +222,8 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     // rows beyond the cap — most visibly the 2023–2025 fixed-asset
     // capitalisation lines, leaving Non-Current Assets at zero while
     // Current Assets (recent lines within the window) still showed.
-    // Loop over pages of 1000 until a short page is returned. This must use
-    // a stable ORDER so pages do not overlap or skip under concurrent
-    // inserts (PostgREST defaults to insertion order, which is unstable).
-    if (allLines.length >= 1000) {
-      const PAGE = 1000;
-      let from = allLines.length;
-      // Loop until a page returns fewer than PAGE rows (short page = end).
-      // `count` guards against an infinite loop if a page ever returns 0.
-      for (let count = PAGE; count >= PAGE && from < 100_000; from += PAGE) {
-        const { data: next, error: nextError } = await query
-          .order('id', { ascending: true })
-          .range(from, from + PAGE - 1);
-        if (nextError) throw toRepositoryError('journal_lines', nextError);
-        const page = (next ?? []) as typeof allLines;
-        count = page.length;
-        allLines.push(...page);
-      }
-    }
+    // fetchAllRows pages the whole result set with a stable ORDER BY id.
+    const allLines = await fetchAllRows<{ account_id: string; is_debit: boolean; amount_base: number }>(query);
 
     const rawBalances = new Map<string, number>();
     for (const line of allLines) {
@@ -1072,7 +1052,11 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       ((accountsRes.data ?? []) as Row<'accounts'>[]).map((a) => [a.id, a]),
     );
 
-    const linesRes = await this.client
+    type LineRow = {
+      journal_entry_id: string; account_id: string; is_debit: boolean; amount_base: number;
+      journal_entries: { entry_date: string; status: string; source_type: string | null; reversal_of: string | null };
+    };
+    const linesQuery = this.client
       .from('journal_lines')
       .select('journal_entry_id, account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id, source_type, reversal_of)')
       .eq('business_id', businessId)
@@ -1080,13 +1064,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       .gte('journal_entries.entry_date', periodStart)
       .lte('journal_entries.entry_date', periodEnd)
       .in('journal_entries.status', ['posted', 'reversed']);
-    if (linesRes.error) throw toRepositoryError('journal_lines', linesRes.error);
-
-    type LineRow = {
-      journal_entry_id: string; account_id: string; is_debit: boolean; amount_base: number;
-      journal_entries: { entry_date: string; status: string; source_type: string | null; reversal_of: string | null };
-    };
-    const lines = (linesRes.data ?? []) as unknown as LineRow[];
+    const lines = await fetchAllRows<LineRow>(linesQuery);
 
     const byEntry = new Map<string, LineRow[]>();
     for (const line of lines) {
@@ -1344,19 +1322,19 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const functionalCurrency = ((businessRes.data as { base_currency?: string } | null)?.base_currency) || 'MWK';
 
     // Foreign-currency journal lines touching posted/reversed entries.
-    const fxLinesRes = await this.client
+    const fxLinesQuery = this.client
       .from('journal_lines')
       .select('currency, amount_base, exchange_rate, rate_is_stale, journal_entries!inner(status, entry_number, business_id)')
       .eq('business_id', businessId)
       .eq('journal_entries.business_id', businessId)
       .in('journal_entries.status', ['posted', 'reversed']);
-    if (fxLinesRes.error) throw toRepositoryError('journal_lines', fxLinesRes.error);
-    const foreignLines: FxLineSample[] = [];
-    let staleRateCount = 0;
-    for (const l of (fxLinesRes.data ?? []) as unknown as Array<{
+    const fxLines = await fetchAllRows<{
       currency: string | null; amount_base: number; exchange_rate: number | null;
       rate_is_stale: boolean | null; journal_entries: { entry_number: string };
-    }>) {
+    }>(fxLinesQuery);
+    const foreignLines: FxLineSample[] = [];
+    let staleRateCount = 0;
+    for (const l of fxLines) {
       if (!l.currency || l.currency.toUpperCase() === functionalCurrency.toUpperCase()) continue;
       foreignLines.push({
         entryNumber: l.journal_entries?.entry_number ?? null,

@@ -60,6 +60,7 @@
  */
 
 import { repos } from '@/lib/repositories';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('InventoryJournalService');
@@ -749,21 +750,21 @@ async function computeInventoryLedgerBalance(
   );
   if (accounts.length === 0) return balances;
 
-  const { data, error } = await repos.account.db
-    .from('journal_lines')
-    .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
-    .eq('business_id', businessId)
-    .eq('journal_entries.business_id', businessId)
-    .in('journal_entries.status', ['posted', 'reversed'])
-    .lte('journal_entries.entry_date', asOfDate)
-    .in('account_id', accounts.map((a) => a.id));
-
-  if (error) throw new Error(`Could not read inventory ledger balance: ${error.message}`);
+  const data = await fetchAllRows<{
+    account_id: string; is_debit: boolean; amount_base: number;
+  }>(
+    repos.account.db
+      .from('journal_lines')
+      .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
+      .eq('business_id', businessId)
+      .eq('journal_entries.business_id', businessId)
+      .in('journal_entries.status', ['posted', 'reversed'])
+      .lte('journal_entries.entry_date', asOfDate)
+      .in('account_id', accounts.map((a) => a.id)),
+  );
 
   const accountById = new Map(accounts.map((a) => [a.id, a]));
-  for (const line of (data ?? []) as unknown as {
-    account_id: string; is_debit: boolean; amount_base: number;
-  }[]) {
+  for (const line of data) {
     const account = accountById.get(line.account_id);
     if (!account) continue;
     const signed = line.is_debit ? Number(line.amount_base) : -Number(line.amount_base);

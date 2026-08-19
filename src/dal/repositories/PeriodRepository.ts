@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import type { Json } from '../types/database.generated';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import { BaseRepository } from './BaseRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
@@ -96,18 +97,16 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
   async getSummary(periodId: string): Promise<{ entryCount: number; totalDebits: number; totalCredits: number }> {
     const period = await this.findById(periodId);
 
-    const { data, error } = await this.client
-      .from('journal_lines')
-      .select('is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
-      .eq('business_id', period.business_id)
-      .eq('journal_entries.business_id', period.business_id)
-      .gte('journal_entries.entry_date', period.period_start)
-      .lte('journal_entries.entry_date', period.period_end)
-      .in('journal_entries.status', ['posted', 'reversed']);
-
-    if (error) throw toRepositoryError('accounting_periods', error);
-
-    const lines = (data ?? []) as { is_debit: boolean; amount_base: number }[];
+    const lines = await fetchAllRows<{ is_debit: boolean; amount_base: number }>(
+      this.client
+        .from('journal_lines')
+        .select('is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
+        .eq('business_id', period.business_id)
+        .eq('journal_entries.business_id', period.business_id)
+        .gte('journal_entries.entry_date', period.period_start)
+        .lte('journal_entries.entry_date', period.period_end)
+        .in('journal_entries.status', ['posted', 'reversed']),
+    );
     const totalDebits = lines.filter((l) => l.is_debit).reduce((s, l) => s + Number(l.amount_base), 0);
     const totalCredits = lines.filter((l) => !l.is_debit).reduce((s, l) => s + Number(l.amount_base), 0);
 

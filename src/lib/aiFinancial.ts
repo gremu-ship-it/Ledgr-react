@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import { repos } from '@/lib/repositories';
 import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
 import { formatMwk } from '@/lib/formatters';
@@ -83,11 +84,10 @@ async function fetchEntryTotals(
     query = query.lte('journal_entries.entry_date', toDate);
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
+  const data = await fetchAllRows<JournalLineRow>(query);
 
   const byEntry = new Map<string, EntryTotals>();
-  for (const line of (data ?? []) as unknown as JournalLineRow[]) {
+  for (const line of data) {
     const entry = line.journal_entries;
     if (!entry) continue;
 
