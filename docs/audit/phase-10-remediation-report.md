@@ -228,3 +228,47 @@ certification below GREEN:
 Once A-06 is resolved by the user (Vercel team/project check) and the
 browser journeys A–M from `phase-9-browser-test-script.md` pass on hosted
 staging, the certification can be upgraded to GREEN.
+
+---
+
+## 11. Production deploy incident (2026-08-19) — amount_due is GENERATED in production
+
+**Symptom:** the first production run of `20260817000000_phase10_amount_due_trigger.sql`
+failed at its backfill statement:
+
+```
+ERROR: column "amount_due" can only be updated to DEFAULT (SQLSTATE 428C9)
+Column "amount_due" is a generated column.
+```
+
+**Root cause — schema divergence between production and the reconstructed base:**
+the ORIGINAL production schema defines `invoices.amount_due` as a **generated
+column** (`GENERATED ALWAYS AS (total_amount - amount_paid) STORED`); the
+reconstructed base schema (and therefore staging + fresh replays) has it as a
+plain nullable numeric. The Phase 10.1 A-03 migration assumed the plain shape,
+so its backfill `UPDATE` violated 428C9 on production. (The capture's
+`generated_columns.json` only listed the `exchange_rate_used` generated
+columns — `amount_due`'s generated status was lost in the reconstruction.)
+
+**Fix (PR #112):** the migration is now **schema-aware and idempotent**:
+- `amount_due` **GENERATED** (production): the column self-maintains — no
+  trigger, no backfill. Any leftover `trg_invoices_sync_amount_due` from a
+  partial apply of the old migration is **dropped** (a BEFORE trigger
+  assigning to a generated column would fail EVERY invoice write with 428C9),
+  and the helper function is removed.
+- `amount_due` **PLAIN** (staging/fresh): trigger installed + backfill run,
+  exactly as before.
+
+**Verified (disposable PostgreSQL, 66-migration replay):** `phase10_remediation`
+**20/20** (4 new A-03b tests cover the generated-column branch: leftover
+trigger dropped, insert computes amount_due, payment updates recompute,
+idempotent re-run); all other suites green (integrity 11, subtype repair 8,
+rls 41, rpc 20, storage 8, workflow 16, paye 10).
+
+**Action taken on production:** re-run the deploy (`v*` tag or
+`workflow_dispatch` → production) — the failed migration was not recorded as
+applied, so `db push --include-all` re-applies the fixed file, then proceeds
+through `20260817000001` (CHECKs), `20260817000002` (discount-account
+backfill) and `20260819000000` (15xx subtype repair). If invoice creation in
+production was failing with 428C9 before the re-run, that was the leftover
+trigger from the aborted run — the fixed migration removes it.

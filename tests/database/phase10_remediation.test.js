@@ -164,6 +164,51 @@ async function main() {
       ok('A-02: backfill leaves existing parent accounts untouched');
     else fail('A-02: backfill mutated existing accounts');
 
+    // ── A-03b: GENERATED-column database (production shape) ─────────────────
+    // Production defines invoices.amount_due as GENERATED ALWAYS
+    // (total_amount - amount_paid) STORED. The migration must detect that
+    // shape, install NO trigger, and DROP any leftover trigger from a
+    // partial apply of the pre-fix migration (which would otherwise break
+    // every invoice write with 428C9).
+    {
+      // Simulate the production shape. v_ar_ageing depends on amount_due and
+      // blocks the column conversion; it is not needed for the remaining
+      // assertions, so it is dropped (a fresh DB replay recreates it).
+      await q(`drop view if exists public.v_ar_ageing`);
+      await q(`alter table public.invoices drop column amount_due`);
+      await q(`alter table public.invoices add column amount_due numeric generated always as (total_amount - amount_paid) stored`);
+
+      // Simulate a partial apply of the OLD migration version: the trigger
+      // exists on the generated column.
+      await q(`create or replace function public.sync_invoice_amount_due() returns trigger language plpgsql set search_path = public as $$ begin new.amount_due := new.total_amount - new.amount_paid; return new; end $$;`);
+      await q(`drop trigger if exists trg_invoices_sync_amount_due on public.invoices`);
+      await q(`create trigger trg_invoices_sync_amount_due before insert or update of total_amount, amount_paid on public.invoices for each row execute function public.sync_invoice_amount_due()`);
+
+      // Re-run the migration (schema-aware, idempotent).
+      await q(readMig('20260817000000_phase10_amount_due_trigger.sql'));
+
+      const trig = (await q(`select count(*)::int as n from pg_trigger where tgrelid='public.invoices'::regclass and tgname='trg_invoices_sync_amount_due'`)).rows[0].n;
+      if (trig === 0) ok('A-03b: generated column — migration drops the leftover trigger');
+      else fail('A-03b: trigger still present on generated column', trig);
+
+      // Insert works and amount_due self-computes.
+      const ginv = (await asUser(`insert into public.invoices (business_id, contact_id, invoice_number, invoice_type, status, issue_date, due_date, currency, exchange_rate, total_amount, amount_paid, subtotal, vat_amount, wht_amount, taxable_amount, discount_amount, discount_percent, ar_account_id, revenue_account_id)
+        values ($1,$2,'R-INV-GEN','invoice','sent','2026-08-02','2026-08-16','MWK',1,10000,0,10000,0,0,10000,0,0,$3,$4) returning id, amount_due`, [biz, cust, a1131, a4110])).rows[0];
+      if (Number(ginv.amount_due) === 10000) ok('A-03b: generated column computes amount_due on insert');
+      else fail('A-03b: generated amount_due wrong on insert', ginv.amount_due);
+
+      await asUser(`select public.increment_amount_paid('invoices', $1, 2500)`, [ginv.id]);
+      const g2 = (await q(`select amount_due, amount_paid from public.invoices where id=$1`, [ginv.id])).rows[0];
+      if (Number(g2.amount_due) === 7500 && Number(g2.amount_paid) === 2500) ok('A-03b: payment updates generated amount_due (7500)');
+      else fail('A-03b: generated amount_due after payment', JSON.stringify(g2));
+
+      // Re-running the migration again is a no-op (idempotent on generated).
+      await q(readMig('20260817000000_phase10_amount_due_trigger.sql'));
+      const trig2 = (await q(`select count(*)::int as n from pg_trigger where tgrelid='public.invoices'::regclass and tgname='trg_invoices_sync_amount_due'`)).rows[0].n;
+      if (trig2 === 0) ok('A-03b: migration idempotent on generated column (no trigger recreated)');
+      else fail('A-03b: idempotency on generated column', trig2);
+    }
+
     console.log(`\nPHASE 10 REMEDIATION TESTS: ${pass} passed, ${failN} failed`);
   } catch (e) {
     fail('unexpected', e);
