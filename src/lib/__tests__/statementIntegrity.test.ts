@@ -49,6 +49,7 @@ describe('buildFixedAssetCheck', () => {
       registerAssetCount: 3,
     });
     expect(check.ok).toBe(true);
+    expect(check.summary).toContain('register cost differs');
     expect(check.findings.join(' ')).toContain('Asset cost');
   });
 });

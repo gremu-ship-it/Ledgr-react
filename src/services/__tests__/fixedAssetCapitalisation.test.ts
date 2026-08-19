@@ -9,7 +9,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { buildCapitalisationLines, selectAssetsMissingCapitalisation } from '@/lib/fixedAssetCapitalisation';
+import {
+  buildCapitalisationLines,
+  postedCapitalisedAssetIds,
+  selectAssetsMissingCapitalisation,
+} from '@/lib/fixedAssetCapitalisation';
 
 const base = {
   assetAccountId: 'acc-asset',
@@ -39,6 +43,28 @@ describe('buildCapitalisationLines', () => {
       const credits = lines.filter((l) => !l.is_debit).reduce((s, l) => s + l.amount_base, 0);
       expect(debits).toBe(credits);
     }
+  });
+});
+
+describe('postedCapitalisedAssetIds', () => {
+  it('counts only posted acquisition journals as effective capitalisation', () => {
+    const ids = postedCapitalisedAssetIds([
+      { source_id: 'posted', status: 'posted', entry_date: '2026-06-01' },
+      { source_id: 'failed-draft', status: 'draft', entry_date: '2026-06-01' },
+      { source_id: 'undone', status: 'reversed', entry_date: '2026-06-01' },
+      { source_id: null, status: 'posted', entry_date: '2026-06-01' },
+    ]);
+
+    expect([...ids]).toEqual(['posted']);
+  });
+
+  it('does not let a later posting hide an asset from an earlier statement', () => {
+    const ids = postedCapitalisedAssetIds([
+      { source_id: 'already-posted', status: 'posted', entry_date: '2026-06-30' },
+      { source_id: 'posted-later', status: 'posted', entry_date: '2026-07-01' },
+    ], '2026-06-30');
+
+    expect([...ids]).toEqual(['already-posted']);
   });
 });
 

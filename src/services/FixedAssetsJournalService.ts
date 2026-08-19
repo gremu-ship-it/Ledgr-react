@@ -95,29 +95,31 @@ import { calculateMonthlyDepreciation } from '@/services/depreciation';
 // service remains the single entry point for fixed-asset posting logic.
 export {
   buildCapitalisationLines,
+  postedCapitalisedAssetIds,
   selectAssetsMissingCapitalisation,
 } from '@/lib/fixedAssetCapitalisation';
 import {
   buildCapitalisationLines,
+  postedCapitalisedAssetIds,
   selectAssetsMissingCapitalisation,
 } from '@/lib/fixedAssetCapitalisation';
 
-/** Returns the set of asset ids that already have a NON-REVERSED
- *  capitalisation journal entry. A reversed capitalisation means the user
- *  undid it; the asset must be capitalisable again after that. */
+/**
+ * Returns assets with a POSTED acquisition journal. Draft entries are not
+ * effective in the ledger and must not block a retry/backfill. In particular,
+ * the two-step create-then-post flow can leave a draft if posting is rejected;
+ * the SOFP also excludes drafts, so counting one here made the asset disappear
+ * from both the ledger report and its uncapitalised-register fallback.
+ */
 async function findCapitalisedAssetIds(businessId: string): Promise<Set<string>> {
   const { data, error } = await supabase
     .from('journal_entries')
-    .select('source_id')
+    .select('source_id, status')
     .eq('business_id', businessId)
     .eq('source_type', 'fixed_asset_acquisition')
-    .neq('status', 'reversed');
+    .eq('status', 'posted');
   if (error) throw error;
-  return new Set(
-    ((data ?? []) as Array<{ source_id: string | null }>)
-      .map((r) => r.source_id)
-      .filter((id): id is string => Boolean(id)),
-  );
+  return postedCapitalisedAssetIds(data ?? []);
 }
 
 export interface CapitalisationResult {
@@ -138,8 +140,9 @@ export interface CapitalisationResult {
  * register listed assets. Depreciation/disposal/revaluation journals existed;
  * the initial capitalisation was the missing leg.
  *
- * Idempotent: an asset that already has a non-reversed capitalisation entry
- * is skipped. Delta postings (cost edited after capitalisation) pass
+ * Idempotent: an asset that already has a posted capitalisation entry is
+ * skipped. Draft/failed and reversed entries do not block a retry. Delta
+ * postings (cost edited after capitalisation) pass
  * amountOverride + direction so only the CHANGE is posted.
  */
 export async function postAssetCapitalisation(

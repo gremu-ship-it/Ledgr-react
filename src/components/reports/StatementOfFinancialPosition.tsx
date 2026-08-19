@@ -121,7 +121,12 @@ export function StatementOfFinancialPosition({
     queryFn: () => financialStatementRepo.auditStatementIntegrity(businessId, asOfDate),
     enabled: Boolean(businessId && asOfDate),
   });
-  const failedIntegrityChecks = integrity?.checks.filter((c) => !c.ok) ?? [];
+  // Some checks intentionally classify a variance as a warning rather than a
+  // hard failure (for example asset cost can differ after revaluation). Do not
+  // hide those findings: an uncapitalised register asset also presents as a
+  // cost variance, and hiding it made a zero Non-Current Assets figure look
+  // trustworthy.
+  const integrityFindings = integrity?.checks.filter((check) => !check.ok || check.findings.length > 0) ?? [];
 
   const showComparative = Boolean(comparativeDate);
   const dateLabel = format.date(asOfDate, { day: 'numeric', month: 'long', year: 'numeric' });
@@ -265,13 +270,13 @@ export function StatementOfFinancialPosition({
         </div>
       )}
 
-      {failedIntegrityChecks.length > 0 && (
+      {integrityFindings.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <div className="mb-1 flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-4 w-4 flex-shrink-0" />
             Data-quality findings ({integrity?.functionalCurrency}) — figures shown may need review
           </div>
-          {failedIntegrityChecks.map((check) => (
+          {integrityFindings.map((check) => (
             <details key={check.key} className="mt-1">
               <summary className="cursor-pointer font-medium">{check.summary}</summary>
               <ul className="mt-1 list-disc space-y-0.5 ps-5">

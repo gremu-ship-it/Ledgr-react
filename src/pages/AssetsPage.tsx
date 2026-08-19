@@ -836,8 +836,8 @@ function CapitaliseAssetsModal({ businessId, userId, onClose }: {
             <p className="mt-2 text-sm text-gray-600">
               Posts the missing acquisition journal (DR fixed-asset account / CR funding account,
               dated at each asset's acquisition date) for every registered asset that doesn't
-              have one yet — so they appear on the Statement of Financial Position.
-              Assets that already have a capitalisation entry, and disposed assets, are skipped.
+              have a posted one yet — so they appear on the Statement of Financial Position.
+              Draft/failed entries are retried; posted and disposed assets are skipped.
             </p>
             <p className="mt-2 text-xs font-medium text-amber-700">
               Only run this if you did NOT already capture these assets in your opening balances —
@@ -880,7 +880,7 @@ function CapitaliseAssetsModal({ businessId, userId, onClose }: {
             <div className="mt-3 max-h-64 overflow-y-auto space-y-1.5">
               {posted.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  Every registered asset already has a capitalisation entry — nothing to post.
+                  Every registered asset already has a posted capitalisation entry — nothing to post.
                 </p>
               ) : (
                 posted.map((r) => (
