@@ -19,6 +19,9 @@
 
 /**
  * Parse the ALLOWED_ORIGINS env var into a Set of lowercase origins.
+ * Trailing slashes are stripped so a configured value like
+ * "https://app.example.com/" still matches the browser's Origin header
+ * ("https://app.example.com"), which never carries a trailing slash.
  * If not configured, returns null — callers should fall back to reflecting
  * the request Origin only if it matches the Supabase project domain.
  */
@@ -30,7 +33,7 @@ function getAllowedOrigins(): Set<string> | null {
   return new Set(
     raw
       .split(',')
-      .map((o) => o.trim().toLowerCase())
+      .map((o) => o.trim().toLowerCase().replace(/\/+$/, ''))
       .filter(Boolean),
   );
 }
