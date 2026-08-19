@@ -1,6 +1,15 @@
 {
+  "github": {
+    "enabled": false
+  },
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
-    { "source": "/((?!api/|assets/|icons/|.*\\..*$).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/|assets/|icons/|.*\\..*$).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
