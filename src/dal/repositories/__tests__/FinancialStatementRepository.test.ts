@@ -327,14 +327,25 @@ describe('getSOFP — contra-account presentation', () => {
     // Second page holds the fixed-asset line.
     const pageTwo = [fixedLine];
     let call = 0;
+    let ordered = false;
     const client = {
       from: (table: string) => {
         if (table === 'accounts') return tableStub([account]);
         if (table === 'journal_lines') {
           const proxy: unknown = new Proxy({}, {
             get(_t, prop) {
+              // ORDER BY must be applied to the base query BEFORE the first
+              // fetch — otherwise page 1 (unordered) and pages 2+ (ordered)
+              // do not partition the data and rows are silently skipped.
+              if (prop === 'order') {
+                return () => { ordered = true; return proxy; };
+              }
+              if (prop === 'range') {
+                return () => proxy;
+              }
               if (prop === 'then') {
                 return (onFulfilled: (v: { data: unknown[]; error: null }) => unknown) => {
+                  if (call === 0 && !ordered) throw new Error('base query not ordered before first fetch');
                   // First call = initial query (1000 rows). Subsequent calls
                   // (pagination) return the next page; return short page to stop.
                   const data = call++ === 0 ? filler : pageTwo;
