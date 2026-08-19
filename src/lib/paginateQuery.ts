@@ -39,7 +39,14 @@ export async function fetchAllRows<T>(
   const maxRows = options.maxRows ?? 1_000_000;
   const q = query as PageableQuery;
 
-  const first = await q.range(0, pageSize - 1);
+  // Phase 10.2f — apply ORDER BY to the base query BEFORE the first fetch.
+  // If page 1 were fetched unordered and pages 2+ ordered (by random UUIDs),
+  // the windows would not partition the data: rows would be skipped and
+  // others double-counted (production symptom: 1331/1343 capitalisation
+  // lines missing from Non-Current Assets).
+  const ordered = q.order(orderBy, { ascending: true });
+
+  const first = await ordered.range(0, pageSize - 1);
   if (first.error) throw first.error;
   const rows = [...((first.data ?? []) as T[])];
   if (first.data === null || first.data.length < pageSize) return rows;
@@ -47,7 +54,7 @@ export async function fetchAllRows<T>(
   let from = pageSize;
   let last = first.data.length;
   while (last >= pageSize && from < maxRows) {
-    const page = await q.order(orderBy, { ascending: true }).range(from, from + pageSize - 1);
+    const page = await ordered.range(from, from + pageSize - 1);
     if (page.error) throw page.error;
     const data = (page.data ?? []) as T[];
     rows.push(...data);

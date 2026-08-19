@@ -4,13 +4,18 @@ import { fetchAllRows } from '@/lib/paginateQuery';
 /** Minimal PostgREST-builder-like stub: returns pages in order, a short page ends. */
 function makeQuery(pages: unknown[][]) {
   let call = 0;
+  let ordered = false;
   const builder = {
     range: async () => {
+      if (call === 0 && !ordered) throw new Error('order() must be called before the first range()');
       const data = pages[Math.min(call, pages.length - 1)] ?? [];
       call += 1;
       return { data, error: null };
     },
-    order: () => builder,
+    order: () => {
+      ordered = true;
+      return builder;
+    },
   };
   return builder;
 }
