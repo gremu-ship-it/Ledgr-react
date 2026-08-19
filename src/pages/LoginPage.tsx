@@ -2,6 +2,7 @@ import { useState, type FormEvent, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
+import { createLogger } from '@/lib/logger';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { usePartner } from '@/partner/PartnerContext';
 import {
@@ -14,6 +15,38 @@ import {
 } from '@/components/auth/AuthUI';
 
 type LoginStep = 'credentials' | 'mfa';
+
+const log = createLogger('LoginPage');
+
+/**
+ * Classify a Supabase sign-in error so platform failures are never reported
+ * to the user as "wrong password".
+ *
+ *  - credential : the password/email genuinely didn't match (400
+ *                 invalid_credentials) — safe to blame the credentials.
+ *  - unverified : the account exists but the email isn't confirmed.
+ *  - service    : anything else (401 invalid/rotated API key, 5xx
+ *                 "database error ..." from GoTrue, network failure, rate
+ *                 limiting). Telling the user their password is wrong here
+ *                 is misleading and hides real outages from support.
+ */
+function classifySignInError(err: {
+  message: string;
+  code?: string;
+  status?: number;
+}): 'credential' | 'unverified' | 'service' {
+  const msg = err.message.toLowerCase();
+  if (err.code === 'email_not_confirmed' || msg.includes('email not confirmed')) {
+    return 'unverified';
+  }
+  if (
+    err.code === 'invalid_credentials' ||
+    (err.status === 400 && msg.includes('invalid login credentials'))
+  ) {
+    return 'credential';
+  }
+  return 'service';
+}
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -70,10 +103,24 @@ export function LoginPage() {
 
     if (signInError) {
       setLoading(false);
-      if (signInError.message.toLowerCase().includes('email not confirmed')) {
+      const kind = classifySignInError(signInError);
+      if (kind === 'unverified') {
         setError(t('auth.emailNotVerified'));
-      } else {
+      } else if (kind === 'credential') {
         setError(t('auth.incorrectCredentials'));
+      } else {
+        // Platform-level failure (invalid API key, GoTrue database error,
+        // network, rate limit…). Surface it as a service problem and log the
+        // raw error so it reaches Sentry instead of hiding behind a
+        // "wrong password" message.
+        log.error('Sign-in failed with a non-credential error', signInError as Error, {
+          operation: 'signInWithPassword',
+          data: {
+            status: (signInError as { status?: number }).status,
+            code: (signInError as { code?: string }).code,
+          },
+        });
+        setError(t('auth.serviceUnavailable'));
       }
       return;
     }

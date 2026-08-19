@@ -121,6 +121,7 @@
     "signInSubtitle": "Connectez-vous à votre compte",
     "emailNotVerified": "Votre adresse e-mail n’est pas encore vérifiée. Consultez votre boîte de réception.",
     "incorrectCredentials": "E-mail ou mot de passe incorrect. Réessayez.",
+    "serviceUnavailable": "Connexion impossible en raison d'un problème de service temporaire — votre mot de passe est peut-être correct. Réessayez dans quelques minutes et contactez l'assistance si le problème persiste.",
     "enterMfaCode": "Saisissez le code à 6 chiffres de votre application d’authentification.",
     "invalidMfaCode": "Code invalide. Vérifiez votre application et réessayez.",
     "twoFactor": "Authentification à deux facteurs",
