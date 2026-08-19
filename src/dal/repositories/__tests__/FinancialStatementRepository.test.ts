@@ -312,6 +312,50 @@ describe('getSOFP — contra-account presentation', () => {
   });
 });
 
+  it('does not truncate balances beyond PostgREST 1000-row limit (Phase 10.2d)', async () => {
+    // Simulates a business with > 1000 journal lines: the first page returns
+    // 1000 rows, and the pagination loop must fetch the rest. Without the
+    // fix, a fixed-asset line beyond the first page would be dropped and
+    // Non-Current Assets would read zero.
+    const account = { ...ACCOUNTS[3], id: 'a-buildings-paged', opening_balance: 0 };
+    const fixedLine = { account_id: 'a-buildings-paged', is_debit: true, amount_base: 60_000 };
+    const filler = Array.from({ length: 1000 }, () => ({
+      account_id: 'a-cash',
+      is_debit: true,
+      amount_base: 1,
+    }));
+    // Second page holds the fixed-asset line.
+    const pageTwo = [fixedLine];
+    let call = 0;
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([account]);
+        if (table === 'journal_lines') {
+          const proxy: unknown = new Proxy({}, {
+            get(_t, prop) {
+              if (prop === 'then') {
+                return (onFulfilled: (v: { data: unknown[]; error: null }) => unknown) => {
+                  // First call = initial query (1000 rows). Subsequent calls
+                  // (pagination) return the next page; return short page to stop.
+                  const data = call++ === 0 ? filler : pageTwo;
+                  return onFulfilled({ data, error: null });
+                };
+              }
+              return () => proxy;
+            },
+          });
+          return proxy;
+        }
+        return tableStub([]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    expect(sofp.nonCurrentAssets.lines.find((l) => l.code === '1512')?.amount).toBe(60_000);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(60_000);
+  });
+
 describe('getProfitOrLoss — discount presentation', () => {
   it('shows allowed and received discounts as reductions of their sections', async () => {
     const profitOrLoss = await makeRepo().getProfitOrLoss(
