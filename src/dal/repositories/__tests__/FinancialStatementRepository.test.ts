@@ -188,6 +188,85 @@ describe('getSOFP — contra-account presentation', () => {
     expect(sofp.nonCurrentAssets.subtotal).toBe(80_000);
   });
 
+  // ── Phase 10.2: "restore fixed assets to Non-Current Assets" ─────────────
+  // The 1500-1599 range is the documented Non-Current Assets range. Legacy
+  // data or manual edits can leave a 15xx asset account with a NULL,
+  // 'current_asset' or junk subtype; the statement must still present it
+  // under Non-Current Assets — and never in two sections at once.
+
+  it('routes a 15xx asset account with subtype "current_asset" to Non-Current Assets only', async () => {
+    const mislabelled = {
+      ...ACCOUNTS[3], // Buildings fixture — code 1512, fixed_asset
+      id: 'a-buildings-mislabeled',
+      account_subtype: 'current_asset',
+    };
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([mislabelled]);
+        if (table === 'journal_lines') {
+          return tableStub([{ account_id: 'a-buildings-mislabeled', is_debit: true, amount_base: 100_000 }]);
+        }
+        return tableStub([]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    const ncaLine = sofp.nonCurrentAssets.lines.find((l) => l.code === '1512');
+    expect(ncaLine?.amount).toBe(100_000);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(100_000);
+    // Must not appear in Current Assets (no double counting).
+    expect(sofp.currentAssets.lines.find((l) => l.code === '1512')).toBeUndefined();
+    expect(sofp.currentAssets.subtotal).toBe(0);
+    expect(sofp.totalAssets).toBe(100_000);
+  });
+
+  it('routes a 15xx asset account with a junk non-asset subtype to Non-Current Assets', async () => {
+    const junk = {
+      ...ACCOUNTS[3],
+      id: 'a-buildings-junk',
+      account_subtype: 'revenue', // clearly wrong — would drop the account from every section
+    };
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([junk]);
+        if (table === 'journal_lines') {
+          return tableStub([{ account_id: 'a-buildings-junk', is_debit: true, amount_base: 50_000 }]);
+        }
+        return tableStub([]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    expect(sofp.nonCurrentAssets.lines.find((l) => l.code === '1512')?.amount).toBe(50_000);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(50_000);
+    expect(sofp.totalAssets).toBe(50_000);
+  });
+
+  it('leaves a deliberately current-asset account (non-15xx code) in Current Assets', async () => {
+    const current = {
+      ...ACCOUNTS[1], // Cash on Hand — code 1110, current_asset
+      id: 'a-cash-current',
+      account_subtype: 'current_asset',
+    };
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub([current]);
+        if (table === 'journal_lines') {
+          return tableStub([{ account_id: 'a-cash-current', is_debit: true, amount_base: 9_000 }]);
+        }
+        return tableStub([]);
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+
+    expect(sofp.currentAssets.lines.find((l) => l.code === '1110')?.amount).toBe(9_000);
+    expect(sofp.nonCurrentAssets.lines.find((l) => l.code === '1110')).toBeUndefined();
+    expect(sofp.totalAssets).toBe(9_000);
+  });
+
   it('shows the register NBV when a failed capitalisation left only a draft journal', async () => {
     const account = { ...ACCOUNTS[3], opening_balance: 0 };
     const fixedAsset = {
