@@ -217,8 +217,36 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const { data: lines, error: linesError } = await query;
     if (linesError) throw toRepositoryError('journal_lines', linesError);
 
+    const allLines = (lines ?? []) as { account_id: string; is_debit: boolean; amount_base: number }[];
+
+    // Phase 10.2d — FIX [PostgREST silent 1000-row truncation]:
+    // PostgREST caps a response at `db-max-rows` (default 1000) unless the
+    // client requests a range. A business with more than 1000 journal lines
+    // (e.g. an IFRS holding company with subsidiaries) silently lost the
+    // rows beyond the cap — most visibly the 2023–2025 fixed-asset
+    // capitalisation lines, leaving Non-Current Assets at zero while
+    // Current Assets (recent lines within the window) still showed.
+    // Loop over pages of 1000 until a short page is returned. This must use
+    // a stable ORDER so pages do not overlap or skip under concurrent
+    // inserts (PostgREST defaults to insertion order, which is unstable).
+    if (allLines.length >= 1000) {
+      const PAGE = 1000;
+      let from = allLines.length;
+      // Loop until a page returns fewer than PAGE rows (short page = end).
+      // `count` guards against an infinite loop if a page ever returns 0.
+      for (let count = PAGE; count >= PAGE && from < 100_000; from += PAGE) {
+        const { data: next, error: nextError } = await query
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (nextError) throw toRepositoryError('journal_lines', nextError);
+        const page = (next ?? []) as typeof allLines;
+        count = page.length;
+        allLines.push(...page);
+      }
+    }
+
     const rawBalances = new Map<string, number>();
-    for (const line of (lines ?? []) as { account_id: string; is_debit: boolean; amount_base: number }[]) {
+    for (const line of allLines) {
       const acc = accountMap.get(line.account_id);
       if (!acc) continue;
       const signedAmount = line.is_debit ? Number(line.amount_base) : -Number(line.amount_base);
