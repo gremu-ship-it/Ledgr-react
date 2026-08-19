@@ -97,6 +97,9 @@ import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
+import { isSupabaseConfigured } from '@/lib/supabase';
+import { ConfigError } from '@/components/ConfigError';
+
 export function RoleRoute() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
@@ -116,6 +119,15 @@ function App() {
   const role = currentBusiness?.role || null;
   const roleHome = getHomePathForRole(role);
   const homePath = isAdminPortalHost() ? '/partner-admin' : (roleHome !== '/dashboard' ? roleHome : '/dashboard');
+
+  // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
+  // build time, supabase.ts now falls back to a placeholder client instead of
+  // throwing at import (which blanks the page). Show a readable error here so
+  // operators immediately see what to fix, rather than a white screen or a
+  // cascade of network errors.
+  if (!isSupabaseConfigured) {
+    return <ConfigError />;
+  }
 
   return (
     <ErrorBoundary name="App">
