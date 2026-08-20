@@ -415,3 +415,17 @@ Non-Current Assets (1331 Motor Vehicles 14.5M, 1343 Computer Equipment
 
 **Regression risk closed:** any business with > 1000 journal lines was
 silently under-reporting in those reports; all such reads now page correctly.
+
+---
+
+## 13. Tag hygiene + tagged production deploy (2026-08-20)
+
+- **`v1.0.0` re-pointed** to current main (`710c27b`) — it previously pointed
+  at `ab9620f` (2026-08-16, pre-fix code; a deploy from it would have rolled
+  production back). Force-pushed with owner consent; verified on the remote.
+- The tag push triggered the **production** deploy (run 32382135164), which
+  the owner approved through the environment gate.
+- **Verified green end-to-end**: Build → Vercel (frontend) → **Link & migrate
+  production DB** → Edge Function secrets → Edge Functions, all on `710c27b`
+  (current main incl. #112–#116, #117).
+- Production is now on a properly tagged, reproducible release.
