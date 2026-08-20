@@ -1,16 +1,25 @@
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router';
-import { Building2, CreditCard, LayoutGrid, LogOut, Settings, Users } from 'lucide-react';
+import { ArrowLeft, Building2, CreditCard, LayoutGrid, LogOut, Settings, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
+import { isAdminPortalHost } from '@/lib/partnerDomain';
+import { getHomePathForRole } from '@/hooks/usePermissions';
 
 /** Chrome for the partner admin portal (admin.ledgr.com). */
 export function PartnerAdminLayout() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const currentUser = useAppStore((s) => s.currentUser);
+  const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { isPlatformAdmin } = usePartnerAdminAccess();
+
+  // On admin.ledgr.com the portal *is* the app, so there is nowhere to go
+  // back to. When the portal is opened from the main app (via the user menu)
+  // the user must be able to return without closing the app.
+  const showBackToApp = !isAdminPortalHost() && Boolean(currentBusiness);
+  const backPath = getHomePathForRole(currentBusiness?.role || null);
 
   const links = id
     ? [
@@ -47,6 +56,16 @@ export function PartnerAdminLayout() {
           </span>
           <div className="ms-auto flex items-center gap-3 text-sm text-slate-700">
             <span className="hidden sm:inline">{currentUser?.email}</span>
+            {showBackToApp && (
+              <button
+                type="button"
+                onClick={() => navigate(backPath)}
+                className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 hover:bg-slate-100 hover:text-slate-900"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back to app
+              </button>
+            )}
             <button
               type="button"
               onClick={signOut}
