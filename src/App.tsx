@@ -75,6 +75,7 @@ const PeriodManagementPage = lazyPage(() => import('@/pages/PeriodManagementPage
 const JournalsPage = lazyPage(() => import('@/pages/JournalsPage'), 'JournalsPage');
 const RepairCoaPage = lazyPage(() => import('@/pages/RepairCoaPage'), 'RepairCoaPage');
 const AuditLogPage = lazyPage(() => import('@/pages/AuditLogPage'), 'AuditLogPage');
+const AdminLayout = lazyPage(() => import('@/pages/admin/AdminLayout'), 'AdminLayout');
 const AdminBillingPage = lazyPage(() => import('@/pages/admin/AdminBillingPage'), 'AdminBillingPage');
 const AdminBusinessesPage = lazyPage(() => import('@/pages/admin/AdminBusinessesPage'), 'AdminBusinessesPage');
 const PartnerAdminLayout = lazyPage(() => import('@/pages/partner-admin/PartnerAdminLayout'), 'PartnerAdminLayout');
@@ -155,10 +156,13 @@ function App() {
               <Route path="/create-business" element={<CreateBusinessPage />} />
             </Route>
 
-            {/* Internal admin tools */}
+            {/* Internal admin tools — wrapped in AdminLayout so there is always
+                a visible way back into the main app. */}
             <Route element={<PlatformAdminRoute />}>
-              <Route path="/admin/billing" element={<AdminBillingPage />} />
-              <Route path="/admin/businesses" element={<AdminBusinessesPage />} />
+              <Route element={<AdminLayout />}>
+                <Route path="/admin/billing" element={<AdminBillingPage />} />
+                <Route path="/admin/businesses" element={<AdminBusinessesPage />} />
+              </Route>
             </Route>
 
             {/* Partner admin portal */}
