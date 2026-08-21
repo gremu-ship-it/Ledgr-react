@@ -180,11 +180,11 @@ app.use(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
         try {
-          // codeql[js/request-forgery]
           // The URL was resolved against the configured TARGET_URL and
           // rejected unless its origin matches the target origin exactly
           // (see the origin guard above), so this fetch cannot be redirected
           // to an arbitrary host by caller input.
+          // codeql[js/request-forgery]
           return await fetch(url, {
             method: req.method,
             headers,
