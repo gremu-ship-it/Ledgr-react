@@ -11,6 +11,15 @@ Ledgr runs on **managed platforms** (Vercel for the frontend, Supabase for Postg
 
 **Strengths verified in code:** rate limiting (3 layers: edge-API sliding window, Express gateway per-IP, webhook dispatcher), webhook delivery with HMAC signing + 3 attempts + exponential backoff + SSRF protection (DNS-resolved private-IP blocking), offline sync with idempotency (`client_key`), atomic document-number reservation, schema-aware migrations (66), automated weekly backup-restore verification, Sentry (frontend + edge + gateway) with tracing, CSP/HSTS/security headers, RLS-based IAM, and the pagination fix this session (PostgREST 1000-row truncation).
 
+**Status update (2026-08-20):** most code-level gaps below have been
+implemented in the ops-hardening PR (this repo, #118): DB-backed journal
+entry numbers, webhook dead-letter tracking + daily retry + auto-deactivate,
+circuit breakers + timeouts (AI agent, gateway, Supabase client), offline
+queue backpressure cap, optimistic-locking primitive, feature flags, PWA
+update banner, Dependabot config, `package.json` 1.0.0, SLO draft, dashboard
+checklist, k6 smoke script, synthetic check script. Remaining dashboard-only
+items are listed in §11 and `docs/ops/dashboard-checks.md`.
+
 **Key gaps (highest-value first):**
 1. **No circuit breakers / bulkheads** anywhere (webhook dispatcher, gateway, AI, sync) — a slow downstream can pile up.
 2. **No SLOs/SLIs/error budgets, no on-call, no alert routing** — observability is collect-only (Sentry + platform logs); nothing pages a human.

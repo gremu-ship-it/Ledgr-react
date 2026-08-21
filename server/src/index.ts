@@ -49,6 +49,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { createServerLogger } from './logger.js';
+import { CircuitBreaker } from './resilience.js';
 
 const log = createServerLogger('Gateway');
 
@@ -56,6 +57,11 @@ const PORT = Number(process.env.PORT) || 3000;
 const APP_ENV = process.env.APP_ENV || 'staging';
 const TARGET_URL = process.env.TARGET_URL || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
+
+// Phase 10.4: bound upstream requests and trip a breaker after repeated
+// failures (see the proxy handler below).
+const UPSTREAM_TIMEOUT_MS = 15_000;
+const upstreamBreaker = new CircuitBreaker({ failureThreshold: 5, resetTimeoutMs: 30_000 });
 
 const app = express();
 
@@ -157,10 +163,22 @@ app.use(
       const auth = (req.headers['authorization'] as string) || (req.headers['x-api-key'] as string);
       if (auth && SENTRY_DSN) Sentry.setUser({ id: hashToken(auth) });
 
-      const upstream = await fetch(url, {
-        method: req.method,
-        headers,
-        body: req.method === 'GET' || req.method === 'HEAD' ? undefined : (req.body as string | undefined),
+      // Phase 10.4: bound the upstream call (15s) and trip a breaker after 5
+      // consecutive failures so a dead upstream fails fast instead of
+      // hanging every request for the full timeout.
+      const upstream = await upstreamBreaker.run(async () => {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+        try {
+          return await fetch(url, {
+            method: req.method,
+            headers,
+            body: req.method === 'GET' || req.method === 'HEAD' ? undefined : (req.body as string | undefined),
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
       });
 
       const text = await upstream.text();
@@ -169,13 +187,16 @@ app.use(
       if (ct) res.set('Content-Type', ct);
       res.send(text);
     } catch (err) {
-      log.error('Proxy request failed', err as Error, {
+      const isCircuit = err instanceof Error && err.name === 'CircuitOpenError';
+      log.error(isCircuit ? 'Upstream circuit open' : 'Proxy request failed', err as Error, {
         method: req.method,
         path: req.originalUrl,
         target: TARGET_URL,
       });
       if (SENTRY_DSN) Sentry.captureException(err);
-      res.status(502).json({ errors: [{ status: '502', title: 'Bad gateway' }] });
+      res.status(isCircuit ? 503 : 502).json({
+        errors: [{ status: isCircuit ? '503' : '502', title: isCircuit ? 'Service temporarily unavailable' : 'Bad gateway' }],
+      });
     }
   },
 );

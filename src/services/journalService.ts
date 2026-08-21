@@ -57,8 +57,20 @@ async function getAccountByCode(
   return acc;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- accepted for future per-business sequence support; currently timestamp-based
-export async function nextEntryNumber(_businessId: string): Promise<string> {
+// Phase 10.4: DB-backed sequence (JNL-YYYYMMDD-NNNNNN) so journal numbers are
+// unique regardless of client/edge clock skew. Falls back to the timestamp
+// format only if the RPC is unavailable (e.g. pre-migration environments or
+// test stubs that return undefined).
+export async function nextEntryNumber(businessId: string): Promise<string> {
+  try {
+    const { data, error } = await (repos.journal.db as unknown as {
+      rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+    }).rpc('next_journal_entry_number', { p_business_id: businessId });
+    if (!error && typeof data === 'string' && data) return data;
+    if (error) log.warn('next_journal_entry_number RPC failed — using timestamp fallback', { businessId, error: error.message });
+  } catch (err) {
+    log.warn('next_journal_entry_number RPC threw — using timestamp fallback', { businessId, error: err instanceof Error ? err.message : String(err) });
+  }
   const now   = new Date();
   const stamp =
     `${now.getFullYear()}` +

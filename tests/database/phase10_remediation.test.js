@@ -209,6 +209,39 @@ async function main() {
       else fail('A-03b: idempotency on generated column', trig2);
     }
 
+    // ── Phase 10.4: DB-backed journal entry numbers + updated_at touch ─────
+    {
+      const nums = new Set();
+      for (let i = 0; i < 50; i += 1) {
+        const r = await q(`select public.next_journal_entry_number($1) as n`, [biz]);
+        nums.add(r.rows[0].n);
+      }
+      if (nums.size === 50) ok('10.4: next_journal_entry_number returns 50 unique values');
+      else fail('10.4: journal number collision', nums.size);
+      const sample = [...nums][0];
+      if (/^JNL-\d{8}-\d{6}$/.test(sample)) ok(`10.4: journal number format ${sample}`);
+      else fail('10.4: journal number format', sample);
+
+      // updated_at touch trigger on invoices
+      const t0 = (await q(`select updated_at from public.invoices where id=$1`, [inv.id])).rows[0].updated_at;
+      await new Promise((r) => setTimeout(r, 25));
+      await asUser(`update public.invoices set notes='touch' where id=$1`, [inv.id]);
+      const t1 = (await q(`select updated_at from public.invoices where id=$1`, [inv.id])).rows[0].updated_at;
+      if (new Date(t1) > new Date(t0)) ok('10.4: invoices.updated_at touched on update');
+      else fail('10.4: updated_at not touched', { t0, t1 });
+
+      // webhooks.consecutive_failures column exists and defaults to 0
+      const wh = (await asUser(`insert into public.webhooks (business_id, url, events, secret, is_active)
+        values ($1,'https://example.com/hook',array['invoice.created'],'s3cret',true) returning consecutive_failures`, [biz])).rows[0];
+      if (Number(wh.consecutive_failures) === 0) ok('10.4: webhooks.consecutive_failures defaults to 0');
+      else fail('10.4: consecutive_failures default', wh.consecutive_failures);
+
+      // cron job for retry-failed-webhooks exists
+      const cron = (await q(`select count(*)::int as n from cron.job where command like '%retry-failed-webhooks%'`)).rows[0].n;
+      if (cron === 1) ok('10.4: retry-failed-webhooks cron job scheduled');
+      else fail('10.4: cron job missing', cron);
+    }
+
     console.log(`\nPHASE 10 REMEDIATION TESTS: ${pass} passed, ${failN} failed`);
   } catch (e) {
     fail('unexpected', e);

@@ -39,10 +39,30 @@ if (!isSupabaseConfigured) {
 const resolvedUrl = supabaseUrl || 'https://placeholder.supabase.co';
 const resolvedKey = supabaseAnonKey || 'placeholder-anon-key';
 
+// Phase 10.4: bound every Supabase HTTP request so a hung network cannot
+// hang the UI indefinitely. 30s is generous for normal queries and still
+// short enough to fail visibly.
+const REQUEST_TIMEOUT_MS = 30_000;
+
+function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const signal = init?.signal;
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  global: { fetch: fetchWithTimeout as typeof fetch },
 });

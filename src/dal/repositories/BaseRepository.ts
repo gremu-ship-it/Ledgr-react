@@ -93,6 +93,30 @@ export class BaseRepository<T extends TableName> {
   }
 
   /**
+   * Phase 10.4 optimistic locking: update only if the row still carries the
+   * expected updated_at (compare-and-set). Returns null when another writer
+   * changed the row first — the caller should surface a conflict rather than
+   * silently overwriting. Requires the table to have an `updated_at` column
+   * (invoices/expenses do; the invoice touch trigger maintains it).
+   */
+  async updateIfUnchanged(
+    id: string,
+    dto: UpdateDto<T>,
+    expectedUpdatedAt: string,
+  ): Promise<Row<T> | null> {
+    const { data, error } = await this.client
+      .from(this.table)
+      .update(dto as never)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see findById
+      .eq('id' as never, id)
+      .eq('updated_at' as never, expectedUpdatedAt)
+      .select('*')
+      .maybeSingle();
+    if (error) throw toRepositoryError(this.table as string, error);
+    return (data as Row<T> | null) ?? null;
+  }
+
+  /**
    * Soft-delete a record by setting `deleted_at` to now.
    *
    * FIX [BaseRepository]: Guards against calling softDelete() on tables that

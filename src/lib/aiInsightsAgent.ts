@@ -11,6 +11,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
+import { CircuitBreaker, withTimeout } from '@/lib/resilience';
 
 export interface InsightsMessage {
   role: 'user' | 'assistant';
@@ -31,10 +32,15 @@ export interface InsightsRequest {
  * Invokes the `ai-insights` edge function. Throws on network / auth / HTTP
  * errors so the UI can show a friendly fallback message.
  */
+// Phase 10.4: bound the AI call so a hung provider cannot hang the page, and
+// trip a breaker after repeated failures so the UI fails fast instead of
+// hammering a dead upstream.
+const AI_TIMEOUT_MS = 30_000;
+const aiBreaker = new CircuitBreaker({ failureThreshold: 3, resetTimeoutMs: 30_000 });
+
 export async function callAiInsightsAgent(request: InsightsRequest): Promise<InsightsResponse> {
-  const { data, error } = await supabase.functions.invoke<InsightsResponse>('ai-insights', {
-    body: request,
-  });
+  const invoke = () => supabase.functions.invoke<InsightsResponse>('ai-insights', { body: request });
+  const { data, error } = await aiBreaker.run(() => withTimeout(invoke(), AI_TIMEOUT_MS, 'AI Insights'));
 
   if (error) {
     throw new Error(error.message || 'AI Insights request failed');
