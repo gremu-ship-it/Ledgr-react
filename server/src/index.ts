@@ -152,7 +152,17 @@ app.use(
     }
 
     try {
-      const url = new URL(req.originalUrl, TARGET_URL).toString();
+      // Phase 10.4 (CodeQL): the resolved URL must stay on the configured
+      // target origin. new URL(path, TARGET) can otherwise escape the target
+      // via absolute/authority path tricks (open-proxy / SSRF).
+      const target = new URL(TARGET_URL);
+      const resolved = new URL(req.originalUrl, target);
+      if (resolved.origin !== target.origin) {
+        log.warn('Blocked off-target proxy request', { path: req.originalUrl, resolved: resolved.toString() });
+        res.status(400).json({ errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }] });
+        return;
+      }
+      const url = resolved.toString();
       const headers = new Headers();
       for (const [key, value] of Object.entries(req.headers)) {
         if (Array.isArray(value)) headers.set(key, value.join(', '));
