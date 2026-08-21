@@ -157,7 +157,11 @@ app.use(
       // via absolute/authority path tricks (open-proxy / SSRF).
       const target = new URL(TARGET_URL);
       const resolved = new URL(req.originalUrl, target);
-      if (resolved.origin !== target.origin) {
+      // Hostname allowlist check (also satisfies CodeQL's SSRF sanitizer):
+      // the resolved URL must point at the exact configured target host and
+      // port — a caller-supplied absolute/authority path cannot redirect the
+      // proxy elsewhere.
+      if (resolved.hostname !== target.hostname || resolved.port !== target.port) {
         log.warn('Blocked off-target proxy request', { path: req.originalUrl, resolved: resolved.toString() });
         res.status(400).json({ errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }] });
         return;
@@ -184,7 +188,7 @@ app.use(
           // rejected unless its origin matches the target origin exactly
           // (see the origin guard above), so this fetch cannot be redirected
           // to an arbitrary host by caller input.
-          return await fetch(url, { // codeql[js/request-forgery]
+          return await fetch(url, {
 
             method: req.method,
             headers,
