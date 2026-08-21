@@ -152,17 +152,23 @@ app.use(
     }
 
     try {
-      // Phase 10.4 (CodeQL): the resolved URL must stay on the configured
-      // target origin. new URL(path, TARGET) can otherwise escape the target
-      // via absolute/authority path tricks (open-proxy / SSRF).
+      // Phase 10.4 (CodeQL SSRF): the proxy must never leave the configured
+      // target. Two independent guards:
+      //   1. Strict allowlist regex on the caller path — only a relative
+      //      /api/v1/... path survives; anything that could smuggle a
+      //      scheme/host (://, //, \) is rejected before any URL is built.
+      //   2. Hostname/port comparison after resolution, as a second line of
+      //      defence against future refactors.
+      const rawPath = req.originalUrl;
+      if (!/^\/api\/v1\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/.test(rawPath)) {
+        log.warn('Blocked off-target proxy request (path allowlist)', { path: rawPath });
+        res.status(400).json({ errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }] });
+        return;
+      }
       const target = new URL(TARGET_URL);
-      const resolved = new URL(req.originalUrl, target);
-      // Hostname allowlist check (also satisfies CodeQL's SSRF sanitizer):
-      // the resolved URL must point at the exact configured target host and
-      // port — a caller-supplied absolute/authority path cannot redirect the
-      // proxy elsewhere.
+      const resolved = new URL(rawPath, target);
       if (resolved.hostname !== target.hostname || resolved.port !== target.port) {
-        log.warn('Blocked off-target proxy request', { path: req.originalUrl, resolved: resolved.toString() });
+        log.warn('Blocked off-target proxy request (host mismatch)', { path: rawPath, resolved: resolved.toString() });
         res.status(400).json({ errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }] });
         return;
       }
