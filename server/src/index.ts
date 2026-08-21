@@ -184,8 +184,8 @@ app.use(
           // rejected unless its origin matches the target origin exactly
           // (see the origin guard above), so this fetch cannot be redirected
           // to an arbitrary host by caller input.
-          // codeql[js/request-forgery]
-          return await fetch(url, {
+          return await fetch(url, { // codeql[js/request-forgery]
+
             method: req.method,
             headers,
             body: req.method === 'GET' || req.method === 'HEAD' ? undefined : (req.body as string | undefined),
