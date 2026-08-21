@@ -1,0 +1,41 @@
+# Phase 10.4 — dependency scanning & automated updates.
+# npm ecosystem for the app, the server package, and GitHub Actions itself.
+# Weekly cadence; production deps get PRs too, dev deps are bundled in the
+# same PR stream. Version bumps to Vite/React/Supabase majors may need manual
+# review — dependabot will still open the PR, CI gates it.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Africa/Blantyre"
+    open-pull-requests-limit: 10
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      development-dependencies:
+        dependency-type: "development"
+
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:30"
+      timezone: "Africa/Blantyre"
+    open-pull-requests-limit: 5
+    groups:
+      server-dependencies:
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Africa/Blantyre"
+    open-pull-requests-limit: 5

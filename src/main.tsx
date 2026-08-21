@@ -11,6 +11,7 @@ import { queryClient } from '@/lib/queryClient';
 import './index.css';
 import './i18n';
 import App from './App.tsx';
+import { registerSW } from 'virtual:pwa-register';
 
 // Automatically recover once if Vite encounters a module preload failure
 // (e.g. after a deployment invalidates old chunk filenames).
@@ -24,6 +25,22 @@ if (typeof window !== 'undefined') {
   // Begin capturing client-side errors so the Support Agent can attach
   // sanitised diagnostics when a user reports a problem.
   initErrorCapture();
+
+  // Phase 10.4: surface "new version available" instead of silently waiting
+  // for the auto-updating service worker to take over on the next load.
+  // App.tsx listens for these events and shows a reload banner.
+  registerSW({
+    immediate: true,
+    onNeedRefresh() {
+      window.dispatchEvent(new CustomEvent('app:update-available'));
+    },
+    onOfflineReady() {
+      window.dispatchEvent(new CustomEvent('app:offline-ready'));
+    },
+    onRegisteredSW() {
+      window.dispatchEvent(new CustomEvent('app:sw-registered'));
+    },
+  });
 }
 
 // --- Sentry (frontend) ------------------------------------------------------

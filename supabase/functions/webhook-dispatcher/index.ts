@@ -97,6 +97,7 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
   let delivered = 0;
   for (const webhook of webhooks ?? []) {
     const body = JSON.stringify({ event, timestamp: new Date().toISOString(), data: payload });
+    let ok = false;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         const endpoint = new URL(webhook.url);
@@ -128,6 +129,12 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
         });
         await supabase.from('webhooks').update({ last_triggered_at: new Date().toISOString() }).eq('id', webhook.id);
         if (res.ok) {
+          // Phase 10.4: a successful delivery resets the failure streak.
+          await supabase.from('webhooks')
+            .update({ consecutive_failures: 0 })
+            .eq('id', webhook.id)
+            .neq('consecutive_failures', 0);
+          ok = true;
           delivered += 1;
           break;
         }
@@ -142,6 +149,19 @@ async function deliverWebhooks(businessId: string, event: string, payload: unkno
         });
       }
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 2 ** (attempt - 1) * 1000));
+    }
+
+    // Phase 10.4 dead-letter guard: only when all 3 attempts failed, bump the
+    // consecutive-failure counter and deactivate a webhook whose endpoint is
+    // persistently dead (5+ consecutive failures) so retries stop burning.
+    if (!ok) {
+      const next = Number(webhook.consecutive_failures ?? 0) + 1;
+      await supabase.from('webhooks')
+        .update({ consecutive_failures: next, is_active: next >= 5 ? false : true })
+        .eq('id', webhook.id);
+      if (next >= 5) {
+        console.log(`webhook ${webhook.id} deactivated after ${next} consecutive failures`);
+      }
     }
   }
   return { subscribed: webhooks?.length ?? 0, delivered };

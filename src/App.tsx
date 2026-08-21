@@ -1,4 +1,4 @@
-import { Suspense, lazy, type ComponentType } from 'react';
+import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
@@ -114,6 +114,36 @@ export function RoleRoute() {
   return <Outlet />;
 }
 
+/**
+ * Phase 10.4 — new-version banner. The service worker (registered in
+ * main.tsx) dispatches 'app:update-available' when a fresh build is ready;
+ * we surface a reload button instead of silently waiting for the next load,
+ * which previously left users on a stale bundle after deploys.
+ */
+function UpdateAvailableBanner() {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    const show = () => setAvailable(true);
+    window.addEventListener('app:update-available', show);
+    return () => window.removeEventListener('app:update-available', show);
+  }, []);
+  if (!available) return null;
+  return (
+    <div className="fixed inset-x-0 top-0 z-[100] flex justify-center p-3">
+      <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-4 py-2.5 text-sm text-white shadow-lg">
+        <span>A new version of Ledgr is available.</span>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded bg-brand-500 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-600"
+        >
+          Reload
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   useAuthListener();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
@@ -132,6 +162,7 @@ function App() {
 
   return (
     <ErrorBoundary name="App">
+      <UpdateAvailableBanner />
       <PartnerProvider>
         <BrowserRouter>
           {/* Lazy route chunks resolve here; fullScreen keeps layout stable. */}

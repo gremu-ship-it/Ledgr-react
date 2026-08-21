@@ -8,6 +8,7 @@
 
 import { supabase } from '@/lib/supabase';
 import type { CapturedError } from '@/lib/errorCapture';
+import { isFeatureEnabled } from '@/lib/featureFlags';
 
 export type SupportCategory = 'query' | 'error' | 'compliance';
 
@@ -75,5 +76,5 @@ export async function callSupportAgent(request: SupportRequest): Promise<Support
  * helper exists for parity with the AI Insights page and future feature flags.
  */
 export function isSupportConfigured(): boolean {
-  return true;
+  return isFeatureEnabled('ai_agent');
 }

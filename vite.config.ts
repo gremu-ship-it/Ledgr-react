@@ -31,6 +31,7 @@ export default defineConfig(({ mode }) => {
     VitePWA({
       strategies: 'generateSW',
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       includeAssets: ['icons/*.png', 'icons/*.svg', 'favicon.svg'],
       manifest: {
         name: 'Ledgr — Business Accounting for Malawi',

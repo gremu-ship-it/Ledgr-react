@@ -77,12 +77,25 @@ export interface EnqueueOptions {
  * @param options - Optional dependency linkage and conflict-resolution metadata.
  * @returns The localId of the newly queued item.
  */
+/**
+ * Phase 10.4 backpressure: cap the number of unsynced items. Prevents an
+ * unbounded offline queue (which would stall sync and blow up IndexedDB)
+ * when the device stays offline for a long time.
+ */
+export const MAX_PENDING_QUEUE_ITEMS = 2_000;
+
 export async function enqueue<T extends QueueOperationType>(
   operationType: T,
   businessId: string,
   payload: QueuePayloadFor<T>,
   options?: EnqueueOptions,
 ): Promise<number> {
+  const pending = await getPendingCount();
+  if (pending >= MAX_PENDING_QUEUE_ITEMS) {
+    throw new Error(
+      `Offline queue is full (${MAX_PENDING_QUEUE_ITEMS} items). Go online and sync before creating more transactions.`,
+    );
+  }
   const sequence = await nextSequence();
 
   const item: QueueItem = {

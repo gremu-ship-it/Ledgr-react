@@ -23,7 +23,18 @@ import type { Row } from '@/dal/types/database';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Phase 10.4: DB-backed sequence (JNL-YYYYMMDD-NNNNNN) so journal numbers are
+// unique regardless of client/edge clock skew. Falls back to the timestamp
+// format only if the RPC is unavailable (e.g. pre-migration environments).
 export async function nextEntryNumber(): Promise<string> {
+  try {
+    const { data, error } = await (supabase as unknown as {
+      rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
+    }).rpc('next_journal_entry_number', { p_business_id: null });
+    if (!error && typeof data === 'string' && data) return data;
+  } catch {
+    // fall through to timestamp fallback
+  }
   const now = new Date();
   const stamp =
     `${now.getFullYear()}` +
