@@ -46,17 +46,27 @@ comment on column public.webhooks.consecutive_failures is
 
 -- Daily retry of undelivered webhook deliveries (attempt >= 3, < 7 days old).
 -- The edge function supabase/functions/retry-failed-webhooks re-dispatches
--- them via webhook-dispatcher. Idempotent: remove any prior job for this
--- command, then insert fresh.
-delete from cron.job
- where command like '%retry-failed-webhooks%';
+-- them via webhook-dispatcher. Uses cron.schedule (the established pattern
+-- in 20260726000003/…05/…06) with the same project-ref/secret placeholders
+-- that the Supabase SQL editor must fill before apply (see those migrations'
+-- headers). cron.schedule is idempotent for a given job name: re-scheduling
+-- the same name replaces the prior schedule.
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
 
-insert into cron.job (jobid, schedule, command, active)
-values (
-  nextval('cron.jobid_seq'),
+select cron.schedule(
+  'retry-failed-webhooks-daily',
   '0 6 * * *',
-  'select net.http_post(url := ''https://<PROJECT_REF>.supabase.co/functions/v1/retry-failed-webhooks'', headers := jsonb_build_object(''Content-Type'', ''application/json'', ''x-cron-secret'', ''<CRON_SECRET>''), body := ''{}''::jsonb);',
-  true
+  $$
+  select net.http_post(
+    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/retry-failed-webhooks',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', '<CRON_SECRET>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
 );
 
 -- ── 3. Maintain invoices.updated_at (optimistic-locking primitive) ──────────
