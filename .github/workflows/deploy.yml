@@ -232,7 +232,7 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (production)
         run: |
-          NO_VERIFY_FUNCTIONS="initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders"
+                    NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
