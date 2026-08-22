@@ -20,31 +20,11 @@ import {
   resolveAssetAccountLinks,
 } from '@/lib/fixedAssetAccounts';
 import type { Row } from '@/dal/types/database';
+import { nextEntryNumber } from '@/services/journalNumber';
+
+export { nextEntryNumber } from '@/services/journalNumber';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-// Phase 10.4: DB-backed sequence (JNL-YYYYMMDD-NNNNNN) so journal numbers are
-// unique regardless of client/edge clock skew. Falls back to the timestamp
-// format only if the RPC is unavailable (e.g. pre-migration environments).
-export async function nextEntryNumber(): Promise<string> {
-  try {
-    const { data, error } = await (supabase as unknown as {
-      rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
-    }).rpc('next_journal_entry_number', { p_business_id: null });
-    if (!error && typeof data === 'string' && data) return data;
-  } catch {
-    // fall through to timestamp fallback
-  }
-  const now = new Date();
-  const stamp =
-    `${now.getFullYear()}` +
-    `${String(now.getMonth() + 1).padStart(2, '0')}` +
-    `${String(now.getDate()).padStart(2, '0')}` +
-    `${String(now.getHours()).padStart(2, '0')}` +
-    `${String(now.getMinutes()).padStart(2, '0')}` +
-    `${String(now.getSeconds()).padStart(2, '0')}`;
-  return `JNL-${stamp}`;
-}
 
 function monthName(dateStr: string): string {
   return new Date(dateStr).toLocaleString('en-US', { month: 'long', year: 'numeric' });
@@ -200,7 +180,7 @@ export async function postAssetCapitalisation(
     `Capitalisation — ${asset.name} (${asset.asset_number})` +
     (options?.descriptionSuffix ?? '');
 
-  const entryNumber = `${await nextEntryNumber()}${options?.entryNumberSuffix ?? ''}`;
+  const entryNumber = `${await nextEntryNumber(businessId)}${options?.entryNumberSuffix ?? ''}`;
   const { entry } = await repos.journal.createBalancedEntry(
     {
       business_id: businessId,
@@ -389,7 +369,7 @@ export async function postAssetDepreciation(
 
     const accumulatedDepAccountId = resolvedAccounts.accumulatedDepAccountId!;
     const depExpenseAccountId = resolvedAccounts.depExpenseAccountId!;
-    const entryNumber = await nextEntryNumber();
+    const entryNumber = await nextEntryNumber(businessId);
     const monthLabel = monthName(period.period_end);
     const description = `Auto-depreciation — ${asset.name} — ${monthLabel}`;
 
@@ -526,7 +506,7 @@ export async function disposeAsset(
     },
   );
 
-  const entryNumber = await nextEntryNumber();
+  const entryNumber = await nextEntryNumber(businessId);
   const description = `Disposal — ${asset.name} (${asset.asset_number})`;
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
@@ -686,7 +666,7 @@ export async function revalueAsset(
     },
   );
 
-  const entryNumber = await nextEntryNumber();
+  const entryNumber = await nextEntryNumber(businessId);
   const description = `Revaluation — ${asset.name} (${asset.asset_number})`;
 
   const { entry } = await repos.journal.createBalancedEntry(

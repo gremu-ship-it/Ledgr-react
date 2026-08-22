@@ -5,6 +5,8 @@ import { JournalRepository } from './JournalRepository';
 import { TaxRepository } from './TaxRepository';
 import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
+import { chunk } from '@/lib/chunk';
+import { computeVatNetDue, vatDueDateForPeriodEnd, vatPeriodLabel } from '@/lib/vat';
 
 const log = createLogger('TaxReturnRepository');
 
@@ -103,7 +105,7 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
     periodStart: string,
     periodEnd: string,
   ): Promise<Row<'tax_returns'>> {
-    const periodLabel = periodStart.slice(0, 7); // 'YYYY-MM'
+    const periodLabel = vatPeriodLabel(periodStart);
 
     const existing = await this.findByPeriod(businessId, 'vat_standard', periodLabel);
     if (existing) return existing;
@@ -120,13 +122,11 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
       businessId, 'invoice_lines', 'invoice_id', 'invoices', 'issue_date', periodStart, periodEnd,
     );
     const inputTax = await this.sumLineTax(
-      businessId, 'expense_lines', 'expense_id', 'expenses', 'expense_date' as never, periodStart, periodEnd,
-    ).catch(() => 0); // FLAGGED: expenses.expense_date column name not confirmed in shared schema — verify.
+      businessId, 'expense_lines', 'expense_id', 'expenses', 'expense_date', periodStart, periodEnd,
+    );
 
-    const netPayable = Math.round((outputTax - inputTax) * 100) / 100;
-
-    // MRA VAT 3 due date: 25th of the month following the period end.
-    const dueDate = this.addMonthsSetDay(periodEnd, 1, 25);
+    const netPayable = computeVatNetDue(outputTax, inputTax);
+    const dueDate = vatDueDateForPeriodEnd(periodEnd);
 
     const dto: InsertDto<'tax_returns'> = {
       business_id: businessId,
@@ -138,7 +138,7 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
       output_tax: outputTax,
       input_tax: inputTax,
       gross_amount: 0,
-      amount_due: Math.max(netPayable, 0),
+      amount_due: netPayable,
       amount_paid: 0,
       status: 'pending',
       source_type: 'vat_period',
@@ -411,15 +411,18 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
     const parentIds = (parents ?? []).map((p: { id: string }) => p.id);
     if (parentIds.length === 0) return 0;
 
-    const { data: lines, error: linesErr } = await this.client
-      .from(linesTable)
-      .select('tax_amount')
-      .eq('business_id', businessId)
-      .eq('tax_code', 'vat_standard')
-      .in(fkColumn as never, parentIds);
-    if (linesErr) throw toRepositoryError(linesTable, linesErr);
-
-    return (lines ?? []).reduce((sum: number, l: { tax_amount: number }) => sum + Number(l.tax_amount), 0);
+    let total = 0;
+    for (const batch of chunk(parentIds, 200)) {
+      const { data: lines, error: linesErr } = await this.client
+        .from(linesTable)
+        .select('tax_amount')
+        .eq('business_id', businessId)
+        .eq('tax_code', 'vat_standard')
+        .in(fkColumn as never, batch);
+      if (linesErr) throw toRepositoryError(linesTable, linesErr);
+      total += (lines ?? []).reduce((sum: number, l: { tax_amount: number }) => sum + Number(l.tax_amount), 0);
+    }
+    return total;
   }
 
   private async scheduleAlerts(taxReturn: Row<'tax_returns'>): Promise<void> {
@@ -458,12 +461,6 @@ export class TaxReturnRepository extends BaseRepository<'tax_returns'> {
   private addDays(dateStr: string, days: number): string {
     const d = new Date(dateStr);
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
-  }
-
-  private addMonthsSetDay(dateStr: string, months: number, day: number): string {
-    const d = new Date(dateStr);
-    d.setMonth(d.getMonth() + months, day);
     return d.toISOString().slice(0, 10);
   }
 }

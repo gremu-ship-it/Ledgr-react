@@ -6,22 +6,35 @@
 // Test manually: supabase functions invoke generate-vat-returns
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const CRON_SECRET = Deno.env.get('CRON_SECRET');
+import { unauthorizedCronResponse } from '../_shared/cronAuth.ts';
 
 // This is a tenant-wide, service-role job. Keep it callable only by the
 // scheduler: Supabase JWT verification alone is insufficient because an
 // ordinary authenticated user must not be able to generate returns for every
-// business.
+// business. Formulae must stay aligned with src/lib/vat.ts.
+function computeVatNetDue(outputTax: number, inputTax: number): number {
+  return Math.max(Math.round((Number(outputTax) - Number(inputTax)) * 100) / 100, 0);
+}
+
+function vatDueDateForPeriodEnd(periodEnd: string): string {
+  const d = new Date(periodEnd);
+  d.setMonth(d.getMonth() + 1, 25);
+  return d.toISOString().slice(0, 10);
+}
+
+function chunkIds(ids: string[], size = 200): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
   }
 
-  const providedSecret = req.headers.get('x-cron-secret');
-  if (!CRON_SECRET || !providedSecret || providedSecret !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
+  const denied = unauthorizedCronResponse(req);
+  if (denied) return denied;
 
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -34,6 +47,7 @@ Deno.serve(async (req) => {
   const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0);
   const periodStartStr = periodStart.toISOString().slice(0, 10);
   const periodEndStr = periodEnd.toISOString().slice(0, 10);
+  const dueDate = vatDueDateForPeriodEnd(periodEndStr);
 
   const { data: businesses, error } = await supabase
     .from('businesses')
@@ -85,13 +99,15 @@ Deno.serve(async (req) => {
 
       let outputTax = 0;
       if (invoiceIds.length > 0) {
-        const { data: lines } = await supabase
-          .from('invoice_lines')
-          .select('tax_amount')
-          .eq('business_id', business.id)
-          .eq('tax_code', 'vat_standard')
-          .in('invoice_id', invoiceIds);
-        outputTax = (lines ?? []).reduce((s: number, l: { tax_amount: number }) => s + Number(l.tax_amount), 0);
+        for (const batch of chunkIds(invoiceIds)) {
+          const { data: lines } = await supabase
+            .from('invoice_lines')
+            .select('tax_amount')
+            .eq('business_id', business.id)
+            .eq('tax_code', 'vat_standard')
+            .in('invoice_id', batch);
+          outputTax += (lines ?? []).reduce((s: number, l: { tax_amount: number }) => s + Number(l.tax_amount), 0);
+        }
       }
 
       // FLAGGED: expenses date column name not confirmed — same caveat as
@@ -108,17 +124,18 @@ Deno.serve(async (req) => {
 
       let inputTax = 0;
       if (expenseIds.length > 0) {
-        const { data: lines } = await supabase
-          .from('expense_lines')
-          .select('tax_amount')
-          .eq('business_id', business.id)
-          .eq('tax_code', 'vat_standard')
-          .in('expense_id', expenseIds);
-        inputTax = (lines ?? []).reduce((s: number, l: { tax_amount: number }) => s + Number(l.tax_amount), 0);
+        for (const batch of chunkIds(expenseIds)) {
+          const { data: lines } = await supabase
+            .from('expense_lines')
+            .select('tax_amount')
+            .eq('business_id', business.id)
+            .eq('tax_code', 'vat_standard')
+            .in('expense_id', batch);
+          inputTax += (lines ?? []).reduce((s: number, l: { tax_amount: number }) => s + Number(l.tax_amount), 0);
+        }
       }
 
-      const amountDue = Math.max(Math.round((outputTax - inputTax) * 100) / 100, 0);
-      const dueDate = new Date(now.getFullYear(), now.getMonth(), 25).toISOString().slice(0, 10);
+      const amountDue = computeVatNetDue(outputTax, inputTax);
 
       const { data: created, error: insertErr } = await supabase
         .from('tax_returns')
@@ -192,7 +209,10 @@ Deno.serve(async (req) => {
  *   $$
  *   select net.http_post(
  *     url := 'https://<your-project-ref>.supabase.co/functions/v1/generate-vat-returns',
- *     headers := jsonb_build_object('Authorization', 'Bearer <service-role-key>')
+ *     headers := jsonb_build_object(
+ *       'Content-Type', 'application/json',
+ *       'x-cron-secret', '<CRON_SECRET>'
+ *     )
  *   );
  *   $$
  * );

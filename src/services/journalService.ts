@@ -43,6 +43,9 @@ import { usageService } from '@/lib/billing/UsageService';
 import { getPlan, normalizePlanTier } from '@/lib/billing/plans';
 import { createLogger } from '@/lib/logger';
 import { isMissingAccountError } from '@/lib/journalErrors';
+import { nextEntryNumber } from '@/services/journalNumber';
+
+export { nextEntryNumber };
 
 const log = createLogger('JournalService');
 
@@ -55,31 +58,6 @@ async function getAccountByCode(
   const acc = await repos.account.findByCode(businessId, code);
   if (!acc) throw new Error(`Account ${code} not found. Please ensure your Chart of Accounts is set up.`);
   return acc;
-}
-
-// Phase 10.4: DB-backed sequence (JNL-YYYYMMDD-NNNNNN) so journal numbers are
-// unique regardless of client/edge clock skew. Falls back to the timestamp
-// format only if the RPC is unavailable (e.g. pre-migration environments or
-// test stubs that return undefined).
-export async function nextEntryNumber(businessId: string): Promise<string> {
-  try {
-    const { data, error } = await (repos.journal.db as unknown as {
-      rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
-    }).rpc('next_journal_entry_number', { p_business_id: businessId });
-    if (!error && typeof data === 'string' && data) return data;
-    if (error) log.warn('next_journal_entry_number RPC failed — using timestamp fallback', { businessId, error: error.message });
-  } catch (err) {
-    log.warn('next_journal_entry_number RPC threw — using timestamp fallback', { businessId, error: err instanceof Error ? err.message : String(err) });
-  }
-  const now   = new Date();
-  const stamp =
-    `${now.getFullYear()}` +
-    `${String(now.getMonth() + 1).padStart(2, '0')}` +
-    `${String(now.getDate()).padStart(2, '0')}` +
-    `${String(now.getHours()).padStart(2, '0')}` +
-    `${String(now.getMinutes()).padStart(2, '0')}` +
-    `${String(now.getSeconds()).padStart(2, '0')}`;
-  return `JNL-${stamp}`;
 }
 
 /**

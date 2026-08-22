@@ -16,3 +16,36 @@ export const VAT_STANDARD_RATE = 0.175;
 
 /** Display percentage (17.5) — derive labels from this, never hard-code. */
 export const VAT_STANDARD_RATE_PERCENT = VAT_STANDARD_RATE * 100;
+
+/** Calendar-month label used as tax_returns.period_label. */
+export function vatPeriodLabel(periodStart: string): string {
+  return periodStart.slice(0, 7);
+}
+
+/**
+ * Net VAT payable, never negative (a credit period is stored as amount_due = 0
+ * plus the input/output tax columns). Rounded to the nearest tambala.
+ */
+export function computeVatNetDue(outputTax: number, inputTax: number): number {
+  return Math.max(Math.round((Number(outputTax) - Number(inputTax)) * 100) / 100, 0);
+}
+
+/**
+ * MRA VAT 3 due date: 25th of the month following `periodEnd`.
+ * Matches TaxReturnRepository / generate-vat-returns — keep both on this helper.
+ */
+export function vatDueDateForPeriodEnd(periodEnd: string): string {
+  const d = new Date(periodEnd);
+  d.setMonth(d.getMonth() + 1, 25);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Prior calendar month in the local timezone (cron runs in Africa/Blantyre). */
+export function previousCalendarMonth(now = new Date()): { periodStart: string; periodEnd: string } {
+  const periodStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  return {
+    periodStart: periodStart.toISOString().slice(0, 10),
+    periodEnd: periodEnd.toISOString().slice(0, 10),
+  };
+}

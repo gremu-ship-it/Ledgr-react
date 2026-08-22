@@ -10,7 +10,7 @@
  */
 
 import { repos } from '@/lib/repositories';
-import { nextEntryNumber } from '@/services/FixedAssetsJournalService';
+import { nextEntryNumber } from '@/services/journalNumber';
 import type { Row, ShareTransactionType } from '@/dal/types/database';
 
 type JournalLine = Parameters<typeof repos.journal.createBalancedEntry>[1][number];
@@ -71,7 +71,7 @@ export async function createLoan(input: CreateLoanInput): Promise<Row<'loans'>> 
   });
 
   const description = `Loan drawdown — ${input.lenderName}`;
-  const entryNumber = await nextEntryNumber();
+  const entryNumber = await nextEntryNumber(input.businessId);
   const { entry } = await repos.journal.createBalancedEntry(
     {
       business_id: input.businessId,
@@ -129,7 +129,7 @@ export async function recordLoanRepayment(
   }
   lines.push(line(n, input.bankAccountId, description, false, input.amount)); // Cr Bank
 
-  const entryNumber = await nextEntryNumber();
+  const entryNumber = await nextEntryNumber(input.businessId);
   const { entry } = await repos.journal.createBalancedEntry(
     {
       business_id: input.businessId,
@@ -207,7 +207,7 @@ export async function recordShareTransaction(
         line(2, input.bankAccountId, description, false, input.amount),
       ];
 
-  const entryNumber = await nextEntryNumber();
+  const entryNumber = await nextEntryNumber(input.businessId);
   const { entry } = await repos.journal.createBalancedEntry(
     {
       business_id: input.businessId,

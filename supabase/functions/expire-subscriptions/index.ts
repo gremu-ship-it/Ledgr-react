@@ -12,16 +12,14 @@
 // end users.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { unauthorizedCronResponse } from '../_shared/cronAuth.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const CRON_SECRET = Deno.env.get('CRON_SECRET');
 
 Deno.serve(async (req) => {
-  const providedSecret = req.headers.get('x-cron-secret');
-  if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
-  }
+  const denied = unauthorizedCronResponse(req);
+  if (denied) return denied;
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 

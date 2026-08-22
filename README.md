@@ -113,6 +113,7 @@ and the manual approval gate — is in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 | Document | What it covers |
 |---|---|
+| [`docs/architecture/CTO_BRIEF.md`](docs/architecture/CTO_BRIEF.md) | Operating principles, remaining risks, 90-day plan |
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | Architecture, CI/CD, provider setup, monitoring |
 | [`PAYCHANGU_SETUP.md`](PAYCHANGU_SETUP.md) | PayChangu subscription/webhook setup |
 | [`SUPPORT_AGENT.md`](SUPPORT_AGENT.md) | In-app AI support agent |
