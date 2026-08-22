@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { UnsupportedOperationError, toRepositoryError } from '../errors/RepositoryError';
+import { chunk } from '@/lib/chunk';
 
 export interface BalanceWithProduct {
   id: string;
@@ -267,6 +268,27 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       .order('name', { ascending: true });
     if (error) throw toRepositoryError('products', error);
     return data ?? [];
+  }
+
+  /**
+   * Fetch a specific set of products by id. Batches `.in()` to stay under
+   * PostgREST URL limits — used by COGS posting so a sale does not load
+   * the entire catalogue.
+   */
+  async findProductsByIds(businessId: string, productIds: string[]): Promise<Row<'products'>[]> {
+    const ids = [...new Set(productIds.filter(Boolean))];
+    if (ids.length === 0) return [];
+    const rows: Row<'products'>[] = [];
+    for (const batch of chunk(ids, 200)) {
+      const { data, error } = await this.client
+        .from('products')
+        .select('*')
+        .eq('business_id', businessId)
+        .in('id', batch);
+      if (error) throw toRepositoryError('products', error);
+      rows.push(...(data ?? []));
+    }
+    return rows;
   }
 
   /**
