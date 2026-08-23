@@ -10,6 +10,8 @@
  * `ai-chat` Edge Function without translation.
  */
 
+import type { SupportCategory, SupportContext } from '../supportAgent';
+
 export type AssistantMode = 'support' | 'ai';
 
 export type ChatRole = 'user' | 'assistant' | 'system';
@@ -17,6 +19,25 @@ export type ChatRole = 'user' | 'assistant' | 'system';
 export interface ChatMessage {
   role: ChatRole;
   content: string;
+}
+
+/**
+ * Support-mode metadata carried on the DataContext when the unified
+ * assistant is in the Support tab: the selected category and the (optional)
+ * sanitised diagnostics the user asked to attach. `supportProvider` hands it
+ * to the `support-agent` Edge Function; the local knowledge-base fallback
+ * simply ignores it.
+ */
+export interface SupportPayload {
+  category: SupportCategory;
+  context?: SupportContext;
+}
+
+/** A structured follow-up button attached to an assistant answer. */
+export interface AnswerAction {
+  label: string;
+  path: string;
+  variant: 'primary' | 'secondary';
 }
 
 export interface KnowledgeArticle {
@@ -196,6 +217,8 @@ export interface DataContext {
   data?: AiData;
   knowledgeBase?: KnowledgeArticle[];
   forecast?: Forecast;
+  /** Present in Support mode — category + optional attached diagnostics. */
+  support?: SupportPayload;
 }
 
 export interface AIChartSeries {
@@ -214,6 +237,16 @@ export interface AIAnswer {
   provider: string;
   suggestions?: string[];
   charts?: AIChart[];
+  /** Structured follow-up buttons (support-agent actions). */
+  actions?: AnswerAction[];
+  /** Set when the answer escalated to a human (support-agent). */
+  escalate?: boolean;
+  /**
+   * True when the provider the UI asked for was unreachable and the answer
+   * came from the local `rulesProvider` knowledge base instead. The UI shows
+   * a quiet source note — never an error.
+   */
+  fallback?: boolean;
 }
 
 export interface AIProvider {

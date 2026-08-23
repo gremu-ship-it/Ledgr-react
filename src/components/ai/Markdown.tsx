@@ -24,13 +24,13 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     const token = match[0];
     if (token.startsWith('**')) {
       nodes.push(
-        <strong key={`${keyPrefix}-b${i}`} className="font-semibold text-white">
+        <strong key={`${keyPrefix}-b${i}`} className="font-semibold text-gray-900">
           {token.slice(2, -2)}
         </strong>,
       );
     } else {
       nodes.push(
-        <code key={`${keyPrefix}-c${i}`} className="rounded bg-white/10 px-1 py-0.5 font-mono text-[0.85em]">
+        <code key={`${keyPrefix}-c${i}`} className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.85em] text-gray-900">
           {token.slice(1, -1)}
         </code>,
       );
@@ -90,7 +90,7 @@ export function Markdown({ content }: { content: string }) {
                   <th
                     key={hi}
                     scope="col"
-                    className={`border-b border-white/15 px-2 py-1.5 font-semibold text-slate-200 ${hi === 0 ? 'text-left' : 'text-right'}`}
+                    className={`border-b border-gray-200 px-2 py-1.5 font-semibold text-gray-700 ${hi === 0 ? 'text-left' : 'text-right'}`}
                   >
                     {renderInline(h, `h${key}-${hi}`)}
                   </th>
@@ -99,9 +99,9 @@ export function Markdown({ content }: { content: string }) {
             </thead>
             <tbody>
               {rows.map((row, ri) => (
-                <tr key={ri} className="border-b border-white/5 last:border-0">
+                <tr key={ri} className="border-b border-gray-100 last:border-0">
                   {row.map((cell, ci) => (
-                    <td key={ci} className={`px-2 py-1.5 ${ci === 0 ? 'text-left' : 'text-right tabular-nums'}`}>
+                    <td key={ci} className={`px-2 py-1.5 text-gray-700 ${ci === 0 ? 'text-left' : 'text-right tabular-nums'}`}>
                       {renderInline(cell, `c${key}-${ri}-${ci}`)}
                     </td>
                   ))}
@@ -118,7 +118,7 @@ export function Markdown({ content }: { content: string }) {
     const headingMatch = /^#{1,4}\s+(.*)$/.exec(line);
     if (headingMatch) {
       blocks.push(
-        <p key={`k${key++}`} className="text-sm font-semibold text-white">
+        <p key={`k${key++}`} className="text-sm font-semibold text-gray-900">
           {renderInline(headingMatch[1], `hd${key}`)}
         </p>,
       );
@@ -134,7 +134,7 @@ export function Markdown({ content }: { content: string }) {
         i += 1;
       }
       blocks.push(
-        <ul key={`k${key++}`} className="ml-4 list-disc space-y-1 marker:text-indigo-400">
+        <ul key={`k${key++}`} className="ml-4 list-disc space-y-1 marker:text-brand-500">
           {items.map((item, ii) => (
             <li key={ii}>{renderInline(item, `u${key}-${ii}`)}</li>
           ))}
@@ -151,7 +151,7 @@ export function Markdown({ content }: { content: string }) {
         i += 1;
       }
       blocks.push(
-        <ol key={`k${key++}`} className="ml-4 list-decimal space-y-1 marker:text-indigo-400">
+        <ol key={`k${key++}`} className="ml-4 list-decimal space-y-1 marker:text-brand-500">
           {items.map((item, ii) => (
             <li key={ii}>{renderInline(item, `o${key}-${ii}`)}</li>
           ))}
@@ -180,5 +180,5 @@ export function Markdown({ content }: { content: string }) {
     );
   }
 
-  return <div className="space-y-2 text-sm leading-relaxed">{blocks}</div>;
+  return <div className="space-y-2 text-sm leading-relaxed text-gray-800">{blocks}</div>;
 }

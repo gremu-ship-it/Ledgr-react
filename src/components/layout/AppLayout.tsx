@@ -17,8 +17,7 @@ import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 import { useOrientationLock } from '@/hooks/useOrientationLock';
 import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
-import { SupportWidget } from '@/components/support/SupportWidget';
-import { AssistantWidget } from '@/components/ai/AssistantWidget';
+import { Assistant } from '@/components/ai/Assistant';
 import { CommandPalette } from './CommandPalette';
 
 export function AppLayout() {
@@ -81,9 +80,10 @@ export function AppLayout() {
         </div>
 
         <BottomNav />
-        <SupportWidget />
-        <ErrorBoundary name="AssistantWidget" fallback={() => null}>
-          <AssistantWidget />
+        {/* The single unified assistant (Support + Ledgr AI tabs) — replaces
+            the old SupportWidget and AssistantWidget launchers. */}
+        <ErrorBoundary name="Assistant" fallback={() => null}>
+          <Assistant />
         </ErrorBoundary>
         <CommandPalette />
 
