@@ -102,6 +102,11 @@ function asRecord(value: unknown): Json | null {
     : null;
 }
 
+/** `{}` is how ai_context() represents an absent row — normalise it to null. */
+function nonEmpty(value: Json | null): Json | null {
+  return value !== null && Object.keys(value).length > 0 ? value : null;
+}
+
 function asArray(value: unknown): Json[] {
   return Array.isArray(value) ? value.filter((v): v is Json => asRecord(v) !== null) : [];
 }
@@ -131,8 +136,12 @@ export function normaliseAiData(raw: unknown): AiData | null {
   if (!root) return null;
 
   const companyRaw = asRecord(root.company);
-  const kpisRaw = asRecord(root.kpis);
-  const concRaw = asRecord(root.concentration);
+  // `ai_context()` coalesces a missing KPI row to `{}` rather than JSON null
+  // (see migration 20260823000001), so an empty object means "no row", not
+  // "a row of zeros" — treat it as absent or the assistant would confidently
+  // report MK 0 for every figure.
+  const kpisRaw = nonEmpty(asRecord(root.kpis));
+  const concRaw = nonEmpty(asRecord(root.concentration));
 
   return {
     generated_at: s(root.generated_at, new Date().toISOString()),

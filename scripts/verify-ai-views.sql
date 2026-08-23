@@ -472,6 +472,41 @@ select
   e.key,
   case when (select j from payload) ? e.key then 'present' else 'MISSING' end as status,
   jsonb_typeof((select j from payload) -> e.key) as json_type,
-  case when (select j from payload) ? e.key then 'PASS' else 'FAIL' end as verdict
+  -- A key can be PRESENT and still be useless. `kpis` came back as JSON null
+  -- once (service-role callers were filtered out of v_ai_kpis by an
+  -- over-tight tenant predicate — see 20260823000001) and the original
+  -- presence-only test reported PASS. Type is now asserted too.
+  case
+    when not ((select j from payload) ? e.key) then 'FAIL - key missing'
+    when jsonb_typeof((select j from payload) -> e.key) = 'null'
+      then 'FAIL - key present but JSON null'
+    when e.key in ('monthlyTrend', 'overdueInvoices', 'topExpenses',
+                   'topCustomers', 'anomalies', 'upcomingReceivables',
+                   'upcomingPayables')
+         and jsonb_typeof((select j from payload) -> e.key) <> 'array'
+      then 'FAIL - expected an array'
+    when e.key in ('company', 'kpis')
+         and jsonb_typeof((select j from payload) -> e.key) <> 'object'
+      then 'FAIL - expected an object'
+    else 'PASS'
+  end as verdict
 from expected e
-order by verdict, e.key;
+order by verdict desc, e.key;
+
+
+-- ── 8. Both caller shapes see data ──────────────────────────────────────────
+-- The regression fixed in 20260823000001 was invisible to a browser session
+-- (which has a JWT) and broke only service-role callers — the `ai-chat` Edge
+-- Function. The SQL Editor runs WITHOUT a JWT, so it exercises exactly the
+-- path that broke. Both rows must be non-zero.
+
+select
+  'service-role (this session, no JWT)' as caller,
+  auth.uid()                            as auth_uid,
+  (select count(*) from public.v_ai_kpis)          as kpi_rows,
+  (select count(*) from public.v_ai_monthly_trend) as trend_rows,
+  case
+    when (select count(*) from public.v_ai_kpis) = 0
+      then 'FAIL - tenant predicate is filtering out service-role reads'
+    else 'PASS'
+  end as verdict;
