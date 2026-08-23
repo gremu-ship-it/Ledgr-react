@@ -61,7 +61,11 @@ select
   coalesce(a.opening_balance, 0)::numeric as opening_balance
 from public.accounts a
 where a.deleted_at is null
-  and (a.is_bank_account or a.code in ('1110', '1115', '1125', '1126'));
+  and (a.is_bank_account or a.code in ('1110', '1115', '1125', '1126'))
+  -- Tenant scope stated explicitly: RLS policies are OR'ed, and public.accounts
+  -- also grants platform-admin and partner-admin reads, which security_invoker
+  -- would otherwise inherit. See 20260823000003.
+  and (auth.uid() is null or public.is_business_member(a.business_id));
 
 comment on view public.v_ai_cash_accounts is
   'Cash and cash-equivalent accounts (is_bank_account OR code 1110/1115/1125/1126). Mirrors FinancialStatementRepository.isCashEquivalent.';
@@ -84,6 +88,7 @@ join public.v_ai_cash_accounts ca
   on ca.id = jl.account_id
  and ca.business_id = je.business_id
 where je.status in ('posted', 'reversed')
+  and (auth.uid() is null or public.is_business_member(je.business_id))
 group by je.business_id, je.id, je.entry_date;
 
 comment on view public.v_ai_cash_movements is
@@ -112,10 +117,11 @@ select
 from public.invoices i
 where i.deleted_at is null
   and i.invoice_type in ('invoice', 'credit_note', 'debit_note')
-  and i.status not in ('void', 'draft');
+  and i.status not in ('void', 'draft')
+  and (auth.uid() is null or public.is_business_member(i.business_id));
 
 comment on view public.v_ai_revenue_invoices is
-  'Revenue-recognising invoices in MWK. Filters and amount derivation copied from IncomeRepository.getTotals / findOutstanding so AI totals equal dashboard totals.';
+  'Revenue-recognising invoices in MWK. Filters and amount derivation copied from IncomeRepository.getTotals / findOutstanding so AI totals equal dashboard totals. Tenant scope stated explicitly — do not rely on the base table''s widest RLS policy.';
 
 
 -- Expense documents on the dashboard''s own rules.
@@ -138,10 +144,11 @@ select
   )::numeric                                               as amount_outstanding
 from public.expenses e
 where e.deleted_at is null
-  and e.status not in ('void', 'draft');
+  and e.status not in ('void', 'draft')
+  and (auth.uid() is null or public.is_business_member(e.business_id));
 
 comment on view public.v_ai_expense_docs is
-  'Recognised expenses in MWK (status NOT IN void/draft), matching useMonthlyExpenses.';
+  'Recognised expenses in MWK (status NOT IN void/draft), matching useMonthlyExpenses. Tenant scope stated explicitly — do not rely on the base table''s widest RLS policy.';
 
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -238,10 +245,11 @@ left join ap  on ap.business_id  = b.id
 left join cash_opening co on co.business_id = b.id
 left join cash_movement cm on cm.business_id = b.id
 left join paid on paid.business_id = b.id
-where b.deleted_at is null;
+where b.deleted_at is null
+  and (auth.uid() is null or public.is_business_member(b.id));
 
 comment on view public.v_ai_kpis is
-  'Month-to-date KPIs per business: revenue, expenses, net profit, margin, cash balance, receivables/overdue, payables, average days to pay, expense ratio. All amounts MWK and reconciled with the dashboard queries.';
+  'Month-to-date KPIs per business: revenue, expenses, net profit, margin, cash balance, receivables/overdue, payables, average days to pay, expense ratio. All amounts MWK and reconciled with the dashboard queries. Membership-scoped for JWT callers; unscoped for service-role callers, which must filter by business_id themselves (ai_context does).';
 
 
 -- ────────────────────────────────────────────────────────────────────────────
@@ -263,6 +271,7 @@ with
       interval '1 month'
     ) gs
     where b.deleted_at is null
+      and (auth.uid() is null or public.is_business_member(b.id))
   ),
   rev as (
     select r.business_id, date_trunc('month', r.issue_date)::date as month, sum(r.amount_base) as revenue
@@ -688,7 +697,7 @@ begin
 
   select jsonb_build_object(
     'generated_at', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SSOF'),
-    'company', (
+    'company', coalesce((
       select jsonb_build_object(
         'id', b.id,
         'name', b.name,
@@ -698,12 +707,14 @@ begin
       )
       from public.businesses b
       where b.id = p_business_id
-    ),
-    'kpis', (
+    ), 'null'::jsonb),
+    -- coalesce: an uncoalesced scalar subquery emits JSON null, which
+    -- asRecord() in src/lib/ai/context.ts reads as "no data at all".
+    'kpis', coalesce((
       select to_jsonb(k) - 'business_id'
       from public.v_ai_kpis k
       where k.business_id = p_business_id
-    ),
+    ), '{}'::jsonb),
     'monthlyTrend', coalesce((
       select jsonb_agg(to_jsonb(t) - 'business_id' order by t.month_start)
       from public.v_ai_monthly_trend t

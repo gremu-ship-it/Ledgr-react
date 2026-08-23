@@ -175,6 +175,16 @@ migrations: it prints a single grid, and section 6 impersonates a real user to
 prove no view returns another tenant's rows. That probe is what caught
 `v_ai_cash_accounts` leaking three foreign rows.
 
+> **Re-running `20260822000000_ai_data_views.sql` on its own used to reopen the
+> leak.** It defines every view with `drop view ... cascade; create view ...`,
+> so replaying it discarded the predicates added by the later fix migrations —
+> a verification run caught exactly this, with three views leaking again after
+> having passed. That file now carries the tenant predicates in its own
+> definitions, so replaying it is safe. If you hit a database in the reverted
+> state, apply `20260823000003_repair_ai_view_tenant_scope.sql`: it restores the
+> correct end state for all six views plus `ai_context()` regardless of what is
+> currently deployed, and asserts the result rather than trusting it.
+
 Apply it with the rest of the migrations:
 
 ```bash
