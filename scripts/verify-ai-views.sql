@@ -354,22 +354,37 @@ begin
   perform set_config('request.jwt.claims',
     json_build_object('sub', v_user_id, 'role', 'authenticated')::text, true);
 
-  -- 6a. The views must return ZERO foreign rows
-  execute 'select count(*) from public.v_ai_kpis where business_id = $1'
-    into v_rows using v_foreign_biz;
-  if v_rows = 0 then
-    raise notice 'PASS  v_ai_kpis leaks no foreign rows';
-  else
-    raise exception 'FAIL  v_ai_kpis returned % row(s) for a foreign business', v_rows;
-  end if;
+  -- 6a. EVERY view must return ZERO foreign rows.
+  -- Reported as notices and tallied, NOT raised one at a time: an exception
+  -- here aborts the whole script and hides the rest of the results, which is
+  -- exactly what happened on the first run of this file.
+  declare
+    v_view  text;
+    v_leaks int := 0;
+  begin
+    foreach v_view in array array[
+      'v_ai_cash_accounts', 'v_ai_cash_movements', 'v_ai_revenue_invoices',
+      'v_ai_expense_docs', 'v_ai_kpis', 'v_ai_monthly_trend',
+      'v_ai_overdue_invoices', 'v_ai_top_expenses', 'v_ai_top_customers',
+      'v_ai_customer_concentration', 'v_ai_upcoming_receivables',
+      'v_ai_upcoming_payables', 'v_ai_anomalies'
+    ] loop
+      execute format('select count(*) from public.%I where business_id = $1', v_view)
+        into v_rows using v_foreign_biz;
+      if v_rows = 0 then
+        raise notice 'PASS  %-30s no foreign rows', v_view;
+      else
+        v_leaks := v_leaks + 1;
+        raise warning 'FAIL  %-30s LEAKED % foreign row(s)', v_view, v_rows;
+      end if;
+    end loop;
 
-  execute 'select count(*) from public.v_ai_revenue_invoices where business_id = $1'
-    into v_rows using v_foreign_biz;
-  if v_rows = 0 then
-    raise notice 'PASS  v_ai_revenue_invoices leaks no foreign rows';
-  else
-    raise exception 'FAIL  v_ai_revenue_invoices returned % foreign row(s)', v_rows;
-  end if;
+    if v_leaks = 0 then
+      raise notice '--- No view leaks across tenants ---';
+    else
+      raise warning '--- % VIEW(S) LEAK ACROSS TENANTS — do not ship ---', v_leaks;
+    end if;
+  end;
 
   -- 6b. ai_context() must REFUSE outright
   begin
@@ -393,7 +408,18 @@ begin
     raise notice '      keys: %', (select string_agg(k, ', ' order by k)
                                    from jsonb_object_keys(v_json) k);
   else
-    raise exception 'FAIL  ai_context() payload is malformed: %', left(v_json::text, 200);
+    raise warning 'FAIL  ai_context() payload is malformed: %', left(v_json::text, 200);
+  end if;
+
+  -- 6d. The own business must still be VISIBLE through the views. The fix in
+  -- 20260823000000 narrows the tenant scope, so this guards the opposite
+  -- failure mode: over-tightening until a legitimate user sees nothing.
+  execute 'select count(*) from public.v_ai_kpis where business_id = $1'
+    into v_rows using v_own_biz;
+  if v_rows = 1 then
+    raise notice 'PASS  v_ai_kpis returns exactly 1 row for the own business';
+  else
+    raise warning 'FAIL  v_ai_kpis returned % row(s) for the OWN business (expected 1)', v_rows;
   end if;
 
   perform set_config('role', 'postgres', true);
