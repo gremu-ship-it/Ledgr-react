@@ -11,7 +11,7 @@ import { queryClient } from '@/lib/queryClient';
 import './index.css';
 import './i18n';
 import App from './App.tsx';
-import { registerSW } from 'virtual:pwa-register';
+import { registerLedgrServiceWorker } from '@/offline/registerServiceWorker';
 
 // Automatically recover once if Vite encounters a module preload failure
 // (e.g. after a deployment invalidates old chunk filenames).
@@ -26,21 +26,9 @@ if (typeof window !== 'undefined') {
   // sanitised diagnostics when a user reports a problem.
   initErrorCapture();
 
-  // Phase 10.4: surface "new version available" instead of silently waiting
-  // for the auto-updating service worker to take over on the next load.
-  // App.tsx listens for these events and shows a reload banner.
-  registerSW({
-    immediate: true,
-    onNeedRefresh() {
-      window.dispatchEvent(new CustomEvent('app:update-available'));
-    },
-    onOfflineReady() {
-      window.dispatchEvent(new CustomEvent('app:offline-ready'));
-    },
-    onRegisteredSW() {
-      window.dispatchEvent(new CustomEvent('app:sw-registered'));
-    },
-  });
+  // Register early so Workbox can precache the app shell and begin managing
+  // updates. The wrapper also exposes registration lifecycle events to React.
+  registerLedgrServiceWorker();
 }
 
 // --- Sentry (frontend) ------------------------------------------------------

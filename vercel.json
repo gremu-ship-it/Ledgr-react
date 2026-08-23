@@ -12,7 +12,7 @@
   ],
   "headers": [
     {
-      "source": "/(index\\.html|registerSW\\.js|sw\\.js|workbox-.*\\.js)",
+      "source": "/(index\\.html|registerSW\\.js|sw\\.js|sw-events\\.js|workbox-.*\\.js)",
       "headers": [
         {
           "key": "Cache-Control",
