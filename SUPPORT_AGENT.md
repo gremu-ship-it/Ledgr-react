@@ -12,17 +12,26 @@ An in-app assistant that helps users with three things from anywhere in the app:
 
 ## Surfaces
 
-- **Floating widget** (`src/components/support/SupportWidget.tsx`) — a permanent
-  chat bubble in the bottom-right, mounted once in `AppLayout`, available on every
-  authenticated page.
-- **Support page** (`/support`, `src/pages/SupportPage.tsx`) — a fuller experience
-  with compliance self-service shortcuts and a "talk to a human" card.
-- Both share `src/components/support/SupportChat.tsx`.
+- **Unified assistant** (`src/components/ai/Assistant.tsx`) — one component with
+  a Support tab and a Ledgr AI tab, mounted once in `AppLayout` as a floating
+  drawer in the bottom-right, available on every authenticated page. The
+  Support tab is the support assistant: category pills (question / report a
+  problem / compliance), the diagnostics-attachment toggle, action buttons and
+  the escalation footer.
+- **Support page** (`/support`, `src/pages/SupportPage.tsx`) — the same component
+  rendered full-page (Support tab) plus compliance self-service shortcuts and a
+  "talk to a human" card. `/ai` renders the same component full-page on the
+  Ledgr AI tab.
+
+> The support tab prefers the `support-agent` Edge Function below; whenever it
+> is unreachable the answer degrades silently to the local knowledge base
+> (`rulesProvider` in `src/lib/ai/provider.ts`), so the user never sees a
+> "couldn't reach the support assistant" dead-end.
 
 ## Architecture
 
 ```
-Browser (SupportChat)
+Browser (Assistant — Support tab)
    │  supabase.functions.invoke('support-agent', { body })  ← attaches user JWT
    ▼
 supabase/functions/support-agent/index.ts   (Deno edge function)
@@ -90,6 +99,8 @@ the function can verify identity.
 
 ## Local development
 
-The edge function is not invoked by the Vite dev server, so the widget/page will
-show a friendly "couldn't reach the support assistant" message locally until the
-function is deployed and the client is pointed at a Supabase project.
+The edge function is not invoked by the Vite dev server. Until it is deployed
+and the client is pointed at a Supabase project, the Support tab answers from
+the local knowledge base (`rulesProvider`) instead — the UI degrades silently
+and never shows a "couldn't reach the support assistant" dead-end; a small
+source note marks which answers came from the built-in knowledge base.

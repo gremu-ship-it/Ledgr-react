@@ -114,21 +114,25 @@ and the manual approval gate — is in [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ## In-app AI assistants
 
-Ledgr ships **two assistants behind one drawer** (`src/components/ai/AssistantDrawer.tsx`):
+Ledgr ships **one unified assistant** (`src/components/ai/Assistant.tsx`) with
+two mode tabs — mounted once in `AppLayout` as a floating drawer, and rendered
+full-page at `/ai` (Ledgr AI tab) and `/support` (Support tab):
 
-| | Support Assistant (`mode="support"`) | Ledgr AI (`mode="ai"`) |
+| | Support tab | Ledgr AI tab |
 |---|---|---|
 | Answers | How-to, troubleshooting, MRA compliance | Performance, forecasts, advice on live data |
 | Source | `src/lib/ai/knowledge.ts` (local knowledge base) | `public.ai_context(business_id)` |
 | Cost | Free, no network call | Free by default; optional LLM |
-| Mounted | `SupportWidget` (all pages) | `AssistantWidget` (needs the `ai_insights` plan capability) |
+| Mounted | All pages (Support tab) | Needs the `ai_insights` plan capability |
 
-**Both work with zero API keys.** With nothing configured, `getProvider()`
-returns the deterministic rules engine in `src/lib/ai/provider.ts`; every
-number it quotes is computed locally from the live payload. Setting
+**Both work with zero API keys, and neither can dead-end.** The remote paths
+are wrapped with automatic fallback to the local engine in
+`src/lib/ai/provider.ts`: `getSupportProvider()` degrades from the
+`support-agent` Edge Function to the `rulesProvider()` knowledge base, and
+`getProvider()` (the `ai-chat` remote) does the same — so a failed network
+call resolves to a useful built-in answer instead of an error. Setting
 `VITE_AI_CHAT_URL` upgrades open-ended questions to an LLM served by the
-`ai-chat` Edge Function — and if that call fails for any reason, the answer
-silently falls back to the offline engine.
+`ai-chat` Edge Function.
 
 ```
 src/lib/ai/
@@ -138,7 +142,7 @@ src/lib/ai/
 ├── forecast.ts    forecast(data, monthsAhead = 3)
 ├── advisor.ts     advise(ctx) → rating, headline, insights, 2–5 actions
 ├── format.ts      mk() — "MK 1,234,567", no decimals
-└── provider.ts    getProvider(), rulesProvider(), buildSystemPrompt(), LLM adapters
+└── provider.ts    getProvider(), getSupportProvider(), rulesProvider(), buildSystemPrompt(), LLM adapters
 ```
 
 ### Data layer
