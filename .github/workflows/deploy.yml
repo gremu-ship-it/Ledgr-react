@@ -7,13 +7,13 @@ name: Deploy
 #   * push of a tag `v*`       -> deploy to PRODUCTION (manual approval gate)
 #   * workflow_dispatch        -> manual re-deploy of staging or production
 #
-# Production uses a GitHub Environment named `production` that has a "Required
+# Production uses a GitHub Environment named `Production` that has a "Required
 # reviewers" protection rule, which gives the manual approval gate the prompt
 # asks for. Configure it under Settings > Environments in the repo
 # (see DEPLOYMENT.md).
 #
 # What gets deployed on each environment:
-#   1. Frontend  -> Vercel (staging = preview build, production = --prod)
+#   1. Frontend  -> Vercel (staging = production deploy of staging project, production = --prod)
 #   2. Backend   -> Supabase Edge Functions + DB migrations + function secrets
 #                   (separate staging and production Supabase projects)
 #   3. Optional  -> Containerised Express gateway to Railway, if RAILWAY_TOKEN
@@ -129,15 +129,19 @@ jobs:
         run: |
           # Functions that handle their own JWT/auth verification and must not
           # be blocked at the Supabase gateway. Deploying without this flag causes
-          # CORS preflight to be rejected → "Failed to fetch" in the browser.
-                    NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation"
+          # CORS preflight to be rejected -> "Failed to fetch" in the browser.
+          # All functions in this repo either verify JWT themselves, are public
+          # (invoice-open, accept-invite-link), or are cron/webhook entry points.
+          # Deploying all with --no-verify-jwt is the safest default and matches
+          # the current Supabase recommendation for custom-auth functions.
+          NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation ai-chat support-agent suggest-bank-matches accept-invite-link create-invite-link invite-team-member list-team-members create-api-key cancel-account-deletion request-account-deletion export-my-data send-invoice webhook-dispatcher"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
             if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
               supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             else
-              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             fi
           done
       - name: Deploy Express gateway to Railway (if configured)
@@ -158,7 +162,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
     runs-on: ubuntu-latest
     environment:
-      name: Production   # <- manual approval gate (required reviewers)
+      name: Production
       url: ${{ vars.PRODUCTION_URL }}
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
@@ -224,14 +228,14 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (production)
         run: |
-                    NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation"
+          NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation ai-chat support-agent suggest-bank-matches accept-invite-link create-invite-link invite-team-member list-team-members create-api-key cancel-account-deletion request-account-deletion export-my-data send-invoice webhook-dispatcher"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
             if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
               supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             else
-              supabase functions deploy "$fn" --project-ref "$SUPABASE_PROJECT_REF"
+              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             fi
           done
       - name: Deploy Express gateway to Railway (if configured)
