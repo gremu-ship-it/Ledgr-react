@@ -129,7 +129,16 @@ where n.nspname = 'public' and p.proname = 'ai_context';
 
 -- The tenant predicate added by 20260823000000 must still be in both views,
 -- and must be the service-role-aware form from 20260823000001.
-foreach v_name in array array['v_ai_kpis','v_ai_monthly_trend'] loop
+--
+-- The four leaf views that read base tables directly need the same predicate
+-- (20260823000002). v_ai_cash_accounts leaked 3 foreign rows in section 6
+-- before that migration: public.accounts carries platform-admin and
+-- partner-admin SELECT policies on top of the member policy, and because RLS
+-- policies are OR'ed, security_invoker inherits the WIDEST one. Every other
+-- AI view is scoped transitively through one of these four.
+foreach v_name in array array['v_ai_kpis','v_ai_monthly_trend',
+                              'v_ai_cash_accounts','v_ai_revenue_invoices',
+                              'v_ai_expense_docs','v_ai_cash_movements'] loop
   begin
     v_txt := pg_get_viewdef(format('public.%I', v_name)::regclass, true);
     insert into _ai_verify(section, check_name, detail, verdict)
@@ -147,6 +156,9 @@ foreach v_name in array array['v_ai_kpis','v_ai_monthly_trend'] loop
         when v_txt like '%is_business_member%' and v_txt like '%auth.uid() IS NULL%' then 'PASS'
         when v_txt like '%is_business_member%'
           then 'FAIL - apply 20260823000001 (service-role reads return nothing)'
+        when v_name in ('v_ai_cash_accounts','v_ai_revenue_invoices',
+                        'v_ai_expense_docs','v_ai_cash_movements')
+          then 'FAIL - apply 20260823000002 (cross-tenant leak)'
         else 'FAIL - apply 20260823000000 (cross-tenant leak)'
       end
     );

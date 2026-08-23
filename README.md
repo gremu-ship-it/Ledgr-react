@@ -146,10 +146,34 @@ src/lib/ai/
 `supabase/migrations/20260822000000_ai_data_views.sql` creates thirteen
 `v_ai_*` views plus `public.ai_context(uuid)`, which returns the whole
 assistant payload as one JSONB document. Every view is
-`with (security_invoker = true)`, so RLS applies to the caller and a view can
-never leak another tenant's rows; `ai_context` is `SECURITY DEFINER` but
-raises `42501` unless `public.is_business_member(p_business_id)` passes (or the
-caller is service-role, which derives the id from `business_users` first).
+`with (security_invoker = true)`, so RLS applies to the caller; `ai_context` is
+`SECURITY DEFINER` but raises `42501` unless
+`public.is_business_member(p_business_id)` passes (or the caller is
+service-role, which derives the id from `business_users` first).
+
+**`security_invoker` alone is not enough for tenant scoping.** RLS policies are
+OR'ed, so a view inherits the *widest* SELECT policy on its base table. Several
+tables carry platform-admin and partner-admin read policies for support tooling
+(`public.accounts`, `public.businesses`), which is correct for those features
+but wrong for an AI payload that must never mix tenants. The views that read
+base tables directly therefore state the scope themselves:
+
+```sql
+and (auth.uid() is null or public.is_business_member(business_id))
+```
+
+The `auth.uid() is null` arm keeps the service-role path alive — the Edge
+Function calls `ai_context()` with no JWT, and `SECURITY DEFINER` swaps the
+*role*, not the JWT, so `auth.uid()` is NULL there. See
+`20260823000001_fix_ai_context_kpis_null.sql` (`v_ai_kpis`,
+`v_ai_monthly_trend`) and `20260823000002_fix_ai_leaf_view_tenant_scope.sql`
+(`v_ai_cash_accounts`, `v_ai_revenue_invoices`, `v_ai_expense_docs`,
+`v_ai_cash_movements`). All other views are scoped transitively through those.
+
+Run `scripts/verify-ai-views.sql` in the Supabase SQL Editor after applying
+migrations: it prints a single grid, and section 6 impersonates a real user to
+prove no view returns another tenant's rows. That probe is what caught
+`v_ai_cash_accounts` leaking three foreign rows.
 
 Apply it with the rest of the migrations:
 
