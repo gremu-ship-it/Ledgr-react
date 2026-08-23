@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { createLogger } from '@/lib/logger';
+import { callSupportAgent } from '@/lib/supportAgent';
 import { advise } from './advisor';
 import { negativeMonths } from './forecast';
 import { mk, monthName, pct, shortDate } from './format';
@@ -26,12 +27,62 @@ const log = createLogger('ai/provider');
  *  • otherwise               → rulesProvider: a deterministic rule + data
  *    engine that works completely offline with zero API keys.
  *
- * The remote provider falls back to the rules engine on any failure, so the
- * assistant is never dead.
+ * Every remote path falls back to `rulesProvider` (the local knowledge base)
+ * on ANY failure — network, auth, timeout, missing deployment — so the
+ * assistant is never dead and the user never sees a "couldn't reach the
+ * support assistant" dead-end. Fallback answers are flagged with
+ * `AIAnswer.fallback` so the UI can show a quiet source note.
  */
 export function getProvider(): AIProvider {
   const url = import.meta.env.VITE_AI_CHAT_URL as string | undefined;
   return url ? remoteProvider(url) : rulesProvider();
+}
+
+/**
+ * Support-mode provider: prefers the `support-agent` Edge Function (which
+ * knows how to attach diagnostics, return action buttons and escalate) and
+ * automatically degrades to the local knowledge base via `rulesProvider`
+ * whenever the function is unreachable or errors. The degradation is silent —
+ * `answer()` resolves with a useful built-in answer instead of throwing, so
+ * the UI can never surface "couldn't reach the support assistant".
+ */
+export function getSupportProvider(): AIProvider {
+  const local = rulesProvider();
+
+  return {
+    name: 'ledgr-support',
+    async answer(messages: ChatMessage[], context: DataContext): Promise<AIAnswer> {
+      try {
+        // The support agent only speaks user/assistant turns.
+        const history = messages
+          .filter((m): m is ChatMessage & { role: 'user' | 'assistant' } => m.role !== 'system')
+          .map((m) => ({ role: m.role, content: m.content }));
+
+        const result = await callSupportAgent({
+          messages: history,
+          category: context.support?.category ?? 'query',
+          context: context.support?.context,
+        });
+
+        const content = result.content?.trim() ?? '';
+        if (!content) throw new Error('support-agent returned an empty answer');
+
+        return {
+          content,
+          provider: 'support-agent',
+          suggestions: suggestionsFor(lastUserMessage(messages), context),
+          actions: result.actions,
+          escalate: result.escalate,
+        };
+      } catch (err) {
+        log.warn('Support agent unavailable — degrading to the local knowledge base', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        const localAnswer = await local.answer(messages, context);
+        return { ...localAnswer, provider: 'ledgr-rules (local knowledge base)', fallback: true };
+      }
+    },
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -85,7 +136,7 @@ export function remoteProvider(url: string): AIProvider {
           error: err instanceof Error ? err.message : String(err),
         });
         const local = await fallback.answer(messages, context);
-        return { ...local, provider: `${local.provider} (offline fallback)` };
+        return { ...local, provider: `${local.provider} (offline fallback)`, fallback: true };
       }
     },
   };

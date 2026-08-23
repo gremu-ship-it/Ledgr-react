@@ -479,6 +479,36 @@
     "theBusiness": "the business",
     "member": "a member"
   },
+  "assistant": {
+    "title": "Ledgr Assistant",
+    "open": "Open the Ledgr assistant",
+    "close": "Close the assistant",
+    "online": "Online",
+    "askLabel": "Ask the assistant",
+    "tabs": {
+      "label": "Assistant mode",
+      "support": "Support",
+      "ai": "Ledgr AI"
+    },
+    "supportSubtitle": "Product help & how-to",
+    "aiSubtitle": "Live data from {{business}}",
+    "provider": {
+      "ledgrSupport": "Support assistant",
+      "ledgrAi": "Ledgr AI",
+      "ledgrRules": "Ledgr analysis engine"
+    },
+    "loadingData": "Loading your data…",
+    "healthCard": "Business health",
+    "anomaliesDetected_one": "{{count}} anomaly detected",
+    "anomaliesDetected_other": "{{count}} anomalies detected",
+    "andMore": "…and {{count}} more.",
+    "thinking": "Thinking…",
+    "fallbackNote": "Answered from the built-in knowledge base — the online assistant is unreachable right now.",
+    "placeholderSupport": "Ask how to do something in Ledgr…",
+    "placeholderAi": "Ask anything about your business…",
+    "send": "Send message",
+    "enterHint": "Press Enter to send · Shift+Enter for a new line"
+  },
   "support": {
     "title": "Support Assistant",
     "subtitle": "Answers, troubleshooting & compliance help",

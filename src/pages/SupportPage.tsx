@@ -10,7 +10,7 @@ import {
   ArrowUpRight,
   type LucideIcon,
 } from 'lucide-react';
-import { SupportChat } from '@/components/support/SupportChat';
+import { Assistant } from '@/components/ai/Assistant';
 
 interface QuickLink {
   icon: LucideIcon;
@@ -28,8 +28,9 @@ const COMPLIANCE_LINKS: QuickLink[] = [
 ];
 
 /**
- * Dedicated Support page (`/support`). Offers the full chat experience plus a
- * panel of compliance self-service shortcuts and an escalation card.
+ * Dedicated Support page (`/support`). Renders the same unified assistant
+ * component as the floating drawer and `/ai` — starting on the Support tab —
+ * plus a panel of compliance self-service shortcuts and an escalation card.
  */
 export function SupportPage() {
   const { t } = useTranslation();
@@ -48,10 +49,10 @@ export function SupportPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Chat — primary column */}
+        {/* Chat — primary column (the unified assistant, Support tab) */}
         <div className="lg:col-span-2">
-          <div className="h-[calc(100vh-13rem)] min-h-[480px] rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <SupportChat />
+          <div className="flex h-[calc(100vh-13rem)] min-h-[480px] flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <Assistant variant="page" initialMode="support" showHeader={false} />
           </div>
         </div>
 
