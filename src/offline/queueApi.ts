@@ -1,5 +1,6 @@
 import { offlineDB, type QueueOperationType, type QueueItem } from './db';
 import type { QueuePayloadFor } from './payloads';
+import { requestBackgroundSync } from './backgroundSync';
 
 /**
  * Determines whether an error occurred because the device is offline or
@@ -115,6 +116,11 @@ export async function enqueue<T extends QueueOperationType>(
   };
 
   const localId = await offlineDB.queue.add(item);
+
+  // Best-effort only. Browsers without Background Sync still flush through
+  // the online event and the mount-time backlog check in useSyncQueue.
+  void requestBackgroundSync();
+
   return localId as number;
 }
 

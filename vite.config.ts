@@ -37,13 +37,15 @@ export default defineConfig(({ mode }) => {
         name: 'Ledgr — Business Accounting for Malawi',
         short_name: 'Ledgr',
         description: 'MWK-first accounting, invoicing, payroll, and inventory for Malawian SMEs. Works offline.',
+        id: '/',
         theme_color: '#0E7C5A',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         lang: 'en-MW',
+        dir: 'ltr',
         categories: ['business', 'finance', 'productivity'],
         icons: [
           {
@@ -87,6 +89,9 @@ export default defineConfig(({ mode }) => {
         ],
       },
       workbox: {
+        // generateSW handles the app shell/cache strategies; this companion
+        // script adds push, notification-click, and Background Sync events.
+        importScripts: ['sw-events.js'],
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         navigateFallback: '/index.html',

@@ -5,6 +5,10 @@ import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/Pr
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { InstallPrompt } from '@/offline/InstallPrompt';
+import {
+  activateServiceWorkerUpdate,
+  isServiceWorkerUpdateAvailable,
+} from '@/offline/registerServiceWorker';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
@@ -121,7 +125,8 @@ export function RoleRoute() {
  * which previously left users on a stale bundle after deploys.
  */
 function UpdateAvailableBanner() {
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState(isServiceWorkerUpdateAvailable);
+  const [updating, setUpdating] = useState(false);
   useEffect(() => {
     const show = () => setAvailable(true);
     window.addEventListener('app:update-available', show);
@@ -134,10 +139,14 @@ function UpdateAvailableBanner() {
         <span>A new version of Ledgr is available.</span>
         <button
           type="button"
-          onClick={() => window.location.reload()}
-          className="rounded bg-brand-500 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-600"
+          disabled={updating}
+          onClick={() => {
+            setUpdating(true);
+            void activateServiceWorkerUpdate().catch(() => window.location.reload());
+          }}
+          className="rounded bg-brand-500 px-3 py-1 text-xs font-semibold text-white hover:bg-brand-600 disabled:cursor-wait disabled:opacity-70"
         >
-          Reload
+          {updating ? 'Updating…' : 'Update'}
         </button>
       </div>
     </div>

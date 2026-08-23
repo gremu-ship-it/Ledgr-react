@@ -5,6 +5,7 @@ import { useOfflineQueue } from './useOfflineQueue';
 import { syncQueue, type SyncProgress } from '@/offline/syncEngine';
 import { QUEUE_TYPE_LABELS } from '@/offline/db';
 import { invalidateAfterSync } from '@/lib/queryInvalidation';
+import { isServiceWorkerSyncRequest } from '@/offline/backgroundSync';
 
 export interface SyncQueueState {
   /** True while a sync pass is actively running. */
@@ -68,6 +69,25 @@ export function useSyncQueue(): SyncQueueState {
     if (justCameOnline) {
       void syncNow();
     }
+  }, [isOnline, syncNow]);
+
+  // Chromium's Background Sync wakes the service worker when connectivity
+  // returns. The worker cannot safely perform our semantic accounting writes
+  // without the current app/auth context, so it asks an open client to run the
+  // same idempotent queue processor used by the online-event fallback.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const handleServiceWorkerMessage = (event: MessageEvent<unknown>) => {
+      if (isOnline && isServiceWorkerSyncRequest(event.data)) {
+        void syncNow();
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+    };
   }, [isOnline, syncNow]);
 
   // Trigger once on mount if already online and there's a backlog

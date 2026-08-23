@@ -68,6 +68,32 @@ cron secrets…) lives in [`.env.example`](.env.example). **Never** put
 non-`VITE_` secrets in the browser — Edge Function secrets are configured with
 `supabase secrets set` (see [`DEPLOYMENT.md`](DEPLOYMENT.md)).
 
+## Offline and service-worker behaviour
+
+`vite-plugin-pwa` generates and registers the Workbox service worker during a
+production build. It precaches the HTML/CSS/JS app shell, uses the app shell as
+the navigation fallback, removes old caches after deployments, and applies
+network/cache strategies for API reads and static images/fonts. A generated
+manifest makes the app installable; the UI handles both Chromium's install
+prompt and iOS Add to Home Screen instructions.
+
+Offline financial writes are stored as idempotent semantic operations in Dexie
+(`src/offline/`), not as unsafe raw request replays. Enqueueing requests a
+Background Sync registration where the browser supports it. When connectivity
+returns, the service worker wakes an open Ledgr client and its authenticated
+sync engine flushes the queue; `online` events and a mount-time backlog check
+provide fallbacks in browsers without Background Sync and when the app was
+closed. The service worker also handles Web Push payload display and routes
+notification clicks back to same-origin app pages. A push provider still needs
+to create/store each user's Push API subscription before remote pushes can be
+sent.
+
+Service-worker source is split between the generated Workbox configuration in
+`vite.config.ts` and the event handlers in `public/sw-events.js`. Use a secure
+origin (HTTPS, or localhost) and test the production output with `npm run build`
+then `npm run preview`; service workers are deliberately progressive
+enhancement and the online app continues to work if registration is blocked.
+
 ## Scripts
 
 | Command                | What it does                                    |
