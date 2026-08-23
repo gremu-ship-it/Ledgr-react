@@ -8,7 +8,7 @@ no code changes. Record the date + result in the ops log.
 - [ ] **PITR**: enabled (recommended for production; RPO ≤ 24 h → PITR gives point-in-time).
 - [ ] **Read replicas**: off (not needed at current scale — leave off).
 - [ ] **Log retention**: Settings → Logging → retention ≥ 7 days.
-- [ ] **Edge function logs**: spot-check `webhook-dispatcher`, `api`, `ai-insights`, `process-invoice-automation` for recurring errors in the last 7 days.
+- [ ] **Edge function logs**: spot-check `webhook-dispatcher`, `api`, `ai-chat`, `process-invoice-automation` for recurring errors in the last 7 days.
 - [ ] **Cron jobs**: Database → Cron → the 4 jobs (expire-subscriptions, send-renewal-reminders, generate-partner-invoices, retry-failed-webhooks) all present and last-run OK.
 
 ## Vercel (projects `ledgr-react` production, `ledgr-react-prod` staging)
