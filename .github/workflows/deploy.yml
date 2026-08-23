@@ -67,8 +67,6 @@ jobs:
       # Frontend build-time env (staging Supabase project)
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_STAGING }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_STAGING }}
-      VITE_ARENA_AGENT_URL: ${{ vars.VITE_ARENA_AGENT_URL_STAGING }}
-      VITE_ARENA_API_KEY: ${{ secrets.VITE_ARENA_API_KEY_STAGING }}
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN_STAGING }}
 
       # Sentry source-map upload (frontend)
@@ -99,8 +97,6 @@ jobs:
             --yes \
             --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
             --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-            --build-env VITE_ARENA_AGENT_URL="$VITE_ARENA_AGENT_URL" \
-            --build-env VITE_ARENA_API_KEY="$VITE_ARENA_API_KEY" \
             --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
@@ -170,8 +166,6 @@ jobs:
 
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_PROD }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_PROD }}
-      VITE_ARENA_AGENT_URL: ${{ vars.VITE_ARENA_AGENT_URL_PROD }}
-      VITE_ARENA_API_KEY: ${{ secrets.VITE_ARENA_API_KEY_PROD }}
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN_PROD }}
 
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -200,8 +194,6 @@ jobs:
             --yes \
             --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
             --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-            --build-env VITE_ARENA_AGENT_URL="$VITE_ARENA_AGENT_URL" \
-            --build-env VITE_ARENA_API_KEY="$VITE_ARENA_API_KEY" \
             --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
