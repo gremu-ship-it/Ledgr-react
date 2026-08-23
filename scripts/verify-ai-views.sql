@@ -8,6 +8,14 @@
 -- READ-ONLY: no DML, no DDL, no side effects. Every section prints a `verdict`
 -- column — you are looking for 'PASS' everywhere.
 --
+-- RUN THE WHOLE FILE, IN ORDER. Section 6 impersonates a real end user via
+-- request.jwt.claims and resets it immediately afterwards. If you run section 7
+-- on its own straight after section 6, or abort mid-way through section 6, the
+-- claim may still be set and ai_context() will correctly refuse with
+--     ERROR: 42501: ai_context: not authorised for this business
+-- That is the tenant guard doing its job, not a schema fault. Clear it with:
+--     select set_config('request.jwt.claims', '{}', true);
+--
 -- Sections 1-4 need no parameters. Section 5 (reconciliation) and section 6
 -- (tenant isolation) need a business id; set it once here:
 --
@@ -422,14 +430,30 @@ begin
     raise warning 'FAIL  v_ai_kpis returned % row(s) for the OWN business (expected 1)', v_rows;
   end if;
 
+  -- Drop the impersonation. BOTH settings must be cleared: resetting `role`
+  -- alone leaves request.jwt.claims in place, so auth.uid() keeps returning
+  -- the test user for the REST of the session — which made section 7 below
+  -- fail with "ai_context: not authorised for this business".
   perform set_config('role', 'postgres', true);
+  perform set_config('request.jwt.claims', '{}', true);
   raise notice '--- Tenant isolation checks complete ---';
 end $$;
+
+-- Belt and braces: guarantee the impersonation is gone even if the block above
+-- exited early. '{}' rather than '' because some auth.uid() implementations
+-- cast the setting to jsonb without a nullif() guard, and ''::jsonb throws.
+select set_config('role', 'postgres', true) as role_reset,
+       set_config('request.jwt.claims', '{}', true) as claims_reset,
+       auth.uid() as auth_uid_should_be_null;
 
 
 -- ── 7. Shape check: does ai_context() match what the client expects? ────────
 -- src/lib/ai/context.ts narrows exactly these keys. A missing key degrades the
 -- assistant silently (it just stops mentioning that data), so check them here.
+--
+-- REQUIRES a clean session: the reset immediately above must have run, or
+-- ai_context() sees the test user's JWT claim and raises 42501. Confirm the
+-- `auth_uid_should_be_null` column above is NULL before reading these results.
 
 with payload as (
   select public.ai_context((
