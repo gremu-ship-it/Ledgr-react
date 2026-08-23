@@ -29,3 +29,6 @@ dist-ssr
 .env.production
 supabase/.temp/
 dev-dist/
+
+# Local-only AI assistant preview harness (not part of the app)
+.preview

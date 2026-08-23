@@ -18,6 +18,7 @@ import { useOrientationLock } from '@/hooks/useOrientationLock';
 import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 import { SupportWidget } from '@/components/support/SupportWidget';
+import { AssistantWidget } from '@/components/ai/AssistantWidget';
 import { CommandPalette } from './CommandPalette';
 
 export function AppLayout() {
@@ -81,6 +82,9 @@ export function AppLayout() {
 
         <BottomNav />
         <SupportWidget />
+        <ErrorBoundary name="AssistantWidget" fallback={() => null}>
+          <AssistantWidget />
+        </ErrorBoundary>
         <CommandPalette />
 
         {showWarning && (
