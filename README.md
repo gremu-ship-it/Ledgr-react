@@ -98,7 +98,7 @@ non-`VITE_` secrets in the browser — Edge Function secrets are configured with
 │   ├── hooks/            # Shared React hooks
 │   └── i18n/             # Translations (en, Chichewa)
 ├── supabase/
-│   ├── functions/        # Edge Functions (api, paychangu-webhook, ai-insights…)
+│   ├── functions/        # Edge Functions (api, paychangu-webhook, ai-chat…)
 │   └── migrations/       # SQL migrations (RLS, scheduling, indexes)
 ├── scripts/              # Ops helpers (backup verification, API keys, SQL audits)
 └── .github/workflows/    # CI, deploy (staging/prod), backup verification

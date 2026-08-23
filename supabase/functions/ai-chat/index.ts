@@ -35,7 +35,7 @@ const AI_API_KEY = Deno.env.get('AI_API_KEY')
   || (AI_PROVIDER === 'anthropic' ? Deno.env.get('ANTHROPIC_API_KEY') : undefined);
 const AI_MODEL = Deno.env.get('AI_MODEL');
 
-/** Requests per user per rolling minute (mirrors ai-insights). */
+/** Requests per user per rolling minute (mirrors the former ai-insights fn). */
 const RATE_LIMIT = 40;
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
