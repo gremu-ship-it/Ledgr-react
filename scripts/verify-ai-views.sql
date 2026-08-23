@@ -54,6 +54,10 @@ declare
   v_own_biz     uuid;
   v_foreign_biz uuid;
   v_leaks       int := 0;
+  -- section 6 buffers its findings here: while the session is impersonating
+  -- `authenticated` it may not INSERT into a temp table owned by the session
+  -- role, so rows are written once the role has been restored.
+  v_buf         jsonb;
 
   c_views constant text[] := array[
     'v_ai_cash_accounts', 'v_ai_cash_movements', 'v_ai_revenue_invoices',
@@ -319,6 +323,12 @@ else
           format('as user %s, own=%s, probing foreign=%s', v_user_id, v_own_biz, v_foreign_biz),
           'INFO');
 
+  -- Results are BUFFERED in v_buf and written after the role is restored.
+  -- Inserting while impersonating fails with "permission denied for table
+  -- _ai_verify": SET ROLE changes current_user for privilege checks, and the
+  -- temp table is owned by the session role, not by `authenticated`.
+  v_buf := '[]'::jsonb;
+
   begin
     perform set_config('role', 'authenticated', true);
     perform set_config('request.jwt.claims',
@@ -330,54 +340,60 @@ else
         execute format('select count(*) from public.%I where business_id = $1', v_name)
           into v_cnt using v_foreign_biz;
         if v_cnt > 0 then v_leaks := v_leaks + 1; end if;
-        insert into _ai_verify(section, check_name, detail, verdict)
-        values ('6. tenant isolation', v_name,
-                v_cnt || ' foreign rows',
-                case when v_cnt = 0 then 'PASS' else 'FAIL - LEAKS ACROSS TENANTS' end);
+        v_buf := v_buf || jsonb_build_object(
+          'c', v_name,
+          'd', v_cnt || ' foreign rows',
+          'v', case when v_cnt = 0 then 'PASS' else 'FAIL - LEAKS ACROSS TENANTS' end);
       exception when others then
-        insert into _ai_verify(section, check_name, detail, verdict)
-        values ('6. tenant isolation', v_name, sqlerrm, 'FAIL - errored while probing');
+        v_buf := v_buf || jsonb_build_object(
+          'c', v_name, 'd', sqlerrm, 'v', 'FAIL - errored while probing');
       end;
     end loop;
 
     -- 6b. ai_context() must refuse the foreign business
     begin
       v_json := public.ai_context(v_foreign_biz);
-      insert into _ai_verify(section, check_name, detail, verdict)
-      values ('6. tenant isolation', 'ai_context(foreign)',
-              'returned ' || left(v_json::text, 60), 'FAIL - RETURNED DATA');
+      v_buf := v_buf || jsonb_build_object(
+        'c', 'ai_context(foreign)',
+        'd', 'returned ' || left(v_json::text, 60),
+        'v', 'FAIL - RETURNED DATA');
     exception when others then
-      insert into _ai_verify(section, check_name, detail, verdict)
-      values ('6. tenant isolation', 'ai_context(foreign)',
-              format('refused: %s (%s)', sqlerrm, sqlstate),
-              case when sqlstate = '42501' or sqlerrm like '%not authorised%'
-                   then 'PASS' else 'FAIL - wrong error' end);
+      v_buf := v_buf || jsonb_build_object(
+        'c', 'ai_context(foreign)',
+        'd', format('refused: %s (%s)', sqlerrm, sqlstate),
+        'v', case when sqlstate = '42501' or sqlerrm like '%not authorised%'
+                  then 'PASS' else 'FAIL - wrong error' end);
     end;
 
     -- 6c. ...and must succeed for the user's own business
     begin
       v_json := public.ai_context(v_own_biz);
-      insert into _ai_verify(section, check_name, detail, verdict)
-      values ('6. tenant isolation', 'ai_context(own)',
-              format('kpis=%s, trend=%s',
-                     jsonb_typeof(v_json->'kpis'), jsonb_typeof(v_json->'monthlyTrend')),
-              case when jsonb_typeof(v_json->'kpis') = 'object'
-                    and jsonb_typeof(v_json->'monthlyTrend') = 'array'
-                   then 'PASS' else 'FAIL - payload malformed for own business' end);
+      v_buf := v_buf || jsonb_build_object(
+        'c', 'ai_context(own)',
+        'd', format('kpis=%s, trend=%s',
+                    jsonb_typeof(v_json->'kpis'), jsonb_typeof(v_json->'monthlyTrend')),
+        'v', case when jsonb_typeof(v_json->'kpis') = 'object'
+                   and jsonb_typeof(v_json->'monthlyTrend') = 'array'
+                  then 'PASS' else 'FAIL - payload malformed for own business' end);
     exception when others then
-      insert into _ai_verify(section, check_name, detail, verdict)
-      values ('6. tenant isolation', 'ai_context(own)', sqlerrm,
-              'FAIL - refused the user''s OWN business');
+      v_buf := v_buf || jsonb_build_object(
+        'c', 'ai_context(own)', 'd', sqlerrm,
+        'v', 'FAIL - refused the user''s OWN business');
     end;
 
     -- 6d. own business must remain visible (guards over-tightening)
-    execute 'select count(*) from public.v_ai_kpis where business_id = $1'
-      into v_cnt using v_own_biz;
-    insert into _ai_verify(section, check_name, detail, verdict)
-    values ('6. tenant isolation', 'own business visible',
-            v_cnt || ' row(s), expected 1',
-            case when v_cnt = 1 then 'PASS'
-                 else 'FAIL - legitimate user cannot see their own data' end);
+    begin
+      execute 'select count(*) from public.v_ai_kpis where business_id = $1'
+        into v_cnt using v_own_biz;
+      v_buf := v_buf || jsonb_build_object(
+        'c', 'own business visible',
+        'd', v_cnt || ' row(s), expected 1',
+        'v', case when v_cnt = 1 then 'PASS'
+                  else 'FAIL - legitimate user cannot see their own data' end);
+    exception when others then
+      v_buf := v_buf || jsonb_build_object(
+        'c', 'own business visible', 'd', sqlerrm, 'v', 'FAIL - errored');
+    end;
 
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '{}', true);
@@ -385,9 +401,19 @@ else
     -- never leave the session impersonating
     perform set_config('role', 'postgres', true);
     perform set_config('request.jwt.claims', '{}', true);
-    insert into _ai_verify(section, check_name, detail, verdict)
-    values ('6. tenant isolation', 'aborted', sqlerrm, 'FAIL');
+    v_buf := v_buf || jsonb_build_object(
+      'c', 'aborted', 'd', sqlerrm, 'v', 'FAIL');
   end;
+
+  -- Role restored — safe to write now.
+  insert into _ai_verify(section, check_name, detail, verdict)
+  select '6. tenant isolation', e->>'c', e->>'d', e->>'v'
+  from jsonb_array_elements(v_buf) e;
+
+  insert into _ai_verify(section, check_name, detail, verdict)
+  values ('6. tenant isolation', 'summary',
+          v_leaks || ' of ' || cardinality(c_views) || ' views leaked',
+          case when v_leaks = 0 then 'PASS' else 'FAIL - CROSS-TENANT LEAK' end);
 end if;
 
 
