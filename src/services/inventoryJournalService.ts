@@ -62,6 +62,7 @@
 import { repos } from '@/lib/repositories';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import { createLogger } from '@/lib/logger';
+import { nextEntryNumber } from '@/services/journalNumber';
 
 const log = createLogger('InventoryJournalService');
 import type { Row } from '@/dal/types/database';
@@ -272,23 +273,9 @@ export async function resolveExpenseLineAccountIds(
 
 // ── Entry numbering ──────────────────────────────────────────────────────────
 
-/**
- * journalService.nextEntryNumber is timestamp-to-the-second. A COGS entry is
- * posted in the same tick as the revenue entry it accompanies, so reusing
- * that helper risks a duplicate entry_number collision. The suffix keeps
- * companion entries unique and makes them self-describing in the journal.
- */
-function inventoryEntryNumber(suffix: string): string {
-  const now = new Date();
-  const stamp =
-    `${now.getFullYear()}` +
-    `${String(now.getMonth() + 1).padStart(2, '0')}` +
-    `${String(now.getDate()).padStart(2, '0')}` +
-    `${String(now.getHours()).padStart(2, '0')}` +
-    `${String(now.getMinutes()).padStart(2, '0')}` +
-    `${String(now.getSeconds()).padStart(2, '0')}` +
-    `${String(now.getMilliseconds()).padStart(3, '0')}`;
-  return `JNL-${stamp}-${suffix}`;
+/** Companion entries (COGS / GRN / STK) share the DB sequence and a suffix. */
+function inventoryEntryNumber(businessId: string, suffix: string): Promise<string> {
+  return nextEntryNumber(businessId, suffix);
 }
 
 type JournalLineInput = Parameters<typeof repos.journal.createBalancedEntry>[1][number];
@@ -408,7 +395,7 @@ export async function postCogsForSale(
     const { entry } = await repos.journal.createBalancedEntry(
       {
         business_id: businessId,
-        entry_number: inventoryEntryNumber('COGS'),
+        entry_number: await inventoryEntryNumber(businessId, 'COGS'),
         entry_date: invoice.issue_date,
         description: `Cost of goods sold — Invoice ${invoice.invoice_number}`,
         source_type: 'inventory_cogs',
@@ -476,14 +463,13 @@ export async function deductStockAndPostCogs(
 
     const costLines: SaleCostLine[] = [];
     const movements = [];
+    const products = await repos.inventory.findProductsByIds(
+      businessId,
+      linesWithProducts.map((line) => line.productId),
+    );
+    const productById = new Map(products.map((product) => [product.id, product]));
     for (const line of linesWithProducts) {
-      const product = await repos.inventory.db
-        .from('products')
-        .select('track_inventory')
-        .eq('id', line.productId)
-        .maybeSingle()
-        .then((r) => r.data);
-
+      const product = productById.get(line.productId);
       if (!product || !product.track_inventory) {
         continue;
       }
@@ -585,7 +571,7 @@ export async function postWarehouseReceipt(
     const { entry } = await repos.journal.createBalancedEntry(
       {
         business_id: businessId,
-        entry_number: inventoryEntryNumber('GRN'),
+        entry_number: await inventoryEntryNumber(businessId, 'GRN'),
         entry_date: movementDate,
         description: `${label} — goods received not invoiced`,
         source_type: 'stock_receipt',
@@ -684,7 +670,7 @@ export async function postStockMovementAdjustment(
     const { entry } = await repos.journal.createBalancedEntry(
       {
         business_id: businessId,
-        entry_number: inventoryEntryNumber('STK'),
+        entry_number: await inventoryEntryNumber(businessId, 'STK'),
         entry_date: movement.movementDate,
         description: label,
         source_type: 'stock_adjustment',
@@ -870,7 +856,7 @@ export async function postInventoryReconciliationAdjustment(
   const { entry } = await repos.journal.createBalancedEntry(
     {
       business_id: businessId,
-      entry_number: inventoryEntryNumber('INVADJ'),
+      entry_number: await inventoryEntryNumber(businessId, 'INVADJ'),
       entry_date: asOfDate,
       description,
       source_type: 'inventory_reconciliation',
@@ -889,11 +875,7 @@ export async function postInventoryReconciliationAdjustment(
 // ── Internal ─────────────────────────────────────────────────────────────────
 
 async function loadProducts(businessId: string, productIds: string[]): Promise<Row<'products'>[]> {
-  const distinct = [...new Set(productIds.filter(Boolean))];
-  if (distinct.length === 0) return [];
-  const all = await repos.inventory.findAllProducts(businessId);
-  const wanted = new Set(distinct);
-  return all.filter((p) => wanted.has(p.id));
+  return repos.inventory.findProductsByIds(businessId, productIds);
 }
 
 async function buildProductAccountMap(

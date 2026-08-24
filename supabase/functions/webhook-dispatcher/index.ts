@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
+import { isCronRequest } from '../_shared/cronAuth.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -173,14 +174,17 @@ serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) return json({ error: 'Missing Authorization header' }, 401);
+  const cron = isCronRequest(req);
 
   const body = await req.json().catch(() => null) as { business_id?: string; event?: string; payload?: unknown } | null;
   if (!body?.business_id || !body.event) return json({ error: 'business_id and event are required' }, 400);
   if (!ALLOWED_EVENTS.has(body.event)) return json({ error: 'Unsupported webhook event' }, 400);
 
-  const authError = await assertMember(authHeader, body.business_id);
-  if (authError) return authError;
+  if (!cron) {
+    if (!authHeader) return json({ error: 'Missing Authorization header' }, 401);
+    const authError = await assertMember(authHeader, body.business_id);
+    if (authError) return authError;
+  }
 
   const result = await deliverWebhooks(body.business_id, body.event, body.payload ?? {});
   return json({ ok: true, ...result });

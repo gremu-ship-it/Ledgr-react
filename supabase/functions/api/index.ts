@@ -389,9 +389,16 @@ serve(async (req) => {
           query = query.is('deleted_at', null);
         }
         const { data, error, count } = await query
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .range(0, 999);
         if (error) throw error;
-        return response(jsonApiDocument(route.resource, data ?? [], { count: count ?? (data?.length ?? 0) }));
+        const returned = data?.length ?? 0;
+        const total = count ?? returned;
+        return response(jsonApiDocument(route.resource, data ?? [], {
+          count: total,
+          returned,
+          truncated: total > returned,
+        }));
       }
 
       const body = await req.json().catch(() => ({}));

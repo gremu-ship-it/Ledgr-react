@@ -9,14 +9,14 @@
 // Guarded by x-cron-secret (same pattern as the other scheduled functions).
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { readConfiguredSecret, unauthorizedCronResponse } from '../_shared/cronAuth.ts';
 
-const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? Deno.env.get('INVOICE_CRON_SECRET') ?? '';
+const CRON_ENV = ['CRON_SECRET', 'INVOICE_CRON_SECRET'];
 
 serve(async (req) => {
   try {
-    if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
-      return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401 });
-    }
+    const denied = unauthorizedCronResponse(req, CRON_ENV);
+    if (denied) return denied;
 
     const db = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -36,6 +36,7 @@ serve(async (req) => {
 
     if (error) throw error;
 
+    const cronSecret = readConfiguredSecret(CRON_ENV) ?? '';
     let redispatched = 0;
     for (const d of deliveries ?? []) {
       const { data: webhook } = await db
@@ -52,6 +53,7 @@ serve(async (req) => {
           event: d.event,
           payload: d.payload,
         },
+        headers: { 'x-cron-secret': cronSecret },
       });
       if (invokeError) {
         console.error(`retry-failed-webhooks: redispatch of delivery ${d.id} failed: ${invokeError.message}`);
