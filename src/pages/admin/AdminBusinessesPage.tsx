@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Building2, Search, Users } from 'lucide-react';
 import { BusinessAdminRepository, type BusinessDirectoryEntry } from '@/dal/repositories/BusinessAdminRepository';
+import { useAppStore } from '@/store/useAppStore';
 
 function formatDate(value: string): string {
   if (!value) return '—';
@@ -23,10 +24,12 @@ function planBadge(tier: string): string {
  */
 export function AdminBusinessesPage() {
   const [query, setQuery] = useState('');
+  const userId = useAppStore((state) => state.currentUser?.id);
 
   const { data: businesses = [], isLoading, error } = useQuery({
-    queryKey: ['admin', 'businesses'],
+    queryKey: ['admin', userId, 'businesses'],
     queryFn: () => BusinessAdminRepository.listAll(),
+    enabled: Boolean(userId),
   });
 
   const filtered = useMemo(() => {

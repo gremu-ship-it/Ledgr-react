@@ -25,6 +25,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { MFASetup } from '@/components/auth/MFASetup';
 import type { Row } from '@/dal/types/database';
 import { useCookieConsent } from '@/lib/cookieConsent';
@@ -728,7 +729,7 @@ function UserProfileTab() {
         <p className="mt-1 text-xs text-red-700">End your current session on this device.</p>
         <button
           onClick={async () => {
-            await supabase.auth.signOut();
+            await secureSignOut('local');
             navigate('/login', { replace: true });
           }}
           className="mt-3 inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white transition-colors hover:bg-red-700"
@@ -914,7 +915,7 @@ function SecurityTab() {
         </p>
         <button
           onClick={async () => {
-            await supabase.auth.signOut({ scope: 'global' });
+            await secureSignOut('global');
             window.location.href = '/login';
           }}
           className="mt-3 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
@@ -1989,7 +1990,7 @@ export function SettingsPage() {
   async function handleSignOut() {
     setSigningOut(true);
     try {
-      await supabase.auth.signOut();
+      await secureSignOut('local');
     } finally {
       navigate('/login', { replace: true });
     }

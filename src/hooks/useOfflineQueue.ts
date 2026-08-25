@@ -43,10 +43,18 @@ export function useOfflineQueue(): OfflineQueueSummary & {
   ) => Promise<number>;
 } {
   const businessId = useAppStore((s) => s.currentBusiness?.business.id);
+  const ownerUserId = useAppStore((s) => s.currentUser?.id);
 
   const items = useLiveQuery(
-    () => (businessId ? offlineDB.queue.where('businessId').equals(businessId).sortBy('sequence') : []),
-    [businessId],
+    async () => {
+      if (!businessId || !ownerUserId) return [];
+      const businessItems = await offlineDB.queue
+        .where('businessId')
+        .equals(businessId)
+        .sortBy('sequence');
+      return businessItems.filter((item) => item.ownerUserId === ownerUserId);
+    },
+    [businessId, ownerUserId],
     [] as QueueItem[],
   );
 
@@ -58,10 +66,10 @@ export function useOfflineQueue(): OfflineQueueSummary & {
     payload: QueuePayloadFor<T>,
     options?: EnqueueOptions,
   ): Promise<number> {
-    if (!businessId) {
-      throw new Error('Cannot queue an offline operation without a selected business.');
+    if (!businessId || !ownerUserId) {
+      throw new Error('Cannot queue an offline operation without an authenticated user and selected business.');
     }
-    return enqueue(operationType, businessId, payload, options);
+    return enqueue(operationType, businessId, ownerUserId, payload, options);
   }
 
   return {

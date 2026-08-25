@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Building2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useIsMutating } from '@tanstack/react-query';
+import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { useAppStore } from '@/store/useAppStore';
 import { AddBusinessButton } from '@/components/layout/AddBusinessButton';
 
@@ -11,6 +13,9 @@ export function BusinessSwitcher() {
   const businesses = useAppStore((s) => s.businesses);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const switchBusiness = useAppStore((s) => s.switchBusiness);
+  const activeMutations = useIsMutating();
+  const { isSyncing } = useOfflineSync();
+  const switchBlocked = activeMutations > 0 || isSyncing;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -89,11 +94,12 @@ export function BusinessSwitcher() {
                 >
                   <button
                     onClick={() => {
-                      switchBusiness(
-                        membership.business.id,
-                      );
+                      if (switchBlocked) return;
+                      switchBusiness(membership.business.id);
                       setOpen(false);
                     }}
+                    disabled={switchBlocked}
+                    title={switchBlocked ? 'Finish the current save or offline sync before switching businesses.' : undefined}
                     className={clsx(
                       'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm transition-colors',
                       isSelected

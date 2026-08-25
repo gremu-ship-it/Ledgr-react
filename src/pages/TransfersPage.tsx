@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { queryKeys } from '@/lib/queryKeys';
+import { invalidateAfterInventory } from '@/lib/queryInvalidation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Plus, Search, X, Loader2, Truck,
@@ -516,9 +518,9 @@ export function TransfersPage() {
   });
 
   const { data: selectedDetail } = useQuery({
-    queryKey: ['transfer_detail', selectedTransferId],
-    queryFn: () => repos.transfer.findWithLines(selectedTransferId!),
-    enabled: Boolean(selectedTransferId),
+    queryKey: queryKeys.transfer(businessId ?? '', selectedTransferId ?? ''),
+    queryFn: () => repos.transfer.findWithLines(selectedTransferId!, businessId!),
+    enabled: Boolean(businessId && selectedTransferId),
   });
 
   const createMutation = useMutation({
@@ -571,7 +573,7 @@ export function TransfersPage() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transfers', businessId] });
-      queryClient.invalidateQueries({ queryKey: ['transfer_detail', selectedTransferId] });
+      if (businessId && selectedTransferId) queryClient.invalidateQueries({ queryKey: queryKeys.transfer(businessId, selectedTransferId) });
     },
   });
 
@@ -580,8 +582,8 @@ export function TransfersPage() {
       repos.transfer.dispatch(transferId, currentUserId, quantities),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transfers', businessId] });
-      queryClient.invalidateQueries({ queryKey: ['transfer_detail', selectedTransferId] });
-      queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
+      if (businessId && selectedTransferId) queryClient.invalidateQueries({ queryKey: queryKeys.transfer(businessId, selectedTransferId) });
+      invalidateAfterInventory(queryClient);
     },
   });
 
@@ -590,8 +592,8 @@ export function TransfersPage() {
       repos.transfer.confirmReceipt(transferId, currentUserId, quantities),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transfers', businessId] });
-      queryClient.invalidateQueries({ queryKey: ['transfer_detail', selectedTransferId] });
-      queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
+      if (businessId && selectedTransferId) queryClient.invalidateQueries({ queryKey: queryKeys.transfer(businessId, selectedTransferId) });
+      invalidateAfterInventory(queryClient);
     },
   });
 

@@ -31,6 +31,13 @@ const LEDGER_KEYS = [
   'cash_flow',
   'changes_in_equity',
   'branch_performance',
+  // Dashboard/report aliases use different historical naming conventions.
+  'profit_loss',
+  'trial_balance',
+  'multi_currency_report',
+  'revenue-breakdown',
+  'trend',
+  'vat',
 ] as const;
 
 /** Stock surfaces, touched only when the line references a tracked product. */
@@ -40,6 +47,10 @@ const INVENTORY_KEYS = [
   'products_all',
   'reorder_alerts',
   'locations',
+  'balances',
+  'movements',
+  'inventory_reconciliation',
+  'products_trackable',
 ] as const;
 
 /**
@@ -68,9 +79,27 @@ export function invalidateAfterIncome(
   queryClient: QueryClient,
   options: { touchedInventory?: boolean } = {},
 ): void {
-  const keys: string[] = ['invoices', 'contacts', ...LEDGER_KEYS, 'usage'];
+  const keys: string[] = ['invoices', 'income', 'contacts', ...LEDGER_KEYS, 'usage'];
   if (options.touchedInventory) keys.push(...INVENTORY_KEYS);
   invalidateKeys(queryClient, keys);
+}
+
+/** Refresh payroll, tax, journal, dashboard and report data after payroll writes. */
+export function invalidateAfterPayroll(queryClient: QueryClient): void {
+  invalidateKeys(queryClient, [
+    'payroll_runs',
+    'payroll_run',
+    'employees',
+    'paye',
+    'tax_returns',
+    ...LEDGER_KEYS,
+    'usage',
+  ]);
+}
+
+/** Refresh every stock representation and the financial reports stock affects. */
+export function invalidateAfterInventory(queryClient: QueryClient): void {
+  invalidateKeys(queryClient, [...INVENTORY_KEYS, ...LEDGER_KEYS]);
 }
 
 /**

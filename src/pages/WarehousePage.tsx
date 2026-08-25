@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { invalidateAfterInventory } from '@/lib/queryInvalidation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle, CheckCircle2,
@@ -281,8 +282,7 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
             'Check the ledger reconciliation below next, since stock values have changed.',
         });
       }
-      queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
-      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
+      invalidateAfterInventory(queryClient);
     },
     onError: (err: Error) => setFeedback({ type: 'error', message: err.message }),
   });
@@ -360,7 +360,7 @@ function ReconciliationPanel({ businessId }: { businessId: string }) {
             }
           : { type: 'success', message: 'Already reconciled — nothing to post.' },
       );
-      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
+      invalidateAfterInventory(queryClient);
     },
     onError: (err: Error) => setFeedback({ type: 'error', message: err.message }),
   });
@@ -519,8 +519,7 @@ export function WarehousePage() {
       return recorded;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
-      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
+      invalidateAfterInventory(queryClient);
       setReceiveError(null);
       setReceiveOpen(false);
     },

@@ -5,6 +5,7 @@ import { repos } from '@/lib/repositories';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { nextEntryNumber } from '@/services/journalService';
+import { queryKeys } from '@/lib/queryKeys';
 
 
 interface JournalEntryDetailModalProps {
@@ -16,6 +17,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role;
+  const businessId = currentBusiness?.business?.id;
   const canReverse = role === 'owner' || role === 'admin';
 
   const queryClient = useQueryClient();
@@ -28,8 +30,9 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
   const [assignDeptId, setAssignDeptId] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['journal_entry_detail', entryId],
-    queryFn: () => repos.journal.findByIdWithLines(entryId),
+    queryKey: queryKeys.journalEntry(businessId ?? '', entryId),
+    queryFn: () => repos.journal.findByIdWithLines(entryId, businessId!),
+    enabled: Boolean(businessId && entryId),
   });
 
   const { data: accounts = [] } = useQuery({
@@ -39,9 +42,9 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
   });
 
   const { data: period } = useQuery({
-    queryKey: ['period_for_entry', data?.entry.period_id],
+    queryKey: queryKeys.accountingPeriod(businessId ?? '', data?.entry.period_id ?? ''),
     queryFn: () => repos.period.findById(data!.entry.period_id!),
-    enabled: Boolean(data?.entry.period_id),
+    enabled: Boolean(businessId && data?.entry.period_id),
   });
 
   const { data: branches = [] } = useQuery({
@@ -76,7 +79,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
       await repos.journal.reverse(data.entry.id, entryNumber, today, currentUser.id, reason.trim());
 
       queryClient.invalidateQueries({ queryKey: ['journal'] });
-      queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] });
+      if (businessId) queryClient.invalidateQueries({ queryKey: queryKeys.journalEntry(businessId, entryId) });
       queryClient.invalidateQueries({ queryKey: ['accounting_periods'] });
       onClose();
     } catch (err) {
@@ -108,7 +111,7 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['journal'] });
-      queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] });
+      if (businessId) queryClient.invalidateQueries({ queryKey: queryKeys.journalEntry(businessId, entryId) });
       setShowAssignCenter(false);
       setAssignBranchId('');
       setAssignDeptId('');

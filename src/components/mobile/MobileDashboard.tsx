@@ -176,9 +176,9 @@ export function MobileDashboard() {
 
   const onRefresh = useCallback(async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['monthly_income'] }),
-      queryClient.invalidateQueries({ queryKey: ['monthly_expenses'] }),
-      queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
+      queryClient.invalidateQueries({ queryKey: ['income', 'monthly'] }),
+      queryClient.invalidateQueries({ queryKey: ['expenses', 'monthly'] }),
+      queryClient.invalidateQueries({ queryKey: ['invoices', 'outstanding'] }),
       queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
     ]);
   }, [queryClient]);

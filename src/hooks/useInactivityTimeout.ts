@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { useAppStore } from '@/store/useAppStore';
 
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'pointerdown'];
@@ -45,7 +45,7 @@ export function useInactivityTimeout(): InactivityState {
 
   const doLogout = useCallback(async () => {
     clearAllTimers(); setShowWarning(false);
-    await supabase.auth.signOut({ scope: 'local' });
+    await secureSignOut('local');
     reset();
     navigate('/login', { replace: true, state: { reason: 'inactivity' } });
   }, [clearAllTimers, navigate, reset]);

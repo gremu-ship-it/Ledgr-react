@@ -7,7 +7,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { useUsage } from '@/hooks/useUsage';
-import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { LanguageSwitcher } from '@/components/i18n/LanguageSwitcher';
 import { BusinessSwitcher } from './BusinessSwitcher';
 import { ThemeToggle } from './ThemeToggle';
@@ -50,17 +50,20 @@ export function Header() {
     clearAll,
   } = useNotificationStore();
 
-  const scopedNotifications = currentBusinessId
-    ? notifications.filter((n) => n.businessId === currentBusinessId)
+  const currentUserId = currentUser?.id ?? null;
+  const scopedNotifications = currentBusinessId && currentUserId
+    ? notifications.filter(
+        (n) => n.businessId === currentBusinessId && n.userId === currentUserId,
+      )
     : [];
   const unreadCount = scopedNotifications.filter((n) => !n.read).length;
 
   function handleMarkAllAsRead() {
-    if (currentBusinessId) markAllAsRead(currentBusinessId);
+    if (currentBusinessId && currentUserId) markAllAsRead(currentBusinessId, currentUserId);
   }
 
   function handleClearAll() {
-    if (currentBusinessId) clearAll(currentBusinessId);
+    if (currentBusinessId && currentUserId) clearAll(currentBusinessId, currentUserId);
   }
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export function Header() {
   }, [notificationsOpen, unreadCount]);
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await secureSignOut('local');
     navigate('/login', { replace: true });
   }
 

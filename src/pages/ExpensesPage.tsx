@@ -394,6 +394,7 @@ function ExpenseEmptyState({ onRecord }: { onRecord: () => void }) {
 
 function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
+  const ownerUserId = useAppStore((state) => state.currentUser?.id);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { business: businessData } = useBrandTheme();
   const isVatRegistered = businessData?.vat_registered ?? false;
@@ -413,6 +414,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
 
   const mutation = useMutation({
     mutationFn: async (values: QuickExpenseForm) => {
+      if (!ownerUserId) throw new Error('Your session is unavailable. Sign in again before recording an expense.');
       const rawAmount = parseFloat(values.amount);
       if (isNaN(rawAmount) || rawAmount <= 0) throw new Error('Enter a valid amount');
       if (!values.description.trim()) throw new Error('Description is required');
@@ -493,7 +495,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
 
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('EXP');
-        await enqueue('expense', businessId, buildPayload(offlineNum));
+        await enqueue('expense', businessId, ownerUserId, buildPayload(offlineNum));
         return { offline: true, expense_number: offlineNum, touchedInventory: false };
       }
 
@@ -548,7 +550,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('EXP');
-          await enqueue('expense', businessId, buildPayload(offlineNum));
+          await enqueue('expense', businessId, ownerUserId, buildPayload(offlineNum));
           return { offline: true, expense_number: offlineNum, touchedInventory: false };
         }
         throw err;
@@ -968,7 +970,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Expense created and posted successfully.' });
-      queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      const touchedInventory = form.lines.some((line) =>
+        products.some((product) => product.id === line.product_id && product.track_inventory),
+      );
+      invalidateAfterExpense(queryClient, { touchedInventory });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => {

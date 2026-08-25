@@ -4,6 +4,8 @@ import {
   invalidateAfterExpense,
   invalidateAfterIncome,
   invalidateAfterSync,
+  invalidateAfterPayroll,
+  invalidateAfterInventory,
 } from '../queryInvalidation';
 
 /**
@@ -40,7 +42,7 @@ describe('invalidateAfterExpense', () => {
     const { client, keys } = mockClient();
     invalidateAfterExpense(client);
 
-    for (const key of ['sofp', 'profit_or_loss', 'cash_flow']) {
+    for (const key of ['sofp', 'profit_or_loss', 'profit_loss', 'cash_flow', 'trial_balance', 'vat', 'trend']) {
       expect(keys(), `${key} would show stale figures`).toContain(key);
     }
   });
@@ -89,6 +91,24 @@ describe('invalidateAfterIncome', () => {
 
     for (const key of ['employees', 'payroll_runs', 'team']) {
       expect(keys()).not.toContain(key);
+    }
+  });
+});
+
+describe('payroll and inventory invalidation', () => {
+  it('refreshes payroll-derived tax and ledger data', () => {
+    const { client, keys } = mockClient();
+    invalidateAfterPayroll(client);
+    for (const key of ['payroll_runs', 'paye', 'journal', 'profit_loss', 'tax_returns']) {
+      expect(keys()).toContain(key);
+    }
+  });
+
+  it('refreshes every stock alias and affected reports', () => {
+    const { client, keys } = mockClient();
+    invalidateAfterInventory(client);
+    for (const key of ['balances', 'inventory_balances', 'reorder_alerts', 'movements', 'sofp']) {
+      expect(keys()).toContain(key);
     }
   });
 });

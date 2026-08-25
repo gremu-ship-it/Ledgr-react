@@ -125,16 +125,15 @@ export function LoginPage() {
       return;
     }
 
-    // "Remember me" (30 days) — Supabase default: stores session in localStorage.
-    // Session-only (no checkbox) — we store a flag so useAuthListener can enforce
-    // clearing the localStorage session on next page load if the sessionStorage
-    // marker is gone (i.e. the browser tab/window was closed).
+    // Supabase persists sessions in localStorage. For a session-only login we
+    // pair a durable mode flag with a tab-scoped marker: after the browser/tab
+    // closes the marker is gone, so useAuthListener signs the persisted session
+    // out before hydrating any business data.
     if (!rememberMe && signInData.session) {
-      // Mark this as a session-only login. If the user closes the browser
-      // (sessionStorage is cleared), useAuthListener will find no marker and
-      // sign out on the next load.
+      localStorage.setItem('ledgr-auth-persistence', 'session');
       sessionStorage.setItem('ledgr-session-only', '1');
     } else {
+      localStorage.removeItem('ledgr-auth-persistence');
       sessionStorage.removeItem('ledgr-session-only');
     }
 

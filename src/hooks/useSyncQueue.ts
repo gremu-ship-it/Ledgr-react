@@ -6,6 +6,8 @@ import { syncQueue, type SyncProgress } from '@/offline/syncEngine';
 import { QUEUE_TYPE_LABELS } from '@/offline/db';
 import { invalidateAfterSync } from '@/lib/queryInvalidation';
 import { isServiceWorkerSyncRequest } from '@/offline/backgroundSync';
+import { pruneSyncedItems } from '@/offline/queueApi';
+import { useAppStore } from '@/store/useAppStore';
 
 export interface SyncQueueState {
   /** True while a sync pass is actively running. */
@@ -33,6 +35,8 @@ export interface SyncQueueState {
 export function useSyncQueue(): SyncQueueState {
   const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();
+  const userId = useAppStore((state) => state.currentUser?.id);
+  const businessId = useAppStore((state) => state.currentBusiness?.business?.id);
   const { pendingCount } = useOfflineQueue();
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -42,12 +46,15 @@ export function useSyncQueue(): SyncQueueState {
   const wasOnlineRef = useRef(isOnline);
 
   const syncNow = useCallback(async () => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current || !userId || !businessId) return;
     inFlightRef.current = true;
     setIsSyncing(true);
 
     try {
-      const res = await syncQueue((p) => setProgress({ ...p }));
+      const res = await syncQueue(
+        { userId, businessId },
+        (p) => setProgress({ ...p }),
+      );
       if (res.completed > 0) {
         // Refresh the caches the queue can have written to, so synced items
         // appear immediately. Scoped rather than a blanket invalidate: the
@@ -55,11 +62,12 @@ export function useSyncQueue(): SyncQueueState {
         // and settings data cannot have changed.
         invalidateAfterSync(queryClient);
       }
+      await pruneSyncedItems();
     } finally {
       setIsSyncing(false);
       inFlightRef.current = false;
     }
-  }, [queryClient]);
+  }, [businessId, queryClient, userId]);
 
   // Trigger on offline -> online transition.
   useEffect(() => {

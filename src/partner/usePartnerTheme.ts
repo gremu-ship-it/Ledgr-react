@@ -11,10 +11,10 @@ import { usePartner } from './PartnerContext';
  * selected business.
  */
 export function usePartnerTheme(enabled = true) {
-  const { partner, branding } = usePartner();
+  const { partner, branding, host } = usePartner();
 
   useEffect(() => {
-    if (!enabled || !partner) return;
+    if (!enabled || (!partner && host.isPlatformHost)) return;
     applyBrandColors(branding.primaryColour);
     document.title = branding.appName;
 
@@ -29,7 +29,7 @@ export function usePartnerTheme(enabled = true) {
         })();
       link.href = branding.logoUrl;
     }
-  }, [enabled, partner, branding.primaryColour, branding.appName, branding.logoUrl]);
+  }, [enabled, partner, host.isPlatformHost, branding.primaryColour, branding.appName, branding.logoUrl]);
 
   return branding;
 }

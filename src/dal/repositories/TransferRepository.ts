@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError } from '../errors/RepositoryError';
+import { NotFoundError, toRepositoryError } from '../errors/RepositoryError';
 
 export type TransferStatus =
   | 'draft'
@@ -46,8 +46,11 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
     return data ?? [];
   }
 
-  async findWithLines(transferId: string): Promise<TransferWithLines> {
+  async findWithLines(transferId: string, businessId?: string): Promise<TransferWithLines> {
     const transfer = await this.findById(transferId);
+    if (businessId && transfer.business_id !== businessId) {
+      throw new NotFoundError('stock_transfers', transferId);
+    }
 
     const { data: lines, error } = await this.client
       .from('stock_transfer_lines')

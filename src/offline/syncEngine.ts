@@ -1,5 +1,6 @@
 import { repos } from '@/lib/repositories';
 import { withRetry } from '@/lib/errorHandler';
+import { useAppStore } from '@/store/useAppStore';
 
 /**
  * Wraps a non-critical sync operation with retry logic.
@@ -30,6 +31,10 @@ import {
   resolveExpenseLineAccountId,
 } from '@/services/inventoryJournalService';
 import { offlineDB, type QueueItem } from './db';
+import {
+  queueItemMatchesIdentity,
+  type OfflineSyncIdentity,
+} from './identity';
 import type {
   IncomeQueuePayload,
   InvoiceQueuePayload,
@@ -48,6 +53,14 @@ export interface SyncProgress {
 }
 
 export type SyncProgressListener = (progress: SyncProgress) => void;
+
+function activeContextMatches(identity: OfflineSyncIdentity): boolean {
+  const state = useAppStore.getState();
+  return (
+    state.currentUser?.id === identity.userId &&
+    state.currentBusiness?.business?.id === identity.businessId
+  );
+}
 
 function resolveForeignKey(item: QueueItem, parentServerId: string): void {
   if (!item.dependentFkField) return;
@@ -233,11 +246,23 @@ async function syncItem(item: QueueItem): Promise<string> {
   }
 }
 
-export async function syncQueue(onProgress?: SyncProgressListener): Promise<SyncProgress> {
-  const items = await offlineDB.queue
-    .where('status')
-    .anyOf('pending', 'failed')
+export async function syncQueue(
+  identity: OfflineSyncIdentity,
+  onProgress?: SyncProgressListener,
+): Promise<SyncProgress> {
+  if (!identity.userId || !identity.businessId || !activeContextMatches(identity)) {
+    return { total: 0, completed: 0, failed: 0 };
+  }
+
+  const businessItems = await offlineDB.queue
+    .where('businessId')
+    .equals(identity.businessId)
     .sortBy('sequence');
+  const items = businessItems.filter(
+    (item) =>
+      queueItemMatchesIdentity(item, identity) &&
+      (item.status === 'pending' || item.status === 'failed'),
+  );
 
   const progress: SyncProgress = { total: items.length, completed: 0, failed: 0 };
   onProgress?.(progress);
@@ -248,6 +273,10 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
   const deferred: QueueItem[] = [];
 
   for (const item of items) {
+    // A logout or business switch can occur while a pass is in progress. Stop
+    // before the next write instead of submitting under the new UI context.
+    if (!activeContextMatches(identity) || !queueItemMatchesIdentity(item, identity)) break;
+
     if (item.dependsOnLocalId !== undefined) {
       const parentServerId =
         resolvedIds.get(item.dependsOnLocalId) ??
@@ -295,6 +324,7 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
   }
 
   for (const item of deferred) {
+    if (!activeContextMatches(identity) || !queueItemMatchesIdentity(item, identity)) break;
     const parent = await offlineDB.queue.get(item.dependsOnLocalId!);
     if (parent?.status === 'synced' && parent.resolvedServerId) {
       resolveForeignKey(item, parent.resolvedServerId);

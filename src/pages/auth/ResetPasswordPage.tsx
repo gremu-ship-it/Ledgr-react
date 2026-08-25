@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { PasswordInput, PasswordStrengthMeter, measureStrength, FormField, AuthAlert, SubmitButton } from '@/components/auth/AuthUI';
 
@@ -36,7 +37,7 @@ export function ResetPasswordPage() {
     setLoading(false);
     if (updateError) { setError(updateError.message); return; }
     setPageState('success');
-    await supabase.auth.signOut({ scope: 'global' });
+    await secureSignOut('global');
     setTimeout(() => navigate('/login', { replace: true }), 2500);
   }
 

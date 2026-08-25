@@ -143,6 +143,10 @@ app.use(
   unauthLimiter,
   authLimiter,
   async (req: Request, res: Response) => {
+    // The upstream API is authenticated and tenant-scoped. Do not rely on an
+    // intermediary preserving upstream headers through this reconstructed
+    // response; set the policy explicitly at the gateway boundary.
+    res.set('Cache-Control', 'no-store');
     if (!TARGET_URL) {
       log.warn('TARGET_URL not configured — returning 503');
       res.status(503).json({

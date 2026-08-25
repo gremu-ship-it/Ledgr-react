@@ -12,6 +12,7 @@ import './index.css';
 import './i18n';
 import App from './App.tsx';
 import { registerLedgrServiceWorker } from '@/offline/registerServiceWorker';
+import { initializeClientDataIsolation } from '@/lib/clientDataIsolation';
 
 // Automatically recover once if Vite encounters a module preload failure
 // (e.g. after a deployment invalidates old chunk filenames).
@@ -21,6 +22,10 @@ if (typeof window !== 'undefined') {
     attemptChunkRecovery('vite_preload');
   });
   clearChunkRecovery('vite_preload');
+
+  // Install cross-tab logout and business-switch cache isolation before the
+  // authenticated application mounts.
+  initializeClientDataIsolation();
 
   // Begin capturing client-side errors so the Support Agent can attach
   // sanitised diagnostics when a user reports a problem.

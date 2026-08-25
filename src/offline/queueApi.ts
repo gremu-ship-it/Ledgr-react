@@ -71,9 +71,8 @@ export interface EnqueueOptions {
  * Add a new operation to the offline queue.
  *
  * @param operationType - Which of the 7 financial write operations this is.
- * @param businessId - The tenant this record belongs to — preserved so the
- * item syncs into the correct business even if the user switches business
- * context while offline.
+ * @param businessId - The tenant this record belongs to.
+ * @param ownerUserId - Auth identity that owns the queued financial write.
  * @param payload - The exact data the corresponding repository method needs.
  * @param options - Optional dependency linkage and conflict-resolution metadata.
  * @returns The localId of the newly queued item.
@@ -88,9 +87,13 @@ export const MAX_PENDING_QUEUE_ITEMS = 2_000;
 export async function enqueue<T extends QueueOperationType>(
   operationType: T,
   businessId: string,
+  ownerUserId: string,
   payload: QueuePayloadFor<T>,
   options?: EnqueueOptions,
 ): Promise<number> {
+  if (!businessId || !ownerUserId) {
+    throw new Error('Offline transactions require an authenticated user and active business.');
+  }
   const pending = await getPendingCount();
   if (pending >= MAX_PENDING_QUEUE_ITEMS) {
     throw new Error(
@@ -104,6 +107,7 @@ export async function enqueue<T extends QueueOperationType>(
     operationType,
     status: 'pending',
     businessId,
+    ownerUserId,
     payload,
     dependsOnLocalId: options?.dependsOnLocalId,
     dependentFkField: options?.dependentFkField,
@@ -124,18 +128,22 @@ export async function enqueue<T extends QueueOperationType>(
   return localId as number;
 }
 
-/** Fetch all queue items for a business, in creation order. */
-export async function getQueueForBusiness(businessId: string): Promise<QueueItem[]> {
-  return offlineDB.queue.where('businessId').equals(businessId).sortBy('sequence');
+/** Fetch queue items owned by one user in one business, in creation order. */
+export async function getQueueForBusiness(
+  businessId: string,
+  ownerUserId: string,
+): Promise<QueueItem[]> {
+  const items = await offlineDB.queue.where('businessId').equals(businessId).sortBy('sequence');
+  return items.filter((item) => item.ownerUserId === ownerUserId);
 }
 
-/** Fetch all pending or failed items across all businesses, in creation order. */
-export async function getPendingItems(): Promise<QueueItem[]> {
-  const items = await offlineDB.queue
-    .where('status')
-    .anyOf('pending', 'failed')
-    .sortBy('sequence');
-  return items;
+/** Fetch pending/failed items for the exact active user and business. */
+export async function getPendingItems(
+  businessId: string,
+  ownerUserId: string,
+): Promise<QueueItem[]> {
+  const items = await getQueueForBusiness(businessId, ownerUserId);
+  return items.filter((item) => item.status === 'pending' || item.status === 'failed');
 }
 
 /** Count of items not yet successfully synced. */

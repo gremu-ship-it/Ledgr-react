@@ -24,7 +24,7 @@ import { clsx } from 'clsx';
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
-import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { IconBadge, type IconTone } from '@/components/ui/IconBadge';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
@@ -171,7 +171,7 @@ export function BottomNav() {
           <button
             type="button"
             onClick={async () => {
-              await supabase.auth.signOut();
+              await secureSignOut('local');
               navigate('/login', { replace: true });
               setMoreOpen(false);
             }}

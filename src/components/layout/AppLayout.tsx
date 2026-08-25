@@ -24,6 +24,7 @@ export function AppLayout() {
   const { t } = useTranslation();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
+  const activeBusinessId = useAppStore((s) => s.currentBusiness?.business?.id ?? 'no-business');
   const isMobile = useIsMobile();
   const location = useLocation();
 
@@ -73,7 +74,8 @@ export function AppLayout() {
               isMobile && isDashboard && 'pt-6'
             )}
           >
-            <ErrorBoundary name="PageContent">
+            <ErrorBoundary key={activeBusinessId} name="PageContent">
+              {/* Remount route-local detail/form state when the tenant changes. */}
               <Outlet />
             </ErrorBoundary>
           </main>

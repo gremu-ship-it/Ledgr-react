@@ -1,6 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { AuthShell } from '@/components/auth/AuthShell';
 import {
   PasswordInput,
@@ -73,7 +74,7 @@ export function ResetPasswordPage() {
 
     // Sign out all sessions except the current one so the new password
     // takes effect everywhere, then redirect to login.
-    await supabase.auth.signOut({ scope: 'global' });
+    await secureSignOut('global');
     setTimeout(() => navigate('/login', { replace: true }), 2500);
   }
 

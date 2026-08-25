@@ -1,7 +1,7 @@
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Building2, CreditCard, LayoutGrid, LogOut, Settings, Users } from 'lucide-react';
 import { clsx } from 'clsx';
-import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { useAppStore } from '@/store/useAppStore';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
@@ -31,7 +31,7 @@ export function PartnerAdminLayout() {
     : [{ to: '/partner-admin', label: 'Partners', icon: Building2, end: true }];
 
   async function signOut() {
-    await supabase.auth.signOut();
+    await secureSignOut('local');
     navigate('/login', { replace: true });
   }
 
