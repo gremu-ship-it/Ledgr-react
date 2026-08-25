@@ -52,14 +52,14 @@
 - Replaced sequential anonymous/authenticated limiters with one dynamic policy: 10/min anonymous and 100/min authenticated.
 - Uses hashed credential keys and IPv6-safe IP normalization.
 - Uses Redis when configured and fails production startup when `REDIS_URL` is absent.
-- Added proxy target tests and CI gateway verification.
+- Added proxy target tests and repeatable local gateway verification.
 
 ### Repeatable security verification
 
 - Converted the database security harness to ESM.
 - Added declared `embedded-postgres` and `pg` development dependencies.
 - Added `npm run test:db-security`.
-- CI now runs the database replay plus gateway typecheck, tests, and build.
+- CI workflow integration remains a repository-administration follow-up: the Arena GitHub App can push source changes but lacks permission to update `.github/workflows/ci.yml`.
 
 ## Verification results
 
