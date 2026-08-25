@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Loader2, Monitor, LogOut, RefreshCw, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { AuthAlert } from '@/components/auth/AuthUI';
 import type { User } from '@supabase/supabase-js';
 
@@ -84,7 +85,7 @@ export function SessionManager() {
   async function handleSignOut(scope: 'local' | 'global') {
     if (scope === 'global' && !window.confirm('This will sign you out of all devices. Continue?')) return;
     setSigningOut(scope); setError(null); setSuccess(null);
-    const { error: signOutError } = await supabase.auth.signOut({ scope });
+    const { error: signOutError } = await secureSignOut(scope);
     if (signOutError) { setSigningOut(null); setError(signOutError.message); return; }
     if (scope === 'local') setSuccess('Signed out from this device.');
   }

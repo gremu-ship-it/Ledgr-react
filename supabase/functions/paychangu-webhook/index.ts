@@ -25,6 +25,7 @@
 // (bad signature, DB error) return non-200 so PayChangu does retry.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { noStoreJson, noStoreRedirect } from '../_shared/response.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -32,12 +33,7 @@ const PAYCHANGU_SECRET_KEY = Deno.env.get('PAYCHANGU_SECRET_KEY');
 const PAYCHANGU_WEBHOOK_SECRET = Deno.env.get('PAYCHANGU_WEBHOOK_SECRET');
 const RAW_APP_URL = Deno.env.get('APP_URL');
 
-function json(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+const json = noStoreJson;
 
 async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
   const key = await crypto.subtle.importKey(
@@ -85,7 +81,7 @@ Deno.serve(async (req) => {
     const txRef = new URL(req.url).searchParams.get('tx_ref');
     const appUrl = normalizeAppUrl(RAW_APP_URL);
     if (txRef && appUrl) {
-      return Response.redirect(`${appUrl}/settings?tab=billing&payment=${encodeURIComponent(txRef)}`, 302);
+      return noStoreRedirect(`${appUrl}/settings?tab=billing&payment=${encodeURIComponent(txRef)}`);
     }
     return json({ error: 'Method not allowed' }, 405);
   }

@@ -1,5 +1,6 @@
 import { repos } from '@/lib/repositories';
 import { withRetry } from '@/lib/errorHandler';
+import { useAppStore } from '@/store/useAppStore';
 
 /**
  * Wraps a non-critical sync operation with retry logic.
@@ -30,6 +31,11 @@ import {
   resolveExpenseLineAccountId,
 } from '@/services/inventoryJournalService';
 import { offlineDB, type QueueItem } from './db';
+import {
+  queueItemHasValidPayloadScope,
+  queueItemMatchesIdentity,
+  type OfflineSyncIdentity,
+} from './identity';
 import type {
   IncomeQueuePayload,
   InvoiceQueuePayload,
@@ -49,6 +55,14 @@ export interface SyncProgress {
 
 export type SyncProgressListener = (progress: SyncProgress) => void;
 
+function activeContextMatches(identity: OfflineSyncIdentity): boolean {
+  const state = useAppStore.getState();
+  return (
+    state.currentUser?.id === identity.userId &&
+    state.currentBusiness?.business?.id === identity.businessId
+  );
+}
+
 function resolveForeignKey(item: QueueItem, parentServerId: string): void {
   if (!item.dependentFkField) return;
   const payload = item.payload as unknown as Record<string, unknown>;
@@ -62,6 +76,10 @@ function resolveForeignKey(item: QueueItem, parentServerId: string): void {
 }
 
 async function syncItem(item: QueueItem): Promise<string> {
+  if (!queueItemHasValidPayloadScope(item)) {
+    throw new Error('Queued financial payload does not match its owning business.');
+  }
+
   switch (item.operationType) {
     case 'income':
     case 'invoice': {
@@ -233,11 +251,39 @@ async function syncItem(item: QueueItem): Promise<string> {
   }
 }
 
-export async function syncQueue(onProgress?: SyncProgressListener): Promise<SyncProgress> {
-  const items = await offlineDB.queue
-    .where('status')
-    .anyOf('pending', 'failed')
+async function rejectInvalidQueueItem(
+  item: QueueItem,
+  progress: SyncProgress,
+  message: string,
+  onProgress?: SyncProgressListener,
+): Promise<void> {
+  await offlineDB.queue.update(item.localId!, {
+    status: 'failed',
+    lastAttemptAt: new Date().toISOString(),
+    attemptCount: item.attemptCount + 1,
+    lastError: message,
+  });
+  progress.failed += 1;
+  onProgress?.(progress);
+}
+
+export async function syncQueue(
+  identity: OfflineSyncIdentity,
+  onProgress?: SyncProgressListener,
+): Promise<SyncProgress> {
+  if (!identity.userId || !identity.businessId || !activeContextMatches(identity)) {
+    return { total: 0, completed: 0, failed: 0 };
+  }
+
+  const businessItems = await offlineDB.queue
+    .where('businessId')
+    .equals(identity.businessId)
     .sortBy('sequence');
+  const items = businessItems.filter(
+    (item) =>
+      queueItemMatchesIdentity(item, identity) &&
+      (item.status === 'pending' || item.status === 'failed'),
+  );
 
   const progress: SyncProgress = { total: items.length, completed: 0, failed: 0 };
   onProgress?.(progress);
@@ -248,10 +294,33 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
   const deferred: QueueItem[] = [];
 
   for (const item of items) {
+    // A logout or business switch can occur while a pass is in progress. Stop
+    // before the next write instead of submitting under the new UI context.
+    if (!activeContextMatches(identity) || !queueItemMatchesIdentity(item, identity)) break;
+
+    if (!queueItemHasValidPayloadScope(item)) {
+      await rejectInvalidQueueItem(
+        item,
+        progress,
+        'Queued financial payload does not match its owning business.',
+        onProgress,
+      );
+      continue;
+    }
+
     if (item.dependsOnLocalId !== undefined) {
-      const parentServerId =
-        resolvedIds.get(item.dependsOnLocalId) ??
-        (await offlineDB.queue.get(item.dependsOnLocalId))?.resolvedServerId;
+      const parent = await offlineDB.queue.get(item.dependsOnLocalId);
+      if (!parent || !queueItemMatchesIdentity(parent, identity)) {
+        await rejectInvalidQueueItem(
+          item,
+          progress,
+          'Queued dependency does not belong to the same user and business.',
+          onProgress,
+        );
+        continue;
+      }
+
+      const parentServerId = resolvedIds.get(item.dependsOnLocalId) ?? parent.resolvedServerId;
 
       if (!parentServerId) {
         deferred.push(item);
@@ -269,6 +338,13 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
       lastAttemptAt: new Date().toISOString(),
       attemptCount: item.attemptCount + 1,
     });
+
+    // The IndexedDB update above yields to the event loop. A logout can happen
+    // during that gap, so re-check immediately before the first network write.
+    if (!activeContextMatches(identity)) {
+      await offlineDB.queue.update(item.localId!, { status: 'pending' });
+      break;
+    }
 
     try {
       const serverId = await syncItem(item);
@@ -295,8 +371,29 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
   }
 
   for (const item of deferred) {
+    if (!activeContextMatches(identity) || !queueItemMatchesIdentity(item, identity)) break;
+    if (!queueItemHasValidPayloadScope(item)) {
+      await rejectInvalidQueueItem(
+        item,
+        progress,
+        'Queued financial payload does not match its owning business.',
+        onProgress,
+      );
+      continue;
+    }
+
     const parent = await offlineDB.queue.get(item.dependsOnLocalId!);
-    if (parent?.status === 'synced' && parent.resolvedServerId) {
+    if (!parent || !queueItemMatchesIdentity(parent, identity)) {
+      await rejectInvalidQueueItem(
+        item,
+        progress,
+        'Queued dependency does not belong to the same user and business.',
+        onProgress,
+      );
+      continue;
+    }
+
+    if (parent.status === 'synced' && parent.resolvedServerId) {
       resolveForeignKey(item, parent.resolvedServerId);
 
       await offlineDB.queue.update(item.localId!, {
@@ -304,6 +401,11 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
         lastAttemptAt: new Date().toISOString(),
         attemptCount: item.attemptCount + 1,
       });
+
+      if (!activeContextMatches(identity)) {
+        await offlineDB.queue.update(item.localId!, { status: 'pending' });
+        break;
+      }
 
       try {
         const serverId = await syncItem(item);

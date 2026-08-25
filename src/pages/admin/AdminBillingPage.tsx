@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { subscriptionPaymentService, type ManualPaymentMethod } from '@/services/billing/SubscriptionPaymentService';
 import { PLANS, type PlanTier } from '@/lib/billing/plans';
 import { handleError } from '@/lib/errorHandler';
+import { useAppStore } from '@/store/useAppStore';
 
 interface BusinessSearchResult {
   id: string;
@@ -33,6 +34,7 @@ const PAYMENT_METHODS: { value: ManualPaymentMethod; label: string }[] = [
  */
 export function AdminBillingPage() {
   const queryClient = useQueryClient();
+  const userId = useAppStore((state) => state.currentUser?.id);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [search, setSearch] = useState('');
@@ -70,7 +72,7 @@ export function AdminBillingPage() {
   }, [searchParams, selected, setSearchParams]);
 
   const { data: results = [], isFetching } = useQuery({
-    queryKey: ['admin-business-search', search],
+    queryKey: ['admin-business-search', userId, search],
     queryFn: async (): Promise<BusinessSearchResult[]> => {
       const { data, error } = await supabase
         .from('businesses')
@@ -81,7 +83,7 @@ export function AdminBillingPage() {
       if (error) throw error;
       return (data ?? []) as BusinessSearchResult[];
     },
-    enabled: search.trim().length >= 2,
+    enabled: Boolean(userId) && search.trim().length >= 2,
   });
 
   const grantMutation = useMutation({

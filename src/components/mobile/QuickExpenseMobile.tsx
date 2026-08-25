@@ -12,6 +12,7 @@ import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { useAppStore } from '@/store/useAppStore';
 
 const log = createLogger('QuickExpenseMobile');
 
@@ -25,6 +26,7 @@ interface QuickExpenseMobileProps {
 
 export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMobileProps) {
   const queryClient = useQueryClient();
+  const ownerUserId = useAppStore((state) => state.currentUser?.id);
   const { business: businessData } = useBrandTheme();
   const isVatRegistered = businessData?.vat_registered ?? false;
   const effectiveVatRate = isVatRegistered ? VAT_STANDARD_RATE : 0;
@@ -111,6 +113,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!ownerUserId) throw new Error('Your session is unavailable. Sign in again before recording an expense.');
       if (!selectedAccount) throw new Error('Please select an expense account.');
       const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
       const desc = description.trim() || selectedProduct?.name || selectedAccount.name;
@@ -155,7 +158,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('EXP');
-        await enqueue('expense', businessId, buildPayload(offlineNum));
+        await enqueue('expense', businessId, ownerUserId, buildPayload(offlineNum));
         return { offline: true };
       }
 
@@ -203,7 +206,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('EXP');
-          await enqueue('expense', businessId, buildPayload(offlineNum));
+          await enqueue('expense', businessId, ownerUserId, buildPayload(offlineNum));
           return { offline: true };
         }
         throw err;

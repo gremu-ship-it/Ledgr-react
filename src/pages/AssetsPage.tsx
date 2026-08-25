@@ -9,6 +9,7 @@ import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { createLogger } from '@/lib/logger';
+import { isActiveClientContext } from '@/lib/clientDataIsolation';
 import {
   isAssetDepreciable,
   isLandCategoryName,
@@ -118,6 +119,7 @@ function CategoryModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const ownerUserId = useAppStore((state) => state.currentUser?.id);
 
   const { data: assetAccountsRaw = [] } = useQuery({
     queryKey: ['accounts_by_type', businessId, 'asset'],
@@ -236,6 +238,7 @@ function CategoryModal({
         : repos.asset.createCategory(payload);
     },
     onSuccess: (savedCategory) => {
+      if (!ownerUserId || !isActiveClientContext(ownerUserId, businessId)) return;
       queryClient.setQueryData<Row<'asset_categories'>[]>(
         ['asset_categories', businessId],
         (current = []) => [

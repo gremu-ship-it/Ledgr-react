@@ -10,6 +10,7 @@ import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
+import { useAppStore } from '@/store/useAppStore';
 
 const log = createLogger('QuickIncomeMobile');
 
@@ -23,6 +24,7 @@ interface QuickIncomeMobileProps {
 
 export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobileProps) {
   const queryClient = useQueryClient();
+  const ownerUserId = useAppStore((state) => state.currentUser?.id);
   const [step, setStep] = useState<Step>('amount');
   const [amount, setAmount] = useState('');
   const [selectedAccount, setSelectedAccount] = useState<Row<'accounts'> | null>(null);
@@ -97,6 +99,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!ownerUserId) throw new Error('Your session is unavailable. Sign in again before recording income.');
       if (!selectedAccount) throw new Error('Please select an income account.');
       const isOfflineNow = typeof navigator !== 'undefined' && !navigator.onLine;
       const desc = description.trim() || selectedProduct?.name || selectedAccount.name;
@@ -145,7 +148,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('INV');
-        await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+        await enqueue('income', businessId, ownerUserId, buildPayload(offlineNum, 'offline_walk_in_customer'));
         return { offline: true };
       }
 
@@ -169,7 +172,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('INV');
-          await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+          await enqueue('income', businessId, ownerUserId, buildPayload(offlineNum, 'offline_walk_in_customer'));
           return { offline: true };
         }
         throw err;

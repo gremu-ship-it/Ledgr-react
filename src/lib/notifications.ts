@@ -1,7 +1,9 @@
 import { useNotificationStore, type AppNotification } from '@/store/useNotificationStore';
 import { announce } from './a11y';
 
-type NotificationPayload = Omit<AppNotification, 'id' | 'timestamp' | 'read'>;
+type NotificationPayload = Omit<AppNotification, 'id' | 'timestamp' | 'read' | 'userId'> & {
+  userId?: string | null;
+};
 type NotificationOptions = {
   link?: string;
   businessId?: string | null;

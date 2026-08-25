@@ -9,6 +9,31 @@
 
 const LEDGR_BACKGROUND_SYNC_TAG = 'ledgr-offline-queue';
 const LEDGR_SYNC_REQUESTED = 'LEDGR_SYNC_REQUESTED';
+const LEDGR_CLEAR_PRIVATE_CACHES = 'LEDGR_CLEAR_PRIVATE_CACHES';
+
+// Runtime caches from older releases that could contain authenticated REST
+// responses or remote tenant images. They are deleted on activation so existing
+// installed PWAs are remediated as soon as the new worker takes control.
+const OBSOLETE_PRIVATE_CACHES = ['ledgr-api-cache', 'ledgr-static-assets'];
+
+async function clearPrivateCaches() {
+  const names = await caches.keys();
+  await Promise.all(
+    names
+      .filter((name) => OBSOLETE_PRIVATE_CACHES.includes(name))
+      .map((name) => caches.delete(name)),
+  );
+}
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clearPrivateCaches());
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === LEDGR_CLEAR_PRIVATE_CACHES) {
+    event.waitUntil(clearPrivateCaches());
+  }
+});
 
 function safeNotificationUrl(value) {
   try {

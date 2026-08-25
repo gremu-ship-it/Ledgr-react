@@ -288,6 +288,7 @@ function IncomeEmptyState({ onRecord }: { onRecord: () => void }) {
 function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSuccess: () => void }) {
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const ownerUserId = useAppStore((s) => s.currentUser?.id);
   const { data: branches = [] } = useBranches(businessId);
   const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] } = useAllProducts(businessId);
@@ -300,6 +301,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
 
   const mutation = useMutation({
     mutationFn: async (values: QuickEntryForm) => {
+      if (!ownerUserId) throw new Error('Your session is unavailable. Sign in again before recording income.');
       const amount = parseFloat(values.amount);
       if (isNaN(amount) || amount <= 0) throw new Error('Enter a valid amount');
       if (!values.description.trim()) throw new Error('Description is required');
@@ -382,7 +384,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
 
       if (isOfflineNow) {
         const offlineNum = generateOfflineNumber('INV');
-        await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+        await enqueue('income', businessId, ownerUserId, buildPayload(offlineNum, 'offline_walk_in_customer'));
         return { offline: true, invoice_number: offlineNum, touchedInventory: false };
       }
 
@@ -429,7 +431,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       } catch (err) {
         if (isOfflineError(err)) {
           const offlineNum = generateOfflineNumber('INV');
-          await enqueue('income', businessId, buildPayload(offlineNum, 'offline_walk_in_customer'));
+          await enqueue('income', businessId, ownerUserId, buildPayload(offlineNum, 'offline_walk_in_customer'));
           return { offline: true, invoice_number: offlineNum, touchedInventory: false };
         }
         throw err;
@@ -795,8 +797,10 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Invoice created successfully.' });
-      queryClient.invalidateQueries({ queryKey: ['income'] });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
+      const touchedInventory = form.lines.some((line) =>
+        products.some((product) => product.id === line.product_id && product.track_inventory),
+      );
+      invalidateAfterIncome(queryClient, { touchedInventory });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),

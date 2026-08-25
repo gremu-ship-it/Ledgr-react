@@ -47,8 +47,11 @@ if (SENTRY_DSN) {
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import Redis from 'ioredis';
+import { RedisStore, type RedisReply } from 'rate-limit-redis';
 import { createServerLogger } from './logger.js';
+import { resolveProxyTarget } from './proxyTarget.js';
 import { CircuitBreaker } from './resilience.js';
 
 const log = createServerLogger('Gateway');
@@ -57,6 +60,14 @@ const PORT = Number(process.env.PORT) || 3000;
 const APP_ENV = process.env.APP_ENV || 'staging';
 const TARGET_URL = process.env.TARGET_URL || '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
+const REDIS_URL = process.env.REDIS_URL || '';
+
+if (APP_ENV === 'production' && !REDIS_URL) {
+  throw new Error('REDIS_URL is required in production so rate limits are shared across instances.');
+}
+if (APP_ENV === 'production' && TARGET_URL && new URL(TARGET_URL).protocol !== 'https:') {
+  throw new Error('Production TARGET_URL must use HTTPS.');
+}
 
 // Phase 10.4: bound upstream requests and trip a breaker after repeated
 // failures (see the proxy handler below).
@@ -106,26 +117,42 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Unauthenticated: 10 req/min per IP on every route except /api/health.
-const unauthLimiter = rateLimit({
-  windowMs: 60_000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => req.path === '/api/health',
-});
+const redisClient = REDIS_URL
+  ? new Redis(REDIS_URL, {
+      lazyConnect: true,
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 1,
+    })
+  : null;
 
-// Authenticated: 100 req/min per API key / bearer token.
-const authLimiter = rateLimit({
+const sharedRateStore = redisClient
+  ? new RedisStore({
+      prefix: 'ledgr-gateway:',
+      sendCommand: async (command: string, ...args: string[]): Promise<RedisReply> =>
+        await redisClient.call(command, ...args) as RedisReply,
+    })
+  : undefined;
+
+/**
+ * Apply exactly one policy per request: authenticated clients receive 100/min
+ * keyed by a non-reversible token hash; anonymous clients receive 10/min using
+ * express-rate-limit's IPv6-safe IP normalization.
+ */
+const apiLimiter = rateLimit({
   windowMs: 60_000,
-  max: 100,
+  limit: (req) =>
+    req.headers.authorization || req.headers['x-api-key'] ? 100 : 10,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) =>
-    (req.headers['authorization'] as string) ||
-    (req.headers['x-api-key'] as string) ||
-    req.ip ||
-    'anonymous',
+  store: sharedRateStore,
+  keyGenerator: (req) => {
+    const credential = req.headers.authorization || req.headers['x-api-key'];
+    if (credential) {
+      const value = Array.isArray(credential) ? credential.join(',') : credential;
+      return `auth:${hashToken(value)}`;
+    }
+    return `ip:${ipKeyGenerator(req.ip || '')}`;
+  },
 });
 
 app.get('/api/health', (_req: Request, res: Response) => {
@@ -140,9 +167,12 @@ app.get('/api/test-error', () => {
 
 app.use(
   '/api/v1',
-  unauthLimiter,
-  authLimiter,
+  apiLimiter,
   async (req: Request, res: Response) => {
+    // The upstream API is authenticated and tenant-scoped. Do not rely on an
+    // intermediary preserving upstream headers through this reconstructed
+    // response; set the policy explicitly at the gateway boundary.
+    res.set('Cache-Control', 'no-store');
     if (!TARGET_URL) {
       log.warn('TARGET_URL not configured — returning 503');
       res.status(503).json({
@@ -152,29 +182,35 @@ app.use(
     }
 
     try {
-      // Phase 10.4 (CodeQL SSRF): the proxy must never leave the configured
-      // target. Two independent guards:
-      //   1. Strict allowlist regex on the caller path — only a relative
-      //      /api/v1/... path survives; anything that could smuggle a
-      //      scheme/host (://, //, \) is rejected before any URL is built.
-      //   2. Hostname/port comparison after resolution, as a second line of
-      //      defence against future refactors.
-      const rawPath = req.originalUrl;
-      if (!/^\/api\/v1\/[A-Za-z0-9\-._~!$&'()*+,;=:@/%]*$/.test(rawPath)) {
-        log.warn('Blocked off-target proxy request (path allowlist)', { path: rawPath });
-        res.status(400).json({ errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }] });
-        return;
-      }
-      const target = new URL(TARGET_URL);
-      const resolved = new URL(rawPath, target);
-      if (resolved.hostname !== target.hostname || resolved.port !== target.port) {
-        log.warn('Blocked off-target proxy request (host mismatch)', { path: rawPath, resolved: resolved.toString() });
-        res.status(400).json({ errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }] });
+      let resolved: URL;
+      try {
+        resolved = resolveProxyTarget(TARGET_URL, req.originalUrl);
+      } catch (error) {
+        log.warn('Blocked invalid proxy request', {
+          path: req.originalUrl,
+          reason: error instanceof Error ? error.message : 'invalid target',
+        });
+        res.status(400).json({
+          errors: [{ status: '400', title: 'Bad request', detail: 'Path escapes the configured target' }],
+        });
         return;
       }
       const url = resolved.toString();
       const headers = new Headers();
+      const excludedHeaders = new Set([
+        'connection',
+        'content-length',
+        'host',
+        'keep-alive',
+        'proxy-authenticate',
+        'proxy-authorization',
+        'te',
+        'trailer',
+        'transfer-encoding',
+        'upgrade',
+      ]);
       for (const [key, value] of Object.entries(req.headers)) {
+        if (excludedHeaders.has(key.toLowerCase())) continue;
         if (Array.isArray(value)) headers.set(key, value.join(', '));
         else if (value) headers.set(key, value);
       }
@@ -190,10 +226,9 @@ app.use(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
         try {
-          // The URL was resolved against the configured TARGET_URL and
-          // rejected unless its origin matches the target origin exactly
-          // (see the origin guard above), so this fetch cannot be redirected
-          // to an arbitrary host by caller input.
+          // resolveProxyTarget constructs scheme/authority exclusively from
+          // TARGET_URL and appends only a validated path/query. The caller
+          // cannot redirect this request to another host.
           return await fetch(url, {
 
             method: req.method,

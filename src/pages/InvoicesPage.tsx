@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { queryKeys } from '@/lib/queryKeys';
+import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -189,8 +191,7 @@ function RecordPaymentModal({
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Payment recorded successfully.' });
-      queryClient.invalidateQueries({ queryKey: ['invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['income'] });
+      invalidateAfterIncome(queryClient);
       setTimeout(() => {
         onSuccess();
         onClose();
@@ -416,25 +417,26 @@ function InvoiceDetail({
   const { logoUrl, businessName, tradingName, business: businessData } = useBrandTheme();
 
   const { data: withLines, isLoading } = useQuery({
-    queryKey: ['invoice', 'lines', invoice.id],
-    queryFn: () => repos.invoice.findByIdWithLines(invoice.id),
-    enabled: Boolean(invoice.id),
+    queryKey: queryKeys.invoiceLines(businessId, invoice.id),
+    queryFn: () => repos.invoice.findByIdWithLines(invoice.id, businessId),
+    enabled: Boolean(businessId && invoice.id),
   });
 
   const { data: payments = [] } = useQuery({
-    queryKey: ['invoice', 'payments', invoice.id],
+    queryKey: queryKeys.invoicePayments(businessId, invoice.id),
     queryFn: () => repos.invoice.findPayments(businessId, invoice.id),
-    enabled: Boolean(invoice.id),
+    enabled: Boolean(businessId && invoice.id),
   });
 
   // Fetch contact for professional invoice PDF
   const { data: contact } = useQuery({
-    queryKey: ['contact', invoice.contact_id],
+    queryKey: queryKeys.contact(businessId, invoice.contact_id ?? ''),
     queryFn: async () => {
       if (!invoice.contact_id) return null;
       const { data, error } = await supabase
         .from('contacts')
         .select('*')
+        .eq('business_id', businessId)
         .eq('id', invoice.contact_id)
         .maybeSingle();
       if (error) throw new Error(error.message);
@@ -947,7 +949,7 @@ function InvoiceDetail({
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['invoices'] });
             queryClient.invalidateQueries({
-              queryKey: ['invoice', 'payments', invoice.id],
+              queryKey: queryKeys.invoicePayments(businessId, invoice.id),
             });
           }}
         />

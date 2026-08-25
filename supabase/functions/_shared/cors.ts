@@ -118,6 +118,7 @@ export function corsHeadersForRequest(req?: Request, extra?: Record<string, stri
     'Access-Control-Allow-Headers': 'authorization, x-api-key, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Vary': 'Origin',
+    'Cache-Control': 'no-store',
   };
   if (origin) {
     headers['Access-Control-Allow-Origin'] = origin;
@@ -136,6 +137,7 @@ export function corsHeaders(extra?: Record<string, string>): Record<string, stri
     'Access-Control-Allow-Headers': 'authorization, x-api-key, x-client-info, apikey, content-type',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Vary': 'Origin',
+    'Cache-Control': 'no-store',
   };
   if (origin) {
     headers['Access-Control-Allow-Origin'] = origin;

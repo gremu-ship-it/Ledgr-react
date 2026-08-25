@@ -62,6 +62,13 @@ export interface QueueItem {
   businessId: string;
 
   /**
+   * Authenticated identity that created the operation. Sync is fail-closed:
+   * only this exact user, while actively viewing this exact business, may
+   * submit the item. This is ownership metadata, never an authorization grant.
+   */
+  ownerUserId: string;
+
+  /**
    * The payload to send to the repository's create/record method. Shape
    * is determined by `operationType` via the discriminated union in
    * `QueuePayloadFor` (see ./payloads.ts).
@@ -134,10 +141,20 @@ class LedgrOfflineDB extends Dexie {
     super('ledgr-offline');
 
     this.version(1).stores({
-      // Indexes: sequence (ordering), status (filtering pending/failed),
-      // businessId (tenant scoping), dependsOnLocalId (dependency lookups).
       queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
     });
+
+    this.version(2)
+      .stores({
+        // ownerUserId binds durable financial writes to the authenticated
+        // identity that created them. businessId remains independently indexed.
+        queue: '++localId, sequence, status, businessId, ownerUserId, dependsOnLocalId, operationType',
+      })
+      .upgrade((tx) =>
+        // Version-1 rows cannot be safely attributed to an identity. Purging
+        // them is a deliberate fail-closed migration for existing PWAs.
+        tx.table('queue').filter((item: QueueItem) => !item.ownerUserId).delete(),
+      );
   }
 }
 

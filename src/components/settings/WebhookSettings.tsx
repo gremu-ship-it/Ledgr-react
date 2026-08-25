@@ -4,6 +4,7 @@ import { Plus, Trash2, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { webhookService, type Webhook, type WebhookDelivery } from '@/services/webhook/WebhookService';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { queryKeys } from '@/lib/queryKeys';
 
 const AVAILABLE_EVENTS = [
   'invoice.created',
@@ -22,6 +23,9 @@ export function WebhookSettings() {
   const [url, setUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
+  const activeSelectedWebhook = selectedWebhook?.business_id === businessId
+    ? selectedWebhook
+    : null;
 
   const { data: webhooks = [] } = useQuery({
     queryKey: ['webhooks', businessId],
@@ -30,9 +34,9 @@ export function WebhookSettings() {
   });
 
   const { data: deliveries = [] } = useQuery({
-    queryKey: ['webhook-deliveries', selectedWebhook?.id],
-    queryFn: () => webhookService.getDeliveries(selectedWebhook!.id),
-    enabled: !!selectedWebhook,
+    queryKey: queryKeys.webhookDeliveries(businessId ?? '', activeSelectedWebhook?.id ?? ''),
+    queryFn: () => webhookService.getDeliveries(activeSelectedWebhook!.id),
+    enabled: Boolean(businessId && activeSelectedWebhook),
   });
 
   const createMutation = useMutation({
@@ -152,11 +156,11 @@ export function WebhookSettings() {
       </div>
 
       {/* Delivery Log */}
-      {selectedWebhook && (
+      {activeSelectedWebhook && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold flex items-center gap-2">
-              <Clock className="h-4 w-4" /> Delivery Log — {selectedWebhook.url}
+              <Clock className="h-4 w-4" /> Delivery Log — {activeSelectedWebhook.url}
             </h3>
             <button onClick={() => setSelectedWebhook(null)} className="text-xs text-gray-500">Close</button>
           </div>

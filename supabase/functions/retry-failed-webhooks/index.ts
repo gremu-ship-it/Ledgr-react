@@ -9,13 +9,14 @@
 // Guarded by x-cron-secret (same pattern as the other scheduled functions).
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { noStoreJson } from '../_shared/response.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? Deno.env.get('INVOICE_CRON_SECRET') ?? '';
 
 serve(async (req) => {
   try {
     if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
-      return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401 });
+      return noStoreJson({ error: 'Unauthorised' }, 401);
     }
 
     const db = createClient(
@@ -60,13 +61,8 @@ serve(async (req) => {
       redispatched += 1;
     }
 
-    return new Response(JSON.stringify({ redispatched }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return noStoreJson({ redispatched });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'error' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return noStoreJson({ error: err instanceof Error ? err.message : 'error' }, 500);
   }
 });

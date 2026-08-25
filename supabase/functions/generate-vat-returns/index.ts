@@ -6,6 +6,7 @@
 // Test manually: supabase functions invoke generate-vat-returns
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { noStoreJson } from '../_shared/response.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 
@@ -15,12 +16,12 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET');
 // business.
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 });
+    return noStoreJson({ error: 'Method not allowed' }, 405);
   }
 
   const providedSecret = req.headers.get('x-cron-secret');
   if (!CRON_SECRET || !providedSecret || providedSecret !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    return noStoreJson({ error: 'Unauthorized' }, 401);
   }
 
   const supabase = createClient(
@@ -43,7 +44,7 @@ Deno.serve(async (req) => {
 
   if (error) {
     console.error('Failed to fetch VAT-registered businesses:', error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return noStoreJson({ error: error.message }, 500);
   }
 
   const results: { business_id: string; status: 'created' | 'skipped' | 'error'; detail?: string }[] = [];
@@ -172,13 +173,11 @@ Deno.serve(async (req) => {
 
   // Do not expose tenant identifiers or detailed database errors in a network
   // response. Scheduler diagnostics are available in Edge Function logs.
-  return new Response(JSON.stringify({
+  return noStoreJson({
     period: periodStartStr.slice(0, 7),
     created: results.filter((result) => result.status === 'created').length,
     skipped: results.filter((result) => result.status === 'skipped').length,
     failed: results.filter((result) => result.status === 'error').length,
-  }), {
-    headers: { 'Content-Type': 'application/json' },
   });
 });
 

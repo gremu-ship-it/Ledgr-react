@@ -1,13 +1,17 @@
 // Phase 8B.3 — RLS security test matrix (ORG-A / ORG-B cross-tenant).
 // CRITICAL: RLS tests run as SET ROLE authenticated (postgres superuser
 // bypasses RLS — the earlier version's false pass/fail artifacts).
-const EP = require('embedded-postgres').default;
-const { Client } = require('pg');
-const fs = require('fs');
-const path = require('path');
+import EmbeddedPostgres from 'embedded-postgres';
+import pg from 'pg';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
 
+const { Client } = pg;
+const require = createRequire(import.meta.url);
+const EP = EmbeddedPostgres;
 const PORT = 54329;
-const MIG_DIR = '/home/user/Ledgr-react/supabase/migrations';
+const MIG_DIR = path.resolve(process.cwd(), 'supabase/migrations');
 
 async function main() {
   const PG = new EP({ databaseDir: '/tmp/pgtest/data', user: 'postgres', password: 'postgres', port: PORT, persistent: true });
@@ -35,7 +39,11 @@ async function main() {
     CREATE OR REPLACE FUNCTION storage.foldername(name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ select string_to_array(name, '/') $$;
     GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;
     GRANT ALL ON storage.objects TO anon, authenticated, service_role;`);
-  const EXT = '/tmp/pgtest/node_modules/@embedded-postgres/linux-x64/native/share/postgresql/extension';
+  const nativePackageRoot = path.resolve(
+    path.dirname(require.resolve('@embedded-postgres/linux-x64')),
+    '..',
+  );
+  const EXT = path.join(nativePackageRoot, 'native/share/postgresql/extension');
   fs.writeFileSync(path.join(EXT, 'pg_cron.control'), "comment='stub'\ndefault_version='1.0'\nrelocatable=true\n");
   fs.writeFileSync(path.join(EXT, 'pg_cron--1.0.sql'), "create schema if not exists cron;\ncreate table if not exists cron.job (jobid bigint primary key, schedule text, command text, active boolean default true);\ncreate sequence if not exists cron.jobid_seq;\ncreate or replace function cron.schedule(name text, schedule text, command text) returns bigint language plpgsql as $$ declare v bigint; begin insert into cron.job values (nextval('cron.jobid_seq'), schedule, command, true) returning jobid into v; return v; end $$;\n");
   fs.writeFileSync(path.join(EXT, 'pg_net.control'), "comment='stub'\ndefault_version='1.0'\nrelocatable=true\n");
@@ -191,8 +199,11 @@ async function main() {
     await expectDenied('B-viewer INSERT A employee (cross-tenant, outside payroll tier)', bu, `with ins as (insert into public.employees (business_id, employee_number, first_name, last_name, employment_type, gross_salary, currency, is_active, payment_method, pay_frequency, start_date, tax_exempt) values ($1,'E2','Bob','B','full_time',100,'MWK',true,'bank_transfer','monthly','2025-01-01',false) returning id) select count(*)::int n from ins`, [BIZ_A]);
     await expectCount('admin reads A employees (payroll tier)', ao, `select count(*)::int n from public.employees where business_id=$1`, [BIZ_A], 1);
 
-    // ── 7. RPC boundary: non-member cannot use audit RPC on B ───────────────
+    // ── 7. RPC boundaries ──────────────────────────────────────────────────
     await expectDenied('A-user log_manual_audit_event on B (RPC check)', au, `select public.log_manual_audit_event($1,'x','x','x')`, [BIZ_B]);
+    await expectDenied('anon cannot execute ai_context', asAnon, `select count(public.ai_context($1))::int n`, [BIZ_A]);
+    await expectDenied('A-user cannot execute ai_context for B', au, `select count(public.ai_context($1))::int n`, [BIZ_B]);
+    await expectCount('A-user executes ai_context for A', au, `select count(public.ai_context($1))::int n`, [BIZ_A], 1);
 
     console.log(`\n8B.3 RLS SECURITY TESTS COMPLETE: ${pass} passed, ${failN} failed`);
   } catch (e) {

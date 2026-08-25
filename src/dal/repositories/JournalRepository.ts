@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
 import type { Json } from '../types/database.generated';
 import { BaseRepository } from './BaseRepository';
-import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
+import { NotFoundError, ValidationError, toRepositoryError } from '../errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
 import { paymentStatusFromAmounts } from '@/lib/paymentStatus';
 
@@ -26,8 +26,11 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    * `journal_lines.business_id` is NOT NULL in the schema. Added explicit
    * `business_id` filter using the parent entry's business_id.
    */
-  async findByIdWithLines(id: string): Promise<JournalEntryWithLines> {
+  async findByIdWithLines(id: string, businessId?: string): Promise<JournalEntryWithLines> {
     const entry = await this.findById(id);
+    if (businessId && entry.business_id !== businessId) {
+      throw new NotFoundError('journal_entries', id);
+    }
 
     const { data, error } = await this.client
       .from('journal_lines')

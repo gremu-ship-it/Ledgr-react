@@ -4,6 +4,12 @@ import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 import { i18n, normalizeLanguage } from '@/i18n';
 import { createLogger } from '@/lib/logger';
+import { purgeSensitiveClientState } from '@/lib/clientDataIsolation';
+import { secureSignOut } from '@/lib/authSession';
+import {
+  AUTH_PERSISTENCE_MODE_KEY,
+  SESSION_ONLY_TAB_MARKER,
+} from '@/lib/authStorage';
 
 const log = createLogger('useAuthListener');
 
@@ -74,14 +80,13 @@ export function useAuthListener() {
         useAppStore.getState().setBusinesses(validMemberships);
 
         const current = useAppStore.getState().currentBusiness;
-        const stillValid = current?.business?.id
-          ? validMemberships.some((m) => m.business.id === current.business.id)
-          : false;
+        const refreshedCurrent = current?.business?.id
+          ? validMemberships.find((membership) => membership.business.id === current.business.id)
+          : null;
 
-        if (!stillValid) {
-          const firstValid = validMemberships[0] ?? null;
-          useAppStore.getState().setCurrentBusiness(firstValid);
-        }
+        // Replace the membership object even when the business id is unchanged,
+        // so role/permission changes cannot keep an old cache context alive.
+        useAppStore.getState().setCurrentBusiness(refreshedCurrent ?? validMemberships[0] ?? null);
 
         hasInitialHydrated = true;
         lastHydratedUserId = userId;
@@ -96,13 +101,22 @@ export function useAuthListener() {
     }
 
     // ── Initial session check ────────────────────────────────────────
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!isMountedRef.current) return;
       if (session?.user) {
-        hydrateUser(session.user.id, session.user.email ?? null, true).finally(() => {
+        const sessionOnly = window.localStorage.getItem(AUTH_PERSISTENCE_MODE_KEY) === 'session';
+        const tabMarkerPresent = window.sessionStorage.getItem(SESSION_ONLY_TAB_MARKER) === '1';
+        if (sessionOnly && !tabMarkerPresent) {
+          await secureSignOut('local');
           if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
-        });
+          return;
+        }
+
+        await hydrateUser(session.user.id, session.user.email ?? null, true);
+        if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
       } else {
+        await purgeSensitiveClientState({ broadcast: false });
+        if (!isMountedRef.current) return;
         useAppStore.getState().setBusinessesLoading(false);
         useAppStore.getState().setAuthLoading(false);
       }
@@ -118,6 +132,7 @@ export function useAuthListener() {
         lastHydratedUserId = null;
         useAppStore.getState().reset();
         useAppStore.getState().setAuthLoading(false);
+        void purgeSensitiveClientState({ broadcast: true });
         return;
       }
 
@@ -132,6 +147,22 @@ export function useAuthListener() {
       }
 
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        const isDifferentAuthenticatedUser =
+          lastHydratedUserId !== null && lastHydratedUserId !== session.user.id;
+        if (isDifferentAuthenticatedUser) {
+          hasInitialHydrated = false;
+          lastHydratedUserId = null;
+          void purgeSensitiveClientState({
+            broadcast: true,
+            preserveAuthPersistenceMode: true,
+          }).then(() =>
+            hydrateUser(session.user.id, session.user.email ?? null, true).finally(() => {
+              if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
+            }),
+          );
+          return;
+        }
+
         const isSameUserReSignIn =
           event === 'SIGNED_IN' &&
           hasInitialHydrated &&

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { invalidateAfterInventory } from '@/lib/queryInvalidation';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -752,9 +753,7 @@ function MovementsTab({ businessId }: { businessId: string }) {
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Stock movement recorded.' });
       setForm((f) => ({ ...f, quantity: '', unit_cost: '', reference: '', notes: '' }));
-      queryClient.invalidateQueries({ queryKey: ['balances'] });
-      queryClient.invalidateQueries({ queryKey: ['movements'] });
-      queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] });
+      invalidateAfterInventory(queryClient);
       setTimeout(() => setAlert(null), 2000);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),

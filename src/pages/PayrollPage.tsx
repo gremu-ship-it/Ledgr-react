@@ -1,4 +1,6 @@
 import { currentFiscalYear } from '@/lib/fiscalYear';
+import { queryKeys } from '@/lib/queryKeys';
+import { invalidateAfterPayroll } from '@/lib/queryInvalidation';
 import { calculatePAYE, type PayeBand } from '@/lib/paye';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -380,7 +382,7 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Payroll run created as a draft. Approve it from the run detail view to post the journal entry.' });
-      queryClient.invalidateQueries({ queryKey: ['payroll_runs'] });
+      invalidateAfterPayroll(queryClient);
       setTimeout(() => { onSuccess(); onClose(); }, 1500);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
@@ -665,9 +667,9 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
   });
 
   const { data: runWithLines } = useQuery({
-    queryKey: ['payroll_run', 'lines', selectedRun?.id],
-    queryFn: () => repos.payroll.findWithLines(selectedRun!.id),
-    enabled: Boolean(selectedRun?.id),
+    queryKey: queryKeys.payrollRun(businessId, selectedRun?.id ?? ''),
+    queryFn: () => repos.payroll.findWithLines(selectedRun!.id, businessId),
+    enabled: Boolean(businessId && selectedRun?.id),
   });
 
   if (selectedRun) {
@@ -740,9 +742,8 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
             userId={currentUser?.id ?? null}
             onClose={() => setShowApproveModal(false)}
             onSuccess={() => {
-              queryClient.invalidateQueries({ queryKey: ['payroll_runs'] });
-              queryClient.invalidateQueries({ queryKey: ['payroll_run', 'lines', selectedRun.id] });
-              queryClient.invalidateQueries({ queryKey: ['tax_returns'] });
+              invalidateAfterPayroll(queryClient);
+              queryClient.invalidateQueries({ queryKey: queryKeys.payrollRun(businessId, selectedRun.id) });
             }}
           />
         )}

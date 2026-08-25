@@ -15,6 +15,7 @@ import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { announce } from '@/lib/a11y';
 import { QUEUE_TYPE_LABELS, type QueueItem, type QueueItemStatus } from '@/offline/db';
 import { removeQueueItem } from '@/offline/queueApi';
+import { useAppStore } from '@/store/useAppStore';
 
 const STATUS_STYLES: Record<QueueItemStatus, { label: string; className: string }> = {
   pending: { label: 'Queued', className: 'bg-amber-100 text-amber-900' },
@@ -86,6 +87,8 @@ function QueueRow({ item, onDiscard, canDiscard }: {
 /** A header-triggered drawer for reviewing and managing locally queued offline changes. */
 export function OfflineQueueDrawer() {
   const { items, pendingCount, failedCount } = useOfflineQueue();
+  const userId = useAppStore((state) => state.currentUser?.id);
+  const businessId = useAppStore((state) => state.currentBusiness?.business?.id);
   const isOnline = useOnlineStatus();
   const { isSyncing, progress, syncNow } = useOfflineSync();
   const [isOpen, setIsOpen] = useState(false);
@@ -127,14 +130,14 @@ export function OfflineQueueDrawer() {
   }
 
   async function handleDiscard(item: QueueItem) {
-    if (item.localId === undefined) return;
+    if (item.localId === undefined || !userId || !businessId) return;
     const label = QUEUE_TYPE_LABELS[item.operationType];
     const confirmed = window.confirm(`Discard this queued ${label}? This cannot be undone.`);
     if (!confirmed) return;
 
     setIsDiscarding(item.localId);
     try {
-      await removeQueueItem(item.localId);
+      await removeQueueItem(item.localId, { userId, businessId });
       announce(`Queued ${label} discarded.`);
     } finally {
       setIsDiscarding(null);

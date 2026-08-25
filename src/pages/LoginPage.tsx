@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { createLogger } from '@/lib/logger';
+import { setAuthPersistenceMode } from '@/lib/authStorage';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { usePartner } from '@/partner/PartnerContext';
 import {
@@ -96,7 +97,11 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+    // Configure the Supabase storage adapter before Auth writes the new token.
+    // Session-only credentials therefore never enter localStorage.
+    setAuthPersistenceMode(rememberMe);
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -123,19 +128,6 @@ export function LoginPage() {
         setError(t('auth.serviceUnavailable'));
       }
       return;
-    }
-
-    // "Remember me" (30 days) — Supabase default: stores session in localStorage.
-    // Session-only (no checkbox) — we store a flag so useAuthListener can enforce
-    // clearing the localStorage session on next page load if the sessionStorage
-    // marker is gone (i.e. the browser tab/window was closed).
-    if (!rememberMe && signInData.session) {
-      // Mark this as a session-only login. If the user closes the browser
-      // (sessionStorage is cleared), useAuthListener will find no marker and
-      // sign out on the next load.
-      sessionStorage.setItem('ledgr-session-only', '1');
-    } else {
-      sessionStorage.removeItem('ledgr-session-only');
     }
 
     // Check Authenticator Assurance Level for MFA requirement

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useIsMutating, useQuery } from '@tanstack/react-query';
+import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
@@ -37,6 +38,9 @@ export function CommandPalette() {
   const businesses = useAppStore((s) => s.businesses);
   const currentBusinessId = useAppStore((s) => s.currentBusiness?.business.id);
   const switchBusiness = useAppStore((s) => s.switchBusiness);
+  const activeMutations = useIsMutating();
+  const { isSyncing } = useOfflineSync();
+  const switchBlocked = activeMutations > 0 || isSyncing;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(0);
@@ -82,6 +86,7 @@ export function CommandPalette() {
       icon: Building2,
       group: 'Businesses',
       action: () => {
+        if (switchBlocked) return;
         switchBusiness(m.business.id);
         navigate('/dashboard');
       },
@@ -97,7 +102,7 @@ export function CommandPalette() {
     }));
 
     return [...productCommands, ...quickActions, ...navItems, ...businessSwitches];
-  }, [t, businesses, switchBusiness, navigate, products]);
+  }, [t, businesses, switchBusiness, switchBlocked, navigate, products]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands.slice(0, 20);

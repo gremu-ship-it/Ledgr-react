@@ -31,6 +31,13 @@ const LEDGER_KEYS = [
   'cash_flow',
   'changes_in_equity',
   'branch_performance',
+  // Dashboard/report aliases use different historical naming conventions.
+  'profit_loss',
+  'trial_balance',
+  'multi_currency_report',
+  'revenue-breakdown',
+  'trend',
+  'vat',
 ] as const;
 
 /** Stock surfaces, touched only when the line references a tracked product. */
@@ -40,7 +47,25 @@ const INVENTORY_KEYS = [
   'products_all',
   'reorder_alerts',
   'locations',
+  'balances',
+  'movements',
+  'inventory_reconciliation',
+  'products_trackable',
 ] as const;
+
+/** Third segment used by the tenant-first detail keys in queryKeys.ts. */
+type BusinessDetailSegment =
+  | 'journal-entry'
+  | 'accounting-period'
+  | 'invoice'
+  | 'contact'
+  | 'payroll-run'
+  | 'stock-transfer';
+
+const LEDGER_DETAIL_SEGMENTS: BusinessDetailSegment[] = [
+  'journal-entry',
+  'accounting-period',
+];
 
 /**
  * Invalidate the caches a saved expense affects.
@@ -56,6 +81,7 @@ export function invalidateAfterExpense(
   const keys: string[] = ['expenses', ...LEDGER_KEYS, 'usage'];
   if (options.touchedInventory) keys.push(...INVENTORY_KEYS);
   invalidateKeys(queryClient, keys);
+  invalidateBusinessDetails(queryClient, LEDGER_DETAIL_SEGMENTS);
 }
 
 /**
@@ -68,9 +94,40 @@ export function invalidateAfterIncome(
   queryClient: QueryClient,
   options: { touchedInventory?: boolean } = {},
 ): void {
-  const keys: string[] = ['invoices', 'contacts', ...LEDGER_KEYS, 'usage'];
+  const keys: string[] = ['invoices', 'income', 'contacts', ...LEDGER_KEYS, 'usage'];
   if (options.touchedInventory) keys.push(...INVENTORY_KEYS);
   invalidateKeys(queryClient, keys);
+  invalidateBusinessDetails(queryClient, [
+    ...LEDGER_DETAIL_SEGMENTS,
+    'invoice',
+    'contact',
+  ]);
+}
+
+/** Refresh payroll, tax, journal, dashboard and report data after payroll writes. */
+export function invalidateAfterPayroll(queryClient: QueryClient): void {
+  invalidateKeys(queryClient, [
+    'payroll_runs',
+    'payroll_run',
+    'employees',
+    'paye',
+    'tax_returns',
+    ...LEDGER_KEYS,
+    'usage',
+  ]);
+  invalidateBusinessDetails(queryClient, [
+    ...LEDGER_DETAIL_SEGMENTS,
+    'payroll-run',
+  ]);
+}
+
+/** Refresh every stock representation and the financial reports stock affects. */
+export function invalidateAfterInventory(queryClient: QueryClient): void {
+  invalidateKeys(queryClient, [...INVENTORY_KEYS, ...LEDGER_KEYS]);
+  invalidateBusinessDetails(queryClient, [
+    ...LEDGER_DETAIL_SEGMENTS,
+    'stock-transfer',
+  ]);
 }
 
 /**
@@ -90,6 +147,11 @@ export function invalidateAfterSync(queryClient: QueryClient): void {
     ...INVENTORY_KEYS,
     'usage',
   ]);
+  invalidateBusinessDetails(queryClient, [
+    ...LEDGER_DETAIL_SEGMENTS,
+    'invoice',
+    'contact',
+  ]);
 }
 
 function invalidateKeys(queryClient: QueryClient, keys: string[]): void {
@@ -98,4 +160,25 @@ function invalidateKeys(queryClient: QueryClient, keys: string[]): void {
     // refetches it triggers should not block the success animation.
     void queryClient.invalidateQueries({ queryKey: [key] });
   }
+}
+
+/**
+ * Invalidate only the sensitive tenant-first detail families affected by a
+ * write. The business id deliberately remains unconstrained here: inactive
+ * tenants are merely marked stale, while only mounted observers can refetch.
+ * This avoids missing a detail entry whose business id is not available at a
+ * low-level journal/inventory callsite without widening to unrelated webhook
+ * or partner-admin data.
+ */
+function invalidateBusinessDetails(
+  queryClient: QueryClient,
+  segments: readonly BusinessDetailSegment[],
+): void {
+  const allowed = new Set<string>(segments);
+  void queryClient.invalidateQueries({
+    predicate: (query) => {
+      const key = query.queryKey;
+      return key[0] === 'business' && typeof key[2] === 'string' && allowed.has(key[2]);
+    },
+  });
 }

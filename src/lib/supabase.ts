@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/dal/types/database';
+import { authStorage } from '@/lib/authStorage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -55,12 +56,16 @@ function fetchWithTimeout(
     if (signal.aborted) controller.abort();
     else signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
-  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+  // Never allow the browser HTTP cache to retain authenticated Supabase data.
+  // RLS is re-evaluated for every network request; static app assets are cached
+  // separately by Workbox/Vercel.
+  return fetch(input, { ...init, signal: controller.signal, cache: 'no-store' }).finally(() => clearTimeout(timer));
 }
 
 export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {
   auth: {
     persistSession: true,
+    storage: authStorage,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },

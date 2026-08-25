@@ -30,6 +30,11 @@ const MIGRATION = resolve(
   'supabase/migrations/20260813000000_enable_rls_on_unprotected_tables.sql',
 );
 
+const AI_CONTEXT_HARDENING = resolve(
+  REPO_ROOT,
+  'supabase/migrations/20260825000000_phase10_close_ai_context_anon.sql',
+);
+
 const DEAD_MIDDLEWARE = resolve(
   REPO_ROOT,
   'supabase/functions/api/middleware.ts',
@@ -72,5 +77,20 @@ describe('RLS isolation migration (20260813000000)', () => {
 
   it('keeps the dead api middleware deleted (never import the buggy limiter)', () => {
     expect(existsSync(DEAD_MIDDLEWARE), 'supabase/functions/api/middleware.ts should not exist').toBe(false);
+  });
+});
+
+describe('ai_context SECURITY DEFINER hardening (20260825000000)', () => {
+  const sql = readFileSync(AI_CONTEXT_HARDENING, 'utf8').toLowerCase();
+
+  it('distinguishes service-role execution from anonymous null-uid requests', () => {
+    expect(sql).toContain("auth.role() is distinct from 'service_role'");
+    expect(sql).toContain('auth.uid() is null or not public.is_business_member(p_business_id)');
+  });
+
+  it('revokes default public and anon execute before granting explicit roles', () => {
+    expect(sql).toContain('revoke all on function public.ai_context(uuid) from public');
+    expect(sql).toContain('revoke all on function public.ai_context(uuid) from anon');
+    expect(sql).toContain('grant execute on function public.ai_context(uuid) to authenticated, service_role');
   });
 });

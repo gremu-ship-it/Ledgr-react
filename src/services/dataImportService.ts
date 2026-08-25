@@ -735,9 +735,11 @@ export function downloadTemplate(entityType: ImportEntityType) {
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
+  link.href = url;
   link.download = `${entityType}_template.csv`;
   link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function downloadAllTemplates() {

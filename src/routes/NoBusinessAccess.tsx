@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { Building2, LifeBuoy, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '@/lib/supabase';
+import { secureSignOut } from '@/lib/authSession';
 import { useAppStore } from '@/store/useAppStore';
 
 /**
@@ -25,7 +25,7 @@ export function NoBusinessAccess() {
   const currentUser = useAppStore((s) => s.currentUser);
 
   async function handleSignOut() {
-    await supabase.auth.signOut();
+    await secureSignOut('local');
   }
 
   return (

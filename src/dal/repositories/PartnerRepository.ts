@@ -7,7 +7,11 @@ import type {
   UpdatePartnerDto,
 } from '@/types/partners';
 
-function mapPartner(row: Row<'partners'>): Partner {
+const PUBLIC_PARTNER_COLUMNS = 'id, name, slug, domain, custom_domain, logo_url, primary_colour, support_email, support_phone, app_name, onboarding_title, onboarding_subtitle, is_active, created_at, updated_at' as const;
+
+type PartnerRowInput = Partial<Row<'partners'>> & Pick<Row<'partners'>, 'id' | 'name'>;
+
+function mapPartner(row: PartnerRowInput): Partner {
   return {
     id: row.id,
     name: row.name,
@@ -44,7 +48,7 @@ export const PartnerRepository = {
   async getBySlug(slug: string): Promise<Partner | null> {
     const { data } = await supabase
       .from('partners')
-      .select('*')
+      .select(PUBLIC_PARTNER_COLUMNS)
       .eq('slug', slug)
       .eq('is_active', true)
       .maybeSingle();
@@ -52,7 +56,7 @@ export const PartnerRepository = {
     // Backwards compatibility with rows that only set the legacy `domain`.
     const { data: legacy } = await supabase
       .from('partners')
-      .select('*')
+      .select(PUBLIC_PARTNER_COLUMNS)
       .ilike('domain', `${slug}.%`)
       .eq('is_active', true)
       .limit(1);
@@ -64,7 +68,7 @@ export const PartnerRepository = {
     const host = domain.toLowerCase();
     const { data } = await supabase
       .from('partners')
-      .select('*')
+      .select(PUBLIC_PARTNER_COLUMNS)
       .or(`custom_domain.eq.${host},domain.eq.${host}`)
       .eq('is_active', true)
       .limit(1);

@@ -25,12 +25,13 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     return data ?? [];
   }
 
-  async findWithLines(runId: string): Promise<PayrollRunWithLines> {
-    const { data, error } = await this.client
+  async findWithLines(runId: string, businessId?: string): Promise<PayrollRunWithLines> {
+    let query = this.client
       .from('payroll_runs')
       .select('*, lines:payroll_employee_lines(*)')
-      .eq('id', runId)
-      .single();
+      .eq('id', runId);
+    if (businessId) query = query.eq('business_id', businessId);
+    const { data, error } = await query.single();
     if (error) throw toRepositoryError('payroll_runs', error);
     return data as PayrollRunWithLines;
   }

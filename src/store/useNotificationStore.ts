@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useAppStore } from '@/store/useAppStore';
+import { notificationMatchesContext } from '@/lib/notificationScope';
 
 export interface AppNotification {
   id: string;
@@ -8,32 +9,37 @@ export interface AppNotification {
   title: string;
   message: string;
   timestamp: string;
-  link?: string;           // optional navigation target
-  businessId?: string | null; // tenant scope; null only for deliberately global/legacy notifications
+  link?: string;
+  /** Tenant scope. Null is reserved for deliberately global notifications. */
+  businessId?: string | null;
+  /** Auth identity that created the notification. Required for signed-in data. */
+  userId: string | null;
+  /** Optional branch scope for future branch-specific notifications. */
+  branchId?: string | null;
   read: boolean;
 }
 
-type NewNotification = Omit<AppNotification, 'id' | 'timestamp' | 'read'>;
+type NewNotification = Omit<AppNotification, 'id' | 'timestamp' | 'read' | 'userId'> & {
+  userId?: string | null;
+};
 
 interface NotificationState {
   notifications: AppNotification[];
   addNotification: (notif: NewNotification) => void;
   markAsRead: (id: string) => void;
-  markAllAsRead: (businessId?: string | null) => void;
-  clearAll: (businessId?: string | null) => void;
+  markAllAsRead: (businessId?: string | null, userId?: string | null) => void;
+  clearAll: (businessId?: string | null, userId?: string | null) => void;
   removeNotification: (id: string) => void;
 }
 
 function resolveBusinessId(notif: NewNotification): string | null {
-  if (notif.businessId !== undefined) {
-    return notif.businessId;
-  }
-
+  if (notif.businessId !== undefined) return notif.businessId;
   return useAppStore.getState().currentBusiness?.business?.id ?? null;
 }
 
-function matchesBusinessScope(notification: AppNotification, businessId: string | null): boolean {
-  return (notification.businessId ?? null) === businessId;
+function resolveUserId(notif: NewNotification): string | null {
+  if (notif.userId !== undefined) return notif.userId;
+  return useAppStore.getState().currentUser?.id ?? null;
 }
 
 export const useNotificationStore = create<NotificationState>()(
@@ -45,37 +51,40 @@ export const useNotificationStore = create<NotificationState>()(
         const newNotif: AppNotification = {
           ...notif,
           businessId: resolveBusinessId(notif),
+          userId: resolveUserId(notif),
           id: crypto.randomUUID(),
           timestamp: new Date().toISOString(),
           read: false,
         };
         set((state) => ({
-          notifications: [newNotif, ...state.notifications].slice(0, 50), // keep latest 50
+          notifications: [newNotif, ...state.notifications].slice(0, 50),
         }));
       },
 
       markAsRead: (id) =>
         set((state) => ({
           notifications: state.notifications.map((n) =>
-            n.id === id ? { ...n, read: true } : n
+            n.id === id ? { ...n, read: true } : n,
           ),
         })),
 
-      markAllAsRead: (businessId) =>
+      markAllAsRead: (businessId, userId) =>
         set((state) => ({
           notifications: state.notifications.map((n) =>
-            businessId === undefined || matchesBusinessScope(n, businessId)
+            businessId === undefined || notificationMatchesContext(n, businessId, userId ?? null)
               ? { ...n, read: true }
-              : n
+              : n,
           ),
         })),
 
-      clearAll: (businessId) =>
+      clearAll: (businessId, userId) =>
         set((state) => ({
           notifications:
             businessId === undefined
               ? []
-              : state.notifications.filter((n) => !matchesBusinessScope(n, businessId)),
+              : state.notifications.filter(
+                  (n) => !notificationMatchesContext(n, businessId, userId ?? null),
+                ),
         })),
 
       removeNotification: (id) =>
@@ -85,7 +94,10 @@ export const useNotificationStore = create<NotificationState>()(
     }),
     {
       name: 'ledgr-notifications',
+      version: 2,
       partialize: (state) => ({ notifications: state.notifications }),
-    }
-  )
+      // Version 1 records had no user identity and cannot be safely attributed.
+      migrate: () => ({ notifications: [] }),
+    },
+  ),
 );

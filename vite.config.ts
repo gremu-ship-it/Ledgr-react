@@ -100,29 +100,26 @@ export default defineConfig(({ mode }) => {
         clientsClaim: true,
         runtimeCaching: [
           {
+            // Authenticated PostgREST responses can contain financial data and
+            // are authorised by JWT/RLS, while Cache Storage keys do not include
+            // that auth context. Never persist them in a service-worker cache.
             urlPattern: supabaseUrlPattern('/rest/v1/'),
-            handler: 'NetworkFirst',
+            handler: 'NetworkOnly',
             method: 'GET',
-            options: {
-              cacheName: 'ledgr-api-cache',
-              networkTimeoutSeconds: 4,
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24,
-              },
-              cacheableResponse: { statuses: [0, 200] },
-            },
           },
           {
             urlPattern: supabaseUrlPattern('/auth/v1/'),
             handler: 'NetworkOnly',
           },
           {
-            urlPattern: ({ request }) =>
-              request.destination === 'image' || request.destination === 'font',
+            // Only same-origin build assets are safe to retain across users.
+            // Remote logos/avatars may be tenant-specific or signed resources.
+            urlPattern: ({ request, sameOrigin }) =>
+              sameOrigin &&
+              (request.destination === 'image' || request.destination === 'font'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'ledgr-static-assets',
+              cacheName: 'ledgr-static-assets-v2',
               expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 * 30 },
             },
           },

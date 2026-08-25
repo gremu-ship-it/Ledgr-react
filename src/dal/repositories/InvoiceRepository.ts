@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, InsertDto, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError, ValidationError } from '../errors/RepositoryError';
+import { NotFoundError, toRepositoryError, ValidationError } from '../errors/RepositoryError';
 import { triggerWebhook } from '@/services/webhook/webhook-triggers';
 import { paymentStatusFromAmounts } from '@/lib/paymentStatus';
 
@@ -21,8 +21,11 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
    * Fetch an invoice with its line items. Lines are tenant-scoped with the
    * parent invoice's business_id to avoid cross-tenant reads.
    */
-  async findByIdWithLines(id: string): Promise<InvoiceWithLines> {
+  async findByIdWithLines(id: string, businessId?: string): Promise<InvoiceWithLines> {
     const invoice = await this.findById(id);
+    if (businessId && invoice.business_id !== businessId) {
+      throw new NotFoundError('invoices', id);
+    }
 
     const { data, error } = await this.client
       .from('invoice_lines')
@@ -117,20 +120,24 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
     payment: InsertDto<'invoice_payments'>,
     clientKey?: string,
   ): Promise<{ payment: Row<'invoice_payments'>; invoice: Row<'invoices'> }> {
+    const invoice = await this.findById(payment.invoice_id);
+    if (invoice.business_id !== payment.business_id) {
+      throw new ValidationError(
+        'invoice_payments',
+        'Invoice payment business does not match the parent invoice.',
+      );
+    }
+
     // Idempotency: a retried offline sync must not insert a duplicate payment
     // and re-increment amount_paid.
     if (clientKey) {
       const existing = await this.findPaymentByClientKey(payment.business_id, clientKey);
-      if (existing) {
-        const invoice = await this.findById(payment.invoice_id);
-        return { payment: existing, invoice };
-      }
+      if (existing) return { payment: existing, invoice };
     }
 
     // FIX [C-03 void/credit-note payment control]: enforce at the repository
     // layer (not just the UI). The DB trigger (20260813000002) is the backstop;
     // this check gives a clear error before the insert round-trip.
-    const invoice = await this.findById(payment.invoice_id);
     if (invoice.status === 'void' || invoice.status === 'credit_note') {
       throw new ValidationError(
         'invoice_payments',
