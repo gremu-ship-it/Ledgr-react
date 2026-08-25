@@ -20,6 +20,12 @@ describe('logout isolation', () => {
     expect(directCallers).toEqual([]);
   });
 
+  it('routes the inactivity modal sign-out action through the secure timeout hook', () => {
+    const layout = readFileSync(resolve(root, 'src/components/layout/AppLayout.tsx'), 'utf8');
+    expect(layout).toContain('void logoutNow();');
+    expect(layout).not.toContain("window.location.href = '/login'");
+  });
+
   it('initializes cross-tab isolation before the application mounts', () => {
     const main = readFileSync(resolve(root, 'src/main.tsx'), 'utf8');
     expect(main).toContain('initializeClientDataIsolation();');

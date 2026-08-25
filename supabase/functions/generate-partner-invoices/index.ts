@@ -28,6 +28,7 @@
 // by end users.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { noStoreJson } from '../_shared/response.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -159,7 +160,7 @@ async function sendInvoiceEmail(
 Deno.serve(async (req) => {
   const providedSecret = req.headers.get('x-cron-secret');
   if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    return noStoreJson({ error: 'Unauthorized' }, 401);
   }
 
   // Optional body: { period: "2026-06", dryRun: true }
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
     .eq('is_active', true);
 
   if (findErr) {
-    return new Response(JSON.stringify({ error: findErr.message }), { status: 500 });
+    return noStoreJson({ error: findErr.message }, 500);
   }
 
   const results: {
@@ -313,15 +314,12 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(
-    JSON.stringify({
-      period: { start: periodStart, end: periodEnd, due: dueDate },
-      dry_run: Boolean(body.dryRun),
-      processed: results.length,
-      invoiced: results.filter((r) => r.invoice_number).length,
-      failed: results.filter((r) => !r.success).length,
-      results,
-    }),
-    { status: 200, headers: { 'Content-Type': 'application/json' } },
-  );
+  return noStoreJson({
+    period: { start: periodStart, end: periodEnd, due: dueDate },
+    dry_run: Boolean(body.dryRun),
+    processed: results.length,
+    invoiced: results.filter((r) => r.invoice_number).length,
+    failed: results.filter((r) => !r.success).length,
+    results,
+  });
 });

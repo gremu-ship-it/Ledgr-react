@@ -82,6 +82,17 @@ describe('payment guard against cancelled documents', () => {
     expect(from.mock.calls.filter(([t]) => t === 'invoice_payments')).toHaveLength(0);
   });
 
+  it('rejects a payment whose business differs from its parent invoice', async () => {
+    const { client, from } = invoiceClient('sent');
+    const repo = new InvoiceRepository(client);
+
+    await expect(
+      repo.recordPayment({ invoice_id: 'inv-1', amount: 10, business_id: 'biz-2' } as never),
+    ).rejects.toMatchObject({ name: 'ValidationError' });
+
+    expect(from.mock.calls.filter(([t]) => t === 'invoice_payments')).toHaveLength(0);
+  });
+
   it('allows a payment against a live invoice', async () => {
     const { client } = invoiceClient('sent');
     const repo = new InvoiceRepository(client);
@@ -116,6 +127,29 @@ describe('expense payment guard', () => {
 
     await expect(
       repo.recordPayment({ expense_id: 'exp-1', amount: 10, business_id: 'biz-1' } as never),
+    ).rejects.toMatchObject({ name: 'ValidationError' });
+
+    expect(from.mock.calls.filter(([t]) => t === 'expense_payments')).toHaveLength(0);
+  });
+
+  it('rejects a payment whose business differs from its parent expense', async () => {
+    const expense = { id: 'exp-1', business_id: 'biz-1', status: 'approved' };
+    const from = vi.fn((table: string) => {
+      if (table === 'expenses') {
+        return {
+          select: () => ({
+            eq: () => ({
+              is: () => ({ maybeSingle: async () => ({ data: expense, error: null }) }),
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    });
+    const repo = new ExpenseRepository({ from } as unknown as SupabaseClient<Database>);
+
+    await expect(
+      repo.recordPayment({ expense_id: 'exp-1', amount: 10, business_id: 'biz-2' } as never),
     ).rejects.toMatchObject({ name: 'ValidationError' });
 
     expect(from.mock.calls.filter(([t]) => t === 'expense_payments')).toHaveLength(0);

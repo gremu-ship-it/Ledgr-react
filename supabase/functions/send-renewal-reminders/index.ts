@@ -22,6 +22,7 @@
 // end users.
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { noStoreJson } from '../_shared/response.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -79,7 +80,7 @@ async function sendReminderEmail(to: string, businessName: string, planName: str
 Deno.serve(async (req) => {
   const providedSecret = req.headers.get('x-cron-secret');
   if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    return noStoreJson({ error: 'Unauthorized' }, 401);
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
@@ -97,7 +98,7 @@ Deno.serve(async (req) => {
     .not('plan_expires_at', 'is', null);
 
   if (findErr) {
-    return new Response(JSON.stringify({ error: findErr.message }), { status: 500 });
+    return noStoreJson({ error: findErr.message }, 500);
   }
 
   const results: { business_id: string; days_before?: number; success: boolean; detail?: string }[] = [];
@@ -158,8 +159,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({
+  return noStoreJson({
     processed: results.length,
     results,
-  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
 });

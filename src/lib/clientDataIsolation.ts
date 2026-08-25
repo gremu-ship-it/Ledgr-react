@@ -3,6 +3,7 @@ import { clearCapturedErrors } from '@/lib/errorCapture';
 import { offlineDB } from '@/offline/db';
 import { useAppStore } from '@/store/useAppStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
+import { clearAuthPersistenceMode } from '@/lib/authStorage';
 
 const ISOLATION_CHANNEL = 'ledgr-client-isolation-v1';
 const ISOLATION_STORAGE_EVENT = 'ledgr-client-isolation-event';
@@ -19,12 +20,10 @@ const SENSITIVE_LOCAL_STORAGE_KEYS = [
   'ledgr-notifications',
   'ledgr-partner-cache',
   'ledgr-renewal-reminders-shown',
-  'ledgr-auth-persistence',
   'onboardingSkipped',
 ] as const;
 
 const SENSITIVE_SESSION_STORAGE_KEYS = [
-  'ledgr-session-only',
   'ledgr_tax_reminder_shown',
 ] as const;
 
@@ -110,7 +109,9 @@ export function isActiveClientContext(userId: string, businessId: string): boole
  * Purge all user/tenant-sensitive client state. UI-only preferences and the
  * static application shell are intentionally preserved.
  */
-export function purgeSensitiveClientState(options: { broadcast?: boolean } = {}): Promise<void> {
+export function purgeSensitiveClientState(
+  options: { broadcast?: boolean; preserveAuthPersistenceMode?: boolean } = {},
+): Promise<void> {
   // These operations are synchronous and happen even when an async cleanup is
   // already running, so the current tab cannot render a stale query/notif while
   // IndexedDB and Cache Storage are being cleared.
@@ -122,6 +123,7 @@ export function purgeSensitiveClientState(options: { broadcast?: boolean } = {})
   if (typeof window !== 'undefined') {
     removeStorageKeys(window.localStorage, SENSITIVE_LOCAL_STORAGE_KEYS);
     removeStorageKeys(window.sessionStorage, SENSITIVE_SESSION_STORAGE_KEYS);
+    if (!options.preserveAuthPersistenceMode) clearAuthPersistenceMode();
   }
 
   if (!cleanupInFlight) {
@@ -170,9 +172,7 @@ export function initializeClientDataIsolation(): void {
     const previousRole = previousState.currentBusiness?.role ?? null;
     const nextRole = state.currentBusiness?.role ?? null;
     const contextChanged =
-      previousBusinessId &&
-      nextBusinessId &&
-      (previousBusinessId !== nextBusinessId || previousRole !== nextRole);
+      previousBusinessId !== nextBusinessId || previousRole !== nextRole;
     if (contextChanged) {
       // clear() destroys/cancels query observers, including record-id detail
       // entries. Business and permission changes both re-fetch through RLS.

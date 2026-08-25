@@ -120,20 +120,24 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
     payment: InsertDto<'invoice_payments'>,
     clientKey?: string,
   ): Promise<{ payment: Row<'invoice_payments'>; invoice: Row<'invoices'> }> {
+    const invoice = await this.findById(payment.invoice_id);
+    if (invoice.business_id !== payment.business_id) {
+      throw new ValidationError(
+        'invoice_payments',
+        'Invoice payment business does not match the parent invoice.',
+      );
+    }
+
     // Idempotency: a retried offline sync must not insert a duplicate payment
     // and re-increment amount_paid.
     if (clientKey) {
       const existing = await this.findPaymentByClientKey(payment.business_id, clientKey);
-      if (existing) {
-        const invoice = await this.findById(payment.invoice_id);
-        return { payment: existing, invoice };
-      }
+      if (existing) return { payment: existing, invoice };
     }
 
     // FIX [C-03 void/credit-note payment control]: enforce at the repository
     // layer (not just the UI). The DB trigger (20260813000002) is the backstop;
     // this check gives a clear error before the insert round-trip.
-    const invoice = await this.findById(payment.invoice_id);
     if (invoice.status === 'void' || invoice.status === 'credit_note') {
       throw new ValidationError(
         'invoice_payments',

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { queryKeys } from '@/lib/queryKeys';
 import { notificationMatchesContext } from '@/lib/notificationScope';
-import { queueItemMatchesIdentity } from '@/offline/identity';
+import {
+  queueItemMatchesIdentity,
+  queuePayloadMatchesBusiness,
+} from '@/offline/identity';
 
 describe('tenant-sensitive cache keys', () => {
   it('separates identical detail ids by business', () => {
@@ -28,6 +31,34 @@ describe('offline queue ownership', () => {
     expect(queueItemMatchesIdentity(item, { userId: 'user-a', businessId: 'business-a' })).toBe(true);
     expect(queueItemMatchesIdentity(item, { userId: 'user-b', businessId: 'business-a' })).toBe(false);
     expect(queueItemMatchesIdentity(item, { userId: 'user-a', businessId: 'business-b' })).toBe(false);
+  });
+});
+
+describe('offline payload tenant binding', () => {
+  it('rejects financial payloads whose embedded business differs from the queue envelope', () => {
+    expect(queuePayloadMatchesBusiness(
+      'invoice',
+      { invoice: { business_id: 'business-a' }, lines: [] } as never,
+      'business-a',
+    )).toBe(true);
+    expect(queuePayloadMatchesBusiness(
+      'invoice',
+      { invoice: { business_id: 'business-b' }, lines: [] } as never,
+      'business-a',
+    )).toBe(false);
+    expect(queuePayloadMatchesBusiness(
+      'invoice_payment',
+      { payment: { business_id: 'business-b', invoice_id: 'invoice-b' } } as never,
+      'business-a',
+    )).toBe(false);
+    expect(queuePayloadMatchesBusiness(
+      'payroll_run',
+      {
+        run: { business_id: 'business-a' },
+        lines: [{ business_id: 'business-b' }],
+      } as never,
+      'business-a',
+    )).toBe(false);
   });
 });
 

@@ -120,13 +120,20 @@ describe('central client data purge', () => {
     initializeClientDataIsolation();
 
     const subscription = (mocks.subscribe.mock.calls[0] as unknown[])[0] as (
-      state: { currentBusiness: { business: { id: string } } },
-      previous: { currentBusiness: { business: { id: string } } },
+      state: { currentBusiness: { business: { id: string } } | null },
+      previous: { currentBusiness: { business: { id: string } } | null },
     ) => void;
     mocks.queryClear.mockClear();
     subscription(
       { currentBusiness: { business: { id: 'business-b' } } },
       { currentBusiness: { business: { id: 'business-a' } } },
+    );
+    expect(mocks.queryClear).toHaveBeenCalledTimes(1);
+
+    mocks.queryClear.mockClear();
+    subscription(
+      { currentBusiness: null },
+      { currentBusiness: { business: { id: 'business-b' } } },
     );
     expect(mocks.queryClear).toHaveBeenCalledTimes(1);
 

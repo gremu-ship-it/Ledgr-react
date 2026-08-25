@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { QueryClient } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../queryKeys';
 import {
   invalidateAfterExpense,
   invalidateAfterIncome,
@@ -24,7 +25,10 @@ function mockClient() {
   const invalidateQueries = vi.fn();
   const client = { invalidateQueries } as unknown as QueryClient;
   const keys = () =>
-    invalidateQueries.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
+    invalidateQueries.mock.calls.flatMap((call) => {
+      const queryKey = (call[0] as { queryKey?: string[] }).queryKey;
+      return queryKey ? [queryKey[0]] : [];
+    });
   return { client, invalidateQueries, keys };
 }
 
@@ -130,5 +134,43 @@ describe('invalidateAfterSync', () => {
     for (const key of ['payroll_runs', 'team', 'partner']) {
       expect(keys()).not.toContain(key);
     }
+  });
+});
+
+describe('tenant-first detail invalidation', () => {
+  it('marks affected business detail families stale without touching unrelated details', () => {
+    const client = new QueryClient();
+    const invoice = queryKeys.invoiceLines('business-a', 'invoice-a');
+    const contact = queryKeys.contact('business-a', 'contact-a');
+    const journal = queryKeys.journalEntry('business-b', 'journal-b');
+    const webhook = queryKeys.webhookDeliveries('business-a', 'webhook-a');
+    const payroll = queryKeys.payrollRun('business-a', 'payroll-a');
+
+    for (const key of [invoice, contact, journal, webhook, payroll]) {
+      client.setQueryData(key, { cached: true });
+    }
+
+    invalidateAfterIncome(client);
+
+    expect(client.getQueryState(invoice)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(contact)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(journal)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(webhook)?.isInvalidated).toBe(false);
+    expect(client.getQueryState(payroll)?.isInvalidated).toBe(false);
+  });
+
+  it('invalidates payroll and transfer detail families from their matching write paths', () => {
+    const client = new QueryClient();
+    const payroll = queryKeys.payrollRun('business-a', 'payroll-a');
+    const transfer = queryKeys.transfer('business-a', 'transfer-a');
+    client.setQueryData(payroll, { cached: true });
+    client.setQueryData(transfer, { cached: true });
+
+    invalidateAfterPayroll(client);
+    expect(client.getQueryState(payroll)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(transfer)?.isInvalidated).toBe(false);
+
+    invalidateAfterInventory(client);
+    expect(client.getQueryState(transfer)?.isInvalidated).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/dal/types/database';
+import { authStorage } from '@/lib/authStorage';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -64,6 +65,7 @@ function fetchWithTimeout(
 export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {
   auth: {
     persistSession: true,
+    storage: authStorage,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },

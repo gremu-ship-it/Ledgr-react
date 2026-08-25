@@ -144,20 +144,24 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
     payment: InsertDto<'expense_payments'>,
     clientKey?: string,
   ): Promise<{ payment: Row<'expense_payments'>; expense: Row<'expenses'> }> {
+    const expense = await this.findById(payment.expense_id);
+    if (expense.business_id !== payment.business_id) {
+      throw new ValidationError(
+        'expense_payments',
+        'Expense payment business does not match the parent expense.',
+      );
+    }
+
     // Idempotency: a retried offline sync must not insert a duplicate payment
     // and re-increment amount_paid.
     if (clientKey) {
       const existing = await this.findPaymentByClientKey(payment.business_id, clientKey);
-      if (existing) {
-        const expense = await this.findById(payment.expense_id);
-        return { payment: existing, expense };
-      }
+      if (existing) return { payment: existing, expense };
     }
 
     // FIX [C-03 void/credit-note payment control]: enforce at the repository
     // layer. The DB trigger (20260813000002) is the backstop; this check gives
     // a clear error before the insert round-trip.
-    const expense = await this.findById(payment.expense_id);
     if (expense.status === 'void') {
       throw new ValidationError(
         'expense_payments',

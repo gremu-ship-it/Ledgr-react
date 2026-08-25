@@ -30,7 +30,7 @@ export function AppLayout() {
 
   useBrandTheme();
   usePartnerTheme();
-  const { showWarning, secondsRemaining, extendSession } = useInactivityTimeout();
+  const { showWarning, secondsRemaining, extendSession, logoutNow } = useInactivityTimeout();
   useRenewalReminder();
   useOrientationLock();
 
@@ -94,7 +94,7 @@ export function AppLayout() {
             secondsRemaining={secondsRemaining}
             onExtend={extendSession}
             onLogoutNow={() => {
-              window.location.href = '/login';
+              void logoutNow();
             }}
           />
         )}

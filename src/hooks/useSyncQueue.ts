@@ -62,7 +62,7 @@ export function useSyncQueue(): SyncQueueState {
         // and settings data cannot have changed.
         invalidateAfterSync(queryClient);
       }
-      await pruneSyncedItems();
+      await pruneSyncedItems({ userId, businessId });
     } finally {
       setIsSyncing(false);
       inFlightRef.current = false;

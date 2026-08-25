@@ -1,6 +1,12 @@
 import { offlineDB, type QueueOperationType, type QueueItem } from './db';
 import type { QueuePayloadFor } from './payloads';
 import { requestBackgroundSync } from './backgroundSync';
+import { isActiveClientContext } from '@/lib/clientDataIsolation';
+import {
+  queueItemMatchesIdentity,
+  queuePayloadMatchesBusiness,
+  type OfflineSyncIdentity,
+} from './identity';
 
 /**
  * Determines whether an error occurred because the device is offline or
@@ -94,13 +100,32 @@ export async function enqueue<T extends QueueOperationType>(
   if (!businessId || !ownerUserId) {
     throw new Error('Offline transactions require an authenticated user and active business.');
   }
-  const pending = await getPendingCount();
+  if (!isActiveClientContext(ownerUserId, businessId)) {
+    throw new Error('Offline transaction context no longer matches the active user and business.');
+  }
+  if (!queuePayloadMatchesBusiness(operationType, payload, businessId)) {
+    throw new Error('Offline transaction payload does not belong to the active business.');
+  }
+  if ((options?.dependsOnLocalId === undefined) !== (options?.dependentFkField === undefined)) {
+    throw new Error('Offline queue dependencies require both a parent item and foreign-key field.');
+  }
+  if (options?.dependsOnLocalId !== undefined) {
+    const parent = await offlineDB.queue.get(options.dependsOnLocalId);
+    if (!parent || !queueItemMatchesIdentity(parent, { userId: ownerUserId, businessId })) {
+      throw new Error('Offline queue dependency does not belong to the active user and business.');
+    }
+  }
+
+  const pending = await getPendingCount(businessId, ownerUserId);
   if (pending >= MAX_PENDING_QUEUE_ITEMS) {
     throw new Error(
       `Offline queue is full (${MAX_PENDING_QUEUE_ITEMS} items). Go online and sync before creating more transactions.`,
     );
   }
   const sequence = await nextSequence();
+  if (!isActiveClientContext(ownerUserId, businessId)) {
+    throw new Error('Offline transaction context changed before it could be queued.');
+  }
 
   const item: QueueItem = {
     sequence,
@@ -146,25 +171,38 @@ export async function getPendingItems(
   return items.filter((item) => item.status === 'pending' || item.status === 'failed');
 }
 
-/** Count of items not yet successfully synced. */
-export async function getPendingCount(): Promise<number> {
-  return offlineDB.queue.where('status').anyOf('pending', 'failed').count();
+/** Count unsynced items owned by one exact user/business queue. */
+export async function getPendingCount(
+  businessId: string,
+  ownerUserId: string,
+): Promise<number> {
+  const items = await getQueueForBusiness(businessId, ownerUserId);
+  return items.filter((item) => item.status === 'pending' || item.status === 'failed').length;
 }
 
-/** Remove a queue item entirely (used after successful sync, or manual discard). */
-export async function removeQueueItem(localId: number): Promise<void> {
+/** Remove an owned queue item entirely (used after successful sync or manual discard). */
+export async function removeQueueItem(
+  localId: number,
+  identity: OfflineSyncIdentity,
+): Promise<void> {
+  const item = await offlineDB.queue.get(localId);
+  if (!item || !queueItemMatchesIdentity(item, identity)) {
+    throw new Error('Queued item does not belong to the active user and business.');
+  }
   await offlineDB.queue.delete(localId);
 }
 
-/** Clear all successfully synced items older than the given age, to keep IndexedDB tidy. */
-export async function pruneSyncedItems(olderThanMs = 1000 * 60 * 60 * 24 * 7): Promise<number> {
+/** Clear old synced items for one exact user/business queue. */
+export async function pruneSyncedItems(
+  identity: OfflineSyncIdentity,
+  olderThanMs = 1000 * 60 * 60 * 24 * 7,
+): Promise<number> {
   const cutoff = new Date(Date.now() - olderThanMs).toISOString();
-  const stale = await offlineDB.queue
-    .where('status')
-    .equals('synced')
-    .filter((item) => Boolean(item.lastAttemptAt) && item.lastAttemptAt! < cutoff)
-    .toArray();
+  const owned = await getQueueForBusiness(identity.businessId, identity.userId);
+  const stale = owned.filter(
+    (item) => item.status === 'synced' && Boolean(item.lastAttemptAt) && item.lastAttemptAt! < cutoff,
+  );
 
-  await offlineDB.queue.bulkDelete(stale.map((i) => i.localId!));
+  await offlineDB.queue.bulkDelete(stale.map((item) => item.localId!));
   return stale.length;
 }

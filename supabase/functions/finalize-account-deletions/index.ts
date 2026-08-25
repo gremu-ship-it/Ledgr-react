@@ -19,6 +19,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
+import { noStoreJson } from '../_shared/response.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -29,7 +30,7 @@ const PERMANENT_BAN_DURATION = '876000h'; // ~100 years
 serve(async (req) => {
   const providedSecret = req.headers.get('x-cron-secret');
   if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+    return noStoreJson({ error: 'Unauthorized' }, 401);
   }
 
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
@@ -43,7 +44,7 @@ serve(async (req) => {
     .not('deletion_requested_at', 'is', null);
 
   if (dueErr) {
-    return new Response(JSON.stringify({ error: dueErr.message }), { status: 500 });
+    return noStoreJson({ error: dueErr.message }, 500);
   }
 
   const results: { user_id: string; success: boolean; error?: string }[] = [];
@@ -67,8 +68,8 @@ serve(async (req) => {
     }
   }
 
-  return new Response(JSON.stringify({
+  return noStoreJson({
     processed: results.length,
     results,
-  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
 });

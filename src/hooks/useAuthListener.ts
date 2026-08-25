@@ -6,6 +6,10 @@ import { i18n, normalizeLanguage } from '@/i18n';
 import { createLogger } from '@/lib/logger';
 import { purgeSensitiveClientState } from '@/lib/clientDataIsolation';
 import { secureSignOut } from '@/lib/authSession';
+import {
+  AUTH_PERSISTENCE_MODE_KEY,
+  SESSION_ONLY_TAB_MARKER,
+} from '@/lib/authStorage';
 
 const log = createLogger('useAuthListener');
 
@@ -100,8 +104,8 @@ export function useAuthListener() {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!isMountedRef.current) return;
       if (session?.user) {
-        const sessionOnly = window.localStorage.getItem('ledgr-auth-persistence') === 'session';
-        const tabMarkerPresent = window.sessionStorage.getItem('ledgr-session-only') === '1';
+        const sessionOnly = window.localStorage.getItem(AUTH_PERSISTENCE_MODE_KEY) === 'session';
+        const tabMarkerPresent = window.sessionStorage.getItem(SESSION_ONLY_TAB_MARKER) === '1';
         if (sessionOnly && !tabMarkerPresent) {
           await secureSignOut('local');
           if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
@@ -148,7 +152,10 @@ export function useAuthListener() {
         if (isDifferentAuthenticatedUser) {
           hasInitialHydrated = false;
           lastHydratedUserId = null;
-          void purgeSensitiveClientState({ broadcast: true }).then(() =>
+          void purgeSensitiveClientState({
+            broadcast: true,
+            preserveAuthPersistenceMode: true,
+          }).then(() =>
             hydrateUser(session.user.id, session.user.email ?? null, true).finally(() => {
               if (isMountedRef.current) useAppStore.getState().setAuthLoading(false);
             }),

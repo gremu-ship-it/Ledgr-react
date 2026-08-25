@@ -11,6 +11,7 @@ export interface InactivityState {
   showWarning: boolean;
   secondsRemaining: number;
   extendSession: () => void;
+  logoutNow: () => Promise<void>;
 }
 
 export function useInactivityTimeout(): InactivityState {
@@ -109,5 +110,5 @@ export function useInactivityTimeout(): InactivityState {
     };
   }, [currentUser, scheduleTimers, clearAllTimers, doLogout, getInactivityMs]);
 
-  return { showWarning, secondsRemaining, extendSession };
+  return { showWarning, secondsRemaining, extendSession, logoutNow: doLogout };
 }
