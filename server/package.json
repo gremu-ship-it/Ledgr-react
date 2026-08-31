@@ -12,7 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@sentry/node": "^10.70.0",
+    "@sentry/node": "^10.71.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
@@ -23,10 +23,10 @@
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.6",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.4.0",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,
