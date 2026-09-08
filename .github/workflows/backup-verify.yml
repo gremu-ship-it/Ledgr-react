@@ -95,15 +95,27 @@ jobs:
         run: |
           set -euo pipefail
           pg_bin=/usr/lib/postgresql/17/bin
-          if [[ ! -x "$pg_bin/pg_dump" ]]; then
+          if [[ ! -x "$pg_bin/pg_dump" || ! -x "$pg_bin/pg_restore" || ! -x "$pg_bin/psql" ]]; then
+            # Ubuntu's default repositories may not carry this major version.
+            # Register the official PGDG repository with a repository-scoped
+            # signing key before requesting the versioned client package.
+            sudo apt-get update
+            sudo apt-get install -y ca-certificates curl
+            sudo install -d -m 0755 /usr/share/postgresql-common/pgdg
+            curl --fail --silent --show-error --location --retry 3 \
+              https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+              | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc > /dev/null
+            . /etc/os-release
+            echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
+              | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
             sudo apt-get update
             sudo apt-get install -y postgresql-client-17
           fi
-          test -x "$pg_bin/pg_dump"
-          test -x "$pg_bin/pg_restore"
-          test -x "$pg_bin/psql"
+          for tool in pg_dump pg_restore psql; do
+            test -x "$pg_bin/$tool"
+            "$pg_bin/$tool" --version | grep -E 'PostgreSQL\) 17\.'
+          done
           echo "$pg_bin" >> "$GITHUB_PATH"
-          "$pg_bin/pg_dump" --version
 
       - name: Resolve source database connection
         shell: bash
