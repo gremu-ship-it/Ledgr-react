@@ -101,6 +101,103 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 > time. Non-`VITE_` secrets (e.g. `SENDGRID_API_KEY`) are Edge Function secrets
 > set with `supabase secrets set` and are **never** exposed to the browser.
 
+#### Missing Supabase secret — what the error means and how to fix it
+
+Both `deploy.yml` (pre-flight credential check before `supabase link`) and
+`backup-verify.yml` fail fast with a message that names the exact missing
+value, for example:
+
+```
+SUPABASE_DB_PASSWORD_PROD is not configured.
+Process completed with exit code 1.
+```
+
+That message means the GitHub secret `SUPABASE_DB_PASSWORD_PROD` does not exist
+or is empty **where the job can read it**. Fix:
+
+1. Go to **Settings → Secrets and variables → Actions → Secrets** and ensure
+   `SUPABASE_DB_PASSWORD_STAGING` and `SUPABASE_DB_PASSWORD_PROD` exist, each
+   containing its Supabase project's database password. Repository-level
+   secrets are visible to every workflow and every environment, so adding them
+   here (as the tables above assume) is the simplest and most robust fix.
+2. If you prefer environment-scoped secrets (**Settings → Environments**), the
+   secret must be set on the exact environment the job targets: `staging` for
+   the staging deploy, and `Production` for the production deploy and for the
+   weekly production backup verification. A secret on any other environment
+   (e.g. a `Preview – …` environment) is **not** visible to those jobs.
+3. Also confirm `SUPABASE_ACCESS_TOKEN` (secret) and the `SUPABASE_PROJECT_REF_STAGING`
+   / `SUPABASE_PROJECT_REF_PROD` variables still exist; the same pre-flight
+   check names them if they do not.
+4. Re-run the failed workflow via `workflow_dispatch`.
+
+Both database-password secrets were confirmed working on 2026-08-20 (production
+release `v1.0.1`) and 2026-08-23 (last successful staging deploy); the same
+workflow versions began failing on 2026-09-08 with **no intervening repository
+change**. That points to the GitHub secrets — or the Supabase database
+passwords they wrap — having been rotated, removed, or rescoped since then.
+Re-entering the current database passwords in step 1 is the fix.
+
+#### `Unexpected error retrieving remote project status: {"message":"Unauthorized"}`
+
+If the password guards pass but `supabase link` fails with this message
+(seen in `deploy.yml`'s *Link & migrate …* step and in `backup-verify.yml`'s
+*Resolve source database connection* step), the problem is the **access
+token**, not the DB password:
+
+```
+Unexpected error retrieving remote project status: {"message":"Unauthorized"}
+Try rerunning the command with --debug to troubleshoot the error.
+```
+
+`supabase link` first calls the Supabase **Management API** to look up the
+project, and that call is authenticated by the `SUPABASE_ACCESS_TOKEN` secret.
+`401 Unauthorized` means the stored token is expired, revoked, or belongs to an
+account that can no longer see the projects. Fix:
+
+1. Open the Supabase dashboard → **Account → Access Tokens**
+   (https://supabase.com/dashboard/account/tokens). If the existing token was
+   rotated or revoked, generate a new one.
+2. Update the `SUPABASE_ACCESS_TOKEN` secret under **Settings → Secrets and
+   variables → Actions** (or the same environment scope where it currently
+   lives). The account that owns the token must have access to **both** the
+   staging and production Supabase projects.
+3. Sanity-check it before re-running:
+   ```bash
+   curl -s https://api.supabase.com/v1/projects \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"   # 401 => token is bad
+   ```
+4. Re-run the failed workflow. An expired `SUPABASE_ACCESS_TOKEN` also
+   surfaces as an unexplained "Process completed with exit code 1" on
+   `deploy.yml`'s *Link & migrate …* step, so refresh it whenever Supabase
+   credentials have been rotated.
+
+#### Paused ("INACTIVE") Supabase projects block deploys and backups
+
+When the token is valid, verify each project CI targets is actually running.
+The Management API returns `"status":"ACTIVE_HEALTHY"` for a running project
+and `"status":"INACTIVE"` for a **paused** one:
+
+```bash
+curl -s https://api.supabase.com/v1/projects \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
+```
+
+A paused project fails mid-deploy (or backup) with connection/link errors even
+with correct credentials, because its database is not accepting connections.
+Projects on the free plan auto-pause after ~7 days without activity — a staging
+project with no successful deploys for a couple of weeks is exactly what gets
+caught. Check the mapping before re-running:
+
+- `SUPABASE_PROJECT_REF_PROD` must point at the **ACTIVE_HEALTHY** production
+  project.
+- `SUPABASE_PROJECT_REF_STAGING` must point at the staging project — resume it
+  first if it shows `INACTIVE`: Supabase dashboard → the project → **Restore**
+  (takes a few minutes). Pausing does **not** reset the database password, so
+  `SUPABASE_DB_PASSWORD_STAGING` still applies after resume.
+
+If any configured ref points at an abandoned/paused project (e.g. an unused
+auto-created one), update the GitHub variable to the correct project's ref.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to
@@ -202,6 +299,16 @@ staging/production deployment jobs. The session pooler is IPv4-reachable from
 GitHub-hosted runners and keeps the database password out of the endpoint URL.
 If database network restrictions are enabled, allow GitHub Actions runner
 traffic to the project's session-pooler connection.
+
+`TABLES` (in `backup-verify.yml`, with the same default inside
+`scripts/verify-backup.sh`) must only reference tables that exist as
+migration-created tables. Historical mistakes: `payroll_employees` (the schema
+calls it `employees`), `inventory_items` (stock lives in `inventory_balances`),
+and `subscriptions` (created out-of-band in production only — absent from
+migrations, so staging verification would fail on it; billing is tracked in
+`subscription_payments`). A listed table that the source dump does not contain
+is skipped with a `::warning::` rather than failing the run, so one stale name
+cannot keep the whole verification red.
 
 ## 10. Rate limiting & security headers
 

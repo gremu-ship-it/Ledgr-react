@@ -57,7 +57,11 @@ source_psql() {
   source_command_env psql --no-password -X "$SOURCE_DB_URL" "$@"
 }
 
-TABLES="${TABLES:-businesses,business_users,contacts,accounts,invoices,expenses,journal_entries,journal_lines,payroll_employees,tax_returns,inventory_items,branches,departments,api_keys,webhooks,subscriptions}"
+# NB: every name in this list must exist as a migration-created table. Earlier
+# drafts listed payroll_employees/inventory_items (no such tables exist) and
+# subscriptions (created out-of-band in production only, absent from
+# migrations), which made verification fail on "relation does not exist".
+TABLES="${TABLES:-businesses,business_users,contacts,accounts,invoices,expenses,journal_entries,journal_lines,employees,tax_returns,inventory_balances,branches,departments,api_keys,webhooks,subscription_payments}"
 
 DUMP_FILE="$(mktemp --suffix=.dump)"
 trap 'rm -f "$DUMP_FILE"' EXIT
@@ -107,6 +111,20 @@ FAIL=0
 for table in "${TABLE_ARR[@]}"; do
   table="$(echo "$table" | tr -d '[:space:]')"
   [[ -z "$table" ]] && continue
+
+  # Skip tables the source schema does not define. The comparison only makes
+  # sense for tables that exist in the dump, so a missing source table (env
+  # drift, renamed/legacy table) is a warning rather than a backup failure.
+  present=$(source_psql -tAc "SELECT to_regclass('public.\"$table\"') IS NOT NULL;" 2>/dev/null || echo "ERR")
+  if [[ "$present" == "ERR" ]]; then
+    echo "::error::Could not check existence of $table in the source database"
+    FAIL=1
+    continue
+  fi
+  if [[ "$present" != "t" ]]; then
+    echo "::warning::Skipping $table: not present in the source database schema"
+    continue
+  fi
 
   src=$(source_psql -tAc "SELECT count(*) FROM public.\"$table\";" 2>/dev/null || echo "ERR")
   rst=$(psql --no-password -X "$RESTORE_DB_URL" -tAc "SELECT count(*) FROM public.\"$table\";" 2>/dev/null || echo "ERR")

@@ -79,6 +79,10 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_STAGING }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Used only to name the missing secret in pre-flight error messages.
+      SUPABASE_SECRET_SUFFIX: STAGING
+      SUPABASE_ENV_LABEL: staging
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -106,6 +110,27 @@ jobs:
         uses: supabase/setup-cli@v3
         with:
           version: 2.109.0
+      - name: Verify Supabase credentials are configured (staging)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || {
+            echo "::error::SUPABASE_ACCESS_TOKEN is not configured. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          }
+          test -n "$SUPABASE_PROJECT_REF" || {
+            echo "::error::SUPABASE_PROJECT_REF_${SUPABASE_SECRET_SUFFIX} is not configured. Add it under Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          }
+          test -n "$SUPABASE_DB_PASSWORD" || {
+            echo "::error::SUPABASE_DB_PASSWORD_${SUPABASE_SECRET_SUFFIX} is not configured. Add the ${SUPABASE_ENV_LABEL} Supabase database password under Settings -> Secrets and variables -> Actions."
+            exit 1
+          }
+          if [[ "$SUPABASE_DB_PASSWORD" == *$'\n'* || "$SUPABASE_DB_PASSWORD" == *$'\r'* ]]; then
+            echo "::error::SUPABASE_DB_PASSWORD_${SUPABASE_SECRET_SUFFIX} must not contain a newline."
+            exit 1
+          fi
+          echo "Supabase deployment credentials for ${SUPABASE_ENV_LABEL} are configured."
       - name: Link & migrate staging database
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
@@ -180,6 +205,10 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD_PROD }}
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      # Used only to name the missing secret in pre-flight error messages.
+      SUPABASE_SECRET_SUFFIX: PROD
+      SUPABASE_ENV_LABEL: production
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -207,6 +236,27 @@ jobs:
         uses: supabase/setup-cli@v3
         with:
           version: 2.109.0
+      - name: Verify Supabase credentials are configured (production)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || {
+            echo "::error::SUPABASE_ACCESS_TOKEN is not configured. Add it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          }
+          test -n "$SUPABASE_PROJECT_REF" || {
+            echo "::error::SUPABASE_PROJECT_REF_${SUPABASE_SECRET_SUFFIX} is not configured. Add it under Settings -> Secrets and variables -> Actions -> Variables."
+            exit 1
+          }
+          test -n "$SUPABASE_DB_PASSWORD" || {
+            echo "::error::SUPABASE_DB_PASSWORD_${SUPABASE_SECRET_SUFFIX} is not configured. Add the ${SUPABASE_ENV_LABEL} Supabase database password under Settings -> Secrets and variables -> Actions."
+            exit 1
+          }
+          if [[ "$SUPABASE_DB_PASSWORD" == *$'\n'* || "$SUPABASE_DB_PASSWORD" == *$'\r'* ]]; then
+            echo "::error::SUPABASE_DB_PASSWORD_${SUPABASE_SECRET_SUFFIX} must not contain a newline."
+            exit 1
+          fi
+          echo "Supabase deployment credentials for ${SUPABASE_ENV_LABEL} are configured."
       - name: Link & migrate production database
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
