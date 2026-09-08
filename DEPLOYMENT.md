@@ -171,6 +171,33 @@ account that can no longer see the projects. Fix:
    `deploy.yml`'s *Link & migrate …* step, so refresh it whenever Supabase
    credentials have been rotated.
 
+#### Paused ("INACTIVE") Supabase projects block deploys and backups
+
+When the token is valid, verify each project CI targets is actually running.
+The Management API returns `"status":"ACTIVE_HEALTHY"` for a running project
+and `"status":"INACTIVE"` for a **paused** one:
+
+```bash
+curl -s https://api.supabase.com/v1/projects \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"
+```
+
+A paused project fails mid-deploy (or backup) with connection/link errors even
+with correct credentials, because its database is not accepting connections.
+Projects on the free plan auto-pause after ~7 days without activity — a staging
+project with no successful deploys for a couple of weeks is exactly what gets
+caught. Check the mapping before re-running:
+
+- `SUPABASE_PROJECT_REF_PROD` must point at the **ACTIVE_HEALTHY** production
+  project.
+- `SUPABASE_PROJECT_REF_STAGING` must point at the staging project — resume it
+  first if it shows `INACTIVE`: Supabase dashboard → the project → **Restore**
+  (takes a few minutes). Pausing does **not** reset the database password, so
+  `SUPABASE_DB_PASSWORD_STAGING` still applies after resume.
+
+If any configured ref points at an abandoned/paused project (e.g. an unused
+auto-created one), update the GitHub variable to the correct project's ref.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to
