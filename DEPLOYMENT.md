@@ -101,6 +101,42 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 > time. Non-`VITE_` secrets (e.g. `SENDGRID_API_KEY`) are Edge Function secrets
 > set with `supabase secrets set` and are **never** exposed to the browser.
 
+#### Missing Supabase secret — what the error means and how to fix it
+
+Both `deploy.yml` (pre-flight credential check before `supabase link`) and
+`backup-verify.yml` fail fast with a message that names the exact missing
+value, for example:
+
+```
+SUPABASE_DB_PASSWORD_PROD is not configured.
+Process completed with exit code 1.
+```
+
+That message means the GitHub secret `SUPABASE_DB_PASSWORD_PROD` does not exist
+or is empty **where the job can read it**. Fix:
+
+1. Go to **Settings → Secrets and variables → Actions → Secrets** and ensure
+   `SUPABASE_DB_PASSWORD_STAGING` and `SUPABASE_DB_PASSWORD_PROD` exist, each
+   containing its Supabase project's database password. Repository-level
+   secrets are visible to every workflow and every environment, so adding them
+   here (as the tables above assume) is the simplest and most robust fix.
+2. If you prefer environment-scoped secrets (**Settings → Environments**), the
+   secret must be set on the exact environment the job targets: `staging` for
+   the staging deploy, and `Production` for the production deploy and for the
+   weekly production backup verification. A secret on any other environment
+   (e.g. a `Preview – …` environment) is **not** visible to those jobs.
+3. Also confirm `SUPABASE_ACCESS_TOKEN` (secret) and the `SUPABASE_PROJECT_REF_STAGING`
+   / `SUPABASE_PROJECT_REF_PROD` variables still exist; the same pre-flight
+   check names them if they do not.
+4. Re-run the failed workflow via `workflow_dispatch`.
+
+Both database-password secrets were confirmed working on 2026-08-20 (production
+release `v1.0.1`) and 2026-08-23 (last successful staging deploy); the same
+workflow versions began failing on 2026-09-08 with **no intervening repository
+change**. That points to the GitHub secrets — or the Supabase database
+passwords they wrap — having been rotated, removed, or rescoped since then.
+Re-entering the current database passwords in step 1 is the fix.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to
