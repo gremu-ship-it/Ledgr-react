@@ -99,11 +99,14 @@ failures instead of fabricating output. The GitHub Actions workflow
 
 ## 5. Backup & restore
 
-CI workflow `.github/workflows/backup-verify.yml` restores the latest Supabase
-dump into a throwaway Postgres and runs verification. Manual:
+CI workflow `.github/workflows/backup-verify.yml` restores a logical dump into
+a throwaway PostgreSQL 17 instance and runs verification. It reuses the existing
+deployment configuration (`SUPABASE_ACCESS_TOKEN`, environment project ref, and
+environment database password) to resolve the project's session-pooler endpoint;
+it does **not** require a separate `SUPABASE_DB_URL_*` secret. Manual:
 
 ```bash
-pg_dump "postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres" -Fc -f ledgr-$(date +%F).dump
+pg_dump "postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres?sslmode=require" -Fc -f ledgr-$(date +%F).dump
 pg_restore --clean --if-exists -d fresh_db ledgr-$(date +%F).dump
 ```
 

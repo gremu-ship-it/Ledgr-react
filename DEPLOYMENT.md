@@ -84,7 +84,7 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 |--------|---------|
 | `VERCEL_TOKEN` | Vercel CLI auth (both) |
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI (both) |
-| `SUPABASE_DB_PASSWORD_STAGING` / `_PROD` | DB migrations (both) |
+| `SUPABASE_DB_PASSWORD_STAGING` / `_PROD` | DB migrations + backup verification; backup verification reuses these credentials rather than requiring a duplicate DB URL secret |
 | `VITE_SUPABASE_ANON_KEY_STAGING` / `_PROD` | build |
 | `VITE_SENTRY_DSN_STAGING` / `_PROD` | frontend Sentry init |
 | `SENTRY_AUTH_TOKEN` | Sentry source-map upload (CI) |
@@ -95,7 +95,6 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 | `PAYCHANGU_SECRET_KEY_STAGING` / `_PROD` | Edge Function secrets |
 | `PAYCHANGU_WEBHOOK_SECRET_STAGING` / `_PROD` | Edge Function secrets |
 | `CRON_SECRET_STAGING` / `_PROD` | Edge Function secrets |
-| `SUPABASE_DB_URL_STAGING` / `SUPABASE_DB_URL_PRODUCTION` | backup-verify (`postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres`) |
 | `RAILWAY_TOKEN` | optional gateway deploy (Railway) |
 
 > Frontend-only vars prefixed `VITE_` are baked into the client bundle at build
@@ -187,16 +186,22 @@ uptime pings always succeed.
 
 Every Monday 03:17 UTC (or manually) the workflow:
 
-1. Spins up a **throwaway** `postgres:16` container (GitHub service container).
-2. `pg_dump`s the selected environment's `public` schema.
-3. Restores it into the throwaway DB.
-4. Compares row counts for a core table list (`TABLES`) between source and
+1. Resolves the selected project's **session-pooler** endpoint with `supabase
+   link`, using the same credentials as `deploy.yml`.
+2. Spins up a **throwaway** `postgres:17` container (GitHub service container).
+3. `pg_dump`s the selected environment's `public` schema over TLS.
+4. Restores it into the throwaway DB.
+5. Compares row counts for a core table list (`TABLES`) between source and
    restored.
-5. Fails the run on any mismatch, so bad backups are caught before they matter.
+6. Fails the run on any mismatch, so bad backups are caught before they matter.
 
-Required: set `SUPABASE_DB_URL_STAGING` / `SUPABASE_DB_URL_PRODUCTION` (direct
-Postgres connection strings) and allow the GitHub Actions runner's IP (or use
-Supabase's allowed-list / SSH tunnel) to reach the DB.
+No duplicate `SUPABASE_DB_URL_*` secret is needed. The workflow reuses
+`SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF_STAGING` / `_PROD`, and
+`SUPABASE_DB_PASSWORD_STAGING` / `_PROD` that are already required by the
+staging/production deployment jobs. The session pooler is IPv4-reachable from
+GitHub-hosted runners and keeps the database password out of the endpoint URL.
+If database network restrictions are enabled, allow GitHub Actions runner
+traffic to the project's session-pooler connection.
 
 ## 10. Rate limiting & security headers
 
