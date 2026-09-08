@@ -137,6 +137,40 @@ change**. That points to the GitHub secrets — or the Supabase database
 passwords they wrap — having been rotated, removed, or rescoped since then.
 Re-entering the current database passwords in step 1 is the fix.
 
+#### `Unexpected error retrieving remote project status: {"message":"Unauthorized"}`
+
+If the password guards pass but `supabase link` fails with this message
+(seen in `deploy.yml`'s *Link & migrate …* step and in `backup-verify.yml`'s
+*Resolve source database connection* step), the problem is the **access
+token**, not the DB password:
+
+```
+Unexpected error retrieving remote project status: {"message":"Unauthorized"}
+Try rerunning the command with --debug to troubleshoot the error.
+```
+
+`supabase link` first calls the Supabase **Management API** to look up the
+project, and that call is authenticated by the `SUPABASE_ACCESS_TOKEN` secret.
+`401 Unauthorized` means the stored token is expired, revoked, or belongs to an
+account that can no longer see the projects. Fix:
+
+1. Open the Supabase dashboard → **Account → Access Tokens**
+   (https://supabase.com/dashboard/account/tokens). If the existing token was
+   rotated or revoked, generate a new one.
+2. Update the `SUPABASE_ACCESS_TOKEN` secret under **Settings → Secrets and
+   variables → Actions** (or the same environment scope where it currently
+   lives). The account that owns the token must have access to **both** the
+   staging and production Supabase projects.
+3. Sanity-check it before re-running:
+   ```bash
+   curl -s https://api.supabase.com/v1/projects \
+     -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN"   # 401 => token is bad
+   ```
+4. Re-run the failed workflow. An expired `SUPABASE_ACCESS_TOKEN` also
+   surfaces as an unexplained "Process completed with exit code 1" on
+   `deploy.yml`'s *Link & migrate …* step, so refresh it whenever Supabase
+   credentials have been rotated.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to
