@@ -1,0 +1,81 @@
+name: Supabase keep-alive
+
+# ---------------------------------------------------------------------------
+# Prevent the Supabase projects from being paused for inactivity.
+#
+# Supabase pauses Free-plan projects that receive no API requests for 7 days
+# (that is what happened to ledgr-staging in Sep 2026). pg_cron jobs running
+# inside the database do not reliably count as activity — only requests that
+# hit the project's API gateways do — so an *external* scheduled ping is the
+# standard fix.
+#
+# This workflow pings both the staging and production Supabase API gateways
+# twice a day — far inside the 7-day window — so even a missed run cannot
+# cause a pause. Any HTTP answer (200/401/404 …) proves the gateway received
+# an API request and therefore counts as activity; only a network failure
+# (HTTP 000) fails the step, which is exactly what we want surfaced.
+#
+# Credentials reuse existing repo configuration:
+#   vars.SUPABASE_URL_* are the per-env Vite URLs (project refs embedded)
+#   secrets.VITE_SUPABASE_ANON_KEY_* are the per-env publishable anon keys
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    # 06:17 and 18:17 UTC every day. Anything comfortably below once-per-7-days
+    # works; twice daily leaves margin for runner queues or a missed day.
+    - cron: "17 6,18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    name: Ping Supabase projects
+    runs-on: ubuntu-latest
+    env:
+      STAGING_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_STAGING }}
+      STAGING_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_STAGING }}
+      PROD_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_PROD }}
+      PROD_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_PROD }}
+    steps:
+      - name: Ping both projects
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ping_project() {
+            local name="$1" url="$2" anon_key="$3"
+            test -n "$url" || {
+              echo "::error::Project URL for ${name} is not configured (VITE_SUPABASE_URL_${name^^})"
+              return 1
+            }
+            test -n "$anon_key" || {
+              echo "::error::Anon key for ${name} is not configured"
+              return 1
+            }
+
+            local http_code
+            http_code="$(curl --silent --show-error --location --max-time 30 \
+              -H "apikey: ${anon_key}" \
+              -H "Authorization: Bearer ${anon_key}" \
+              -o /dev/null --write-out '%{http_code}' \
+              "${url}/rest/v1/" 2>/dev/null || echo 000)"
+
+            if [[ "$http_code" == "000" ]]; then
+              echo "::error::Could not reach ${name} Supabase gateway (${url})"
+              return 1
+            fi
+            # 2xx/4xx alike: the gateway answered, so the request counts as
+            # project activity for the 7-day inactivity window.
+            echo "OK ${name}: ${url} responded HTTP ${http_code}"
+          }
+
+          ping_project "staging" "$STAGING_SUPABASE_URL" "$STAGING_SUPABASE_ANON_KEY"
+          ping_project "production" "$PROD_SUPABASE_URL" "$PROD_SUPABASE_ANON_KEY"
+          echo "Keep-alive ping complete."
