@@ -77,10 +77,15 @@ jobs:
 
       RESTORE_DB_URL: "postgresql://throwaway:throwaway@localhost:5432/restore"
       # Core tables whose row counts must match exactly. Comma-separated.
+      # Every name must exist as a migration-created table: payroll employees
+      # live in `employees`, inventory stock in `inventory_balances`, and
+      # billing records in `subscription_payments` (`payroll_employees`,
+      # `inventory_items` and `subscriptions` do not exist in the migrations).
+      # Tables absent from the source schema are skipped with a warning.
       TABLES: >-
         businesses,business_users,contacts,accounts,invoices,expenses,
-        journal_entries,journal_lines,payroll_employees,tax_returns,
-        inventory_items,branches,departments,api_keys,webhooks,subscriptions
+        journal_entries,journal_lines,employees,tax_returns,
+        inventory_balances,branches,departments,api_keys,webhooks,subscription_payments
 
     steps:
       - uses: actions/checkout@v7

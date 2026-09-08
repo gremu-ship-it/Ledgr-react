@@ -300,6 +300,16 @@ GitHub-hosted runners and keeps the database password out of the endpoint URL.
 If database network restrictions are enabled, allow GitHub Actions runner
 traffic to the project's session-pooler connection.
 
+`TABLES` (in `backup-verify.yml`, with the same default inside
+`scripts/verify-backup.sh`) must only reference tables that exist as
+migration-created tables. Historical mistakes: `payroll_employees` (the schema
+calls it `employees`), `inventory_items` (stock lives in `inventory_balances`),
+and `subscriptions` (created out-of-band in production only — absent from
+migrations, so staging verification would fail on it; billing is tracked in
+`subscription_payments`). A listed table that the source dump does not contain
+is skipped with a `::warning::` rather than failing the run, so one stale name
+cannot keep the whole verification red.
+
 ## 10. Rate limiting & security headers
 
 | Control | Where |
