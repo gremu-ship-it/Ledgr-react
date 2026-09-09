@@ -13,8 +13,10 @@ The codebase is in **good security shape overall** — clearly hardened by prior
 |---|---|---|
 | Critical | 0 | — |
 | High | 2 (dependencies) | ✅ **Fixed** |
-| Moderate | 3 (dependencies) | ✅ `qs` fixed; 2 remaining are dev-only vitest (needs major bump) |
+| Moderate | 3 (dependencies) | ✅ **All fixed** (`qs` override; vitest upgraded to v5 in root + server) |
 | Low | 2 (code hygiene: CSV formula injection, `rel` attributes) | ✅ **Fixed** |
+
+**Final state: `npm audit` reports 0 vulnerabilities in both the root project and `server/`.**
 
 ---
 
@@ -28,12 +30,12 @@ The codebase is in **good security shape overall** — clearly hardened by prior
 | `browserslist` ≤4.28.6 | **High** (dev) | Unbounded memory growth / prototype write via untrusted stats (GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g) → patched |
 | `baseline-browser-mapping` <2.11.0 | Moderate (dev) | DoS on invalid input (GHSA-w5vr-8v7q-w6rv) → patched |
 
-### Remaining (dev/test only — not shipped to production)
+### Also fixed (previously "remaining")
 
-| Package | Severity | Issue | Notes |
+| Package | Severity | Issue | Resolution |
 |---|---|---|---|
-| `vitest` / `@vitest/mocker` 2.1.0–4.1.10 | Moderate | Path traversal / arbitrary file read via redirect mock (GHSA-82fw-gwwq-j7x9) | Only exploitable when running the Vitest **browser-mode dev server** locally. Fix requires vitest 5 (breaking). Recommend upgrading when convenient. |
-| ~~`server/`: `qs`~~ | Moderate | Prototype pollution range in express transitive dep | ✅ **Fixed** — pinned to ≥6.16.0 via `overrides` in `server/package.json`; server tests pass. Redeploy the gateway to pick it up. |
+| `vitest` / `@vitest/mocker` 2.1.0–4.1.10 | Moderate (dev) | Path traversal / arbitrary file read via redirect mock (GHSA-82fw-gwwq-j7x9) | ✅ **Fixed** — upgraded to vitest 5.0.0 in both root and `server/`; all suites pass unchanged (331 + 5 tests). |
+| `server/`: `qs` | Moderate | Prototype pollution range in express transitive dep | ✅ **Fixed** — pinned to ≥6.16.0 via `overrides` in `server/package.json`; server tests pass. Redeploy the gateway to pick it up. |
 
 ---
 
@@ -89,6 +91,9 @@ The codebase is in **good security shape overall** — clearly hardened by prior
 4. `src/pages/CapitalPage.tsx`, `src/pages/AuditLogPage.tsx`, `src/services/dataImportService.ts` — CSV exports now route through the guarded builder.
 5. 4 components upgraded to explicit `rel="noopener noreferrer"` on `target="_blank"` links.
 
-**Verification:** `tsc -b` clean, ESLint clean (2 pre-existing unrelated warnings), full test suite **40 files / 331 tests passing**.
+6. Upgraded `vitest` to v5.0.0 in root and `server/`, clearing the last dev-only advisories.
+7. Lint hygiene: excluded generated `artifacts/**` from ESLint; removed a stale disable directive in `BaseRepository.ts`. ESLint is now fully clean (0 errors, 0 warnings).
 
-Remaining open item: dev-only `vitest` moderate advisory (root + server) — requires a major-version upgrade to vitest 5; recommended as separate maintenance work.
+**Verification:** full `npm run verify` (typecheck + lint + test + build) passes end-to-end. Frontend: **40 files / 331 tests**; server: **5/5 tests**. `npm audit`: **0 vulnerabilities anywhere**.
+
+No open security items remain.
