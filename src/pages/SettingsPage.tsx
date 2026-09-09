@@ -1431,7 +1431,7 @@ export function TeamMembersTab({ businessId }: { businessId: string }) {
                     <a
                       href={generatedLink}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="flex items-center justify-center rounded-lg border border-gray-200 px-3 py-1.5 hover:bg-gray-50"
                     >
                       <ExternalLink className="h-3.5 w-3.5 text-gray-600" />
