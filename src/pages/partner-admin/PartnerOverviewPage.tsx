@@ -96,7 +96,7 @@ export function PartnerOverviewPage() {
               href={`https://${partner.custom_domain ?? `${partner.slug}.${PLATFORM_ROOT_DOMAIN}`}`}
               className="hover:text-slate-800"
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
             >
               {partner.custom_domain ?? `${partner.slug}.${PLATFORM_ROOT_DOMAIN}`}
             </a>

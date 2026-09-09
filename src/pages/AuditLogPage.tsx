@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
 import { pushAuditChainWarning, pushAuditVerified } from '@/lib/notifications';
+import { buildCsv } from '@/lib/csv';
 import type { AuditLogEntry, ChainVerificationResult } from '@/dal/repositories/AuditLogRepository';
 
 const auditRepo = new AuditLogRepository(supabase);
@@ -423,10 +424,11 @@ export function AuditLogPage() {
         e.entry_hash ?? '',
         e.prev_hash ?? '',
         chain ? (chain.chain_valid ? 'VALID' : 'TAMPERED') : '',
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(',');
+      ];
     });
 
-    const csv = [headers.join(','), ...rows].join('\n');
+    // buildCsv guards against CSV formula injection (cells starting with =, +, @, …)
+    const csv = buildCsv(headers, rows);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

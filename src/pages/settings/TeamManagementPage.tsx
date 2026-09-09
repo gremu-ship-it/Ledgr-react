@@ -500,7 +500,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
                 <a
                   href={generatedLink}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="flex items-center justify-center rounded-lg border border-gray-200 px-3 py-2 hover:bg-gray-50"
                 >
                   <ExternalLink className="h-3 w-3 text-gray-600" />
