@@ -165,9 +165,9 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         if (created) {
           try {
             const allocations: ExpenseAccountAllocation[] = [{ accountId: resolvedAccountId, amount: netAmount, description: desc }];
-            const journalEntryId = await createExpenseJournalEntry(businessId, created, allocations, vatAmount, branchId || null, departmentId || null);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+            // createExpenseJournalEntry already links journal_entry_id on the
+            // expense row — no duplicate update needed.
+            await createExpenseJournalEntry(businessId, created, allocations, vatAmount, branchId || null, departmentId || null);
             if (selectedProduct && selectedProduct.track_inventory) {
               try {
                 const locations = await repos.inventory.findLocations(businessId);

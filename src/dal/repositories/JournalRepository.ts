@@ -142,6 +142,29 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
    * @throws {NotFoundError} If no entry with the given id exists.
    */
   async post(id: string, postedBy: string | null): Promise<Row<'journal_entries'>> {
+    // PERF fast path: a single conditional UPDATE enforces the draft→posted
+    // transition atomically. The previous implementation read the row first
+    // and then updated it — two sequential round trips on every transaction
+    // save (invoice, expense, payroll, COGS posting).
+    const { data, error } = await this.client
+      .from('journal_entries')
+      .update({
+        status: 'posted',
+        posted_by: postedBy,
+        posted_at: new Date().toISOString(),
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- known columns on journal_entries
+      .eq('id' as any, id)
+      .eq('status', 'draft')
+      .select('*')
+      .maybeSingle();
+
+    if (error) throw toRepositoryError('journal_entries', error);
+    if (data) return data as Row<'journal_entries'>;
+
+    // Nothing matched: the entry is missing/unreadable, not in draft, or was
+    // concurrently posted. Fall back to the read-based path for a precise
+    // error (rare — one extra round trip only on the failure path).
     const current = await this.findById(id);
 
     // FIX: guard against posting a non-draft entry
@@ -153,11 +176,12 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
       );
     }
 
-    return this.update(id, {
-      status: 'posted',
-      posted_by: postedBy,
-      posted_at: new Date().toISOString(),
-    });
+    // Readable and still 'draft' here means a concurrent writer posted it
+    // between our conditional update and this read (or the write was denied).
+    throw new ValidationError(
+      'journal_entries',
+      `Cannot post journal entry ${id}: it was just posted by another session. Refresh to see its current status.`,
+    );
   }
 
   /**

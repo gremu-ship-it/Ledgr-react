@@ -72,8 +72,7 @@ async function syncItem(item: QueueItem): Promise<string> {
         nextInvoice = { ...nextInvoice, invoice_number: realNumber };
       }
       if (!nextInvoice.contact_id || nextInvoice.contact_id === 'offline_walk_in_customer') {
-        const contacts = await repos.contact.findByBusiness(item.businessId, 'customer');
-        const walkIn = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
+        const walkIn = await repos.contact.findDefaultSaleContact(item.businessId);
         if (walkIn) {
           nextInvoice = { ...nextInvoice, contact_id: walkIn.id };
         }
@@ -163,7 +162,9 @@ async function syncItem(item: QueueItem): Promise<string> {
           description: l.description || '',
         }));
         if (allocations.length > 0) {
-          const journalEntryId = await createExpenseJournalEntry(
+          // createExpenseJournalEntry already links journal_entry_id on the
+          // expense row — no duplicate update needed.
+          await createExpenseJournalEntry(
             item.businessId,
             result.expense,
             allocations,
@@ -171,8 +172,6 @@ async function syncItem(item: QueueItem): Promise<string> {
             result.expense.branch_id,
             result.expense.department_id,
           );
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- update exposed on repo
-          await (repos.expense as any).update(result.expense.id, { journal_entry_id: journalEntryId });
         }
       }, { operation: 'expense_journal_entry', businessId: item.businessId });
       return result.expense.id;

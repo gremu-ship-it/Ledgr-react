@@ -19,6 +19,26 @@ export class AccountRepository extends BaseRepository<'accounts'> {
   }
 
   /**
+   * First active bank account (asset) — the quick-income entry only ever
+   * needed this one row but used to fetch the entire chart of accounts to
+   * find it.
+   */
+  async findFirstBankAccount(businessId: string): Promise<Row<'accounts'> | null> {
+    const { data, error } = await this.client
+      .from('accounts').select('*')
+      .eq('business_id', businessId)
+      .eq('account_type', 'asset')
+      .eq('is_bank_account', true)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('code', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw toRepositoryError('accounts', error);
+    return data ?? null;
+  }
+
+  /**
    * FIX [is_active filter]: Added is_active=true filter to match
    * findPostingAccounts behaviour. Inactive accounts should not be
    * returned for general use — they remain in the DB for historical

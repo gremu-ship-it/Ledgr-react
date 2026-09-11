@@ -102,7 +102,31 @@ async function addStockForBranchPurchase(
   const linesWithProducts = purchaseLines.filter((l) => l.productId && l.quantity > 0);
   if (linesWithProducts.length === 0) return;
 
-  const locations = await repos.inventory.findLocations(businessId);
+  // PERF: locations and the tracked-product flags are independent — fetch
+  // them in one parallel batch. Product rows come down in a single targeted
+  // `.in()` query instead of one sequential query per line.
+  const productIds = [...new Set(linesWithProducts.map((l) => l.productId))];
+  const [locations, products] = await Promise.all([
+    repos.inventory.findLocations(businessId),
+    // Never block the purchase on a stock-lookup failure — skip the movements
+    // (the warehouse reconciliation panel will surface the variance).
+    repos.inventory.db
+      .from('products')
+      .select('id, track_inventory')
+      .in('id', productIds)
+      .then(
+        (r) => {
+          if (r.error) {
+            log.warn('Could not load products for stock movement — stock not adjusted', { reference, error: r.error.message });
+            return [] as { id: string; track_inventory: boolean }[];
+          }
+          return (r.data as { id: string; track_inventory: boolean }[]) ?? [];
+        },
+        () => [] as { id: string; track_inventory: boolean }[],
+      ),
+  ]);
+  const trackedProductIds = new Set(products.filter((p) => p.track_inventory).map((p) => p.id));
+
   // Try branch location first if branchId is provided, otherwise fall back to default warehouse or primary location
   let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
   if (!targetLocation) {
@@ -116,14 +140,7 @@ async function addStockForBranchPurchase(
 
   const movements = [];
   for (const line of linesWithProducts) {
-    const product = await repos.inventory.db
-      .from('products')
-      .select('track_inventory')
-      .eq('id', line.productId)
-      .maybeSingle()
-      .then((r) => r.data);
-
-    if (product && product.track_inventory) {
+    if (trackedProductIds.has(line.productId)) {
       movements.push({
         business_id: businessId,
         product_id: line.productId,
@@ -513,7 +530,10 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               amount:      netAmount,
               description: values.description,
             }];
-            const journalEntryId = await createExpenseJournalEntry(
+            // createExpenseJournalEntry already links journal_entry_id on
+            // the expense row — the extra update here duplicated that write
+            // (one more round trip) on every quick expense.
+            await createExpenseJournalEntry(
               businessId,
               created,
               allocations,
@@ -521,7 +541,6 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               values.branch_id || null,
               values.department_id || null,
             );
-            await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
             await addStockForBranchPurchase(
               businessId,
@@ -932,7 +951,9 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         const allocations: ExpenseAccountAllocation[] = Array.from(allocationMap.entries())
           .map(([accountId, amount]) => ({ accountId, amount }));
 
-        const journalEntryId = await createExpenseJournalEntry(
+        // createExpenseJournalEntry already links journal_entry_id on the
+        // expense row — no duplicate update needed here.
+        await createExpenseJournalEntry(
           businessId,
           created,
           allocations,
@@ -940,7 +961,6 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           form.branch_id || null,
           form.department_id || null,
         );
-        await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
         // NEW: add stock for every line that has a product selected.
         await addStockForBranchPurchase(

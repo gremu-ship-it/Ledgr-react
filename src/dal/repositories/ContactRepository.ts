@@ -27,6 +27,33 @@ export class ContactRepository extends BaseRepository<'contacts'> {
     return data ?? [];
   }
 
+  /**
+   * Default contact for quick income entry: the seeded "Walk-in Customer"
+   * when present, else the first active customer by name — same resolution
+   * the quick-entry form always used, but as a targeted single-row lookup
+   * instead of fetching the whole contact list on every sale.
+   */
+  async findDefaultSaleContact(businessId: string): Promise<Row<'contacts'> | null> {
+    const base = () =>
+      this.client
+        .from('contacts')
+        .select('*')
+        .eq('business_id', businessId)
+        .eq('contact_type', 'customer')
+        .eq('is_active', true)
+        .is('deleted_at', null)
+        .order('name', { ascending: true })
+        .limit(1);
+
+    const { data: walkIn, error: walkInError } = await base().eq('name', 'Walk-in Customer').maybeSingle();
+    if (walkInError) throw toRepositoryError('contacts', walkInError);
+    if (walkIn) return walkIn;
+
+    const { data: first, error: firstError } = await base().maybeSingle();
+    if (firstError) throw toRepositoryError('contacts', firstError);
+    return first ?? null;
+  }
+
   async createContact(payload: InsertDto<'contacts'>): Promise<Row<'contacts'>> {
     const { data, error } = await this.client
       .from('contacts')

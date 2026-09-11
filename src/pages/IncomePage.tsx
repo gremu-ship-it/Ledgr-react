@@ -305,28 +305,31 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       if (!values.description.trim()) throw new Error('Description is required');
       const qty = parseFloat(values.quantity) || 1;
 
-      const contacts = await repos.contact.findByBusiness(businessId, 'customer');
-      const walkIn   = contacts.find((c) => c.name === 'Walk-in Customer') ?? contacts[0];
+      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
+      const originalCurrency = values.currency || functionalCurrency;
+      const manualRate = values.exchange_rate ? parseFloat(values.exchange_rate) : null;
+
+      // PERF: walk-in contact, FX rate and the AR/bank account are
+      // independent lookups — resolve them in a single parallel batch.
+      // (Previously: three sequential round trips, two of which fetched
+      // the full contacts / chart-of-accounts tables on every sale.)
+      const [walkIn, rate, arAccount] = await Promise.all([
+        repos.contact.findDefaultSaleContact(businessId),
+        resolveTransactionRate({
+          businessId,
+          originalCurrency,
+          functionalCurrency,
+          date: values.issue_date,
+          manualRate,
+        }),
+        repos.account.findFirstBankAccount(businessId),
+      ]);
       if (!walkIn) {
         throw new Error(
           'No customer contacts found. Please add a "Walk-in Customer" contact first, or use the Invoice Builder.',
         );
       }
-
-      const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
-      const originalCurrency = values.currency || functionalCurrency;
-      const manualRate = values.exchange_rate ? parseFloat(values.exchange_rate) : null;
-      const rate = await resolveTransactionRate({
-        businessId,
-        originalCurrency,
-        functionalCurrency,
-        date: values.issue_date,
-        manualRate,
-      });
       const functionalAmount = amount * rate.rate;
-
-      const accounts      = await repos.account.findByBusiness(businessId);
-      const arAccount     = accounts.find((a) => a.account_type === 'asset' && a.is_bank_account);
 
       // Resolve product's sales account if a product is selected
       const selectedProduct = values.product_id

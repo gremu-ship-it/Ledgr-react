@@ -72,13 +72,19 @@ export async function nextEntryNumber(businessId: string): Promise<string> {
     log.warn('next_journal_entry_number RPC threw — using timestamp fallback', { businessId, error: err instanceof Error ? err.message : String(err) });
   }
   const now   = new Date();
+  // Millisecond precision + a short random suffix: the fallback must stay
+  // collision-free even when two entry numbers are reserved in parallel
+  // within the same second (the DB-backed RPC path above is atomic and
+  // never collides).
   const stamp =
     `${now.getFullYear()}` +
     `${String(now.getMonth() + 1).padStart(2, '0')}` +
     `${String(now.getDate()).padStart(2, '0')}` +
     `${String(now.getHours()).padStart(2, '0')}` +
     `${String(now.getMinutes()).padStart(2, '0')}` +
-    `${String(now.getSeconds()).padStart(2, '0')}`;
+    `${String(now.getSeconds()).padStart(2, '0')}` +
+    `${String(now.getMilliseconds()).padStart(3, '0')}` +
+    `-${Math.random().toString(36).slice(2, 6)}`;
   return `JNL-${stamp}`;
 }
 
@@ -152,14 +158,19 @@ async function buildFxLines(
 // exchange_rate/functional_amount rather than assuming MWK 1:1.
 
 // ── Usage Limit Guard ───────────────────────────────────────────────────────
+// PERF: the plan lookup and the usage count are independent reads. They used
+// to run back-to-back, adding a second sequential round trip to EVERY
+// transaction save; running them in parallel costs the same as one.
 async function checkUsageLimit(businessId: string): Promise<void> {
-  const business = await repos.business.findById(businessId);
+  const [business, currentUsage] = await Promise.all([
+    repos.business.findById(businessId),
+    usageService.getCurrentMonthUsage(businessId),
+  ]);
   const planTier = normalizePlanTier(business.plan_tier);
   const plan = getPlan(planTier);
 
   if (plan.transactionLimit === null) return; // unlimited
 
-  const currentUsage = await usageService.getCurrentMonthUsage(businessId);
   if (currentUsage >= plan.transactionLimit) {
     throw new Error(`Monthly transaction limit reached (${plan.transactionLimit}). Please upgrade your plan.`);
   }
@@ -179,16 +190,21 @@ export async function createInvoiceJournalEntry(
   const invoiceDate = invoice.issue_date;
   const sourceId = invoice.id;
 
-  const [debtors, defaultRevenue, vatPayable, cash] = await Promise.all([
+  // PERF: every independent read — GL accounts, the plan/usage guard, and
+  // BOTH journal entry numbers (the quick path posts the sale entry and the
+  // cash-receipt entry) — now resolves in a single parallel batch instead of
+  // four-plus sequential round trips.
+  const [debtors, revenue, vatPayable, cash, , entryNumber, entryNumber2] = await Promise.all([
     getAccountByCode(businessId, '1131'),
-    getAccountByCode(businessId, '4112'),
+    invoice.revenue_account_id
+      ? repos.account.findById(invoice.revenue_account_id).catch(() => getAccountByCode(businessId, '4112'))
+      : getAccountByCode(businessId, '4112'),
     getAccountByCode(businessId, '2121'),
     getAccountByCode(businessId, '1110'),
+    checkUsageLimit(businessId),
+    nextEntryNumber(businessId),
+    nextEntryNumber(businessId),
   ]);
-
-  const revenue = invoice.revenue_account_id
-    ? await repos.account.findById(invoice.revenue_account_id).catch(() => defaultRevenue)
-    : defaultRevenue;
 
   const currency        = invoice.original_currency ?? invoice.currency;
   const exchangeRate     = Number(invoice.exchange_rate);
@@ -199,10 +215,6 @@ export async function createInvoiceJournalEntry(
   const grossFunctional  = grossSubtotal * exchangeRate;
   const subtotalFunctional = subtotal * exchangeRate;
   const vatFunctional    = vatAmount * exchangeRate;
-
-  await checkUsageLimit(businessId);
-
-  const entryNumber = await nextEntryNumber(businessId);
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
 
@@ -299,95 +311,92 @@ export async function createInvoiceJournalEntry(
     });
   }
 
-  const { entry } = await repos.journal.createBalancedEntry(
+  // PERF: the sale entry and the auto-receipt entry are independent journal
+  // entries — create both in one parallel batch, then post both in parallel.
+  // Previously this was strictly sequential: create → post → link → webhook
+  // (awaited!) → sleep(100) → create → post → webhook (awaited!).
+  const entry1Dto: Parameters<typeof repos.journal.createBalancedEntry>[0] = {
+    business_id:   businessId,
+    entry_number:  entryNumber,
+    entry_date:    invoiceDate,
+    description:   `Invoice ${invoiceNumber}`,
+    source_type:   'invoice',
+    source_id:     sourceId,
+    currency,
+    exchange_rate: exchangeRate,
+    status:        'draft',
+    branch_id:     branchId ?? null,
+    department_id: departmentId ?? null,
+  };
+
+  const entry2Dto: Parameters<typeof repos.journal.createBalancedEntry>[0] = {
+    business_id:   businessId,
+    entry_number:  entryNumber2,
+    entry_date:    invoiceDate,
+    description:   `Receipt for Invoice ${invoiceNumber}`,
+    source_type:   'invoice',
+    source_id:     sourceId,
+    currency,
+    exchange_rate: exchangeRate,
+    status:        'draft',
+    branch_id:     branchId ?? null,
+    department_id: departmentId ?? null,
+  };
+
+  const entry2Lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [
     {
-      business_id:   businessId,
-      entry_number:  entryNumber,
-      entry_date:    invoiceDate,
-      description:   `Invoice ${invoiceNumber}`,
-      source_type:   'invoice',
-      source_id:     sourceId,
+      line_number:   1,
+      account_id:    cash.id,
+      description:   `Cash received — Invoice ${invoiceNumber}`,
+      is_debit:      true,
+      amount:        Number(invoice.total_amount),
+      amount_base:   totalFunctional,
       currency,
       exchange_rate: exchangeRate,
-      status:        'draft',
-      branch_id:     branchId ?? null,
-      department_id: departmentId ?? null,
+      tax_code:      'none',
+      tax_amount:    0,
+      reconciled:    false,
     },
-    lines,
-  );
-
-  await repos.journal.post(entry.id, null);
-  await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
-
-  // Record usage
-  await usageService.recordTransaction(businessId, 'journal');
-
-  // Trigger webhook
-  try {
-    await webhookService.triggerWebhooks(businessId, 'invoice.created', {
-      invoice_id: sourceId,
-      invoice_number: invoiceNumber,
-      total_amount: invoice.total_amount,
-    });
-  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
-
-  const entryNumber2 = await nextEntryNumber(businessId);
-  await new Promise((r) => setTimeout(r, 100));
-
-  const { entry: entry2 } = await repos.journal.createBalancedEntry(
     {
-      business_id:   businessId,
-      entry_number:  entryNumber2,
-      entry_date:    invoiceDate,
-      description:   `Receipt for Invoice ${invoiceNumber}`,
-      source_type:   'invoice',
-      source_id:     sourceId,
+      line_number:   2,
+      account_id:    debtors.id,
+      description:   `Settle debtor — Invoice ${invoiceNumber}`,
+      is_debit:      false,
+      amount:        Number(invoice.total_amount),
+      amount_base:   totalFunctional,
       currency,
       exchange_rate: exchangeRate,
-      status:        'draft',
-      branch_id:     branchId ?? null,
-      department_id: departmentId ?? null,
+      tax_code:      'none',
+      tax_amount:    0,
+      reconciled:    false,
     },
-    [
-      {
-        line_number:   1,
-        account_id:    cash.id,
-        description:   `Cash received — Invoice ${invoiceNumber}`,
-        is_debit:      true,
-        amount:        Number(invoice.total_amount),
-        amount_base:   totalFunctional,
-        currency,
-        exchange_rate: exchangeRate,
-        tax_code:      'none',
-        tax_amount:    0,
-        reconciled:    false,
-      },
-      {
-        line_number:   2,
-        account_id:    debtors.id,
-        description:   `Settle debtor — Invoice ${invoiceNumber}`,
-        is_debit:      false,
-        amount:        Number(invoice.total_amount),
-        amount_base:   totalFunctional,
-        currency,
-        exchange_rate: exchangeRate,
-        tax_code:      'none',
-        tax_amount:    0,
-        reconciled:    false,
-      },
-    ],
-  );
+  ];
 
-  await repos.journal.post(entry2.id, null);
+  const [{ entry }, { entry: entry2 }] = await Promise.all([
+    repos.journal.createBalancedEntry(entry1Dto, lines),
+    repos.journal.createBalancedEntry(entry2Dto, entry2Lines),
+  ]);
 
-  // Trigger webhook for paid invoice
-  try {
-    await webhookService.triggerWebhooks(businessId, 'invoice.paid', {
-      invoice_id: sourceId,
-      invoice_number: invoiceNumber,
-      total_amount: invoice.total_amount,
-    });
-  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
+  await Promise.all([
+    repos.journal.post(entry.id, null),
+    repos.journal.post(entry2.id, null),
+    repos.invoice.update(sourceId, { journal_entry_id: entry.id }),
+  ]);
+
+  // PERF: webhook dispatch goes through a Supabase Edge Function — awaiting
+  // it held the transaction open for the whole round trip (worse on cold
+  // starts). Failures were always non-blocking, so fire and forget.
+  void webhookService.triggerWebhooks(businessId, 'invoice.created', {
+    invoice_id: sourceId,
+    invoice_number: invoiceNumber,
+    total_amount: invoice.total_amount,
+  }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
+
+  void webhookService.triggerWebhooks(businessId, 'invoice.paid', {
+    invoice_id: sourceId,
+    invoice_number: invoiceNumber,
+    total_amount: invoice.total_amount,
+  }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
 }
 
 // ── Invoice-Builder: Receivable Entry (draft creation, no cash line) ─────────
@@ -400,10 +409,11 @@ export async function createInvoiceReceivableEntry(
   branchId?: string | null,
   departmentId?: string | null,
 ): Promise<string> {
-  const [debtors, revenue, vatPayable] = await Promise.all([
+  const [debtors, revenue, vatPayable, entryNumber] = await Promise.all([
     getAccountByCode(businessId, '1131'),
     getAccountByCode(businessId, '4112'),
     getAccountByCode(businessId, '2121'),
+    nextEntryNumber(businessId),
   ]);
 
   const currency       = invoice.original_currency ?? invoice.currency;
@@ -417,8 +427,6 @@ export async function createInvoiceReceivableEntry(
   const subtotalFunctional = subtotal * exchangeRate;
   const vatAmount       = Number(invoice.vat_amount);
   const vatFunctional   = vatAmount * exchangeRate;
-
-  const entryNumber = await nextEntryNumber(businessId);
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [
     {
@@ -545,11 +553,12 @@ export async function createInvoiceSettlementEntry(
   branchId?: string | null,
   departmentId?: string | null,
 ): Promise<string> {
-  const [debtors, cash] = await Promise.all([
+  const [debtors, cash, entryNumber] = await Promise.all([
     getAccountByCode(businessId, '1131'),
     payment.bank_account_id
       ? repos.account.findById(payment.bank_account_id)
       : getAccountByCode(businessId, '1110'),
+    nextEntryNumber(businessId),
   ]);
 
   const paymentCurrency   = payment.original_currency ?? payment.currency;
@@ -561,8 +570,6 @@ export async function createInvoiceSettlementEntry(
 
   const direction = 'receivable' as const;
   const realisedGainLoss = calculateRealisedFx(settledOriginal, bookedRate, settlementRate, direction);
-
-  const entryNumber = await nextEntryNumber(businessId);
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [
     {
@@ -657,22 +664,24 @@ export async function createExpenseJournalEntry(
     );
   }
 
-  await checkUsageLimit(businessId);
+  // PERF: usage guard, GL account lookups and the entry-number RPC are all
+  // independent reads — resolve them in one parallel batch (used to be three
+  // sequential steps on every expense save).
+  const [vatReceivable, creditors, cash, entryNumber] = await Promise.all([
+    vatAmount > 0 ? getAccountByCode(businessId, '1135') : Promise.resolve(null),
+    getAccountByCode(businessId, '2111'),
+    getAccountByCode(businessId, '1110'),
+    nextEntryNumber(businessId),
+    checkUsageLimit(businessId),
+  ]);
 
   const currency      = expense.original_currency ?? expense.currency;
   const exchangeRate   = Number(expense.exchange_rate);
   const discountFunctional = discountAmount * exchangeRate;
   const vatFunctional  = vatAmount * exchangeRate;
 
-  const [vatReceivable, creditors, cash] = await Promise.all([
-    vatAmount > 0 ? getAccountByCode(businessId, '1135') : Promise.resolve(null),
-    getAccountByCode(businessId, '2111'),
-    getAccountByCode(businessId, '1110'),
-  ]);
-
   const isBill        = expense.expense_type === 'bill';
   const creditAccount = isBill ? creditors : cash;
-  const entryNumber   = await nextEntryNumber(businessId);
   const totalFunctional = Number(expense.functional_amount ?? totalAmount);
 
   // For gross disclosure, compute gross allocations proportionally from net
@@ -791,14 +800,13 @@ export async function createExpenseJournalEntry(
   await repos.journal.post(entry.id, null);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
 
-  // Trigger webhook
-  try {
-    await webhookService.triggerWebhooks(businessId, 'expense.created', {
-      expense_id: expense.id,
-      expense_number: expense.expense_number,
-      total_amount: expense.total_amount,
-    });
-  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
+  // PERF: fire-and-forget — dispatch runs through an Edge Function and used
+  // to be awaited on the critical save path.
+  void webhookService.triggerWebhooks(businessId, 'expense.created', {
+    expense_id: expense.id,
+    expense_number: expense.expense_number,
+    total_amount: expense.total_amount,
+  }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
 
   return entry.id;
 }
@@ -816,11 +824,12 @@ export async function createExpenseSettlementEntry(
   branchId?: string | null,
   departmentId?: string | null,
 ): Promise<string> {
-  const [creditors, cash] = await Promise.all([
+  const [creditors, cash, entryNumber] = await Promise.all([
     getAccountByCode(businessId, '2111'),
     payment.bank_account_id
       ? repos.account.findById(payment.bank_account_id)
       : getAccountByCode(businessId, '1110'),
+    nextEntryNumber(businessId),
   ]);
 
   const paymentCurrency = payment.original_currency ?? payment.currency;
@@ -832,8 +841,6 @@ export async function createExpenseSettlementEntry(
 
   const direction = 'payable' as const;
   const realisedGainLoss = calculateRealisedFx(settledOriginal, bookedRate, settlementRate, direction);
-
-  const entryNumber = await nextEntryNumber(businessId);
 
   const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [
     {
@@ -905,13 +912,12 @@ export async function createPayrollJournalEntry(
   totalNet: number,
   sourceId: string,
 ): Promise<void> {
-  const [salariesExp, payePayable, salariesPayable] = await Promise.all([
+  const [salariesExp, payePayable, salariesPayable, entryNumber] = await Promise.all([
     getAccountByCode(businessId, '6110'),
     getAccountByCode(businessId, '2122'),
     getAccountByCode(businessId, '2131'),
+    nextEntryNumber(businessId),
   ]);
-
-  const entryNumber = await nextEntryNumber(businessId);
 
   const { entry } = await repos.journal.createBalancedEntry(
     {
@@ -970,13 +976,11 @@ export async function createPayrollJournalEntry(
 
   await repos.journal.post(entry.id, null);
 
-  // Trigger webhook
-  try {
-    await webhookService.triggerWebhooks(businessId, 'payroll.run', {
-      payroll_run_id: sourceId,
-      run_number: runNumber,
-      total_gross: totalGross,
-      total_net: totalNet,
-    });
-  } catch (e) { log.warn('Webhook failed (non-blocking)', { error: e }); }
+  // PERF: fire-and-forget (was awaited on the payroll save path).
+  void webhookService.triggerWebhooks(businessId, 'payroll.run', {
+    payroll_run_id: sourceId,
+    run_number: runNumber,
+    total_gross: totalGross,
+    total_net: totalNet,
+  }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
 }

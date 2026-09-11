@@ -61,6 +61,7 @@
 
 import { repos } from '@/lib/repositories';
 import { fetchAllRows } from '@/lib/paginateQuery';
+import { toRepositoryError } from '@/dal/errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('InventoryJournalService');
@@ -368,7 +369,11 @@ export async function postCogsForSale(
   try {
     if (costLines.length === 0) return null;
 
-    const products = await loadProducts(businessId, costLines.map((l) => l.productId));
+    // PERF: product rows and the functional currency are independent reads.
+    const [products, currency] = await Promise.all([
+      loadProducts(businessId, costLines.map((l) => l.productId)),
+      functionalCurrencyFor(businessId),
+    ]);
     const accountsByProduct = await buildProductAccountMap(businessId, products);
 
     const { debitsByAccount, creditsByAccount, total, skippedProductIds } =
@@ -384,9 +389,9 @@ export async function postCogsForSale(
 
     if (total < TOLERANCE) return null;
 
-    // Always the business's functional currency: average_cost is stored in
-    // MWK regardless of the currency the invoice was raised in.
-    const currency = await functionalCurrencyFor(businessId);
+    // `currency` was resolved above (always the business's functional
+    // currency: average_cost is stored in MWK regardless of the currency
+    // the invoice was raised in).
     const lines: JournalLineInput[] = [];
     let lineNumber = 1;
 
@@ -476,19 +481,26 @@ export async function deductStockAndPostCogs(
 
     const costLines: SaleCostLine[] = [];
     const movements = [];
-    for (const line of linesWithProducts) {
-      const product = await repos.inventory.db
-        .from('products')
-        .select('track_inventory')
-        .eq('id', line.productId)
-        .maybeSingle()
-        .then((r) => r.data);
+    // PERF: one targeted query for all product rows and all stock balances in
+    // parallel. This used to be two sequential round trips PER sale line
+    // (product row, then its balance), one line at a time.
+    const productIds = [...new Set(linesWithProducts.map((l) => l.productId))];
+    const [products, balances] = await Promise.all([
+      loadProducts(businessId, productIds),
+      Promise.all(
+        linesWithProducts.map((l) => repos.inventory.findBalance(businessId, l.productId, targetLocation.id)),
+      ),
+    ]);
+    const productById = new Map(products.map((p) => [p.id, p]));
+
+    for (const [i, line] of linesWithProducts.entries()) {
+      const product = productById.get(line.productId);
 
       if (!product || !product.track_inventory) {
         continue;
       }
 
-      const balance = await repos.inventory.findBalance(businessId, line.productId, targetLocation.id);
+      const balance = balances[i];
       const unitCost = balance ? Number(balance.average_cost) : 0;
       costLines.push({ productId: line.productId, quantity: line.quantity, unitCost });
       movements.push({
@@ -891,9 +903,15 @@ export async function postInventoryReconciliationAdjustment(
 async function loadProducts(businessId: string, productIds: string[]): Promise<Row<'products'>[]> {
   const distinct = [...new Set(productIds.filter(Boolean))];
   if (distinct.length === 0) return [];
-  const all = await repos.inventory.findAllProducts(businessId);
-  const wanted = new Set(distinct);
-  return all.filter((p) => wanted.has(p.id));
+  // PERF: targeted `.in()` fetch of just the products involved. This used to
+  // pull the business's ENTIRE product catalog and filter client-side.
+  const { data, error } = await repos.inventory.db
+    .from('products')
+    .select('*')
+    .eq('business_id', businessId)
+    .in('id', distinct);
+  if (error) throw toRepositoryError('products', error);
+  return (data ?? []) as Row<'products'>[];
 }
 
 async function buildProductAccountMap(
@@ -901,11 +919,12 @@ async function buildProductAccountMap(
   products: Row<'products'>[],
 ): Promise<Map<string, { inventoryAccountId: string; cogsAccountId: string }>> {
   const map = new Map<string, { inventoryAccountId: string; cogsAccountId: string }>();
-  for (const product of products) {
+  // PERF: products resolve independently — resolve them in parallel.
+  await Promise.all(products.map(async (product) => {
     // Only inventory-tracked products carry a balance-sheet cost to release.
     // A non-tracked product was already expensed when it was bought, so
     // posting COGS again here would double count it.
-    if (!product.track_inventory) continue;
+    if (!product.track_inventory) return;
     const [inventoryAccount, cogsAccount] = await Promise.all([
       resolveInventoryAccount(businessId, product),
       resolveCogsAccount(businessId, product),
@@ -914,6 +933,6 @@ async function buildProductAccountMap(
       inventoryAccountId: inventoryAccount.id,
       cogsAccountId: cogsAccount.id,
     });
-  }
+  }));
   return map;
 }
