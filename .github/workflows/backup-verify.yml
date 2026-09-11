@@ -164,8 +164,19 @@ jobs:
           # `link` discovers the current, project-specific IPv4 session pooler
           # and writes an uncredentialed URL to supabase/.temp/pooler-url.
           # This is the same supported credential path used by deploy.yml.
+          # Retried: fresh runners occasionally hit a transient Management
+          # API / DNS blip here (same class of flake deploy.yml retries).
           echo "::add-mask::$db_password"
-          supabase link --project-ref "$project_ref" --password "$db_password"
+          attempt=1
+          until supabase link --project-ref "$project_ref" --password "$db_password"; do
+            if (( attempt >= 3 )); then
+              echo "::error::supabase link failed after 3 attempts for ${TARGET_ENV}."
+              exit 1
+            fi
+            echo "supabase link failed (attempt $attempt/3) — retrying in $((attempt * 15))s ..."
+            sleep $((attempt * 15))
+            attempt=$((attempt + 1))
+          done
 
           pooler_url_file=supabase/.temp/pooler-url
           test -s "$pooler_url_file" || {
