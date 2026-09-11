@@ -198,6 +198,40 @@ caught. Check the mapping before re-running:
 If any configured ref points at an abandoned/paused project (e.g. an unused
 auto-created one), update the GitHub variable to the correct project's ref.
 
+#### `failed to connect to postgres ... timeout: context deadline exceeded`
+
+If `supabase link` succeeds ("Finished supabase link") but `supabase db push`
+fails with:
+
+```
+Connecting to remote database...
+failed to connect to postgres: failed to connect to `host=....pooler.supabase.com ...`: failed to receive message (timeout: context deadline exceeded)
+```
+
+…the CLI reached the Management API (so the access token and project ref are
+fine) but could not open a database connection through the pooler. In order of
+likelihood:
+
+1. **The project is unresponsive.** The database is up but not accepting
+   pooled connections — this is also how a Supabase-side incident surfaces
+   (e.g. the "Unresponsive Projects" incident of 2026-09-10/11, during which
+   Supabase's own guidance was to restart still-affected projects). Fix:
+   Supabase dashboard → the project → **General settings → Restart project**,
+   wait for it to report healthy, then re-run the workflow.
+2. **The project is paused.** Same symptom, different cause — see the previous
+   section. `deploy.yml` now checks the project status before linking and
+   fails fast with a "project is PAUSED" error in this case.
+3. **A transient pooler/network blip** between the GitHub runner and Supabase.
+   `deploy.yml` now retries `link` and `db push` (3 attempts with backoff;
+   the final `db push` attempt runs with `--debug`), so one-off blips go
+   green on their own. Both steps are idempotent, so retrying is safe.
+4. **Database network restrictions or a disabled pooler.** In the Supabase
+   dashboard → Database → Network restrictions / Pooler, confirm the pooler
+   is enabled and GitHub Actions runner traffic is allowed.
+
+Before re-running, glance at https://status.supabase.com — if an incident is
+open, restarting the project (step 1) is still the fastest path back to green.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to

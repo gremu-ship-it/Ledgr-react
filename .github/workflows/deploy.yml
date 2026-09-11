@@ -132,9 +132,10 @@ jobs:
           fi
           echo "Supabase deployment credentials for ${SUPABASE_ENV_LABEL} are configured."
       - name: Link & migrate staging database
-        run: |
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+        shell: bash
+        # Retries link + push (transient pooler timeouts) and fails fast with an
+        # actionable error when the project is paused/unresponsive. See script.
+        run: bash scripts/ci/supabase-link-and-push.sh
       - name: Set Edge Function secrets (staging)
         run: |
           supabase secrets set \
