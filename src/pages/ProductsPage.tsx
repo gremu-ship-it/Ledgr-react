@@ -174,7 +174,10 @@ function ProductModal({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       setAlert({ type: 'success', message: existing ? 'Product updated.' : 'Product added.' });
-      setTimeout(onClose, 1000);
+      // Brief success flash, but close promptly — the save itself is a single
+      // insert, so holding the modal for a full second made recording a
+      // product feel much slower than it is.
+      setTimeout(onClose, 400);
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
   });

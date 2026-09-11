@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, ShoppingCart, Building2, Users2 } from 'lucide-react';
 import { MwkNumberPad } from './MwkNumberPad';
@@ -11,6 +11,12 @@ import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService'
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
+import { webhookService } from '@/services/webhook/WebhookService';
+import {
+  saveQuickExpenseViaRpc,
+  isMissingFunctionError,
+  newSaveClientKey,
+} from '@/services/quickSaveService';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 
 const log = createLogger('QuickExpenseMobile');
@@ -109,6 +115,8 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       .slice(0, 30);
   }, [products, productSearchQuery]);
 
+  const saveClientKeyRef = useRef(newSaveClientKey());
+
   const mutation = useMutation({
     mutationFn: async () => {
       if (!selectedAccount) throw new Error('Please select an expense account.');
@@ -159,15 +167,50 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         return { offline: true };
       }
 
+      // ── FAST PATH: atomic single-round-trip RPC ─────────────────────────
+      try {
+        const payload = buildPayload('PENDING');
+        const { expense_number: _reservedByRpc, ...expenseCore } = payload.expense;
+        void _reservedByRpc;
+        const result = await saveQuickExpenseViaRpc({
+          business_id: businessId,
+          client_key: saveClientKeyRef.current,
+          expense: expenseCore as unknown as Record<string, unknown>,
+          lines: payload.lines as unknown as Record<string, unknown>[],
+          allocations: [{ account_id: resolvedAccountId, amount: netAmount, description: desc }],
+          vat_amount: vatAmount,
+          stock_lines:
+            selectedProduct?.id
+              ? [{ product_id: selectedProduct.id, quantity: 1, unit_cost: netAmount }]
+              : [],
+        });
+        void webhookService.triggerWebhooks(businessId, 'expense.created', {
+          expense_id: result.id,
+          expense_number: result.number,
+          total_amount: rawAmount,
+        }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
+        return { offline: false, expense_number: result.number };
+      } catch (rpcErr) {
+        if (!isMissingFunctionError(rpcErr)) {
+          log.error('Quick-expense RPC failed (nothing was saved)', rpcErr as Error, { businessId });
+          throw new Error(
+            `${(rpcErr as Error)?.message ?? 'The expense could not be saved.'} ` +
+            `Nothing was saved — it is safe to try again.`,
+            { cause: rpcErr },
+          );
+        }
+        log.info('save_quick_expense unavailable — using legacy save path');
+      }
+
       try {
         const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
         const { expense: created } = await repos.expense.createWithLines(buildPayload(expenseNumber).expense, buildPayload(expenseNumber).lines);
         if (created) {
           try {
             const allocations: ExpenseAccountAllocation[] = [{ accountId: resolvedAccountId, amount: netAmount, description: desc }];
-            const journalEntryId = await createExpenseJournalEntry(businessId, created, allocations, vatAmount, branchId || null, departmentId || null);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (repos.expense as any).update(created.id, { journal_entry_id: journalEntryId });
+            // createExpenseJournalEntry already links journal_entry_id on the
+            // expense row — no duplicate update needed.
+            await createExpenseJournalEntry(businessId, created, allocations, vatAmount, branchId || null, departmentId || null);
             if (selectedProduct && selectedProduct.track_inventory) {
               try {
                 const locations = await repos.inventory.findLocations(businessId);
@@ -210,6 +253,7 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
       }
     },
     onSuccess: () => {
+      saveClientKeyRef.current = newSaveClientKey();
       invalidateAfterExpense(queryClient, { touchedInventory: Boolean(selectedProduct?.track_inventory) });
       setStep('success');
       setTimeout(() => handleClose(), 1500);

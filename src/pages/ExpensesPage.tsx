@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye } from 'lucide-react';
@@ -21,6 +21,12 @@ import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 import { createLogger } from '@/lib/logger';
+import { webhookService } from '@/services/webhook/WebhookService';
+import {
+  saveQuickExpenseViaRpc,
+  isMissingFunctionError,
+  newSaveClientKey,
+} from '@/services/quickSaveService';
 
 const log = createLogger('ExpensesPage');
 
@@ -102,7 +108,31 @@ async function addStockForBranchPurchase(
   const linesWithProducts = purchaseLines.filter((l) => l.productId && l.quantity > 0);
   if (linesWithProducts.length === 0) return;
 
-  const locations = await repos.inventory.findLocations(businessId);
+  // PERF: locations and the tracked-product flags are independent — fetch
+  // them in one parallel batch. Product rows come down in a single targeted
+  // `.in()` query instead of one sequential query per line.
+  const productIds = [...new Set(linesWithProducts.map((l) => l.productId))];
+  const [locations, products] = await Promise.all([
+    repos.inventory.findLocations(businessId),
+    // Never block the purchase on a stock-lookup failure — skip the movements
+    // (the warehouse reconciliation panel will surface the variance).
+    repos.inventory.db
+      .from('products')
+      .select('id, track_inventory')
+      .in('id', productIds)
+      .then(
+        (r) => {
+          if (r.error) {
+            log.warn('Could not load products for stock movement — stock not adjusted', { reference, error: r.error.message });
+            return [] as { id: string; track_inventory: boolean }[];
+          }
+          return (r.data as { id: string; track_inventory: boolean }[]) ?? [];
+        },
+        () => [] as { id: string; track_inventory: boolean }[],
+      ),
+  ]);
+  const trackedProductIds = new Set(products.filter((p) => p.track_inventory).map((p) => p.id));
+
   // Try branch location first if branchId is provided, otherwise fall back to default warehouse or primary location
   let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
   if (!targetLocation) {
@@ -116,14 +146,7 @@ async function addStockForBranchPurchase(
 
   const movements = [];
   for (const line of linesWithProducts) {
-    const product = await repos.inventory.db
-      .from('products')
-      .select('track_inventory')
-      .eq('id', line.productId)
-      .maybeSingle()
-      .then((r) => r.data);
-
-    if (product && product.track_inventory) {
+    if (trackedProductIds.has(line.productId)) {
       movements.push({
         business_id: businessId,
         product_id: line.productId,
@@ -410,6 +433,10 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
     product_id: '', branch_id: '', department_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // Idempotency key for the atomic RPC save: kept across manual retries of a
+  // failed save (a lost-response commit returns the existing document instead
+  // of duplicating it), rotated after success.
+  const saveClientKeyRef = useRef(newSaveClientKey());
 
   const mutation = useMutation({
     mutationFn: async (values: QuickExpenseForm) => {
@@ -497,6 +524,55 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         return { offline: true, expense_number: offlineNum, touchedInventory: false };
       }
 
+      // ── FAST PATH: atomic single-round-trip RPC ─────────────────────────
+      // Document + journal + stock movements commit together or not at all.
+      // Only a missing migration falls back to the legacy chain below; every
+      // other error is a real failure where NOTHING was saved.
+      try {
+        const payload = buildPayload('PENDING');
+        const { expense_number: _reservedByRpc, ...expenseCore } = payload.expense;
+        void _reservedByRpc;
+        const result = await saveQuickExpenseViaRpc({
+          business_id: businessId,
+          client_key: saveClientKeyRef.current,
+          expense: expenseCore as unknown as Record<string, unknown>,
+          lines: payload.lines as unknown as Record<string, unknown>[],
+          allocations: [{
+            account_id: resolvedAccountId,
+            amount: netAmount,
+            description: values.description,
+          }],
+          vat_amount: vatAmount,
+          stock_lines:
+            values.product_id && qty > 0
+              ? [{ product_id: values.product_id, quantity: qty, unit_cost: netAmount / qty }]
+              : [],
+        });
+        // Fire-and-forget, same as the legacy path's webhook dispatch.
+        void webhookService.triggerWebhooks(businessId, 'expense.created', {
+          expense_id: result.id,
+          expense_number: result.number,
+          total_amount: totalAmount,
+        }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
+        return {
+          offline: false,
+          expense_number: result.number,
+          touchedInventory: Boolean(selectedProduct?.track_inventory),
+        };
+      } catch (rpcErr) {
+        if (!isMissingFunctionError(rpcErr)) {
+          log.error('Quick-expense RPC failed (nothing was saved)', rpcErr as Error, { businessId });
+          throw new Error(
+            `${(rpcErr as Error)?.message ?? 'The expense could not be saved.'} ` +
+            `Nothing was saved — it is safe to try again.`,
+            { cause: rpcErr },
+          );
+        }
+        // Migration 20260911000001 not applied on this environment yet —
+        // fall through to the legacy multi-request path.
+        log.info('save_quick_expense unavailable — using legacy save path');
+      }
+
       try {
         const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
         // Use the row createWithLines returns rather than refetching every
@@ -513,7 +589,10 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               amount:      netAmount,
               description: values.description,
             }];
-            const journalEntryId = await createExpenseJournalEntry(
+            // createExpenseJournalEntry already links journal_entry_id on
+            // the expense row — the extra update here duplicated that write
+            // (one more round trip) on every quick expense.
+            await createExpenseJournalEntry(
               businessId,
               created,
               allocations,
@@ -521,7 +600,6 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
               values.branch_id || null,
               values.department_id || null,
             );
-            await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
             await addStockForBranchPurchase(
               businessId,
@@ -555,6 +633,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       }
     },
     onSuccess: (result) => {
+      saveClientKeyRef.current = newSaveClientKey();
       setAlert({ type: 'success', message: 'Expense recorded and posted successfully.' });
       setForm({
         expense_date: today(), description: '', amount: '', account_id: '',
@@ -932,7 +1011,9 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
         const allocations: ExpenseAccountAllocation[] = Array.from(allocationMap.entries())
           .map(([accountId, amount]) => ({ accountId, amount }));
 
-        const journalEntryId = await createExpenseJournalEntry(
+        // createExpenseJournalEntry already links journal_entry_id on the
+        // expense row — no duplicate update needed here.
+        await createExpenseJournalEntry(
           businessId,
           created,
           allocations,
@@ -940,7 +1021,6 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           form.branch_id || null,
           form.department_id || null,
         );
-        await repos.expense.update(created.id, { journal_entry_id: journalEntryId });
 
         // NEW: add stock for every line that has a product selected.
         await addStockForBranchPurchase(

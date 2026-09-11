@@ -173,7 +173,14 @@ describe('PayrollRepository approval & TPR pension account linking', () => {
             }),
           }),
           update: () => ({
+            // Chainable eq filters (JournalRepository.post applies
+            // .eq('id', …).eq('status', 'draft') in one conditional update).
             eq: () => ({
+              eq: () => ({
+                select: () => ({
+                  maybeSingle: async () => ({ data: { ...mockEntry, status: 'posted' }, error: null }),
+                }),
+              }),
               select: () => ({
                 maybeSingle: async () => ({ data: { ...mockEntry, status: 'posted' }, error: null }),
               }),
@@ -407,7 +414,14 @@ describe('TaxReturnRepository auto-fallback', () => {
             }),
           }),
           update: () => ({
+            // Chainable eq filters (JournalRepository.post applies
+            // .eq('id', …).eq('status', 'draft') in one conditional update).
             eq: () => ({
+              eq: () => ({
+                select: () => ({
+                  maybeSingle: async () => ({ data: { ...mockEntry, status: 'posted' }, error: null }),
+                }),
+              }),
               select: () => ({
                 maybeSingle: async () => ({ data: { ...mockEntry, status: 'posted' }, error: null }),
               }),
