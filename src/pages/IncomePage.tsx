@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle, Eye, CreditCard } from 'lucide-react';
@@ -14,6 +14,12 @@ import { CurrencySelector } from '@/components/CurrencySelector';
 import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
+import { webhookService } from '@/services/webhook/WebhookService';
+import {
+  saveQuickSaleViaRpc,
+  isMissingFunctionError,
+  newSaveClientKey,
+} from '@/services/quickSaveService';
 import { createLogger } from '@/lib/logger';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
@@ -297,6 +303,9 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
     reference: '', notes: '', product_id: '', branch_id: '', department_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // Idempotency key for the atomic RPC save: kept across retries of one
+  // logical save, rotated on success.
+  const saveClientKeyRef = useRef(newSaveClientKey());
 
   const mutation = useMutation({
     mutationFn: async (values: QuickEntryForm) => {
@@ -389,6 +398,56 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         return { offline: true, invoice_number: offlineNum, touchedInventory: false };
       }
 
+      // ── FAST PATH: atomic single-round-trip RPC ─────────────────────────
+      // Invoice + revenue entry + receipt entry + stock release + COGS all
+      // commit together or not at all. Only a missing migration falls back
+      // to the legacy chain below; any other error means NOTHING was saved.
+      try {
+        const payload = buildPayload('PENDING', walkIn.id);
+        const { invoice_number: _reservedByRpc, ...invoiceCore } = payload.invoice;
+        void _reservedByRpc;
+        const result = await saveQuickSaleViaRpc({
+          business_id: businessId,
+          client_key: saveClientKeyRef.current,
+          invoice: invoiceCore as unknown as Record<string, unknown>,
+          lines: payload.lines as unknown as Record<string, unknown>[],
+          subtotal: amount,
+          vat_amount: 0,
+          stock_lines:
+            values.product_id && qty > 0
+              ? [{ product_id: values.product_id, quantity: qty }]
+              : [],
+        });
+        // Fire-and-forget, same events as the legacy journal service.
+        void webhookService.triggerWebhooks(businessId, 'invoice.created', {
+          invoice_id: result.id,
+          invoice_number: result.number,
+          total_amount: amount,
+        }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
+        void webhookService.triggerWebhooks(businessId, 'invoice.paid', {
+          invoice_id: result.id,
+          invoice_number: result.number,
+          total_amount: amount,
+        }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
+        return {
+          offline: false,
+          invoice_number: result.number,
+          touchedInventory: Boolean(selectedProduct?.track_inventory),
+        };
+      } catch (rpcErr) {
+        if (!isMissingFunctionError(rpcErr)) {
+          log.error('Quick-sale RPC failed (nothing was saved)', { error: rpcErr });
+          throw new Error(
+            `${(rpcErr as Error)?.message ?? 'The income could not be saved.'} ` +
+            `Nothing was saved — it is safe to try again.`,
+            { cause: rpcErr },
+          );
+        }
+        // Migration 20260911000001 not applied on this environment yet —
+        // fall through to the legacy multi-request path.
+        log.info('save_quick_sale unavailable — using legacy save path');
+      }
+
       try {
         const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId);
         // Use the row createWithLines returns rather than refetching every
@@ -439,6 +498,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       }
     },
     onSuccess: (result) => {
+      saveClientKeyRef.current = newSaveClientKey();
       setAlert({ type: 'success', message: 'Income recorded successfully.' });
       setForm({
         issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',

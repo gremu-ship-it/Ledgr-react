@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye } from 'lucide-react';
@@ -21,6 +21,12 @@ import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 import { createLogger } from '@/lib/logger';
+import { webhookService } from '@/services/webhook/WebhookService';
+import {
+  saveQuickExpenseViaRpc,
+  isMissingFunctionError,
+  newSaveClientKey,
+} from '@/services/quickSaveService';
 
 const log = createLogger('ExpensesPage');
 
@@ -427,6 +433,10 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
     product_id: '', branch_id: '', department_id: '', quantity: '1',
   });
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // Idempotency key for the atomic RPC save: kept across manual retries of a
+  // failed save (a lost-response commit returns the existing document instead
+  // of duplicating it), rotated after success.
+  const saveClientKeyRef = useRef(newSaveClientKey());
 
   const mutation = useMutation({
     mutationFn: async (values: QuickExpenseForm) => {
@@ -514,6 +524,55 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         return { offline: true, expense_number: offlineNum, touchedInventory: false };
       }
 
+      // ── FAST PATH: atomic single-round-trip RPC ─────────────────────────
+      // Document + journal + stock movements commit together or not at all.
+      // Only a missing migration falls back to the legacy chain below; every
+      // other error is a real failure where NOTHING was saved.
+      try {
+        const payload = buildPayload('PENDING');
+        const { expense_number: _reservedByRpc, ...expenseCore } = payload.expense;
+        void _reservedByRpc;
+        const result = await saveQuickExpenseViaRpc({
+          business_id: businessId,
+          client_key: saveClientKeyRef.current,
+          expense: expenseCore as unknown as Record<string, unknown>,
+          lines: payload.lines as unknown as Record<string, unknown>[],
+          allocations: [{
+            account_id: resolvedAccountId,
+            amount: netAmount,
+            description: values.description,
+          }],
+          vat_amount: vatAmount,
+          stock_lines:
+            values.product_id && qty > 0
+              ? [{ product_id: values.product_id, quantity: qty, unit_cost: netAmount / qty }]
+              : [],
+        });
+        // Fire-and-forget, same as the legacy path's webhook dispatch.
+        void webhookService.triggerWebhooks(businessId, 'expense.created', {
+          expense_id: result.id,
+          expense_number: result.number,
+          total_amount: totalAmount,
+        }).catch((e) => { log.warn('Webhook failed (non-blocking)', { error: e }); });
+        return {
+          offline: false,
+          expense_number: result.number,
+          touchedInventory: Boolean(selectedProduct?.track_inventory),
+        };
+      } catch (rpcErr) {
+        if (!isMissingFunctionError(rpcErr)) {
+          log.error('Quick-expense RPC failed (nothing was saved)', rpcErr as Error, { businessId });
+          throw new Error(
+            `${(rpcErr as Error)?.message ?? 'The expense could not be saved.'} ` +
+            `Nothing was saved — it is safe to try again.`,
+            { cause: rpcErr },
+          );
+        }
+        // Migration 20260911000001 not applied on this environment yet —
+        // fall through to the legacy multi-request path.
+        log.info('save_quick_expense unavailable — using legacy save path');
+      }
+
       try {
         const expenseNumber = await repos.business.reserveNextExpenseNumber(businessId);
         // Use the row createWithLines returns rather than refetching every
@@ -574,6 +633,7 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
       }
     },
     onSuccess: (result) => {
+      saveClientKeyRef.current = newSaveClientKey();
       setAlert({ type: 'success', message: 'Expense recorded and posted successfully.' });
       setForm({
         expense_date: today(), description: '', amount: '', account_id: '',

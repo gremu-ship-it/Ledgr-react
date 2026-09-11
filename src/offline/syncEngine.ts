@@ -29,6 +29,15 @@ import {
   deductStockAndPostCogs,
   resolveExpenseLineAccountId,
 } from '@/services/inventoryJournalService';
+import {
+  saveQuickExpenseViaRpc,
+  saveQuickSaleViaRpc,
+  isMissingFunctionError,
+  newSaveClientKey,
+  type QuickExpenseRpcPayload,
+  type QuickSaleRpcPayload,
+} from '@/services/quickSaveService';
+import { createLogger } from '@/lib/logger';
 import { offlineDB, type QueueItem } from './db';
 import type {
   IncomeQueuePayload,
@@ -39,6 +48,8 @@ import type {
   PayrollRunQueuePayload,
   StockMovementQueuePayload,
 } from './payloads';
+
+const log = createLogger('SyncEngine');
 
 export interface SyncProgress {
   total: number;
@@ -66,7 +77,73 @@ async function syncItem(item: QueueItem): Promise<string> {
     case 'income':
     case 'invoice': {
       const { invoice, lines } = item.payload as IncomeQueuePayload | InvoiceQueuePayload;
-      let nextInvoice = { ...invoice };
+      const baseInvoice = { ...invoice };
+
+      // ── FAST PATH: atomic RPC for quick income (plain paid invoice) ────
+      // Same guarantees as the online quick entry: one round trip, all-or-
+      // nothing, idempotent on the queue item's client_key. The RPC reserves
+      // the real document number itself, so this must run BEFORE the legacy
+      // reservation below (otherwise each sync burns two numbers).
+      // Discounts, VAT or builder-style drafts fall back to the legacy path.
+      if (item.operationType === 'income') {
+        const inv = baseInvoice as unknown as Record<string, unknown>;
+        const vatAmount = Number(inv.vat_amount ?? 0);
+        const discountAmount = Number(inv.discount_amount ?? 0);
+        const needsContact =
+          !inv.contact_id || inv.contact_id === 'offline_walk_in_customer';
+        const isOfflineNumbered =
+          typeof inv.invoice_number === 'string' && inv.invoice_number.startsWith('INV-OFFLINE-');
+        if (vatAmount <= 0.005 && discountAmount <= 0.005 && inv.status === 'paid') {
+          try {
+            let nextInvoice = baseInvoice;
+            if (needsContact) {
+              const walkIn = await repos.contact.findDefaultSaleContact(item.businessId);
+              if (!walkIn) {
+                throw new Error(
+                  'No customer contacts found. Please add a "Walk-in Customer" contact first.',
+                );
+              }
+              nextInvoice = { ...nextInvoice, contact_id: walkIn.id };
+            }
+            // Strip the offline placeholder — the RPC reserves the real one.
+            if (isOfflineNumbered) {
+              const { invoice_number: _drop, ...rest } = nextInvoice as Record<string, unknown>;
+              void _drop;
+              nextInvoice = rest as typeof nextInvoice;
+            }
+            const rpcLines = (lines as unknown as Record<string, unknown>[]).map((l) => {
+              const { line_id: _localId, ...rest } = l as Record<string, unknown>;
+              void _localId;
+              return rest;
+            });
+            const stockLines = rpcLines
+              .filter((l) => l.product_id && Number(l.quantity) > 0)
+              .map((l) => ({
+                product_id: l.product_id as string,
+                quantity: Number(l.quantity),
+              }));
+            const rpcResult = await saveQuickSaleViaRpc({
+              business_id: item.businessId,
+              client_key: item.clientKey ?? newSaveClientKey(),
+              invoice: nextInvoice as unknown as Record<string, unknown>,
+              lines: rpcLines,
+              subtotal: Number((nextInvoice as unknown as Record<string, unknown>).subtotal),
+              vat_amount: 0,
+              stock_lines: stockLines,
+            } satisfies QuickSaleRpcPayload);
+            return rpcResult.id;
+          } catch (rpcErr) {
+            if (!isMissingFunctionError(rpcErr)) {
+              // Atomic failure — nothing was committed; the item stays
+              // queued and the client_key makes the retry idempotent.
+              throw rpcErr;
+            }
+            log.info('save_quick_sale unavailable — legacy income sync');
+          }
+        }
+      }
+
+      let nextInvoice = baseInvoice;
       if (nextInvoice.invoice_number && nextInvoice.invoice_number.startsWith('INV-OFFLINE-')) {
         const realNumber = await repos.business.reserveNextInvoiceNumber(item.businessId);
         nextInvoice = { ...nextInvoice, invoice_number: realNumber };
@@ -123,7 +200,60 @@ async function syncItem(item: QueueItem): Promise<string> {
 
     case 'expense': {
       const { expense, lines } = item.payload as ExpenseQueuePayload;
-      let nextExpense = { ...expense };
+      const baseExpense = { ...expense };
+
+      // ── FAST PATH: atomic RPC — one round trip for document + journal +
+      // stock movements (the legacy path below never recorded stock for
+      // offline expenses; the RPC does, so offline and online converge).
+      // The RPC reserves the real document number itself, so this runs
+      // BEFORE the legacy reservation to avoid burning two numbers.
+      {
+        const exp = baseExpense as unknown as Record<string, unknown>;
+        const isOfflineNumbered =
+          typeof exp.expense_number === 'string' && exp.expense_number.startsWith('EXP-OFFLINE-');
+        try {
+          let nextExpense = baseExpense;
+          if (isOfflineNumbered) {
+            const { expense_number: _drop, ...rest } = nextExpense as Record<string, unknown>;
+            void _drop;
+            nextExpense = rest as typeof nextExpense;
+          }
+          const allocations = (lines as unknown as Record<string, unknown>[]).map((l) => ({
+            account_id: l.account_id as string,
+            amount: Number(
+              (l as { line_subtotal?: number }).line_subtotal ??
+                (Number(l.line_total) - Number((l as { tax_amount?: number }).tax_amount ?? 0)),
+            ),
+            description: (l.description as string) || '',
+          }));
+          const stockLines = (lines as unknown as Record<string, unknown>[])
+            .filter((l) => l.product_id && Number(l.quantity) > 0)
+            .map((l) => ({
+              product_id: l.product_id as string,
+              quantity: Number(l.quantity),
+              unit_cost: Number(l.unit_price ?? 0),
+            }));
+          const rpcResult = await saveQuickExpenseViaRpc({
+            business_id: item.businessId,
+            client_key: item.clientKey ?? newSaveClientKey(),
+            expense: nextExpense as unknown as Record<string, unknown>,
+            lines: lines as unknown as Record<string, unknown>[],
+            allocations,
+            vat_amount: Number(exp.vat_amount ?? 0),
+            stock_lines: stockLines,
+          } satisfies QuickExpenseRpcPayload);
+          return rpcResult.id;
+        } catch (rpcErr) {
+          if (!isMissingFunctionError(rpcErr)) {
+            // Atomic failure — nothing was committed; the item stays queued
+            // and the client_key makes the retry idempotent.
+            throw rpcErr;
+          }
+          log.info('save_quick_expense unavailable — legacy expense sync');
+        }
+      }
+
+      let nextExpense = baseExpense;
       if (nextExpense.expense_number && nextExpense.expense_number.startsWith('EXP-OFFLINE-')) {
         const realNumber = await repos.business.reserveNextExpenseNumber(item.businessId);
         nextExpense = { ...nextExpense, expense_number: realNumber };

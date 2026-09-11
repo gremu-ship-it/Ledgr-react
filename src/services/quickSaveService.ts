@@ -1,0 +1,120 @@
+import { supabase } from '@/lib/supabase';
+
+/**
+ * quickSaveService — single-round-trip transaction saves.
+ *
+ * The quick-entry forms used to run the whole save as 8–25 sequential
+ * Supabase round trips (reserve number → header → lines → usage → journal →
+ * post → link → stock movements). On a Lilongwe→Ireland link (~110 ms RTT)
+ * that is seconds of wall time. These wrappers call the atomic Postgres RPCs
+ * (supabase/migrations/20260911000001_quick_save_rpc.sql) which perform the
+ * entire save — document, journal posting, link and stock movements — in ONE
+ * transaction, or nothing at all.
+ *
+ * DESIGN CONTRACT (see the migration header for the SQL side):
+ *   - Policy inputs (FX rate, VAT math, account resolution, amounts) are
+ *     computed by the caller exactly as before. The RPC is an executor.
+ *   - client_key makes retries safe: a save that committed but whose response
+ *     was lost returns the already-committed document (idempotent: true)
+ *     instead of creating a duplicate. Callers should keep the same key
+ *     across manual retries of one logical save and rotate it on success.
+ *   - Only a MISSING FUNCTION (migration not yet applied) falls back to the
+ *     legacy path. Any other error is a real failure — nothing was saved —
+ *     and must surface to the user, never silently downgrade.
+ */
+
+
+export interface QuickSaveResult {
+  id: string;
+  number: string;
+  journal_entry_id: string | null;
+  receipt_entry_id?: string | null;
+  cogs_entry_id?: string | null;
+  idempotent: boolean;
+}
+
+export interface QuickExpenseRpcPayload {
+  business_id: string;
+  client_key: string;
+  /** Insert shape of the expense, WITHOUT expense_number (RPC reserves it). */
+  expense: Record<string, unknown>;
+  lines: Record<string, unknown>[];
+  /** [{ account_id, amount, description }] — net, original currency. */
+  allocations: { account_id: string; amount: number; description?: string }[];
+  vat_amount: number;
+  /** [{ product_id, quantity, unit_cost }] — purchases to receive. */
+  stock_lines: { product_id: string; quantity: number; unit_cost: number }[];
+}
+
+export interface QuickSaleRpcPayload {
+  business_id: string;
+  client_key: string;
+  /** Insert shape of the invoice, WITHOUT invoice_number (RPC reserves it). */
+  invoice: Record<string, unknown>;
+  lines: Record<string, unknown>[];
+  subtotal: number;
+  vat_amount: number;
+  /** [{ product_id, quantity }] — unit cost is read server-side. */
+  stock_lines: { product_id: string; quantity: number }[];
+}
+
+/**
+ * True only when the RPC does not exist yet (migration pending on this
+ * environment — e.g. preview DBs built before 20260911000001). Distinguishes
+ * PostgREST's function-not-found (404 / PGRST202) from every real failure.
+ */
+export function isMissingFunctionError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const e = err as { code?: string; message?: string; status?: number };
+  if (e.code === 'PGRST202' || e.code === '404' || e.status === 404) return true;
+  return /could not find the function|function .* does not exist|schema cache/i.test(e.message ?? '');
+}
+
+type RpcClient = {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { code?: string; message: string; details?: unknown; hint?: unknown } | null }>;
+};
+
+async function callRpc(fn: string, args: Record<string, unknown>): Promise<QuickSaveResult> {
+  // The generated Database type predates these functions; the runtime result
+  // is validated below rather than trusted from a cast.
+  const client = supabase as unknown as RpcClient;
+  const { data, error } = await client.rpc(fn, args);
+  if (error) throw error;
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    typeof (data as QuickSaveResult).id !== 'string' ||
+    typeof (data as QuickSaveResult).number !== 'string'
+  ) {
+    throw new Error(`${fn} returned an unexpected response`);
+  }
+  return data as QuickSaveResult;
+}
+
+export function saveQuickExpenseViaRpc(payload: QuickExpenseRpcPayload): Promise<QuickSaveResult> {
+  return callRpc('save_quick_expense', { p_payload: payload });
+}
+
+export function saveQuickSaleViaRpc(payload: QuickSaleRpcPayload): Promise<QuickSaveResult> {
+  return callRpc('save_quick_sale', { p_payload: payload });
+}
+
+/**
+ * Fresh idempotency key for one logical save. Rotate on success; keep the
+ * same key when retrying a failed save so a lost-response commit cannot
+ * duplicate.
+ */
+export function newSaveClientKey(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+  // Non-secure contexts (http LAN previews): uuid-v4-shaped fallback.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
