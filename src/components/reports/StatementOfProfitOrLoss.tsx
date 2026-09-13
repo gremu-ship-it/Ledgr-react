@@ -127,6 +127,7 @@ export function StatementOfProfitOrLoss({
     queryFn: () => financialStatementRepo.getProfitOrLoss(
       businessId, periodStart, periodEnd, comparativePeriodStart, comparativePeriodEnd,
     ),
+    staleTime: 5 * 60_000,
     enabled: Boolean(businessId && periodStart && periodEnd),
   });
 

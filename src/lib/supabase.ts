@@ -41,21 +41,66 @@ const resolvedKey = supabaseAnonKey || 'placeholder-anon-key';
 
 // Phase 10.4: bound every Supabase HTTP request so a hung network cannot
 // hang the UI indefinitely. 30s is generous for normal queries and still
-// short enough to fail visibly.
-const REQUEST_TIMEOUT_MS = 30_000;
+// short enough to fail visibly. Quick-save RPCs that write documents plus
+// multiple journal entries can legitimately run longer on a cold Postgres,
+// so write operations that take an explicit AbortSignal get a longer budget
+// (see REQUEST_TIMEOUT_MS_WRITE below).
+export const REQUEST_TIMEOUT_MS = 30_000;
+export const REQUEST_TIMEOUT_MS_WRITE = 60_000;
 
 function fetchWithTimeout(
   input: RequestInfo | URL,
   init?: RequestInit,
 ): Promise<Response> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  // Heuristic: POST/PUT/PATCH/DELETE writes get a longer timeout budget so
+  // an RPC that does a multi-statement transaction on a cold DB doesn't
+  // trip the abort right as it's finishing. Reads keep the tighter budget.
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const isWrite = method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+  const timeoutMs = isWrite ? REQUEST_TIMEOUT_MS_WRITE : REQUEST_TIMEOUT_MS;
+  const timeoutReason = new DOMException(
+    `Request timed out after ${timeoutMs / 1000}s`,
+    'TimeoutError',
+  );
+  const timer = setTimeout(() => controller.abort(timeoutReason), timeoutMs);
   const signal = init?.signal;
   if (signal) {
-    if (signal.aborted) controller.abort();
-    else signal.addEventListener('abort', () => controller.abort(), { once: true });
+    if (signal.aborted) {
+      // Propagate the caller's reason verbatim so e.g. a React Query
+      // cancel shows its own message, not our timeout text.
+      controller.abort((signal as AbortSignal).reason);
+    } else {
+      signal.addEventListener(
+        'abort',
+        () => controller.abort((signal as AbortSignal).reason),
+        { once: true },
+      );
+    }
   }
   return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
+/**
+ * True when an error was caused by the user (or browser) cancelling an
+ * in-flight request, or by our own request timeout, rather than a real
+ * server-side failure. These cases have an important semantic property:
+ * we CANNOT tell whether the server committed the write, so the caller
+ * MUST surface a retry-safe message and must NOT claim "nothing was saved".
+ * Quick-save RPCs use an idempotency client_key precisely so that retrying
+ * in this state cannot create duplicates.
+ */
+export function isAbortError(err: unknown): boolean {
+  if (!err) return false;
+  if ((err as { name?: string }).name === 'AbortError') return true;
+  if ((err as { name?: string }).name === 'TimeoutError') return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    /signal is aborted/i.test(msg) ||
+    /timed out/i.test(msg) ||
+    /user aborted/i.test(msg) ||
+    /The operation was aborted/i.test(msg)
+  );
 }
 
 export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {

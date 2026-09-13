@@ -94,8 +94,18 @@ export function invalidateAfterSync(queryClient: QueryClient): void {
 
 function invalidateKeys(queryClient: QueryClient, keys: string[]): void {
   for (const key of keys) {
-    // Not awaited: invalidation marks queries stale synchronously, and the
-    // refetches it triggers should not block the success animation.
-    void queryClient.invalidateQueries({ queryKey: [key] });
+    // RESET infinite-list queries (expenses, invoices, contacts) back to
+    // page 1 so the next render fetches fresh first-page data including
+    // the just-saved row. A plain invalidateQueries() on an infinite query
+    // only marks each existing page stale and re-fetches them all in
+    // parallel — which is (a) wasteful for pages 2+ the user may never
+    // return to, and (b) leaves the new row missing from page 1 until
+    // every page resolves because the newly saved row has the newest date
+    // and belongs on page 1 only. Resetting drops accumulated pages and
+    // triggers a clean first-page fetch.
+    //
+    // For non-infinite queries (totals, usage, ledger reports) reset is
+    // equivalent to a refetch of the single cached entry — no downside.
+    void queryClient.resetQueries({ queryKey: [key] });
   }
 }

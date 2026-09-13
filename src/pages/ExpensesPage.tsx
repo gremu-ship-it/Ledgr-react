@@ -5,6 +5,7 @@ import { Plus, Receipt, Zap, Trash2, AlertCircle, CheckCircle, RefreshCw, Eye } 
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useInfiniteKeysetList } from '@/hooks/useInfiniteKeysetList';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -22,6 +23,7 @@ import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueA
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 import { createLogger } from '@/lib/logger';
 import { webhookService } from '@/services/webhook/WebhookService';
+import { isAbortError } from '@/lib/supabase';
 import {
   saveQuickExpenseViaRpc,
   isMissingFunctionError,
@@ -561,6 +563,30 @@ function QuickExpenseTab({ businessId, onSuccess }: { businessId: string; onSucc
         };
       } catch (rpcErr) {
         if (!isMissingFunctionError(rpcErr)) {
+          // IMPORTANT: for abort/timeout/network errors we do NOT know
+          // whether the server committed the transaction. We surface a
+          // retry-safe message because saveClientKeyRef.current is kept
+          // stable across manual retries — if the first attempt did land,
+          // the retry returns the existing document (idempotent) instead
+          // of creating a duplicate. Do NOT claim "nothing was saved" for
+          // these cases.
+          if (isAbortError(rpcErr) || isOfflineError(rpcErr)) {
+            log.warn('Quick-expense RPC aborted/network failure — safe to retry', {
+              businessId,
+              errorMessage: (rpcErr as Error)?.message,
+              errorName: (rpcErr as Error)?.name,
+            });
+            const reason = (rpcErr as Error)?.message?.toLowerCase() ?? '';
+            const timedOut = reason.includes('timed out') || (rpcErr as { name?: string })?.name === 'TimeoutError';
+            throw new Error(
+              timedOut
+                ? `The save took longer than expected and was paused to keep the app responsive. ` +
+                  `It is safe to press Record Expense again — we will not create a duplicate.`
+                : `The request was interrupted (network change or slow connection). ` +
+                  `It is safe to try again — we will not create a duplicate.`,
+              { cause: rpcErr },
+            );
+          }
           log.error('Quick-expense RPC failed (nothing was saved)', rpcErr as Error, { businessId });
           throw new Error(
             `${(rpcErr as Error)?.message ?? 'The expense could not be saved.'} ` +
@@ -1308,24 +1334,35 @@ function ExpenseList({ businessId }: { businessId: string }) {
   const isMobile = useIsMobile();
   const { thClass, tdClass } = useDensity();
 
+  const {
+    rows: expenses,
+    sentinelRef,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    isError,
+    error,
+  } = useInfiniteKeysetList({
+    queryKey: ['expenses', businessId],
+    businessId,
+    pageSize: 50,
+    fetcher: (bid, opts) => repos.expense.listPage(bid, opts),
+  });
+
+  const retry = useRetryPosting(businessId);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  // Pull-to-refresh resets the infinite query back to page 1 and re-fetches.
   const onRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['expenses', businessId] });
+    await queryClient.resetQueries({ queryKey: ['expenses', businessId] });
   }, [queryClient, businessId]);
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
 
-  const { data: expenses = [], isLoading, isError } = useQuery({
-    queryKey: ['expenses', businessId],
-    queryFn: () => repos.expense.findByBusiness(businessId),
-    enabled: Boolean(businessId),
-  });
-  const retry = useRetryPosting(businessId);
-  const [retryingId, setRetryingId] = useState<string | null>(null);
-
   if (isLoading) return <div className="space-y-3">{[...Array(5)].map((_, i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />)}</div>;
   if (isError) return (
     <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-      <AlertCircle className="h-4 w-4 shrink-0" />Failed to load expenses.
+      <AlertCircle className="h-4 w-4 shrink-0" />Failed to load expenses{(error as Error)?.message ? `: ${(error as Error).message}` : '.'}
     </div>
   );
   if (expenses.length === 0) return (
@@ -1428,6 +1465,18 @@ function ExpenseList({ businessId }: { businessId: string }) {
           )}
         </div>
       )}
+
+      {/* ── Infinite scroll sentinel & status ─────────────────────── */}
+      <div ref={sentinelRef} className="flex items-center justify-center py-6 text-xs text-gray-500" aria-live="polite">
+        {isFetchingNextPage && (
+          <span className="inline-flex items-center gap-2">
+            <RefreshCw className="h-3 w-3 animate-spin" /> Loading more…
+          </span>
+        )}
+        {!isFetchingNextPage && !hasNextPage && expenses.length > 0 && (
+          <span className="text-gray-400">You've reached the end.</span>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,13 +4,20 @@ import { requestBackgroundSync } from './backgroundSync';
 
 /**
  * Determines whether an error occurred because the device is offline or
- * network connectivity failed.
+ * network connectivity failed — including browser-side aborts (tab
+ * backgrounding, network switch, Wi‑Fi toggle) and our own request
+ * timeout. These are all cases where the client cannot tell whether the
+ * server actually committed the write, so callers should either queue
+ * the operation for retry or surface a retry-safe message rather than
+ * declaring "nothing was saved".
  */
 export function isOfflineError(error: unknown): boolean {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return true;
   }
   if (!error) return false;
+  if ((error as { name?: string }).name === 'AbortError') return true;
+  if ((error as { name?: string }).name === 'TimeoutError') return true;
   const msg = error instanceof Error ? error.message : String(error);
   return (
     msg.includes('Failed to fetch') ||
@@ -19,7 +26,10 @@ export function isOfflineError(error: unknown): boolean {
     msg.includes('fetch failed') ||
     msg.includes('offline') ||
     msg.includes('ERR_INTERNET_DISCONNECTED') ||
-    msg.includes('ERR_NETWORK_CHANGED')
+    msg.includes('ERR_NETWORK_CHANGED') ||
+    /signal is aborted/i.test(msg) ||
+    /timed out/i.test(msg) ||
+    /The operation was aborted/i.test(msg)
   );
 }
 

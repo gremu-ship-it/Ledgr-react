@@ -60,7 +60,14 @@ const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '';
 
 // Phase 10.4: bound upstream requests and trip a breaker after repeated
 // failures (see the proxy handler below).
-const UPSTREAM_TIMEOUT_MS = 15_000;
+//
+// NOTE: 15s was too aggressive for the multi-write quick-save RPCs which
+// run a whole document + journal + stock-movement transaction on cold
+// Postgres and can legitimately take 20-40s on a Lilongwe→EU link.
+// Writes (POST/PUT/PATCH/DELETE) get a longer budget; reads keep the
+// tighter 15s budget so hung GETs don't pile up.
+const UPSTREAM_TIMEOUT_MS_READ = 15_000;
+const UPSTREAM_TIMEOUT_MS_WRITE = 75_000;
 const upstreamBreaker = new CircuitBreaker({ failureThreshold: 5, resetTimeoutMs: 30_000 });
 
 const app = express();
@@ -183,12 +190,16 @@ app.use(
       const auth = (req.headers['authorization'] as string) || (req.headers['x-api-key'] as string);
       if (auth && SENTRY_DSN) Sentry.setUser({ id: hashToken(auth) });
 
-      // Phase 10.4: bound the upstream call (15s) and trip a breaker after 5
+      // Phase 10.4: bound the upstream call and trip a breaker after 5
       // consecutive failures so a dead upstream fails fast instead of
-      // hanging every request for the full timeout.
+      // hanging every request for the full timeout. Writes get a longer
+      // budget than reads so a cold-Postgres quick-save RPC doesn't get
+      // timed out by the gateway right as Postgres commits.
+      const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+      const upstreamTimeoutMs = isWrite ? UPSTREAM_TIMEOUT_MS_WRITE : UPSTREAM_TIMEOUT_MS_READ;
       const upstream = await upstreamBreaker.run(async () => {
         const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+        const timer = setTimeout(() => controller.abort(), upstreamTimeoutMs);
         try {
           // The URL was resolved against the configured TARGET_URL and
           // rejected unless its origin matches the target origin exactly

@@ -109,6 +109,7 @@ export function StatementOfFinancialPosition({
   const { data: sofp, isLoading, error } = useQuery({
     queryKey: ['sofp', businessId, asOfDate, comparativeDate],
     queryFn: () => financialStatementRepo.getSOFP(businessId, asOfDate, comparativeDate),
+    staleTime: 5 * 60_000,
     enabled: Boolean(businessId && asOfDate),
   });
 
@@ -119,6 +120,7 @@ export function StatementOfFinancialPosition({
   const { data: integrity } = useQuery({
     queryKey: ['sofp-integrity', businessId, asOfDate],
     queryFn: () => financialStatementRepo.auditStatementIntegrity(businessId, asOfDate),
+    staleTime: 5 * 60_000,
     enabled: Boolean(businessId && asOfDate),
   });
   // Some checks intentionally classify a variance as a warning rather than a
