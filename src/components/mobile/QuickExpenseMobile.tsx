@@ -12,12 +12,50 @@ import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterExpense } from '@/lib/queryInvalidation';
 import { webhookService } from '@/services/webhook/WebhookService';
+import { isAbortError } from '@/lib/supabase';
 import {
   saveQuickExpenseViaRpc,
   isMissingFunctionError,
   newSaveClientKey,
 } from '@/services/quickSaveService';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { useAutoSaveDraft } from '@/hooks/useAutoSaveDraft';
+
+// Draft shape for QuickExpenseMobile. We only persist primitive fields
+// (strings, numbers, booleans) and the id of selected entities — full Row
+// objects aren't serialised because reference data may have changed
+// between sessions. On restore we re-lookup selectedAccount / selectedProduct
+// by id from the freshly-fetched reference arrays.
+interface QuickExpenseDraft {
+  step: 'amount' | 'details' | 'confirm';
+  amount: string;
+  selectedAccountId: string | null;
+  searchQuery: string;
+  description: string;
+  includeVat: boolean;
+  branchId: string;
+  departmentId: string;
+  selectedProductId: string | null;
+  productSearchQuery: string;
+}
+type DraftStep = QuickExpenseDraft['step'];
+
+function isQuickExpenseDraft(v: unknown): v is QuickExpenseDraft {
+  if (!v || typeof v !== 'object') return false;
+  const d = v as Record<string, unknown>;
+  return (
+    typeof d.amount === 'string' &&
+    typeof d.description === 'string' &&
+    typeof d.includeVat === 'boolean' &&
+    typeof d.branchId === 'string' &&
+    typeof d.departmentId === 'string' &&
+    typeof d.searchQuery === 'string' &&
+    typeof d.productSearchQuery === 'string' &&
+    (d.selectedAccountId === null || typeof d.selectedAccountId === 'string') &&
+    (d.selectedProductId === null || typeof d.selectedProductId === 'string') &&
+    ['amount', 'details', 'confirm'].includes(d.step as string)
+  );
+}
 
 const log = createLogger('QuickExpenseMobile');
 
@@ -73,7 +111,49 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
     staleTime: 1000 * 60 * 10,
   });
 
+  // Draft auto-save (sessionStorage, namespaced by businessId). Cleared on
+  // successful submit, explicit close, or logout. Only restores after all
+  // reference data is loaded so we can resolve ids back to Row objects.
+  const { clear: clearDraft, recovered: draftRecovered } = useAutoSaveDraft<QuickExpenseDraft>({
+    formId: 'quick-expense-mobile',
+    businessId,
+    enabled: open && expenseAccounts.length > 0 && products.length > 0 && branches.length > 0 && departments.length > 0,
+    capture: () => ({
+      step: (step === 'success' ? 'confirm' : step) as DraftStep,
+      amount,
+      selectedAccountId: selectedAccount?.id ?? null,
+      searchQuery,
+      description,
+      includeVat,
+      branchId,
+      departmentId,
+      selectedProductId: selectedProduct?.id ?? null,
+      productSearchQuery,
+    }),
+    restore: (d) => {
+      setStep(d.step);
+      setAmount(d.amount);
+      setSearchQuery(d.searchQuery);
+      setDescription(d.description);
+      setIncludeVat(d.includeVat);
+      setBranchId(d.branchId);
+      setDepartmentId(d.departmentId);
+      setProductSearchQuery(d.productSearchQuery);
+      if (d.selectedAccountId) {
+        const acc = expenseAccounts.find((a) => a.id === d.selectedAccountId);
+        if (acc) setSelectedAccount(acc);
+      }
+      if (d.selectedProductId) {
+        const prod = products.find((p) => p.id === d.selectedProductId);
+        if (prod) setSelectedProduct(prod);
+      }
+    },
+    validate: isQuickExpenseDraft,
+    deps: [step, amount, selectedAccount?.id, searchQuery, description, includeVat, branchId, departmentId, selectedProduct?.id, productSearchQuery],
+  });
+
   function reset() {
+    clearDraft();
     setStep('amount');
     setAmount('');
     setSelectedAccount(null);
@@ -192,6 +272,26 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
         return { offline: false, expense_number: result.number };
       } catch (rpcErr) {
         if (!isMissingFunctionError(rpcErr)) {
+          // Abort/timeout/network: we don't know if the server committed
+          // the write, but client_key makes retries idempotent so it is
+          // safe to retry.
+          if (isAbortError(rpcErr) || isOfflineError(rpcErr)) {
+            log.warn('Quick-expense RPC aborted/network failure — safe to retry', {
+              businessId,
+              errorMessage: (rpcErr as Error)?.message,
+              errorName: (rpcErr as Error)?.name,
+            });
+            const reason = (rpcErr as Error)?.message?.toLowerCase() ?? '';
+            const timedOut = reason.includes('timed out') || (rpcErr as { name?: string })?.name === 'TimeoutError';
+            throw new Error(
+              timedOut
+                ? `The save took longer than expected and was paused. ` +
+                  `Tap Record Expense again — we will not create a duplicate.`
+                : `The request was interrupted (network change or slow connection). ` +
+                  `It is safe to try again — we will not create a duplicate.`,
+              { cause: rpcErr },
+            );
+          }
           log.error('Quick-expense RPC failed (nothing was saved)', rpcErr as Error, { businessId });
           throw new Error(
             `${(rpcErr as Error)?.message ?? 'The expense could not be saved.'} ` +
@@ -290,6 +390,11 @@ export function QuickExpenseMobile({ businessId, open, onClose }: QuickExpenseMo
 
       {step === 'amount' && (
         <div className="flex flex-col gap-6">
+          {draftRecovered && (
+            <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+              Recovered your unfinished expense from earlier in this session.
+            </div>
+          )}
           <MwkNumberPad value={amount} onChange={setAmount} />
 
           <div className="flex items-center justify-between rounded-2xl bg-gray-50 px-5 py-4 ring-1 ring-gray-100">

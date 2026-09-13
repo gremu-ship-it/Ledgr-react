@@ -10,12 +10,22 @@ export interface InvoiceWithLines {
   lines: Row<'invoice_lines'>[];
 }
 
+export interface InvoiceListPage {
+  rows: Row<'invoices'>[];
+  nextCursor: { date: string; id: string } | null;
+}
+
 type InvoiceStatus = Row<'invoices'>['status'];
 
 export class InvoiceRepository extends BaseRepository<'invoices'> {
   constructor(client: SupabaseClient<Database>) {
     super(client, 'invoices');
   }
+
+  private static readonly LIST_SELECT =
+    'id, invoice_number, invoice_type, status, issue_date, due_date, currency, ' +
+    'total_amount, amount_paid, amount_due, contact_id, notes, po_number, ar_account_id, ' +
+    'branch_id, department_id, created_at';
 
   /**
    * Fetch an invoice with its line items. Lines are tenant-scoped with the
@@ -36,21 +46,74 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
   }
 
   /**
-   * Fetch all non-deleted invoices for a business, optionally filtered by
-   * invoice status.
+   * Keyset (cursor-based) pagination for the invoice list. See
+   * ExpenseRepository.listPage for the full rationale and cursor rules.
    */
-  async findByBusiness(businessId: string, status?: InvoiceStatus): Promise<Row<'invoices'>[]> {
+  async listPage(
+    businessId: string,
+    options: {
+      status?: InvoiceStatus;
+      cursor?: { date: string; id: string } | null;
+      pageSize?: number;
+    } = {},
+  ): Promise<InvoiceListPage> {
+    const pageSize = Math.max(1, Math.min(options.pageSize ?? 50, 200));
+    const fetchSize = pageSize + 1;
+
     let query = this.client
       .from('invoices')
-      .select('*')
+      .select(InvoiceRepository.LIST_SELECT)
+      .eq('business_id', businessId)
+      .is('deleted_at', null);
+
+    if (options.status) query = query.eq('status', options.status);
+
+    if (options.cursor) {
+      query = query.or(
+        `issue_date.lt.${options.cursor.date},` +
+        `and(issue_date.eq.${options.cursor.date},id.lt.${options.cursor.id})`,
+      );
+    }
+
+    const { data, error } = await query
+      .order('issue_date', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(fetchSize);
+
+    if (error) throw toRepositoryError('invoices', error);
+
+    const all = (data ?? []) as unknown as Row<'invoices'>[];
+    const hasMore = all.length > pageSize;
+    const rows = hasMore ? all.slice(0, pageSize) : all;
+    const last = rows[rows.length - 1];
+    const nextCursor = hasMore && last
+      ? { date: last.issue_date, id: last.id }
+      : null;
+
+    return { rows, nextCursor };
+  }
+
+  /**
+   * Fetch recent invoices for a business (drop-downs, widgets, contact-page
+   * totals). For the main list view use listPage() instead.
+   */
+  async findByBusiness(businessId: string, status?: InvoiceStatus, limit?: number): Promise<Row<'invoices'>[]> {
+    const LATEST_LIMIT = 500;
+    const cap = Math.max(1, Math.min(limit ?? LATEST_LIMIT, 2000));
+    let query = this.client
+      .from('invoices')
+      .select(InvoiceRepository.LIST_SELECT)
       .eq('business_id', businessId)
       .is('deleted_at', null);
 
     if (status) query = query.eq('status', status);
 
-    const { data, error } = await query.order('issue_date', { ascending: false });
+    const { data, error } = await query
+      .order('issue_date', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(cap);
     if (error) throw toRepositoryError('invoices', error);
-    return data ?? [];
+    return (data ?? []) as unknown as Row<'invoices'>[];
   }
 
   /**

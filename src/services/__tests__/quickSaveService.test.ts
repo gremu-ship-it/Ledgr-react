@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Unit cover for the quick-save RPC wrappers.
@@ -15,6 +15,12 @@ const rpcMock = vi.fn();
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     rpc: (...args: unknown[]) => rpcMock(...args),
+  },
+  isAbortError: (err: unknown): boolean => {
+    if (!err || typeof err !== 'object') return false;
+    const name = (err as { name?: string }).name;
+    const msg = (err as { message?: string }).message ?? '';
+    return name === 'AbortError' || name === 'TimeoutError' || /signal is aborted|timed out|The operation was aborted/i.test(msg);
   },
 }));
 
@@ -70,6 +76,13 @@ describe('isMissingFunctionError', () => {
 });
 
 describe('saveQuickExpenseViaRpc', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('calls save_quick_expense with the payload under p_payload and returns the result', async () => {
     rpcMock.mockResolvedValueOnce({ data: validResult, error: null });
     const result = await saveQuickExpenseViaRpc(payload);
@@ -84,11 +97,43 @@ describe('saveQuickExpenseViaRpc', () => {
       error: { code: 'P0001', message: 'Monthly transaction limit reached (50).' },
     });
     await expect(saveQuickExpenseViaRpc(payload)).rejects.toThrow(/transaction limit/);
+    // Non-transient errors must NOT trigger a retry.
+    expect(rpcMock).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a malformed success payload rather than returning it', async () => {
     rpcMock.mockResolvedValueOnce({ data: { unexpected: true }, error: null });
     await expect(saveQuickExpenseViaRpc(payload)).rejects.toThrow(/unexpected response/);
+  });
+
+  it('automatically retries ONCE on abort/timeout using the same payload (idempotent replay)', async () => {
+    // First call aborts (the user's observed failure); second call returns
+    // the already-committed document thanks to client_key.
+    const abortErr = new DOMException('The operation was aborted.', 'AbortError');
+    rpcMock
+      .mockRejectedValueOnce(abortErr)
+      .mockResolvedValueOnce({ data: { ...validResult, idempotent: true }, error: null });
+
+    const resultPromise = saveQuickExpenseViaRpc(payload);
+    // Flush the retry delay.
+    await vi.advanceTimersByTimeAsync(2000);
+    const result = await resultPromise;
+
+    expect(rpcMock).toHaveBeenCalledTimes(2);
+    // Same fn, same args (same client_key) — guarantees idempotent replay.
+    expect(rpcMock).toHaveBeenNthCalledWith(1, 'save_quick_expense', { p_payload: payload });
+    expect(rpcMock).toHaveBeenNthCalledWith(2, 'save_quick_expense', { p_payload: payload });
+    expect(result.number).toBe('EXP-0042');
+    expect(result.idempotent).toBe(true);
+  });
+
+  it('does NOT retry on a missing-function error (legacy fallback path)', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST202', message: 'Could not find the function public.save_quick_expense' },
+    });
+    await expect(saveQuickExpenseViaRpc(payload)).rejects.toThrow(/Could not find the function/);
+    expect(rpcMock).toHaveBeenCalledTimes(1);
   });
 });
 

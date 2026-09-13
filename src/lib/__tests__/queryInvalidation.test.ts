@@ -19,11 +19,14 @@ import {
  */
 
 function mockClient() {
-  const invalidateQueries = vi.fn();
-  const client = { invalidateQueries } as unknown as QueryClient;
+  // invalidateKeys uses resetQueries (not invalidateQueries) so that infinite
+  // list caches drop accumulated pages and re-fetch page 1 after a save.
+  // The scoping assertions are the same regardless.
+  const resetQueries = vi.fn();
+  const client = { resetQueries } as unknown as QueryClient;
   const keys = () =>
-    invalidateQueries.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
-  return { client, invalidateQueries, keys };
+    resetQueries.mock.calls.map((c) => (c[0] as { queryKey: string[] }).queryKey[0]);
+  return { client, resetQueries, keys };
 }
 
 describe('invalidateAfterExpense', () => {

@@ -38,7 +38,12 @@ export function CashFlowStatement({ businessId, periodStart, periodEnd }: Props)
       if (error) throw error;
       return data ?? [];
     },
-    staleTime: 0,
+    // Financial statements are derived from posted journal entries and only
+    // change when a transaction is saved (queryInvalidation resets these keys
+    // explicitly). 5 minutes keeps tab-switching snappy without risking
+    // visibly stale figures — and invalidateAfter{Expense,Income,Sync} already
+    // force an immediate refetch after any write.
+    staleTime: 5 * 60_000,
     enabled: Boolean(businessId && periodStart && periodEnd),
   });
 

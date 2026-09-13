@@ -10,8 +10,38 @@ import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
+import { useAutoSaveDraft } from '@/hooks/useAutoSaveDraft';
 
 const log = createLogger('QuickIncomeMobile');
+
+interface QuickIncomeDraft {
+  step: 'amount' | 'details' | 'confirm';
+  amount: string;
+  selectedAccountId: string | null;
+  searchQuery: string;
+  description: string;
+  branchId: string;
+  departmentId: string;
+  selectedProductId: string | null;
+  productSearchQuery: string;
+}
+type IncomeDraftStep = QuickIncomeDraft['step'];
+
+function isQuickIncomeDraft(v: unknown): v is QuickIncomeDraft {
+  if (!v || typeof v !== 'object') return false;
+  const d = v as Record<string, unknown>;
+  return (
+    typeof d.amount === 'string' &&
+    typeof d.description === 'string' &&
+    typeof d.branchId === 'string' &&
+    typeof d.departmentId === 'string' &&
+    typeof d.searchQuery === 'string' &&
+    typeof d.productSearchQuery === 'string' &&
+    (d.selectedAccountId === null || typeof d.selectedAccountId === 'string') &&
+    (d.selectedProductId === null || typeof d.selectedProductId === 'string') &&
+    ['amount', 'details', 'confirm'].includes(d.step as string)
+  );
+}
 
 type Step = 'amount' | 'details' | 'confirm' | 'success';
 
@@ -61,7 +91,44 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
     staleTime: 1000 * 60 * 10,
   });
 
+  const { clear: clearDraft, recovered: draftRecovered } = useAutoSaveDraft<QuickIncomeDraft>({
+    formId: 'quick-income-mobile',
+    businessId,
+    enabled: open && incomeAccounts.length > 0 && products.length > 0 && branches.length > 0 && departments.length > 0,
+    capture: () => ({
+      step: (step === 'success' ? 'confirm' : step) as IncomeDraftStep,
+      amount,
+      selectedAccountId: selectedAccount?.id ?? null,
+      searchQuery,
+      description,
+      branchId,
+      departmentId,
+      selectedProductId: selectedProduct?.id ?? null,
+      productSearchQuery,
+    }),
+    restore: (d) => {
+      setStep(d.step);
+      setAmount(d.amount);
+      setSearchQuery(d.searchQuery);
+      setDescription(d.description);
+      setBranchId(d.branchId);
+      setDepartmentId(d.departmentId);
+      setProductSearchQuery(d.productSearchQuery);
+      if (d.selectedAccountId) {
+        const acc = incomeAccounts.find((a) => a.id === d.selectedAccountId);
+        if (acc) setSelectedAccount(acc);
+      }
+      if (d.selectedProductId) {
+        const prod = products.find((p) => p.id === d.selectedProductId);
+        if (prod) setSelectedProduct(prod);
+      }
+    },
+    validate: isQuickIncomeDraft,
+    deps: [step, amount, selectedAccount?.id, searchQuery, description, branchId, departmentId, selectedProduct?.id, productSearchQuery],
+  });
+
   function reset() {
+    clearDraft();
     setStep('amount');
     setAmount('');
     setSelectedAccount(null);
@@ -212,6 +279,11 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
       {step === 'amount' && (
         <div className="flex flex-col gap-6">
+          {draftRecovered && (
+            <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+              Recovered your unfinished income entry from earlier in this session.
+            </div>
+          )}
           <MwkNumberPad value={amount} onChange={setAmount} />
           <button
             onClick={() => setStep('details')}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
@@ -11,6 +11,7 @@ import {
   Receipt,
   Truck,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
@@ -33,7 +34,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useDensity } from '@/hooks/useDensity';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
-import { useCallback } from 'react';
+import { useInfiniteKeysetList } from '@/hooks/useInfiniteKeysetList';
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 import { formatDateShort } from '@/lib/formatters';
@@ -969,24 +970,32 @@ function InvoiceList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const isMobile = useIsMobile();
   const { tdClass, thClass } = useDensity();
-  const queryClient = useQueryClient();
+
+  const {
+    rows: invoices,
+    sentinelRef,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    isError,
+    reset,
+  } = useInfiniteKeysetList<Row<'invoices'>, Row<'invoices'>['status']>({
+    queryKey: ['invoices', 'list', statusFilter === 'all' ? undefined : statusFilter],
+    businessId,
+    status: statusFilter === 'all' ? undefined : statusFilter,
+    pageSize: 50,
+    fetcher: (bid, opts) => repos.invoice.listPage(bid, opts),
+  });
 
   const onRefresh = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ['invoices', businessId] });
-  }, [queryClient, businessId]);
+    reset();
+  }, [reset]);
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
 
-  const { data: invoices = [], isLoading, isError } = useQuery({
-    queryKey: ['invoices', businessId],
-    queryFn: () => repos.invoice.findByBusiness(businessId),
-    enabled: Boolean(businessId),
-  });
-
-  const filtered =
-    statusFilter === 'all'
-      ? invoices
-      : invoices.filter((inv) => inv.status === statusFilter);
+  // Filter is applied server-side via the status param above when a status is
+  // selected; when 'all' we already have every status from the server.
+  const filtered = invoices;
 
   const filteredIds = filtered.map((i) => i.id);
   const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id));
@@ -1092,6 +1101,7 @@ function InvoiceList({
       ) : isMobile ? (
         <div className="space-y-3">
           {filtered.map((inv) => {
+
             const amountDue = inv.amount_due !== null ? Number(inv.amount_due) : Number(inv.total_amount) - Number(inv.amount_paid);
             const isSel = selectedIds.has(inv.id);
             const canPay = !['paid', 'void', 'credit_note'].includes(inv.status) && amountDue > 0;
@@ -1194,6 +1204,22 @@ function InvoiceList({
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Keyset pagination sentinel — IntersectionObserver fires fetchNextPage
+          when this scrolls within ~300px of the viewport. */}
+      {filtered.length > 0 && (
+        <div ref={sentinelRef} className="flex items-center justify-center py-6 text-xs text-gray-400">
+          {isFetchingNextPage ? (
+            <>
+              <RefreshCw className="mr-2 h-3 w-3 animate-spin" /> Loading more…
+            </>
+          ) : hasNextPage ? (
+            <span className="opacity-0">Loading more…</span>
+          ) : (
+            <span>You've reached the end.</span>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle, Eye, CreditCard } from 'lucide-react';
+import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle, Eye, CreditCard, RefreshCw } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { VAT_STANDARD_RATE, VAT_STANDARD_RATE_PERCENT } from '@/lib/vat';
 import { useAppStore } from '@/store/useAppStore';
@@ -15,6 +15,7 @@ import { resolveTransactionRate } from '@/lib/currency';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 import { webhookService } from '@/services/webhook/WebhookService';
+import { isAbortError } from '@/lib/supabase';
 import {
   saveQuickSaleViaRpc,
   isMissingFunctionError,
@@ -25,6 +26,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useInfiniteKeysetList } from '@/hooks/useInfiniteKeysetList';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -436,6 +438,22 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
         };
       } catch (rpcErr) {
         if (!isMissingFunctionError(rpcErr)) {
+          // Abort/timeout/network: we cannot know whether the server
+          // committed the write, but client_key makes retries idempotent
+          // so it is safe for the user to press Record again.
+          if (isAbortError(rpcErr) || isOfflineError(rpcErr)) {
+            log.warn('Quick-sale RPC aborted/network failure — safe to retry', { error: rpcErr });
+            const reason = (rpcErr as Error)?.message?.toLowerCase() ?? '';
+            const timedOut = reason.includes('timed out') || (rpcErr as { name?: string })?.name === 'TimeoutError';
+            throw new Error(
+              timedOut
+                ? `The save took longer than expected and was paused to keep the app responsive. ` +
+                  `It is safe to press Record Income again — we will not create a duplicate.`
+                : `The request was interrupted (network change or slow connection). ` +
+                  `It is safe to try again — we will not create a duplicate.`,
+              { cause: rpcErr },
+            );
+          }
           log.error('Quick-sale RPC failed (nothing was saved)', { error: rpcErr });
           throw new Error(
             `${(rpcErr as Error)?.message ?? 'The income could not be saved.'} ` +
@@ -1122,17 +1140,26 @@ function IncomeList({ businessId }: { businessId: string }) {
   const isMobile = useIsMobile();
   const { tdClass, thClass } = useDensity();
 
-  const onRefresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['invoices', 'income', businessId] });
-  };
+  const {
+    rows: allInvoices,
+    sentinelRef,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    isError,
+    error,
+  } = useInfiniteKeysetList<Row<'invoices'>, Row<'invoices'>['status']>({
+    queryKey: ['invoices', 'income', businessId],
+    businessId,
+    pageSize: 50,
+    fetcher: (bid, opts) => repos.invoice.listPage(bid, opts),
+  });
+
+  const onRefresh = useCallback(async () => {
+    await queryClient.resetQueries({ queryKey: ['invoices', 'income', businessId] });
+  }, [queryClient, businessId]);
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, disabled: !isMobile });
-
-  const { data: invoices = [], isLoading, isError } = useQuery({
-    queryKey: ['invoices', 'income', businessId],
-    queryFn: () => repos.invoice.findByBusiness(businessId),
-    enabled: Boolean(businessId),
-  });
 
   if (isLoading)
     return (
@@ -1146,11 +1173,14 @@ function IncomeList({ businessId }: { businessId: string }) {
     return (
       <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
         <AlertCircle className="h-4 w-4 shrink-0" />
-        Failed to load income records.
+        Failed to load income records{(error as Error)?.message ? `: ${(error as Error).message}` : '.'}
       </div>
     );
 
-  const incomeInvoices = invoices.filter((inv) => inv.invoice_type === 'invoice');
+  // The list-page endpoint returns ALL non-deleted invoices (quotes,
+  // proformas, credit notes etc.) — the income tab only shows real revenue
+  // invoices, matching the previous filter.
+  const incomeInvoices = allInvoices.filter((inv) => inv.invoice_type === 'invoice');
   if (incomeInvoices.length === 0)
     return (
       <EmptyState
@@ -1223,6 +1253,17 @@ function IncomeList({ businessId }: { businessId: string }) {
           </div>
         </div>
       )}
+
+      <div ref={sentinelRef} className="flex items-center justify-center py-6 text-xs text-gray-500" aria-live="polite">
+        {isFetchingNextPage && (
+          <span className="inline-flex items-center gap-2">
+            <RefreshCw className="h-3 w-3 animate-spin" /> Loading more…
+          </span>
+        )}
+        {!isFetchingNextPage && !hasNextPage && incomeInvoices.length > 0 && (
+          <span className="text-gray-400">You've reached the end.</span>
+        )}
+      </div>
     </div>
   );
 }

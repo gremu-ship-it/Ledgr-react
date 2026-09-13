@@ -59,6 +59,7 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
   const { data: soce, isLoading, error } = useQuery({
     queryKey: ['changes_in_equity', businessId, periodStart, periodEnd],
     queryFn: () => financialStatementRepo.getChangesInEquity(businessId, periodStart, periodEnd),
+    staleTime: 5 * 60_000,
     enabled: Boolean(businessId && periodStart && periodEnd),
   });
 

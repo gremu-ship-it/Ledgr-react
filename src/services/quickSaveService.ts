@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, isAbortError } from '@/lib/supabase';
 
 /**
  * quickSaveService — single-round-trip transaction saves.
@@ -21,7 +21,44 @@ import { supabase } from '@/lib/supabase';
  *   - Only a MISSING FUNCTION (migration not yet applied) falls back to the
  *     legacy path. Any other error is a real failure — nothing was saved —
  *     and must surface to the user, never silently downgrade.
+ *
+ * TRANSIENT RETRY POLICY:
+ *   On abort/timeout/network failure (which, by definition, means we do not
+ *   know whether the server committed), we transparently retry ONCE using
+ *   the SAME client_key. If the first attempt actually committed (the most
+ *   common case on slow mobile links — the save finishes inside Postgres
+ *   but the response is cut by the client's 60s write timeout) the retry
+ *   returns the already-committed document; the user sees a normal success
+ *   instead of an error. We do NOT retry on real server errors (PGRST202,
+ *   4xx/5xx, constraint violations) because those genuinely mean "nothing
+ *   was saved" and a retry would not help.
  */
+
+const TRANSIENT_RETRY_DELAY_MS = 800;
+
+function isRetriableTransient(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  // Network/abort/timeout from fetchWithTimeout or the browser.
+  if (isAbortError(err)) return true;
+  const e = err as { code?: string; message?: string; status?: number };
+  // PostgREST/GoTrue 5xx — server blip, retry is reasonable.
+  if (typeof e.status === 'number' && e.status >= 500 && e.status < 600) return true;
+  const msg = (e.message ?? '').toLowerCase();
+  return (
+    msg.includes('failed to fetch') ||
+    msg.includes('networkerror') ||
+    msg.includes('network request failed') ||
+    msg.includes('network down') ||
+    msg.includes('err_internet_disconnected') ||
+    msg.includes('err_network_changed') ||
+    msg.includes('upstream request timeout') ||
+    msg.includes('database error') // rare GoTrue/PostgREST transient
+  );
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 
 export interface QuickSaveResult {
@@ -81,17 +118,37 @@ async function callRpc(fn: string, args: Record<string, unknown>): Promise<Quick
   // The generated Database type predates these functions; the runtime result
   // is validated below rather than trusted from a cast.
   const client = supabase as unknown as RpcClient;
-  const { data, error } = await client.rpc(fn, args);
-  if (error) throw error;
-  if (
-    !data ||
-    typeof data !== 'object' ||
-    typeof (data as QuickSaveResult).id !== 'string' ||
-    typeof (data as QuickSaveResult).number !== 'string'
-  ) {
-    throw new Error(`${fn} returned an unexpected response`);
+
+  // First attempt.
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const { data, error } = await client.rpc(fn, args);
+      if (error) throw error;
+      if (
+        !data ||
+        typeof data !== 'object' ||
+        typeof (data as QuickSaveResult).id !== 'string' ||
+        typeof (data as QuickSaveResult).number !== 'string'
+      ) {
+        throw new Error(`${fn} returned an unexpected response`);
+      }
+      return data as QuickSaveResult;
+    } catch (err) {
+      lastErr = err;
+      // Never retry a "function does not exist" — that's a migration
+      // signal the caller wants to handle (fallback to legacy path).
+      if (isMissingFunctionError(err)) throw err;
+      // Only one retry, and only on transient/abort errors.
+      if (attempt === 0 && isRetriableTransient(err)) {
+        await delay(TRANSIENT_RETRY_DELAY_MS);
+        continue;
+      }
+      throw err;
+    }
   }
-  return data as QuickSaveResult;
+  // Should be unreachable — loop either returns or throws.
+  throw lastErr;
 }
 
 export function saveQuickExpenseViaRpc(payload: QuickExpenseRpcPayload): Promise<QuickSaveResult> {

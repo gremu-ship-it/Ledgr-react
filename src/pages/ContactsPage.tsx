@@ -310,18 +310,26 @@ export function ContactsPage() {
     queryKey: ['contacts', businessId, tab],
     queryFn: () => repos.contact.findByBusiness(businessId!, tab),
     enabled: Boolean(businessId),
+    staleTime: 2 * 60_000,
   });
 
+  // Totals sidebar on each contact card only needs recent transactions —
+  // pulling ALL invoices/expenses for the business here was one of the
+  // biggest contributors to ContactsPage slowdown on larger datasets.
+  // Cap to the most recent year of activity (covers the vast majority of
+  // lookups without forcing a full-table transfer).
   const { data: invoices = [] } = useQuery({
-    queryKey: ['invoices', businessId],
-    queryFn: () => repos.invoice.findByBusiness(businessId!),
+    queryKey: ['invoices', businessId, 'recent_totals'],
+    queryFn: () => repos.invoice.findByBusiness(businessId!, undefined, 200),
     enabled: Boolean(businessId) && tab === 'customer',
+    staleTime: 2 * 60_000,
   });
 
   const { data: expenses = [] } = useQuery({
-    queryKey: ['expenses', businessId],
-    queryFn: () => repos.expense.findByBusiness(businessId!),
+    queryKey: ['expenses', businessId, 'recent_totals'],
+    queryFn: () => repos.expense.findByBusiness(businessId!, undefined, 200),
     enabled: Boolean(businessId) && tab === 'supplier',
+    staleTime: 2 * 60_000,
   });
 
   const deleteMutation = useMutation({

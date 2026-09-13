@@ -32,6 +32,7 @@ import { DataExportButton } from '@/components/DataExportButton';
 import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
+import { BusinessDataBackup } from '@/components/settings/BusinessDataBackup';
 import { BillingTab } from '@/components/billing/BillingTab';
 import { TeamManagementPage } from '@/pages/settings/TeamManagementPage';
 import { PlanGate } from '@/components/billing/PlanGate';
@@ -1867,6 +1868,11 @@ function PrivacyTab() {
             onChange={(v) => updateConsent(analytics, v)}
           />
         </div>
+      </div>
+
+      {/* Per-business backup */}
+      <div className="border-t border-gray-100 pt-6">
+        <BusinessDataBackup />
       </div>
 
       {/* Data export (Right to Portability) */}

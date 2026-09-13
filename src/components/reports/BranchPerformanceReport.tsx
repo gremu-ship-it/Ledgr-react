@@ -261,6 +261,7 @@ export function BranchPerformanceReport({
         rows: buildBranchPerformance(branches as BranchRef[], lines),
       };
     },
+    staleTime: 5 * 60_000,
     enabled: Boolean(businessId && periodStart && periodEnd),
   });
 
