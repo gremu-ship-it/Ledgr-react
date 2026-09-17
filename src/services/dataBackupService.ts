@@ -86,7 +86,10 @@ export type ProgressCb = (p: BackupProgress) => void;
 export function csvCell(value: unknown): string {
   if (value === null || value === undefined) return '';
   let s = String(value);
-  // Strip control characters that would break CSV parsing.
+  // Strip control characters that would break CSV parsing. The control
+  // characters are the subject of this expression rather than an accident in
+  // it, which is the case no-control-regex exists to catch.
+  // eslint-disable-next-line no-control-regex
   s = s.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
   // Newlines inside cells become spaces (Excel-compatible).
   s = s.replace(/\r?\n/g, ' ');

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useInfiniteQuery, type InfiniteData, type QueryFunctionContext } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
 
@@ -42,7 +42,6 @@ export function useInfiniteKeysetList<TRow, TStatus extends string | undefined =
 ) {
   const pageSize = opts.pageSize ?? 50;
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const [isAtBottom, setIsAtBottom] = useState(false);
 
   const query = useInfiniteQuery<KeysetPage<TRow>, Error, InfiniteData<KeysetPage<TRow>>>({
     queryKey: [...opts.queryKey, opts.businessId, opts.status, pageSize],
@@ -62,35 +61,33 @@ export function useInfiniteKeysetList<TRow, TStatus extends string | undefined =
   });
 
   const rows = query.data ? query.data.pages.flatMap((p) => p.rows) : [];
+  const { hasNextPage, isFetchingNextPage, isLoading, dataUpdatedAt, fetchNextPage } = query;
 
-  // Wire the sentinel to IntersectionObserver.
+  // Wire the sentinel to IntersectionObserver and fetch the next page when it
+  // scrolls into view. The observer callback is the only trigger: this used to
+  // route through an `isAtBottom` state flag, a second effect that reacted to
+  // it, and a third that cleared it once the fetch settled — two extra renders
+  // per page, and two synchronous setState calls in effect bodies.
+  //
+  // dataUpdatedAt stays in the deps so the observer is torn down and rebuilt
+  // after each page lands: IntersectionObserver only fires on a *change* in
+  // intersection, so a sentinel that remains in view would otherwise never
+  // ask for the page after next.
   useEffect(() => {
     const el = sentinelRef.current;
     if (!el) return;
-    if (!query.hasNextPage || query.isFetchingNextPage) {
-      setIsAtBottom(false);
-      return;
-    }
+    if (!hasNextPage || isFetchingNextPage || isLoading) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        if (entry.isIntersecting) setIsAtBottom(true);
+        if (entry.isIntersecting) void fetchNextPage();
       },
       { rootMargin: '300px 0px', threshold: 0 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [query.hasNextPage, query.isFetchingNextPage, query.dataUpdatedAt]);
-
-  useEffect(() => {
-    if (isAtBottom && query.hasNextPage && !query.isFetchingNextPage && !query.isLoading) {
-      void query.fetchNextPage();
-    }
-  }, [isAtBottom, query.hasNextPage, query.isFetchingNextPage, query.isLoading, query.fetchNextPage]);
-
-  useEffect(() => {
-    if (!query.isFetchingNextPage) setIsAtBottom(false);
-  }, [query.isFetchingNextPage]);
+  }, [hasNextPage, isFetchingNextPage, isLoading, dataUpdatedAt, fetchNextPage]);
 
   return {
     rows,

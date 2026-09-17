@@ -112,14 +112,22 @@ export function useFormDraft<T>(opts: UseFormDraftOptions<T>): UseFormDraftResul
     };
   }, [draft, key, debounceMs]);
 
-  // When businessId changes (user switches tenants), drop the draft state
-  // from the previous tenant rather than loading a different business's
+  // When businessId or formId changes (user switches tenants), drop the draft
+  // state from the previous tenant rather than loading a different business's
   // numbers into the form.
-  useEffect(() => {
+  //
+  // Adjusted during render — React's "adjusting state when a prop changes"
+  // pattern — rather than in an effect. Effects run after commit, so the old
+  // version painted one frame of the previous tenant's draft before clearing
+  // it, which is precisely the leak this guard exists to prevent. Setting
+  // state here is safe because it is conditional on the key having actually
+  // changed and only ever writes this component's own state.
+  const [draftKey, setDraftKey] = useState(key);
+  if (draftKey !== key) {
+    setDraftKey(key);
     setDraftState(initialValue);
     setRecovered(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [businessId, formId]);
+  }
 
   function setDraft(updater: T | ((prev: T) => T)) {
     setDraftState((prev) => (typeof updater === 'function' ? (updater as (p: T) => T)(prev) : updater));
