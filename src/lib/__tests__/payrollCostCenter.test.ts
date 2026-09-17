@@ -32,7 +32,17 @@ describe('Payroll Cost Center Aggregation and Filtering', () => {
     },
   ];
 
-  const mockEmployeeMap = new Map<string, any>([
+  interface MockEmployee {
+    id: string;
+    first_name: string;
+    last_name: string;
+    branch_id?: string | null;
+    branch?: { id: string; name: string; code?: string | null } | null;
+    department_id?: string | null;
+    department?: { id: string; name: string; cost_centre?: string | null } | null;
+  }
+
+  const mockEmployeeMap = new Map<string, MockEmployee>([
     [
       'emp-1',
       {

@@ -13,6 +13,7 @@ import type { Row, InsertDto } from '@/dal/types/database';
 import { nextEntryNumber } from '@/services/journalService';
 import { csvCell } from '@/services/dataBackupService';
 import { isMobileMoney } from '@/lib/paymentMethod';
+import type { EmployeeWithOrg } from '@/dal/repositories/PayrollRepository';
 import { EditEmployeeModal } from '@/components/payroll/EditEmployeeModal';
 import { ImportEmployeesModal } from '@/components/payroll/ImportEmployeesModal';
 
@@ -1409,7 +1410,7 @@ function EmployeesTab({
     );
   }
 
-  const filteredEmployees = employees.filter((emp: any) => {
+  const filteredEmployees = employees.filter((emp: EmployeeWithOrg) => {
     if (selectedBranchId !== 'all') {
       if (selectedBranchId === 'unassigned') {
         if (emp.branch_id) return false;
@@ -1440,8 +1441,8 @@ function EmployeesTab({
   });
 
   const isFiltered = selectedBranchId !== 'all' || selectedDepartmentId !== 'all' || Boolean(searchTerm.trim());
-  const filteredGross = filteredEmployees.reduce((sum: number, emp: any) => sum + Number(emp.gross_salary || 0), 0);
-  const filteredPaye = filteredEmployees.reduce((sum: number, emp: any) => {
+  const filteredGross = filteredEmployees.reduce((sum: number, emp: EmployeeWithOrg) => sum + Number(emp.gross_salary || 0), 0);
+  const filteredPaye = filteredEmployees.reduce((sum: number, emp: EmployeeWithOrg) => {
     const gross = Number(emp.gross_salary || 0);
     return sum + (emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]));
   }, 0);
@@ -1580,7 +1581,7 @@ function EmployeesTab({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredEmployees.map((emp: any) => {
+              {filteredEmployees.map((emp) => {
                 const gross = Number(emp.gross_salary);
                 const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
                 const net = gross - paye;
@@ -1708,7 +1709,7 @@ function CostCentersTab({ businessId }: { businessId: string }) {
     enabled: Boolean(targetRun?.id),
   });
 
-  const employeeMap = new Map<string, any>(employees.map((e: any) => [e.id, e]));
+  const employeeMap = new Map<string, EmployeeWithOrg>(employees.map((e) => [e.id, e]));
 
   interface CostCenterItem {
     id: string;
@@ -1727,53 +1728,49 @@ function CostCentersTab({ businessId }: { businessId: string }) {
     netPay: number;
   }
 
-  let items: CostCenterItem[] = [];
-
-  if (scope !== 'live' && targetRunWithLines) {
-    items = (targetRunWithLines.lines || []).map((l) => {
-      const emp = employeeMap.get(l.employee_id);
-      return {
-        id: l.id,
-        employeeName: emp ? `${emp.first_name} ${emp.last_name}` : l.employee_id,
-        employeeNumber: emp?.employee_number || '',
-        branchId: emp?.branch_id || null,
-        branchName: emp?.branch?.name || (emp?.branch_id ? 'Branch' : 'Unassigned Branch'),
-        branchCode: emp?.branch?.code || '',
-        departmentId: emp?.department_id || null,
-        departmentName: emp?.department?.name || (emp?.department_id ? 'Department' : 'Unassigned Cost Centre'),
-        costCentre: emp?.department?.cost_centre || '',
-        grossPay: Number(l.gross_pay || 0),
-        paye: Number(l.paye_deduction || 0),
-        pensionEmp: Number(l.pension_employee || 0),
-        otherDeductions: Number(l.other_deductions || 0),
-        netPay: Number(l.net_pay || 0),
-      };
-    });
-  } else {
-    items = employees.map((emp: any) => {
-      const gross = Number(emp.gross_salary || 0);
-      const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
-      const pension = calculatePension(gross, tprConfig?.employer_rate, tprConfig?.employee_rate);
-      const pensionEmp = pension.employee;
-      const net = gross - paye - pensionEmp;
-      return {
-        id: emp.id,
-        employeeName: `${emp.first_name} ${emp.last_name}`,
-        employeeNumber: emp.employee_number || '',
-        branchId: emp.branch_id || null,
-        branchName: emp.branch?.name || (emp.branch_id ? 'Branch' : 'Unassigned Branch'),
-        branchCode: emp.branch?.code || '',
-        departmentId: emp.department_id || null,
-        departmentName: emp.department?.name || (emp.department_id ? 'Department' : 'Unassigned Cost Centre'),
-        costCentre: emp.department?.cost_centre || '',
-        grossPay: gross,
-        paye,
-        pensionEmp,
-        otherDeductions: 0,
-        netPay: net,
-      };
-    });
-  }
+  const items: CostCenterItem[] = (scope !== 'live' && targetRunWithLines)
+    ? (targetRunWithLines.lines || []).map((l) => {
+        const emp = employeeMap.get(l.employee_id);
+        return {
+          id: l.id,
+          employeeName: emp ? `${emp.first_name} ${emp.last_name}` : l.employee_id,
+          employeeNumber: emp?.employee_number || '',
+          branchId: emp?.branch_id || null,
+          branchName: emp?.branch?.name || (emp?.branch_id ? 'Branch' : 'Unassigned Branch'),
+          branchCode: emp?.branch?.code || '',
+          departmentId: emp?.department_id || null,
+          departmentName: emp?.department?.name || (emp?.department_id ? 'Department' : 'Unassigned Cost Centre'),
+          costCentre: emp?.department?.cost_centre || '',
+          grossPay: Number(l.gross_pay || 0),
+          paye: Number(l.paye_deduction || 0),
+          pensionEmp: Number(l.pension_employee || 0),
+          otherDeductions: Number(l.other_deductions || 0),
+          netPay: Number(l.net_pay || 0),
+        };
+      })
+    : employees.map((emp) => {
+        const gross = Number(emp.gross_salary || 0);
+        const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
+        const pension = calculatePension(gross, tprConfig?.employer_rate, tprConfig?.employee_rate);
+        const pensionEmp = pension.employee;
+        const net = gross - paye - pensionEmp;
+        return {
+          id: emp.id,
+          employeeName: `${emp.first_name} ${emp.last_name}`,
+          employeeNumber: emp.employee_number || '',
+          branchId: emp.branch_id || null,
+          branchName: emp.branch?.name || (emp.branch_id ? 'Branch' : 'Unassigned Branch'),
+          branchCode: emp.branch?.code || '',
+          departmentId: emp.department_id || null,
+          departmentName: emp.department?.name || (emp.department_id ? 'Department' : 'Unassigned Cost Centre'),
+          costCentre: emp.department?.cost_centre || '',
+          grossPay: gross,
+          paye,
+          pensionEmp,
+          otherDeductions: 0,
+          netPay: net,
+        };
+      });
 
   // Filter items
   const filteredItems = items.filter((item) => {
