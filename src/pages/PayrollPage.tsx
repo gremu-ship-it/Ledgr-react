@@ -3,13 +3,14 @@ import { calculatePAYE, type PayeBand } from '@/lib/paye';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Users, Plus, AlertCircle, CheckCircle, ChevronRight, ArrowLeft, X, Briefcase, Pencil,
+  Users, Plus, AlertCircle, CheckCircle, ChevronRight, ArrowLeft, X, Briefcase, Pencil, Download, Building2, Check,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { nextEntryNumber } from '@/services/journalService';
+import { csvCell } from '@/services/dataBackupService';
 import { EditEmployeeModal } from '@/components/payroll/EditEmployeeModal';
 
 
@@ -75,6 +76,7 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
     payment_method: 'bank_transfer', bank_name: '', bank_account_number: '',
     mobile_money_type: '', mobile_money_number: '', start_date: today(),
     national_id: '', tpin: '', salary_account_id: '',
+    branch_id: '', department_id: '',
   });
 
   function set(field: string, value: string) {
@@ -84,6 +86,18 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
   const { data: postingAccounts = [] } = useQuery({
     queryKey: ['posting_accounts', businessId],
     queryFn: () => repos.account.findPostingAccounts(businessId),
+  });
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', businessId],
+    queryFn: () => repos.branch.findActive(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', businessId],
+    queryFn: () => repos.department.findActive(businessId),
+    enabled: Boolean(businessId),
   });
 
   const mutation = useMutation({
@@ -109,6 +123,8 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
           mobile_money_type: form.mobile_money_type || null, mobile_money_number: form.mobile_money_number || null,
           start_date: form.start_date, national_id: form.national_id || null,
           tpin: form.tpin || null, salary_account_id: form.salary_account_id || null,
+          branch_id: form.branch_id || null,
+          department_id: form.department_id || null,
           tax_exempt: false, is_active: true,
         })
         .select().single();
@@ -233,6 +249,30 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
               </div>
             </div>
           )}
+
+          {/* Cost Center / Branch & Department */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Branch (Cost Center)</label>
+              <select value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">No branch</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Department</label>
+              <select value={form.department_id} onChange={(e) => set('department_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">No department</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}{d.cost_centre ? ` [${d.cost_centre}]` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Salary Expense Account</label>
@@ -652,6 +692,22 @@ function ApprovePayrollModal({
   );
 }
 
+function downloadPayrollCsv(headers: string[], rows: (string | number)[][], filename: string) {
+  const lines = [headers.map(csvCell).join(',')];
+  for (const row of rows) {
+    lines.push(row.map(csvCell).join(','));
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: string; onRunPayroll: () => void; canApprove: boolean }) {
   const [selectedRun, setSelectedRun] = useState<Row<'payroll_runs'> | null>(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
@@ -670,66 +726,281 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
     enabled: Boolean(selectedRun?.id),
   });
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees', businessId],
+    queryFn: () => repos.payroll.findEmployees(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const employeeMap = new Map<string, any>(employees.map((e: any) => [e.id, e]));
+
   if (selectedRun) {
+    const lines = runWithLines?.lines ?? [];
+    const totalBeneficiaries = lines.length;
+    const totalGross = lines.reduce((s, l) => s + Number(l.gross_pay || 0), 0);
+    const totalPaye = lines.reduce((s, l) => s + Number(l.paye_deduction || 0), 0);
+    const totalPensionEmployee = lines.reduce((s, l) => s + Number(l.pension_employee || 0), 0);
+    const totalOtherDeductions = lines.reduce((s, l) => s + Number(l.other_deductions || 0), 0);
+    const totalDeductions = totalPaye + totalPensionEmployee + totalOtherDeductions;
+    const totalNet = lines.reduce((s, l) => s + Number(l.net_pay || 0), 0);
+
+    // Group payment channels
+    const channelSummary = lines.reduce((acc, line) => {
+      const emp = employeeMap.get(line.employee_id);
+      const method = emp?.payment_method ?? 'unspecified';
+      const net = Number(line.net_pay || 0);
+      if (!acc[method]) {
+        acc[method] = { count: 0, amount: 0 };
+      }
+      acc[method].count += 1;
+      acc[method].amount += net;
+      return acc;
+    }, {} as Record<string, { count: number; amount: number }>);
+
+    const handleExportCsv = () => {
+      const headers = [
+        'Run #',
+        'Period Start',
+        'Period End',
+        'Pay Date',
+        'Employee Number',
+        'Employee Name',
+        'Branch / Cost Centre',
+        'Department',
+        'Payment Method',
+        'Payment Details',
+        'Gross Salary',
+        'PAYE Deduction',
+        'Pension (Employee)',
+        'Pension (Employer)',
+        'Other Deductions',
+        'Net Amount Received',
+      ];
+
+      const rows = lines.map((line) => {
+        const emp = employeeMap.get(line.employee_id);
+        const branchStr = emp?.branch?.name ? `${emp.branch.name}${emp.branch.code ? ' (' + emp.branch.code + ')' : ''}` : '';
+        const deptStr = emp?.department?.name ? `${emp.department.name}${emp.department.cost_centre ? ' [' + emp.department.cost_centre + ']' : ''}` : '';
+        const payDetail = emp?.payment_method === 'bank_transfer'
+          ? `${emp?.bank_name || ''} - ${emp?.bank_account_number || ''}`.trim()
+          : emp?.payment_method === 'mobile_money'
+          ? `${emp?.mobile_money_type || ''} - ${emp?.mobile_money_number || ''}`.trim()
+          : '';
+
+        return [
+          selectedRun.run_number,
+          selectedRun.period_start,
+          selectedRun.period_end,
+          selectedRun.pay_date,
+          emp?.employee_number || line.employee_id,
+          emp ? `${emp.first_name} ${emp.last_name}` : line.employee_id,
+          branchStr,
+          deptStr,
+          emp?.payment_method ? emp.payment_method.replace(/_/g, ' ') : '',
+          payDetail,
+          Number(line.gross_pay || 0).toFixed(2),
+          Number(line.paye_deduction || 0).toFixed(2),
+          Number(line.pension_employee || 0).toFixed(2),
+          Number(line.pension_employer || 0).toFixed(2),
+          Number(line.other_deductions || 0).toFixed(2),
+          Number(line.net_pay || 0).toFixed(2),
+        ];
+      });
+
+      downloadPayrollCsv(headers, rows, `payroll_${selectedRun.run_number}_${selectedRun.pay_date}.csv`);
+    };
+
     return (
-      <div>
-        <button onClick={() => setSelectedRun(null)} className="mb-5 flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
-          <ArrowLeft className="h-4 w-4" />Back to Payroll Runs
-        </button>
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button onClick={() => setSelectedRun(null)} className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 transition-colors">
+            <ArrowLeft className="h-4 w-4" />Back to Payroll Runs
+          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExportCsv}
+              className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+            >
+              <Download className="h-4 w-4 text-gray-500" />
+              Export Breakdown (CSV)
+            </button>
+            <StatusBadge status={selectedRun.status} />
+            {selectedRun.status === 'draft' && canApprove && (
+              <button onClick={() => setShowApproveModal(true)}
+                className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
+                <CheckCircle className="h-4 w-4" />Approve Payroll
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Detailed Breakdown Header & Metrics */}
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-start justify-between">
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 pb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">{selectedRun.run_number}</h2>
-              <p className="text-sm text-gray-500">Period: {selectedRun.period_start} → {selectedRun.period_end}</p>
-              <p className="text-sm text-gray-500">Pay Date: {selectedRun.pay_date}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <StatusBadge status={selectedRun.status} />
-              {selectedRun.status === 'draft' && canApprove && (
-                <button onClick={() => setShowApproveModal(true)}
-                  className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors">
-                  <CheckCircle className="h-4 w-4" />Approve Payroll
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-gray-900">{selectedRun.run_number}</h2>
+                <span className="rounded bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                  {selectedRun.payroll_period}
+                </span>
+              </div>
+              <p className="mt-1 text-sm text-gray-500">
+                Period: <span className="font-medium text-gray-700">{selectedRun.period_start}</span> to <span className="font-medium text-gray-700">{selectedRun.period_end}</span> • Pay Date: <span className="font-medium text-gray-700">{selectedRun.pay_date}</span>
+              </p>
             </div>
           </div>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-                <tr>
-                  <th scope="col" className="px-4 py-2.5 text-left">Employee</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Gross Pay</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">PAYE</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Pension (Employee)</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Other Deductions</th>
-                  <th scope="col" className="px-4 py-2.5 text-right">Net Pay</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {(runWithLines?.lines ?? []).map((line) => (
-                  <tr key={line.id}>
-                    <td className="px-4 py-3 font-medium text-gray-900">{line.employee_id}</td>
-                    <td className="px-4 py-3 text-right">{formatMwkDetailed(Number(line.gross_pay))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.paye_deduction))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.pension_employee))}</td>
-                    <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.other_deductions))}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwkDetailed(Number(line.net_pay))}</td>
-                  </tr>
+
+          {/* Monthly KPI Overview Cards */}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <Users className="h-4 w-4 text-blue-500" />
+                Beneficiaries
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{totalBeneficiaries}</p>
+              <p className="text-xs text-gray-500">Employees paid</p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <Briefcase className="h-4 w-4 text-gray-500" />
+                Total Gross Paid
+              </div>
+              <p className="mt-2 text-2xl font-bold text-gray-900">{formatMwkDetailed(totalGross)}</p>
+              <p className="text-xs text-gray-500">Before statutory deductions</p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-gray-500">
+                <AlertCircle className="h-4 w-4 text-amber-500" />
+                Total Deductions
+              </div>
+              <p className="mt-2 text-2xl font-bold text-red-600">−{formatMwkDetailed(totalDeductions)}</p>
+              <p className="text-xs text-gray-500">PAYE ({formatMwkDetailed(totalPaye)}) + Pension ({formatMwkDetailed(totalPensionEmployee)})</p>
+            </div>
+
+            <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-brand-700">
+                <Check className="h-4 w-4 text-brand-600" />
+                Total Net Paid
+              </div>
+              <p className="mt-2 text-2xl font-bold text-brand-700">{formatMwkDetailed(totalNet)}</p>
+              <p className="text-xs text-brand-600">Disbursed to beneficiaries</p>
+            </div>
+          </div>
+
+          {/* Payment Method / Channel Breakdown */}
+          {Object.keys(channelSummary).length > 0 && (
+            <div className="mt-5 rounded-xl border border-gray-100 bg-white p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Disbursement by Payment Method
+              </h3>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                {Object.entries(channelSummary).map(([method, data]) => (
+                  <div key={method} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-3.5 py-2.5 text-sm">
+                    <div>
+                      <span className="font-medium capitalize text-gray-900">{method.replace(/_/g, ' ')}</span>
+                      <span className="ml-2 text-xs text-gray-500">({data.count} {data.count === 1 ? 'employee' : 'employees'})</span>
+                    </div>
+                    <span className="font-semibold text-brand-700">{formatMwkDetailed(data.amount)}</span>
+                  </div>
                 ))}
-              </tbody>
-              <tfoot className="border-t-2 border-gray-200 bg-gray-50">
-                <tr>
-                  <td className="px-4 py-3 text-sm font-semibold">Totals</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold">{formatMwkDetailed(Number(selectedRun.total_gross))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwkDetailed(Number(selectedRun.total_paye))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">
-                    −{formatMwkDetailed((runWithLines?.lines ?? []).reduce((s, l) => s + Number(l.pension_employee), 0))}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-red-600">−{formatMwkDetailed(Number(selectedRun.total_other_deductions))}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-brand-700">{formatMwkDetailed(Number(selectedRun.total_net))}</td>
-                </tr>
-              </tfoot>
-            </table>
+              </div>
+            </div>
+          )}
+
+          {/* Detailed Employee Breakdown Table */}
+          <div className="mt-6 overflow-hidden rounded-xl border border-gray-200">
+            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3">
+              <h3 className="text-sm font-semibold text-gray-800">Beneficiary Payment Lines & Cost Centre Allocation</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-2.5 text-left">Beneficiary / Employee</th>
+                    <th scope="col" className="px-4 py-2.5 text-left">Branch & Cost Centre</th>
+                    <th scope="col" className="px-4 py-2.5 text-left">Payment Channel</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Gross Pay</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">PAYE</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Pension (Emp)</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Other Ded.</th>
+                    <th scope="col" className="px-4 py-2.5 text-right">Amount Received (Net)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {lines.map((line) => {
+                    const emp = employeeMap.get(line.employee_id);
+                    const branchName = emp?.branch?.name;
+                    const branchCode = emp?.branch?.code;
+                    const deptName = emp?.department?.name;
+                    const costCentre = emp?.department?.cost_centre;
+
+                    return (
+                      <tr key={line.id} className="hover:bg-gray-50/50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium text-gray-900">
+                            {emp ? `${emp.first_name} ${emp.last_name}` : line.employee_id}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {emp?.employee_number ? `#${emp.employee_number}` : 'No ID'} • {emp?.job_title || 'Staff'}
+                          </p>
+                        </td>
+                        <td className="px-4 py-3">
+                          {branchName || deptName ? (
+                            <div className="space-y-0.5">
+                              {branchName && (
+                                <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+                                  <Building2 className="h-3 w-3" />
+                                  {branchName}{branchCode ? ` (${branchCode})` : ''}
+                                </span>
+                              )}
+                              {deptName && (
+                                <p className="text-xs text-gray-600">
+                                  {deptName}{costCentre ? ` • CC: ${costCentre}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="inline-block text-xs font-medium capitalize text-gray-700">
+                            {emp?.payment_method ? emp.payment_method.replace(/_/g, ' ') : '—'}
+                          </span>
+                          {emp?.payment_method === 'bank_transfer' && emp.bank_account_number && (
+                            <p className="text-xs text-gray-400">{emp.bank_name || 'Bank'}: {emp.bank_account_number}</p>
+                          )}
+                          {emp?.payment_method === 'mobile_money' && emp.mobile_money_number && (
+                            <p className="text-xs text-gray-400">{emp.mobile_money_type || 'Mobile'}: {emp.mobile_money_number}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right font-medium text-gray-700">{formatMwkDetailed(Number(line.gross_pay))}</td>
+                        <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.paye_deduction))}</td>
+                        <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.pension_employee))}</td>
+                        <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(Number(line.other_deductions))}</td>
+                        <td className="px-4 py-3 text-right font-bold text-brand-700">{formatMwkDetailed(Number(line.net_pay))}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                  <tr>
+                    <td colSpan={3} className="px-4 py-3 text-sm font-bold text-gray-900">
+                      Totals ({totalBeneficiaries} {totalBeneficiaries === 1 ? 'beneficiary' : 'beneficiaries'})
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-gray-900">{formatMwkDetailed(Number(selectedRun.total_gross))}</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-red-600">−{formatMwkDetailed(Number(selectedRun.total_paye))}</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-red-600">
+                      −{formatMwkDetailed(totalPensionEmployee)}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-red-600">−{formatMwkDetailed(Number(selectedRun.total_other_deductions))}</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-brand-700">{formatMwkDetailed(Number(selectedRun.total_net))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -812,11 +1083,6 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
     enabled: Boolean(businessId),
   });
 
-  // FIX: this previously called calculatePAYE(gross * 12, []) — an
-  // always-empty bands array — meaning the "Est. PAYE" column silently
-  // used the hardcoded MRA-default fallback for every business, every
-  // employee, regardless of that business's actual configured bands.
-  // Now fetches the real bands, same as RunPayrollModal does.
   const { data: payeBands = [] } = useQuery({
     queryKey: ['paye_bands', businessId, currentFiscalYear()],
     queryFn: () => repos.payroll.findPayeBands(businessId, currentFiscalYear()),
@@ -848,7 +1114,7 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
           <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
             <tr>
               <th scope="col" className="px-4 py-3 text-left">Employee</th>
-              <th scope="col" className="px-4 py-3 text-left">Employee #</th>
+              <th scope="col" className="px-4 py-3 text-left">Cost Center / Branch</th>
               <th scope="col" className="px-4 py-3 text-left">Job Title</th>
               <th scope="col" className="px-4 py-3 text-left">Type</th>
               <th scope="col" className="px-4 py-3 text-right">Gross Salary</th>
@@ -858,10 +1124,15 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {employees.map((emp) => {
+            {employees.map((emp: any) => {
               const gross = Number(emp.gross_salary);
               const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
               const net = gross - paye;
+              const branchName = emp.branch?.name;
+              const branchCode = emp.branch?.code;
+              const deptName = emp.department?.name;
+              const costCentre = emp.department?.cost_centre;
+
               return (
                 <tr
                   key={emp.id}
@@ -870,9 +1141,29 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
                 >
                   <td className="px-4 py-3">
                     <p className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
-                    <p className="text-xs text-gray-600">{emp.payment_method.replace(/_/g, ' ')}</p>
+                    <p className="text-xs text-gray-500">
+                      {emp.employee_number ? `#${emp.employee_number} • ` : ''}{emp.payment_method.replace(/_/g, ' ')}
+                    </p>
                   </td>
-                  <td className="px-4 py-3 text-gray-500">{emp.employee_number}</td>
+                  <td className="px-4 py-3">
+                    {branchName || deptName ? (
+                      <div>
+                        {branchName && (
+                          <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
+                            <Building2 className="h-3 w-3" />
+                            {branchName}{branchCode ? ` (${branchCode})` : ''}
+                          </span>
+                        )}
+                        {deptName && (
+                          <p className="mt-0.5 text-xs text-gray-600">
+                            {deptName}{costCentre ? ` • CC: ${costCentre}` : ''}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-500 capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
                   <td className="px-4 py-3 text-right">{formatMwkDetailed(gross)}</td>

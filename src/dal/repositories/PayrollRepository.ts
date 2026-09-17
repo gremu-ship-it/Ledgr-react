@@ -96,7 +96,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
   async findEmployees(businessId: string): Promise<Row<'employees'>[]> {
     const { data, error } = await this.client
       .from('employees')
-      .select('*')
+      .select('*, branch:branches(id, name, code), department:departments(id, name, code, cost_centre)')
       .eq('business_id', businessId)
       .eq('is_active', true)
       .is('deleted_at', null)
@@ -341,6 +341,8 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
         line_number: lineNum++,
         tax_code: 'none',
         tax_amount: 0,
+        branch_id: employee.branch_id ?? null,
+        department_id: employee.department_id ?? null,
         reconciled: false as const,
       });
     }
