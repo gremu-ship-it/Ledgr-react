@@ -51,6 +51,11 @@ const ENTITY_CATEGORIES = [
     label: 'Operations',
     description: 'Historical transactions and assets',
     entities: ['fixed_assets'] as ImportEntityType[]
+  },
+  {
+    label: 'Payroll & People',
+    description: 'Employees with branch and cost centre assignment',
+    entities: ['employees'] as ImportEntityType[]
   }
 ];
 
