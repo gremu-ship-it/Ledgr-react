@@ -30,6 +30,12 @@
     "button": "Get started free",
     "secondary": "Talk to us"
   },
+  "demo": {
+    "live": "Try the live demo",
+    "nav": "Live demo",
+    "tour": "See the 1-minute tour",
+    "hint": "The full app on sample books — no sign-up, no password."
+  },
   "common": {
     "readMore": "Read more",
     "learnMore": "Learn more",

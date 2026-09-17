@@ -4,6 +4,8 @@ import { Plus, Trash2, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { webhookService, type Webhook, type WebhookDelivery } from '@/services/webhook/WebhookService';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { useDemoMode } from '@/hooks/useDemoMode';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 
 const AVAILABLE_EVENTS = [
   'invoice.created',
@@ -18,6 +20,7 @@ export function WebhookSettings() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
 
   const [url, setUrl] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
@@ -61,6 +64,10 @@ export function WebhookSettings() {
   };
 
   if (!businessId) return null;
+
+  // Demo accounts have nothing to bill, delete or connect: show why, and
+  // point at a real account instead of letting the flow fail silently.
+  if (isDemo) return <DemoNotice feature="webhooks" />;
 
   return (
     <div className="space-y-8">

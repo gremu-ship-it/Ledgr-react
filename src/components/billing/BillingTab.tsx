@@ -13,9 +13,12 @@ import { subscriptionPaymentService } from '@/services/billing/SubscriptionPayme
 import { PLANS, PLAN_TIER_ORDER, type PlanTier } from '@/lib/billing/plans';
 import { UsageHistoryChart } from './UsageHistoryChart';
 import { CheckoutModal } from './CheckoutModal';
+import { useDemoMode } from '@/hooks/useDemoMode';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 
 export function BillingTab() {
   const { usage, plan, planTier } = useUsage();
+  const isDemo = useDemoMode();
   const { canManageBilling } = usePermissions();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
@@ -106,6 +109,10 @@ export function BillingTab() {
       downgradeMutation.mutate(targetTier);
     }
   };
+
+  // Demo accounts have nothing to bill, delete or connect: show why, and
+  // point at a real account instead of letting the flow fail silently.
+  if (isDemo) return <DemoNotice feature="billing" />;
 
   return (
     <div className="space-y-8">

@@ -475,5 +475,51 @@
     "joinedAs": "Mwalowa ngati {{role}}. Tikukutumizani ku dashboard…",
     "theBusiness": "bizinesi",
     "member": "membala"
+  },
+  "demo": {
+    "bannerLabel": "Akaunti yachiwonetsero — deta yachitsanzo, osati mabuku anu",
+    "bannerShort": "Chiwonetsero",
+    "bannerNote": "Zimasungidwa mu bulawuza ino yokha · zibwezeretsedwa mu {{timeLeft}}",
+    "resetAction": "Bwezeretsani deta",
+    "resetDoneTitle": "Chiwonetsero chayambiranso",
+    "resetDoneBody": "Mabuku achitsanzo abwerera pa mmene ankalili.",
+    "signUpAction": "Pangani akaunti yaulere",
+    "exitAction": "Tulukani",
+    "tourCta": "Lowani mu chiwonetsero chenicheni",
+    "tourCtaHint": "Imatsegula pulogalamu yathunthu ndi mabuku achitsanzo — popanda kulembetsa, popanda mawu achinsinsi.",
+    "entering": "Ikutsegula akaunti yachiwonetsero…",
+    "enteringHint": "Ikukulowetsani monga demo@ledgr.test — popanda mawu achinsinsi. Zonse zimakhala mu bulawuza ino.",
+    "entryFailedTitle": "Sitinathe kuyambitsa chiwonetsero",
+    "entryFailedBody": "Chiwonetsero chimayenda mu bulawuza yanu yokha, chonwe chikufunika malo osungira. Yesaninso mu windo labwinobwino, kapena onani chiwonetsero chachidule.",
+    "notice": {
+      "billing": {
+        "title": "Malipiro si gawo la chiwonetsero",
+        "body": "Palibe choyenera kulipira pano — akaunti yachiwonetsero imagwiritsa ntchito mabuku achitsanzo mu bulawuza yanu. Pangani akaunti yaulere mukafuna kusunga mabuku anu enieni."
+      },
+      "deleteAccount": {
+        "title": "Palibe akaunti yoti ichotsedwe",
+        "body": "demo@ledgr.test ndi malo oyeserera mu bulawuza ino yokha. Kutuluka kapena kubwezeretsa deta kumachotsa zonse."
+      },
+      "invites": {
+        "title": "Kuitana anthu kwaletsedwa",
+        "body": "Kuitana munthu kumatumiza imelo yeniyeni ndipo kumapanga akaunti yeniyeni, chonwe sizigwira ntchito pano. Pangani akaunti yaulere kuti muitane gulu lanu."
+      },
+      "apiKeys": {
+        "title": "Mafungulo a API aletsedwa",
+        "body": "Mafungulowa amagwira ntchito ndi akaunti yeniyeni. Pangani akaunti yaulere kuti mupeze fungulo lanu."
+      },
+      "webhooks": {
+        "title": "Ma webhook aletsedwa",
+        "body": "Ma webhook amatumiza zochitika kuchokera ku akaunti yeniyeni. Pangani akaunti yaulere kuti mukonze izi."
+      },
+      "password": {
+        "title": "Akaunti yachiwonetsero ilibe mawu achinsinsi",
+        "body": "Mwalowa monga demo@ledgr.test popanda mawu achinsinsi, chonwe palibe chosinthika. Pangani akaunti yanu kuti mukhazikitse mawu achinsinsi."
+      },
+      "generic": {
+        "title": "Sikupezeka mu chiwonetsero",
+        "body": "Chinthu ichi chimagwira ntchito ndi akaunti yeniyeni ya Ledgr. Pangani akaunti yaulere kuti mugwiritse ntchito ndi mabuku anu."
+      }
+    }
   }
 }

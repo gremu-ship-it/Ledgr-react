@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Loader2, ShieldAlert, Undo2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
+import { useDemoMode } from '@/hooks/useDemoMode';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 
 /**
  * Account deletion (Right to Erasure) — drop into the Privacy tab in
@@ -11,6 +13,7 @@ import { useAppStore } from '@/store/useAppStore';
 export function DeleteAccountSection() {
   const currentUser = useAppStore((s) => s.currentUser);
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
   const [confirmText, setConfirmText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -111,6 +114,10 @@ export function DeleteAccountSection() {
       </div>
     );
   }
+
+  // Demo accounts have nothing to bill, delete or connect: show why, and
+  // point at a real account instead of letting the flow fail silently.
+  if (isDemo) return <DemoNotice feature="deleteAccount" />;
 
   return (
     <div className="rounded-2xl border border-red-200 bg-white p-5">

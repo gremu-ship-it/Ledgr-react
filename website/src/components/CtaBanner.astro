@@ -9,6 +9,7 @@ interface Props {
 
 const locale: Locale = Astro.props.locale ?? ((Astro.currentLocale as Locale) ?? 'en');
 const d = dict(locale).cta;
+const demo = dict(locale).demo;
 ---
 
 <section class="bg-brand-700" aria-labelledby="cta-heading">
@@ -23,6 +24,12 @@ const d = dict(locale).cta;
         class="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-700 shadow-soft transition-colors hover:bg-brand-50"
       >
         {d.button}
+      </a>
+      <a
+        href={`${SITE.appUrl}/demo/enter`}
+        class="rounded-lg border border-brand-300 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-800"
+      >
+        {demo.live}
       </a>
       <a
         href={`mailto:${SITE.salesEmail}`}

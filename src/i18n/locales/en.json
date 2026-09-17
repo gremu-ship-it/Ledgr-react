@@ -557,5 +557,51 @@
     "contactTitle": "Talk to a human",
     "contactBody": "The assistant handles most questions. For billing disputes, legal, or urgent issues, email our team.",
     "disclaimer": "The assistant uses AI and may make mistakes. Verify important financial or compliance details. Conversations are not used to train models without your consent."
+  },
+  "demo": {
+    "bannerLabel": "Demo account — sample data, not your books",
+    "bannerShort": "Demo mode",
+    "bannerNote": "Saved in this browser only · resets in {{timeLeft}}",
+    "resetAction": "Reset data",
+    "resetDoneTitle": "Demo reset",
+    "resetDoneBody": "The sample books are back to their starting point.",
+    "signUpAction": "Create free account",
+    "exitAction": "Exit demo",
+    "tourCta": "Enter the live demo",
+    "tourCtaHint": "Opens the full app with sample books — no sign-up, no password.",
+    "entering": "Opening the demo account…",
+    "enteringHint": "Signing you in as demo@ledgr.test — no password, no sign-up. Everything you do stays in this browser.",
+    "entryFailedTitle": "We couldn't start the demo",
+    "entryFailedBody": "The demo runs entirely in your browser, so it needs local storage enabled. Try again in a normal (not private) window, or take the static product tour instead.",
+    "notice": {
+      "billing": {
+        "title": "Billing is not part of the demo",
+        "body": "There is nothing to pay for here — the demo account runs on sample books stored in your browser. Create a free account and pick a plan when you are ready to keep your own books."
+      },
+      "deleteAccount": {
+        "title": "No account to delete",
+        "body": "demo@ledgr.test is a sandbox that lives in this browser only. Leaving the demo or resetting the data removes everything it created."
+      },
+      "invites": {
+        "title": "Team invites are disabled in the demo",
+        "body": "Inviting a colleague sends a real email and creates a real user, so it is switched off here. Create a free account to invite your team."
+      },
+      "apiKeys": {
+        "title": "API keys are disabled in the demo",
+        "body": "Keys authenticate against a live Ledgr tenant. Create a free account to generate one for your own business."
+      },
+      "webhooks": {
+        "title": "Webhooks are disabled in the demo",
+        "body": "Webhooks post events from a live tenant to your endpoint. Create a free account to configure them."
+      },
+      "password": {
+        "title": "The demo account has no password",
+        "body": "You are signed in as demo@ledgr.test without credentials, so there is nothing to change. Create your own account to set a password."
+      },
+      "generic": {
+        "title": "Not available in the demo",
+        "body": "This feature acts on a live Ledgr account. Create a free account to use it with your own books."
+      }
+    }
   }
 }
