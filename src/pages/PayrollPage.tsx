@@ -737,6 +737,18 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
     enabled: Boolean(businessId),
   });
 
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', businessId],
+    queryFn: () => repos.branch.findActive(businessId),
+    enabled: Boolean(businessId),
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', businessId],
+    queryFn: () => repos.department.findActive(businessId),
+    enabled: Boolean(businessId),
+  });
+
   const employeeMap = new Map(employees.map((e) => [e.id, e] as const));
 
   if (selectedRun) {
@@ -1436,77 +1448,102 @@ function EmployeesTab({
   const filteredNet = filteredGross - filteredPaye;
 
   return (
-    <>
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wide text-gray-500">
-            <tr>
-              <th scope="col" className="px-4 py-3 text-left">Employee</th>
-              <th scope="col" className="px-4 py-3 text-left">Cost Center / Branch</th>
-              <th scope="col" className="px-4 py-3 text-left">Job Title</th>
-              <th scope="col" className="px-4 py-3 text-left">Type</th>
-              <th scope="col" className="px-4 py-3 text-right">Gross Salary</th>
-              <th scope="col" className="px-4 py-3 text-right">Est. PAYE</th>
-              <th scope="col" className="px-4 py-3 text-right">Est. Net</th>
-              {canEdit && <th scope="col" className="w-10" />}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {employees.map((emp) => {
-              const gross = Number(emp.gross_salary);
-              const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
-              const net = gross - paye;
-              const branchName = emp.branch?.name;
-              const branchCode = emp.branch?.code;
-              const deptName = emp.department?.name;
-              const costCentre = emp.department?.cost_centre;
+    <div className="space-y-4">
+      {/* Cost Center Filter & Search Bar */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-gray-100">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-600">
+              <Filter className="h-3.5 w-3.5 text-brand-500" />
+              Filter Cost Centers:
+            </div>
+            <select
+              value={selectedBranchId}
+              onChange={(e) => setSelectedBranchId(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="all">All Branches</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}{b.code ? ` (${b.code})` : ''}
+                </option>
+              ))}
+              <option value="unassigned">Unassigned Branch</option>
+            </select>
 
-              return (
-                <tr
-                  key={emp.id}
-                  onClick={() => canEdit && setEditingEmployee(emp)}
-                  className={`transition-colors hover:bg-gray-50 ${canEdit ? 'cursor-pointer' : ''}`}
-                >
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</p>
-                    <p className="text-xs text-gray-500">
-                      {emp.employee_number ? `#${emp.employee_number} • ` : ''}{emp.payment_method.replace(/_/g, ' ')}
-                    </p>
-                  </td>
-                  <td className="px-4 py-3">
-                    {branchName || deptName ? (
-                      <div>
-                        {branchName && (
-                          <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-1.5 py-0.5 text-xs font-medium text-blue-700">
-                            <Building2 className="h-3 w-3" />
-                            {branchName}{branchCode ? ` (${branchCode})` : ''}
-                          </span>
-                        )}
-                        {deptName && (
-                          <p className="mt-0.5 text-xs text-gray-600">
-                            {deptName}{costCentre ? ` • CC: ${costCentre}` : ''}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{emp.job_title ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 capitalize">{emp.employment_type.replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-right">{formatMwkDetailed(gross)}</td>
-                  <td className="px-4 py-3 text-right text-red-600">−{formatMwkDetailed(paye)}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-brand-700">{formatMwkDetailed(net)}</td>
-                  {canEdit && (
-                    <td className="px-3 py-3">
-                      <Pencil className="h-4 w-4 text-gray-400" />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            <select
+              value={selectedDepartmentId}
+              onChange={(e) => setSelectedDepartmentId(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+            >
+              <option value="all">All Departments / Cost Centres</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}{d.cost_centre ? ` [CC: ${d.cost_centre}]` : ''}
+                </option>
+              ))}
+              <option value="unassigned">Unassigned Department</option>
+            </select>
+
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search staff, code, title..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="rounded-lg border border-gray-300 pl-8 pr-3 py-1.5 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              />
+            </div>
+
+            {isFiltered && (
+              <button
+                onClick={() => {
+                  setSelectedBranchId('all');
+                  setSelectedDepartmentId('all');
+                  setSearchTerm('');
+                }}
+                className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-800"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Clear Filters
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <button
+                onClick={onImportEmployees}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 transition-colors"
+              >
+                <Upload className="h-3.5 w-3.5 text-brand-600" />
+                Bulk Import
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Summary Metrics */}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-4 text-xs">
+          <div className="flex items-center gap-2 text-gray-500">
+            <span>Staff Count: <strong className="text-gray-900">{filteredEmployees.length}</strong> (of {employees.length})</span>
+            {isFiltered && <span className="rounded bg-brand-50 px-2 py-0.5 font-medium text-brand-700">Filtered View</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div>
+              <span className="text-gray-500">Filtered Gross: </span>
+              <strong className="text-gray-900">{formatMwkDetailed(filteredGross)}</strong>
+            </div>
+            <div>
+              <span className="text-gray-500">Est. PAYE: </span>
+              <strong className="text-red-600">−{formatMwkDetailed(filteredPaye)}</strong>
+            </div>
+            <div>
+              <span className="text-gray-500">Est. Net: </span>
+              <strong className="text-brand-700 font-bold">{formatMwkDetailed(filteredNet)}</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
       {filteredEmployees.length === 0 ? (
