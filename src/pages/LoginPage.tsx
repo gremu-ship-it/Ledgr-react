@@ -289,6 +289,12 @@ export function LoginPage() {
           {t('auth.createOne')}
         </Link>
       </p>
+      <p className="mt-2 text-center text-sm text-gray-500">
+        Or{' '}
+        <Link to="/demo" className="font-medium text-brand-600 hover:text-brand-700">
+          try the public demo
+        </Link>
+      </p>
     </AuthShell>
   );
 }
