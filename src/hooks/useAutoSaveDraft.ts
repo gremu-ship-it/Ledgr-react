@@ -69,6 +69,12 @@ export function useAutoSaveDraft<T extends object>(
       const parsed = JSON.parse(raw) as unknown;
       if (validate(parsed)) {
         restore(parsed);
+        // One-shot restore of a draft this hook does not own: `restore` writes
+        // into the consumer's form state, so there is no lazy-initialiser or
+        // render-phase alternative, and reading sessionStorage during render
+        // would itself be a side effect in render. restoredRef guarantees this
+        // branch runs at most once per mount, so it cannot cascade.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setRecovered(true);
       } else {
         window.sessionStorage.removeItem(key);

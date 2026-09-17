@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
-import { FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ArrowRight, FileText, FlaskConical } from 'lucide-react';
 import { IncomeExpenseChart } from '@/components/dashboard/IncomeExpenseChart';
 import { CashFlowIndicator } from '@/components/dashboard/CashFlowIndicator';
 import { formatMwk, formatMwkCompact, formatDateShort } from '@/lib/formatters';
@@ -58,6 +59,7 @@ function KpiCard({
 }
 
 export function DemoPage() {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="sticky top-0 z-40 border-b border-brand-700 bg-brand-950 text-white">
@@ -70,10 +72,10 @@ export function DemoPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              to="/login"
-              className="rounded-lg border border-brand-400/50 px-4 py-2 text-sm font-semibold text-brand-100 hover:bg-brand-900"
+              to="/demo/enter"
+              className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-300"
             >
-              Sign in
+              {t('demo.tourCta')}
             </Link>
             <Link
               to="/register"
@@ -81,11 +83,38 @@ export function DemoPage() {
             >
               Start free
             </Link>
+            <Link
+              to="/login"
+              className="rounded-lg border border-brand-400/50 px-4 py-2 text-sm font-semibold text-brand-100 hover:bg-brand-900"
+            >
+              Sign in
+            </Link>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+        {/* Bridge to the real product: the tour below is a snapshot, while
+            /demo/enter opens the whole app on the same sample books. */}
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100">
+              <FlaskConical className="h-4 w-4 text-amber-700" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-sm font-bold text-amber-900">{t('demo.tourCta')}</h2>
+              <p className="mt-0.5 max-w-xl text-xs text-amber-800">{t('demo.tourCtaHint')}</p>
+            </div>
+          </div>
+          <Link
+            to="/demo/enter"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-400"
+          >
+            {t('demo.tourCta')}
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
+        </div>
+
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900">Financial overview</h1>
           <p className="mt-0.5 text-sm text-gray-500">

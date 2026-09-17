@@ -126,10 +126,16 @@ const invoiceRows = [
           <a href={`${SITE.appUrl}/register`} class="rounded-lg bg-brand-500 px-6 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-brand-400">
             {t(locale, 'nav.getStarted')} →
           </a>
-          <a href={`${SITE.appUrl}/demo`} class="rounded-lg border border-brand-400/50 px-6 py-3 text-sm font-semibold text-brand-100 transition-colors hover:bg-brand-900">
-            Try the demo
+          <a href={`${SITE.appUrl}/demo/enter`} class="rounded-lg border border-brand-400/50 px-6 py-3 text-sm font-semibold text-brand-100 transition-colors hover:bg-brand-900">
+            {t(locale, 'demo.live')} →
           </a>
         </div>
+        <p class="mt-3 text-sm text-brand-200">
+          {t(locale, 'demo.hint')}
+          <a href={`${SITE.appUrl}/demo`} class="font-semibold text-brand-100 underline decoration-brand-400/60 underline-offset-2 hover:text-white">
+            {t(locale, 'demo.tour')}
+          </a>
+        </p>
         <ul class="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-brand-200">
           <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> Works offline</li>
           <li class="flex items-center gap-1.5"><span class="text-brand-400" aria-hidden="true">✓</span> PAYE, VAT &amp; MRA-ready</li>

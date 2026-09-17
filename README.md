@@ -335,10 +335,33 @@ Leaving `VITE_AI_CHAT_URL` unset (or omitting `AI_API_KEY`) is a supported
 configuration: the assistant keeps working entirely offline. **No AI provider
 key is ever present in the client bundle** — the browser only knows a URL.
 
+## Live demo
+
+Visitors from the marketing site can use the full app with **no sign-up and no
+password** via a single stable link:
+
+```
+https://app.ledgr.com/demo/enter
+```
+
+That route seeds a realistic Malawian business (six months of sales, purchases,
+payroll, inventory and journals — all balanced) in the visitor's own browser,
+signs them in as `demo@ledgr.test`, and lands on the dashboard. Demo mode is
+entirely client-side: it makes no Supabase, payment or AI calls, persists only
+to that browser's `localStorage`, auto-reseeds every 24 hours, and replaces
+irreversible screens (billing, team invites, API keys, webhooks, password
+change, account deletion) with an explanation. A static, read-only product tour
+remains at `/demo`.
+
+The landing page lives in a separate Vercel project; linking to it is the whole
+integration. See [`DEMO_MODE.md`](DEMO_MODE.md) for the dataset, the client
+facade and the guardrail list.
+
 ## Documentation
 
 | Document | What it covers |
 |---|---|
+| [`DEMO_MODE.md`](DEMO_MODE.md) | One-click live demo (`/demo/enter`) — dataset, client facade, guardrails |
 | [`DEPLOYMENT.md`](DEPLOYMENT.md) | Architecture, CI/CD, provider setup, monitoring |
 | [`PAYCHANGU_SETUP.md`](PAYCHANGU_SETUP.md) | PayChangu subscription/webhook setup |
 | [`SUPPORT_AGENT.md`](SUPPORT_AGENT.md) | In-app AI support agent |

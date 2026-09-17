@@ -6,6 +6,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { apiKeyService } from '@/services/api/ApiKeyService';
 import type { ApiKey } from '@/services/api/ApiKeyService';
 import { useLocaleFormat } from '@/i18n';
+import { useDemoMode } from '@/hooks/useDemoMode';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 
 export function ApiKeysPage({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
@@ -13,6 +15,7 @@ export function ApiKeysPage({ compact = false }: { compact?: boolean }) {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
   const [newKeyName, setNewKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -46,6 +49,10 @@ export function ApiKeysPage({ compact = false }: { compact?: boolean }) {
   };
 
   if (!businessId) return <div className="p-8">{t('api.noBusinessSelected')}</div>;
+
+  // Demo accounts have nothing to bill, delete or connect: show why, and
+  // point at a real account instead of letting the flow fail silently.
+  if (isDemo) return <DemoNotice feature="apiKeys" />;
 
   return (
     <div className={compact ? 'space-y-6' : 'mx-auto max-w-4xl p-8'}>

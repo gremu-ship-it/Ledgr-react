@@ -1,4 +1,6 @@
 import { useNavigate } from 'react-router';
+import { useDemoMode } from '@/hooks/useDemoMode';
+import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router';
@@ -744,6 +746,7 @@ function UserProfileTab() {
 // ── Security Tab ──────────────────────────────────────────────────────────────
 
 function SecurityTab() {
+  const isDemo = useDemoMode();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
@@ -799,6 +802,9 @@ function SecurityTab() {
     },
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
   });
+
+  // demo@ledgr.test has no password and no MFA enrolment to manage.
+  if (isDemo) return <DemoNotice feature="password" />;
 
   return (
     <div className="space-y-6">
@@ -947,6 +953,7 @@ const ROLES = [
 ] as const;
 
 export function TeamMembersTab({ businessId }: { businessId: string }) {
+  const isDemo = useDemoMode();
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showInvite, setShowInvite] = useState(false);
@@ -1283,6 +1290,10 @@ export function TeamMembersTab({ businessId }: { businessId: string }) {
     setAlert({ type: 'success', message: 'Invitation link copied.' });
     setTimeout(() => setAlert(null), 2000);
   }
+
+  // Inviting a colleague sends real email and creates a real user, so the
+  // whole tab is replaced in the demo rather than left to fail on submit.
+  if (isDemo) return <DemoNotice feature="invites" />;
 
   return (
     <div className="space-y-6">

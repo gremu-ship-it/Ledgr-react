@@ -30,6 +30,12 @@
     "button": "Yambani kwaulere",
     "secondary": "Tilankhuleni"
   },
+  "demo": {
+    "live": "Yesani demo yeniyeni",
+    "nav": "Demo yeniyeni",
+    "tour": "Onani chiwonetsero chachidule",
+    "hint": "Pulogalamu yathunthu ndi mabuku achitsanzo — popanda kulembetsa, popanda mawu achinsinsi."
+  },
   "common": {
     "readMore": "Werengani zambiri",
     "learnMore": "Dziwani zambiri",

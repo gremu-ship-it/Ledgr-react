@@ -1,5 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/dal/types/database';
+import { isDemoMode } from '@/lib/demo/mode';
+import { getDemoClientIfLoaded } from '@/lib/demo/loader';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -103,11 +105,61 @@ export function isAbortError(err: unknown): boolean {
   );
 }
 
-export const supabase = createClient<Database>(resolvedUrl, resolvedKey, {
+export const realSupabase = createClient<Database>(resolvedUrl, resolvedKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
   global: { fetch: fetchWithTimeout as typeof fetch },
+});
+
+/**
+ * The client every module in the app talks to.
+ *
+ * This is a thin facade that forwards each property access to whichever
+ * backend is active *right now*:
+ *
+ *   - demo mode (`demo@ledgr.test`) → the in-memory demo client, so the whole
+ *     product is explorable with no Supabase project, no credentials and no
+ *     network traffic. See `src/lib/demo/`.
+ *   - otherwise → the real Supabase client above.
+ *
+ * Forwarding lazily (instead of re-exporting the client directly) is what
+ * makes the swap possible at all: every repository captures `this.client` at
+ * module load, long before a visitor can enter the demo, so the reference has
+ * to stay stable while the target changes underneath it.
+ *
+ * The facade is transparent in production: when the demo flag is off (the
+ * default, and the only possible state on a real session) every access resolves
+ * to `realSupabase` and behaves exactly as before.
+ */
+let warnedAboutUnloadedDemo = false;
+
+function activeClient(): SupabaseClient<Database> {
+  if (isDemoMode()) {
+    const demo = getDemoClientIfLoaded();
+    if (demo) return demo;
+    // Both entry points (enterDemoMode and the main.tsx bootstrap) await the
+    // chunk before anything can query, so this is a race we should never hit.
+    // Fall back rather than throw inside a Proxy getter, and say so once.
+    if (!warnedAboutUnloadedDemo) {
+      warnedAboutUnloadedDemo = true;
+      console.warn('[supabase] Demo mode is on but the demo engine has not loaded yet — using the real client.');
+    }
+    return realSupabase;
+  }
+  return realSupabase;
+}
+
+export const supabase: SupabaseClient<Database> = new Proxy({} as SupabaseClient<Database>, {
+  get(_target, prop) {
+    const target = activeClient() as unknown as Record<string | symbol, unknown>;
+    const value = Reflect.get(target, prop, target);
+    // Bind methods so `const { from } = supabase` keeps working.
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+  },
+  has(_target, prop) {
+    return Reflect.has(activeClient() as unknown as object, prop);
+  },
 });

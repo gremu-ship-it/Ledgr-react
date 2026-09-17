@@ -96,6 +96,7 @@ const SupportPage = lazyPage(() => import('@/pages/SupportPage'), 'SupportPage')
 const ToolsPage = lazyPage(() => import('@/pages/ToolsPage'), 'default');
 const DataImportPage = lazyPage(() => import('@/pages/DataImportPage'), 'DataImportPage');
 const DemoPage = lazyPage(() => import('@/pages/DemoPage'), 'DemoPage');
+const DemoEntryPage = lazyPage(() => import('@/pages/DemoEntryPage'), 'DemoEntryPage');
 
 // Plan gates wrap routes, so they stay in the main bundle.
 import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
@@ -104,6 +105,7 @@ import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { isDemoMode } from '@/lib/demo/mode';
 import { ConfigError } from '@/components/ConfigError';
 
 export function RoleRoute() {
@@ -166,11 +168,13 @@ function App() {
   // throwing at import (which blanks the page). Show a readable error here so
   // operators immediately see what to fix, rather than a white screen or a
   // cascade of network errors.
-  // The public demo is static sample data and must remain reachable even when
-  // env vars are missing (marketing / preview builds).
+  // The public demo must stay reachable even when env vars are missing
+  // (marketing / preview builds). That covers both the static product tour
+  // (/demo) and the client-side demo account (/demo/enter and anything reached
+  // from it), neither of which talks to Supabase at all.
   const onPublicDemo =
-    typeof window !== 'undefined' && window.location.pathname === '/demo';
-  if (!isSupabaseConfigured && !onPublicDemo) {
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/demo');
+  if (!isSupabaseConfigured && !onPublicDemo && !isDemoMode()) {
     return <ConfigError />;
   }
 
@@ -194,6 +198,11 @@ function App() {
 
             {/* Public product tour — no auth, no live tenant data */}
             <Route path="/demo" element={<DemoPage />} />
+
+            {/* One-click demo account: signs the visitor in as
+                demo@ledgr.test against seeded, browser-local books. This is
+                the URL external sites (the marketing site on Vercel) link to. */}
+            <Route path="/demo/enter" element={<DemoEntryPage />} />
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
             <Route path="/reset-password" element={<ResetPasswordPage />} />

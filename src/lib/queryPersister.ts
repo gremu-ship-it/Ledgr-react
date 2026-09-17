@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { PersistedClient, Persister } from '@tanstack/react-query-persist-client';
+import { isDemoMode } from '@/lib/demo/mode';
 
 /**
  * IndexedDB persister for the React Query cache.
@@ -131,6 +132,10 @@ function isPersistableKey(queryKey: unknown): boolean {
 export function createIDBPersister(): Persister {
   return {
     persistClient: async (client: PersistedClient): Promise<void> => {
+      // Demo data must never reach IndexedDB: the persisted blob is restored
+      // on the next app boot, and a visitor who later signs in for real would
+      // then be handed demo rows before their own data loads.
+      if (isDemoMode()) return;
       try {
         const serialized = JSON.stringify(client);
         // Single-row store; we use a fixed id ('rq-state') because React
@@ -149,6 +154,9 @@ export function createIDBPersister(): Persister {
       }
     },
     restoreClient: async (): Promise<PersistedClient | undefined> => {
+      // Symmetric with persistClient: a demo session starts from an empty
+      // cache and reads everything from the seeded in-memory tables.
+      if (isDemoMode()) return undefined;
       try {
         const row = await db.cache.get('rq-state');
         if (!row) return undefined;
