@@ -136,7 +136,11 @@ history ending in the current month, so the demo never looks stale:
 
 - **Business** — Zikomo Foods Ltd, Lilongwe, MWK, VAT registered (17.5%), Pro
   plan, two branches, three departments, 12 accounting periods (the months
-  before the ledger cut-over are locked).
+  before the ledger cut-over are locked). The tier matters: `PlanGate` wraps
+  Reports, Journals, Tax, Assets, Period Management and the Chart of Accounts in
+  the `accounting_organisation` capability, so a Free-tier demo would meet an
+  upgrade wall on the core of the product. Pro unlocks all of them while still
+  reporting a real usage meter (Enterprise's is unlimited).
 - **Chart of accounts** — the real `getCoaTemplate('gaap')` seed (~120 accounts),
   with a balanced opening position (assets = liabilities + equity).
 - **Contacts** — 10 customers and suppliers with Malawian names, VAT numbers and
@@ -183,7 +187,12 @@ browser snapshots are discarded rather than mismatched.
 ## 5. Testing and safety
 
 ```bash
-npx vitest run src/lib/demo   # dataset integrity, query builder, session lifecycle
+# Engine: dataset integrity, query builder, session lifecycle, plan access
+npx vitest run src/lib/demo
+
+# The screens a visitor actually lands on (jsdom, real components and hooks)
+npx vitest run src/pages/__tests__/DemoEntryPage.test.tsx \
+               src/hooks/__tests__/useDashboardData.demo.test.tsx
 ```
 
 - `demoDataset.test.ts` asserts the books balance, invoice/expense/payroll
@@ -194,6 +203,18 @@ npx vitest run src/lib/demo   # dataset integrity, query builder, session lifecy
   seeded tables.
 - `demoSession.test.ts` covers entering, using, resetting, auto-reset, and
   leaving the demo, and that the facade stops serving demo rows on exit.
+- `demoPlanAccess.test.ts` asserts the seeded tier unlocks every module
+  `PlanGate` wraps, and that the seeded month leaves transaction creation
+  enabled — a prospect who cannot press "New invoice" is not seeing a demo.
+- `DemoEntryPage.test.tsx` (`src/pages/__tests__/`) renders the real
+  `/demo/enter` page: the visitor lands signed in on `/dashboard`, `?to=` deep
+  links are honoured, and neither an absolute nor a protocol-relative `?to=` can
+  turn the entry point into an open redirect.
+- `useDashboardData.demo.test.tsx` (`src/hooks/__tests__/`) renders the seven
+  real hooks behind the first screen and asserts they resolve against the demo
+  client, that the reporting month anchors to the **newest** record (an ignored
+  `.order()` would still return valid-looking rows — just January's), and that
+  the trend, outstanding invoices and journal period-lock flag carry real values.
 
 Safety properties worth preserving:
 
