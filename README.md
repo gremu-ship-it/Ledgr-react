@@ -48,6 +48,9 @@ agent** answers product, triage, and compliance questions.
 
 ## Getting started
 
+A public, unauthenticated product tour lives at **`/demo`**. It renders static
+sample books (Lilongwe Trading Ltd) and never talks to Supabase.
+
 **Prerequisites:** Node.js ≥ 22.22 (react-router v8 requirement) and npm 10+.
 
 ```bash

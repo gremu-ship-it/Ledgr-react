@@ -95,6 +95,7 @@ const BankReconciliation = lazyPage(
 const SupportPage = lazyPage(() => import('@/pages/SupportPage'), 'SupportPage');
 const ToolsPage = lazyPage(() => import('@/pages/ToolsPage'), 'default');
 const DataImportPage = lazyPage(() => import('@/pages/DataImportPage'), 'DataImportPage');
+const DemoPage = lazyPage(() => import('@/pages/DemoPage'), 'DemoPage');
 
 // Plan gates wrap routes, so they stay in the main bundle.
 import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
@@ -165,7 +166,11 @@ function App() {
   // throwing at import (which blanks the page). Show a readable error here so
   // operators immediately see what to fix, rather than a white screen or a
   // cascade of network errors.
-  if (!isSupabaseConfigured) {
+  // The public demo is static sample data and must remain reachable even when
+  // env vars are missing (marketing / preview builds).
+  const onPublicDemo =
+    typeof window !== 'undefined' && window.location.pathname === '/demo';
+  if (!isSupabaseConfigured && !onPublicDemo) {
     return <ConfigError />;
   }
 
@@ -186,6 +191,9 @@ function App() {
 
             {/* Public legal page */}
             <Route path="/terms-and-conditions" element={<TermsAndConditionsPage />} />
+
+            {/* Public product tour — no auth, no live tenant data */}
+            <Route path="/demo" element={<DemoPage />} />
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
             <Route path="/reset-password" element={<ResetPasswordPage />} />
