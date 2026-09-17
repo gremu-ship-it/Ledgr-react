@@ -950,9 +950,13 @@ export async function importEmployees(
       paymentMethod = 'bank_transfer';
     }
 
+    const randomSuffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()
+      : `${Date.now().toString().slice(-4)}${row.rowNumber}`;
+
     const empNumber =
       row.data['employee_number']?.trim() ||
-      `EMP-${Date.now().toString().slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+      `EMP-${randomSuffix}`;
 
     toInsert.push({
       business_id: businessId,
