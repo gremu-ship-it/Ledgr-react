@@ -10,6 +10,17 @@ export type PayrollRunWithLines = Row<'payroll_runs'> & {
   lines: Row<'payroll_employee_lines'>[];
 };
 
+/**
+ * An employee plus the branch and department embedded by findEmployees().
+ * Generated Row types describe columns only, never embeds, so the joined
+ * shape is named once here instead of being re-declared (or `any`-ed) at
+ * each call site.
+ */
+export type EmployeeWithOrg = Row<'employees'> & {
+  branch?: Row<'branches'> | null;
+  department?: Row<'departments'> | null;
+};
+
 export class PayrollRepository extends BaseRepository<'payroll_runs'> {
   constructor(client: SupabaseClient<Database>) {
     super(client, 'payroll_runs');
@@ -93,7 +104,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     return data as PayrollRunWithLines;
   }
 
-  async findEmployees(businessId: string): Promise<Row<'employees'>[]> {
+  async findEmployees(businessId: string): Promise<EmployeeWithOrg[]> {
     const { data, error } = await this.client
       .from('employees')
       .select('*, branch:branches(id, name, code), department:departments(id, name, code, cost_centre)')
@@ -102,7 +113,7 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
       .is('deleted_at', null)
       .order('last_name', { ascending: true });
     if (error) throw toRepositoryError('employees', error);
-    return data ?? [];
+    return (data ?? []) as EmployeeWithOrg[];
   }
 
   async findEmployeeById(employeeId: string): Promise<Row<'employees'>> {

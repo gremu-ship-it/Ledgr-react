@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useId } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { Bell, Menu, LogOut, Settings, User, X, AlertTriangle, CheckCircle2, Crown, ShieldCheck } from 'lucide-react';
+import { Bell, Menu, LogOut, Settings, User, X, AlertTriangle, CheckCircle2, Crown, FlaskConical, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
@@ -13,6 +13,8 @@ import { BusinessSwitcher } from './BusinessSwitcher';
 import { ThemeToggle } from './ThemeToggle';
 import { OfflineQueueDrawer } from './OfflineQueueDrawer';
 import { announce } from '@/lib/a11y';
+import { useDemoMode } from '@/hooks/useDemoMode';
+import { exitDemoMode } from '@/lib/demo/session';
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {
   if (name && name.trim()) {
@@ -32,6 +34,7 @@ export function Header() {
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusinessId = useAppStore((s) => s.currentBusiness?.business?.id ?? null);
+  const isDemo = useDemoMode();
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -104,6 +107,13 @@ export function Header() {
   }, [notificationsOpen, unreadCount]);
 
   async function handleSignOut() {
+    // Leaving the demo is not a Supabase sign-out: there is no session to
+    // revoke, only local sample data and the demo flag to clear.
+    if (isDemo) {
+      exitDemoMode();
+      navigate('/login', { replace: true });
+      return;
+    }
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
   }
@@ -128,20 +138,33 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Subscription Status Badge */}
-        <button
-          type="button"
-          onClick={() => navigate('/settings?tab=billing')}
-          className={`hidden sm:flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold cursor-pointer transition-all active:scale-[0.985] ${
-            isPaid
-              ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-          }`}
-          aria-label={`Current plan: ${plan.name}. Open billing settings.`}
-        >
-          <Crown className="h-3 w-3" aria-hidden="true" />
-          <span>{plan.name}</span>
-        </button>
+        {/* Subscription Status Badge — replaced by a demo badge in the tour,
+            where a plan name would imply a billable account that doesn't exist. */}
+        {isDemo ? (
+          <button
+            type="button"
+            onClick={() => navigate('/register')}
+            className="hidden sm:flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900 cursor-pointer transition-all hover:bg-amber-200 active:scale-[0.985]"
+            aria-label={t('demo.bannerLabel')}
+          >
+            <FlaskConical className="h-3 w-3" aria-hidden="true" />
+            <span>{t('demo.bannerShort')}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate('/settings?tab=billing')}
+            className={`hidden sm:flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold cursor-pointer transition-all active:scale-[0.985] ${
+              isPaid
+                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            aria-label={`Current plan: ${plan.name}. Open billing settings.`}
+          >
+            <Crown className="h-3 w-3" aria-hidden="true" />
+            <span>{plan.name}</span>
+          </button>
+        )}
 
         <LanguageSwitcher />
         <ThemeToggle />
@@ -311,6 +334,12 @@ export function Header() {
                   {currentUser?.profile?.full_name ?? t('common.account')}
                 </p>
                 <p className="truncate text-[10px] font-bold text-gray-700 uppercase tracking-tighter mt-0.5">{currentUser?.email}</p>
+                {isDemo && (
+                  <p className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">
+                    <FlaskConical className="h-3 w-3" aria-hidden="true" />
+                    {t('demo.bannerShort')}
+                  </p>
+                )}
               </div>
               <div className="my-1 border-t border-gray-100/50" />
               <button

@@ -47,6 +47,14 @@ const links = [
 
     <div class="flex items-center gap-2">
       <LanguageSwitcher locale={locale} />
+      <!-- One-click demo: opens the app already signed in as demo@ledgr.test -->
+      <a
+        href={`${SITE.appUrl}/demo/enter`}
+        class="hidden items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-1.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100 md:inline-flex"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6.3L4.7 18a2 2 0 0 0 1.7 3h11.2a2 2 0 0 0 1.7-3L14 9.3V3"/></svg>
+        {t(locale, 'demo.nav')}
+      </a>
       <a
         href={`${SITE.appUrl}/login`}
         class="hidden text-sm font-medium text-navy-600 hover:text-brand-700 sm:inline-flex"
@@ -74,6 +82,9 @@ const links = [
               </a>
             ))
           }
+          <a href={`${SITE.appUrl}/demo/enter`} class="block rounded-lg px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50">
+            {t(locale, 'demo.nav')}
+          </a>
           <a href={`${SITE.appUrl}/login`} class="block rounded-lg px-3 py-2 text-sm font-medium text-navy-600 hover:bg-brand-50 hover:text-brand-700">
             {d.signIn}
           </a>

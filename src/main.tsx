@@ -13,6 +13,8 @@ import './index.css';
 import './i18n';
 import App from './App.tsx';
 import { registerLedgrServiceWorker } from '@/offline/registerServiceWorker';
+import { isDemoMode } from '@/lib/demo/mode';
+import { loadDemoClient } from '@/lib/demo/loader';
 
 // Automatically recover once if Vite encounters a module preload failure
 // (e.g. after a deployment invalidates old chunk filenames).
@@ -61,37 +63,50 @@ if (SENTRY_DSN) {
   });
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-      <App />
-      {/* Vercel Web Analytics + Speed Insights (Core Web Vitals) */}
-      <Analytics />
-      <SpeedInsights />
-    </PersistQueryClientProvider>
-  </StrictMode>,
-);
+function startApp() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+        <App />
+        {/* Vercel Web Analytics + Speed Insights (Core Web Vitals) */}
+        <Analytics />
+        <SpeedInsights />
+      </PersistQueryClientProvider>
+    </StrictMode>,
+  );
 
-// Wipe all locally-cached data on explicit logout so another user on a
-// shared device cannot read cached rows or form drafts belonging to the
-// previous account. Supabase RLS already blocks server-side access to
-// other tenants, but defense-in-depth says we don't leave financial data
-// sitting in the browser after sign-out.
-supabase.auth.onAuthStateChange((event) => {
-  if (event === 'SIGNED_OUT') {
-    void clearPersistedCache();
-    try {
-      // Only clear ledgr-prefixed keys so we don't touch third-party
-      // entries (Supabase session, analytics, etc.) that manage their
-      // own lifecycle.
-      const toRemove: string[] = [];
-      for (let i = 0; i < window.sessionStorage.length; i++) {
-        const k = window.sessionStorage.key(i);
-        if (k && k.startsWith('ledgr_')) toRemove.push(k);
+  // Wipe all locally-cached data on explicit logout so another user on a
+  // shared device cannot read cached rows or form drafts belonging to the
+  // previous account. Supabase RLS already blocks server-side access to
+  // other tenants, but defense-in-depth says we don't leave financial data
+  // sitting in the browser after sign-out.
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') {
+      void clearPersistedCache();
+      try {
+        // Only clear ledgr-prefixed keys so we don't touch third-party
+        // entries (Supabase session, analytics, etc.) that manage their
+        // own lifecycle.
+        const toRemove: string[] = [];
+        for (let i = 0; i < window.sessionStorage.length; i++) {
+          const k = window.sessionStorage.key(i);
+          if (k && k.startsWith('ledgr_')) toRemove.push(k);
+        }
+        for (const k of toRemove) window.sessionStorage.removeItem(k);
+      } catch {
+        // storage access disabled; ignore
       }
-      for (const k of toRemove) window.sessionStorage.removeItem(k);
-    } catch {
-      // storage access disabled; ignore
     }
-  }
-});
+  });
+}
+
+// A page load that starts already inside the demo (a refresh deep in the tour)
+// needs the demo engine in memory before the first render, so the client facade
+// answers from the seeded tables instead of falling back to the network.
+// Everyone else renders immediately and never downloads that chunk — the seeded
+// books are ~33 kB gzipped that a signed-in user has no use for.
+if (isDemoMode()) {
+  void loadDemoClient().then(startApp, startApp);
+} else {
+  startApp();
+}

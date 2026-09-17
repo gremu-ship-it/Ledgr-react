@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
+import { useDemoMode } from '@/hooks/useDemoMode';
 
 const ACTIVITY_EVENTS: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'pointerdown'];
 const DEFAULT_INACTIVITY_MINUTES = 60;
@@ -15,6 +16,7 @@ export interface InactivityState {
 
 export function useInactivityTimeout(): InactivityState {
   const navigate = useNavigate();
+  const isDemo = useDemoMode();
   const currentUser = useAppStore((s) => s.currentUser);
   const reset = useAppStore((s) => s.reset);
   const inactivityTimeoutMinutes = useAppStore((s) => s.inactivityTimeoutMinutes);
@@ -80,6 +82,10 @@ export function useInactivityTimeout(): InactivityState {
   const didInitRef = useRef(false);
   useEffect(() => {
     if (!currentUser) return;
+    // The demo has no session to protect: it is local sample data with no
+    // credentials behind it, so idle-logging a visitor out of the tour only
+    // interrupts them. Real sessions keep the full idle-timeout behaviour.
+    if (isDemo) return;
     if (!didInitRef.current) {
       didInitRef.current = true;
       getLastActivity();
@@ -107,7 +113,7 @@ export function useInactivityTimeout(): InactivityState {
       ACTIVITY_EVENTS.forEach((ev) => window.removeEventListener(ev, handleActivity));
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [currentUser, scheduleTimers, clearAllTimers, doLogout, getInactivityMs]);
+  }, [currentUser, isDemo, scheduleTimers, clearAllTimers, doLogout, getInactivityMs]);
 
   return { showWarning, secondsRemaining, extendSession };
 }

@@ -19,6 +19,8 @@ import { useRenewalReminder } from '@/hooks/useRenewalReminder';
 import { InactivityWarningModal } from '@/components/auth/InactivityWarningModal';
 import { Assistant } from '@/components/ai/Assistant';
 import { CommandPalette } from './CommandPalette';
+import { DemoBanner } from '@/components/demo/DemoBanner';
+import { useDemoMode } from '@/hooks/useDemoMode';
 
 export function AppLayout() {
   const { t } = useTranslation();
@@ -26,6 +28,7 @@ export function AppLayout() {
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const isMobile = useIsMobile();
   const location = useLocation();
+  const isDemo = useDemoMode();
 
   useBrandTheme();
   usePartnerTheme();
@@ -46,6 +49,9 @@ export function AppLayout() {
         <div id="ledgr-live-region" aria-live="polite" aria-atomic="true" className="sr-only" />
 
         <div className="sticky top-0 z-40">
+          {/* Demo visitors always see which account they are in and how to
+              leave — the sample books must never be mistaken for real data. */}
+          {isDemo && <DemoBanner />}
           <OfflineBanner />
         </div>
 

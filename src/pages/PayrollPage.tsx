@@ -11,6 +11,7 @@ import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { nextEntryNumber } from '@/services/journalService';
 import { csvCell } from '@/services/dataBackupService';
+import { isMobileMoney } from '@/lib/paymentMethod';
 import { EditEmployeeModal } from '@/components/payroll/EditEmployeeModal';
 
 
@@ -732,7 +733,7 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
     enabled: Boolean(businessId),
   });
 
-  const employeeMap = new Map<string, any>(employees.map((e: any) => [e.id, e]));
+  const employeeMap = new Map(employees.map((e) => [e.id, e] as const));
 
   if (selectedRun) {
     const lines = runWithLines?.lines ?? [];
@@ -783,7 +784,7 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
         const deptStr = emp?.department?.name ? `${emp.department.name}${emp.department.cost_centre ? ' [' + emp.department.cost_centre + ']' : ''}` : '';
         const payDetail = emp?.payment_method === 'bank_transfer'
           ? `${emp?.bank_name || ''} - ${emp?.bank_account_number || ''}`.trim()
-          : emp?.payment_method === 'mobile_money'
+          : isMobileMoney(emp?.payment_method)
           ? `${emp?.mobile_money_type || ''} - ${emp?.mobile_money_number || ''}`.trim()
           : '';
 
@@ -972,7 +973,7 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
                           {emp?.payment_method === 'bank_transfer' && emp.bank_account_number && (
                             <p className="text-xs text-gray-400">{emp.bank_name || 'Bank'}: {emp.bank_account_number}</p>
                           )}
-                          {emp?.payment_method === 'mobile_money' && emp.mobile_money_number && (
+                          {emp && isMobileMoney(emp.payment_method) && emp.mobile_money_number && (
                             <p className="text-xs text-gray-400">{emp.mobile_money_type || 'Mobile'}: {emp.mobile_money_number}</p>
                           )}
                         </td>
@@ -1124,7 +1125,7 @@ function EmployeesTab({ businessId, onAddEmployee, canEdit }: { businessId: stri
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {employees.map((emp: any) => {
+            {employees.map((emp) => {
               const gross = Number(emp.gross_salary);
               const paye = emp.tax_exempt ? 0 : calculatePAYE(gross * 12, payeBands as PayeBand[]);
               const net = gross - paye;

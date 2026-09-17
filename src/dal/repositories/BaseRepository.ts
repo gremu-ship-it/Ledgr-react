@@ -107,7 +107,6 @@ export class BaseRepository<T extends TableName> {
     const { data, error } = await this.client
       .from(this.table)
       .update(dto as never)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- see findById
       .eq('id' as never, id)
       .eq('updated_at' as never, expectedUpdatedAt)
       .select('*')

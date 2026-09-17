@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Users, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { repos } from '@/lib/repositories';
+import { isMobileMoney } from '@/lib/paymentMethod';
 import type { Row, UpdateDto } from '@/dal/types/database';
 
 interface Alert { type: 'success' | 'error'; message: string; }
@@ -211,10 +212,7 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
             </div>
           )}
 
-          {(
-            form.payment_method === 'airtel_money' ||
-            form.payment_method === 'tnm_mpamba'
-          ) && (
+          {isMobileMoney(form.payment_method) && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Provider</label>

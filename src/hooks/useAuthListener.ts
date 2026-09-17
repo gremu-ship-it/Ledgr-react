@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { isDemoMode } from '@/lib/demo/mode';
+import { hydrateDemoSession } from '@/lib/demo/session';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
@@ -160,7 +162,32 @@ export function useAuthListener() {
     }
 
     // ── Initial session check ────────────────────────────────────────
+    // Demo mode owns the session: `demo@ledgr.test` is a local identity with
+    // no Supabase user behind it, so hydrate it straight from the seed and
+    // never touch the network. (This also makes the demo work on a build with
+    // no Supabase env vars at all.)
+    // Demo hydration is async: the seeded books live in a lazily loaded chunk
+    // so that visitors who never open the demo don't download them. It writes
+    // the demo identity into the store and clears both loading flags itself.
+    const hydrateDemo = () => {
+      void hydrateDemoSession().catch((err) => {
+        log.error('Demo session hydration failed', err as Error);
+        if (isMountedRef.current) {
+          useAppStore.getState().setBusinessesLoading(false);
+          useAppStore.getState().setAuthLoading(false);
+        }
+      });
+    };
+
+    if (isDemoMode()) {
+      hydrateDemo();
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isDemoMode()) {
+        hydrateDemo();
+        return;
+      }
       if (!isMountedRef.current) return;
       if (session?.user) {
         // If we already recorded a hydrated user and it's a DIFFERENT user
@@ -189,6 +216,14 @@ export function useAuthListener() {
     // ── Auth state changes ───────────────────────────────────────────
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!isMountedRef.current) return;
+
+      // While the demo flag is set, auth events come from the demo client and
+      // carry no real user. Re-hydrate the seeded identity (or, on sign-out,
+      // fall through to the purge below so leaving the demo clears state).
+      if (isDemoMode() && event !== 'SIGNED_OUT') {
+        hydrateDemo();
+        return;
+      }
 
       if (event === 'SIGNED_OUT' || !session?.user) {
         isHydrating = false;
