@@ -40,6 +40,8 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
     national_id: employee.national_id ?? '',
     tpin: employee.tpin ?? '',
     salary_account_id: employee.salary_account_id ?? '',
+    branch_id: employee.branch_id ?? '',
+    department_id: employee.department_id ?? '',
     is_active: employee.is_active,
   });
 
@@ -48,6 +50,18 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
   const { data: postingAccounts = [] } = useQuery({
     queryKey: ['posting_accounts', employee.business_id],
     queryFn: () => repos.account.findPostingAccounts(employee.business_id),
+  });
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', employee.business_id],
+    queryFn: () => repos.branch.findActive(employee.business_id),
+    enabled: Boolean(employee.business_id),
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments', employee.business_id],
+    queryFn: () => repos.department.findActive(employee.business_id),
+    enabled: Boolean(employee.business_id),
   });
 
   function set<K extends keyof typeof form>(field: K, value: typeof form[K]) {
@@ -78,6 +92,8 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
         national_id: form.national_id || null,
         tpin: form.tpin || null,
         salary_account_id: form.salary_account_id || null,
+        branch_id: form.branch_id || null,
+        department_id: form.department_id || null,
         is_active: form.is_active,
       } as never;
 
@@ -216,6 +232,30 @@ export function EditEmployeeModal({ employee, onClose, onSuccess }: EditEmployee
               </div>
             </div>
           )}
+
+          {/* Cost Center / Branch & Department */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Branch (Cost Center)</label>
+              <select value={form.branch_id} onChange={(e) => set('branch_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">No branch</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Department</label>
+              <select value={form.department_id} onChange={(e) => set('department_id', e.target.value)}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+                <option value="">No department</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}{d.cost_centre ? ` [${d.cost_centre}]` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700">Salary Expense Account</label>
