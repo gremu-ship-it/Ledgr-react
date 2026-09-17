@@ -194,12 +194,70 @@ export const IMPORT_TEMPLATES: Record<ImportEntityType, ImportTemplate> = {
   employees: {
     entityType: 'employees',
     label: 'Employees',
-    description: 'Import employee data for payroll',
-    headers: ['employee_number', 'first_name', 'last_name', 'email', 'phone', 'department', 'position', 'hire_date', 'basic_salary', 'bank_account', 'tpin', 'pension_number'],
+    description: 'Import employee data with branch and cost centre assignment',
+    headers: [
+      'employee_number',
+      'first_name',
+      'last_name',
+      'job_title',
+      'branch_code',
+      'cost_centre_code',
+      'department',
+      'gross_salary',
+      'payment_method',
+      'bank_name',
+      'bank_account_number',
+      'mobile_money_type',
+      'mobile_money_number',
+      'start_date',
+      'email',
+      'phone',
+      'national_id',
+      'tpin',
+    ],
     requiredHeaders: ['first_name', 'last_name'],
     exampleRows: [
-      { employee_number: 'EMP-001', first_name: 'John', last_name: 'Banda', email: 'john@company.com', phone: '+265 999 000 001', department: 'Sales', position: 'Manager', hire_date: '2023-01-15', basic_salary: '500000', bank_account: '12345678', tpin: '12345678', pension_number: 'PEN001' },
-    ]
+      {
+        employee_number: 'EMP-001',
+        first_name: 'John',
+        last_name: 'Banda',
+        job_title: 'Accountant',
+        branch_code: 'HQ',
+        cost_centre_code: 'FIN-01',
+        department: 'Finance',
+        gross_salary: '750000',
+        payment_method: 'bank_transfer',
+        bank_name: 'National Bank',
+        bank_account_number: '1002345678',
+        mobile_money_type: '',
+        mobile_money_number: '',
+        start_date: '2025-01-15',
+        email: 'john.banda@example.com',
+        phone: '+265 999 123 456',
+        national_id: 'MW12345678',
+        tpin: '10029384',
+      },
+      {
+        employee_number: 'EMP-002',
+        first_name: 'Grace',
+        last_name: 'Phiri',
+        job_title: 'Sales Representative',
+        branch_code: 'BLZ',
+        cost_centre_code: 'SLS-02',
+        department: 'Sales',
+        gross_salary: '450000',
+        payment_method: 'airtel_money',
+        bank_name: '',
+        bank_account_number: '',
+        mobile_money_type: 'airtel_money',
+        mobile_money_number: '0999888777',
+        start_date: '2025-03-01',
+        email: 'grace.phiri@example.com',
+        phone: '+265 999 888 777',
+        national_id: 'MW87654321',
+        tpin: '20019283',
+      },
+    ],
   }
 };
 
@@ -308,6 +366,9 @@ export function validateRows(
       case 'trial_balance':
         validateOpeningBalanceRow(row, errors);
         break;
+      case 'employees':
+        validateEmployeeRow(row, errors, warnings);
+        break;
       default:
         break;
     }
@@ -397,6 +458,39 @@ function validateOpeningBalanceRow(row: ParsedRow, errors: string[]) {
   const balance = row.data['opening_balance'] || row.data['debit'] || row.data['credit'];
   if (balance && isNaN(Number(balance.replace(/,/g, '')))) {
     errors.push(`Invalid balance amount: ${balance}`);
+  }
+}
+
+function validateEmployeeRow(row: ParsedRow, errors: string[], warnings: string[]) {
+  const salary = row.data['gross_salary'] || row.data['basic_salary'] || row.data['salary'];
+  if (salary && isNaN(Number(salary))) {
+    errors.push(`Invalid salary "${salary}": must be numeric`);
+  } else if (salary && Number(salary) < 0) {
+    errors.push('Salary must not be negative');
+  }
+
+  const email = row.data['email'];
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    warnings.push(`Email format appears invalid: ${email}`);
+  }
+
+  const method = row.data['payment_method']?.toLowerCase().replace(/\s+/g, '_');
+  if (
+    method &&
+    ![
+      'bank_transfer',
+      'mobile_money',
+      'airtel_money',
+      'tnm_mpamba',
+      'cash',
+      'cheque',
+      'card',
+      'other',
+    ].includes(method)
+  ) {
+    warnings.push(
+      `Unrecognized payment method "${row.data['payment_method']}", defaulting to bank_transfer`
+    );
   }
 }
 
@@ -724,6 +818,193 @@ export async function importFixedAssets(
 
 // ── Template Download ────────────────────────────────────────────────────────
 
+export async function importEmployees(
+  businessId: string,
+  rows: ParsedRow[]
+): Promise<ImportResult> {
+  const results: ImportResult = { success: 0, failed: 0, errors: [] };
+
+  // Fetch branches for this business to resolve branch_code
+  const { data: branches, error: branchErr } = await supabase
+    .from('branches')
+    .select('id, code, name')
+    .eq('business_id', businessId)
+    .is('deleted_at', null);
+
+  if (branchErr) {
+    return {
+      success: 0,
+      failed: rows.length,
+      errors: [{ row: 0, message: `Failed to load branches: ${branchErr.message}` }],
+    };
+  }
+
+  // Fetch departments for this business to resolve cost_centre_code
+  const { data: departments, error: deptErr } = await supabase
+    .from('departments')
+    .select('id, code, name, cost_centre, branch_id')
+    .eq('business_id', businessId)
+    .is('deleted_at', null);
+
+  if (deptErr) {
+    return {
+      success: 0,
+      failed: rows.length,
+      errors: [{ row: 0, message: `Failed to load departments: ${deptErr.message}` }],
+    };
+  }
+
+  // Build lookup maps (case-insensitive)
+  const branchByCode = new Map<string, string>();
+  const branchByName = new Map<string, string>();
+  for (const b of branches || []) {
+    if (b.code) branchByCode.set(b.code.trim().toLowerCase(), b.id);
+    if (b.name) branchByName.set(b.name.trim().toLowerCase(), b.id);
+  }
+
+  const deptByCostCentre = new Map<string, string>();
+  const deptByCode = new Map<string, string>();
+  const deptByName = new Map<string, string>();
+  for (const d of departments || []) {
+    if (d.cost_centre) deptByCostCentre.set(d.cost_centre.trim().toLowerCase(), d.id);
+    if (d.code) deptByCode.set(d.code.trim().toLowerCase(), d.id);
+    if (d.name) deptByName.set(d.name.trim().toLowerCase(), d.id);
+  }
+
+  const toInsert: Record<string, unknown>[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const row of rows) {
+    if (!row.isValid) {
+      results.failed++;
+      results.errors.push({ row: row.rowNumber, message: row.errors.join(', ') });
+      continue;
+    }
+
+    const firstName = row.data['first_name']?.trim();
+    const lastName = row.data['last_name']?.trim();
+    if (!firstName || !lastName) {
+      results.failed++;
+      results.errors.push({ row: row.rowNumber, message: 'First name and last name are required' });
+      continue;
+    }
+
+    // Resolve Branch ID from branch_code or branch
+    const branchKey = (row.data['branch_code'] || row.data['branch'] || '').trim().toLowerCase();
+    let branchId: string | null = null;
+    if (branchKey) {
+      branchId = branchByCode.get(branchKey) || branchByName.get(branchKey) || null;
+      if (!branchId) {
+        results.failed++;
+        results.errors.push({
+          row: row.rowNumber,
+          message: `Branch code or name "${row.data['branch_code'] || row.data['branch']}" not found`,
+        });
+        continue;
+      }
+    }
+
+    // Resolve Department ID from cost_centre_code, cost_centre, department_code, or department
+    const ccKey = (
+      row.data['cost_centre_code'] ||
+      row.data['cost_centre'] ||
+      row.data['department_code'] ||
+      row.data['department'] ||
+      ''
+    ).trim().toLowerCase();
+    let departmentId: string | null = null;
+    if (ccKey) {
+      departmentId = deptByCostCentre.get(ccKey) || deptByCode.get(ccKey) || deptByName.get(ccKey) || null;
+      if (!departmentId) {
+        results.failed++;
+        results.errors.push({
+          row: row.rowNumber,
+          message: `Cost centre or department "${row.data['cost_centre_code'] || row.data['department']}" not found`,
+        });
+        continue;
+      }
+    }
+
+    // If department has an associated branch and branchId wasn't explicitly set, inherit it
+    if (!branchId && departmentId) {
+      const matchedDept = (departments || []).find((d) => d.id === departmentId);
+      if (matchedDept?.branch_id) {
+        branchId = matchedDept.branch_id;
+      }
+    }
+
+    const rawSalary = row.data['gross_salary'] || row.data['basic_salary'] || row.data['salary'] || '0';
+    const salary = parseFloat(rawSalary);
+
+    let paymentMethod = (row.data['payment_method'] || 'bank_transfer').trim().toLowerCase().replace(/\s+/g, '_');
+    const mobileType = (row.data['mobile_money_type'] || '').trim().toLowerCase();
+    if (paymentMethod === 'mobile_money' || paymentMethod === 'mobile') {
+      if (mobileType.includes('tnm') || mobileType.includes('mpamba')) {
+        paymentMethod = 'tnm_mpamba';
+      } else {
+        paymentMethod = 'airtel_money';
+      }
+    }
+    const validMethods = ['bank_transfer', 'mobile_money', 'airtel_money', 'tnm_mpamba', 'cash', 'cheque', 'card', 'other'];
+    if (!validMethods.includes(paymentMethod)) {
+      paymentMethod = 'bank_transfer';
+    }
+
+    const randomSuffix = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 6).toUpperCase()
+      : `${Date.now().toString().slice(-4)}${row.rowNumber}`;
+
+    const empNumber =
+      row.data['employee_number']?.trim() ||
+      `EMP-${randomSuffix}`;
+
+    toInsert.push({
+      business_id: businessId,
+      employee_number: empNumber,
+      first_name: firstName,
+      last_name: lastName,
+      job_title: (row.data['job_title'] || row.data['position'] || '').trim() || null,
+      email: row.data['email']?.trim() || null,
+      phone: row.data['phone']?.trim() || null,
+      employment_type: (row.data['employment_type'] || 'permanent').trim().toLowerCase(),
+      pay_frequency: (row.data['pay_frequency'] || 'monthly').trim().toLowerCase(),
+      gross_salary: isNaN(salary) || salary < 0 ? 0 : salary,
+      currency: 'MWK',
+      payment_method: paymentMethod,
+      bank_name: (row.data['bank_name'] || '').trim() || null,
+      bank_account_number: (row.data['bank_account_number'] || row.data['bank_account'] || '').trim() || null,
+      mobile_money_type: (row.data['mobile_money_type'] || '').trim() || null,
+      mobile_money_number: (row.data['mobile_money_number'] || row.data['mobile_number'] || '').trim() || null,
+      start_date: (row.data['start_date'] || row.data['hire_date'] || today).trim(),
+      national_id: (row.data['national_id'] || '').trim() || null,
+      tpin: (row.data['tpin'] || '').trim() || null,
+      branch_id: branchId,
+      department_id: departmentId,
+      tax_exempt: row.data['tax_exempt']?.toLowerCase() === 'true',
+      is_active: row.data['is_active'] === undefined ? true : row.data['is_active'].toLowerCase() !== 'false',
+    });
+  }
+
+  if (toInsert.length > 0) {
+    const { data, error } = await supabase
+      .from('employees')
+      .insert(toInsert as never)
+      .select('id');
+
+    if (error) {
+      return {
+        success: 0,
+        failed: toInsert.length,
+        errors: [{ row: 0, message: error.message }],
+      };
+    }
+
+    results.success = data?.length || 0;
+  }
+
+  return results;
+}
+
 export function downloadTemplate(entityType: ImportEntityType) {
   const template = IMPORT_TEMPLATES[entityType];
   const csvContent = [
@@ -769,6 +1050,8 @@ export async function executeImport(
       return importOpeningBalances(businessId, rows);
     case 'fixed_assets':
       return importFixedAssets(businessId, rows, options?.categories || []);
+    case 'employees':
+      return importEmployees(businessId, rows);
     default:
       return {
         success: 0,
