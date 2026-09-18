@@ -22,6 +22,25 @@
 -- 20260728000008 fixed contacts / branches / departments / inventory_locations
 -- by routing them through can_write_business_data(). Section 1 finds every
 -- other table still carrying a hand-written list.
+--
+-- STATUS
+-- ------
+-- Sections 2, 3 and 4 below are now also available as a single query, so this
+-- file does not have to be pasted in by hand to notice a regression:
+--
+--     select * from public.audit_rls_gaps() where severity <> 'ok';
+--
+-- An empty result means clean. Cases that are intentional (service-role-only
+-- tables, v_partner_client_usage's deliberate owner rights) come back with
+-- severity 'ok' rather than as findings. 20260729000000 added that function
+-- and fixed what these three sections were reporting at the time:
+--   • invoice_delivery_events, recurring_invoices — RLS was never enabled
+--   • api_usage                                   — bare rate-limit table
+--   • v_trial_balance, v_ar_ageing, v_asset_register, v_reorder_alerts
+--                                                 — owner rights, RLS bypassed
+--
+-- Sections 1 and 1b have no function equivalent: judging whether a role list is
+-- stale still needs a human reading it against usePermissions.ts.
 -- ============================================================================
 
 
