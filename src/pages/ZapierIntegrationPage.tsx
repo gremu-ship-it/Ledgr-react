@@ -28,7 +28,7 @@ export function ZapierIntegrationPage() {
           <a
             href="https://zapier.com/developer"
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="inline-block rounded-lg bg-black px-6 py-3 text-sm font-medium text-white"
           >
             {t('api.submitToZapier')}

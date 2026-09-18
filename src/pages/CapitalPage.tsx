@@ -6,6 +6,7 @@ import {
   Wallet, Receipt, Printer, FileDown,
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
+import { buildCsv, downloadCsvFile } from '@/lib/csv';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, AccountSubtype, LoanStatus, ShareTransactionType } from '@/dal/types/database';
@@ -50,17 +51,8 @@ function num(v: string): number {
 // ── CSV Export helpers ──────────────────────────────────────────────────────────
 
 function downloadCsv(headers: string[], rows: string[][], filename: string) {
-  const escape = (s: string) => `"${s.replace(/"/g, '""')}"`;
-  const csv = [headers.join(','), ...rows.map((r) => r.map(escape).join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  // buildCsv guards against CSV formula injection (cells starting with =, +, @, …)
+  downloadCsvFile(buildCsv(headers, rows), filename);
 }
 
 function exportLoansCsv(

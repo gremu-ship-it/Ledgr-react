@@ -9,6 +9,7 @@
 
 import Papa from 'papaparse';
 import { supabase } from '@/lib/supabase';
+import { buildCsv } from '@/lib/csv';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -1007,12 +1008,11 @@ export async function importEmployees(
 
 export function downloadTemplate(entityType: ImportEntityType) {
   const template = IMPORT_TEMPLATES[entityType];
-  const csvContent = [
-    template.headers.join(','),
-    ...template.exampleRows.map(row => 
-      template.headers.map(h => `"${row[h] || ''}"`).join(',')
-    )
-  ].join('\n');
+  // buildCsv guards against CSV formula injection (cells starting with =, +, @, …)
+  const csvContent = buildCsv(
+    template.headers,
+    template.exampleRows.map(row => template.headers.map(h => row[h] || '')),
+  );
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
