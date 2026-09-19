@@ -335,6 +335,20 @@ paths store exactly the numbers the receipt showed.
   `staging-schema-inventory.json`) are what the type contract was checked
   against; `tests/database/` can exercise it against a real Postgres
   (`npm i -D embedded-postgres pg`) but is not wired into CI.
+* **The till's shift-open fallbacks are not uuid-shaped.** Found while
+  sweeping for the F6 class of bug (values that a uuid column will reject).
+  `PosPage.tsx` opens a shift with `cashierId: currentUser?.id || 'cashier-1'`,
+  and `PosRepository.openShift` falls back to `businessId = 'biz-default'`.
+  Both columns are `uuid` (`pos_shifts.cashier_id`, `pos_shifts.business_id`
+  — `20260920000000_pos_module.sql`), so in any state where the store has no
+  current user (bootstrap, a cold offline start) the insert fails with 22P02
+  and the till cannot start a session, under an alert that reads "Could not
+  open shift: invalid input syntax for type uuid". Not a mis-posting — nothing
+  is written — but it blocks selling, so it deserves the same treatment as F6:
+  either a nullable cashier (`|| null`, the name is recorded anyway) or an
+  offline-minted shift. Left alone here because the failing state cannot be
+  reproduced in the test environment, and it is a till-session concern rather
+  than a posting one.
 * **`reference` stays free text.** Keyed postings use `posting_key`; the
   user-facing `reference` field and its search in the Journals list are
   untouched.
