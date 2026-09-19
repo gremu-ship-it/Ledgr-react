@@ -2,10 +2,8 @@ import { useRef, useState } from 'react';
 import {
   X,
   Printer,
-  Mail,
   FileSpreadsheet,
   CheckCircle2,
-  AlertTriangle,
   Send,
 } from 'lucide-react';
 import type { PosShift, PosSale } from '@/types/pos';
@@ -54,8 +52,9 @@ export function PosZReportModal({
       await new Promise((resolve) => setTimeout(resolve, 600));
       setSendSuccess(true);
       setTimeout(() => setSendSuccess(false), 3000);
-    } catch (err: any) {
-      alert(`Email dispatch failed: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Email dispatch failed: ${message}`);
     } finally {
       setIsSending(false);
     }

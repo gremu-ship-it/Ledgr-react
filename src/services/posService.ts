@@ -11,6 +11,7 @@ import type {
   PosDiscount,
   PosCartTotals,
   PosPaymentMethod,
+  PosProduct,
 } from '@/types/pos';
 import { createInvoiceJournalEntry } from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
@@ -96,11 +97,15 @@ export function calculateCartTotals(
 
 // ── Cart State Helpers ──────────────────────────────────────────────────────
 
-export function addProductToCart(currentItems: PosCartItem[], product: any): PosCartItem[] {
-  const pId = product.product_id || product.productId || product.id;
+export function addProductToCart(
+  currentItems: PosCartItem[],
+  product: PosProduct | (Partial<PosCartItem> & { name: string; selling_price?: number; cost_price?: number }),
+): PosCartItem[] {
+  const pId = ('id' in product && product.id) || product.product_id || product.productId || 'item';
   const existingIdx = currentItems.findIndex((it) => (it.product_id || it.productId) === pId);
 
-  const unitPrice = Number(product.unit_price ?? product.unitPrice ?? product.selling_price ?? 0);
+  const unitPrice = Number(product.unit_price ?? product.unitPrice ?? product.selling_price ?? ('sale_price' in product ? product.sale_price : 0) ?? 0);
+  const costPrice = Number(product.cost_price ?? ('purchase_price' in product ? product.purchase_price : 0) ?? product.unit_cost ?? ('unitCost' in product ? product.unitCost : 0) ?? 0);
 
   if (existingIdx >= 0) {
     return currentItems.map((it, idx) => {
@@ -127,7 +132,7 @@ export function addProductToCart(currentItems: PosCartItem[], product: any): Pos
     quantity: 1,
     unit_price: unitPrice,
     unitPrice: unitPrice,
-    unit_cost: Number(product.cost_price ?? product.unit_cost ?? 0),
+    unit_cost: costPrice,
     line_total: unitPrice,
     lineTotal: unitPrice,
   };
@@ -184,7 +189,7 @@ export function applyOrderDiscount(_currentItems: PosCartItem[], discount?: PosD
 // ── Complete POS Sale ───────────────────────────────────────────────────────
 
 export async function processSale(
-  payload: PosSalePayload | any,
+  payload: PosSalePayload,
   options: { isOnline?: boolean; userRole?: string } = {},
 ): Promise<PosSaleResult> {
   const businessId = payload.businessId || payload.business_id || 'biz-default';
@@ -200,8 +205,8 @@ export async function processSale(
   const orderDiscount = payload.orderDiscount || payload.order_discount;
   const rawPayments = payload.payments || payload.payment_splits || [{ payment_method: 'cash', amount: payload.totalPaid || 0 }];
   const payments: { payment_method: PosPaymentMethod; amount: number; reference?: string; bank_account_id?: string; tendered?: number }[] =
-    rawPayments.map((p: any) => ({
-      payment_method: p.payment_method || p.method || 'cash',
+    rawPayments.map((p) => ({
+      payment_method: (p.payment_method || 'cash') as PosPaymentMethod,
       amount: Number(p.amount) || 0,
       reference: p.reference,
       bank_account_id: p.bank_account_id,
@@ -249,9 +254,9 @@ export async function processSale(
           lineTotal: i.line_total ?? i.lineTotal ?? 0,
         })),
         receiptNumber,
-      } as any).catch(() => {});
+      } as never).catch(() => {});
     } catch {
-      // offline fallback
+      // offline fallback ignored safely
     }
   };
 
@@ -338,7 +343,7 @@ export async function processSale(
 
     // 3. Resolve Revenue Account
     const incomeAccounts = await repos.account.findByBusiness(businessId).catch(() => []);
-    const revenueAccount = incomeAccounts.find((a: any) => a.account_number === '4000' || a.account_number === '4110' || a.classification === 'revenue');
+    const revenueAccount = incomeAccounts.find((a) => a.code === '4000' || a.code === '4110' || a.account_type === 'income');
 
     // 4. Create Invoice Header
     const invoiceHeader: InsertDto<'invoices'> = {
@@ -398,7 +403,7 @@ export async function processSale(
             invoice_id: createdInvoice.id,
             amount: p.amount,
             payment_date: today,
-            payment_method: (p.payment_method === 'credit_sale' ? 'other' : p.payment_method) as any,
+            payment_method: (p.payment_method === 'credit_sale' ? 'other' : p.payment_method) as never,
             bank_account_id: p.bank_account_id || null,
             notes: `POS Payment: ${p.payment_method} for ${receiptNumber}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
             currency: 'MWK',
@@ -431,7 +436,7 @@ export async function processSale(
             await repos.inventory.recordMovement({
               business_id: businessId,
               product_id: pId,
-              location_id: locationId!,
+              location_id: locationId,
               movement_date: today,
               movement_type: 'sale',
               quantity: -Math.abs(item.quantity),
@@ -486,7 +491,8 @@ export async function processSale(
     ].filter(Boolean).join(' | ');
 
     try {
-      await (supabase.rpc as any)('log_manual_audit_event', {
+      const rpcFn = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<unknown>;
+      await rpcFn('log_manual_audit_event', {
         p_business_id: businessId,
         p_event_type: 'pos_sale',
         p_resource_type: 'invoices',
@@ -626,9 +632,10 @@ export const createSale = processSale;
 // ── Process POS Return / Refund ─────────────────────────────────────────────
 
 export async function processReturn(
-  payload: PosReturnPayload | any,
-  _options: { isOnline?: boolean; userRole?: string } = {},
+  payload: PosReturnPayload,
+  options: { isOnline?: boolean; userRole?: string } = {},
 ): Promise<{ returnInvoiceId: string; returnNumber: string }> {
+  void options;
   const businessId = payload.businessId || payload.business_id || 'biz-default';
   const branchId = payload.branchId ?? payload.branch_id ?? null;
   const shiftId = payload.shiftId ?? payload.shift_id ?? null;
@@ -639,7 +646,7 @@ export async function processReturn(
   const reason = payload.reason || 'Customer return';
   const refundMethod = payload.refundMethod || payload.refund_payment_method || 'cash';
   const rawItems = payload.items || [];
-  const items = rawItems.map((it: any) => ({
+  const items = rawItems.map((it) => ({
     productId: it.productId || it.product_id,
     productName: it.productName || it.product_name || 'Product',
     quantity: Number(it.quantity) || 1,
@@ -647,7 +654,7 @@ export async function processReturn(
     refundAmount: Number(it.refundAmount ?? it.refund_amount ?? ((it.unitPrice ?? it.unit_price ?? 0) * it.quantity)),
   }));
 
-  const totalRefund = Number(payload.totalRefund || items.reduce((s: number, i: any) => s + i.refundAmount, 0));
+  const totalRefund = Number(payload.totalRefund || items.reduce((s: number, i) => s + i.refundAmount, 0));
 
   const today = new Date().toISOString().slice(0, 10);
   const returnNumber = generateReceiptNumber('RET');
@@ -680,7 +687,7 @@ export async function processReturn(
     branch_id: branchId || original.branch_id,
   } as InsertDto<'invoices'>;
 
-  const creditLines = items.map((it: any, idx: number) => ({
+  const creditLines = items.map((it, idx: number) => ({
     line_number: idx + 1,
     description: `Return: ${it.productName}`,
     quantity: -Math.abs(it.quantity),
@@ -713,7 +720,7 @@ export async function processReturn(
           await repos.inventory.recordMovement({
             business_id: businessId,
             product_id: it.productId,
-            location_id: locationId!,
+            location_id: locationId,
             movement_date: today,
             movement_type: 'return_in',
             quantity: Math.abs(it.quantity),
@@ -740,7 +747,8 @@ export async function processReturn(
 
   // 5. Audit log
   try {
-    await (supabase.rpc as any)('log_manual_audit_event', {
+    const rpcFn = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<unknown>;
+    await rpcFn('log_manual_audit_event', {
       p_business_id: businessId,
       p_event_type: 'pos_refund',
       p_resource_type: 'invoices',
@@ -768,9 +776,10 @@ export async function processReturn(
 // ── Process POS Void ────────────────────────────────────────────────────────
 
 export async function processVoid(
-  payload: PosVoidPayload | any,
-  _options: { isOnline?: boolean; userRole?: string } = {},
+  payload: PosVoidPayload,
+  options: { isOnline?: boolean; userRole?: string } = {},
 ): Promise<{ success: boolean }> {
+  void options;
   const businessId = payload.businessId || payload.business_id || 'biz-default';
   const branchId = payload.branchId ?? payload.branch_id ?? null;
   const invoiceId = payload.invoiceId || payload.sale_id || '';
@@ -806,8 +815,8 @@ export async function processVoid(
         if (l.product_id) {
           await repos.inventory.recordMovement({
             business_id: businessId,
-            product_id: l.product_id!,
-            location_id: locationId!,
+            product_id: l.product_id,
+            location_id: locationId,
             movement_date: today,
             movement_type: 'adjustment_in',
             quantity: Math.abs(Number(l.quantity)),
@@ -842,7 +851,8 @@ export async function processVoid(
 
   // 5. Audit Log
   try {
-    await (supabase.rpc as any)('log_manual_audit_event', {
+    const rpcFn = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<unknown>;
+    await rpcFn('log_manual_audit_event', {
       p_business_id: businessId,
       p_event_type: 'pos_void',
       p_resource_type: 'invoices',
@@ -866,9 +876,16 @@ export async function processVoid(
 
 export const voidSale = processVoid;
 
+export interface OfflineSaleItem {
+  offlineNum: string;
+  receiptNumber: string;
+  payload: PosSalePayload;
+  queuedAt: string;
+}
+
 // ── Offline Queue Helpers ───────────────────────────────────────────────────
 
-export function getOfflineQueue(): any[] {
+export function getOfflineQueue(): OfflineSaleItem[] {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw = localStorage.getItem(POS_OFFLINE_STORAGE_KEY);
@@ -877,7 +894,9 @@ export function getOfflineQueue(): any[] {
         return Array.isArray(arr) ? arr : [];
       }
     }
-  } catch {}
+  } catch (e) {
+    log.warn('Could not read offline queue', { error: e });
+  }
   return [];
 }
 
@@ -890,7 +909,7 @@ export async function syncOfflineQueue(): Promise<number> {
   if (queue.length === 0) return 0;
 
   let synced = 0;
-  const remaining: any[] = [];
+  const remaining: OfflineSaleItem[] = [];
 
   for (const item of queue) {
     try {

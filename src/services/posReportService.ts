@@ -52,10 +52,10 @@ export function generateZReportSummary(
   };
 
   sales.forEach((s) => {
-    const gross = Number(s.gross_amount ?? (s as any).grossAmount ?? s.total_amount ?? 0);
-    const disc = Number(s.discount_amount ?? (s as any).discountAmount ?? 0);
-    const net = Number(s.net_amount ?? (s as any).netAmount ?? (gross - disc));
-    const tax = Number(s.tax_amount ?? (s as any).taxAmount ?? 0);
+    const gross = Number(s.gross_amount ?? s.grossAmount ?? s.total_amount ?? 0);
+    const disc = Number(s.discount_amount ?? s.discountAmount ?? 0);
+    const net = Number(s.net_amount ?? s.netAmount ?? (gross - disc));
+    const tax = Number(s.tax_amount ?? s.taxAmount ?? 0);
 
     if (s.status === 'returned') {
       refundsTotal += net;

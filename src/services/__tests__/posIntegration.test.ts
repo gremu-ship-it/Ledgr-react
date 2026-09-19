@@ -42,7 +42,7 @@ describe('POS Integration & Acceptance Criteria', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as any);
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
   });
 
   describe('Split Payment & Change Computation', () => {
@@ -51,7 +51,7 @@ describe('POS Integration & Acceptance Criteria', () => {
       const branchId = 'branch-001';
 
       vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0005');
-      vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cust-walkin', name: 'Walk-in' } as any);
+      vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cust-walkin', name: 'Walk-in' } as never);
 
       const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
         invoice: {
@@ -63,18 +63,18 @@ describe('POS Integration & Acceptance Criteria', () => {
           amount_paid: 27100,
           amount_due: 0,
           status: 'paid',
-        } as any,
+        } as never,
         lines: [],
       });
 
       const mockRecordPayment = vi.spyOn(repos.invoice, 'recordPayment').mockResolvedValue({
-        payment: { id: 'pmt-1' } as any,
-        invoice: {} as any,
+        payment: { id: 'pmt-1' } as never,
+        invoice: {} as never,
       });
 
-      vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({ id: 'loc-1' } as any);
-      vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({} as any);
-      vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as any);
+      vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({ id: 'loc-1' } as never);
+      vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({} as never);
+      vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
 
       const items = [chickenItem, sausageItem];
       const totals = posService.calculateCartTotals(items); // Gross: 27100
@@ -127,14 +127,14 @@ describe('POS Integration & Acceptance Criteria', () => {
           amount_paid: 0,
           amount_due: 19500,
           status: 'sent',
-        } as any,
+        } as never,
         lines: [],
       });
 
       const mockRecordPayment = vi.spyOn(repos.invoice, 'recordPayment');
-      vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({ id: 'loc-1' } as any);
-      vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({} as any);
-      vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as any);
+      vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({ id: 'loc-1' } as never);
+      vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({} as never);
+      vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
 
       const items = [chickenItem];
       const totals = posService.calculateCartTotals(items);

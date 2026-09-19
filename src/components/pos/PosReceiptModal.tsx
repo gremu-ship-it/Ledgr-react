@@ -5,7 +5,7 @@ import {
   X,
   Bluetooth,
 } from 'lucide-react';
-import type { PosSaleResult, PosSettings } from '@/types/pos';
+import type { PosSaleResult, PosSettings, PosSale, PosCartItem, PosPaymentSplit } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { EscPosBuilder, printViaBluetooth } from '@/lib/pos/escpos';
 
@@ -29,9 +29,20 @@ export function PosReceiptModal({
 
   if (!open || !saleResult) return null;
 
-  const sale = saleResult.sale || saleResult;
-  const items = saleResult.items || [];
-  const payments = saleResult.payments || [];
+  const sale = (saleResult.sale || saleResult) as Partial<PosSale> & Record<string, unknown>;
+  const items: Partial<PosCartItem>[] = (saleResult.items || []) as Partial<PosCartItem>[];
+  const payments: Partial<PosPaymentSplit>[] = (saleResult.payments || []) as Partial<PosPaymentSplit>[];
+
+  const receiptNumber = String(sale.receipt_number || sale.receiptNumber || sale.id?.slice(0, 8) || 'RECEIPT').toUpperCase();
+  const branchName = String(sale.branchName || sale.branch_name || settings?.receipt_header || 'Main Store Branch');
+  const cashierName = String(sale.cashierName || sale.cashier_name || 'Cashier');
+  const customerName = sale.customerName || sale.customer_name ? String(sale.customerName || sale.customer_name) : null;
+  const createdAt = String(sale.createdAt || sale.created_at || new Date().toISOString());
+  const grossAmount = Number(sale.gross_amount ?? sale.grossAmount ?? sale.total_amount ?? saleResult.subtotal ?? 0);
+  const discountAmount = Number(sale.discount_amount ?? sale.discountAmount ?? saleResult.discountAmount ?? 0);
+  const netAmount = Number(sale.net_amount ?? sale.netAmount ?? sale.total_amount ?? saleResult.netPayable ?? (grossAmount - discountAmount));
+  const totalPaid = Number(sale.total_paid ?? sale.totalPaid ?? sale.amount_paid ?? saleResult.totalPaid ?? netAmount);
+  const changeGiven = Number(sale.change_given ?? sale.changeGiven ?? sale.change ?? saleResult.changeGiven ?? 0);
 
   const handlePrint = () => {
     window.print();
@@ -49,7 +60,7 @@ export function PosReceiptModal({
         .line(settings?.receipt_header || 'LEDGR POS STORE')
         .textSize('normal')
         .bold(false)
-        .line((sale as any).branchName || 'Main Store Branch')
+        .line(branchName)
         .divider()
         .align('left')
         .twoColumn('Receipt #:', receiptNumber)
@@ -63,10 +74,10 @@ export function PosReceiptModal({
       builder.divider();
 
       items.forEach((it) => {
-        const name = it.product_name || (it as any).name || 'Item';
-        const qty = it.quantity;
-        const price = it.unit_price ?? (it as any).unitPrice ?? 0;
-        const lineTot = it.line_total ?? (it as any).lineTotal ?? (qty * price);
+        const name = it.product_name || it.name || 'Item';
+        const qty = it.quantity || 1;
+        const price = it.unit_price ?? it.unitPrice ?? 0;
+        const lineTot = it.line_total ?? it.lineTotal ?? (qty * price);
         builder.twoColumn(`${name} x${qty}`, formatMwkDetailed(lineTot));
       });
 
@@ -86,8 +97,8 @@ export function PosReceiptModal({
 
       if (payments.length > 0) {
         payments.forEach((p) => {
-          const m = p.payment_method || (p as any).method || 'Payment';
-          builder.twoColumn(m.toUpperCase(), formatMwkDetailed(p.amount));
+          const m = p.payment_method || 'Payment';
+          builder.twoColumn(String(m).toUpperCase(), formatMwkDetailed(Number(p.amount || 0)));
         });
       } else {
         builder.twoColumn('Paid:', formatMwkDetailed(totalPaid));
@@ -106,8 +117,9 @@ export function PosReceiptModal({
 
       const bytes = builder.build();
       await printViaBluetooth(bytes);
-    } catch (err: any) {
-      alert(`Direct thermal print error: ${err.message}. Falling back to system print.`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Direct thermal print error: ${message}. Falling back to system print.`);
       window.print();
     } finally {
       setIsEscPosPrinting(false);
@@ -118,17 +130,6 @@ export function PosReceiptModal({
     onClose();
     if (onNewSale) onNewSale();
   };
-
-  const receiptNumber = sale.receipt_number || (sale as any).receiptNumber || sale.id?.slice(0, 8).toUpperCase();
-  const branchName = (sale as any).branchName || (sale as any).branch_name || settings?.receipt_header || 'Main Store Branch';
-  const cashierName = (sale as any).cashierName || (sale as any).cashier_name || 'Cashier';
-  const customerName = (sale as any).customerName || (sale as any).customer_name;
-  const createdAt = (sale as any).createdAt || (sale as any).created_at || new Date().toISOString();
-  const grossAmount = (sale as any).gross_amount ?? (sale as any).grossAmount ?? (sale as any).total_amount ?? saleResult.subtotal ?? 0;
-  const discountAmount = (sale as any).discount_amount ?? (sale as any).discountAmount ?? saleResult.discountAmount ?? 0;
-  const netAmount = (sale as any).net_amount ?? (sale as any).netAmount ?? (sale as any).total_amount ?? saleResult.netPayable ?? (grossAmount - discountAmount);
-  const totalPaid = (sale as any).total_paid ?? (sale as any).totalPaid ?? (sale as any).amount_paid ?? saleResult.totalPaid ?? netAmount;
-  const changeGiven = (sale as any).change_given ?? (sale as any).changeGiven ?? (sale as any).change ?? saleResult.changeGiven ?? 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
@@ -199,8 +200,8 @@ export function PosReceiptModal({
                 <span>Total</span>
               </div>
               {items.map((item, idx) => {
-                const name = item.product_name || (item as any).name || (item as any).productName || 'Item';
-                const qty = item.quantity;
+                const name = item.product_name || item.name || 'Item';
+                const qty = item.quantity || 1;
                 const price = item.unit_price ?? item.unitPrice ?? 0;
                 const lineTot = item.line_total ?? item.lineTotal ?? (qty * price);
                 return (
@@ -241,11 +242,11 @@ export function PosReceiptModal({
             <div className="space-y-1 text-[11px]">
               {payments.length > 0 ? (
                 payments.map((p, pIdx) => {
-                  const m = p.payment_method || (p as any).method;
+                  const m = p.payment_method || 'Payment';
                   return (
                     <div key={pIdx} className="flex justify-between text-gray-700">
-                      <span className="capitalize">{m?.replace('_', ' ')}:</span>
-                      <span>{formatMwkDetailed(p.amount)}</span>
+                      <span className="capitalize">{String(m).replace('_', ' ')}:</span>
+                      <span>{formatMwkDetailed(Number(p.amount || 0))}</span>
                     </div>
                   );
                 })

@@ -4,7 +4,10 @@ import type { Database } from '../../types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 describe('PosRepository', () => {
-  let mockClient: any;
+  let mockClient: {
+    from: ReturnType<typeof vi.fn>;
+    rpc: ReturnType<typeof vi.fn>;
+  };
   let repo: PosRepository;
 
   beforeEach(() => {
@@ -12,7 +15,7 @@ describe('PosRepository', () => {
       from: vi.fn(),
       rpc: vi.fn(),
     };
-    repo = new PosRepository(mockClient as SupabaseClient<Database>);
+    repo = new PosRepository(mockClient as unknown as SupabaseClient<Database>);
   });
 
   describe('getSettings', () => {

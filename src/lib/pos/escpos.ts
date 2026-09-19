@@ -142,18 +142,67 @@ export class EscPosBuilder {
   }
 }
 
+interface BluetoothCharacteristic {
+  writeValue: (value: Uint8Array | BufferSource) => Promise<void>;
+}
+
+interface BluetoothService {
+  getCharacteristic: (characteristic: string) => Promise<BluetoothCharacteristic>;
+}
+
+interface BluetoothServer {
+  connect: () => Promise<BluetoothServer>;
+  getPrimaryService: (service: string) => Promise<BluetoothService>;
+}
+
+interface BluetoothDevice {
+  gatt?: BluetoothServer;
+}
+
+interface BluetoothAPI {
+  requestDevice: (options: {
+    filters?: Array<{ services?: string[] }>;
+    optionalServices?: string[];
+  }) => Promise<BluetoothDevice>;
+}
+
+interface SerialPort {
+  open: (options: { baudRate: number }) => Promise<void>;
+  close: () => Promise<void>;
+  writable: {
+    getWriter: () => {
+      write: (data: Uint8Array | BufferSource) => Promise<void>;
+      releaseLock: () => void;
+    };
+  };
+}
+
+interface SerialAPI {
+  requestPort: () => Promise<SerialPort>;
+}
+
+interface NavigatorWithHardware extends Navigator {
+  bluetooth?: BluetoothAPI;
+  serial?: SerialAPI;
+}
+
 /**
  * Send binary payload directly to Web Bluetooth thermal printer
  */
 export async function printViaBluetooth(bytes: Uint8Array): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !(navigator as any).bluetooth) {
+  const nav = (typeof navigator !== 'undefined' ? navigator : undefined) as NavigatorWithHardware | undefined;
+  if (!nav?.bluetooth) {
     throw new Error('Web Bluetooth is not supported in this browser. Use Chrome or Edge.');
   }
 
-  const device = await (navigator as any).bluetooth.requestDevice({
+  const device = await nav.bluetooth.requestDevice({
     filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }],
     optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', '49535343-fe7d-4ae5-8fa9-9fafd205e455'],
   });
+
+  if (!device.gatt) {
+    throw new Error('GATT server not found on Bluetooth device.');
+  }
 
   const server = await device.gatt.connect();
   const service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
@@ -173,11 +222,12 @@ export async function printViaBluetooth(bytes: Uint8Array): Promise<boolean> {
  * Send binary payload directly to Web Serial (USB-Serial / RS232) thermal printer
  */
 export async function printViaSerial(bytes: Uint8Array, baudRate = 9600): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !(navigator as any).serial) {
+  const nav = (typeof navigator !== 'undefined' ? navigator : undefined) as NavigatorWithHardware | undefined;
+  if (!nav?.serial) {
     throw new Error('Web Serial is not supported in this browser.');
   }
 
-  const port = await (navigator as any).serial.requestPort();
+  const port = await nav.serial.requestPort();
   await port.open({ baudRate });
 
   const writer = port.writable.getWriter();

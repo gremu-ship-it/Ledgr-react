@@ -36,6 +36,30 @@ const DEFAULT_SETTINGS: (businessId: string) => PosSettings = (businessId) => ({
   custom_role_permissions: DEFAULT_ROLE_PERMISSIONS,
 });
 
+interface RawPosSettingsData {
+  id?: string;
+  business_id?: string;
+  enabled_payment_methods?: string[];
+  max_cashier_discount_percent?: number;
+  cashier_max_discount_percent?: number;
+  max_manager_discount_percent?: number;
+  manager_max_discount_percent?: number;
+  require_manager_approval_discount?: boolean;
+  require_manager_approval_void?: boolean;
+  require_manager_approval_refund?: boolean;
+  require_manager_approval_price_override?: boolean;
+  require_approval_for_void?: boolean;
+  require_approval_for_refund?: boolean;
+  cash_variance_threshold?: number;
+  require_explanation_variance_threshold?: number;
+  allow_negative_stock_sales?: boolean;
+  default_tax_rate?: number;
+  receipt_header?: string | null;
+  receipt_footer?: string | null;
+  show_tax_on_receipt?: boolean;
+  custom_role_permissions?: Record<string, PosPermission[]>;
+}
+
 export class PosRepository extends BaseRepository<'pos_shifts'> {
   constructor(client: SupabaseClient<Database>) {
     super(client, 'pos_shifts');
@@ -57,46 +81,47 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
       if (!data) return DEFAULT_SETTINGS(businessId);
 
+      const d = data as unknown as RawPosSettingsData;
       const cashierMax = Number(
-        (data as any).max_cashier_discount_percent ??
-        (data as any).cashier_max_discount_percent ??
+        d.max_cashier_discount_percent ??
+        d.cashier_max_discount_percent ??
         10
       );
       const managerMax = Number(
-        (data as any).max_manager_discount_percent ??
-        (data as any).manager_max_discount_percent ??
+        d.max_manager_discount_percent ??
+        d.manager_max_discount_percent ??
         25
       );
       const varianceThresh = Number(
-        (data as any).cash_variance_threshold ??
-        (data as any).require_explanation_variance_threshold ??
+        d.cash_variance_threshold ??
+        d.require_explanation_variance_threshold ??
         500
       );
 
       return {
-        id: data.id,
-        business_id: data.business_id,
-        enabled_payment_methods: (data.enabled_payment_methods as string[]) ?? [
+        id: d.id,
+        business_id: d.business_id || businessId,
+        enabled_payment_methods: d.enabled_payment_methods ?? [
           'cash', 'airtel_money', 'tnm_mpamba', 'bank_transfer', 'credit_sale',
         ],
         max_cashier_discount_percent: cashierMax,
         max_manager_discount_percent: managerMax,
         cashier_max_discount_percent: cashierMax,
         manager_max_discount_percent: managerMax,
-        require_manager_approval_discount: Boolean((data as any).require_manager_approval_discount ?? (data as any).require_approval_for_void ?? true),
-        require_manager_approval_void: Boolean((data as any).require_manager_approval_void ?? (data as any).require_approval_for_void ?? true),
-        require_manager_approval_refund: Boolean((data as any).require_manager_approval_refund ?? (data as any).require_approval_for_refund ?? true),
-        require_manager_approval_price_override: Boolean((data as any).require_manager_approval_price_override ?? true),
-        require_approval_for_void: Boolean((data as any).require_manager_approval_void ?? (data as any).require_approval_for_void ?? true),
-        require_approval_for_refund: Boolean((data as any).require_manager_approval_refund ?? (data as any).require_approval_for_refund ?? true),
+        require_manager_approval_discount: Boolean(d.require_manager_approval_discount ?? d.require_approval_for_void ?? true),
+        require_manager_approval_void: Boolean(d.require_manager_approval_void ?? d.require_approval_for_void ?? true),
+        require_manager_approval_refund: Boolean(d.require_manager_approval_refund ?? d.require_approval_for_refund ?? true),
+        require_manager_approval_price_override: Boolean(d.require_manager_approval_price_override ?? true),
+        require_approval_for_void: Boolean(d.require_manager_approval_void ?? d.require_approval_for_void ?? true),
+        require_approval_for_refund: Boolean(d.require_manager_approval_refund ?? d.require_approval_for_refund ?? true),
         cash_variance_threshold: varianceThresh,
         require_explanation_variance_threshold: varianceThresh,
-        allow_negative_stock_sales: Boolean((data as any).allow_negative_stock_sales ?? false),
-        default_tax_rate: Number((data as any).default_tax_rate ?? 16.5),
-        receipt_header: data.receipt_header,
-        receipt_footer: data.receipt_footer || 'Zikomo kwambiri! Thank you for your business.',
-        show_tax_on_receipt: Boolean((data as any).show_tax_on_receipt ?? true),
-        custom_role_permissions: (data.custom_role_permissions as Record<string, PosPermission[]>) || DEFAULT_ROLE_PERMISSIONS,
+        allow_negative_stock_sales: Boolean(d.allow_negative_stock_sales ?? false),
+        default_tax_rate: Number(d.default_tax_rate ?? 16.5),
+        receipt_header: d.receipt_header,
+        receipt_footer: d.receipt_footer || 'Zikomo kwambiri! Thank you for your business.',
+        show_tax_on_receipt: Boolean(d.show_tax_on_receipt ?? true),
+        custom_role_permissions: d.custom_role_permissions || DEFAULT_ROLE_PERMISSIONS,
       };
     } catch {
       return DEFAULT_SETTINGS(businessId);
@@ -109,7 +134,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
     const updatePayload: InsertDto<'pos_settings'> = {
       business_id: businessId,
-      enabled_payment_methods: merged.enabled_payment_methods as any,
+      enabled_payment_methods: merged.enabled_payment_methods as never,
       cashier_max_discount_percent: merged.max_cashier_discount_percent,
       manager_max_discount_percent: merged.max_manager_discount_percent,
       require_approval_for_void: merged.require_approval_for_void ?? true,
@@ -118,13 +143,13 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       receipt_header: merged.receipt_header,
       receipt_footer: merged.receipt_footer || 'Zikomo kwambiri! Thank you for your business.',
       show_tax_on_receipt: merged.show_tax_on_receipt ?? true,
-      custom_role_permissions: (merged.custom_role_permissions || DEFAULT_ROLE_PERMISSIONS) as any,
+      custom_role_permissions: (merged.custom_role_permissions || DEFAULT_ROLE_PERMISSIONS) as never,
       updated_at: new Date().toISOString(),
     };
 
     const { error } = await this.client
       .from('pos_settings')
-      .upsert(updatePayload as any)
+      .upsert(updatePayload as never)
       .select('*')
       .single();
 
@@ -161,7 +186,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     if (!data) return null;
 
     return {
-      ...(data as any),
+      ...(data as unknown as PosShift),
       opening_float: data.opening_cash,
       start_time: data.opened_at,
       expectedCash: data.expected_cash,
@@ -183,7 +208,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     if (error || !data) return null;
 
     return {
-      ...(data as any),
+      ...(data as unknown as PosShift),
       opening_float: data.opening_cash,
       start_time: data.opened_at,
       expectedCash: data.expected_cash,
@@ -215,28 +240,14 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       notes?: string;
     },
   ): Promise<PosShift> {
-    let businessId: string;
-    let branchId: string | null = null;
-    let cashierId: string | null = null;
-    let cashierName: string | null = null;
-    let openingFloat = 0;
-    let notes: string | null = null;
-
-    if (typeof arg1 === 'string') {
-      businessId = arg1;
-      branchId = arg2?.branchId ?? null;
-      cashierId = arg2?.cashierId ?? null;
-      cashierName = arg2?.cashierName ?? null;
-      openingFloat = Number(arg2?.openingCash ?? arg2?.opening_float ?? 0);
-      notes = arg2?.notes ?? null;
-    } else {
-      businessId = arg1.business_id || arg1.businessId || 'biz-default';
-      branchId = arg1.branch_id ?? arg1.branchId ?? null;
-      cashierId = arg1.cashier_id ?? arg1.cashierId ?? null;
-      cashierName = arg1.cashier_name ?? arg1.cashierName ?? null;
-      openingFloat = Number(arg1.opening_float ?? arg1.openingCash ?? 0);
-      notes = arg1.notes ?? null;
-    }
+    const businessId = typeof arg1 === 'string' ? arg1 : (arg1.business_id || arg1.businessId || 'biz-default');
+    const branchId = typeof arg1 === 'string' ? (arg2?.branchId ?? null) : (arg1.branch_id ?? arg1.branchId ?? null);
+    const cashierId = typeof arg1 === 'string' ? (arg2?.cashierId ?? null) : (arg1.cashier_id ?? arg1.cashierId ?? null);
+    const cashierName = typeof arg1 === 'string' ? (arg2?.cashierName ?? null) : (arg1.cashier_name ?? arg1.cashierName ?? null);
+    const openingFloat = typeof arg1 === 'string'
+      ? Number(arg2?.openingCash ?? arg2?.opening_float ?? 0)
+      : Number(arg1.opening_float ?? arg1.openingCash ?? 0);
+    const notes = typeof arg1 === 'string' ? (arg2?.notes ?? null) : (arg1.notes ?? null);
 
     const newShift: InsertDto<'pos_shifts'> = {
       business_id: businessId,
@@ -267,7 +278,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
     if (error) throw toRepositoryError('pos_shifts', error);
     return {
-      ...(data as any),
+      ...(data as unknown as PosShift),
       opening_float: data.opening_cash,
       start_time: data.opened_at,
       expectedCash: data.expected_cash,
@@ -296,20 +307,12 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
     if (fetchErr) throw toRepositoryError('pos_shifts', fetchErr);
 
-    let actualCash = 0;
-    let variance: number | undefined;
-    let varianceReason: string | null = null;
-    let notes: string | null = null;
-
-    if (typeof payload === 'number') {
-      actualCash = payload;
-      notes = notesArg ?? null;
-    } else {
-      actualCash = Number(payload.closingCashActual ?? payload.closing_cash_actual ?? payload.actualCash ?? 0);
-      variance = payload.variance;
-      varianceReason = payload.varianceReason || payload.variance_reason || null;
-      notes = payload.notes ?? null;
-    }
+    const actualCash = typeof payload === 'number'
+      ? payload
+      : Number(payload.closingCashActual ?? payload.closing_cash_actual ?? payload.actualCash ?? 0);
+    const variance = typeof payload === 'number' ? undefined : payload.variance;
+    const varianceReason = typeof payload === 'number' ? null : (payload.varianceReason || payload.variance_reason || null);
+    const notes = typeof payload === 'number' ? (notesArg ?? null) : (payload.notes ?? null);
 
     const expectedCash =
       Number(shift.opening_cash || 0) +
@@ -340,7 +343,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
     if (error) throw toRepositoryError('pos_shifts', error);
     return {
-      ...(data as any),
+      ...(data as unknown as PosShift),
       opening_float: data.opening_cash,
       start_time: data.opened_at,
       expectedCash: data.expected_cash,
@@ -365,7 +368,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     const { data, error } = await query;
     if (error) throw toRepositoryError('pos_shifts', error);
     return (data ?? []).map((d) => ({
-      ...(d as any),
+      ...(d as unknown as PosShift),
       opening_float: d.opening_cash,
       start_time: d.opened_at,
       expectedCash: d.expected_cash,
@@ -384,13 +387,11 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     },
   ): Promise<PosShift | null> {
     try {
-      const selectRes = this.client
+      const { data: shift, error: fetchErr } = await this.client
         .from('pos_shifts')
-        .select('*');
-
-      const { data: shift, error: fetchErr } = typeof (selectRes as any).eq === 'function'
-        ? await (selectRes as any).eq('id', shiftId).single()
-        : { data: null, error: null };
+        .select('*')
+        .eq('id', shiftId)
+        .single();
 
       if (fetchErr || !shift) return null;
 
@@ -425,7 +426,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
         return null;
       }
       return {
-        ...(data as any),
+        ...(data as unknown as PosShift),
         opening_float: data.opening_cash,
         start_time: data.opened_at,
         expectedCash: data.expected_cash,

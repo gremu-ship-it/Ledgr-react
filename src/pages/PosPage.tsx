@@ -24,6 +24,8 @@ import type {
   PosSaleResult,
   PosPaymentSplit,
   PosRegister,
+  PosProduct,
+  PosPaymentMethod,
 } from '@/types/pos';
 
 // Components
@@ -53,8 +55,8 @@ export function PosPage() {
   const [viewMode, setViewMode] = useState<'sales' | 'analytics' | 'history' | 'settings'>('sales');
 
   // Network & Sync State
-  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
-  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(0);
+  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(() => getOfflineQueue().length);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Shifts & Register
@@ -65,10 +67,11 @@ export function PosPage() {
   const [currentShift, setCurrentShift] = useState<PosShift | null>(null);
 
   // Products & Inventory
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<PosProduct[]>([]);
   const [customers, setCustomers] = useState<PosCustomer[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [dataVersion, setDataVersion] = useState(0);
 
   // Active Sale Cart
   const [cartItems, setCartItems] = useState<PosCartItem[]>([]);
@@ -99,6 +102,11 @@ export function PosPage() {
     return calculateCartTotals(cartItems, orderDiscount, 0);
   }, [cartItems, orderDiscount]);
 
+  const refreshOfflineCount = useCallback(() => {
+    const queue = getOfflineQueue();
+    setPendingOfflineCount(queue.length);
+  }, []);
+
   // Online / Offline monitor
   useEffect(() => {
     const handleOnline = () => {
@@ -109,18 +117,61 @@ export function PosPage() {
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    refreshOfflineCount();
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, [refreshOfflineCount]);
+
+  // Cart Management Handlers
+  const handleAddToCart = useCallback((product: PosProduct) => {
+    setCartItems((prev) => addProductToCart(prev, product));
   }, []);
 
-  const refreshOfflineCount = () => {
-    const queue = getOfflineQueue();
-    setPendingOfflineCount(queue.length);
-  };
+  const handleUpdateQuantity = useCallback((productId: string, quantity: number) => {
+    setCartItems((prev) => updateCartItemQuantity(prev, productId, quantity));
+  }, []);
+
+  const handleRemoveItem = useCallback((productId: string) => {
+    setCartItems((prev) => removeProductFromCart(prev, productId));
+  }, []);
+
+  const handleClearCart = useCallback(() => {
+    setCartItems(clearCart());
+    setSelectedCustomer(null);
+    setOrderDiscount(undefined);
+  }, []);
+
+  const handleUpdateLineDiscount = useCallback((productId: string, discount?: PosDiscount) => {
+    setCartItems((prev) => applyItemDiscount(prev, productId, discount));
+  }, []);
+
+  const handleUpdateOrderDiscount = useCallback((discount?: PosDiscount) => {
+    setOrderDiscount(discount);
+  }, []);
+
+  const handleParkOrder = useCallback(() => {
+    if (cartItems.length === 0) return;
+    const parked = {
+      id: 'PARK-' + Date.now().toString().slice(-4),
+      timestamp: new Date(),
+      items: cartItems,
+      customer: selectedCustomer,
+      discount: orderDiscount,
+    };
+    setParkedOrders((prev) => [parked, ...prev]);
+    handleClearCart();
+  }, [cartItems, selectedCustomer, orderDiscount, handleClearCart]);
+
+  const handleRestoreParkedOrder = useCallback((parkedId: string) => {
+    const found = parkedOrders.find((p) => p.id === parkedId);
+    if (!found) return;
+    setCartItems(found.items);
+    setSelectedCustomer(found.customer);
+    setOrderDiscount(found.discount);
+    setParkedOrders((prev) => prev.filter((p) => p.id !== parkedId));
+  }, [parkedOrders]);
 
   // Keyboard Shortcuts (F4: Checkout, F8: Park)
   useEffect(() => {
@@ -139,67 +190,70 @@ export function PosPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [cartItems, isPaymentModalOpen]);
+  }, [cartItems, isPaymentModalOpen, handleParkOrder]);
 
   // Fetch initial data: Products, Customers, Shifts
-  const loadInitialData = useCallback(async () => {
-    try {
-      setIsLoadingProducts(true);
+  const currentUserId = currentUser?.id;
 
-      // Load products from inventory repository
-      if (businessId) {
-        const prods = await repos.inventory.findAllProducts(businessId).catch(() => []);
+  useEffect(() => {
+    let ignore = false;
+    async function loadData() {
+      if (!businessId) return;
+      try {
+        const [prods, custs, shift, recentInvoices] = await Promise.all([
+          repos.inventory.findAllProducts(businessId).catch(() => []),
+          repos.contact.findByBusiness(businessId, 'customer').catch(() => []),
+          currentUserId ? repos.pos.findActiveShift(businessId, currentUserId, branchId).catch(() => null) : Promise.resolve(null),
+          repos.invoice.findByBusiness(businessId, undefined, 30).catch(() => []),
+        ]);
+
+        if (ignore) return;
+
         if (prods && prods.length > 0) {
-          const mapped = prods.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            sku: p.sku || '',
-            barcode: p.barcode || '',
-            unit_price: Number(p.selling_price) || 0,
-            unitPrice: Number(p.selling_price) || 0,
-            selling_price: Number(p.selling_price) || 0,
-            cost_price: Number(p.cost_price) || 0,
-            stock_quantity: 100,
-            stockQuantity: 100,
-            category: p.category || 'General',
-            category_id: p.category_id || 'General',
-          }));
+        const mapped: PosProduct[] = prods.map((p) => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku || '',
+          barcode: p.barcode || '',
+          unit_price: Number(p.sale_price) || 0,
+          unitPrice: Number(p.sale_price) || 0,
+          selling_price: Number(p.sale_price) || 0,
+          cost_price: Number(p.purchase_price) || 0,
+          stock_quantity: 100,
+          stockQuantity: 100,
+          category: p.category_id || 'General',
+          category_id: p.category_id || 'General',
+        }));
           setProducts(mapped);
-          const rawCats = mapped.map((p: any) => p.category || 'General');
+          const rawCats = mapped.map((p) => p.category || 'General');
           const cats = Array.from(new Set(rawCats)).filter((c): c is string => typeof c === 'string');
           setCategories(cats);
         }
 
-        // Load customers from contacts repository
-        const custs = await repos.contact.findByBusiness(businessId, 'customer').catch(() => []);
         if (custs && custs.length > 0) {
           setCustomers(
-            custs.map((c: any) => ({
+            custs.map((c) => ({
               id: c.id,
               name: c.name,
-              phone: c.phone,
-              email: c.email,
-              address: c.address_line1,
+              phone: c.phone || undefined,
+              email: c.email || undefined,
+              address: c.address_line1 || undefined,
             })),
           );
         }
 
-        // Load active shift
-        if (currentUser?.id) {
-          const shift = await repos.pos.findActiveShift(businessId, currentUser.id, branchId);
+        if (shift) {
           setCurrentShift(shift);
         }
 
-        // Load recent sales / invoices
-        const recentInvoices = await repos.invoice.findByBusiness(businessId, undefined, 30).catch(() => []);
         if (recentInvoices && recentInvoices.length > 0) {
           setSalesHistory(
-            recentInvoices.map((inv: any) => ({
+            recentInvoices.map((inv) => ({
               id: inv.id,
               receipt_number: inv.payment_reference || inv.invoice_number,
               invoice_number: inv.invoice_number,
               created_at: inv.created_at || inv.issue_date,
-              customer_name: inv.contact?.name || 'Walk-in',
+              customer_name: (inv as { contact?: { name?: string } }).contact?.name || 'Walk-in',
               cashier_name: inv.created_by || 'Cashier',
               gross_amount: Number(inv.subtotal) || 0,
               discount_amount: Number(inv.discount_amount) || 0,
@@ -207,102 +261,44 @@ export function PosPage() {
               total_paid: Number(inv.amount_paid) || 0,
               change_given: 0,
               payment_status: inv.status === 'paid' ? 'completed' : inv.status,
-              status: inv.status === 'void' ? 'voided' : (inv.status === 'paid' ? 'completed' : 'completed'),
+              status: inv.status === 'void' ? 'voided' : 'completed',
               items: [],
             })),
           );
         }
+      } catch (err) {
+        console.warn('Could not load all POS data:', err);
+      } finally {
+        if (!ignore) {
+          setIsLoadingProducts(false);
+        }
       }
-    } catch (err) {
-      console.warn('Could not load all POS data:', err);
-    } finally {
-      setIsLoadingProducts(false);
     }
-  }, [businessId, currentUser?.id, branchId]);
 
-  useEffect(() => {
-    loadInitialData();
-  }, [loadInitialData]);
+    void loadData();
 
-  // Cart Management Handlers
-  const handleAddToCart = (product: any) => {
-    setCartItems((prev) =>
-      addProductToCart(prev, {
-        product_id: product.id,
-        productId: product.id,
-        name: product.name,
-        sku: product.sku,
-        barcode: product.barcode,
-        unit_price: product.unit_price ?? product.unitPrice ?? product.selling_price ?? 0,
-        unitPrice: product.unit_price ?? product.unitPrice ?? product.selling_price ?? 0,
-        cost_price: product.cost_price,
-        tax_rate: 0,
-        quantity: 1,
-      }),
-    );
-  };
-
-  const handleUpdateQuantity = (productId: string, quantity: number) => {
-    setCartItems((prev) => updateCartItemQuantity(prev, productId, quantity));
-  };
-
-  const handleRemoveItem = (productId: string) => {
-    setCartItems((prev) => removeProductFromCart(prev, productId));
-  };
-
-  const handleClearCart = () => {
-    setCartItems(clearCart());
-    setSelectedCustomer(null);
-    setOrderDiscount(undefined);
-  };
-
-  const handleUpdateLineDiscount = (productId: string, discount?: PosDiscount) => {
-    setCartItems((prev) => applyItemDiscount(prev, productId, discount));
-  };
-
-  const handleUpdateOrderDiscount = (discount?: PosDiscount) => {
-    setOrderDiscount(discount);
-  };
-
-  const handleParkOrder = () => {
-    if (cartItems.length === 0) return;
-    const parked = {
-      id: 'PARK-' + Date.now().toString().slice(-4),
-      timestamp: new Date(),
-      items: cartItems,
-      customer: selectedCustomer,
-      discount: orderDiscount,
+    return () => {
+      ignore = true;
     };
-    setParkedOrders((prev) => [parked, ...prev]);
-    handleClearCart();
-  };
-
-  const handleRestoreParkedOrder = (parkedId: string) => {
-    const found = parkedOrders.find((p) => p.id === parkedId);
-    if (!found) return;
-    setCartItems(found.items);
-    setSelectedCustomer(found.customer);
-    setOrderDiscount(found.discount);
-    setParkedOrders((prev) => prev.filter((p) => p.id !== parkedId));
-  };
+  }, [businessId, currentUserId, branchId, dataVersion]);
 
   // Manager Approval Interceptor
-  const handleRequestManagerApproval = (
+  const handleRequestManagerApproval = useCallback((
     actionDescription: string,
     onApproved: (approverName: string) => void,
   ) => {
     setApprovalActionDescription(actionDescription);
     setPendingApprovalCallback(() => onApproved);
     setIsApprovalModalOpen(true);
-  };
+  }, []);
 
-  const handleManagerApproved = (_managerPin: string, approverName: string) => {
+  const handleManagerApproved = useCallback((_managerPin: string, approverName: string) => {
     setIsApprovalModalOpen(false);
     if (pendingApprovalCallback) {
       pendingApprovalCallback(approverName);
       setPendingApprovalCallback(null);
     }
-  };
+  }, [pendingApprovalCallback]);
 
   // Checkout Execution
   const handleCompleteSale = async (
@@ -350,11 +346,12 @@ export function PosPage() {
 
       // Refresh sales history list
       if (result.sale) {
-        setSalesHistory((prev) => [result.sale, ...prev]);
+        setSalesHistory((prev) => [result.sale as PosSale, ...prev]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
       console.error('Sale completion error:', err);
-      alert(`Sale failed: ${err.message || 'Unknown error'}`);
+      alert(`Sale failed: ${message}`);
     } finally {
       setIsProcessingSale(false);
     }
@@ -373,8 +370,9 @@ export function PosPage() {
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
-    } catch (err: any) {
-      alert(`Could not open shift: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Could not open shift: ${message}`);
     }
   };
 
@@ -389,8 +387,9 @@ export function PosPage() {
       setIsShiftModalOpen(false);
       // Offer opening Z-Report
       setIsZReportModalOpen(true);
-    } catch (err: any) {
-      alert(`Could not close shift: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Could not close shift: ${message}`);
     }
   };
 
@@ -415,8 +414,9 @@ export function PosPage() {
       // Reload shift details
       const refreshed = await repos.pos.findActiveShift(businessId, currentUser?.id, branchId);
       setCurrentShift(refreshed);
-    } catch (err: any) {
-      alert(`Could not record cash movement: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Could not record cash movement: ${message}`);
     }
   };
 
@@ -427,8 +427,9 @@ export function PosPage() {
       const syncedCount = await syncOfflineQueue();
       refreshOfflineCount();
       alert(`Successfully synced ${syncedCount} offline sale(s) to server.`);
-    } catch (err: any) {
-      alert(`Offline sync failed: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Offline sync failed: ${message}`);
     } finally {
       setIsSyncing(false);
     }
@@ -450,8 +451,8 @@ export function PosPage() {
         const newC: PosCustomer = {
           id: created.id,
           name: created.name,
-          phone: created.phone,
-          email: created.email,
+          phone: created.phone || undefined,
+          email: created.email || undefined,
         };
         setCustomers((prev) => [newC, ...prev]);
         setSelectedCustomer(newC);
@@ -608,19 +609,19 @@ export function PosPage() {
           await processReturn({
             businessId,
             originalInvoiceId: saleId,
-            items: items.map((it: any) => ({
+            items: items.map((it) => ({
               productId: it.product_id,
               productName: 'Product',
               quantity: it.quantity,
               unitPrice: it.refund_amount / it.quantity,
               refundAmount: it.refund_amount,
             })),
-            refundMethod: refundMethod as any,
+            refundMethod: refundMethod as PosPaymentMethod,
             reason: 'Customer return',
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
             branchId,
           });
-          loadInitialData();
+          setDataVersion((v) => v + 1);
         }}
         onVoidSale={async (saleId, reason) => {
           await processVoid({
@@ -629,7 +630,7 @@ export function PosPage() {
             reason,
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
           });
-          loadInitialData();
+          setDataVersion((v) => v + 1);
         }}
         onRequestManagerApproval={handleRequestManagerApproval}
       />

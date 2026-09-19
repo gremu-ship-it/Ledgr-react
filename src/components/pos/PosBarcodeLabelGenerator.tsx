@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { X, Printer, Barcode, Check, Tag, Layers, Search } from 'lucide-react';
-import { generateBarcodeSvg } from '@/lib/pos/barcodeGenerator';
+import { X, Printer, Barcode, Check, Tag, Search } from 'lucide-react';
+import { getBarcodeData } from '@/lib/pos/barcodeGenerator';
 import { formatMwkDetailed } from '@/lib/formatters';
+import type { PosProduct } from '@/types/pos';
 
 interface ProductLabelItem {
   id: string;
@@ -15,7 +16,7 @@ interface ProductLabelItem {
 interface PosBarcodeLabelGeneratorProps {
   open: boolean;
   onClose: () => void;
-  products: any[];
+  products: PosProduct[];
 }
 
 export function PosBarcodeLabelGenerator({
@@ -23,8 +24,6 @@ export function PosBarcodeLabelGenerator({
   onClose,
   products = [],
 }: PosBarcodeLabelGeneratorProps) {
-  if (!open) return null;
-
   const [selectedProductIds, setSelectedProductIds] = useState<Record<string, number>>({});
   const [template, setTemplate] = useState<'thermal_50x30' | 'a4_24' | 'a4_40'>('thermal_50x30');
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,7 +39,7 @@ export function PosBarcodeLabelGenerator({
     });
   }, [products, searchQuery]);
 
-  const handleToggleProduct = (product: any) => {
+  const handleToggleProduct = (product: PosProduct) => {
     setSelectedProductIds((prev) => {
       const copy = { ...prev };
       if (copy[product.id]) {
@@ -77,7 +76,6 @@ export function PosBarcodeLabelGenerator({
     return list;
   }, [selectedProductIds, products]);
 
-  // Flatten items for printing by quantity
   const flattenedPrintItems = useMemo(() => {
     const items: ProductLabelItem[] = [];
     selectedList.forEach((item) => {
@@ -87,6 +85,8 @@ export function PosBarcodeLabelGenerator({
     });
     return items;
   }, [selectedList]);
+
+  if (!open) return null;
 
   const handlePrint = () => {
     window.print();
@@ -131,7 +131,7 @@ export function PosBarcodeLabelGenerator({
                 <span className="font-bold text-gray-600">Label Format:</span>
                 <select
                   value={template}
-                  onChange={(e) => setTemplate(e.target.value as any)}
+                  onChange={(e) => setTemplate(e.target.value as 'thermal_50x30' | 'a4_24' | 'a4_40')}
                   className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-xs font-bold text-gray-800"
                 >
                   <option value="thermal_50x30">Thermal Roll (50mm x 30mm)</option>
@@ -226,10 +226,9 @@ export function PosBarcodeLabelGenerator({
                 >
                   {flattenedPrintItems.map((item, idx) => {
                     const barcodeCode = item.barcode || item.sku || item.id.slice(0, 8);
-                    const svgMarkup = generateBarcodeSvg(barcodeCode, {
-                      height: 36,
+                    const bData = getBarcodeData(barcodeCode, {
+                      height: 32,
                       barWidth: 1.5,
-                      showText: true,
                     });
 
                     return (
@@ -240,10 +239,37 @@ export function PosBarcodeLabelGenerator({
                         <p className="text-[11px] font-black text-gray-900 line-clamp-1 w-full">
                           {item.name}
                         </p>
-                        <div
-                          className="my-1.5 flex items-center justify-center w-full overflow-hidden"
-                          dangerouslySetInnerHTML={{ __html: svgMarkup }}
-                        />
+                        <div className="my-1.5 flex items-center justify-center w-full overflow-hidden">
+                          {bData.bars.length > 0 && (
+                            <svg
+                              viewBox={`0 0 ${bData.totalWidth} ${bData.height + 14}`}
+                              width={bData.totalWidth}
+                              height={bData.height + 14}
+                            >
+                              {bData.bars.map((bar, bIdx) => (
+                                <rect
+                                  key={bIdx}
+                                  x={bar.x}
+                                  y={0}
+                                  width={bar.width}
+                                  height={bData.height}
+                                  fill="#000000"
+                                />
+                              ))}
+                              <text
+                                x={bData.totalWidth / 2}
+                                y={bData.height + 11}
+                                fontFamily="monospace"
+                                fontSize={10}
+                                fontWeight="bold"
+                                textAnchor="middle"
+                                fill="#000000"
+                              >
+                                {bData.text}
+                              </text>
+                            </svg>
+                          )}
+                        </div>
                         <p className="text-xs font-black text-brand-700">
                           {formatMwkDetailed(item.unit_price)}
                         </p>

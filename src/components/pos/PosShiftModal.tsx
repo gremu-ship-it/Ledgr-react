@@ -20,14 +20,14 @@ export function PosShiftModal({
   onCloseShift,
   isProcessing = false,
 }: PosShiftModalProps) {
-  if (!open) return null;
-
   const isOpenShift = !currentShift || currentShift.status === 'closed';
   const [amount, setAmount] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
 
-  const expectedCash = currentShift ? Number((currentShift as any).expected_cash ?? (currentShift as any).expectedCash ?? 0) : 0;
+  const expectedCash = currentShift ? Number(currentShift.expected_cash ?? currentShift.expectedCash ?? 0) : 0;
   const variance = !isOpenShift ? amount - expectedCash : 0;
+
+  if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,13 +95,13 @@ export function PosShiftModal({
                 <div className="flex justify-between text-gray-600">
                   <span>Shift Opened:</span>
                   <span className="font-semibold">
-                    {new Date(currentShift.opened_at || (currentShift as any).start_time || '').toLocaleTimeString()}
+                    {new Date(currentShift.opened_at || currentShift.start_time || '').toLocaleTimeString()}
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Opening Float:</span>
                   <span className="font-semibold">
-                    {formatMwkDetailed(Number(currentShift.opening_float || (currentShift as any).opening_cash || 0))}
+                    {formatMwkDetailed(Number(currentShift.opening_float || currentShift.opening_cash || 0))}
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-900 font-bold pt-1 border-t border-gray-200">

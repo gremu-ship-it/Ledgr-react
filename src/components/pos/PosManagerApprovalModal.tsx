@@ -14,11 +14,11 @@ export function PosManagerApprovalModal({
   actionDescription,
   onApprove,
 }: PosManagerApprovalModalProps) {
-  if (!open) return null;
-
   const [pin, setPin] = useState('');
   const [managerName, setManagerName] = useState('Store Manager');
   const [error, setError] = useState('');
+
+  if (!open) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +26,6 @@ export function PosManagerApprovalModal({
       setError('Please enter a valid 4-digit manager PIN.');
       return;
     }
-    // In demo / production, PIN 1234 or any 4 digits can be configured
     onApprove(pin, managerName);
     setPin('');
     setError('');

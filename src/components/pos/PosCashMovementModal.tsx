@@ -16,11 +16,11 @@ export function PosCashMovementModal({
   onRecordMovement,
   isProcessing = false,
 }: PosCashMovementModalProps) {
-  if (!open) return null;
-
   const [type, setType] = useState<'cash_in' | 'cash_out'>('cash_in');
   const [amount, setAmount] = useState<number>(0);
   const [reason, setReason] = useState<string>('');
+
+  if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

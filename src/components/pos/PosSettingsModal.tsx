@@ -28,12 +28,12 @@ export function PosSettingsModal({
   onSaveSettings,
   isOwnerOrManager,
 }: PosSettingsModalProps) {
-  if (!open) return null;
-
   const [activeTab, setActiveTab] = useState<'discounts' | 'receipt' | 'payments' | 'security'>('discounts');
   const [formData, setFormData] = useState<PosSettings>({ ...settings });
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,10 +92,10 @@ export function PosSettingsModal({
         {/* Tab Navigation */}
         <div className="flex border-b border-gray-100 mt-2">
           {[
-            { id: 'discounts', label: 'Discounts & Limits', icon: Sliders },
-            { id: 'receipt', label: 'Receipt Template', icon: Receipt },
-            { id: 'payments', label: 'Payment Methods', icon: CreditCard },
-            { id: 'security', label: 'Security & Approvals', icon: Shield },
+            { id: 'discounts' as const, label: 'Discounts & Limits', icon: Sliders },
+            { id: 'receipt' as const, label: 'Receipt Template', icon: Receipt },
+            { id: 'payments' as const, label: 'Payment Methods', icon: CreditCard },
+            { id: 'security' as const, label: 'Security & Approvals', icon: Shield },
           ].map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -103,7 +103,7 @@ export function PosSettingsModal({
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id)}
                 className={`flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-bold transition-colors border-b-2 ${
                   isActive
                     ? 'border-brand-600 text-brand-600'

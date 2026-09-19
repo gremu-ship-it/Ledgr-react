@@ -1,6 +1,6 @@
 /**
  * Pure TypeScript Code 128 (Subset B) Barcode Generator.
- * Generates SVG vector string or renders directly to HTMLCanvasElement.
+ * Generates structured bars for native React SVG rendering without innerHTML.
  */
 
 // Code 128 patterns (Subset B)
@@ -15,7 +15,7 @@ const CODE128_PATTERNS: string[] = [
   '112412', '122114', '122411', '142112', '142211', '241211', '221114', '413111', '241112', '134111', // 70-79
   '111242', '121142', '121241', '114212', '124112', '124211', '411212', '421112', '421211', '212141', // 80-89
   '214121', '412121', '111143', '111341', '131141', '114113', '114311', '411113', '411311', '113141', // 90-99
-  '114131', '311141', '411131', '211412', '211214', '211232', '2331112', // 100-106 (Stop pattern is 7 digits)
+  '114131', '311141', '411131', '211412', '211214', '211232', '2331112', // 100-106
 ];
 
 const START_B_INDEX = 104;
@@ -27,7 +27,13 @@ const STOP_INDEX = 106;
 export function encodeCode128B(text: string): string {
   if (!text) return '';
 
-  const cleanText = text.replace(/[\x00-\x1F\x7F-\xFF]/g, ''); // ASCII 32-126
+  let cleanText = '';
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code >= 32 && code <= 126) {
+      cleanText += text[i];
+    }
+  }
   let checksum = START_B_INDEX;
   const indices: number[] = [START_B_INDEX];
 
@@ -42,7 +48,6 @@ export function encodeCode128B(text: string): string {
   indices.push(checkIndex);
   indices.push(STOP_INDEX);
 
-  // Convert pattern strings (widths: 1, 2, 3, 4) into binary 1s and 0s
   let binaryString = '';
   indices.forEach((index) => {
     const pattern = CODE128_PATTERNS[index];
@@ -58,30 +63,35 @@ export function encodeCode128B(text: string): string {
   return binaryString;
 }
 
-/**
- * Generate standalone SVG representation of Code 128 barcode
- */
-export function generateBarcodeSvg(
-  text: string,
-  options: {
-    height?: number;
-    barWidth?: number;
-    showText?: boolean;
-    color?: string;
-  } = {},
-): string {
-  const height = options.height || 50;
-  const barWidth = options.barWidth || 2;
-  const showText = options.showText !== false;
-  const color = options.color || '#000000';
+export interface BarcodeRect {
+  x: number;
+  width: number;
+}
 
+export interface BarcodeData {
+  bars: BarcodeRect[];
+  totalWidth: number;
+  height: number;
+  text: string;
+}
+
+/**
+ * Compute bar geometries for pure React rendering without innerHTML
+ */
+export function getBarcodeData(
+  text: string,
+  options: { height?: number; barWidth?: number } = {},
+): BarcodeData {
+  const height = options.height || 40;
+  const barWidth = options.barWidth || 1.5;
   const binary = encodeCode128B(text);
-  if (!binary) return '';
+
+  if (!binary) {
+    return { bars: [], totalWidth: 0, height, text };
+  }
 
   const totalWidth = binary.length * barWidth;
-  const svgHeight = showText ? height + 16 : height;
-
-  let rects = '';
+  const bars: BarcodeRect[] = [];
   let currentBarStart = -1;
 
   for (let i = 0; i < binary.length; i++) {
@@ -89,23 +99,21 @@ export function generateBarcodeSvg(
       if (currentBarStart === -1) currentBarStart = i;
     } else {
       if (currentBarStart !== -1) {
-        const w = (i - currentBarStart) * barWidth;
-        const x = currentBarStart * barWidth;
-        rects += `<rect x="${x}" y="0" width="${w}" height="${height}" fill="${color}" />`;
+        bars.push({
+          x: currentBarStart * barWidth,
+          width: (i - currentBarStart) * barWidth,
+        });
         currentBarStart = -1;
       }
     }
   }
 
   if (currentBarStart !== -1) {
-    const w = (binary.length - currentBarStart) * barWidth;
-    const x = currentBarStart * barWidth;
-    rects += `<rect x="${x}" y="0" width="${w}" height="${height}" fill="${color}" />`;
+    bars.push({
+      x: currentBarStart * barWidth,
+      width: (binary.length - currentBarStart) * barWidth,
+    });
   }
 
-  const textElement = showText
-    ? `<text x="${totalWidth / 2}" y="${height + 12}" font-family="monospace" font-size="11" font-weight="bold" text-anchor="middle" fill="${color}">${text}</text>`
-    : '';
-
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalWidth} ${svgHeight}" width="${totalWidth}" height="${svgHeight}">${rects}${textElement}</svg>`;
+  return { bars, totalWidth, height, text };
 }

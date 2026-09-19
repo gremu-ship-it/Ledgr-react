@@ -28,12 +28,17 @@ export function PosOwnerAnalytics({
   const filteredSales = useMemo(() => {
     const now = new Date();
     return sales.filter((s) => {
-      if (selectedBranch !== 'all' && s.branch_id !== selectedBranch && (s as any).branchId !== selectedBranch) {
+      const branchMatch = !s.branch_id && !s.branchId
+        ? true
+        : s.branch_id === selectedBranch || s.branchId === selectedBranch;
+
+      if (selectedBranch !== 'all' && !branchMatch) {
         return false;
       }
       if (s.status === 'voided') return false;
 
-      const saleDate = new Date(s.created_at || (s as any).createdAt || '');
+      const dateStr = s.created_at || s.createdAt || '';
+      const saleDate = new Date(dateStr);
       if (dateRange === 'today') {
         return saleDate.toDateString() === now.toDateString();
       }
@@ -53,11 +58,11 @@ export function PosOwnerAnalytics({
 
   // Aggregate metrics
   const totalRevenue = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.net_amount ?? (s as any).netAmount ?? (s as any).total_amount ?? 0), 0);
+    return filteredSales.reduce((acc, s) => acc + (s.net_amount ?? s.netAmount ?? s.total_amount ?? 0), 0);
   }, [filteredSales]);
 
   const totalDiscount = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.discount_amount ?? (s as any).discountAmount ?? 0), 0);
+    return filteredSales.reduce((acc, s) => acc + (s.discount_amount ?? s.discountAmount ?? 0), 0);
   }, [filteredSales]);
 
   const totalReturns = useMemo(() => {
@@ -71,11 +76,11 @@ export function PosOwnerAnalytics({
   const salesByCashier = useMemo(() => {
     const map = new Map<string, { count: number; revenue: number; name: string }>();
     filteredSales.forEach((s) => {
-      const cId = s.cashier_id || (s as any).cashierId || 'Unknown';
-      const cName = (s as any).cashierName || (s as any).cashier_name || 'Cashier ' + cId.slice(0, 4);
+      const cId = s.cashier_id || s.cashierId || 'Unknown';
+      const cName = s.cashierName || s.cashier_name || 'Cashier ' + cId.slice(0, 4);
       const curr = map.get(cId) || { count: 0, revenue: 0, name: cName };
       curr.count += 1;
-      curr.revenue += (s.net_amount ?? (s as any).netAmount ?? 0);
+      curr.revenue += (s.net_amount ?? s.netAmount ?? 0);
       map.set(cId, curr);
     });
     return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);

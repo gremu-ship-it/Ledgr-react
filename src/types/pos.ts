@@ -130,14 +130,20 @@ export interface PosRegister {
 
 export interface PosProduct {
   id: string;
+  product_id?: string;
+  productId?: string;
   name: string;
   sku?: string | null;
   barcode?: string | null;
   unit_price?: number;
   unitPrice?: number;
   selling_price?: number;
+  sale_price?: number;
   cost_price?: number;
   costPrice?: number;
+  purchase_price?: number;
+  unit_cost?: number;
+  unitCost?: number;
   stock_quantity?: number;
   stockQuantity?: number;
   category?: string | null;
@@ -244,6 +250,7 @@ export interface PosCartItem {
   product_id: string;
   productId?: string;
   name: string;
+  product_name?: string;
   sku?: string | null;
   barcode?: string | null;
   category?: string | null;
@@ -289,7 +296,7 @@ export interface PosParkedOrder {
   id: string;
   reference: string;
   items: PosCartItem[];
-  customer: any;
+  customer?: PosCustomer | null;
   order_discount?: PosDiscount;
   orderDiscountPercent?: number;
   total_amount: number;
@@ -405,7 +412,7 @@ export interface PosSalePayload {
 }
 
 export interface PosSaleResult {
-  sale?: any;
+  sale?: PosSale | Record<string, unknown>;
   saleId?: string;
   invoiceId?: string;
   invoiceNumber?: string;

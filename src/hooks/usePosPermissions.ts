@@ -90,7 +90,7 @@ export function usePosPermissions(): PosUserPermissions {
   const settings: PosSettings = dbSettings || DEFAULT_SETTINGS_FALLBACK;
 
   const check = (p: PosPermission): boolean => {
-    return hasPosPermission(role, p, settings?.custom_role_permissions as any);
+    return hasPosPermission(role, p, settings?.custom_role_permissions);
   };
 
   const isOwnerOrAdmin = role === 'owner' || role === 'admin';

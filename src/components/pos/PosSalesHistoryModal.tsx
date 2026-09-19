@@ -6,7 +6,7 @@ import {
   Ban,
   Receipt,
 } from 'lucide-react';
-import type { PosSale } from '@/types/pos';
+import type { PosSale, PosCartItem } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
 
 interface PosSalesHistoryModalProps {
@@ -30,27 +30,30 @@ export function PosSalesHistoryModal({
   onVoidSale,
   onRequestManagerApproval,
 }: PosSalesHistoryModalProps) {
-  if (!open) return null;
-
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSale, setSelectedSale] = useState<PosSale | null>(null);
   const [returnItems, setReturnItems] = useState<Record<string, number>>({});
   const [refundMethod, setRefundMethod] = useState<'cash' | 'original' | 'credit'>('cash');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  if (!open) return null;
+
   const filteredSales = sales.filter((s) => {
     const q = searchTerm.toLowerCase();
-    const rNo = (s.receipt_number || (s as any).receiptNumber || s.id || '').toLowerCase();
-    const cust = ((s as any).customerName || (s as any).customer_name || '').toLowerCase();
+    const rNo = (s.receipt_number || s.receiptNumber || s.id || '').toLowerCase();
+    const cust = (s.customerName || s.customer_name || '').toLowerCase();
     return rNo.includes(q) || cust.includes(q);
   });
 
   const handleSelectSale = (sale: PosSale) => {
     setSelectedSale(sale);
     const initialQtys: Record<string, number> = {};
-    const items = sale.items || (sale as any).pos_sale_items || [];
-    items.forEach((it: any) => {
-      initialQtys[it.id || it.product_id] = 0;
+    const items = (sale.items || []) as Partial<PosCartItem>[];
+    items.forEach((it) => {
+      const itId = it.id || it.product_id;
+      if (itId) {
+        initialQtys[itId] = 0;
+      }
     });
     setReturnItems(initialQtys);
   };
@@ -58,11 +61,13 @@ export function PosSalesHistoryModal({
   const handleExecuteReturn = async () => {
     if (!selectedSale || !onProcessReturn) return;
 
-    const items = selectedSale.items || (selectedSale as any).pos_sale_items || [];
+    const items = (selectedSale.items || []) as Partial<PosCartItem>[];
     const itemsToReturn: Array<{ product_id: string; quantity: number; refund_amount: number }> = [];
 
-    items.forEach((it: any) => {
-      const q = returnItems[it.id || it.product_id] || 0;
+    items.forEach((it) => {
+      const itId = it.id || it.product_id;
+      if (!itId || !it.product_id) return;
+      const q = returnItems[itId] || 0;
       if (q > 0) {
         const uPrice = it.unit_price ?? it.unitPrice ?? 0;
         itemsToReturn.push({
@@ -84,8 +89,9 @@ export function PosSalesHistoryModal({
         await onProcessReturn(selectedSale.id, itemsToReturn, refundMethod);
         alert('Return processed successfully.');
         setSelectedSale(null);
-      } catch (err: any) {
-        alert(`Failed to process return: ${err.message}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        alert(`Failed to process return: ${message}`);
       } finally {
         setIsProcessing(false);
       }
@@ -109,8 +115,9 @@ export function PosSalesHistoryModal({
         await onVoidSale(selectedSale.id, reason);
         alert('Sale voided successfully.');
         setSelectedSale(null);
-      } catch (err: any) {
-        alert(`Failed to void sale: ${err.message}`);
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        alert(`Failed to void sale: ${message}`);
       } finally {
         setIsProcessing(false);
       }
@@ -164,9 +171,10 @@ export function PosSalesHistoryModal({
               ) : (
                 filteredSales.map((s) => {
                   const isSelected = selectedSale?.id === s.id;
-                  const rNo = s.receipt_number || (s as any).receiptNumber || s.id.slice(0, 8).toUpperCase();
-                  const net = s.net_amount ?? (s as any).netAmount ?? (s as any).total_amount ?? 0;
-                  const date = new Date(s.created_at || (s as any).createdAt || '').toLocaleDateString();
+                  const rNo = s.receipt_number || s.receiptNumber || s.id.slice(0, 8).toUpperCase();
+                  const net = s.net_amount ?? s.netAmount ?? s.total_amount ?? 0;
+                  const dateStr = s.created_at || s.createdAt || '';
+                  const date = dateStr ? new Date(dateStr).toLocaleDateString() : '';
 
                   return (
                     <div
@@ -192,7 +200,7 @@ export function PosSalesHistoryModal({
                           </span>
                         </div>
                         <p className="text-[11px] text-gray-500 mt-0.5">
-                          {date} • {(s as any).customerName || (s as any).customer_name || 'Walk-in'}
+                          {date} • {s.customerName || s.customer_name || 'Walk-in'}
                         </p>
                       </div>
                       <div className="text-right">
@@ -218,7 +226,7 @@ export function PosSalesHistoryModal({
                       Receipt {selectedSale.receipt_number || selectedSale.id}
                     </h3>
                     <p className="text-[11px] text-gray-500">
-                      {new Date(selectedSale.created_at || (selectedSale as any).createdAt || '').toLocaleString()}
+                      {new Date(selectedSale.created_at || selectedSale.createdAt || '').toLocaleString()}
                     </p>
                   </div>
                   {selectedSale.status !== 'voided' && (
@@ -238,9 +246,9 @@ export function PosSalesHistoryModal({
                   <span className="text-[11px] font-bold uppercase tracking-wider text-gray-600">
                     Sale Items (Select Qty to Return)
                   </span>
-                  {((selectedSale.items || (selectedSale as any).pos_sale_items || []) as any[]).map((it) => {
-                    const itKey = it.id || it.product_id;
-                    const maxQty = it.quantity;
+                  {((selectedSale.items || []) as Partial<PosCartItem>[]).map((it) => {
+                    const itKey = it.id || it.product_id || 'item';
+                    const maxQty = it.quantity || 1;
                     const currentRetQty = returnItems[itKey] || 0;
                     const unitPrice = it.unit_price ?? it.unitPrice ?? 0;
 
@@ -251,7 +259,7 @@ export function PosSalesHistoryModal({
                       >
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-gray-900 truncate">
-                            {it.product_name || (it as any).name || 'Product'}
+                            {it.product_name || it.name || 'Product'}
                           </p>
                           <p className="text-[11px] text-gray-500">
                             Sold: {maxQty} @ {formatMwkDetailed(unitPrice)}
@@ -291,7 +299,7 @@ export function PosSalesHistoryModal({
                       <span className="font-bold text-gray-700">Refund Method:</span>
                       <select
                         value={refundMethod}
-                        onChange={(e) => setRefundMethod(e.target.value as any)}
+                        onChange={(e) => setRefundMethod(e.target.value as 'cash' | 'original' | 'credit')}
                         className="rounded-xl border border-gray-200 bg-white px-2.5 py-1 text-xs font-bold"
                       >
                         <option value="cash">Cash Refund</option>

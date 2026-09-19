@@ -15,6 +15,14 @@ import {
 import type { PosPaymentMethod, PosPaymentSplit, PosCustomer } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
 
+export interface PaymentCompletionPayload {
+  payments: PosPaymentSplit[];
+  totalPaid: number;
+  changeGiven: number;
+  dueDate?: string;
+  notes?: string;
+}
+
 interface PosPaymentModalProps {
   open: boolean;
   onClose: () => void;
@@ -23,7 +31,7 @@ interface PosPaymentModalProps {
   enabledMethods?: PosPaymentMethod[] | string[];
   enabledPaymentMethods?: PosPaymentMethod[] | string[];
   selectedCustomer?: PosCustomer | null;
-  onCompleteSale: (payload: any, isCreditSale?: boolean, dueDate?: string) => Promise<void>;
+  onCompleteSale: (payload: PaymentCompletionPayload, isCreditSale?: boolean, dueDate?: string) => Promise<void>;
   isProcessing?: boolean;
   canSellOnCredit?: boolean;
 }
@@ -53,8 +61,6 @@ export function PosPaymentModal({
   isProcessing = false,
   canSellOnCredit = true,
 }: PosPaymentModalProps) {
-  if (!open) return null;
-
   const payable = netPayable !== undefined ? netPayable : (propGrandTotal || 0);
 
   const availableMethods = useMemo(() => {
@@ -67,12 +73,10 @@ export function PosPaymentModal({
   const [cashTendered, setCashTendered] = useState<number>(payable);
   const [reference, setReference] = useState<string>('');
 
-  // Split payment rows
   const [splitRows, setSplitRows] = useState<PosPaymentSplit[]>([
     { payment_method: 'cash', amount: payable, tendered: payable },
   ]);
 
-  // Credit sale state
   const [isCreditSale, setIsCreditSale] = useState(false);
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();
@@ -81,7 +85,6 @@ export function PosPaymentModal({
   });
   const [creditNotes, setCreditNotes] = useState('');
 
-  // Total tendered & change calculation
   const totalTendered = useMemo(() => {
     if (isCreditSale) return 0;
     if (!isSplitMode) {
@@ -101,6 +104,8 @@ export function PosPaymentModal({
   }, [isCreditSale, totalTendered, payable]);
 
   const remainingToAssign = Math.max(0, payable - totalAssigned);
+
+  if (!open) return null;
 
   const handleAddSplitRow = () => {
     setSplitRows([
@@ -401,8 +406,8 @@ export function PosPaymentModal({
                     className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 p-2.5"
                   >
                     <select
-                      value={row.payment_method || (row as any).method || 'cash'}
-                      onChange={(e) => handleUpdateSplitRow(idx, { payment_method: e.target.value as any })}
+                      value={row.payment_method || 'cash'}
+                      onChange={(e) => handleUpdateSplitRow(idx, { payment_method: e.target.value as PosPaymentMethod })}
                       className="rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs font-bold text-gray-800 focus:border-brand-500 focus:outline-none"
                     >
                       {availableMethods.map((m) => (
@@ -431,7 +436,7 @@ export function PosPaymentModal({
                       value={row.reference || ''}
                       onChange={(e) => handleUpdateSplitRow(idx, { reference: e.target.value })}
                       placeholder="Ref / Note"
-                      className="flex-1 rounded-xl border border-gray-200 bg-white px-2 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
+                      className="flex-1 rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
                     />
 
                     {splitRows.length > 1 && (

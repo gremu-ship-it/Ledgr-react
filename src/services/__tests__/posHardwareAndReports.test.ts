@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EscPosBuilder } from '@/lib/pos/escpos';
-import { encodeCode128B, generateBarcodeSvg } from '@/lib/pos/barcodeGenerator';
+import { encodeCode128B, getBarcodeData } from '@/lib/pos/barcodeGenerator';
 import { generateZReportSummary, formatZReportEmailBody } from '@/services/posReportService';
 import type { PosShift, PosSale } from '@/types/pos';
 
@@ -27,7 +27,6 @@ describe('POS Hardware & Advanced Features', () => {
 
       expect(bytes).toBeInstanceOf(Uint8Array);
       expect(bytes.length).toBeGreaterThan(20);
-      // ESC @ is [0x1B, 0x40]
       expect(bytes[0]).toBe(0x1b);
       expect(bytes[1]).toBe(0x40);
     });
@@ -37,7 +36,6 @@ describe('POS Hardware & Advanced Features', () => {
       builder.pulseCashDrawer(0);
       const bytes = builder.build();
 
-      // Contains ESC p [0x1B, 0x70, 0x00, 0x19, 0xFA]
       const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join(' ');
       expect(hex).toContain('1b 70 00 19 fa');
     });
@@ -50,17 +48,15 @@ describe('POS Hardware & Advanced Features', () => {
       expect(binary.length).toBeGreaterThan(30);
     });
 
-    it('generates standalone valid SVG markup', () => {
-      const svg = generateBarcodeSvg('BARCODE-12345', {
+    it('generates structured barcode bars for React rendering', () => {
+      const bData = getBarcodeData('BARCODE-12345', {
         height: 40,
         barWidth: 2,
-        showText: true,
       });
 
-      expect(svg).toContain('<svg');
-      expect(svg).toContain('</svg>');
-      expect(svg).toContain('BARCODE-12345');
-      expect(svg).toContain('<rect');
+      expect(bData.bars.length).toBeGreaterThan(5);
+      expect(bData.totalWidth).toBeGreaterThan(50);
+      expect(bData.text).toBe('BARCODE-12345');
     });
   });
 
@@ -69,6 +65,8 @@ describe('POS Hardware & Advanced Features', () => {
       id: 'shift-100',
       business_id: 'biz-01',
       branch_id: 'branch-01',
+      cashier_id: 'user-phiri',
+      cashier_name: 'Grace Phiri',
       opened_at: '2026-09-19T08:00:00Z',
       closed_at: '2026-09-19T18:00:00Z',
       opening_cash: 25000,
@@ -85,7 +83,6 @@ describe('POS Hardware & Advanced Features', () => {
       cash_out_amount: 0,
       status: 'closed',
       notes: 'Clean shift',
-      cashier_name: 'Grace Phiri',
     };
 
     const mockSales: PosSale[] = [

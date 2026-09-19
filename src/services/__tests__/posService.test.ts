@@ -43,7 +43,7 @@ describe('posService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as any);
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
   });
 
   describe('calculateCartTotals', () => {
@@ -127,7 +127,7 @@ describe('posService', () => {
 
       // Mock repository calls
       const mockReserveNumber = vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0001');
-      const mockDefaultContact = vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cont-1', name: 'Walk-in' } as any);
+      const mockDefaultContact = vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cont-1', name: 'Walk-in' } as never);
 
       const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
         invoice: {
@@ -140,24 +140,24 @@ describe('posService', () => {
           amount_due: 0,
           status: 'paid',
           currency: 'MWK',
-        } as any,
+        } as never,
         lines: [],
       });
 
       const mockRecordPayment = vi.spyOn(repos.invoice, 'recordPayment').mockResolvedValue({
-        payment: { id: 'pmt-1', amount: 24400, payment_method: 'cash' } as any,
-        invoice: {} as any,
+        payment: { id: 'pmt-1', amount: 24400, payment_method: 'cash' } as never,
+        invoice: {} as never,
       });
 
       const mockFindLocation = vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({
         id: 'loc-1',
         name: 'Main Store',
         business_id: businessId,
-      } as any);
+      } as never);
 
       const mockRecordMovement = vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({
-        movement: { id: 'mov-1' } as any,
-        balance: { id: 'bal-1', quantity_on_hand: 18 } as any,
+        movement: { id: 'mov-1' } as never,
+        balance: { id: 'bal-1', quantity_on_hand: 18 } as never,
       });
 
       const mockFindAccounts = vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([
@@ -165,7 +165,7 @@ describe('posService', () => {
         { id: 'acc-sales', account_number: '4000', name: 'Sales Revenue', classification: 'revenue' },
         { id: 'acc-cogs', account_number: '5000', name: 'Cost of Goods Sold', classification: 'expense' },
         { id: 'acc-inv', account_number: '1200', name: 'Inventory Asset', classification: 'asset' },
-      ] as any);
+      ] as never);
 
       const payload = {
         businessId,
@@ -210,26 +210,26 @@ describe('posService', () => {
         status: 'paid',
         total_amount: 13000,
         currency: 'MWK',
-      } as any);
+      } as never);
 
       const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
-        invoice: { id: 'cn-1', invoice_number: 'CN-2026-0001', total_amount: -6500 } as any,
+        invoice: { id: 'cn-1', invoice_number: 'CN-2026-0001', total_amount: -6500 } as never,
         lines: [],
       });
 
       const mockFindLocation = vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({
         id: 'loc-1',
         business_id: businessId,
-      } as any);
+      } as never);
 
       const mockDefaultLocation = vi.spyOn(repos.inventory, 'findDefaultLocation').mockResolvedValue({
         id: 'loc-1',
         business_id: businessId,
-      } as any);
+      } as never);
 
       const mockRecordMovement = vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({
-        movement: { id: 'mov-ret-1' } as any,
-        balance: { id: 'bal-1', quantity_on_hand: 21 } as any,
+        movement: { id: 'mov-ret-1' } as never,
+        balance: { id: 'bal-1', quantity_on_hand: 21 } as never,
       });
 
       const returnResult = await posService.processReturn({
@@ -278,30 +278,30 @@ describe('posService', () => {
           branch_id: 'branch-1',
           status: 'paid',
           total_amount: 13000,
-        } as any,
+        } as never,
         lines: [
           {
             id: 'line-1',
             product_id: 'prod-001',
             quantity: 2,
             unit_price: 6500,
-          } as any,
+          } as never,
         ],
       });
 
       const mockUpdate = vi.spyOn(repos.invoice, 'update').mockResolvedValue({
         id: 'inv-void-1',
         status: 'void',
-      } as any);
+      } as never);
 
       const mockFindLocation = vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({
         id: 'loc-1',
         business_id: businessId,
-      } as any);
+      } as never);
 
       const mockRecordMovement = vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({
-        movement: { id: 'mov-void-1' } as any,
-        balance: { id: 'bal-1', quantity_on_hand: 22 } as any,
+        movement: { id: 'mov-void-1' } as never,
+        balance: { id: 'bal-1', quantity_on_hand: 22 } as never,
       });
 
       const voidResult = await posService.processVoid({

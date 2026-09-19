@@ -26,11 +26,11 @@ vi.mock('@tanstack/react-query', () => ({
 describe('usePosPermissions & Role-Based Access Control', () => {
   beforeEach(() => {
     useAppStore.setState({
-      currentUser: { id: 'user-1', email: 'cashier@ledgr.test', fullName: 'John Banda' } as any,
+      currentUser: { id: 'user-1', email: 'cashier@ledgr.test', fullName: 'John Banda' } as never,
       currentBusiness: {
         role: 'cashier',
-        business: { id: 'biz-001', name: 'Test Business' } as any,
-      } as any,
+        business: { id: 'biz-001', name: 'Test Business' },
+      } as never,
     });
   });
 
@@ -38,8 +38,8 @@ describe('usePosPermissions & Role-Based Access Control', () => {
     useAppStore.setState({
       currentBusiness: {
         role: 'cashier',
-        business: { id: 'biz-001', name: 'Test Business' } as any,
-      } as any,
+        business: { id: 'biz-001', name: 'Test Business' },
+      } as never,
     });
 
     const { result } = renderHook(() => usePosPermissions());
@@ -57,8 +57,8 @@ describe('usePosPermissions & Role-Based Access Control', () => {
     useAppStore.setState({
       currentBusiness: {
         role: 'manager',
-        business: { id: 'biz-001', name: 'Test Business' } as any,
-      } as any,
+        business: { id: 'biz-001', name: 'Test Business' },
+      } as never,
     });
 
     const { result } = renderHook(() => usePosPermissions());
@@ -76,8 +76,8 @@ describe('usePosPermissions & Role-Based Access Control', () => {
     useAppStore.setState({
       currentBusiness: {
         role: 'owner',
-        business: { id: 'biz-001', name: 'Test Business' } as any,
-      } as any,
+        business: { id: 'biz-001', name: 'Test Business' },
+      } as never,
     });
 
     const { result } = renderHook(() => usePosPermissions());

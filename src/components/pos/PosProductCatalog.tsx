@@ -7,11 +7,13 @@ import {
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 
+import type { PosProduct } from '@/types/pos';
+
 interface PosProductCatalogProps {
-  products: any[];
+  products: PosProduct[];
   categories?: string[];
   isLoading?: boolean;
-  onAddToCart: (product: any) => void;
+  onAddToCart: (product: PosProduct) => void;
 }
 
 export function PosProductCatalog({
