@@ -192,6 +192,7 @@ describe('posService', () => {
       });
       vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-1');
       vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cont-1' } as never);
+      vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
       vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
 
       const totals = posService.calculateCartTotals(sampleItems);
@@ -231,6 +232,7 @@ describe('posService', () => {
       });
       vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2');
       vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cont-1' } as never);
+      vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
       vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
       const mockRecordMovement = vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({} as never);
       const stockSpy = vi.mocked(deductStockAndPostCogs);
@@ -271,6 +273,8 @@ describe('posService', () => {
       // Mock repository calls
       const mockReserveNumber = vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0001');
       const mockDefaultContact = vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'cont-1', name: 'Walk-in' } as never);
+      // Replay guard for the stock ledger: no movements exist for a new sale.
+      vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
 
       const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
         invoice: {

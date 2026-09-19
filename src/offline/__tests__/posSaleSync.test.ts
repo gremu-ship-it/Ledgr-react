@@ -2,7 +2,12 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { offlineDB } from '@/offline/db';
-import { enqueue } from '@/offline/queueApi';
+import {
+  enqueue,
+  getPendingCount,
+  recoverStaleSyncClaims,
+  STALE_SYNC_CLAIM_MS,
+} from '@/offline/queueApi';
 import { syncQueue } from '@/offline/syncEngine';
 import { buildPosSaleQueuePayload } from '@/services/posService';
 import { repos } from '@/lib/repositories';
@@ -88,6 +93,7 @@ describe('a POS sale queued offline', () => {
       name: 'Walk-in Customer',
     } as never);
     vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
+    vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
     createWithLines.mockResolvedValue({
       invoice: {
         id: 'inv-offline-1',
@@ -150,5 +156,63 @@ describe('a POS sale queued offline', () => {
     // Surfaced in the drawer as "needs attention", with the real reason.
     expect(item?.lastError).toContain('duplicate key value');
     expect(item?.attemptCount).toBe(1);
+  });
+
+  it('retries a sale the app abandoned mid-sync instead of leaving it invisible', async () => {
+    const payload = buildPosSaleQueuePayload(salePayload, { receiptNumber: 'REC-OFF-3' });
+    const localId = await enqueue('pos_sale', 'biz-till-1', payload);
+
+    // A tab killed while this item was being sent: the claim is old, so it is
+    // abandoned rather than in flight.
+    await offlineDB.queue.update(localId, {
+      status: 'syncing',
+      attemptCount: 1,
+      lastAttemptAt: new Date(Date.now() - STALE_SYNC_CLAIM_MS - 60_000).toISOString(),
+    });
+
+    // The badge counts it — the sale is not on the server, and the till must
+    // not be left believing it is.
+    expect(await getPendingCount()).toBe(1);
+
+    vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0102');
+    vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({ id: 'uuid-walkin' } as never);
+    vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([] as never);
+    vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
+    vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
+      invoice: {
+        id: 'inv-offline-3',
+        business_id: 'biz-till-1',
+        invoice_number: 'INV-2026-0102',
+        total_amount: 13000,
+      } as never,
+      lines: [],
+    });
+    vi.spyOn(repos.invoice, 'recordPayment').mockResolvedValue({
+      payment: { id: 'pmt-3' } as never,
+      invoice: {} as never,
+    });
+    vi.spyOn(repos.pos, 'findShiftById').mockResolvedValue({ id: 'shift-1', status: 'open' } as never);
+    vi.spyOn(repos.pos, 'updateShiftTotals').mockResolvedValue(null);
+
+    const progress = await syncQueue();
+
+    expect(progress).toMatchObject({ total: 1, completed: 1, failed: 0 });
+    expect((await offlineDB.queue.get(localId))?.status).toBe('synced');
+    expect(await getPendingCount()).toBe(0);
+  });
+
+  it('leaves a claim that is still inside its lease alone', async () => {
+    const payload = buildPosSaleQueuePayload(salePayload, { receiptNumber: 'REC-OFF-4' });
+    const localId = await enqueue('pos_sale', 'biz-till-1', payload);
+
+    // Fresh claim: another tab may still be writing this sale.
+    await offlineDB.queue.update(localId, {
+      status: 'syncing',
+      lastAttemptAt: new Date().toISOString(),
+    });
+
+    expect(await getPendingCount()).toBe(0);
+    expect(await recoverStaleSyncClaims()).toBe(0);
+    expect((await offlineDB.queue.get(localId))?.status).toBe('syncing');
   });
 });

@@ -169,6 +169,9 @@ describe('commitPosSaleDocuments', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // The commit checks the stock ledger before releasing stock again (replay
+    // guard); these tests stub the repositories wholesale, so answer it here.
+    vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
     vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0042');
     vi.spyOn(repos.contact, 'findDefaultSaleContact').mockResolvedValue({
       id: 'uuid-walkin',

@@ -213,6 +213,33 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
     return data ?? [];
   }
 
+  /**
+   * Whether any stock movement has already been recorded for a source
+   * document (e.g. `('invoice', invoice.id)`).
+   *
+   * `recordMovements` writes a batch with no client key, so a caller that can
+   * be replayed (a retried offline sale, a lost response, a queue retry) has
+   * no way to know whether its movements already landed. The COGS journal
+   * entry is derived from those movements, so releasing them twice double
+   * counts both stock and cost of sales — hence this cheap existence check
+   * before the release, not a re-insert.
+   */
+  async hasMovementsForSource(
+    businessId: string,
+    sourceType: string,
+    sourceId: string,
+  ): Promise<boolean> {
+    const { data, error } = await this.client
+      .from('stock_movements')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('source_type', sourceType)
+      .eq('source_id', sourceId)
+      .limit(1);
+    if (error) throw toRepositoryError('stock_movements', error);
+    return (data?.length ?? 0) > 0;
+  }
+
   async findMovementHistory(
     businessId: string,
     productId: string,

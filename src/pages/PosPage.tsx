@@ -240,7 +240,9 @@ export function PosPage() {
               created_at: inv.created_at || inv.issue_date,
               customer_name: (inv as { contact?: { name?: string } }).contact?.name || 'Walk-in',
               cashier_name: inv.created_by || 'Cashier',
-              gross_amount: Number(inv.subtotal) || 0,
+              // `subtotal` is stored net of discount (app-wide convention),
+              // so the pre-discount figure is subtotal + discount.
+              gross_amount: (Number(inv.subtotal) || 0) + (Number(inv.discount_amount) || 0),
               discount_amount: Number(inv.discount_amount) || 0,
               net_amount: Number(inv.total_amount) || 0,
               total_paid: Number(inv.amount_paid) || 0,

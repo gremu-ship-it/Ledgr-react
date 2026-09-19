@@ -14,7 +14,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { announce } from '@/lib/a11y';
 import { QUEUE_TYPE_LABELS, type QueueItem, type QueueItemStatus } from '@/offline/db';
-import { removeQueueItem } from '@/offline/queueApi';
+import { isStaleSyncClaim, removeQueueItem } from '@/offline/queueApi';
 
 const STATUS_STYLES: Record<QueueItemStatus, { label: string; className: string }> = {
   pending: { label: 'Queued', className: 'bg-amber-100 text-amber-900' },
@@ -147,7 +147,10 @@ export function OfflineQueueDrawer() {
   }
 
   function canDiscard(item: QueueItem): boolean {
-    if (item.status === 'syncing' || item.localId === undefined || isDiscarding === item.localId) return false;
+    // An item still inside its sync lease is off-limits; an abandoned claim
+    // (app closed mid-sync) is just another unsynced change and the user has
+    // to be able to clear it.
+    if ((item.status === 'syncing' && !isStaleSyncClaim(item)) || item.localId === undefined || isDiscarding === item.localId) return false;
     return !items.some((candidate) => candidate.dependsOnLocalId === item.localId && candidate.status !== 'synced');
   }
 

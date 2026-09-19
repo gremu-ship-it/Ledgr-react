@@ -43,6 +43,8 @@ describe('POS Integration & Acceptance Criteria', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // Replay guard for the stock ledger — no movements exist for a fresh sale.
+    vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
   });
 
   describe('Split Payment & Change Computation', () => {

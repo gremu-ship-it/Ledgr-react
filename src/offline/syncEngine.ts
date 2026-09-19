@@ -22,6 +22,7 @@ import {
 } from '@/services/quickSaveService';
 import { commitPosSaleDocuments } from '@/services/posService';
 import { createLogger } from '@/lib/logger';
+import { recoverStaleSyncClaims } from './queueApi';
 import { offlineDB, type QueueItem } from './db';
 import type {
   IncomeQueuePayload,
@@ -375,6 +376,17 @@ async function syncItem(item: QueueItem): Promise<string> {
 }
 
 export async function syncQueue(onProgress?: SyncProgressListener): Promise<SyncProgress> {
+  // Recover anything a previous session abandoned mid-write (app closed,
+  // tab killed, crash): those items are stuck in `syncing` and would never be
+  // selected below, so a queued sale could sit on the device forever with
+  // nothing on screen saying so.
+  const recovered = await recoverStaleSyncClaims();
+  if (recovered > 0) {
+    log.warn(`${recovered} queue item(s) were left mid-sync by a previous session — retrying them`, {
+      recovered,
+    });
+  }
+
   const items = await offlineDB.queue
     .where('status')
     .anyOf('pending', 'failed')

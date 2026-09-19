@@ -16,7 +16,10 @@ import type {
   PosPaymentMethod,
   PosProduct,
 } from '@/types/pos';
-import { createInvoiceJournalEntry } from '@/services/journalService';
+import {
+  createInvoiceJournalEntry,
+  createInvoiceReceivableEntry,
+} from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { newSaveClientKey } from '@/services/quickSaveService';
@@ -380,6 +383,20 @@ export function buildPosSaleQueuePayload(
     ? 0
     : Math.max(0, round2(totals.net_payable - coveredByPayments));
 
+  // Header money. `subtotal` has to mean the same thing here as it does on
+  // every other invoice in the app — VAT-exclusive and net of discount — or
+  // the postings break: `createInvoiceJournalEntry` credits revenue with
+  // `subtotal + discount_amount` (gross disclosure) and debits the discount to
+  // 4130, so a pre-discount `subtotal` double-counts the discount and the entry
+  // no longer balances. The Invoices view reads the same field as "Net
+  // Subtotal", and the quick-save RPC asserts `subtotal + vat = total`.
+  //
+  // Till prices are VAT-inclusive (Malawi retail), so the VAT-exclusive
+  // subtotal is what the customer pays (`taxable_subtotal`) less the tax
+  // already inside it (`tax_total`). With the POS VAT rate at 0 this is
+  // exactly the old `taxable_subtotal`, which is what the till posted before.
+  const vatExclusiveSubtotal = round2(totals.taxable_subtotal - totals.tax_total);
+
   const invoice = {
     business_id: businessId,
     // Placeholder until commit reserves the real sequence number. Keeping the
@@ -397,12 +414,12 @@ export function buildPosSaleQueuePayload(
     due_date: isCreditSale ? (sale.dueDate || sale.issueDate) : sale.issueDate,
     currency: 'MWK',
     exchange_rate: 1,
-    subtotal: totals.gross_total,
+    subtotal: vatExclusiveSubtotal,
     discount_amount: totals.discount_total,
     discount_percent: totals.gross_total > 0
       ? Math.round((totals.discount_total / totals.gross_total) * 100)
       : 0,
-    taxable_amount: totals.taxable_subtotal,
+    taxable_amount: vatExclusiveSubtotal,
     vat_amount: totals.tax_total,
     wht_amount: 0,
     total_amount: totals.net_payable,
@@ -530,7 +547,12 @@ export interface PosSaleCommitResult {
  * Idempotent by construction: the invoice carries `clientKey`, each payment
  * row `${clientKey}:pmt:<n>`, and the repositories look the key up before
  * inserting, so a retry after a lost response returns what already exists
- * rather than duplicating revenue, cash or stock.
+ * rather than duplicating the invoice or the cash rows. The two derived
+ * halves that have no key of their own are guarded by what they left behind:
+ * the sales entry is skipped when the invoice already carries a
+ * `journal_entry_id`, and the stock/COGS release is skipped when the invoice
+ * already has stock movements. Re-running a committed sale is therefore a
+ * no-op in the ledger as well as in the documents.
  */
 export async function commitPosSaleDocuments(
   payload: PosSaleQueuePayload,
@@ -615,7 +637,23 @@ export async function commitPosSaleDocuments(
     .filter((line) => line.product_id && Number(line.quantity) > 0)
     .map((line) => ({ productId: line.product_id as string, quantity: Number(line.quantity) }));
 
-  if (stockLines.length > 0) {
+  //    A replay (queue retry, or a second attempt after a lost response) must
+  //    not release the same stock twice. Unlike the invoice and its payment
+  //    rows, stock movements carry no client key and the COGS entry is derived
+  //    from them, so the check is "has this invoice already moved stock?".
+  const stockAlreadyReleased =
+    stockLines.length > 0 &&
+    (await repos.inventory
+      .hasMovementsForSource(businessId, 'invoice', createdInvoice.id)
+      .catch(() => false));
+
+  if (stockAlreadyReleased) {
+    log.info('Stock already released for this sale — skipping the stock/COGS posting', {
+      businessId,
+      invoiceId: createdInvoice.id,
+      invoiceNumber: createdInvoice.invoice_number,
+    });
+  } else if (stockLines.length > 0) {
     const result = await retryNonCritical(
       () =>
         deductStockAndPostCogs(
@@ -633,21 +671,54 @@ export async function commitPosSaleDocuments(
     }
   }
 
-  // 7. Sales double-entry journal.
-  const journalPosted = await retryNonCritical(
-    () =>
-      createInvoiceJournalEntry(
+  // 7. Sales double-entry journal — the shape the Income screen uses for the
+  //    same two cases:
+  //      * paid at the till  -> DR Debtors / CR Revenue (+VAT) plus the
+  //        auto-receipt DR Cash / CR Debtors, because the money is in the
+  //        drawer now (createInvoiceJournalEntry);
+  //      * on credit         -> DR Debtors / CR Revenue (+VAT) only. Posting
+  //        the receipt too would show cash the shop never received and leave
+  //        the customer's ledger balance already settled
+  //        (createInvoiceReceivableEntry).
+  //
+  //    `journal_entry_id` is stamped on the invoice by whichever posting ran,
+  //    and `createWithLines` returns the stored row on a replay — so a replay
+  //    skips the ledger instead of posting the same revenue twice.
+  const isCreditSale = payload.isCreditSale || payload.payments.length === 0;
+
+  if (createdInvoice.journal_entry_id) {
+    log.info('Sale already has a journal entry — skipping the ledger posting', {
+      businessId,
+      invoiceId: createdInvoice.id,
+      journalEntryId: createdInvoice.journal_entry_id,
+    });
+  } else {
+    const journalPosted = await retryNonCritical<void>(async () => {
+      if (isCreditSale) {
+        await createInvoiceReceivableEntry(
+          businessId,
+          createdInvoice,
+          createdInvoice.branch_id ?? null,
+          createdInvoice.department_id ?? null,
+        );
+        return;
+      }
+      await createInvoiceJournalEntry(
         businessId,
         createdInvoice,
         Number(createdInvoice.subtotal),
         Number(createdInvoice.vat_amount),
         createdInvoice.branch_id ?? null,
         createdInvoice.department_id ?? null,
-      ),
-    { module: 'PosService', operation: 'pos_journal_entry', businessId },
-  );
-  if (journalPosted === null) {
-    warnings.push('The sales journal entry could not be posted for this sale.');
+      );
+    }, { module: 'PosService', operation: 'pos_journal_entry', businessId });
+    if (journalPosted === null) {
+      warnings.push(
+        isCreditSale
+          ? 'The sales journal entry could not be posted for this credit sale.'
+          : 'The sales journal entry could not be posted for this sale.',
+      );
+    }
   }
 
   // 8. Drawer totals for the shift this sale belongs to.
