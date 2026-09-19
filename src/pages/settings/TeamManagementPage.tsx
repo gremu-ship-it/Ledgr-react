@@ -1278,12 +1278,12 @@ export function TeamManagementPage() {
                   <td className="px-4 py-2 font-medium text-gray-700">{label}</td>
                   {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
                     const perm = {
-                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager'],
-                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','branch_manager'],
+                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager','manager','cashier','stock_clerk'],
+                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','branch_manager','manager','cashier','stock_clerk'],
                       canWritePayroll: ['owner','admin','accountant','payroll_manager','supervisor'],
                       canDelete: ['owner','admin'],
                       canManageUsers: ['owner','admin'],
-                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor','purchasing_officer','sales_manager','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager'],
+                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor','purchasing_officer','sales_manager','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager','manager'],
                       canManageBilling: ['owner'],
                     }[key] ?? [];
                     const has = perm.includes(r);
