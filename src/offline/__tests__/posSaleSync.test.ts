@@ -9,6 +9,7 @@ import {
   STALE_SYNC_CLAIM_MS,
 } from '@/offline/queueApi';
 import { syncQueue } from '@/offline/syncEngine';
+import { usageService } from '@/lib/billing/UsageService';
 import { buildPosSaleQueuePayload } from '@/services/posService';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
@@ -70,6 +71,8 @@ describe('a POS sale queued offline', () => {
     await offlineDB.queue.clear();
     vi.restoreAllMocks();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // The sync pass checks the plan limit before writing a document.
+    vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
   });
 
   it('appears in the shared queue and syncs into the books', async () => {

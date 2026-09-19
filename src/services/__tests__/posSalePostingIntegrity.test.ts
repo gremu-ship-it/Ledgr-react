@@ -33,6 +33,7 @@ vi.mock('@/services/inventoryJournalService', () => ({
 
 const ACCOUNTS: Record<string, { id: string; code: string; name: string }> = {
   '1110': { id: 'acc-1110', code: '1110', name: 'Cash on Hand' },
+  '1125': { id: 'acc-1125', code: '1125', name: 'Mobile Money — Airtel Money' },
   '1131': { id: 'acc-1131', code: '1131', name: 'Trade Debtors' },
   '2121': { id: 'acc-2121', code: '2121', name: 'VAT Payable' },
   '4112': { id: 'acc-rev', code: '4112', name: 'Service Revenue' },
@@ -92,6 +93,7 @@ function lineFor(entry: CapturedEntry, accountId: string, isDebit: boolean) {
 
 describe('POS sale posting integrity', () => {
   let storedInvoiceOverrides: Record<string, unknown>;
+  let paymentSeq = 0;
 
   /** The row the server would hand back from createWithLines. */
   function committedRow(payload: QueuePayloadFor<'pos_sale'>) {
@@ -127,12 +129,23 @@ describe('POS sale posting integrity', () => {
     storedInvoiceOverrides = {};
 
     vi.spyOn(realSupabase, 'rpc').mockResolvedValue({ data: 'JNL-20260919-000001', error: null } as never);
-    vi.spyOn(usageService, 'getCurrentMonthUsage').mockResolvedValue(0);
+    // The plan guard runs before the document write (see the dedicated test
+    // below); stubbed here so the ledger tests do not need a network.
+    vi.spyOn(usageService, 'assertWithinTransactionLimit').mockResolvedValue(undefined);
+    // No keyed posting exists yet on the happy path.
+    vi.spyOn(repos.journal, 'findByPostingKey').mockResolvedValue(null as never);
+    vi.spyOn(repos.account, 'findBankAccounts').mockResolvedValue([] as never);
     vi.spyOn(webhookService, 'triggerWebhooks').mockResolvedValue(undefined);
     vi.spyOn(repos.business, 'findById').mockResolvedValue({ id: 'biz-1', plan_tier: 'pro' } as never);
     vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0500');
     vi.spyOn(repos.account, 'findByBusiness').mockResolvedValue([ACCOUNTS['4112']] as never);
-    vi.spyOn(repos.account, 'findById').mockResolvedValue(ACCOUNTS['4112'] as never);
+    vi.spyOn(repos.account, 'findById').mockImplementation(
+      // Resolve the account by id, the way the server does: the settlement
+      // posting debits whatever account the payment points at.
+      async (id: string) =>
+        (Object.values(ACCOUNTS).find((account) => account.id === id) ??
+          ACCOUNTS['4112']) as never,
+    );
     vi.spyOn(repos.account, 'findByCode').mockImplementation(
       async (_businessId: string, code: string) => (ACCOUNTS[code] ?? null) as never,
     );
@@ -147,9 +160,15 @@ describe('POS sale posting integrity', () => {
         return { invoice: committedRow(queuePayload) as never, lines: [] };
       },
     );
-    vi.spyOn(repos.invoice, 'recordPayment').mockResolvedValue({
-      payment: { id: 'pmt-1' } as never,
-      invoice: {} as never,
+    paymentSeq = 0;
+    vi.spyOn(repos.invoice, 'recordPayment').mockImplementation(async (payment) => {
+      paymentSeq += 1;
+      return {
+        // Echo what the server would store: the settlement posting reads the
+        // row's amounts and currency.
+        payment: { id: `pmt-${paymentSeq}`, ...payment } as never,
+        invoice: {} as never,
+      };
     });
     vi.spyOn(repos.invoice, 'update').mockResolvedValue({} as never);
     vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
@@ -228,6 +247,13 @@ describe('POS sale posting integrity', () => {
 
   it('does not post the ledger twice when the sale is replayed', async () => {
     storedInvoiceOverrides = { journal_entry_id: 'je-from-first-attempt' };
+    // Both halves are already in the ledger under their posting keys — that is
+    // what a replay of a committed sale meets.
+    vi.mocked(repos.journal.findByPostingKey).mockImplementation(
+      async (_businessId, key) =>
+        ({ id: key.includes('settlement') ? 'je-receipt' : 'je-sale', status: 'posted' }) as never,
+    );
+
     const queuePayload = buildPosSaleQueuePayload(paidSale, {
       receiptNumber: 'REC-POST-3',
       clientKey: 'key-post-3',
@@ -237,6 +263,98 @@ describe('POS sale posting integrity', () => {
 
     expect(vi.mocked(repos.journal.createBalancedEntry)).not.toHaveBeenCalled();
     expect(vi.mocked(repos.journal.post)).not.toHaveBeenCalled();
+  });
+
+  it('finishes a keyed entry left as a draft by a crash instead of posting it again', async () => {
+    vi.mocked(repos.journal.findByPostingKey).mockImplementation(
+      async (_businessId, key) =>
+        ({ id: key.includes('settlement') ? 'je-receipt' : 'je-sale', status: 'draft' }) as never,
+    );
+
+    const queuePayload = buildPosSaleQueuePayload(paidSale, {
+      receiptNumber: 'REC-POST-5',
+      clientKey: 'key-post-5',
+    });
+
+    await commitPosSaleDocuments(queuePayload, { businessId: 'biz-1', clientKey: 'key-post-5' });
+
+    // Nothing new is created; the two drafts are posted.
+    expect(vi.mocked(repos.journal.createBalancedEntry)).not.toHaveBeenCalled();
+    expect(vi.mocked(repos.journal.post).mock.calls.map(([id]) => id).sort()).toEqual([
+      'je-receipt',
+      'je-sale',
+    ]);
+  });
+
+  it('settles each tender into the account the money actually landed in', async () => {
+    const splitSale = {
+      ...paidSale,
+      payments: [
+        { payment_method: 'airtel_money' as const, amount: 300 },
+        { payment_method: 'cash' as const, amount: 600 },
+      ],
+      totalPaid: 900,
+      changeGiven: 0,
+    };
+
+    const queuePayload = buildPosSaleQueuePayload(splitSale, {
+      receiptNumber: 'REC-POST-6',
+      clientKey: 'key-post-6',
+    });
+
+    await commitPosSaleDocuments(queuePayload, { businessId: 'biz-1', clientKey: 'key-post-6' });
+
+    // The mobile-money leg is recorded against the Airtel float account, not
+    // dropped into the cash drawer...
+    const paymentArgs = vi.mocked(repos.invoice.recordPayment).mock.calls.map(([payment]) => payment);
+    expect(paymentArgs).toHaveLength(2);
+    expect(paymentArgs[0]).toMatchObject({ payment_method: 'airtel_money', bank_account_id: 'acc-1125' });
+    expect(paymentArgs[1]).toMatchObject({ payment_method: 'cash', bank_account_id: null });
+
+    // ...and the ledger settles each leg into its own account.
+    const entries = vi.mocked(repos.journal.createBalancedEntry).mock.calls.map(
+      ([header, lines]) => ({ header, lines }) as unknown as CapturedEntry,
+    );
+    expect(entries).toHaveLength(3); // sale + two receipts (one per tender)
+    const settlements = entries.slice(1);
+    expect(lineFor(settlements[0], 'acc-1125', true)?.amount_base).toBe(300);
+    expect(lineFor(settlements[1], 'acc-1110', true)?.amount_base).toBe(600);
+    for (const settlement of settlements) {
+      expect(lineFor(settlement, 'acc-1131', false)).toBeTruthy();
+      const { debits, credits } = totalsOf(settlement);
+      expect(debits).toBeCloseTo(credits, 2);
+    }
+  });
+
+  it('refuses the sale when the plan limit is reached, before anything is written', async () => {
+    vi.mocked(usageService.assertWithinTransactionLimit).mockRejectedValue(
+      new Error('Monthly transaction limit reached (50). Please upgrade your plan.'),
+    );
+    const findByClientKey = vi
+      .spyOn(repos.invoice, 'findByClientKey')
+      .mockResolvedValue(null as never);
+
+    const queuePayload = buildPosSaleQueuePayload(paidSale, {
+      receiptNumber: 'REC-POST-7',
+      clientKey: 'key-post-7',
+    });
+
+    await expect(
+      commitPosSaleDocuments(queuePayload, { businessId: 'biz-1', clientKey: 'key-post-7' }),
+    ).rejects.toThrow(/Monthly transaction limit reached/);
+
+    // Nothing was written: no orphan invoice, no ledger, no stock release.
+    expect(vi.mocked(repos.invoice.createWithLines)).not.toHaveBeenCalled();
+    expect(vi.mocked(repos.journal.createBalancedEntry)).not.toHaveBeenCalled();
+    expect(deductStockAndPostCogs).not.toHaveBeenCalled();
+
+    // A replay of an already-committed sale is not blocked by the limit: its
+    // document is on the books and the retry has to finish the job.
+    findByClientKey.mockResolvedValue({ id: 'inv-1' } as never);
+    await expect(
+      commitPosSaleDocuments(queuePayload, { businessId: 'biz-1', clientKey: 'key-post-7' }),
+    ).resolves.toBeDefined();
+    expect(vi.mocked(repos.invoice.createWithLines)).toHaveBeenCalled();
   });
 
   it('does not release stock twice when the sale is replayed', async () => {

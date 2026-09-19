@@ -5,6 +5,7 @@ import type { PosCartItem, PosDiscount } from '@/types/pos';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
+import { usageService } from '@/lib/billing/UsageService';
 
 /**
  * The canonical offline queue is Dexie-backed, which these unit tests do not
@@ -18,8 +19,16 @@ vi.mock('@/offline/queueApi', async (importOriginal) => ({
   enqueue: (...args: unknown[]) => enqueueMock(...args),
 }));
 
+const { journalEntryMock, receivableEntryMock, settlementEntryMock } = vi.hoisted(() => ({
+  journalEntryMock: vi.fn().mockResolvedValue({}),
+  receivableEntryMock: vi.fn().mockResolvedValue('je-sale'),
+  settlementEntryMock: vi.fn().mockResolvedValue('je-receipt'),
+}));
+
 vi.mock('@/services/journalService', () => ({
-  createInvoiceJournalEntry: vi.fn().mockResolvedValue({}),
+  createInvoiceJournalEntry: (...args: unknown[]) => journalEntryMock(...args),
+  createInvoiceReceivableEntry: (...args: unknown[]) => receivableEntryMock(...args),
+  createInvoiceSettlementEntry: (...args: unknown[]) => settlementEntryMock(...args),
 }));
 
 vi.mock('@/services/inventoryJournalService', () => ({
@@ -57,6 +66,9 @@ describe('posService', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // The plan guard runs before the document write and needs the server for
+    // the plan tier and the month's document count; stubbed here.
+    vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
   });
 
   describe('calculateCartTotals', () => {

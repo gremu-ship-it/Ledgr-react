@@ -8,10 +8,9 @@ invoice-builder invoice, an expense and a payroll run — plus the retry/queue
 machinery that can replay any of them.
 
 Method: read the posting path end to end (service → repository → migration,
-and the SQL quick-save RPC), then lock the conclusions with tests. Nothing in
-`journalService`, `JournalRepository` or the migrations was changed by this
-audit; the fixes below are in `posService`, `queueApi`/`syncEngine` and the
-inventory repository.
+and the SQL quick-save RPC), then lock the conclusions with tests. The fixes
+below span `posService`, `queueApi`/`syncEngine`, the inventory repository, the
+journal posting functions, `UsageService`, `PosPage` and two migrations.
 
 ## Summary
 
@@ -22,10 +21,10 @@ inventory repository.
 | F3 | A replayed sale could post the ledger and the stock release twice | High | Guarded (baseline) |
 | F4 | A sale abandoned mid-sync stayed invisible on the device forever | Medium | Fixed |
 | F5 | POS sales history read `subtotal` as gross after the header fix | Low | Fixed |
-| O1 | The retry helper wraps non-idempotent ledger writers | High (open) | Reported |
-| O2 | Tender type never reaches the ledger (cash / mobile money / card) | Medium (open) | Reported |
-| O3 | Usage-limit guard counts journal entries and runs after the document write | Medium (open) | Reported |
-| O4 | POS VAT rate is hard-coded to 0 | Low (open) | Reported |
+| O1 | The retry helper wraps non-idempotent ledger writers | High | Fixed (keyed postings) |
+| O2 | Tender type never reaches the ledger (cash / mobile money / card) | Medium | Fixed (tender routing) |
+| O3 | Usage-limit guard counts journal entries and runs after the document write | Medium | Fixed (document count, pre-write) |
+| O4 | POS VAT rate is hard-coded to 0 | Low | Fixed (business VAT flag) |
 
 ---
 
@@ -146,64 +145,139 @@ gross − discount = net still reads correctly.
 
 ---
 
-## Open findings (reported, not changed)
+## Fixed in the follow-up change
 
-### O1 — The retry helper wraps non-idempotent ledger writers (High)
+### O1 — Non-idempotent ledger writers, behind a retrying helper (High)
 
-`retryNonCritical` (`src/lib/nonCriticalRetry.ts`, over `withRetry`,
-`src/lib/errorHandler.ts`) gives a write two attempts. Its own doc comment says
-"anything whose loss would corrupt the ledger's relationship to the document
-must NOT use this helper" — yet it wraps `deductStockAndPostCogs`,
-`createInvoiceJournalEntry`, `createInvoiceReceivableEntry` and
-`createExpenseJournalEntry` in both `posService` and `syncEngine`.
+`retryNonCritical` gives a write two attempts, and it wrapped
+`deductStockAndPostCogs`, `createInvoiceJournalEntry`,
+`createInvoiceReceivableEntry` and `createExpenseJournalEntry`. A lost response
+or a client-side timeout *after* the server committed made the second attempt
+post the same revenue, cash or cost of sales again — the queue guards from F3
+could not help, because the retry happens inside one commit.
 
-Two attempts are only safe if the write is idempotent. These are not: a lost
-response or a client-side timeout *after* the server committed causes the retry
-to insert a second sales entry (and, for the stock path, a second movement
-batch plus a second COGS entry). The queue guards from F3 do not help, because
-the retry happens inside one commit.
+Fix: every automatic posting now carries a deterministic key in the new
+`journal_entries.posting_key` column, and the posting functions resume rather
+than repeat.
 
-Recommended fix: give each posting a deterministic key and let the database
-enforce it.
+* **Migration** `20260921000000_journal_posting_key_idempotency.sql` adds the
+  column and a partial unique index on `(business_id, posting_key) where
+  posting_key is not null` — the database backstop, so even a race that slips
+  past the client-side lookup cannot duplicate an entry. A new column was used
+  instead of the existing `reference` because `reference` is free text typed by
+  users in the journal-entry form; a unique index on it would reject a second
+  manual entry that legitimately repeats a reference.
+* **`postKeyedEntry`** (`journalService`, exported for the inventory module)
+  looks the key up first: no entry → create and post; posted entry → return it
+  (the retry is a no-op); draft entry → post it (a crash between insert and post
+  left the ledger half-written, and the retry finishes it). A unique violation
+  is unwrapped from the repository error and turned into the same resume, so two
+  racing attempts still converge on one entry.
+* **Keys**: `invoice:<id>:sale`, `invoice:<id>:receipt`,
+  `invoice:<id>:settlement:<paymentId>`, `invoice:<id>:cogs`, `expense:<id>`,
+  `expense:<id>:payment:<paymentId>`, `payroll:<runId>`.
+* **Stock movements** now carry `client_key = <invoiceId>:mv:<lineIndex>` and
+  `InventoryRepository.recordMovements` pre-filters keys it has already
+  recorded (the unique `(business_id, client_key)` index already existed from
+  `20260813000003`). Indexing by position in the sale's line list means a
+  replay of the same payload rebuilds identical keys.
 
-* journal entries — write `reference = 'invoice:<id>:sale'` (and `:receipt`,
-  `:settlement`, `expense:<id>:payment`, …) and add a partial unique index on
-  `(business_id, reference) where reference is not null`; the posting functions
-  then check the key first and become no-ops on retry;
-* stock movements — the unique index already exists
-  (`20260813000003_add_client_key_idempotency.sql` covers `stock_movements`
-  on `(business_id, client_key)`), but the batch writer never sets a key. Pass
-  `${clientKey}:mv:<n>` through `recordMovements` and pre-filter existing keys
-  in the same round trip.
+### O2 — Tender type never reached the ledger (Medium)
 
-### O2 — Tender type never reaches the ledger (Medium)
+Every sold item was debited to 1110 Cash on Hand whatever the tender: the
+payment rows carried the method (cash / airtel_money / card / other) but the
+auto-receipt posted to the cash account only, and `bank_account_id` — the field
+`createInvoiceSettlementEntry` already honours — was never set by the till. Cash
+on hand therefore overstated the drawer for card and mobile-money takings, and
+the shift's cash count could not be tied to it.
 
-Every sold item is debited to 1110 Cash on Hand, whatever the tender: the
-payment rows carry the method (cash / airtel_money / card / other) but the
-auto-receipt posts to the cash account only. `bank_account_id` is part of
-`PosPaymentSplit` yet never set by the payment modal, so the "bank/mobile money"
-accounts that `createInvoiceSettlementEntry` already supports are unreachable
-from the till. Cash on hand therefore overstates the drawer for card and mobile
-money takings, and the drawer count at shift close cannot be tied to it.
+Fix, in `commitPosSaleDocuments`:
 
-### O3 — Usage-limit guard counts entries, and runs after the document (Medium)
+* the sale posts as a receivable entry (DR Debtors / CR Revenue [+VAT] / DR
+  discount), and each tender then posts its own receipt — DR the account the
+  money landed in / CR Debtors;
+* `resolveTenderAccountId` decides that account at commit time (an offline till
+  has no accounts list, and the sync replay does): the payment's own
+  `bank_account_id` when set, cash → 1110, `airtel_money` → 1125,
+  `tnm_mpamba` → 1126, card / bank transfer / cheque → the business's first
+  bank account. An unresolvable non-cash tender still posts (to cash on hand)
+  and says so in a warning, because a misclassified account is a smaller
+  problem than a sale with no ledger entry;
+* the resolved account is also stamped on the `invoice_payments` row, so the
+  sub-ledger shows where the money went.
 
-`checkUsageLimit` counts `journal_entries` for the month, so one till sale
-consumes two units (sale + receipt) of the plan's monthly allowance. It runs
-inside `createInvoiceJournalEntry` — i.e. *after* the invoice row exists — so
-tripping it leaves an unposted invoice behind (a warning at the till,
-`Accounting journal entry failed` thrown to the Income screen). The
-receivable/settlement paths never check it at all. Counting transactions and
-checking before the document write would make the limit mean what the pricing
-page says.
+### O3 — Usage-limit guard counted entries and ran after the document (Medium)
 
-### O4 — POS VAT rate is hard-coded to 0 (Low)
+`checkUsageLimit` counted `journal_entries`, so one till sale consumed two or
+three units (sale, auto-receipt, COGS) of a plan that is sold in
+*transactions*; it ran from the journal posting, i.e. after the invoice row
+existed, so tripping it left an unposted invoice behind (a warning at the till,
+an error on the Income screen); and the receivable/settlement paths never
+checked it at all.
 
-`PosPage` calls `calculateCartTotals(items, orderDiscount, 0)` and
-`normalizePosSale` defaults `defaultTaxRate` to 0, so every POS sale posts
-`vat_amount: 0` and no 2121 line. Fine if the till is deliberately VAT-free;
-if a VAT-registered business sells through it, those sales under-declare VAT
-relative to invoices raised on the Invoices screen. Worth confirming intent.
+Fix:
+
+* `UsageService` counts **documents** — invoices + expenses + payroll runs
+  whose date falls in the month — in both
+  `getCurrentMonthTransactionCount` and, server-side,
+  `_ledgr_assert_usage_limit` (migration
+  `20260921000001_usage_limit_counts_documents.sql`), so the client's usage
+  meter and the RPC guard agree. `percentUsed` also keeps one decimal now:
+  the lower count exposed that a whole-percent rounding turned a used month
+  (8 documents of 2,000) back into "0%", which would have hidden the count
+  from both the user and the 80%/100% warnings. The meter still prints a
+  rounded label;
+* the guard runs **before the document is written**:
+  `usageService.assertCanCreateDocument(businessId, clientKey)` is the first
+  step of `commitPosSaleDocuments` and runs before `createWithLines` in the
+  sync engine's invoice, expense and payroll branches. A sale that hits the
+  limit is refused whole rather than half-written, and a queued offline sale
+  fails visibly in the offline drawer with the limit message;
+* a *replay* of an already-committed document is exempt (`findByClientKey`),
+  so a sale whose ledger half failed is never stranded by a limit that filled
+  up in the meantime;
+* the guard was removed from the posting functions: with the count now
+  inclusive of the document being posted, checking there would refuse the
+  ledger for the very sale that reached the limit.
+
+### O4 — POS VAT rate was hard-coded to 0 (Low)
+
+`PosPage` totalled every cart with `calculateCartTotals(items, discount, 0)`,
+so a VAT-registered business's till sales carried `vat_amount: 0` — no 2121 line
+and no VAT on the invoice — while the same sale raised on the Income screen
+declared VAT. The two halves of one month's VAT return disagreed.
+
+Fix: the page reads the business's `vat_registered` flag (the same rule as
+IncomePage, ExpensesPage and the mobile quick-expense sheet) and applies
+`VAT_STANDARD_RATE` to the cart. POS prices are VAT-inclusive, so the rate
+extracts the tax from the price the customer pays. The shown totals are also
+passed to `normalizePosSale` (`totals: cartTotals`), so the queued and offline
+paths store exactly the numbers the receipt showed.
+
+---
+
+## Known limitations / follow-ups
+
+* **Per-line VAT on a POS invoice.** The header carries the right `vat_amount`
+  and `subtotal` (both conventions verified: `subtotal + VAT = total`, VAT
+  extracted from inclusive prices), but the till's invoice lines still carry
+  `tax_amount: 0` and `tax_code: 'none'` because the cart applies a single
+  business-level rate rather than a per-product one. Line-level VAT split is
+  the remaining piece for VAT returns that analyse by line.
+* **Usage metric is a product decision.** Counting documents lowers every
+  business's reported monthly usage relative to the old journal-entry count
+  (the demo month goes from 13 to 8). The pricing page has always said
+  "transactions", so this aligns the number with the promise — but if any
+  plan was sized against the old, inflated number, the tier limits should be
+  revisited rather than silently re-priced.
+* **`reference` stays free text.** Keyed postings use `posting_key`; the
+  user-facing `reference` field and its search in the Journals list are
+  untouched.
+* **Non-POS journal writers are not keyed.** Manual entries
+  (`NewJournalEntryModal`), tax, capital, fixed-asset and FX-revaluation
+  postings are user-initiated one-shot writes that are not retried
+  automatically, so they keep `posting_key = null`. If any of them ever moves
+  behind a retry, it needs a key first.
 
 ---
 
@@ -217,4 +291,17 @@ relative to invoices raised on the Invoices screen. Worth confirming intent.
 * `src/offline/__tests__/posSaleSync.test.ts` (+2 tests) — an abandoned
   `syncing` claim is counted and retried to `synced`; a claim inside its lease is
   left alone.
-* Full suite: 65 files / 557 tests green; `tsc -b` clean; lint 0 errors.
+* `src/services/__tests__/posSalePostingIntegrity.test.ts` (7 tests, +3) — a
+  tender split settles Airtel Money into 1125 and cash into 1110, each with its
+  own balanced receipt; a keyed entry left as a draft is posted rather than
+  recreated; a sale over the plan limit is refused before anything is written,
+  while the replay of a committed sale is allowed through.
+* `src/services/__tests__/posService.test.ts` (11), `posIntegration.test.ts`
+  (2), `posSaleOfflineSync.test.ts` (6), `offline/__tests__/posSaleSync.test.ts`
+  (4), `lib/billing/__tests__/plans.test.ts` and
+  `lib/demo/__tests__/demoPlanAccess.test.ts` — updated for the document-count
+  metric and the pre-write guard.
+* Full suite: 65 files / 560 tests green; `tsc -b` clean; `npm run lint` 0 errors
+  (one pre-existing warning in `artifacts/database/fresh-database.generated.approx.ts`,
+  untouched here). Also verified: the two new migrations are the only new files
+  under `supabase/migrations/` and the superseded `reference`-based draft is gone.

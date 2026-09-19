@@ -9,6 +9,7 @@ import {
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
+import { usageService } from '@/lib/billing/UsageService';
 import type { PosCartItem } from '@/types/pos';
 
 /**
@@ -23,6 +24,8 @@ import type { PosCartItem } from '@/types/pos';
 
 vi.mock('@/services/journalService', () => ({
   createInvoiceJournalEntry: vi.fn().mockResolvedValue({}),
+  createInvoiceReceivableEntry: vi.fn().mockResolvedValue('je-sale'),
+  createInvoiceSettlementEntry: vi.fn().mockResolvedValue('je-receipt'),
 }));
 
 vi.mock('@/services/inventoryJournalService', () => ({
@@ -169,6 +172,16 @@ describe('commitPosSaleDocuments', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // The plan guard runs before the document write; stubbed here so the sale
+    // path does not need the server for its usage count.
+    vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
+    // Tender routing resolves the mobile-money leg to its float account
+    // (1125 Airtel Money) at commit time.
+    vi.spyOn(repos.account, 'findByCode').mockImplementation(
+      async (_businessId: string, code: string) =>
+        (code === '1125' ? { id: 'acc-airtel', code: '1125' } : null) as never,
+    );
+    vi.spyOn(repos.account, 'findBankAccounts').mockResolvedValue([] as never);
     // The commit checks the stock ledger before releasing stock again (replay
     // guard); these tests stub the repositories wholesale, so answer it here.
     vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);

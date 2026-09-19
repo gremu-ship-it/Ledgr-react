@@ -72,7 +72,9 @@ describe('Starter pricing and access', () => {
     [199, true, 1], [200, false, 0], [201, false, 0], [0, true, 200],
   ])('enforces Starter usage at %i transactions', async (count, canCreate, remaining) => {
     const service = new UsageService();
-    vi.spyOn(service, 'getCurrentMonthUsage').mockResolvedValue(Number(count));
+    // Usage is the month's document count (invoices + expenses + payroll
+    // runs), which is what the plan limit is enforced against.
+    vi.spyOn(service, 'getCurrentMonthTransactionCount').mockResolvedValue(Number(count));
     const stats = await service.getUsageStats('business-id', 'starter');
     expect(stats).toMatchObject({ limit: 200, canCreate, remaining, isUnlimited: false });
   });

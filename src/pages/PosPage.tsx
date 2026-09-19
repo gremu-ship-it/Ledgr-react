@@ -13,6 +13,8 @@ import {
   applyItemDiscount,
 } from '@/services/posService';
 import { repos } from '@/lib/repositories';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { VAT_STANDARD_RATE } from '@/lib/vat';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
@@ -104,10 +106,23 @@ export function PosPage() {
   const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
 
+  // VAT. The till used to total every sale at 0%, whatever the business's VAT
+  // status: a VAT-registered shop's POS sales therefore booked no output VAT
+  // (no 2121 line) while its Income-screen invoices did, so the two halves of
+  // the same month disagreed on the VAT return. Same rule as the other sale
+  // and expense screens — the standard rate when the business is registered,
+  // nothing otherwise.
+  //
+  // POS prices are VAT-inclusive, so `calculateCartTotals` extracts the tax
+  // from the price the customer pays rather than adding it on top.
+  const { business: businessData } = useBrandTheme();
+  const isVatRegistered = businessData?.vat_registered ?? false;
+  const posVatRatePercent = isVatRegistered ? VAT_STANDARD_RATE * 100 : 0;
+
   // Compute Cart Totals
   const cartTotals = useMemo(() => {
-    return calculateCartTotals(cartItems, orderDiscount, 0);
-  }, [cartItems, orderDiscount]);
+    return calculateCartTotals(cartItems, orderDiscount, posVatRatePercent);
+  }, [cartItems, orderDiscount, posVatRatePercent]);
 
   // Cart Management Handlers
   const handleAddToCart = useCallback((product: PosProduct) => {
@@ -313,6 +328,11 @@ export function PosPage() {
         customerPhone: selectedCustomer?.phone || undefined,
         customerEmail: selectedCustomer?.email || undefined,
         items: cartItems,
+        // The totals the till just showed, VAT included: the queued/offline
+        // path stores the invoice from these numbers, so recomputing them
+        // later (at a different rate, or after a product price changed) would
+        // make the receipt disagree with the document.
+        totals: cartTotals,
         orderDiscount,
         payments: paymentData.payments,
         totalPaid: paymentData.totalPaid,

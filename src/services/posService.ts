@@ -17,10 +17,11 @@ import type {
   PosProduct,
 } from '@/types/pos';
 import {
-  createInvoiceJournalEntry,
   createInvoiceReceivableEntry,
+  createInvoiceSettlementEntry,
 } from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
+import { usageService } from '@/lib/billing/UsageService';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { newSaveClientKey } from '@/services/quickSaveService';
 
@@ -501,6 +502,55 @@ export function buildPosSaleQueuePayload(
 }
 
 /**
+ * The balance-sheet account a tender leg actually lands in.
+ *
+ * `invoice_payments.bank_account_id` is the column the invoice-payment screen
+ * already uses to say *where* a payment went, and `createInvoiceSettlementEntry`
+ * debits it. The till historically left it null for every method, so card and
+ * mobile-money takings were posted to 1110 Cash on Hand alongside the notes —
+ * the drawer then overstates the cash count at shift close by exactly those
+ * takings.
+ *
+ * Resolution happens here, at commit time, not at the till: an offline till has
+ * no accounts table to read, and this runs again on sync when it does.
+ *
+ *   cash                      -> null (settlement defaults to 1110 Cash on Hand)
+ *   airtel_money / tnm_mpamba  -> 1125 / 1126 mobile-money floats
+ *   card / bank_transfer / …   -> the business's bank account
+ *
+ * An unresolvable non-cash tender still posts (to cash on hand, as before) but
+ * says so in a warning instead of failing the sale: the money was taken, and a
+ * misclassified account is a smaller problem than a sale with no ledger entry.
+ */
+async function resolveTenderAccountId(
+  businessId: string,
+  payment: Omit<InsertDto<'invoice_payments'>, 'invoice_id' | 'business_id'>,
+): Promise<{ accountId: string | null; warning?: string }> {
+  if (payment.bank_account_id) return { accountId: payment.bank_account_id };
+
+  const method = String(payment.payment_method ?? 'cash');
+  if (method === 'cash') return { accountId: null };
+
+  const mobileMoneyCode =
+    method === 'airtel_money' ? '1125' : method === 'tnm_mpamba' ? '1126' : null;
+  if (mobileMoneyCode) {
+    const account = await repos.account.findByCode(businessId, mobileMoneyCode).catch(() => null);
+    if (account) return { accountId: account.id };
+    return {
+      accountId: null,
+      warning: `No account ${mobileMoneyCode} for this business — the ${method} takings were posted to cash on hand instead.`,
+    };
+  }
+
+  const banks = await repos.account.findBankAccounts(businessId).catch(() => []);
+  if (banks[0]) return { accountId: banks[0].id };
+  return {
+    accountId: null,
+    warning: `No bank account on file — the ${method} takings were posted to cash on hand instead.`,
+  };
+}
+
+/**
  * Raised when the sale document exists but a step that belongs to it failed
  * for a reason retrying cannot fix. The invoice id is carried so callers can
  * tell the cashier which document to look at instead of re-ringing the sale
@@ -562,6 +612,16 @@ export async function commitPosSaleDocuments(
   const clientKey = options.clientKey ?? payload.invoice.client_key ?? newSaveClientKey();
   const warnings: string[] = [];
 
+  // 0. Plan limit, checked BEFORE anything is written. The guard used to run
+  //    from the journal posting — after the invoice row existed — so tripping
+  //    it left a saved sale with no ledger entry behind; on the sync path it
+  //    produced a queue item that could never succeed while its document sat
+  //    on the books. One transaction per document is also what the plan sells,
+  //    so a till sale now costs one unit instead of three (sale, receipt, COGS).
+  //    A replay of an already-committed sale is exempt: its document is
+  //    written, and blocking the retry would strand it half-posted.
+  await usageService.assertCanCreateDocument(businessId, clientKey);
+
   let invoice: InsertDto<'invoices'> = { ...payload.invoice, business_id: businessId };
 
   // 1. Reserve a real document number for a number that was issued offline.
@@ -611,12 +671,22 @@ export async function commitPosSaleDocuments(
   //    buildPosSaleQueuePayload. A failure here is NOT retry-invisible: the
   //    invoice would sit at 'sent' with cash taken but unrecorded, so it is
   //    raised for the caller to retry (safe: same key) or surface.
+  const settledPayments: Row<'invoice_payments'>[] = [];
   for (const [index, payment] of payload.payments.entries()) {
     try {
-      await repos.invoice.recordPayment(
-        { ...payment, business_id: businessId, invoice_id: createdInvoice.id } as InsertDto<'invoice_payments'>,
+      const tender = await resolveTenderAccountId(businessId, payment);
+      if (tender.warning) warnings.push(tender.warning);
+
+      const { payment: recorded } = await repos.invoice.recordPayment(
+        {
+          ...payment,
+          bank_account_id: tender.accountId,
+          business_id: businessId,
+          invoice_id: createdInvoice.id,
+        } as InsertDto<'invoice_payments'>,
         `${clientKey}:pmt:${index}`,
       );
+      settledPayments.push(recorded);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new PosSalePostCommitError(
@@ -671,46 +741,53 @@ export async function commitPosSaleDocuments(
     }
   }
 
-  // 7. Sales double-entry journal — the shape the Income screen uses for the
-  //    same two cases:
-  //      * paid at the till  -> DR Debtors / CR Revenue (+VAT) plus the
-  //        auto-receipt DR Cash / CR Debtors, because the money is in the
-  //        drawer now (createInvoiceJournalEntry);
-  //      * on credit         -> DR Debtors / CR Revenue (+VAT) only. Posting
-  //        the receipt too would show cash the shop never received and leave
-  //        the customer's ledger balance already settled
-  //        (createInvoiceReceivableEntry).
+  // 7. Sales double-entry journal — the same shape the Income screen uses for
+  //    the same two cases:
+  //      * the sale         -> DR Debtors / CR Revenue (+VAT) (receivable entry);
+  //      * paid at the till -> then one receipt per tender, debiting the
+  //        account the money actually landed in: cash to 1110 Cash on Hand,
+  //        Airtel Money to 1125, Mpamba to 1126, card / bank transfer / cheque
+  //        to the payment's bank account. Crediting the drawer for every leg
+  //        (what the single-entry quick path does) is why a card sale showed
+  //        as notes in the till and the shift's cash count never tied out;
+  //      * on credit        -> the receivable only. Posting a receipt would
+  //        show cash the shop never received and leave the customer's ledger
+  //        balance already settled.
   //
-  //    `journal_entry_id` is stamped on the invoice by whichever posting ran,
-  //    and `createWithLines` returns the stored row on a replay — so a replay
-  //    skips the ledger instead of posting the same revenue twice.
+  //    Every posting is keyed (`invoice:<id>:sale`, `invoice:<id>:settlement:<paymentId>`),
+  //    so a replay of a sale that only got halfway through the ledger resumes
+  //    the missing half instead of skipping it or duplicating it. A credit sale
+  //    has nothing to settle, so its `journal_entry_id` is a complete guard.
   const isCreditSale = payload.isCreditSale || payload.payments.length === 0;
 
-  if (createdInvoice.journal_entry_id) {
-    log.info('Sale already has a journal entry — skipping the ledger posting', {
+  if (createdInvoice.journal_entry_id && isCreditSale) {
+    log.info('Credit sale already has a journal entry — skipping the ledger posting', {
       businessId,
       invoiceId: createdInvoice.id,
       journalEntryId: createdInvoice.journal_entry_id,
     });
   } else {
     const journalPosted = await retryNonCritical<void>(async () => {
-      if (isCreditSale) {
-        await createInvoiceReceivableEntry(
-          businessId,
-          createdInvoice,
-          createdInvoice.branch_id ?? null,
-          createdInvoice.department_id ?? null,
-        );
-        return;
-      }
-      await createInvoiceJournalEntry(
+      await createInvoiceReceivableEntry(
         businessId,
         createdInvoice,
-        Number(createdInvoice.subtotal),
-        Number(createdInvoice.vat_amount),
         createdInvoice.branch_id ?? null,
         createdInvoice.department_id ?? null,
       );
+      if (isCreditSale) return;
+
+      const functionalCurrency =
+        createdInvoice.original_currency ?? createdInvoice.currency;
+      for (const settled of settledPayments) {
+        await createInvoiceSettlementEntry(
+          businessId,
+          createdInvoice,
+          settled,
+          functionalCurrency,
+          createdInvoice.branch_id ?? null,
+          createdInvoice.department_id ?? null,
+        );
+      }
     }, { module: 'PosService', operation: 'pos_journal_entry', businessId });
     if (journalPosted === null) {
       warnings.push(

@@ -1,5 +1,6 @@
 import { repos } from '@/lib/repositories';
 import { retryNonCritical } from '@/lib/nonCriticalRetry';
+import { usageService } from '@/lib/billing/UsageService';
 
 import {
   createInvoiceJournalEntry,
@@ -140,6 +141,10 @@ async function syncItem(item: QueueItem): Promise<string> {
           nextInvoice = { ...nextInvoice, contact_id: walkIn.id };
         }
       }
+      // Plan limit, checked before the document is written and skipped for a
+      // replay of a document already committed under this client key.
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey);
+
       const result = await repos.invoice.createWithLines(nextInvoice, lines, item.clientKey);
       await retryNonCritical(async () => {
         if (item.operationType === 'income') {
@@ -244,6 +249,8 @@ async function syncItem(item: QueueItem): Promise<string> {
         const realNumber = await repos.business.reserveNextExpenseNumber(item.businessId);
         nextExpense = { ...nextExpense, expense_number: realNumber };
       }
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey);
+
       const result = await repos.expense.createWithLines(nextExpense, lines, item.clientKey);
 
       // PERPETUAL INVENTORY: the queued line carries whatever account the
@@ -331,6 +338,8 @@ async function syncItem(item: QueueItem): Promise<string> {
         ...l,
         business_id: item.businessId,
       }));
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey);
+
       const result = await repos.payroll.createWithLines(run, linesWithBusiness, item.clientKey);
       return result.id;
     }

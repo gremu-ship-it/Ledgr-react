@@ -3,10 +3,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { posService } from '../posService';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
+import { usageService } from '@/lib/billing/UsageService';
 import type { PosCartItem } from '@/types/pos';
 
 vi.mock('@/services/journalService', () => ({
   createInvoiceJournalEntry: vi.fn().mockResolvedValue({}),
+  createInvoiceReceivableEntry: vi.fn().mockResolvedValue('je-sale'),
+  createInvoiceSettlementEntry: vi.fn().mockResolvedValue('je-receipt'),
 }));
 
 vi.mock('@/services/inventoryJournalService', () => ({
@@ -43,6 +46,14 @@ describe('POS Integration & Acceptance Criteria', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
+    // Tender routing resolves the mobile-money leg to its float account
+    // (1125 Airtel Money) at commit time.
+    vi.spyOn(repos.account, 'findByCode').mockImplementation(
+      async (_businessId: string, code: string) =>
+        (code === '1125' ? { id: 'acc-airtel', code: '1125' } : null) as never,
+    );
+    vi.spyOn(repos.account, 'findBankAccounts').mockResolvedValue([] as never);
     // Replay guard for the stock ledger — no movements exist for a fresh sale.
     vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
   });
