@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { offlineDB, type QueueItem, type QueueOperationType, QUEUE_TYPE_LABELS } from '@/offline/db';
-import { enqueue, type EnqueueOptions } from '@/offline/queueApi';
+import { enqueue, isStaleSyncClaim, type EnqueueOptions } from '@/offline/queueApi';
 import type { QueuePayloadFor } from '@/offline/payloads';
 import { useAppStore } from '@/store/useAppStore';
 
@@ -50,7 +50,12 @@ export function useOfflineQueue(): OfflineQueueSummary & {
     [] as QueueItem[],
   );
 
-  const pendingItems = items.filter((i) => i.status === 'pending' || i.status === 'failed');
+  // An item whose sync claim was abandoned (the app closed mid-write) is not
+  // on the server: it counts as waiting, not as done, so the badge and the
+  // drawer keep showing it until the next pass picks it up again.
+  const pendingItems = items.filter(
+    (i) => i.status === 'pending' || i.status === 'failed' || isStaleSyncClaim(i),
+  );
   const failedCount = items.filter((i) => i.status === 'failed').length;
 
   async function add<T extends QueueOperationType>(

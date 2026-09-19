@@ -458,6 +458,13 @@ export interface PosSaleResult {
   notes?: string | null;
   isCreditSale?: boolean;
   isOffline?: boolean;
+  /**
+   * Non-fatal problems on an otherwise completed sale — e.g. the customer's
+   * payment row or the stock deduction could not be posted. The sale stands;
+   * the cashier is shown these so they can raise them rather than re-ring the
+   * sale (which would duplicate revenue and stock).
+   */
+  warnings?: string[];
   dueDate?: string;
 }
 

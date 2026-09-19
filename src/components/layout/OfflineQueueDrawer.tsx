@@ -14,7 +14,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { announce } from '@/lib/a11y';
 import { QUEUE_TYPE_LABELS, type QueueItem, type QueueItemStatus } from '@/offline/db';
-import { removeQueueItem } from '@/offline/queueApi';
+import { isStaleSyncClaim, removeQueueItem } from '@/offline/queueApi';
 
 const STATUS_STYLES: Record<QueueItemStatus, { label: string; className: string }> = {
   pending: { label: 'Queued', className: 'bg-amber-100 text-amber-900' },
@@ -54,6 +54,11 @@ function QueueRow({ item, onDiscard, canDiscard }: {
           {item.status === 'failed' && (
             <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs leading-5 text-red-800">
               {item.lastError || 'This change could not be synced. Retry when your connection is stable.'}
+            </p>
+          )}
+          {item.status === 'synced' && item.lastError && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-900">
+              Synced, but a follow-up step did not post — {item.lastError}
             </p>
           )}
           {item.attemptCount > 0 && item.status !== 'synced' && (
@@ -142,7 +147,10 @@ export function OfflineQueueDrawer() {
   }
 
   function canDiscard(item: QueueItem): boolean {
-    if (item.status === 'syncing' || item.localId === undefined || isDiscarding === item.localId) return false;
+    // An item still inside its sync lease is off-limits; an abandoned claim
+    // (app closed mid-sync) is just another unsynced change and the user has
+    // to be able to clear it.
+    if ((item.status === 'syncing' && !isStaleSyncClaim(item)) || item.localId === undefined || isDiscarding === item.localId) return false;
     return !items.some((candidate) => candidate.dependsOnLocalId === item.localId && candidate.status !== 'synced');
   }
 
@@ -223,7 +231,10 @@ export function OfflineQueueDrawer() {
                 </button>
               </div>
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 text-[11px] text-blue-800 leading-normal">
-                <strong>Offline scope:</strong> Quick cash income/expense only; invoices, payments, and transfers require active internet connection.
+                <strong>Offline scope:</strong> quick cash income, quick expenses and POS till
+                sales are queued here and sync automatically — stock, the ledger and shift
+                totals follow when the connection returns. The invoice builder, payments,
+                payroll and transfers need an active connection.
               </div>
             </div>
 

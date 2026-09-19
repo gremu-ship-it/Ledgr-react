@@ -92,20 +92,6 @@ jobs:
       - run: npm ci
       - name: Build frontend
         run: npm run build
-      - name: Deploy frontend to Vercel (staging)
-        run: |
-          npm i -g vercel@latest
-          vercel deploy \
-            --prod \
-            --token "$VERCEL_TOKEN" \
-            --yes \
-            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
-            --build-env VITE_APP_VERSION="${{ github.sha }}" \
-            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
-            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
-            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}"
       - name: Deploy Supabase backend (staging)
         uses: supabase/setup-cli@v3
         with:
@@ -131,6 +117,13 @@ jobs:
             exit 1
           fi
           echo "Supabase deployment credentials for ${SUPABASE_ENV_LABEL} are configured."
+      # ORDER MATTERS: the database is migrated (and the functions deployed)
+      # BEFORE the frontend goes live. The client writes columns and calls
+      # functions that only exist after `supabase db push` — e.g.
+      # journal_entries.posting_key, added by 20260921000000 — so shipping it
+      # first leaves a window where new code writes against an old schema.
+      # Backend-first is the safe direction: the migrations are additive, so
+      # the running (old) client keeps working throughout the rollout.
       - name: Link & migrate staging database
         shell: bash
         # Retries link + push (transient pooler timeouts) and fails fast with an
@@ -178,6 +171,22 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment staging
 
+      # Last, deliberately — see the ordering note at the migration step.
+      - name: Deploy frontend to Vercel (staging)
+        run: |
+          npm i -g vercel@latest
+          vercel deploy \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --yes \
+            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+            --build-env VITE_APP_VERSION="${{ github.sha }}" \
+            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
+            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
+            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}"
+
   # =========================================================================
   # PRODUCTION — only on a `v*` tag, behind a manual approval gate
   # =========================================================================
@@ -219,20 +228,6 @@ jobs:
       - run: npm ci
       - name: Build frontend
         run: npm run build
-      - name: Deploy frontend to Vercel (production)
-        run: |
-          npm i -g vercel@latest
-          vercel deploy \
-            --prod \
-            --token "$VERCEL_TOKEN" \
-            --yes \
-            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
-            --build-env VITE_APP_VERSION="${{ github.sha }}" \
-            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
-            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
-            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_PROD }}"
       - name: Deploy Supabase backend (production)
         uses: supabase/setup-cli@v3
         with:
@@ -258,6 +253,13 @@ jobs:
             exit 1
           fi
           echo "Supabase deployment credentials for ${SUPABASE_ENV_LABEL} are configured."
+      # ORDER MATTERS: the database is migrated (and the functions deployed)
+      # BEFORE the frontend goes live. The client writes columns and calls
+      # functions that only exist after `supabase db push` — e.g.
+      # journal_entries.posting_key, added by 20260921000000 — so shipping it
+      # first leaves a window where new code writes against an old schema.
+      # Backend-first is the safe direction: the migrations are additive, so
+      # the running (old) client keeps working throughout the rollout.
       - name: Link & migrate production database
         run: |
           supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
@@ -296,3 +298,19 @@ jobs:
         run: |
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment production
+
+      # Last, deliberately — see the ordering note at the migration step.
+      - name: Deploy frontend to Vercel (production)
+        run: |
+          npm i -g vercel@latest
+          vercel deploy \
+            --prod \
+            --token "$VERCEL_TOKEN" \
+            --yes \
+            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+            --build-env VITE_APP_VERSION="${{ github.sha }}" \
+            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
+            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
+            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_PROD }}"

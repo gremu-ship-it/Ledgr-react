@@ -3441,6 +3441,7 @@ export type Database = {
           exchange_rate: number
           id: string
           period_id: string | null
+          posting_key: string | null
           posted_at: string | null
           posted_by: string | null
           reference: string | null
@@ -3463,6 +3464,7 @@ export type Database = {
           exchange_rate: number
           id?: string
           period_id?: string | null
+          posting_key?: string | null
           posted_at?: string | null
           posted_by?: string | null
           reference?: string | null
@@ -3485,6 +3487,7 @@ export type Database = {
           exchange_rate?: number
           id?: string
           period_id?: string | null
+          posting_key?: string | null
           posted_at?: string | null
           posted_by?: string | null
           reference?: string | null
@@ -6311,6 +6314,12 @@ export type Database = {
         Returns: string
       }
       is_business_member: { Args: { p_business_id: string }; Returns: boolean }
+      // Added by migration 20260921000002 (hand-added until `supabase gen types`
+      // is re-run after the migration is applied). NULL for a non-member.
+      ledgr_monthly_document_count: {
+        Args: { p_business_id: string }
+        Returns: number | null
+      }
       is_partner_admin: { Args: { pid: string; uid: string }; Returns: boolean }
       is_partner_business_admin: { Args: { bid: string }; Returns: boolean }
       is_platform_admin: { Args: { uid: string }; Returns: boolean }

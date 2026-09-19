@@ -39,8 +39,6 @@
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
 import { webhookService } from '@/services/webhook/WebhookService';
-import { usageService } from '@/lib/billing/UsageService';
-import { getPlan, normalizePlanTier } from '@/lib/billing/plans';
 import { createLogger } from '@/lib/logger';
 import { isMissingAccountError } from '@/lib/journalErrors';
 
@@ -86,6 +84,149 @@ export async function nextEntryNumber(businessId: string): Promise<string> {
     `${String(now.getMilliseconds()).padStart(3, '0')}` +
     `-${Math.random().toString(36).slice(2, 6)}`;
   return `JNL-${stamp}`;
+}
+
+// ── Keyed postings (idempotency) ────────────────────────────────────────────
+// Every automatic posting carries a deterministic `posting_key`. Callers of
+// these functions are retried — a lost response, a queue replay, a
+// `retryNonCritical` second attempt — and a retry must resume the first
+// attempt's entry instead of posting the same revenue, cash or cost twice.
+
+type JournalEntryInsert = Parameters<typeof repos.journal.createBalancedEntry>[0];
+type JournalLinesInsert = Parameters<typeof repos.journal.createBalancedEntry>[1];
+
+/**
+ * Postgres unique-constraint violation, unwrapped from the repository error.
+ *
+ * `toRepositoryError` wraps 23505 in a ValidationError and keeps the original
+ * PostgREST error as `cause`, so walk the chain rather than checking one shape.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    if ((current as { code?: unknown }).code === '23505') return true;
+    const message = (current as { message?: unknown }).message;
+    if (
+      typeof message === 'string' &&
+      /duplicate key value violates unique constraint/i.test(message)
+    ) {
+      return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+/**
+ * Creates and posts an entry under its `posting_key`, or resumes the entry a
+ * previous attempt already made.
+ *
+ * Three cases:
+ *   1. No entry with that key → create, post, return it (the normal path).
+ *   2. An entry exists and is already posted → return it untouched (the retry
+ *      is then a no-op, which is what makes `retryNonCritical` safe over a
+ *      non-idempotent writer).
+ *   3. An entry exists but is still a draft → post it and return it (a crash
+ *      between insert and post left the ledger half-written; the retry
+ *      finishes it instead of abandoning a draft that never hits the books).
+ *
+ * The lookup is best-effort: if it fails (network, RLS) the caller proceeds to
+ * insert, and the partial unique index catches the duplicate instead, which
+ * the catch below turns back into a resume.
+ */
+export async function postKeyedEntry(
+  dto: JournalEntryInsert,
+  lines: JournalLinesInsert,
+): Promise<Row<'journal_entries'>> {
+  const key = dto.posting_key;
+
+  const existing = key
+    ? await repos.journal.findByPostingKey(dto.business_id, key).catch((err) => {
+        log.warn(
+          'posting_key lookup failed — relying on the unique index for duplicate protection',
+          { postingKey: key, error: err instanceof Error ? err.message : String(err) },
+        );
+        return null;
+      })
+    : null;
+
+  if (existing) {
+    if (existing.status === 'draft') await repos.journal.post(existing.id, null);
+    return existing.status === 'draft' ? { ...existing, status: 'posted' } : existing;
+  }
+
+  try {
+    const { entry } = await repos.journal.createBalancedEntry(dto, lines);
+    await repos.journal.post(entry.id, null);
+    return entry;
+  } catch (err) {
+    // Two attempts raced past the lookup; the unique index rejected the
+    // duplicate. Resume whichever one landed first.
+    if (key && isUniqueViolation(err)) {
+      const raced = await repos.journal.findByPostingKey(dto.business_id, key);
+      if (raced) {
+        if (raced.status === 'draft') await repos.journal.post(raced.id, null);
+        return raced.status === 'draft' ? { ...raced, status: 'posted' } : raced;
+      }
+    }
+
+    // The database is older than the client: `posting_key` is not there yet
+    // (the frontend deploys before `supabase db push`). Losing the ledger entry
+    // would be far worse than losing the key, so write it without one — the
+    // entry is then guarded only by the invoice/payment client keys, which is
+    // exactly how the app behaved before posting keys existed.
+    if (key && isMissingColumn(err, 'posting_key')) {
+      log.warn(
+        'journal_entries.posting_key does not exist yet (migration 20260921000000 not applied) — ' +
+          'posting without an idempotency key. Apply the migration to restore duplicate protection.',
+        { businessId: dto.business_id, postingKey: key, sourceType: dto.source_type },
+      );
+      const unkeyed = { ...dto };
+      delete unkeyed.posting_key;
+      const { entry } = await repos.journal.createBalancedEntry(unkeyed, lines);
+      await repos.journal.post(entry.id, null);
+      return entry;
+    }
+
+    throw err;
+  }
+}
+
+/**
+ * True when Postgres/PostgREST rejected the write because a column does not
+ * exist on the target table.
+ *
+ * Used for one specific situation: the client is newer than the database. The
+ * deploy pipeline ships the frontend to Vercel *before* it runs `supabase db
+ * push`, so there is a window (minutes, or as long as a failed migration step
+ * takes to fix) where `journal_entries.posting_key` is not there yet, and every
+ * keyed insert would fail. A missing *optional* column must never stop a sale
+ * from reaching the books, so the caller retries without the key.
+ *
+ * Shapes seen: 42703 (`column ... does not exist`, Postgres), PGRST204
+ * (`Could not find the 'posting_key' column ... in the schema cache`, PostgREST
+ * when the schema cache predates the migration). The repository error wrapper
+ * keeps the original as `cause`, so the chain is walked.
+ */
+function isMissingColumn(err: unknown, column: string): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+  const pattern = new RegExp(`(column|find)(\\s|.){0,40}["']?${column}["']?`, 'i');
+
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const code = (current as { code?: unknown }).code;
+    if (code === '42703' || code === 'PGRST204') return true;
+
+    const message = (current as { message?: unknown }).message;
+    if (typeof message === 'string' && pattern.test(message)) {
+      if (/does not exist|schema cache|could not find/i.test(message)) return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /**
@@ -157,25 +298,6 @@ async function buildFxLines(
 // Now currency-aware: uses the invoice's actual original_amount/currency/
 // exchange_rate/functional_amount rather than assuming MWK 1:1.
 
-// ── Usage Limit Guard ───────────────────────────────────────────────────────
-// PERF: the plan lookup and the usage count are independent reads. They used
-// to run back-to-back, adding a second sequential round trip to EVERY
-// transaction save; running them in parallel costs the same as one.
-async function checkUsageLimit(businessId: string): Promise<void> {
-  const [business, currentUsage] = await Promise.all([
-    repos.business.findById(businessId),
-    usageService.getCurrentMonthUsage(businessId),
-  ]);
-  const planTier = normalizePlanTier(business.plan_tier);
-  const plan = getPlan(planTier);
-
-  if (plan.transactionLimit === null) return; // unlimited
-
-  if (currentUsage >= plan.transactionLimit) {
-    throw new Error(`Monthly transaction limit reached (${plan.transactionLimit}). Please upgrade your plan.`);
-  }
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function createInvoiceJournalEntry(
@@ -190,18 +312,23 @@ export async function createInvoiceJournalEntry(
   const invoiceDate = invoice.issue_date;
   const sourceId = invoice.id;
 
-  // PERF: every independent read — GL accounts, the plan/usage guard, and
-  // BOTH journal entry numbers (the quick path posts the sale entry and the
-  // cash-receipt entry) — now resolves in a single parallel batch instead of
-  // four-plus sequential round trips.
-  const [debtors, revenue, vatPayable, cash, , entryNumber, entryNumber2] = await Promise.all([
+  // PERF: every independent read — GL accounts and BOTH journal entry numbers
+  // (the quick path posts the sale entry and the cash-receipt entry) — now
+  // resolves in a single parallel batch instead of four-plus sequential round
+  // trips.
+  //
+  // The plan/usage guard deliberately no longer runs here: see
+  // `assertWithinTransactionLimit`. Checking it from the posting step meant a
+  // limit breach was discovered after the invoice row already existed, leaving
+  // an unposted invoice behind; the flows that create documents now check
+  // before writing.
+  const [debtors, revenue, vatPayable, cash, entryNumber, entryNumber2] = await Promise.all([
     getAccountByCode(businessId, '1131'),
     invoice.revenue_account_id
       ? repos.account.findById(invoice.revenue_account_id).catch(() => getAccountByCode(businessId, '4112'))
       : getAccountByCode(businessId, '4112'),
     getAccountByCode(businessId, '2121'),
     getAccountByCode(businessId, '1110'),
-    checkUsageLimit(businessId),
     nextEntryNumber(businessId),
     nextEntryNumber(businessId),
   ]);
@@ -322,6 +449,7 @@ export async function createInvoiceJournalEntry(
     description:   `Invoice ${invoiceNumber}`,
     source_type:   'invoice',
     source_id:     sourceId,
+    posting_key:   `invoice:${sourceId}:sale`,
     currency,
     exchange_rate: exchangeRate,
     status:        'draft',
@@ -336,6 +464,7 @@ export async function createInvoiceJournalEntry(
     description:   `Receipt for Invoice ${invoiceNumber}`,
     source_type:   'invoice',
     source_id:     sourceId,
+    posting_key:   `invoice:${sourceId}:receipt`,
     currency,
     exchange_rate: exchangeRate,
     status:        'draft',
@@ -372,16 +501,14 @@ export async function createInvoiceJournalEntry(
     },
   ];
 
-  const [{ entry }, { entry: entry2 }] = await Promise.all([
-    repos.journal.createBalancedEntry(entry1Dto, lines),
-    repos.journal.createBalancedEntry(entry2Dto, entry2Lines),
+  // Both entries carry their own posting key, so a retried call resumes
+  // whichever half already landed rather than posting it a second time.
+  const [entry] = await Promise.all([
+    postKeyedEntry(entry1Dto, lines),
+    postKeyedEntry(entry2Dto, entry2Lines),
   ]);
 
-  await Promise.all([
-    repos.journal.post(entry.id, null),
-    repos.journal.post(entry2.id, null),
-    repos.invoice.update(sourceId, { journal_entry_id: entry.id }),
-  ]);
+  await repos.invoice.update(sourceId, { journal_entry_id: entry.id });
 
   // PERF: webhook dispatch goes through a Supabase Edge Function — awaiting
   // it held the transaction open for the whole round trip (worse on cold
@@ -411,7 +538,13 @@ export async function createInvoiceReceivableEntry(
 ): Promise<string> {
   const [debtors, revenue, vatPayable, entryNumber] = await Promise.all([
     getAccountByCode(businessId, '1131'),
-    getAccountByCode(businessId, '4112'),
+    // Same resolution as the quick path: the invoice's own revenue account
+    // when it has one (the till and the income screen stamp it on the lines).
+    // Posting everything to 4112 regardless would put the ledger in a
+    // different account from the invoice lines and the revenue reports.
+    invoice.revenue_account_id
+      ? repos.account.findById(invoice.revenue_account_id).catch(() => getAccountByCode(businessId, '4112'))
+      : getAccountByCode(businessId, '4112'),
     getAccountByCode(businessId, '2121'),
     nextEntryNumber(businessId),
   ]);
@@ -519,7 +652,7 @@ export async function createInvoiceReceivableEntry(
     });
   }
 
-  const { entry } = await repos.journal.createBalancedEntry(
+  const entry = await postKeyedEntry(
     {
       business_id:   businessId,
       entry_number:  entryNumber,
@@ -527,6 +660,7 @@ export async function createInvoiceReceivableEntry(
       description:   `Invoice ${invoice.invoice_number}`,
       source_type:   'invoice',
       source_id:     invoice.id,
+      posting_key:   `invoice:${invoice.id}:sale`,
       currency,
       exchange_rate: exchangeRate,
       status:        'draft',
@@ -536,7 +670,6 @@ export async function createInvoiceReceivableEntry(
     lines,
   );
 
-  await repos.journal.post(entry.id, null);
   await repos.invoice.update(invoice.id, { journal_entry_id: entry.id });
   return entry.id;
 }
@@ -609,7 +742,7 @@ export async function createInvoiceSettlementEntry(
   );
   lines.push(...fxLines);
 
-  const { entry } = await repos.journal.createBalancedEntry(
+  const entry = await postKeyedEntry(
     {
       business_id:   businessId,
       entry_number:  entryNumber,
@@ -617,6 +750,7 @@ export async function createInvoiceSettlementEntry(
       description:   `Receipt for Invoice ${invoice.invoice_number}`,
       source_type:   'invoice',
       source_id:     invoice.id,
+      posting_key:   `invoice:${invoice.id}:settlement:${payment.id}`,
       currency:      paymentCurrency,
       exchange_rate: settlementRate,
       status:        'draft',
@@ -626,7 +760,6 @@ export async function createInvoiceSettlementEntry(
     lines,
   );
 
-  await repos.journal.post(entry.id, null);
   await repos.invoice.update(invoice.id, { journal_entry_id: invoice.journal_entry_id ?? entry.id });
   return entry.id;
 }
@@ -664,15 +797,15 @@ export async function createExpenseJournalEntry(
     );
   }
 
-  // PERF: usage guard, GL account lookups and the entry-number RPC are all
-  // independent reads — resolve them in one parallel batch (used to be three
-  // sequential steps on every expense save).
+  // PERF: GL account lookups and the entry-number RPC are independent reads —
+  // resolve them in one parallel batch (used to be three sequential steps on
+  // every expense save). The plan/usage guard is NOT here: it belongs before
+  // the expense row is written, not after (see UsageService.assertCanCreateDocument).
   const [vatReceivable, creditors, cash, entryNumber] = await Promise.all([
     vatAmount > 0 ? getAccountByCode(businessId, '1135') : Promise.resolve(null),
     getAccountByCode(businessId, '2111'),
     getAccountByCode(businessId, '1110'),
     nextEntryNumber(businessId),
-    checkUsageLimit(businessId),
   ]);
 
   const currency      = expense.original_currency ?? expense.currency;
@@ -780,7 +913,7 @@ export async function createExpenseJournalEntry(
     reconciled:    false,
   });
 
-  const { entry } = await repos.journal.createBalancedEntry(
+  const entry = await postKeyedEntry(
     {
       business_id:   businessId,
       entry_number:  entryNumber,
@@ -788,6 +921,7 @@ export async function createExpenseJournalEntry(
       description:   `Expense ${expense.expense_number}`,
       source_type:   'expense',
       source_id:     expense.id,
+      posting_key:   `expense:${expense.id}`,
       currency,
       exchange_rate: exchangeRate,
       status:        'draft',
@@ -797,7 +931,6 @@ export async function createExpenseJournalEntry(
     lines,
   );
 
-  await repos.journal.post(entry.id, null);
   await repos.expense.update(expense.id, { journal_entry_id: entry.id });
 
   // PERF: fire-and-forget — dispatch runs through an Edge Function and used
@@ -880,7 +1013,7 @@ export async function createExpenseSettlementEntry(
   );
   lines.push(...fxLines);
 
-  const { entry } = await repos.journal.createBalancedEntry(
+  const entry = await postKeyedEntry(
     {
       business_id:   businessId,
       entry_number:  entryNumber,
@@ -888,6 +1021,7 @@ export async function createExpenseSettlementEntry(
       description:   `Payment for Expense ${expense.expense_number}`,
       source_type:   'expense',
       source_id:     expense.id,
+      posting_key:   `expense:${expense.id}:payment:${payment.id}`,
       currency:      paymentCurrency,
       exchange_rate: settlementRate,
       status:        'draft',
@@ -897,7 +1031,6 @@ export async function createExpenseSettlementEntry(
     lines,
   );
 
-  await repos.journal.post(entry.id, null);
   return entry.id;
 }
 
@@ -919,7 +1052,7 @@ export async function createPayrollJournalEntry(
     nextEntryNumber(businessId),
   ]);
 
-  const { entry } = await repos.journal.createBalancedEntry(
+  await postKeyedEntry(
     {
       business_id:   businessId,
       entry_number:  entryNumber,
@@ -927,6 +1060,7 @@ export async function createPayrollJournalEntry(
       description:   `Payroll Run ${runNumber}`,
       source_type:   'payroll',
       source_id:     sourceId,
+      posting_key:   `payroll:${sourceId}`,
       currency:      'MWK',
       exchange_rate: 1,
       status:        'draft',
@@ -973,8 +1107,6 @@ export async function createPayrollJournalEntry(
       },
     ],
   );
-
-  await repos.journal.post(entry.id, null);
 
   // PERF: fire-and-forget (was awaited on the payroll save path).
   void webhookService.triggerWebhooks(businessId, 'payroll.run', {

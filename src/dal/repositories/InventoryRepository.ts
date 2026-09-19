@@ -199,18 +199,74 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
 
   /**
    * Bulk-insert multiple stock movements in one round-trip.
-   * Used by WarehousePage "Receive Stock" for multi-line receipts.
+   * Used by WarehousePage "Receive Stock" and the sale/COGS stock release.
+   *
+   * Movements that carry a `client_key` are de-duplicated before inserting: a
+   * retried release (queue replay, lost response, a second `retryNonCritical`
+   * attempt) must not move the same stock twice, and the table's unique
+   * `(business_id, client_key)` index would otherwise reject the whole batch.
+   * Costs one extra round-trip on keyed batches only — unkeyed batches
+   * (warehouse receipts) insert exactly as before.
    */
   async recordMovements(
     movements: InsertDto<'stock_movements'>[],
   ): Promise<Row<'stock_movements'>[]> {
     if (movements.length === 0) return [];
+
+    const keys = movements
+      .map((m) => m.client_key)
+      .filter((k): k is string => typeof k === 'string' && k.length > 0);
+
+    let toInsert = movements;
+    if (keys.length > 0) {
+      // A batch is always single-tenant (every caller builds it from one
+      // document), so one business filter covers all of its keys.
+      const businessId = movements[0].business_id;
+      const { data: existing, error: lookupError } = await this.client
+        .from('stock_movements')
+        .select('client_key')
+        .eq('business_id', businessId)
+        .in('client_key', keys);
+      if (lookupError) throw toRepositoryError('stock_movements', lookupError);
+
+      const alreadyRecorded = new Set((existing ?? []).map((row) => row.client_key));
+      toInsert = movements.filter((m) => !m.client_key || !alreadyRecorded.has(m.client_key));
+      if (toInsert.length === 0) return [];
+    }
+
     const { data, error } = await this.client
       .from('stock_movements')
-      .insert(movements as never)
+      .insert(toInsert as never)
       .select('*');
     if (error) throw toRepositoryError('stock_movements', error);
     return data ?? [];
+  }
+
+  /**
+   * Whether any stock movement has already been recorded for a source
+   * document (e.g. `('invoice', invoice.id)`).
+   *
+   * `recordMovements` writes a batch with no client key, so a caller that can
+   * be replayed (a retried offline sale, a lost response, a queue retry) has
+   * no way to know whether its movements already landed. The COGS journal
+   * entry is derived from those movements, so releasing them twice double
+   * counts both stock and cost of sales — hence this cheap existence check
+   * before the release, not a re-insert.
+   */
+  async hasMovementsForSource(
+    businessId: string,
+    sourceType: string,
+    sourceId: string,
+  ): Promise<boolean> {
+    const { data, error } = await this.client
+      .from('stock_movements')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('source_type', sourceType)
+      .eq('source_id', sourceId)
+      .limit(1);
+    if (error) throw toRepositoryError('stock_movements', error);
+    return (data?.length ?? 0) > 0;
   }
 
   async findMovementHistory(

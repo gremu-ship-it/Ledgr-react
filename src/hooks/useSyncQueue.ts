@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useOnlineStatus } from './useOnlineStatus';
-import { useOfflineQueue } from './useOfflineQueue';
 import { syncQueue, type SyncProgress } from '@/offline/syncEngine';
+import { getPendingCount } from '@/offline/queueApi';
 import { QUEUE_TYPE_LABELS } from '@/offline/db';
 import { invalidateAfterSync } from '@/lib/queryInvalidation';
 import { isServiceWorkerSyncRequest } from '@/offline/backgroundSync';
+import { migrateLegacyPosQueue } from '@/offline/legacyPosQueue';
 
 export interface SyncQueueState {
   /** True while a sync pass is actively running. */
@@ -14,8 +15,12 @@ export interface SyncQueueState {
   progress: SyncProgress | null;
   /** Human label for the currently syncing item type, e.g. "Syncing invoice...". */
   currentLabel: string | null;
-  /** Manually trigger a sync pass (e.g. a "Retry" button). */
-  syncNow: () => Promise<void>;
+  /**
+   * Manually trigger a sync pass (e.g. a "Retry" button). Resolves with the
+   * pass's result so a caller can report it, or null when a pass was already
+   * running and this call was a no-op.
+   */
+  syncNow: () => Promise<SyncProgress | null>;
 }
 
 /**
@@ -33,7 +38,6 @@ export interface SyncQueueState {
 export function useSyncQueue(): SyncQueueState {
   const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();
-  const { pendingCount } = useOfflineQueue();
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
@@ -42,7 +46,7 @@ export function useSyncQueue(): SyncQueueState {
   const wasOnlineRef = useRef(isOnline);
 
   const syncNow = useCallback(async () => {
-    if (inFlightRef.current) return;
+    if (inFlightRef.current) return null;
     inFlightRef.current = true;
     setIsSyncing(true);
 
@@ -55,6 +59,7 @@ export function useSyncQueue(): SyncQueueState {
         // and settings data cannot have changed.
         invalidateAfterSync(queryClient);
       }
+      return res;
     } finally {
       setIsSyncing(false);
       inFlightRef.current = false;
@@ -90,12 +95,34 @@ export function useSyncQueue(): SyncQueueState {
     };
   }, [isOnline, syncNow]);
 
-  // Trigger once on mount if already online and there's a backlog
-  // (e.g. app was closed while offline, reopened later while connected).
+  // On mount: reconcile the retired POS queue, then flush any backlog left by
+  // a previous session (app closed while offline, reopened while connected).
+  //
+  // The migration has to run first. Queued items from an older POS build are
+  // *unsyncable as written*, and a sync pass that ran before the repair would
+  // mark them failed with a misleading error — which is exactly the "needs
+  // attention" state users could not act on.
   useEffect(() => {
-    if (isOnline && pendingCount > 0 && !inFlightRef.current) {
-      void syncNow();
-    }
+    let cancelled = false;
+    void (async () => {
+      const migration = await migrateLegacyPosQueue().catch((err: unknown) => {
+        // Never block syncing on the cleanup of an old local store.
+        console.warn('Could not reconcile the retired POS offline queue', err);
+        return null;
+      });
+      if (cancelled) return;
+      if (migration && (migration.migrated > 0 || migration.repaired > 0)) {
+        console.info('Recovered offline POS sales into the sync queue', migration);
+      }
+
+      const pending = await getPendingCount();
+      if (!cancelled && isOnline && pending > 0 && !inFlightRef.current) {
+        void syncNow();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // Only run this check once on mount — subsequent pending-count changes
     // shouldn't re-trigger here (the online-transition effect above and
     // explicit user actions cover those cases), avoiding a sync-on-every-

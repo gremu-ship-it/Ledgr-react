@@ -20,7 +20,8 @@ export type QueueOperationType =
   | 'invoice_payment'
   | 'expense_payment'
   | 'payroll_run'
-  | 'stock_movement';
+  | 'stock_movement'
+  | 'pos_sale';         // a full POS till sale: invoice + lines + payments + stock + shift
 
 export type QueueItemStatus =
   | 'pending'   // waiting to sync
@@ -125,6 +126,7 @@ export const QUEUE_TYPE_LABELS: Record<QueueOperationType, string> = {
   expense_payment: 'expense payment',
   payroll_run: 'payroll run',
   stock_movement: 'stock movement',
+  pos_sale: 'POS sale',
 };
 
 class LedgrOfflineDB extends Dexie {

@@ -41,6 +41,33 @@ export class JournalRepository extends BaseRepository<'journal_entries'> {
   }
 
   /**
+   * Find the entry a keyed posting already made, if any.
+   *
+   * Posting functions are retried (a lost response, a queue replay, a
+   * `retryNonCritical` second attempt), so each one writes a deterministic
+   * `posting_key` and asks here before inserting. A hit means the entry is
+   * already posted — or was left as a draft by a crash between insert and
+   * post — and the caller must resume it rather than create a second one.
+   *
+   * Backed by the partial unique index `journal_entries_posting_key_uidx`
+   * (migration 20260921000000), which also rejects a duplicate insert when
+   * two attempts race past this lookup.
+   */
+  async findByPostingKey(
+    businessId: string,
+    postingKey: string,
+  ): Promise<Row<'journal_entries'> | null> {
+    const { data, error } = await this.client
+      .from('journal_entries')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('posting_key', postingKey)
+      .maybeSingle();
+    if (error) throw toRepositoryError('journal_entries', error);
+    return data ?? null;
+  }
+
+  /**
    * Fetch all journal entries for a business within a date range.
    */
   async findByBusinessAndDateRange(

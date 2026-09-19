@@ -3,10 +3,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { posService } from '../posService';
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
+import { usageService } from '@/lib/billing/UsageService';
 import type { PosCartItem } from '@/types/pos';
 
 vi.mock('@/services/journalService', () => ({
   createInvoiceJournalEntry: vi.fn().mockResolvedValue({}),
+  createInvoiceReceivableEntry: vi.fn().mockResolvedValue('je-sale'),
+  createInvoiceSettlementEntry: vi.fn().mockResolvedValue('je-receipt'),
 }));
 
 vi.mock('@/services/inventoryJournalService', () => ({
@@ -43,6 +46,16 @@ describe('POS Integration & Acceptance Criteria', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
+    // Tender routing resolves the mobile-money leg to its float account
+    // (1125 Airtel Money) at commit time.
+    vi.spyOn(repos.account, 'findByCode').mockImplementation(
+      async (_businessId: string, code: string) =>
+        (code === '1125' ? { id: 'acc-airtel', code: '1125' } : null) as never,
+    );
+    vi.spyOn(repos.account, 'findBankAccounts').mockResolvedValue([] as never);
+    // Replay guard for the stock ledger — no movements exist for a fresh sale.
+    vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(false as never);
   });
 
   describe('Split Payment & Change Computation', () => {
@@ -104,6 +117,15 @@ describe('POS Integration & Acceptance Criteria', () => {
       expect(result.payments).toHaveLength(2);
       expect(mockRecordPayment).toHaveBeenCalledTimes(2);
 
+      // amount_paid reaches 27,100 through the two payment rows, which
+      // increment it atomically. Pre-setting it on the header as well counted
+      // the sale twice (amount_paid = 2× total, negative amount due).
+      expect(mockCreateWithLines).toHaveBeenCalledWith(
+        expect.objectContaining({ amount_paid: 0, status: 'sent', total_amount: 27100 }),
+        expect.any(Array),
+        expect.any(String),
+      );
+
       mockCreateWithLines.mockRestore();
       mockRecordPayment.mockRestore();
     });
@@ -115,6 +137,9 @@ describe('POS Integration & Acceptance Criteria', () => {
       const branchId = 'branch-001';
 
       vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0006');
+      // The customer here is selected from the contacts list, so no lookup is
+      // needed; stubbed anyway so an accidental one cannot hit the network.
+      vi.spyOn(repos.contact, 'findByBusiness').mockResolvedValue([] as never);
 
       const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
         invoice: {

@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   X,
   Bluetooth,
+  CloudOff,
+  AlertTriangle,
 } from 'lucide-react';
 import type { PosSaleResult, PosSettings, PosSale, PosCartItem, PosPaymentSplit } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
@@ -137,8 +139,14 @@ export function PosReceiptModal({
         {/* Modal Top Bar */}
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-            <h2 className="text-base font-black text-gray-900">Sale Completed</h2>
+            {saleResult.isOffline ? (
+              <CloudOff className="h-5 w-5 text-amber-600" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+            )}
+            <h2 className="text-base font-black text-gray-900">
+              {saleResult.isOffline ? 'Sale Saved Offline' : 'Sale Completed'}
+            </h2>
           </div>
           <button
             type="button"
@@ -148,6 +156,32 @@ export function PosReceiptModal({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {/* An offline sale is not on the server yet. Say so plainly — the
+            cashier is holding the only copy of this transaction. */}
+        {saleResult.isOffline && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-relaxed text-amber-900">
+            <p className="font-bold">This sale is queued on this device.</p>
+            <p className="mt-0.5">
+              Stock, the ledger and the shift drawer will be updated when the connection
+              returns. Keep this device signed in — the sale is stored here, not on the server.
+            </p>
+          </div>
+        )}
+
+        {saleResult.warnings && saleResult.warnings.length > 0 && (
+          <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[11px] leading-relaxed text-red-900">
+            <p className="flex items-center gap-1.5 font-bold">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Saved, but needs a follow-up
+            </p>
+            <ul className="mt-1 list-disc space-y-0.5 ps-4">
+              {saleResult.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* Printable Receipt Preview */}
         <div className="flex-1 overflow-y-auto py-4">
