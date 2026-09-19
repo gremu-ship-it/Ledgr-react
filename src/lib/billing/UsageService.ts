@@ -160,19 +160,49 @@ export class UsageService {
    * A retry of a save whose document already committed (the queue replaying a
    * sale whose ledger half failed, a lost response) must not be blocked by the
    * limit: the document is already on the books and refusing to continue would
-   * strand it half-posted. `clientKey` is how those flows identify themselves.
+   * strand it half-posted. `clientKey` — and the table that key was minted
+   * for — is how those flows identify themselves.
    */
-  async assertCanCreateDocument(businessId: string, clientKey?: string): Promise<void> {
+  async assertCanCreateDocument(
+    businessId: string,
+    clientKey?: string,
+    documentKind: 'invoice' | 'expense' | 'payroll' = 'invoice',
+  ): Promise<void> {
     try {
       await this.assertWithinTransactionLimit(businessId);
     } catch (err) {
       if (clientKey) {
-        const existing = await repos.invoice
-          .findByClientKey(businessId, clientKey)
-          .catch(() => null);
+        const existing = await this.findDocumentByClientKey(businessId, clientKey, documentKind);
         if (existing) return; // replay of an already-committed document
       }
       throw err;
+    }
+  }
+
+  /**
+   * The document a client key already produced, whichever table it belongs to.
+   * A miss (or a lookup error) means "not a replay" — the caller then keeps the
+   * limit error rather than letting the save through.
+   */
+  private async findDocumentByClientKey(
+    businessId: string,
+    clientKey: string,
+    documentKind: 'invoice' | 'expense' | 'payroll',
+  ): Promise<unknown | null> {
+    try {
+      if (documentKind === 'expense') {
+        return await repos.expense.findByClientKey(businessId, clientKey);
+      }
+      if (documentKind === 'payroll') {
+        return await repos.payroll.findByClientKey(businessId, clientKey);
+      }
+      return await repos.invoice.findByClientKey(businessId, clientKey);
+    } catch (lookupError) {
+      log.warn('Could not check whether this save is a replay', {
+        documentKind,
+        error: lookupError instanceof Error ? lookupError.message : String(lookupError),
+      });
+      return null;
     }
   }
 

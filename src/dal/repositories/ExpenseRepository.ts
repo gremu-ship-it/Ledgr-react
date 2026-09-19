@@ -258,8 +258,14 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
     return { payment: paymentData, expense: updatedExpense };
   }
 
-  /** Idempotency lookup: find an expense previously created under a client_key. */
-  private async findByClientKey(businessId: string, clientKey: string): Promise<Row<'expenses'> | null> {
+  /**
+   * Idempotency lookup: find an expense previously created under a client_key.
+   *
+   * Public because the plan-limit guard asks whether a retried save is a replay
+   * of a document that already committed before it refuses the save (see
+   * `UsageService.assertCanCreateDocument`).
+   */
+  async findByClientKey(businessId: string, clientKey: string): Promise<Row<'expenses'> | null> {
     const { data, error } = await this.client
       .from('expenses')
       .select('*')

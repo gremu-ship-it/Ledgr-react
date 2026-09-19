@@ -239,9 +239,12 @@ Fix:
   sync engine's invoice, expense and payroll branches. A sale that hits the
   limit is refused whole rather than half-written, and a queued offline sale
   fails visibly in the offline drawer with the limit message;
-* a *replay* of an already-committed document is exempt (`findByClientKey`),
-  so a sale whose ledger half failed is never stranded by a limit that filled
-  up in the meantime;
+* a *replay* of an already-committed document is exempt
+  (`InvoiceRepository`/`ExpenseRepository`/`PayrollRepository.findByClientKey`
+  — the last two made public for this), so a sale whose ledger half failed is
+  never stranded by a limit that filled up in the meantime. The lookup runs
+  against the table the key belongs to, so an expense replay is not mistaken
+  for an invoice replay;
 * the guard was removed from the posting functions: with the count now
   inclusive of the document being posted, checking there would refuse the
   ledger for the very sale that reached the limit.
@@ -306,6 +309,11 @@ paths store exactly the numbers the receipt showed.
   own balanced receipt; a keyed entry left as a draft is posted rather than
   recreated; a sale over the plan limit is refused before anything is written,
   while the replay of a committed sale is allowed through.
+* `src/lib/billing/__tests__/usageGuard.test.ts` (new, 7 tests) — the
+  pre-write plan guard: it refuses at the limit, checks the client key before
+  refusing, lets a replayed invoice *and* a replayed expense through (each via
+  its own table), keeps the refusal when the lookup finds nothing, and fails
+  open when the plan cannot be read.
 * `src/services/__tests__/posService.test.ts` (11), `posIntegration.test.ts`
   (2), `posSaleOfflineSync.test.ts` (6), `offline/__tests__/posSaleSync.test.ts`
   (4), `lib/billing/__tests__/plans.test.ts` and

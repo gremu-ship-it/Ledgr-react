@@ -87,8 +87,12 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     };
   }
 
-  /** Idempotency lookup: find a payroll run previously created under a client_key. */
-  private async findByClientKey(businessId: string, clientKey: string): Promise<PayrollRunWithLines | null> {
+  /**
+   * Idempotency lookup: find a payroll run previously created under a
+   * client_key. Public for the plan-limit guard's replay exemption — see
+   * `UsageService.assertCanCreateDocument`.
+   */
+  async findByClientKey(businessId: string, clientKey: string): Promise<PayrollRunWithLines | null> {
     const { data, error } = await this.client
       .from('payroll_runs')
       .select('*, lines:payroll_employee_lines(*)')

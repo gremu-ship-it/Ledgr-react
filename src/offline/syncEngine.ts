@@ -249,7 +249,7 @@ async function syncItem(item: QueueItem): Promise<string> {
         const realNumber = await repos.business.reserveNextExpenseNumber(item.businessId);
         nextExpense = { ...nextExpense, expense_number: realNumber };
       }
-      await usageService.assertCanCreateDocument(item.businessId, item.clientKey);
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey, 'expense');
 
       const result = await repos.expense.createWithLines(nextExpense, lines, item.clientKey);
 
@@ -338,7 +338,7 @@ async function syncItem(item: QueueItem): Promise<string> {
         ...l,
         business_id: item.businessId,
       }));
-      await usageService.assertCanCreateDocument(item.businessId, item.clientKey);
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey, 'payroll');
 
       const result = await repos.payroll.createWithLines(run, linesWithBusiness, item.clientKey);
       return result.id;
