@@ -7,6 +7,8 @@ import {
   Coins,
   Settings,
   RefreshCw,
+  Barcode,
+  FileSpreadsheet,
 } from 'lucide-react';
 import type { PosShift, PosRegister } from '@/types/pos';
 
@@ -24,6 +26,8 @@ interface PosHeaderProps {
   onOpenHistoryModal: () => void;
   onOpenOwnerAnalytics?: () => void;
   onOpenSettingsModal?: () => void;
+  onOpenLabelGenerator?: () => void;
+  onOpenZReport?: () => void;
   onSyncOfflineSales: () => Promise<void>;
   viewMode?: 'sales' | 'analytics' | 'history' | 'settings';
   onSelectViewMode?: (mode: 'sales' | 'analytics' | 'history' | 'settings') => void;
@@ -43,6 +47,8 @@ export function PosHeader({
   onOpenHistoryModal,
   onOpenOwnerAnalytics,
   onOpenSettingsModal,
+  onOpenLabelGenerator,
+  onOpenZReport,
   onSyncOfflineSales,
   viewMode = 'sales',
   onSelectViewMode,
@@ -153,6 +159,32 @@ export function PosHeader({
             <WifiOff className="h-3.5 w-3.5 text-red-600" />
             <span>Offline ({pendingOfflineCount} queued)</span>
           </div>
+        )}
+
+        {/* Barcode & Price Tag Labels button */}
+        {onOpenLabelGenerator && (
+          <button
+            type="button"
+            onClick={onOpenLabelGenerator}
+            title="Print Product Barcode Labels & Shelf Tags"
+            className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-2xs"
+          >
+            <Barcode className="h-3.5 w-3.5 text-brand-600" />
+            <span className="hidden xl:inline">Labels</span>
+          </button>
+        )}
+
+        {/* End-of-Day Z-Report Button */}
+        {currentShift && onOpenZReport && (
+          <button
+            type="button"
+            onClick={onOpenZReport}
+            title="End-of-Day Z-Report Audit Summary"
+            className="flex items-center gap-1 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-2xs"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+            <span className="hidden xl:inline">Z-Report</span>
+          </button>
         )}
 
         {/* Cash In / Out Button (available when shift is active) */}

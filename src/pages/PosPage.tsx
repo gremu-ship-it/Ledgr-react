@@ -37,6 +37,8 @@ import { PosCashMovementModal } from '@/components/pos/PosCashMovementModal';
 import { PosSalesHistoryModal } from '@/components/pos/PosSalesHistoryModal';
 import { PosManagerApprovalModal } from '@/components/pos/PosManagerApprovalModal';
 import { PosOwnerAnalytics } from '@/components/pos/PosOwnerAnalytics';
+import { PosBarcodeLabelGenerator } from '@/components/pos/PosBarcodeLabelGenerator';
+import { PosZReportModal } from '@/components/pos/PosZReportModal';
 
 export function PosPage() {
   const currentUser = useAppStore((s) => s.currentUser);
@@ -83,6 +85,8 @@ export function PosPage() {
   const [isCashMovementModalOpen, setIsCashMovementModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
+  const [isZReportModalOpen, setIsZReportModalOpen] = useState(false);
   const [approvalActionDescription, setApprovalActionDescription] = useState('');
   const [pendingApprovalCallback, setPendingApprovalCallback] = useState<((name: string) => void) | null>(null);
 
@@ -383,6 +387,8 @@ export function PosPage() {
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
+      // Offer opening Z-Report
+      setIsZReportModalOpen(true);
     } catch (err: any) {
       alert(`Could not close shift: ${err.message}`);
     }
@@ -478,6 +484,8 @@ export function PosPage() {
         onOpenCashMovementModal={() => setIsCashMovementModalOpen(true)}
         onOpenHistoryModal={() => setIsHistoryModalOpen(true)}
         onOpenOwnerAnalytics={() => setViewMode('analytics')}
+        onOpenLabelGenerator={() => setIsBarcodeModalOpen(true)}
+        onOpenZReport={() => setIsZReportModalOpen(true)}
         onSyncOfflineSales={handleSyncOfflineSales}
         viewMode={viewMode}
         onSelectViewMode={(m) => setViewMode(m)}
@@ -634,6 +642,22 @@ export function PosPage() {
         }}
         actionDescription={approvalActionDescription}
         onApprove={handleManagerApproved}
+      />
+
+      <PosBarcodeLabelGenerator
+        open={isBarcodeModalOpen}
+        onClose={() => setIsBarcodeModalOpen(false)}
+        products={products}
+      />
+
+      <PosZReportModal
+        open={isZReportModalOpen}
+        onClose={() => setIsZReportModalOpen(false)}
+        shift={currentShift}
+        sales={salesHistory}
+        businessName={branchName}
+        branchName={branchName}
+        ownerEmail={currentUser?.email || undefined}
       />
     </div>
   );
