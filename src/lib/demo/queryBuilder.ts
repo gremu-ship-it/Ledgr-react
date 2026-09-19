@@ -51,7 +51,7 @@ const KNOWN_TABLES = [
   'fixed_assets', 'fx_revaluations', 'inventory_balances', 'inventory_locations', 'invoice_lines',
   'invoice_payments', 'invoices', 'journal_entries', 'journal_lines', 'loan_repayments', 'loans',
   'partner_admins', 'partner_clients', 'partner_feature_flags', 'partner_invoices', 'partners',
-  'paye_bands', 'payroll_employee_lines', 'payroll_runs', 'periods', 'products', 'share_transactions',
+  'paye_bands', 'payroll_employee_lines', 'payroll_runs', 'periods', 'pos_cash_movements', 'pos_settings', 'pos_shifts', 'products', 'share_transactions',
   'shares', 'stock_movements', 'stock_transfer_lines', 'stock_transfers', 'subscription_payments',
   'tax_alerts', 'tax_configurations', 'tax_payments', 'tax_returns', 'user_profiles', 'webhook_deliveries',
   'webhooks',

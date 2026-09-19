@@ -20,6 +20,7 @@ import { DepartmentRepository } from '@/dal/repositories/DepartmentRepository';
 import { TransferRepository } from '@/dal/repositories/TransferRepository';
 import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
+import { PosRepository } from '@/dal/repositories/PosRepository';
 
 export const repos = {
   business:   new BusinessRepository(supabase),
@@ -43,6 +44,7 @@ export const repos = {
   transfer:   new TransferRepository(supabase),
   period: new PeriodRepository(supabase),
   auditLog: new AuditLogRepository(supabase),
+  pos: new PosRepository(supabase),
 };
 
 export type Repositories = typeof repos;

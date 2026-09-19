@@ -54,6 +54,7 @@ const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPag
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
+const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
@@ -238,6 +239,7 @@ function App() {
               <Route element={<AppLayout />}>
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
+                  <Route path="/pos" element={<PosPage />} />
 
                   {/* Finance */}
                   <Route path="/income" element={<IncomePage />} />

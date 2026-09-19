@@ -86,6 +86,7 @@
     "items": {
       "ledgrAi": "Ledgr AI",
       "dashboard": "Dashboard",
+      "pos": "Point of Sale",
       "income": "Income",
       "expenses": "Expenses",
       "invoices": "Invoices",

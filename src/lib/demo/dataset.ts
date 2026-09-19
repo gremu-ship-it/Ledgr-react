@@ -232,6 +232,8 @@ const PRODUCTS: ProductSpec[] = [
   { name: 'Rice 10kg', sku: 'RC-10', type: 'goods', purchase: 16_500, sale: 22_400, uom: 'bag', onHand: 64, reorderLevel: 20, taxCode: 'vat_standard' },
   { name: 'Bath Soap (pack of 6)', sku: 'SP-6', type: 'goods', purchase: 4_900, sale: 6_900, uom: 'pack', onHand: 210, reorderLevel: 60, taxCode: 'vat_standard' },
   { name: 'In-town Delivery', sku: 'SVC-DEL', type: 'service', purchase: 0, sale: 7_500, uom: 'trip', onHand: 0, reorderLevel: null, taxCode: 'vat_standard' },
+  { name: 'Chicken 1kg', sku: 'CHK-1KG', type: 'goods', purchase: 7_000, sale: 10_000, uom: 'kg', onHand: 50, reorderLevel: 10, taxCode: 'vat_standard' },
+  { name: 'Sausage 500g', sku: 'SSG-500G', type: 'goods', purchase: 3_500, sale: 5_000, uom: 'pack', onHand: 80, reorderLevel: 15, taxCode: 'vat_standard' },
 ];
 
 /**
@@ -378,6 +380,7 @@ export function buildDemoDataset(now: Date = new Date()): DemoTables {
   seedAuditLog(b, anchor);
   seedTaxReturns(b, anchor);
   seedCashSweep(b, anchor);
+  seedPos(b, anchor);
 
   return b.tables;
 }
@@ -1863,4 +1866,87 @@ function seedTaxReturns(b: DatasetBuilder, anchor: Date): void {
       updated_at: toTs(anchor),
     });
   }
+}
+
+function seedPos(b: DatasetBuilder, anchor: Date): void {
+  b.add('pos_settings', {
+    id: demoUuid('pos_setting', 1),
+    business_id: DEMO_BUSINESS_ID,
+    enabled_payment_methods: ['cash', 'airtel_money', 'tnm_mpamba', 'bank_transfer', 'card', 'credit', 'other'],
+    cashier_max_discount_percent: 5,
+    manager_max_discount_percent: 15,
+    require_approval_for_void: true,
+    require_approval_for_refund: true,
+    require_explanation_variance_threshold: 1000,
+    receipt_header: 'ABC Shop — Lilongwe Branch',
+    receipt_footer: 'Thank you for shopping at ABC Shop!',
+    show_tax_on_receipt: true,
+    custom_role_permissions: {},
+    created_at: toTs(addMonths(anchor, -6)),
+    updated_at: toTs(anchor),
+  });
+
+  const johnId = demoUuid('user', 'john');
+  b.add('user_profiles', {
+    id: johnId,
+    full_name: 'John Banda',
+    avatar_url: null,
+    phone: '+265 888 123 456',
+    is_platform_admin: false,
+    preferred_language: 'en',
+    preferred_currency: 'MWK',
+    created_at: toTs(addMonths(anchor, -6)),
+    updated_at: toTs(anchor),
+  });
+
+  b.add('business_users', {
+    id: demoUuid('membership', 'john'),
+    business_id: DEMO_BUSINESS_ID,
+    user_id: johnId,
+    role: 'cashier',
+    is_active: true,
+    accepted_at: toTs(addMonths(anchor, -6)),
+    branch_id: demoUuid('branch', 'lgw'),
+    created_at: toTs(addMonths(anchor, -6)),
+    updated_at: toTs(anchor),
+  });
+
+  const shiftId = demoUuid('pos_shift', 'today');
+  b.add('pos_shifts', {
+    id: shiftId,
+    business_id: DEMO_BUSINESS_ID,
+    branch_id: demoUuid('branch', 'lgw'),
+    cashier_id: johnId,
+    cashier_name: 'John Banda',
+    opened_at: toTs(anchor),
+    closed_at: null,
+    opening_cash: 50_000,
+    expected_cash: 50_000,
+    actual_cash: null,
+    cash_variance: null,
+    variance_reason: null,
+    total_sales_amount: 0,
+    cash_sales_amount: 0,
+    other_sales_amount: 0,
+    refunds_amount: 0,
+    cash_in_amount: 50_000,
+    cash_out_amount: 0,
+    status: 'open',
+    notes: 'Morning shift opening float K50,000',
+    created_at: toTs(anchor),
+    updated_at: toTs(anchor),
+  });
+
+  b.add('pos_cash_movements', {
+    id: demoUuid('pos_cash_mov', 1),
+    business_id: DEMO_BUSINESS_ID,
+    branch_id: demoUuid('branch', 'lgw'),
+    shift_id: shiftId,
+    user_id: johnId,
+    user_name: 'John Banda',
+    movement_type: 'cash_in',
+    amount: 50_000,
+    reason: 'Opening shift float',
+    created_at: toTs(anchor),
+  });
 }

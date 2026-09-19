@@ -100,7 +100,10 @@ export type BusinessUserRole =
   | 'treasury_manager'
   | 'asset_manager'
   | 'board_member'
-  | 'branch_manager';
+  | 'branch_manager'
+  | 'cashier'
+  | 'manager'
+  | 'stock_clerk';
 /**
  * DB: invoice_status — exact 7 members.
  * 'partial' → 'partially_paid', 'viewed' does NOT exist, 'credit_note' is a status value.
