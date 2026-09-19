@@ -122,7 +122,10 @@ as $$
         'tax_compliance_officer',
         'treasury_manager',
         'asset_manager',
-        'branch_manager'
+        'branch_manager',
+        'cashier',
+        'manager',
+        'stock_clerk'
         -- Deliberately absent: payroll_manager (payroll only), auditor,
         -- viewer, board_member.
       )

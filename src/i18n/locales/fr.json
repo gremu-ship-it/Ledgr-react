@@ -85,6 +85,7 @@
     "items": {
       "ledgrAi": "Ledgr IA",
       "dashboard": "Tableau de bord",
+      "pos": "Point de Vente (POS)",
       "income": "Revenus",
       "expenses": "Dépenses",
       "invoices": "Factures",

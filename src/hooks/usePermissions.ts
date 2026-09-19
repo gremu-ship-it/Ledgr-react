@@ -392,6 +392,57 @@ export function usePermissions(): Permissions {
         isGuest: false,
       };
 
+    case 'cashier':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: false,
+        canWritePayroll: false,
+        canViewPayroll: false,
+        canViewReports: false,
+        canViewInventory: false,
+        canViewFinance: false,
+        role,
+        isGuest: false,
+      };
+
+    case 'manager':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: true,
+        canWritePayroll: false,
+        canViewPayroll: false,
+        canViewReports: true,
+        canViewInventory: true,
+        canViewFinance: false,
+        role,
+        isGuest: false,
+      };
+
+    case 'stock_clerk':
+      return {
+        canRead: true,
+        canWrite: true,
+        canDelete: false,
+        canManageUsers: false,
+        canManageBilling: false,
+        canExport: false,
+        canWritePayroll: false,
+        canViewPayroll: false,
+        canViewReports: false,
+        canViewInventory: true,
+        canViewFinance: false,
+        role,
+        isGuest: false,
+      };
+
     default:
       return GUEST;
   }
@@ -408,9 +459,18 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
     case 'admin':
       return true;
 
+    case 'cashier':
+      return ['/pos', '/pos/shifts', '/income', '/invoices'].includes(path);
+
     case 'sales_clerk':
     case 'data_entry':
-      return ['/income', '/expenses', '/invoices'].includes(path);
+      return ['/income', '/expenses', '/invoices', '/pos', '/pos/shifts'].includes(path);
+
+    case 'manager':
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports'].includes(path);
+
+    case 'stock_clerk':
+      return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'purchasing_officer':
       return ['/expenses', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/dashboard'].includes(path);
@@ -419,10 +479,10 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'sales_manager':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
 
     case 'customer_service_rep':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/pos'].includes(path);
 
     case 'tax_compliance_officer':
       return ['/dashboard', '/tax', '/reports', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
@@ -465,6 +525,9 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
 }
 
 export function getHomePathForRole(role: string | null): string {
+  if (role === 'cashier') return '/pos';
+  if (role === 'manager') return '/pos';
+  if (role === 'stock_clerk') return '/products';
   if (role === 'sales_clerk' || role === 'data_entry') return '/income';
   if (role === 'inventory_manager' || role === 'warehouse_worker') return '/products';
   if (role === 'purchasing_officer') return '/expenses';

@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   LifeBuoy,
   Building2,
+  ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -48,6 +49,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.overview',
     items: [
       { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
+      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag },
     ],
   },
   {

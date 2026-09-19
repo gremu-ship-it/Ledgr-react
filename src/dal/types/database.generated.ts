@@ -4412,6 +4412,195 @@ export type Database = {
           },
         ]
       }
+      pos_cash_movements: {
+        Row: {
+          amount: number
+          branch_id: string | null
+          business_id: string
+          created_at: string
+          id: string
+          movement_type: string
+          reason: string
+          shift_id: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          amount: number
+          branch_id?: string | null
+          business_id: string
+          created_at?: string
+          id?: string
+          movement_type: string
+          reason: string
+          shift_id?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          amount?: number
+          branch_id?: string | null
+          business_id?: string
+          created_at?: string
+          id?: string
+          movement_type?: string
+          reason?: string
+          shift_id?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_cash_movements_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_settings: {
+        Row: {
+          business_id: string
+          cashier_max_discount_percent: number
+          created_at: string
+          custom_role_permissions: Json
+          enabled_payment_methods: Json
+          id: string
+          manager_max_discount_percent: number
+          receipt_footer: string
+          receipt_header: string | null
+          require_approval_for_refund: boolean
+          require_approval_for_void: boolean
+          require_explanation_variance_threshold: number
+          show_tax_on_receipt: boolean
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          cashier_max_discount_percent?: number
+          created_at?: string
+          custom_role_permissions?: Json
+          enabled_payment_methods?: Json
+          id?: string
+          manager_max_discount_percent?: number
+          receipt_footer?: string
+          receipt_header?: string | null
+          require_approval_for_refund?: boolean
+          require_approval_for_void?: boolean
+          require_explanation_variance_threshold?: number
+          show_tax_on_receipt?: boolean
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          cashier_max_discount_percent?: number
+          created_at?: string
+          custom_role_permissions?: Json
+          enabled_payment_methods?: Json
+          id?: string
+          manager_max_discount_percent?: number
+          receipt_footer?: string
+          receipt_header?: string | null
+          require_approval_for_refund?: boolean
+          require_approval_for_void?: boolean
+          require_explanation_variance_threshold?: number
+          show_tax_on_receipt?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_settings_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_shifts: {
+        Row: {
+          actual_cash: number | null
+          branch_id: string | null
+          business_id: string
+          cash_in_amount: number
+          cash_out_amount: number
+          cash_sales_amount: number
+          cash_variance: number | null
+          cashier_id: string | null
+          cashier_name: string | null
+          closed_at: string | null
+          created_at: string
+          expected_cash: number
+          id: string
+          notes: string | null
+          opened_at: string
+          opening_cash: number
+          other_sales_amount: number
+          refunds_amount: number
+          status: string
+          total_sales_amount: number
+          updated_at: string
+          variance_reason: string | null
+        }
+        Insert: {
+          actual_cash?: number | null
+          branch_id?: string | null
+          business_id: string
+          cash_in_amount?: number
+          cash_out_amount?: number
+          cash_sales_amount?: number
+          cash_variance?: number | null
+          cashier_id?: string | null
+          cashier_name?: string | null
+          closed_at?: string | null
+          created_at?: string
+          expected_cash?: number
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opening_cash?: number
+          other_sales_amount?: number
+          refunds_amount?: number
+          status?: string
+          total_sales_amount?: number
+          updated_at?: string
+          variance_reason?: string | null
+        }
+        Update: {
+          actual_cash?: number | null
+          branch_id?: string | null
+          business_id?: string
+          cash_in_amount?: number
+          cash_out_amount?: number
+          cash_sales_amount?: number
+          cash_variance?: number | null
+          cashier_id?: string | null
+          cashier_name?: string | null
+          closed_at?: string | null
+          created_at?: string
+          expected_cash?: number
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opening_cash?: number
+          other_sales_amount?: number
+          refunds_amount?: number
+          status?: string
+          total_sales_amount?: number
+          updated_at?: string
+          variance_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_shifts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_categories: {
         Row: {
           business_id: string
