@@ -251,49 +251,49 @@ function App() {
 
                   {/* Inventory */}
                   <Route path="/products" element={
-                    <PartnerPlanGate featureKey="inventory" featureName="Products">
+                    <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Products">
                       <ProductsPage />
                     </PartnerPlanGate>
                   } />
                   <Route path="/inventory" element={
-                    <PartnerPlanGate featureKey="inventory" featureName="Inventory">
+                    <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Inventory">
                       <InventoryPage />
                     </PartnerPlanGate>
                   } />
                   <Route path="/warehouse" element={
-                    <PartnerPlanGate featureKey="inventory" featureName="Warehouses">
+                    <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Warehouses">
                       <WarehousePage />
                     </PartnerPlanGate>
                   } />
                   <Route path="/transfers" element={
-                    <PartnerPlanGate featureKey="inventory" featureName="Stock transfers">
+                    <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Stock transfers">
                       <TransfersPage />
                     </PartnerPlanGate>
                   } />
 
-                  {/* Accounting — all gated via accounting_organisation */}
+                  {/* Accounting — core modules on Starter; advanced modules on Growth */}
                   <Route path="/accounts" element={
-                    <PlanGate capability="accounting_organisation" featureName="Chart of Accounts">
+                    <PlanGate capability="core_accounting" featureName="Chart of Accounts">
                       <AccountsPage />
                     </PlanGate>
                   } />
                   <Route path="/assets" element={
-                    <PlanGate capability="accounting_organisation" featureName="Assets">
+                    <PlanGate capability="core_accounting" featureName="Assets">
                       <AssetsPage />
                     </PlanGate>
                   } />
                   <Route path="/capital" element={
-                    <PlanGate capability="accounting_organisation" featureName="Capital">
+                    <PlanGate capability="core_accounting" featureName="Capital">
                       <CapitalPage />
                     </PlanGate>
                   } />
                   <Route path="/tax" element={
-                    <PlanGate capability="accounting_organisation" featureName="Tax">
+                    <PlanGate capability="core_accounting" featureName="Tax">
                       <TaxPage />
                     </PlanGate>
                   } />
                   <Route path="/reports" element={
-                    <PlanGate capability="accounting_organisation" featureName="Reports">
+                    <PlanGate capability="core_accounting" featureName="Reports">
                       <ReportsPage />
                     </PlanGate>
                   } />

@@ -24,7 +24,7 @@ import { DEMO_BUSINESS_ID, DEMO_PLAN_TIER } from '@/lib/demo/constants';
  * Every capability App.tsx wraps a route in. Keep in step with the PlanGate
  * usages there — a new gated module must be reachable in the demo too.
  */
-const GATED_CAPABILITIES: PlanCapability[] = ['accounting_organisation'];
+const GATED_CAPABILITIES: PlanCapability[] = ['inventory', 'core_accounting', 'accounting_organisation'];
 
 beforeAll(async () => {
   await enterDemoMode();

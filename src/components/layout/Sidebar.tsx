@@ -5,7 +5,7 @@ import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'luc
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
-import { isItemLocked, visibleSectionsFor } from './navConfig';
+import { isItemLocked, planRequiredForItem, visibleSectionsFor } from './navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
@@ -129,7 +129,7 @@ export function Sidebar() {
                     const handleClick = (e: React.MouseEvent) => {
                       if (locked) {
                         e.preventDefault();
-                        pushUpgradeRequired(t(item.labelKey), 'Growth', businessId);
+                        pushUpgradeRequired(t(item.labelKey), planRequiredForItem(item, section.minPlan)?.name ?? 'a higher plan', businessId);
                         if (window.innerWidth < 1024) setSidebarOpen(false);
                         return;
                       }

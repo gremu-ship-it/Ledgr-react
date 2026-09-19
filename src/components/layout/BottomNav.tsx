@@ -30,7 +30,7 @@ import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
-import { GATED_PATHS, planMeetsMin } from '@/components/layout/navConfig';
+import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
 import { pushUpgradeRequired } from '@/lib/notifications';
@@ -135,11 +135,12 @@ export function BottomNav() {
           </div>
           <div className="grid grid-cols-3 gap-2">
             {moreItems.map((item) => {
-              const locked = GATED_PATHS.has(item.path) ? !planMeetsMin(planTier, 'growth') : false;
+              const navItem = navItemForPath(item.path);
+              const locked = navItem ? isItemLocked(navItem, planTier) : false;
               const handleMoreClick = (e: React.MouseEvent) => {
                 if (locked) {
                   e.preventDefault();
-                  pushUpgradeRequired(t(item.labelKey), 'Growth', businessId);
+                  pushUpgradeRequired(t(item.labelKey), navItem ? planRequiredForItem(navItem)?.name ?? 'a higher plan' : 'a higher plan', businessId);
                   setMoreOpen(false);
                   return;
                 }
@@ -310,6 +311,9 @@ function NavTab({
   icon: LucideIcon;
 }) {
   const { t } = useTranslation();
+  const { planTier } = useUsage();
+  const navItem = navItemForPath(path);
+  const locked = navItem ? isItemLocked(navItem, planTier) : false;
 
   return (
     <NavLink
@@ -325,7 +329,15 @@ function NavTab({
       className="group flex min-h-[48px] min-w-[48px] flex-col items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold transition-colors touch-manipulation"
     >
       {({ isActive }) =>
-        isActive ? (
+        locked ? (
+          <>
+            <div className="relative">
+              <Icon className="h-5 w-5 text-gray-400" aria-hidden="true" />
+              <Lock className="absolute -right-1 -top-1 h-3 w-3 text-gray-500" aria-label="Upgrade required" />
+            </div>
+            <span className="text-gray-500">{t(labelKey)}</span>
+          </>
+        ) : isActive ? (
           <>
             <div className="relative">
               <div className="absolute -inset-1 rounded-full bg-brand-500/20 blur-sm" />

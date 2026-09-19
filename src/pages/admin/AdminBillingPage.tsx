@@ -287,6 +287,7 @@ export function AdminBillingPage() {
                 }}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
               >
+                <option value="starter">Starter</option>
                 <option value="growth">Growth</option>
                 <option value="pro">Pro</option>
                 <option value="enterprise">Enterprise</option>
@@ -380,7 +381,7 @@ export function AdminBillingPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {(['growth', 'pro', 'enterprise'] as const).map((tier) => (
+              {(['starter', 'growth', 'pro', 'enterprise'] as const).map((tier) => (
                 <div key={tier} className="space-y-1">
                   <div className="text-xs font-medium text-gray-600">{PLANS[tier].name}</div>
                   <div className="flex gap-1">

@@ -24,7 +24,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
-import { hasCapability } from '@/lib/billing/plans';
+import { hasCapability, PLAN_TIER_ORDER, PLANS } from '@/lib/billing/plans';
 import type { PartnerFeatureKey } from '@/types/partners';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
@@ -62,19 +62,19 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.inventory',
     items: [
-      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory' },
-      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory' },
-      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory' },
+      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory' },
+      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory' },
+      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory' },
     ],
   },
   {
     labelKey: 'navigation.sections.accounting',
     items: [
-      { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, minPlan: 'growth' },
-      { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, minPlan: 'growth' },
-      { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, minPlan: 'growth' },
-      { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, minPlan: 'growth' },
-      { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, minPlan: 'growth' },
+      { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, requiresCapability: 'core_accounting' },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Building2, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
@@ -104,8 +104,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-const PLAN_TIER_ORDER: PlanTier[] = ['free', 'growth', 'pro', 'enterprise'];
 
 export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   if (!required) return true;
@@ -149,4 +147,15 @@ export function isItemLocked(
     return true;
   }
   return false;
+}
+
+/** Shared by alternative navigation surfaces; /inventory aliases Products. */
+export function navItemForPath(path: string): NavItemConfig | undefined {
+  const canonicalPath = path === '/inventory' ? '/products' : path;
+  return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.path === canonicalPath);
+}
+
+export function planRequiredForItem(item: NavItemConfig, sectionMinPlan?: PlanTier) {
+  const tier = PLAN_TIER_ORDER.find((candidate) => !isItemLocked(item, candidate, sectionMinPlan));
+  return tier ? PLANS[tier] : null;
 }

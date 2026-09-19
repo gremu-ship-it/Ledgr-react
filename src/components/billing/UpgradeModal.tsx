@@ -1,5 +1,5 @@
 import { X, ArrowRight } from 'lucide-react';
-import { PLANS, type PlanTier } from '@/lib/billing/plans';
+import { PLANS, PLAN_TIER_ORDER, type PlanTier } from '@/lib/billing/plans';
 import { useUsage } from '@/hooks/useUsage';
 
 interface UpgradeModalProps {
@@ -13,9 +13,9 @@ export function UpgradeModal({ isOpen, onClose, onUpgrade }: UpgradeModalProps) 
 
   if (!isOpen) return null;
 
-  const nextTier: PlanTier = 
-    planTier === 'free' ? 'growth' :
-    planTier === 'growth' ? 'pro' : 'enterprise';
+  const nextTier = PLAN_TIER_ORDER[
+    Math.min(PLAN_TIER_ORDER.indexOf(planTier) + 1, PLAN_TIER_ORDER.length - 1)
+  ];
 
   const nextPlan = PLANS[nextTier];
 

@@ -10,6 +10,7 @@ function formatDate(value: string): string {
 
 function planBadge(tier: string): string {
   if (tier === 'free') return 'bg-slate-100 text-slate-600';
+  if (tier === 'starter') return 'bg-teal-100 text-teal-700';
   if (tier === 'growth') return 'bg-emerald-100 text-emerald-700';
   if (tier === 'pro') return 'bg-blue-100 text-blue-700';
   return 'bg-indigo-100 text-indigo-700'; // enterprise

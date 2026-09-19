@@ -6,6 +6,7 @@ import {
   CreditCard, BarChart3, Settings, FileSpreadsheet
 } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
+import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
 import { Button } from '@/components/ui/Button';
 import { clsx } from 'clsx';
 
@@ -16,7 +17,6 @@ interface Tool {
   icon: React.ComponentType<{ className?: string }>;
   path: string;
   category: 'daily' | 'accounting' | 'advanced';
-  requiresPlan?: 'growth' | 'pro';
   isPinned?: boolean;
   lastUsed?: string;
 }
@@ -35,11 +35,11 @@ const ALL_TOOLS: Tool[] = [
   { id: 'reports', label: 'Reports', description: 'Financial reports & insights', icon: BarChart3, path: '/reports', category: 'accounting' },
   { id: 'periods', label: 'Financial Periods', description: 'Manage accounting periods', icon: Calendar, path: '/periods', category: 'accounting' },
 
-  // Advanced / Growth tools
-  { id: 'inventory', label: 'Inventory', description: 'Stock & product management', icon: Package, path: '/inventory', category: 'advanced', requiresPlan: 'growth' },
-  { id: 'payroll', label: 'Payroll', description: 'Employee salary management', icon: Users, path: '/payroll', category: 'advanced', requiresPlan: 'growth' },
-  { id: 'assets', label: 'Fixed Assets', description: 'Track company assets', icon: Package, path: '/assets', category: 'advanced', requiresPlan: 'growth' },
-  { id: 'bank', label: 'Bank Reconciliation', description: 'Reconcile bank statements', icon: CreditCard, path: '/bank-reconcile', category: 'advanced', requiresPlan: 'pro' },
+  // Advanced tools (access comes from the shared navigation configuration)
+  { id: 'inventory', label: 'Inventory', description: 'Stock & product management', icon: Package, path: '/inventory', category: 'advanced' },
+  { id: 'payroll', label: 'Payroll', description: 'Employee salary management', icon: Users, path: '/payroll', category: 'advanced' },
+  { id: 'assets', label: 'Fixed Assets', description: 'Track company assets', icon: Package, path: '/assets', category: 'advanced' },
+  { id: 'bank', label: 'Bank Reconciliation', description: 'Reconcile bank statements', icon: CreditCard, path: '/bank-reconcile', category: 'advanced' },
   { id: 'import', label: 'Data Import', description: 'Migrate from QuickBooks, Xero, Sage, Excel', icon: FileSpreadsheet, path: '/import', category: 'accounting' },
 ];
 
@@ -51,14 +51,6 @@ export default function ToolsPage() {
 
   const filteredTools = React.useMemo(() => {
     let tools = [...ALL_TOOLS];
-
-    // Filter by plan access
-    tools = tools.filter(tool => {
-      if (!tool.requiresPlan) return true;
-      if (tool.requiresPlan === 'growth' && ['free'].includes(planTier)) return false;
-      if (tool.requiresPlan === 'pro' && !['pro'].includes(planTier)) return false;
-      return true;
-    });
 
     // Search filter
     if (searchQuery.trim()) {
@@ -75,16 +67,15 @@ export default function ToolsPage() {
     }
 
     return tools;
-  }, [searchQuery, activeTab, planTier]);
+  }, [searchQuery, activeTab]);
 
   // Pinned / favourite tools (user preference)
   const pinnedTools = filteredTools.filter(t => t.isPinned);
   const recentTools = filteredTools.slice(0, 3); // mock recent
 
   const isLocked = (tool: Tool) => {
-    if (!tool.requiresPlan) return false;
-    return tool.requiresPlan === 'growth' && planTier === 'free' ||
-           tool.requiresPlan === 'pro' && planTier !== 'pro';
+    const item = navItemForPath(tool.path);
+    return item ? isItemLocked(item, planTier) : false;
   };
 
   const handleToolClick = (tool: Tool) => {
@@ -238,6 +229,8 @@ function ToolCard({
   showCategory?: boolean;
 }) {
   const Icon = tool.icon;
+  const navItem = navItemForPath(tool.path);
+  const requiredPlan = navItem ? planRequiredForItem(navItem) : null;
 
   return (
     <button
@@ -270,9 +263,9 @@ function ToolCard({
             <span className="inline-block text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
               {tool.category}
             </span>
-            {tool.requiresPlan && (
+            {requiredPlan && requiredPlan.tier !== 'free' && (
               <span className="ml-1.5 text-[10px] text-amber-600 font-medium">
-                {tool.requiresPlan.toUpperCase()}
+                {requiredPlan.name.toUpperCase()}
               </span>
             )}
           </div>

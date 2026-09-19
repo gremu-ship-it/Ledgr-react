@@ -4,7 +4,7 @@
  * monorepo via a packages/ folder — see STRUCTURE.md §4 "Pricing").
  */
 export interface Plan {
-  tier: 'free' | 'growth' | 'pro' | 'enterprise';
+  tier: 'free' | 'starter' | 'growth' | 'pro' | 'enterprise';
   name: string;
   /** Monthly price in MWK. */
   priceMWK: number;
@@ -24,10 +24,23 @@ export const PLANS: Plan[] = [
     annualDiscount: 0,
     transactionLimit: 50,
     features: [
-      'Basic dashboard & reports',
-      'Income & expense tracking',
+      'Basic dashboard',
+      'Finance: income, expenses, invoices & payroll',
       'Up to 50 transactions/month',
       'Community support',
+    ],
+  },
+  {
+    tier: 'starter',
+    name: 'Starter',
+    priceMWK: 50_000,
+    annualDiscount: 0,
+    transactionLimit: 200,
+    features: [
+      'Everything in Free',
+      'Inventory: products, warehouses & stock transfers',
+      'Accounts, Tax, Assets, Capital & Reports',
+      'Up to 200 transactions/month',
     ],
   },
   {
@@ -37,7 +50,7 @@ export const PLANS: Plan[] = [
     annualDiscount: 20,
     transactionLimit: 500,
     features: [
-      'Everything in Free',
+      'Everything in Starter',
       'Bank reconciliation',
       'Accounting & Organisation (full access)',
       'Basic financial reports',

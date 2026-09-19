@@ -14,7 +14,7 @@
 //      PayChangu confirms the payment (see paychangu-webhook /
 //      verify-subscription-payment), via apply_subscription_payment().
 //
-// Body: { business_id: string, target_plan_tier: 'growth'|'pro'|'enterprise', billing_cycle: 'monthly'|'annual' }
+// Body: { business_id: string, target_plan_tier: 'starter'|'growth'|'pro'|'enterprise', billing_cycle: 'monthly'|'annual' }
 // Returns: { checkout_url: string, tx_ref: string }
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
@@ -44,22 +44,24 @@ function json(body: unknown, status = 200) {
 // supabase/functions; see generate-vat-returns/index.ts for the same
 // documented tradeoff. If you change pricing in plans.ts, update this too.
 const PLAN_PRICES_MWK: Record<string, number> = {
+  starter: 50_000,
   growth: 100_000,
   pro: 200_000,
   enterprise: 500_000,
 };
 
 const ANNUAL_DISCOUNT_PCT: Record<string, number> = {
+  starter: 0,
   growth: 20,
   pro: 20,
   enterprise: 25,
 };
 
-type PlanTier = 'growth' | 'pro' | 'enterprise';
+type PlanTier = 'starter' | 'growth' | 'pro' | 'enterprise';
 type BillingCycle = 'monthly' | 'annual';
 
 function isPlanTier(v: unknown): v is PlanTier {
-  return v === 'growth' || v === 'pro' || v === 'enterprise';
+  return v === 'starter' || v === 'growth' || v === 'pro' || v === 'enterprise';
 }
 
 function isBillingCycle(v: unknown): v is BillingCycle {
@@ -129,7 +131,7 @@ serve(async (req) => {
     const businessId = (body.business_id || '').trim();
     if (!businessId) return json({ error: 'business_id is required' }, 400);
     if (!isPlanTier(body.target_plan_tier)) {
-      return json({ error: "target_plan_tier must be one of: growth, pro, enterprise" }, 400);
+      return json({ error: "target_plan_tier must be one of: starter, growth, pro, enterprise" }, 400);
     }
     const billingCycle: BillingCycle = isBillingCycle(body.billing_cycle) ? body.billing_cycle : 'monthly';
     const targetTier = body.target_plan_tier;

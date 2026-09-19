@@ -59,7 +59,7 @@ export function CheckoutModal({ businessId, targetTier, onClose }: CheckoutModal
                   cycle === c ? 'bg-brand-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
-                {c === 'monthly' ? 'Monthly' : `Annual (save ${plan.annualDiscount}%)`}
+                {c === 'monthly' ? 'Monthly' : plan.annualDiscount > 0 ? `Annual (save ${plan.annualDiscount}%)` : 'Annual'}
               </button>
             ))}
           </div>
@@ -71,7 +71,7 @@ export function CheckoutModal({ businessId, targetTier, onClose }: CheckoutModal
               </span>
               <span className="text-2xl font-bold text-brand-700">MWK {price.toLocaleString()}</span>
             </div>
-            {cycle === 'annual' && (
+            {cycle === 'annual' && plan.annualDiscount > 0 && (
               <p className="mt-1 text-xs text-emerald-800">
                 Save {plan.annualDiscount}% vs. paying monthly (MWK {(plan.priceMWK * 12).toLocaleString()}/year)
               </p>
