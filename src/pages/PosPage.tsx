@@ -6,8 +6,6 @@ import {
   createSale,
   processReturn,
   processVoid,
-  syncOfflineQueue,
-  getOfflineQueue,
   addProductToCart,
   updateCartItemQuantity,
   removeProductFromCart,
@@ -15,6 +13,11 @@ import {
   applyItemDiscount,
 } from '@/services/posService';
 import { repos } from '@/lib/repositories';
+import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { VAT_STANDARD_RATE } from '@/lib/vat';
+import { useOfflineQueue } from '@/hooks/useOfflineQueue';
+import { useOfflineSync } from '@/offline/offlineSyncContext';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import type {
   PosCartItem,
   PosCustomer,
@@ -47,17 +50,23 @@ export function PosPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const permissions = usePosPermissions();
 
-  const businessId = currentBusiness?.business?.id || 'biz-default';
+  // Empty rather than a fabricated 'biz-default': a queued offline sale is
+  // filed under this id, and inventing one puts the sale in a tenant that does
+  // not exist (posService rejects the sale with a clear message instead).
+  const businessId = currentBusiness?.business?.id || '';
   const branchName = currentBusiness?.business?.name || 'Main Branch';
   const branchId = null;
 
   // Navigation / View state
   const [viewMode, setViewMode] = useState<'sales' | 'analytics' | 'history' | 'settings'>('sales');
 
-  // Network & Sync State
-  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
-  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(() => getOfflineQueue().length);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  // Network & sync state. Both the queue and the sync pass are the app-wide
+  // ones: the POS screen used to keep its own localStorage list and its own
+  // sync loop, which is why offline sales it queued never showed up in the
+  // header's offline drawer.
+  const isOnline = useOnlineStatus();
+  const { pendingCount: pendingOfflineCount, failedCount: failedOfflineCount } = useOfflineQueue();
+  const { isSyncing, syncNow } = useOfflineSync();
 
   // Shifts & Register
   const [activeRegister] = useState<PosRegister | null>({
@@ -97,32 +106,23 @@ export function PosPage() {
   const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
 
+  // VAT. The till used to total every sale at 0%, whatever the business's VAT
+  // status: a VAT-registered shop's POS sales therefore booked no output VAT
+  // (no 2121 line) while its Income-screen invoices did, so the two halves of
+  // the same month disagreed on the VAT return. Same rule as the other sale
+  // and expense screens — the standard rate when the business is registered,
+  // nothing otherwise.
+  //
+  // POS prices are VAT-inclusive, so `calculateCartTotals` extracts the tax
+  // from the price the customer pays rather than adding it on top.
+  const { business: businessData } = useBrandTheme();
+  const isVatRegistered = businessData?.vat_registered ?? false;
+  const posVatRatePercent = isVatRegistered ? VAT_STANDARD_RATE * 100 : 0;
+
   // Compute Cart Totals
   const cartTotals = useMemo(() => {
-    return calculateCartTotals(cartItems, orderDiscount, 0);
-  }, [cartItems, orderDiscount]);
-
-  const refreshOfflineCount = useCallback(() => {
-    const queue = getOfflineQueue();
-    setPendingOfflineCount(queue.length);
-  }, []);
-
-  // Online / Offline monitor
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      refreshOfflineCount();
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [refreshOfflineCount]);
+    return calculateCartTotals(cartItems, orderDiscount, posVatRatePercent);
+  }, [cartItems, orderDiscount, posVatRatePercent]);
 
   // Cart Management Handlers
   const handleAddToCart = useCallback((product: PosProduct) => {
@@ -255,7 +255,9 @@ export function PosPage() {
               created_at: inv.created_at || inv.issue_date,
               customer_name: (inv as { contact?: { name?: string } }).contact?.name || 'Walk-in',
               cashier_name: inv.created_by || 'Cashier',
-              gross_amount: Number(inv.subtotal) || 0,
+              // `subtotal` is stored net of discount (app-wide convention),
+              // so the pre-discount figure is subtotal + discount.
+              gross_amount: (Number(inv.subtotal) || 0) + (Number(inv.discount_amount) || 0),
               discount_amount: Number(inv.discount_amount) || 0,
               net_amount: Number(inv.total_amount) || 0,
               total_paid: Number(inv.amount_paid) || 0,
@@ -326,6 +328,11 @@ export function PosPage() {
         customerPhone: selectedCustomer?.phone || undefined,
         customerEmail: selectedCustomer?.email || undefined,
         items: cartItems,
+        // The totals the till just showed, VAT included: the queued/offline
+        // path stores the invoice from these numbers, so recomputing them
+        // later (at a different rate, or after a product price changed) would
+        // make the receipt disagree with the document.
+        totals: cartTotals,
         orderDiscount,
         payments: paymentData.payments,
         totalPaid: paymentData.totalPaid,
@@ -340,9 +347,9 @@ export function PosPage() {
       setIsPaymentModalOpen(false);
       setIsReceiptModalOpen(true);
 
-      // Reset cart and update history
+      // Reset cart and update history. The offline queue count is live
+      // (Dexie live query), so a queued sale raises it without a manual refresh.
       handleClearCart();
-      refreshOfflineCount();
 
       // Refresh sales history list
       if (result.sale) {
@@ -420,18 +427,19 @@ export function PosPage() {
     }
   };
 
-  // Sync Offline Queue
+  // Sync offline changes through the app-wide sync engine, so the POS screen
+  // and the offline drawer always report the same numbers.
   const handleSyncOfflineSales = async () => {
-    setIsSyncing(true);
-    try {
-      const syncedCount = await syncOfflineQueue();
-      refreshOfflineCount();
-      alert(`Successfully synced ${syncedCount} offline sale(s) to server.`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Offline sync failed: ${message}`);
-    } finally {
-      setIsSyncing(false);
+    const result = await syncNow();
+    if (!result) return; // a sync pass was already running
+
+    if (result.failed > 0) {
+      alert(
+        `Synced ${result.completed} of ${result.total} offline change(s). ` +
+          `${result.failed} still need attention — open the offline queue in the header for details.`,
+      );
+    } else if (result.completed > 0) {
+      alert(`Successfully synced ${result.completed} offline change(s) to the server.`);
     }
   };
 
@@ -478,6 +486,7 @@ export function PosPage() {
         branchName={branchName}
         isOnline={isOnline}
         pendingOfflineCount={pendingOfflineCount}
+        failedOfflineCount={failedOfflineCount}
         isSyncing={isSyncing}
         canViewOwnerDashboard={permissions.canViewOwnerDashboard}
         canManageRegisters={permissions.canManageRegisters}

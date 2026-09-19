@@ -1,23 +1,7 @@
 import { repos } from '@/lib/repositories';
-import { withRetry } from '@/lib/errorHandler';
+import { retryNonCritical } from '@/lib/nonCriticalRetry';
+import { usageService } from '@/lib/billing/UsageService';
 
-/**
- * Wraps a non-critical sync operation with retry logic.
- * If all retries fail, logs the error and returns null (doesn't throw).
- */
-async function retryNonCritical<T>(
-  operation: () => Promise<T>,
-  context: { operation: string; businessId?: string },
-): Promise<T | null> {
-  return withRetry(operation, {
-    module: 'SyncEngine',
-    operation: context.operation,
-    businessId: context.businessId,
-    maxAttempts: 2, // Quick retry for transient failures
-    initialDelay: 500,
-    backoffMultiplier: 2,
-  });
-}
 import {
   createInvoiceJournalEntry,
   createInvoiceReceivableEntry,
@@ -37,7 +21,9 @@ import {
   type QuickExpenseRpcPayload,
   type QuickSaleRpcPayload,
 } from '@/services/quickSaveService';
+import { commitPosSaleDocuments } from '@/services/posService';
 import { createLogger } from '@/lib/logger';
+import { recoverStaleSyncClaims } from './queueApi';
 import { offlineDB, type QueueItem } from './db';
 import type {
   IncomeQueuePayload,
@@ -47,6 +33,7 @@ import type {
   ExpensePaymentQueuePayload,
   PayrollRunQueuePayload,
   StockMovementQueuePayload,
+  PosSaleQueuePayload,
 } from './payloads';
 
 const log = createLogger('SyncEngine');
@@ -154,6 +141,10 @@ async function syncItem(item: QueueItem): Promise<string> {
           nextInvoice = { ...nextInvoice, contact_id: walkIn.id };
         }
       }
+      // Plan limit, checked before the document is written and skipped for a
+      // replay of a document already committed under this client key.
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey);
+
       const result = await repos.invoice.createWithLines(nextInvoice, lines, item.clientKey);
       await retryNonCritical(async () => {
         if (item.operationType === 'income') {
@@ -173,7 +164,7 @@ async function syncItem(item: QueueItem): Promise<string> {
             result.invoice.department_id,
           );
         }
-      }, { operation: 'invoice_journal_entry', businessId: item.businessId });
+      }, { module: 'SyncEngine', operation: 'invoice_journal_entry', businessId: item.businessId });
 
       // PERPETUAL INVENTORY: an offline sale still has to release stock and
       // its cost. Done here rather than at enqueue time because the average
@@ -193,7 +184,7 @@ async function syncItem(item: QueueItem): Promise<string> {
             null,
           );
         }
-      }, { operation: 'stock_cogs_posting', businessId: item.businessId });
+      }, { module: 'SyncEngine', operation: 'stock_cogs_posting', businessId: item.businessId });
 
       return result.invoice.id;
     }
@@ -258,6 +249,8 @@ async function syncItem(item: QueueItem): Promise<string> {
         const realNumber = await repos.business.reserveNextExpenseNumber(item.businessId);
         nextExpense = { ...nextExpense, expense_number: realNumber };
       }
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey, 'expense');
+
       const result = await repos.expense.createWithLines(nextExpense, lines, item.clientKey);
 
       // PERPETUAL INVENTORY: the queued line carries whatever account the
@@ -283,7 +276,7 @@ async function syncItem(item: QueueItem): Promise<string> {
             line.account_id = resolved;
           }
         }
-      }, { operation: 'inventory_account_resolution', businessId: item.businessId });
+      }, { module: 'SyncEngine', operation: 'inventory_account_resolution', businessId: item.businessId });
 
       await retryNonCritical(async () => {
         const allocations = result.lines.map((l) => ({
@@ -303,7 +296,7 @@ async function syncItem(item: QueueItem): Promise<string> {
             result.expense.department_id,
           );
         }
-      }, { operation: 'expense_journal_entry', businessId: item.businessId });
+      }, { module: 'SyncEngine', operation: 'expense_journal_entry', businessId: item.businessId });
       return result.expense.id;
     }
 
@@ -319,7 +312,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           result.invoice.branch_id,
           result.invoice.department_id,
         );
-      }, { operation: 'invoice_payment_settlement', businessId: item.businessId });
+      }, { module: 'SyncEngine', operation: 'invoice_payment_settlement', businessId: item.businessId });
       return result.payment.id;
     }
 
@@ -335,7 +328,7 @@ async function syncItem(item: QueueItem): Promise<string> {
           result.expense.branch_id,
           result.expense.department_id,
         );
-      }, { operation: 'expense_payment_settlement', businessId: item.businessId });
+      }, { module: 'SyncEngine', operation: 'expense_payment_settlement', businessId: item.businessId });
       return result.payment.id;
     }
 
@@ -345,8 +338,37 @@ async function syncItem(item: QueueItem): Promise<string> {
         ...l,
         business_id: item.businessId,
       }));
+      await usageService.assertCanCreateDocument(item.businessId, item.clientKey, 'payroll');
+
       const result = await repos.payroll.createWithLines(run, linesWithBusiness, item.clientKey);
       return result.id;
+    }
+
+    case 'pos_sale': {
+      // A whole till sale, replayed exactly as the online till would have
+      // written it: invoice + lines, payment rows, stock with COGS, journal,
+      // shift totals and audit. The payload was built before the till lost
+      // connectivity, so the document carries its real totals, discounts and
+      // payment split — only the ids and document number come from the server.
+      const posPayload = item.payload as PosSaleQueuePayload;
+      const committed = await commitPosSaleDocuments(posPayload, {
+        businessId: item.businessId,
+        clientKey: item.clientKey,
+      });
+      if (committed.warnings.length > 0) {
+        // The sale is in the books, but a derived step (stock, COGS, journal,
+        // drawer totals) did not post. Store the warning with the item so the
+        // offline drawer can show it: a synced item that quietly lost its
+        // stock movement is exactly the kind of gap nobody finds later.
+        log.warn(`POS sale ${posPayload.receiptNumber} synced with warnings`, {
+          warnings: committed.warnings,
+          businessId: item.businessId,
+        });
+        await offlineDB.queue.update(item.localId!, {
+          lastError: committed.warnings.join(' '),
+        });
+      }
+      return committed.invoice.id;
     }
 
     case 'stock_movement': {
@@ -363,6 +385,17 @@ async function syncItem(item: QueueItem): Promise<string> {
 }
 
 export async function syncQueue(onProgress?: SyncProgressListener): Promise<SyncProgress> {
+  // Recover anything a previous session abandoned mid-write (app closed,
+  // tab killed, crash): those items are stuck in `syncing` and would never be
+  // selected below, so a queued sale could sit on the device forever with
+  // nothing on screen saying so.
+  const recovered = await recoverStaleSyncClaims();
+  if (recovered > 0) {
+    log.warn(`${recovered} queue item(s) were left mid-sync by a previous session — retrying them`, {
+      recovered,
+    });
+  }
+
   const items = await offlineDB.queue
     .where('status')
     .anyOf('pending', 'failed')

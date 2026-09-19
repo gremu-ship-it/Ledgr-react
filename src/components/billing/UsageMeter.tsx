@@ -26,7 +26,7 @@ export function UsageMeter() {
           {plan.name} Plan — {usage.currentMonth} / {usage.limit} transactions
         </div>
         <div className={`text-xs font-semibold px-2 py-0.5 rounded ${isOverLimit ? 'bg-red-600 text-white' : isNearLimit ? 'bg-amber-600 text-white' : 'bg-gray-200 text-gray-700'}`}>
-          {usage.percentUsed}%
+          {Math.round(usage.percentUsed)}%
         </div>
       </div>
 

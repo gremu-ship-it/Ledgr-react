@@ -36,6 +36,12 @@ afterAll(() => {
   window.localStorage.clear();
 });
 
+/** The plan limit, narrowed for the arithmetic assertions below. */
+function limitOf(stats: { limit: number | null }): number {
+  if (stats.limit === null) throw new Error('the demo plan must have a transaction limit');
+  return stats.limit;
+}
+
 describe('demo plan access', () => {
   it('unlocks every gated module', () => {
     for (const capability of GATED_CAPABILITIES) {
@@ -49,12 +55,19 @@ describe('demo plan access', () => {
     // The head that matters: a prospect must be able to create records.
     expect(stats.canCreate, `usage ${stats.currentMonth}/${String(stats.limit)} blocks creation`).toBe(true);
 
-    // ...and the count behind it must be real. getCurrentMonthUsage issues a
-    // count-only head request ({ count: 'exact', head: true }); if the demo
-    // query builder ignored those options it would report 0 and the usage
-    // meter would sit empty next to books full of transactions.
+    // ...and the count behind it must be real. The count issues count-only
+    // head requests ({ count: 'exact', head: true }) against the document
+    // tables; if the demo query builder ignored those options it would report
+    // 0 and the usage meter would sit empty next to books full of
+    // transactions. A transaction is one document (invoice / expense / payroll
+    // run), so the demo month shows the seeded documents and leaves room under
+    // the plan.
     expect(stats.currentMonth, 'count-only query returned nothing').toBeGreaterThan(0);
     expect(stats.limit).not.toBeNull();
+    expect(stats.currentMonth).toBeLessThan(limitOf(stats));
+    expect(stats.remaining).toBe(limitOf(stats) - stats.currentMonth);
+    // The meter must not read as untouched in a month that has documents —
+    // this is the assertion that catches a count that silently reports 0.
     expect(stats.percentUsed).toBeGreaterThan(0);
     expect(stats.percentUsed).toBeLessThan(100);
   });

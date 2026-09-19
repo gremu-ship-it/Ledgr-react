@@ -240,8 +240,15 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
     return { payment: paymentData, invoice: updatedInvoice };
   }
 
-  /** Idempotency lookup: find an invoice previously created under a client_key. */
-  private async findByClientKey(businessId: string, clientKey: string): Promise<Row<'invoices'> | null> {
+  /**
+   * Idempotency lookup: find an invoice previously created under a client_key.
+   *
+   * Public because callers that retry a whole save need to ask whether their
+   * document is already committed before doing anything a second time — e.g.
+   * the plan-limit guard lets a replay through (see
+   * `UsageService.assertCanCreateDocument`).
+   */
+  async findByClientKey(businessId: string, clientKey: string): Promise<Row<'invoices'> | null> {
     const { data, error } = await this.client
       .from('invoices')
       .select('*')

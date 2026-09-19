@@ -63,6 +63,7 @@ import { repos } from '@/lib/repositories';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import { toRepositoryError } from '@/dal/errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
+import { postKeyedEntry } from '@/services/journalService';
 
 const log = createLogger('InventoryJournalService');
 import type { Row } from '@/dal/types/database';
@@ -410,7 +411,7 @@ export async function postCogsForSale(
       ));
     }
 
-    const { entry } = await repos.journal.createBalancedEntry(
+    const entry = await postKeyedEntry(
       {
         business_id: businessId,
         entry_number: inventoryEntryNumber('COGS'),
@@ -418,6 +419,7 @@ export async function postCogsForSale(
         description: `Cost of goods sold — Invoice ${invoice.invoice_number}`,
         source_type: 'inventory_cogs',
         source_id: invoice.id,
+        posting_key: `invoice:${invoice.id}:cogs`,
         currency,
         exchange_rate: 1,
         status: 'draft',
@@ -427,7 +429,6 @@ export async function postCogsForSale(
       lines,
     );
 
-    await repos.journal.post(entry.id, null);
     return entry.id;
   } catch (err) {
     log.error(
@@ -515,6 +516,11 @@ export async function deductStockAndPostCogs(
         source_id: invoice.id,
         reference: invoice.invoice_number,
         created_by: createdBy,
+        // Deterministic key: `recordMovements` skips keys it has already
+        // recorded, so a replayed sale (queue retry, lost response) cannot
+        // deduct the same stock twice. Indexed by position in the sale's line
+        // list, which the payload fixes, so a replay rebuilds identical keys.
+        client_key: `${invoice.id}:mv:${i}`,
       });
     }
 

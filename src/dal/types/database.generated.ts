@@ -3441,6 +3441,7 @@ export type Database = {
           exchange_rate: number
           id: string
           period_id: string | null
+          posting_key: string | null
           posted_at: string | null
           posted_by: string | null
           reference: string | null
@@ -3463,6 +3464,7 @@ export type Database = {
           exchange_rate: number
           id?: string
           period_id?: string | null
+          posting_key?: string | null
           posted_at?: string | null
           posted_by?: string | null
           reference?: string | null
@@ -3485,6 +3487,7 @@ export type Database = {
           exchange_rate?: number
           id?: string
           period_id?: string | null
+          posting_key?: string | null
           posted_at?: string | null
           posted_by?: string | null
           reference?: string | null

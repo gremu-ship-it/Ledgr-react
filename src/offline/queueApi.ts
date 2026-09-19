@@ -71,6 +71,13 @@ async function nextSequence(): Promise<number> {
 export interface EnqueueOptions {
   /** localId of a parent queue item this operation depends on. */
   dependsOnLocalId?: number;
+  /**
+   * When the user actually performed the action, for items recovered from an
+   * older store that recorded its own timestamp. Defaults to now — a queued
+   * item should otherwise carry the moment it was queued, not the moment it
+   * happened to be imported.
+   */
+  createdAt?: string;
   /** Field in the payload to rewrite with the parent's server id once resolved. */
   dependentFkField?: string;
   /** Client-side modification timestamp, for last-write-wins on tables with updated_at. */
@@ -118,7 +125,7 @@ export async function enqueue<T extends QueueOperationType>(
     dependsOnLocalId: options?.dependsOnLocalId,
     dependentFkField: options?.dependentFkField,
     localUpdatedAt: options?.localUpdatedAt,
-    createdAt: new Date().toISOString(),
+    createdAt: options?.createdAt ?? new Date().toISOString(),
     attemptCount: 0,
     // Idempotency key: a stable, unique value so a retried sync can recognise
     // an already-committed record instead of inserting a duplicate.
@@ -148,9 +155,61 @@ export async function getPendingItems(): Promise<QueueItem[]> {
   return items;
 }
 
-/** Count of items not yet successfully synced. */
+/**
+ * How long an item may sit in `syncing` before its claim is treated as dead.
+ *
+ * `syncQueue` marks an item `syncing` while it writes, and clears it on the
+ * way out. If the tab is closed, reloaded or crashes in that window the item
+ * stays `syncing` forever — invisible to the queue (which only selects
+ * `pending`/`failed`), missing from the "waiting" count, and not retryable
+ * from the drawer. That is the one failure mode where a sale can be lost
+ * without anything on screen saying so. A commit takes seconds, so anything
+ * still claimed two minutes later is abandoned, not in flight.
+ */
+export const STALE_SYNC_CLAIM_MS = 2 * 60 * 1000;
+
+/** True when a `syncing` item has outlived its claim and should be retried. */
+export function isStaleSyncClaim(item: QueueItem, now = Date.now()): boolean {
+  if (item.status !== 'syncing') return false;
+  const claimedAt = item.lastAttemptAt ? Date.parse(item.lastAttemptAt) : Number.NaN;
+  if (Number.isNaN(claimedAt)) return true; // no timestamp: cannot still be in flight
+  return now - claimedAt > STALE_SYNC_CLAIM_MS;
+}
+
+/**
+ * Return abandoned `syncing` items to the queue so the next pass (or the
+ * user's Retry) picks them up again. Returns how many were recovered.
+ *
+ * Safe to call often: a claim younger than the lease is left alone, so a pass
+ * running in another tab is never interrupted.
+ */
+export async function recoverStaleSyncClaims(now = Date.now()): Promise<number> {
+  const claimed = await offlineDB.queue.where('status').equals('syncing').toArray();
+  const stale = claimed.filter((item) => isStaleSyncClaim(item, now));
+  if (stale.length === 0) return 0;
+
+  // Only the status is rewritten. `lastError` is deliberately left alone: the
+  // drawer reads it as "synced, but a follow-up step did not post", and a
+  // recovered item that then syncs cleanly must not inherit that banner.
+  await Promise.all(
+    stale.map((item) => offlineDB.queue.update(item.localId!, { status: 'pending' })),
+  );
+  return stale.length;
+}
+
+/**
+ * Count of items not yet successfully synced.
+ *
+ * Abandoned `syncing` items count too: they are not on the server, and a
+ * count that hides them lets the till believe an offline sale made it.
+ */
 export async function getPendingCount(): Promise<number> {
-  return offlineDB.queue.where('status').anyOf('pending', 'failed').count();
+  const [unfinished, claimed] = await Promise.all([
+    offlineDB.queue.where('status').anyOf('pending', 'failed').count(),
+    offlineDB.queue.where('status').equals('syncing').toArray(),
+  ]);
+  const now = Date.now();
+  return unfinished + claimed.filter((item) => isStaleSyncClaim(item, now)).length;
 }
 
 /** Remove a queue item entirely (used after successful sync, or manual discard). */
