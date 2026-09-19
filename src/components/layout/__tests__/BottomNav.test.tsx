@@ -130,6 +130,27 @@ describe('mobile bottom navigation', () => {
     expect(paths).not.toContain('/settings');
   });
 
+  it('offers a cashier the till-safe quick actions only', () => {
+    state.role = 'cashier';
+    renderNav();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.openAddMenu' }));
+
+    // Income is on the cashier's route list; expenses (closed to cashiers at
+    // the database level by 20260922000000_pos_role_write_scope) and stock
+    // movements are not.
+    expect(screen.getByText('New invoice')).toBeTruthy();
+    expect(screen.getByText('common.recordIncome')).toBeTruthy();
+    expect(screen.queryByText('common.recordExpense')).toBeNull();
+    expect(screen.queryByText('Stock movement')).toBeNull();
+  });
+
+  it('hides the quick-entry button entirely for a read-only role', () => {
+    state.role = 'viewer';
+    renderNav();
+    expect(screen.queryByRole('button', { name: 'common.openAddMenu' })).toBeNull();
+  });
+
   it('falls back to the unfiltered list before the role has loaded', () => {
     state.hasBusiness = false;
     renderNav();

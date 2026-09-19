@@ -34,7 +34,7 @@ import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
 import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
-import { getHomePathForRole, isPathAllowedForRole } from '@/hooks/usePermissions';
+import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
 import { pushUpgradeRequired } from '@/lib/notifications';
@@ -105,6 +105,7 @@ export function BottomNav() {
   const { planTier } = useUsage();
 
   const { isFeatureEnabled } = usePartner();
+  const { canWrite } = usePermissions();
   const role = currentBusiness?.role || null;
 
   // Role filtering mirrors the desktop sidebar (navConfig.visibleSectionsFor):
@@ -124,6 +125,23 @@ export function BottomNav() {
   const moreItems = ALL_MORE_MENU_ITEMS.filter(
     (i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature),
   ).filter((i) => allowedForRole(i.path));
+
+  // The FAB writes, so an action needs both gates:
+  //   canWrite             — a viewer or auditor may open /income and /expenses
+  //                          but must not write; usePermissions mirrors the DB
+  //                          write tier, so this also stops the FAB offering an
+  //                          action the database would reject.
+  //   route allowed        — the screen the action writes through. Keeps
+  //                          "Record expense" away from a cashier and "New
+  //                          invoice" away from a stock clerk, matching
+  //                          20260922000000_pos_role_write_scope.sql. A role
+  //                          with no action left gets no FAB at all.
+  const canQuickAdd = (path: string) => canWrite && allowedForRole(path);
+  const canCreateInvoice = canQuickAdd('/income');
+  const canRecordIncome = canQuickAdd('/income');
+  const canRecordExpense = canQuickAdd('/expenses');
+  const canRecordStock = canQuickAdd('/warehouse');
+  const hasFabActions = canCreateInvoice || canRecordIncome || canRecordExpense || canRecordStock;
 
   // Dynamic balanced split for FAB centering
   const { leftItems, rightItems } = useMemo(() => {
@@ -225,6 +243,7 @@ export function BottomNav() {
       {fabOpen && (
         <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 lg:hidden">
           <div className="flex flex-col items-center gap-3">
+            {canCreateInvoice && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -236,6 +255,8 @@ export function BottomNav() {
               <IconBadge icon={FileText} tone="info" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">New invoice</span>
             </button>
+            )}
+            {canRecordStock && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -247,6 +268,8 @@ export function BottomNav() {
               <IconBadge icon={Package} tone="brand" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">Stock movement</span>
             </button>
+            )}
+            {canRecordIncome && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -258,6 +281,8 @@ export function BottomNav() {
               <IconBadge icon={Wallet} tone="brand" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">{t('common.recordIncome')}</span>
             </button>
+            )}
+            {canRecordExpense && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -269,6 +294,7 @@ export function BottomNav() {
               <IconBadge icon={Receipt} tone="negative" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">{t('common.recordExpense')}</span>
             </button>
+            )}
           </div>
         </div>
       )}
@@ -281,6 +307,7 @@ export function BottomNav() {
           ))}
 
           {/* FAB center button */}
+          {hasFabActions && (
           <button
             type="button"
             onClick={() => {
@@ -299,6 +326,7 @@ export function BottomNav() {
           >
             <Plus className="h-7 w-7 text-white" aria-hidden="true" />
           </button>
+          )}
 
           {rightItems.map((item) => (
             <NavTab key={item.path} {...item} />

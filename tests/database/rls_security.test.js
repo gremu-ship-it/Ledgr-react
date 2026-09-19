@@ -67,6 +67,9 @@ async function main() {
     au: '10000000-0000-0000-0000-000000000003',
     bo: '20000000-0000-0000-0000-000000000001',
     bu: '20000000-0000-0000-0000-000000000002',
+    // POS roles (8B.4) — cashier and stock clerk in ORG-A
+    ac: '10000000-0000-0000-0000-0000000000c1',
+    as: '10000000-0000-0000-0000-0000000000c2',
   };
 
   // asUser(uid) runs a query with SET ROLE authenticated + jwt claims.
@@ -110,23 +113,25 @@ async function main() {
 
   try {
     // ── setup: ORG-A (owner ao, admin am, accountant au), ORG-B (owner bo, viewer bu)
-    for (const [uid, email] of [[U.ao, 'a-owner@x.com'], [U.am, 'a-mgr@x.com'], [U.au, 'a-user@x.com'], [U.bo, 'b-owner@x.com'], [U.bu, 'b-user@x.com']]) {
+    for (const [uid, email] of [[U.ao, 'a-owner@x.com'], [U.am, 'a-mgr@x.com'], [U.au, 'a-user@x.com'], [U.bo, 'b-owner@x.com'], [U.bu, 'b-user@x.com'], [U.ac, 'a-cashier@x.com'], [U.as, 'a-stock@x.com']]) {
       await q(`insert into auth.users (id, email, raw_user_meta_data) values ($1,$2,'{"full_name":"X"}') on conflict (id) do nothing`, [uid, email]);
     }
     const A = await (await asUser(U.ao))(`select public.create_business_with_owner('Org A Co','Org A',null,null,null,false,'MWK','07-01','UTC',null,null,'Malawi',null,null,null,'INV','EXP','PAY') as id`);
     const B = await (await asUser(U.bo))(`select public.create_business_with_owner('Org B Co','Org B',null,null,null,false,'MWK','07-01','UTC',null,null,'Malawi',null,null,null,'INV','EXP','PAY') as id`);
     const BIZ_A = A.rows[0].id, BIZ_B = B.rows[0].id;
     // invites + accepts (each org's owner invites; member accepts)
-    for (const [owner, uid, email, role, biz] of [[U.ao, U.am, 'a-mgr@x.com', 'admin', BIZ_A], [U.ao, U.au, 'a-user@x.com', 'accountant', BIZ_A], [U.bo, U.bu, 'b-user@x.com', 'viewer', BIZ_B]]) {
+    for (const [owner, uid, email, role, biz] of [[U.ao, U.am, 'a-mgr@x.com', 'admin', BIZ_A], [U.ao, U.au, 'a-user@x.com', 'accountant', BIZ_A], [U.bo, U.bu, 'b-user@x.com', 'viewer', BIZ_B], [U.ao, U.ac, 'a-cashier@x.com', 'cashier', BIZ_A], [U.ao, U.as, 'a-stock@x.com', 'stock_clerk', BIZ_A]]) {
       const tok = await (await asUser(owner))(`select public.invite_member($1, $2, $3) as t`, [biz, email, role]);
       await (await asUser(uid))(`select public.accept_invitation($1)`, [tok.rows[0].t]);
     }
-    ok(`orgs: A=${BIZ_A} B=${BIZ_B}; memberships: A(owner/admin/accountant) B(owner/viewer)`);
+    ok(`orgs: A=${BIZ_A} B=${BIZ_B}; memberships: A(owner/admin/accountant/cashier/stock_clerk) B(owner/viewer)`);
 
     // seed tenant data (superuser = service_role equivalent)
     await q(`insert into public.contacts (business_id, name, contact_type, is_active, wht_exempt) values ($1,'A-Customer','customer',true,false), ($2,'B-Customer','customer',true,false)`, [BIZ_A, BIZ_B]);
     await q(`insert into public.products (business_id, name, sku, product_type, track_inventory, is_active, purchase_price, sale_price, reorder_level, reorder_quantity, purchase_tax_code, sales_tax_code, currency)
       values ($1,'A-Product','A-SKU','product',true,true,10,20,5,10,'none','none','MWK'), ($2,'B-Product','B-SKU','product',true,true,10,20,5,10,'none','none','MWK')`, [BIZ_A, BIZ_B]);
+    // Stock movements require a location; the 8B.4 stock-clerk probe needs one.
+    await q(`insert into public.inventory_locations (business_id, name, is_default) values ($1,'A-Main',true)`, [BIZ_A]);
     const accA = (await q(`select id, code from public.accounts where business_id=$1 and code in ('1110','4112')`, [BIZ_A])).rows;
     const je = await q(`insert into public.journal_entries (business_id, entry_date, entry_number, description, currency, exchange_rate, status)
       values ($1,'2026-07-01','A-JE-1','A entry','MWK',1,'posted') returning id`, [BIZ_A]);
@@ -169,7 +174,7 @@ async function main() {
 
     // ── 4. business_users / user_profiles ───────────────────────────────────
     await expectCount('A-user reads own memberships', au, `select count(*)::int n from public.business_users where user_id=$1 and is_active=true`, [U.au], 1);
-    await expectCount('A-user reads A team list', au, `select count(*)::int n from public.business_users where business_id=$1`, [BIZ_A], 3);
+    await expectCount('A-user reads A team list', au, `select count(*)::int n from public.business_users where business_id=$1`, [BIZ_A], 5);
     await expectDenied('A-user reads B team list', au, `select count(*)::int n from public.business_users where business_id=$1`, [BIZ_B]);
     await expectCount('A-user reads own profile', au, `select count(*)::int n from public.user_profiles where id=$1`, [U.au], 1);
     await expectCount('A-user reads A-members profiles', au, `select count(*)::int n from public.user_profiles where id in ($1,$2,$3)`, [U.ao, U.am, U.au], 3);
@@ -193,6 +198,32 @@ async function main() {
 
     // ── 7. RPC boundary: non-member cannot use audit RPC on B ───────────────
     await expectDenied('A-user log_manual_audit_event on B (RPC check)', au, `select public.log_manual_audit_event($1,'x','x','x')`, [BIZ_B]);
+
+    // ── 8B.4 POS role write scope (20260922000000_pos_role_write_scope) ─────
+    // The POS roles share the canWrite tier with the bookkeeping roles, which
+    // is right for the till path and too loose for the modules they have no
+    // duty in. These assertions pin both halves of that boundary: the scoped
+    // tiers must deny cashier→expenses and stock_clerk→invoices, and must NOT
+    // deny anything the till itself writes.
+    const ac = await asUser(U.ac); // A cashier
+    const as2 = await asUser(U.as); // A stock clerk
+
+    const expLedgerProbe = `with ins as (insert into public.expenses (business_id, currency, exchange_rate, expense_date, expense_number, expense_type, amount_paid, subtotal, discount_amount, discount_percent, total_amount, vat_amount, wht_amount, status, notes, created_by) values ($1,'MWK',1,'2026-09-19','EXP-PROBE','operating',100,100,0,0,100,0,0,'approved','probe','probe') returning id) select count(*)::int n from ins`;
+    const invProbe = `with ins as (insert into public.invoices (business_id, contact_id, currency, exchange_rate, invoice_number, invoice_type, issue_date, due_date, subtotal, taxable_amount, discount_amount, discount_percent, vat_amount, wht_amount, total_amount, amount_paid, status, created_by) values ($1,(select id from public.contacts where business_id=$1 limit 1),'MWK',1,'INV-PROBE','sales','2026-09-19','2026-10-19',100,100,0,0,0,0,100,0,'paid','probe') returning id) select count(*)::int n from ins`;
+
+    await expectDenied('cashier INSERT expense (no expense duty)', ac, expLedgerProbe, [BIZ_A]);
+    await expectDenied('stock_clerk INSERT expense (no expense duty)', as2, expLedgerProbe, [BIZ_A]);
+    await expectDenied('stock_clerk INSERT invoice (no sales duty)', as2, invProbe, [BIZ_A]);
+
+    // The till path must keep working: sale, tender, ledger and stock movement.
+    await expectCount('cashier INSERT invoice (till checkout)', ac, invProbe, [BIZ_A], 1);
+    await expectCount('cashier INSERT journal entry (posService posts the sale journal)', ac, `with ins as (insert into public.journal_entries (business_id, currency, exchange_rate, entry_date, entry_number, description, status) values ($1,'MWK',1,'2026-09-19','A-JE-POS','pos sale','posted') returning id) select count(*)::int n from ins`, [BIZ_A], 1);
+    await expectCount('cashier INSERT invoice payment (till takes money)', ac, `with ins as (insert into public.invoice_payments (business_id, invoice_id, amount, currency, exchange_rate, payment_date, payment_method, created_by) select $1, id, 1, 'MWK', 1, '2026-09-19', 'cash', 'probe' from public.invoices where business_id=$1 and invoice_number='INV-PROBE' returning id) select count(*)::int n from ins`, [BIZ_A], 1);
+    await expectCount('stock_clerk INSERT stock movement (their job)', as2, `with ins as (insert into public.stock_movements (business_id, location_id, product_id, movement_type, quantity, unit_cost, movement_date, reference, created_by) select $1, (select id from public.inventory_locations where business_id=$1 limit 1), id, 'adjustment_in', 1, 5, '2026-09-19', 'probe', 'probe' from public.products where business_id=$1 limit 1 returning id) select count(*)::int n from ins`, [BIZ_A], 1);
+
+    // Scoped tiers must not narrow the bookkeeping roles.
+    await expectCount('accountant INSERT expense (unchanged)', au, expLedgerProbe, [BIZ_A], 1);
+    await expectCount('accountant INSERT invoice (unchanged)', au, invProbe, [BIZ_A], 1);
 
     console.log(`\n8B.3 RLS SECURITY TESTS COMPLETE: ${pass} passed, ${failN} failed`);
   } catch (e) {
