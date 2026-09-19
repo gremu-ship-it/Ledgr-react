@@ -18,6 +18,9 @@ import {
   Settings,
   Lock,
   LogOut,
+  ShoppingBag,
+  Warehouse,
+  ArrowLeftRight,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -31,6 +34,7 @@ import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
 import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
+import { getHomePathForRole, isPathAllowedForRole } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
 import { pushUpgradeRequired } from '@/lib/notifications';
@@ -41,6 +45,24 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.sections.inventory', path: '/products', icon: Package },
   { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
 ];
+
+/**
+ * Prepended for roles whose home is the till (cashier, POS manager) so the
+ * primary workspace is one tap away — previously the mobile bar had no POS
+ * entry at all and till staff had to open the drawer to get back to /pos.
+ */
+const POS_NAV_ITEM = {
+  labelKey: 'navigation.items.pos',
+  path: '/pos',
+  icon: ShoppingBag,
+};
+
+/**
+ * Four primary tabs plus the FAB and the More button is what fits the
+ * 64px bar at 360px wide (each tab is min-w-48px). Cap the list so adding
+ * POS for till roles cannot overflow small phones.
+ */
+const MAX_PRIMARY_TABS = 4;
 
 const ALL_MORE_MENU_ITEMS: {
   labelKey: string;
@@ -56,6 +78,8 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
   { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, tone: 'info' },
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
+  { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, tone: 'brand', partnerFeature: 'inventory' },
+  { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
   { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
   { labelKey: 'navigation.items.tools', path: '/tools', icon: BarChart2, tone: 'brand' },
@@ -81,12 +105,25 @@ export function BottomNav() {
   const { planTier } = useUsage();
 
   const { isFeatureEnabled } = usePartner();
-  const bottomItems = BOTTOM_NAV_ITEMS.filter(
-    (i) => i.path !== '/products' || isFeatureEnabled('inventory'),
-  );
+  const role = currentBusiness?.role || null;
+
+  // Role filtering mirrors the desktop sidebar (navConfig.visibleSectionsFor):
+  // hide what the role cannot open, instead of rendering a tab that RoleRoute
+  // would immediately bounce back to the role's home page. When the role is
+  // not yet known we keep the (plan-filtered) default list.
+  const allowedForRole = (path: string) => !role || isPathAllowedForRole(role, path);
+
+  // Till-centric roles get the POS tab first — it is their home route.
+  const homeIsPos = Boolean(role) && getHomePathForRole(role) === '/pos';
+  const primaryItems = homeIsPos ? [POS_NAV_ITEM, ...BOTTOM_NAV_ITEMS] : BOTTOM_NAV_ITEMS;
+
+  const bottomItems = primaryItems
+    .filter((i) => i.path !== '/products' || isFeatureEnabled('inventory'))
+    .filter((i) => allowedForRole(i.path))
+    .slice(0, MAX_PRIMARY_TABS);
   const moreItems = ALL_MORE_MENU_ITEMS.filter(
     (i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature),
-  );
+  ).filter((i) => allowedForRole(i.path));
 
   // Dynamic balanced split for FAB centering
   const { leftItems, rightItems } = useMemo(() => {
