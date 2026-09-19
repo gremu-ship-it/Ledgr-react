@@ -64,6 +64,7 @@ import { fetchAllRows } from '@/lib/paginateQuery';
 import { toRepositoryError } from '@/dal/errors/RepositoryError';
 import { createLogger } from '@/lib/logger';
 import { postKeyedEntry } from '@/services/journalService';
+import { deriveClientKey } from '@/lib/clientKeys';
 
 const log = createLogger('InventoryJournalService');
 import type { Row } from '@/dal/types/database';
@@ -520,7 +521,11 @@ export async function deductStockAndPostCogs(
         // recorded, so a replayed sale (queue retry, lost response) cannot
         // deduct the same stock twice. Indexed by position in the sale's line
         // list, which the payload fixes, so a replay rebuilds identical keys.
-        client_key: `${invoice.id}:mv:${i}`,
+        //
+        // Derived rather than spelled `<invoiceId>:mv:<i>`: `client_key` is a
+        // uuid column, and Postgres rejects a compound string (22P02), which
+        // would have stopped the whole batch from being inserted.
+        client_key: deriveClientKey(invoice.id, i),
       });
     }
 

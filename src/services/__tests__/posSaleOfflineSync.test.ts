@@ -10,6 +10,7 @@ import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { usageService } from '@/lib/billing/UsageService';
+import { deriveClientKey } from '@/lib/clientKeys';
 import type { PosCartItem } from '@/types/pos';
 
 /**
@@ -222,11 +223,17 @@ describe('commitPosSaleDocuments', () => {
     });
     expect(clientKey).toBe('queue-client-key-1');
 
-    // Each payment leg gets its own deterministic key: a retry returns the
-    // existing row instead of taking the money twice.
+    // Each payment leg gets its own deterministic key, derived from the queue
+    // item's key: a retry returns the existing row instead of taking the money
+    // twice. Derived, not spelled `<key>:pmt:<n>` — `client_key` is a uuid
+    // column and Postgres rejects a compound string, which would leave the
+    // payment unrecorded on a live server (the repositories are mocked here).
     expect(pay).toHaveBeenCalledTimes(2);
-    expect(pay.mock.calls[0][1]).toBe('queue-client-key-1:pmt:0');
-    expect(pay.mock.calls[1][1]).toBe('queue-client-key-1:pmt:1');
+    expect(pay.mock.calls[0][1]).toBe(deriveClientKey('queue-client-key-1', 0));
+    expect(pay.mock.calls[1][1]).toBe(deriveClientKey('queue-client-key-1', 1));
+    for (const [, key] of pay.mock.calls) {
+      expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    }
     expect(pay.mock.calls[0][0]).toMatchObject({
       invoice_id: 'inv-synced-1',
       business_id: 'biz-remote-01',

@@ -24,6 +24,7 @@ import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { usageService } from '@/lib/billing/UsageService';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { newSaveClientKey } from '@/services/quickSaveService';
+import { deriveClientKey } from '@/lib/clientKeys';
 
 const log = createLogger('PosService');
 
@@ -684,7 +685,11 @@ export async function commitPosSaleDocuments(
           business_id: businessId,
           invoice_id: createdInvoice.id,
         } as InsertDto<'invoice_payments'>,
-        `${clientKey}:pmt:${index}`,
+        // Sub-key of the queue item's key. It has to be a real uuid:
+        // `invoice_payments.client_key` is a uuid column, so the readable
+        // spelling `<key>:pmt:<n>` would be rejected by Postgres (22P02) and
+        // the payment would never be recorded. See src/lib/clientKeys.ts.
+        deriveClientKey(clientKey, index),
       );
       settledPayments.push(recorded);
     } catch (err) {

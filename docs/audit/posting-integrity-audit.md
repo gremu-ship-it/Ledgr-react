@@ -21,6 +21,7 @@ journal posting functions, `UsageService`, `PosPage` and two migrations.
 | F3 | A replayed sale could post the ledger and the stock release twice | High | Guarded (baseline) |
 | F4 | A sale abandoned mid-sync stayed invisible on the device forever | Medium | Fixed |
 | F5 | POS sales history read `subtotal` as gross after the header fix | Low | Fixed |
+| F6 | Derived idempotency keys cannot be stored in the uuid `client_key` columns | High | Fixed (derived uuids) |
 | O1 | The retry helper wraps non-idempotent ledger writers | High | Fixed (keyed postings) |
 | O2 | Tender type never reaches the ledger (cash / mobile money / card) | Medium | Fixed (tender routing) |
 | O3 | Usage-limit guard counts journal entries and runs after the document write | Medium | Fixed (document count, pre-write) |
@@ -153,6 +154,52 @@ gross − discount = net still reads correctly.
 
 ## Fixed in the follow-up change
 
+### F6 — Derived idempotency keys could not be stored (High)
+
+Found while verifying O1, by asking what actually happens to these keys at the
+database rather than at the mock.
+
+A sale needs more than one idempotency key: the invoice has its `client_key`,
+and so does each payment row and each stock movement, because a replay can be
+interrupted between them. The keys were spelled out of the parent — 
+
+```ts
+`${clientKey}:pmt:${index}`     // a tender leg
+`${invoice.id}:mv:${i}`         // a sale line's stock movement
+```
+
+— which is readable and deterministic, and cannot be stored. `client_key` is a
+**uuid** column (`20260813000003_add_client_key_idempotency.sql`, and the
+captured schemas agree: `stock_movements.client_key`, `invoice_payments.client_key`
+are `uuid`), and PostgreSQL has no implicit text→uuid cast. PostgREST binds the
+JSON body value as an untyped literal and the *column type* decides, so the
+insert fails with 22P02 (`invalid input syntax for type uuid`). A uuid whose
+text form contains `:pmt:` does not exist, so no amount of SQL-side casting
+helps — the value itself has to be a uuid.
+
+The two consequences, both silent to the test suite because the repositories
+are mocked:
+
+* **Payments.** The tender row is never inserted, so `recordPayment` throws and
+  `commitPosSaleDocuments` raises `PosSalePostCommitError`: the sale is saved,
+  the cash it took is not, and the cashier gets a warning to fix up later.
+* **Stock.** `recordMovements` throws, `deductStockAndPostCogs` rethrows, and
+  the sale's stock release and COGS entry are skipped — with a warning, but
+  with inventory and cost of sales wrong until someone reconciles.
+
+Fix: `src/lib/clientKeys.ts` — `deriveClientKey(parentKey, ordinal)` returns a
+real, valid uuid, stable for the same inputs and different for every ordinal
+(the ordinal occupies the last 12 hex digits, so sub-keys of one document can
+never collide; the first 72 bits are a digest of the parent, so two documents
+collide only if 72 bits agree, which would surface as a loud unique violation
+rather than silent corruption). Both call sites go through it, and a
+source-level guard test now fails if any `client_key` write is a template
+literal or concatenation again.
+
+This is the class of bug the audit was for: the code reads correctly, the tests
+pass, and only the column type knows better — which is why the fix ships with a
+test that asserts the key's *shape*, not just its value.
+
 ### O1 — Non-idempotent ledger writers, behind a retrying helper (High)
 
 `retryNonCritical` gives a write two attempts, and it wrapped
@@ -182,11 +229,12 @@ than repeat.
 * **Keys**: `invoice:<id>:sale`, `invoice:<id>:receipt`,
   `invoice:<id>:settlement:<paymentId>`, `invoice:<id>:cogs`, `expense:<id>`,
   `expense:<id>:payment:<paymentId>`, `payroll:<runId>`.
-* **Stock movements** now carry `client_key = <invoiceId>:mv:<lineIndex>` and
-  `InventoryRepository.recordMovements` pre-filters keys it has already
-  recorded (the unique `(business_id, client_key)` index already existed from
-  `20260813000003`). Indexing by position in the sale's line list means a
-  replay of the same payload rebuilds identical keys.
+* **Stock movements** now carry a key derived from the invoice and the line's
+  position (`deriveClientKey(invoice.id, i)` — see F6 for why it is not spelled
+  out in words) and `InventoryRepository.recordMovements` pre-filters keys it
+  has already recorded (the unique `(business_id, client_key)` index already
+  existed from `20260813000003`). Indexing by position in the sale's line list
+  means a replay of the same payload rebuilds identical keys.
 
 ### O2 — Tender type never reached the ledger (Medium)
 
@@ -279,6 +327,14 @@ paths store exactly the numbers the receipt showed.
   "transactions", so this aligns the number with the promise — but if any
   plan was sized against the old, inflated number, the tier limits should be
   revisited rather than silently re-priced.
+* **`client_key` is a uuid, and that constrains key spelling.** Anything that
+  wants a legible compound key (`invoice:<id>:line:3`) has to derive a uuid
+  from it (see `src/lib/clientKeys.ts`) or add a text column; the ledger's new
+  `posting_key` is `text` precisely so the journal keys can stay readable. The
+  captured schemas (`artifacts/database/fresh-schema.json`,
+  `staging-schema-inventory.json`) are what the type contract was checked
+  against; `tests/database/` can exercise it against a real Postgres
+  (`npm i -D embedded-postgres pg`) but is not wired into CI.
 * **`reference` stays free text.** Keyed postings use `posting_key`; the
   user-facing `reference` field and its search in the Journals list are
   untouched.
@@ -309,6 +365,12 @@ paths store exactly the numbers the receipt showed.
   own balanced receipt; a keyed entry left as a draft is posted rather than
   recreated; a sale over the plan limit is refused before anything is written,
   while the replay of a committed sale is allowed through.
+* `src/lib/__tests__/clientKeys.test.ts` (new, 8 tests) — a derived key is a
+  uuid, is stable across calls, differs per ordinal and per parent, survives
+  parents that are not uuids and ordinals that are junk, fills its whole width
+  rather than repeating one hash lane, and a source scan over every non-test
+  file in `src` refuses a `client_key` written as a template literal or
+  concatenation.
 * `src/lib/billing/__tests__/usageGuard.test.ts` (new, 7 tests) — the
   pre-write plan guard: it refuses at the limit, checks the client key before
   refusing, lets a replayed invoice *and* a replayed expense through (each via
