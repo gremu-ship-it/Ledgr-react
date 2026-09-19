@@ -119,8 +119,14 @@ added in `commitPosSaleDocuments`:
   replay whose first attempt never reached the stock step still releases it —
   the movement check decides, not the mere presence of the invoice.
 
-This closes the replay paths the queue itself can take. It does **not** close
-O1.
+This closes the replay paths the queue itself can take, and it was the
+right-sized fix at the time: a replay either finds both guards hit (fully
+committed sale) or neither (nothing written yet). The follow-up change below
+tightens both for the paid-sale case, because a sale can also be replayed
+*inside* one commit — between the sale entry and its receipts — where "skip
+everything" and "post everything" are both wrong: the ledger guard now applies
+to credit sales only (a paid sale's halves are keyed individually, so a replay
+resumes what is missing), and the stock release is both keyed and checked.
 
 ### F4 — A sale abandoned mid-sync stayed invisible forever (Medium)
 
@@ -277,7 +283,11 @@ paths store exactly the numbers the receipt showed.
   (`NewJournalEntryModal`), tax, capital, fixed-asset and FX-revaluation
   postings are user-initiated one-shot writes that are not retried
   automatically, so they keep `posting_key = null`. If any of them ever moves
-  behind a retry, it needs a key first.
+  behind a retry, it needs a key first. The same goes for the warehouse
+  receipt (`stock_receipt`) and stock adjustment postings in
+  `inventoryJournalService`: they post through `createBalancedEntry` directly,
+  but their callers are one-shot screens and the functions swallow their own
+  errors, so they are not reached by `retryNonCritical`.
 
 ---
 
