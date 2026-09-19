@@ -22,6 +22,8 @@ journal posting functions, `UsageService`, `PosPage` and two migrations.
 | F4 | A sale abandoned mid-sync stayed invisible on the device forever | Medium | Fixed |
 | F5 | POS sales history read `subtotal` as gross after the header fix | Low | Fixed |
 | F6 | Derived idempotency keys cannot be stored in the uuid `client_key` columns | High | Fixed (derived uuids) |
+| F7 | The deploy ships the client before the migration it needs | High | Fixed (CI order + client tolerance) |
+| F8 | The usage count the client shows is RLS-filtered, the one that refuses is not | Medium | Fixed (server count RPC) |
 | O1 | The retry helper wraps non-idempotent ledger writers | High | Fixed (keyed postings) |
 | O2 | Tender type never reaches the ledger (cash / mobile money / card) | Medium | Fixed (tender routing) |
 | O3 | Usage-limit guard counts journal entries and runs after the document write | Medium | Fixed (document count, pre-write) |
@@ -313,8 +315,125 @@ paths store exactly the numbers the receipt showed.
 
 ---
 
+---
+
+## Pre-deploy sweep (2026-09-19, before the first release of this branch)
+
+A last pass over the release, with two questions: does anything here only work
+because the tests mock the database, and is the rollout order safe?
+
+### F7 — The deploy ships the client before the migration it needs (High)
+
+`.github/workflows/deploy.yml` pushed the frontend to Vercel and *then* ran
+`supabase db push`. Every keyed posting writes `journal_entries.posting_key`, a
+column that does not exist until the migration runs — and PostgREST rejects an
+insert naming an unknown column (PGRST204, "Could not find the 'posting_key'
+column … in the schema cache"). For the length of that window — minutes
+normally, longer if the migration step fails or the project is paused — **every
+automatic posting would fail**: sales saved without their ledger entry, expense
+and payroll postings erroring on save.
+
+Two fixes, because either alone leaves a hole:
+
+* **Pipeline order.** Both jobs now migrate the database (and deploy the edge
+  functions) *before* deploying the frontend, with the reason written at the
+  step. Migrations here are additive, so the reverse direction — an old client
+  against a migrated database — is safe; the new direction is not. A failed
+  migration now also fails the run before the client is replaced.
+* **Client tolerance.** `postKeyedEntry` recognises a missing-column error
+  specifically (`isMissingColumn`: 42703 / PGRST204, walking the repository
+  error's cause chain) and retries the insert *without* the key, with a warning
+  that names the migration. A missing optional column can then never stop a
+  sale from reaching the books — the posting is merely unprotected against a
+  duplicate, which is exactly how the app behaved before O1. The fallback is
+  deliberately narrow: a test asserts an ordinary insert failure (42501,
+  permission denied) still surfaces as a warning instead of silently retrying
+  keyless.
+
+### F8 — The usage count shown and the usage count enforced disagreed (Medium)
+
+The meter (`UsageService.getCurrentMonthTransactionCount`) counted the three
+document tables with queries issued as the signed-in user, so RLS decided what
+was counted. `payroll_runs` is readable only to owner / admin / accountant /
+payroll_manager (`can_view_payroll`), so for other roles the client counted
+zero payroll runs while `_ledgr_assert_usage_limit` — `security definer`, no
+RLS — counted them. A business just under its limit could be refused by the
+server while its meter still showed room.
+
+Fix: `ledgr_monthly_document_count(business_id)` (migration
+`20260921000002`), `security definer` and granted to `authenticated`, is now the
+single definition of the number — the same tables, the same date column, the
+same month boundary the guard uses. The client prefers it and keeps the
+three-query fallback for when it is not there (pre-migration, demo mode,
+offline), so the deploy order stays safe in both directions. The function
+answers NULL to a non-member rather than leaking another business's usage.
+
+### Migrations verified against a real Postgres
+
+CI runs typecheck, lint, tests and build — **no SQL is executed anywhere**, so
+these three migrations would have met Postgres for the first time during the
+release. They now meet `tests/database/posting_integrity_migrations.test.js`
+first: an embedded Postgres 18.4, bootstrapped to look like Supabase (roles,
+`auth`, `storage`, pg_cron/pg_net stubs) with all 81 migrations replayed in
+order. 16 checks, all passing:
+
+* all 81 migrations replay, including the three new ones, and re-applying the
+  new ones is a no-op (they are guarded and idempotent);
+* `journal_entries.posting_key` is `text` with a **unique, partial**
+  `(business_id, posting_key)` index: a duplicate key is rejected with 23505,
+  while unkeyed rows are unaffected;
+* the F6 bug is reproduced at the database — `'<uuid>:mv:0'` into
+  `stock_movements.client_key` fails with 22P02 — and a derived uuid is
+  accepted, with a replay colliding (23505) instead of duplicating;
+* the guard counts documents, does **not** count journal entries (60 of them
+  change nothing), counts a payroll run, refuses the 50th document on Free with
+  the upgrade message, and lets a Pro business through;
+* `ledgr_monthly_document_count` returns the same number the guard counts,
+  answers NULL to a stranger, and is executable by `authenticated`.
+
+Run it with `npm i -D embedded-postgres pg` (the script's header documents it,
+and that installing them can reconcile `node_modules` against package.json
+ranges — `npm ci` restores it). Wiring it into CI is the obvious next step:
+it is the only thing that would have caught a broken migration before a deploy,
+and it costs one job.
+
+### Re-verified in this pass
+
+* Every automatic posting is keyed (8 call sites) and no bare
+  `createBalancedEntry` remains on a retried path; `retryNonCritical` wraps
+  only keyed writers (`syncEngine` ×6, `posService` ×2).
+* The writers that are intentionally unkeyed are unreachable from a retry:
+  react-query mutations are configured `retry: 0`; `PayrollRepository.approve`
+  posts through `createBalancedEntry` but refuses any run whose status is not
+  `draft`; `postInventoryReconciliationAdjustment` recomputes a difference that
+  is zero after the first attempt; the warehouse-receipt and stock-adjustment
+  postings are one-shot page actions that swallow their own errors.
+* `checkUsageLimit` is gone from the journal path, and the guards sit before
+  every document write (`posService` step 0, `syncEngine` invoice / expense /
+  payroll).
+* RLS read policies on the document tables do not filter `deleted_at`, and the
+  SQL guard counts with definer rights, so both sides count soft-deleted
+  documents — a deleted document therefore still uses a slot. Consistent, but
+  worth a product decision if it ever matters.
+* The month boundary is the database's `current_date` for the guard and the RPC
+  (browser-local only in the fallback path), so the two sides agree except on a
+  device whose timezone differs from the server's and only in the fallback.
+
+---
+
 ## Known limitations / follow-ups
 
+* **Deployment order.** The client requires `journal_entries.posting_key`
+  (20260921000000) for duplicate protection, `ledgr_monthly_document_count`
+  (20260921000002) for the exact usage count, and the restated guard
+  (20260921000001) for the server-side limit. `deploy.yml` now migrates first,
+  and the client degrades without them — but they should still be applied.
+  All three are additive (`add column if not exists`, a partial unique index on
+  a brand-new NULL-only column, `create or replace function`), so they can run
+  against a live database with the old client serving traffic; the only lock
+  worth knowing is the one the index build takes on `journal_entries`, which
+  matches the style of the existing migrations and is momentary for a table of
+  this size.
 * **Per-line VAT on a POS invoice.** The header carries the right `vat_amount`
   and `subtotal` (both conventions verified: `subtotal + VAT = total`, VAT
   extracted from inclusive prices), but the till's invoice lines still carry
@@ -395,7 +514,10 @@ paths store exactly the numbers the receipt showed.
   (4), `lib/billing/__tests__/plans.test.ts` and
   `lib/demo/__tests__/demoPlanAccess.test.ts` — updated for the document-count
   metric and the pre-write guard.
-* Full suite: 65 files / 560 tests green; `tsc -b` clean; `npm run lint` 0 errors
+* `tests/database/posting_integrity_migrations.test.js` (new, 16 checks) — the
+  embedded-Postgres verification above. Standalone (`node …`), like the other
+  `tests/database` harnesses, and not part of the vitest suite.
+* Full suite: 67 files / 580 tests green; `tsc -b` clean; `npm run lint` 0 errors
   (one pre-existing warning in `artifacts/database/fresh-database.generated.approx.ts`,
   untouched here). Also verified: the two new migrations are the only new files
   under `supabase/migrations/` and the superseded `reference`-based draft is gone.

@@ -357,6 +357,67 @@ describe('POS sale posting integrity', () => {
     expect(vi.mocked(repos.invoice.createWithLines)).toHaveBeenCalled();
   });
 
+  it('still posts the ledger when the posting_key column is not migrated yet', async () => {
+    // The deploy pipeline ships the frontend before it runs `supabase db push`,
+    // so for a few minutes `journal_entries.posting_key` does not exist and the
+    // insert is rejected (PGRST204). Losing the ledger entry would be far worse
+    // than losing the key, so the post is retried without it.
+    vi.mocked(repos.journal.createBalancedEntry).mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "Could not find the 'posting_key' column of 'journal_entries' in the schema cache",
+        ),
+        { code: 'PGRST204' },
+      ),
+    );
+
+    const queuePayload = buildPosSaleQueuePayload(paidSale, {
+      receiptNumber: 'REC-POST-8',
+      clientKey: 'key-post-8',
+    });
+
+    const result = await commitPosSaleDocuments(queuePayload, {
+      businessId: 'biz-1',
+      clientKey: 'key-post-8',
+    });
+
+    const headers = vi
+      .mocked(repos.journal.createBalancedEntry)
+      .mock.calls.map(([header]) => header);
+
+    // The first attempt carried the key; exactly one retry dropped it...
+    expect(headers[0]).toHaveProperty('posting_key');
+    expect(headers.filter((header) => !('posting_key' in header))).toHaveLength(1);
+    // ...and the entry reached the books, so the sale carries no warning.
+    expect(result.warnings).toEqual([]);
+    expect(repos.journal.post).toHaveBeenCalled();
+  });
+
+  it('does not treat an unrelated ledger failure as a missing column', async () => {
+    // The fallback must stay narrow: a real insert failure has to keep
+    // surfacing as a warning, not quietly retry keyless and mask the problem.
+    vi.mocked(repos.journal.createBalancedEntry).mockRejectedValue(
+      Object.assign(new Error('permission denied for table journal_entries'), { code: '42501' }),
+    );
+
+    const queuePayload = buildPosSaleQueuePayload(paidSale, {
+      receiptNumber: 'REC-POST-9',
+      clientKey: 'key-post-9',
+    });
+
+    const result = await commitPosSaleDocuments(queuePayload, {
+      businessId: 'biz-1',
+      clientKey: 'key-post-9',
+    });
+
+    const headers = vi
+      .mocked(repos.journal.createBalancedEntry)
+      .mock.calls.map(([header]) => header);
+    expect(headers.length).toBeGreaterThan(0);
+    expect(headers.every((header) => 'posting_key' in header)).toBe(true);
+    expect(result.warnings.join(' ')).toMatch(/sales journal entry could not be posted/i);
+  });
+
   it('does not release stock twice when the sale is replayed', async () => {
     vi.spyOn(repos.inventory, 'hasMovementsForSource').mockResolvedValue(true as never);
     const queuePayload = buildPosSaleQueuePayload(paidSale, {

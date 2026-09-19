@@ -171,8 +171,62 @@ export async function postKeyedEntry(
         return raced.status === 'draft' ? { ...raced, status: 'posted' } : raced;
       }
     }
+
+    // The database is older than the client: `posting_key` is not there yet
+    // (the frontend deploys before `supabase db push`). Losing the ledger entry
+    // would be far worse than losing the key, so write it without one — the
+    // entry is then guarded only by the invoice/payment client keys, which is
+    // exactly how the app behaved before posting keys existed.
+    if (key && isMissingColumn(err, 'posting_key')) {
+      log.warn(
+        'journal_entries.posting_key does not exist yet (migration 20260921000000 not applied) — ' +
+          'posting without an idempotency key. Apply the migration to restore duplicate protection.',
+        { businessId: dto.business_id, postingKey: key, sourceType: dto.source_type },
+      );
+      const unkeyed = { ...dto };
+      delete unkeyed.posting_key;
+      const { entry } = await repos.journal.createBalancedEntry(unkeyed, lines);
+      await repos.journal.post(entry.id, null);
+      return entry;
+    }
+
     throw err;
   }
+}
+
+/**
+ * True when Postgres/PostgREST rejected the write because a column does not
+ * exist on the target table.
+ *
+ * Used for one specific situation: the client is newer than the database. The
+ * deploy pipeline ships the frontend to Vercel *before* it runs `supabase db
+ * push`, so there is a window (minutes, or as long as a failed migration step
+ * takes to fix) where `journal_entries.posting_key` is not there yet, and every
+ * keyed insert would fail. A missing *optional* column must never stop a sale
+ * from reaching the books, so the caller retries without the key.
+ *
+ * Shapes seen: 42703 (`column ... does not exist`, Postgres), PGRST204
+ * (`Could not find the 'posting_key' column ... in the schema cache`, PostgREST
+ * when the schema cache predates the migration). The repository error wrapper
+ * keeps the original as `cause`, so the chain is walked.
+ */
+function isMissingColumn(err: unknown, column: string): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = err;
+  const pattern = new RegExp(`(column|find)(\\s|.){0,40}["']?${column}["']?`, 'i');
+
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const code = (current as { code?: unknown }).code;
+    if (code === '42703' || code === 'PGRST204') return true;
+
+    const message = (current as { message?: unknown }).message;
+    if (typeof message === 'string' && pattern.test(message)) {
+      if (/does not exist|schema cache|could not find/i.test(message)) return true;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 /**

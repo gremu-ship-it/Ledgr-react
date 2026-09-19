@@ -57,8 +57,17 @@ export class UsageService {
    * one till sale posts a sale entry, an auto-receipt and (for stocked items) a
    * COGS entry, so a 200-transaction plan ran out after roughly 70 real sales.
    * A transaction is one document: an invoice, an expense or a payroll run.
+   *
+   * The server's own count is preferred: it is the same definition
+   * `_ledgr_assert_usage_limit` uses when it refuses a save, and it is immune to
+   * RLS — the three fallback queries below run as the signed-in user, and
+   * `payroll_runs` is not readable by every role, so a manager could be refused
+   * by the guard while the meter still showed room.
    */
   async getCurrentMonthTransactionCount(businessId: string): Promise<number> {
+    const serverCount = await this.countDocumentsOnServer(businessId);
+    if (serverCount !== null) return serverCount;
+
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
@@ -69,6 +78,37 @@ export class UsageService {
     ]);
 
     return invoices + expenses + payrollRuns;
+  }
+
+  /**
+   * The month's document count as the database sees it.
+   *
+   * Returns null — never throws — when the RPC is unavailable: migration
+   * 20260921000002 not applied yet (a deploy that ships the client first), demo
+   * mode, an offline device, or a caller who is not a member of the business
+   * (the function answers NULL). The caller then falls back to counting tables.
+   */
+  private async countDocumentsOnServer(businessId: string): Promise<number | null> {
+    try {
+      const { data, error } = await supabase.rpc('ledgr_monthly_document_count', {
+        p_business_id: businessId,
+      });
+      if (error) {
+        log.debug('Server usage count unavailable — falling back to table counts', {
+          error: error.message,
+        });
+        return null;
+      }
+      if (data === null || data === undefined) return null;
+
+      const count = Number(data);
+      return Number.isFinite(count) ? count : null;
+    } catch (err) {
+      log.warn('Server usage count failed — falling back to table counts', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
   }
 
   /**
