@@ -133,6 +133,7 @@ export const KNOWLEDGE_BASE: KnowledgeArticle[] = [
     keywords: [
       'team', 'invite', 'user', 'role', 'permission', 'access', 'staff',
       'owner', 'admin', 'accountant', 'viewer', 'auditor', 'remove user',
+      'cashier', 'pos user', 'till', 'register pos user',
     ],
     body: [
       'Manage people in **Settings → Team Members** (`/settings?tab=team`).',
@@ -140,6 +141,8 @@ export const KNOWLEDGE_BASE: KnowledgeArticle[] = [
       '**Invite** by email (they receive a link) or generate an **invite link** you can share. Choose the role at invite time — owners can assign any role; admins cannot create another admin.',
       '',
       'Common roles: **owner** (everything, including billing and deletion), **admin**, **accountant** (full books), **payroll_manager** (payroll only), **data_entry** / **sales_clerk** / **purchasing_officer** (capture only), **auditor** and **viewer** (read-only), plus specialist roles such as *inventory_manager*, *treasury_manager*, *tax_compliance_officer* and *branch_manager*.',
+      '',
+      'Point-of-sale roles: **cashier** (till only — opens/closes shifts and records sales), **manager** (POS Manager — approvals, voids, refunds and POS reports), **stock_clerk** (stock receipts/transfers/adjustments, no sales).',
       '',
       'Permissions are enforced twice — in the UI and in the database with row-level security — so a viewer cannot write data even through the API.',
       '',
