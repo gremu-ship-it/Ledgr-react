@@ -13,22 +13,24 @@ const locale = 'en' as const;
 const d = dict(locale).pricing;
 
 const comparison: { feature: string; tiers: (string | boolean)[] }[] = [
-  { feature: 'Monthly price (MWK)', tiers: ['Free', 'MK 100,000', 'MK 200,000', 'MK 500,000'] },
-  { feature: 'Transactions / month', tiers: ['50', '500', '2,000', 'Unlimited'] },
-  { feature: 'Income & expense tracking', tiers: [true, true, true, true] },
-  { feature: 'Basic dashboard & reports', tiers: [true, true, true, true] },
-  { feature: 'Bank reconciliation', tiers: [false, true, true, true] },
-  { feature: 'Full accounting & organisation', tiers: [false, true, true, true] },
-  { feature: 'AI Insights & forecasting', tiers: [false, false, true, true] },
-  { feature: 'Public API & webhooks', tiers: [false, false, true, true] },
-  { feature: 'Custom onboarding & support', tiers: [false, false, false, true] },
+  { feature: 'Monthly price (MWK)', tiers: PLANS.map((p) => p.priceMWK === 0 ? 'Free' : `MK ${p.priceMWK.toLocaleString('en-MW')}`) },
+  { feature: 'Transactions / month', tiers: PLANS.map((p) => p.transactionLimit === null ? 'Unlimited' : p.transactionLimit.toLocaleString('en-MW')) },
+  { feature: 'Finance: income, expenses, invoices & payroll', tiers: PLANS.map(() => true) },
+  { feature: 'Basic dashboard', tiers: PLANS.map(() => true) },
+  { feature: 'Inventory', tiers: PLANS.map((p) => p.tier !== 'free') },
+  { feature: 'Accounts, Tax, Assets, Capital & Reports', tiers: PLANS.map((p) => p.tier !== 'free') },
+  { feature: 'Bank reconciliation', tiers: PLANS.map((p) => ['growth', 'pro', 'enterprise'].includes(p.tier)) },
+  { feature: 'Full accounting & organisation', tiers: PLANS.map((p) => ['growth', 'pro', 'enterprise'].includes(p.tier)) },
+  { feature: 'AI Insights & forecasting', tiers: PLANS.map((p) => ['pro', 'enterprise'].includes(p.tier)) },
+  { feature: 'Public API & webhooks', tiers: PLANS.map((p) => ['pro', 'enterprise'].includes(p.tier)) },
+  { feature: 'Custom onboarding & support', tiers: PLANS.map((p) => p.tier === 'enterprise') },
 ];
 
 const faqs = [
-  { q: 'How do I pay?', a: 'Payments run through PayChangu in MWK — mobile money and card, monthly or annually. Annual billing saves you 20–25%.' },
+  { q: 'How do I pay?', a: 'Payments run through PayChangu in MWK — mobile money and card, monthly or annually. Annual billing saves you 20–25% on Growth, Pro and Enterprise.' },
   { q: 'Can I change plans?', a: 'Yes. Upgrade or downgrade anytime from Settings; you are billed pro-rata.' },
-  { q: 'What counts as a transaction?', a: 'A transaction is a recorded income, expense, journal, invoice or payroll entry. Reports and exports are unlimited on every plan.' },
-  { q: 'Is there a contract?', a: 'No. Free, Growth and Pro are month-to-month. Enterprise is billed per agreement with onboarding included.' },
+  { q: 'What counts as a transaction?', a: 'A transaction is a recorded income, expense, journal, invoice or payroll entry. Reports are available on Starter and above and do not count towards the transaction limit.' },
+  { q: 'Is there a contract?', a: 'No. Free, Starter, Growth and Pro are month-to-month. Enterprise is billed per agreement with onboarding included.' },
 ];
 ---
 
@@ -36,7 +38,7 @@ const faqs = [
   locale={locale}
   path="pricing"
   title={t(locale, 'pageTitles.pricing')}
-  description="Ledgr pricing in MWK: Free, Growth (MK 100,000/mo), Pro (MK 200,000/mo) and Enterprise. Pay monthly or annually via PayChangu."
+  description="Ledgr pricing in MWK: Free, Starter (MK 50,000/mo), Growth (MK 100,000/mo), Pro (MK 200,000/mo) and Enterprise. Pay monthly or annually via PayChangu."
 >
   <section class="bg-brand-950">
     <div class="mx-auto w-full max-w-6xl px-4 py-16 sm:px-6 lg:py-20">
@@ -46,7 +48,7 @@ const faqs = [
       </h1>
       <p class="mt-4 max-w-2xl text-lg text-brand-100">
         Start free. Upgrade when you grow. Pay with PayChangu — mobile money or
-        card — and save 20–25% with annual billing.
+        card — and save 20–25% with annual billing on Growth and above.
       </p>
     </div>
   </section>
@@ -67,7 +69,7 @@ const faqs = [
       </div>
     </div>
 
-    <div class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {PLANS.map((p) => <PricingCard plan={p} locale={locale} />)}
     </div>
     <p class="mt-6 text-center text-sm text-navy-600">
@@ -84,7 +86,7 @@ const faqs = [
           <thead>
             <tr class="border-b border-navy-200 bg-brand-50/50 text-left">
               <th scope="col" class="px-4 py-3 font-semibold text-navy-900">Feature</th>
-              {['Free', 'Growth', 'Pro', 'Enterprise'].map((n) => (
+              {PLANS.map(({ name: n }) => (
                 <th scope="col" class="px-4 py-3 text-center font-semibold text-navy-900">
                   {n}{n === 'Pro' ? ' ⭐' : ''}
                 </th>

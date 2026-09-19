@@ -13,7 +13,7 @@
 //
 // Body: {
 //   business_id: string,
-//   target_plan_tier: 'growth'|'pro'|'enterprise',
+//   target_plan_tier: 'starter'|'growth'|'pro'|'enterprise',
 //   duration_days: number,       // how many days of access to grant from today
 //   amount: number,              // what was actually paid, for the record
 //   payment_method: 'cash'|'bank_transfer'|'mobile_money'|'other',
@@ -38,9 +38,9 @@ function json(body: unknown, status = 200) {
   });
 }
 
-type PlanTier = 'growth' | 'pro' | 'enterprise';
+type PlanTier = 'starter' | 'growth' | 'pro' | 'enterprise';
 function isPlanTier(v: unknown): v is PlanTier {
-  return v === 'growth' || v === 'pro' || v === 'enterprise';
+  return v === 'starter' || v === 'growth' || v === 'pro' || v === 'enterprise';
 }
 
 const PAYMENT_METHODS = new Set(['cash', 'bank_transfer', 'mobile_money', 'other']);
@@ -95,7 +95,7 @@ serve(async (req) => {
     const businessId = (body.business_id || '').trim();
     if (!businessId) return json({ error: 'business_id is required' }, 400);
     if (!isPlanTier(body.target_plan_tier)) {
-      return json({ error: 'target_plan_tier must be one of: growth, pro, enterprise' }, 400);
+      return json({ error: 'target_plan_tier must be one of: starter, growth, pro, enterprise' }, 400);
     }
     const durationDays = Number(body.duration_days);
     if (!Number.isFinite(durationDays) || durationDays <= 0 || durationDays > 3660) {

@@ -1,4 +1,4 @@
-export type PlanTier = 'free' | 'growth' | 'pro' | 'enterprise';
+export type PlanTier = 'free' | 'starter' | 'growth' | 'pro' | 'enterprise';
 
 /**
  * Discrete, gate-able capabilities. Each plan's `capabilities` list is
@@ -11,6 +11,8 @@ export type PlanCapability =
   | 'api_access'
   | 'webhooks'
   | 'custom_branding'
+  | 'inventory'
+  | 'core_accounting'          // Accounts, Tax, Assets, Capital and Reports (Starter+)
   | 'accounting_organisation';   // Accounting + Organisation modules (Growth+)
 
 export interface Plan {
@@ -33,10 +35,24 @@ export const PLANS: Record<PlanTier, Plan> = {
     transactionLimit: 50,
     capabilities: [],
     features: [
-      'Basic dashboard & reports',
-      'Income & expense tracking',
+      'Basic dashboard',
+      'Finance: income, expenses, invoices & payroll',
       'Up to 50 transactions/month',
       'Community support',
+    ],
+  },
+  starter: {
+    tier: 'starter',
+    name: 'Starter',
+    priceMWK: 50000,
+    annualDiscount: 0,
+    transactionLimit: 200,
+    capabilities: ['inventory', 'core_accounting'],
+    features: [
+      'Everything in Free',
+      'Inventory: products, warehouses & stock transfers',
+      'Accounts, Tax, Assets, Capital & Reports',
+      'Up to 200 transactions/month',
     ],
   },
   growth: {
@@ -45,9 +61,9 @@ export const PLANS: Record<PlanTier, Plan> = {
     priceMWK: 100000,
     annualDiscount: 20,
     transactionLimit: 500,
-    capabilities: ['bank_reconciliation', 'accounting_organisation'],
+    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation'],
     features: [
-      'Everything in Free',
+      'Everything in Starter',
       'Bank reconciliation',
       'Accounting & Organisation (full access)',
       'Basic financial reports',
@@ -62,7 +78,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     annualDiscount: 20,
     transactionLimit: 2000,
     popular: true,
-    capabilities: ['bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks'],
+    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks'],
     features: [
       'Everything in Growth',
       'AI Insights & forecasting',
@@ -78,7 +94,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     priceMWK: 500000,
     annualDiscount: 25,
     transactionLimit: null,
-    capabilities: ['bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding'],
+    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding'],
     features: [
       'Everything in Pro',
       'Unlimited transactions',
@@ -91,7 +107,7 @@ export const PLANS: Record<PlanTier, Plan> = {
 };
 
 /** Ordered lowest → highest, used for "next tier up" style logic. */
-export const PLAN_TIER_ORDER: PlanTier[] = ['free', 'growth', 'pro', 'enterprise'];
+export const PLAN_TIER_ORDER: PlanTier[] = ['free', 'starter', 'growth', 'pro', 'enterprise'];
 
 export function getPlan(tier: PlanTier): Plan {
   return PLANS[tier];
@@ -117,7 +133,7 @@ export function planRequiredFor(capability: PlanCapability): Plan | null {
 }
 
 export function isValidPlanTier(value: unknown): value is PlanTier {
-  return value === 'free' || value === 'growth' || value === 'pro' || value === 'enterprise';
+  return value === 'free' || value === 'starter' || value === 'growth' || value === 'pro' || value === 'enterprise';
 }
 
 /** Coerces any stored/unknown value to a valid PlanTier, defaulting to 'free'. */

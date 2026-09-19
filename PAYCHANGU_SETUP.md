@@ -12,6 +12,37 @@ confirms the payment.
 **Downgrading (including moving to Free) stays instant and self-serve** — no
 payment is involved, so it doesn't go through PayChangu.
 
+## Starter package rollout (September 2026)
+
+- **Starter:** MK 50,000/month, 200 transactions/month. Includes Finance
+  (income, expenses, invoices and payroll), Inventory (products, warehouses and
+  transfers), Accounts, Tax, Assets, Capital and Reports.
+- **Free:** remains at 50 transactions/month; only Finance business modules are
+  available. Dashboard, account settings/billing and support remain accessible.
+- Journals, periods, audit log, organisation and bank reconciliation remain on
+  Growth and above; other existing higher-tier entitlements are unchanged.
+- No annual discount was specified for Starter: annual checkout costs
+  MK 600,000. Growth, Pro and Enterprise retain their existing discounts.
+- Transaction accounting follows the existing journal-entry usage calculation;
+  the client usage service and quick-save SQL guard both use the 200 limit.
+  Module locks use the existing client-side route/navigation gates; this rollout
+  does not introduce database-level feature entitlements. Partner feature flags
+  and user roles still apply in addition to plan access.
+
+Deploy in this order:
+
+1. Apply `supabase/migrations/20260919000000_add_starter_plan.sql` using the
+   normal Supabase migration process. It adds Starter to business/payment
+   constraints, updates the upgrade-protection rank, and replaces the quick-save
+   usage-limit helper. It does not change existing businesses' plans or data.
+2. Deploy `initiate-subscription-payment` and `grant-manual-subscription`.
+3. Deploy the app and marketing website together so prices and access agree.
+
+Webhook verification, activation, expiry and reminders already handle the
+stored tier generically and require no Starter-specific change. Test checkout
+and a manual grant in staging before production; local regression tests do not
+contact PayChangu or apply migrations to a live database.
+
 ## Architecture
 
 ```

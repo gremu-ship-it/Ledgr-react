@@ -210,6 +210,14 @@ export function BillingTab() {
                 <div className="mb-2 text-xs font-medium uppercase tracking-wider text-amber-700">Quick manual grants</div>
 
                 <div className="space-y-3">
+                  {/* Starter */}
+                  <div className="flex items-center gap-2">
+                    <span className="w-20 text-sm font-medium text-amber-800">Starter</span>
+                    <button onClick={() => quickGrant('starter', 31)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">31 days</button>
+                    <button onClick={() => quickGrant('starter', 90)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">90 days</button>
+                    <button onClick={() => quickGrant('starter', 365)} className="rounded-lg border border-amber-600 bg-white px-3 py-1.5 text-xs font-medium hover:bg-amber-50">1 year</button>
+                  </div>
+
                   {/* Growth */}
                   <div className="flex items-center gap-2">
                     <span className="w-20 text-sm font-medium text-amber-800">Growth</span>
@@ -264,7 +272,7 @@ export function BillingTab() {
       <div>
         <h3 className="text-lg font-semibold mb-4">Upgrade Your Plan</h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {Object.values(PLANS).map((p) => {
             const isCurrent = p.tier === planTier;
             const isBusy = pendingDowngradeTier === p.tier;

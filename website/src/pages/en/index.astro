@@ -81,9 +81,9 @@ const testimonials = [
 ];
 
 const faqs = [
-  { q: 'Is Ledgr really free to start?', a: 'Yes — the Free plan has no card and no time limit. It covers income, expenses and basic reports up to 50 transactions a month.' },
+  { q: 'Is Ledgr really free to start?', a: 'Yes — the Free plan has no card and no time limit. It covers Finance — income, expenses, invoices and payroll — up to 50 transactions a month. Inventory and Reports start on Starter.' },
   { q: 'What happens when I am offline?', a: 'Ledgr keeps working. Transactions queue on your device and sync automatically when you reconnect.' },
-  { q: 'Can I switch to annual billing later?', a: 'Yes. Annual billing gives you 20–25% off, and you can change billing period from Settings.' },
+  { q: 'Can I switch to annual billing later?', a: 'Yes. Annual billing gives you 20–25% off on Growth and above, and you can change billing period from Settings.' },
   { q: 'Is my data safe?', a: 'Your data lives in a managed Postgres database with row-level security, audit logs, MFA and encrypted backups.' },
 ];
 
@@ -297,7 +297,7 @@ const invoiceRows = [
       title="Simple plans, honest prices"
       subtitle="Pay monthly or yearly with PayChangu. Every plan starts free."
     />
-    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {PLANS.map((p) => <PricingCard plan={p} locale={locale} />)}
     </div>
     <p class="mt-10 text-center">
