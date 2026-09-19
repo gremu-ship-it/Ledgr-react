@@ -36,6 +36,10 @@ const ALLOWED_ROLES = new Set([
   'asset_manager',
   'board_member',
   'branch_manager',
+  // POS roles (user_role enum values added by 20260920000000_pos_module.sql)
+  'manager',
+  'cashier',
+  'stock_clerk',
 ]);
 
 function normalizeRole(input: string): string | null {

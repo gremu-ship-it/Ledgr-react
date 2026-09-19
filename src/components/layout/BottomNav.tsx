@@ -18,6 +18,9 @@ import {
   Settings,
   Lock,
   LogOut,
+  ShoppingBag,
+  Warehouse,
+  ArrowLeftRight,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -31,6 +34,7 @@ import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
 import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
+import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
 import { pushUpgradeRequired } from '@/lib/notifications';
@@ -41,6 +45,24 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.sections.inventory', path: '/products', icon: Package },
   { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
 ];
+
+/**
+ * Prepended for roles whose home is the till (cashier, POS manager) so the
+ * primary workspace is one tap away — previously the mobile bar had no POS
+ * entry at all and till staff had to open the drawer to get back to /pos.
+ */
+const POS_NAV_ITEM = {
+  labelKey: 'navigation.items.pos',
+  path: '/pos',
+  icon: ShoppingBag,
+};
+
+/**
+ * Four primary tabs plus the FAB and the More button is what fits the
+ * 64px bar at 360px wide (each tab is min-w-48px). Cap the list so adding
+ * POS for till roles cannot overflow small phones.
+ */
+const MAX_PRIMARY_TABS = 4;
 
 const ALL_MORE_MENU_ITEMS: {
   labelKey: string;
@@ -56,6 +78,8 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
   { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, tone: 'info' },
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
+  { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, tone: 'brand', partnerFeature: 'inventory' },
+  { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
   { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
   { labelKey: 'navigation.items.tools', path: '/tools', icon: BarChart2, tone: 'brand' },
@@ -81,12 +105,43 @@ export function BottomNav() {
   const { planTier } = useUsage();
 
   const { isFeatureEnabled } = usePartner();
-  const bottomItems = BOTTOM_NAV_ITEMS.filter(
-    (i) => i.path !== '/products' || isFeatureEnabled('inventory'),
-  );
+  const { canWrite } = usePermissions();
+  const role = currentBusiness?.role || null;
+
+  // Role filtering mirrors the desktop sidebar (navConfig.visibleSectionsFor):
+  // hide what the role cannot open, instead of rendering a tab that RoleRoute
+  // would immediately bounce back to the role's home page. When the role is
+  // not yet known we keep the (plan-filtered) default list.
+  const allowedForRole = (path: string) => !role || isPathAllowedForRole(role, path);
+
+  // Till-centric roles get the POS tab first — it is their home route.
+  const homeIsPos = Boolean(role) && getHomePathForRole(role) === '/pos';
+  const primaryItems = homeIsPos ? [POS_NAV_ITEM, ...BOTTOM_NAV_ITEMS] : BOTTOM_NAV_ITEMS;
+
+  const bottomItems = primaryItems
+    .filter((i) => i.path !== '/products' || isFeatureEnabled('inventory'))
+    .filter((i) => allowedForRole(i.path))
+    .slice(0, MAX_PRIMARY_TABS);
   const moreItems = ALL_MORE_MENU_ITEMS.filter(
     (i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature),
-  );
+  ).filter((i) => allowedForRole(i.path));
+
+  // The FAB writes, so an action needs both gates:
+  //   canWrite             — a viewer or auditor may open /income and /expenses
+  //                          but must not write; usePermissions mirrors the DB
+  //                          write tier, so this also stops the FAB offering an
+  //                          action the database would reject.
+  //   route allowed        — the screen the action writes through. Keeps
+  //                          "Record expense" away from a cashier and "New
+  //                          invoice" away from a stock clerk, matching
+  //                          20260922000000_pos_role_write_scope.sql. A role
+  //                          with no action left gets no FAB at all.
+  const canQuickAdd = (path: string) => canWrite && allowedForRole(path);
+  const canCreateInvoice = canQuickAdd('/income');
+  const canRecordIncome = canQuickAdd('/income');
+  const canRecordExpense = canQuickAdd('/expenses');
+  const canRecordStock = canQuickAdd('/warehouse');
+  const hasFabActions = canCreateInvoice || canRecordIncome || canRecordExpense || canRecordStock;
 
   // Dynamic balanced split for FAB centering
   const { leftItems, rightItems } = useMemo(() => {
@@ -188,6 +243,7 @@ export function BottomNav() {
       {fabOpen && (
         <div className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 lg:hidden">
           <div className="flex flex-col items-center gap-3">
+            {canCreateInvoice && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -199,6 +255,8 @@ export function BottomNav() {
               <IconBadge icon={FileText} tone="info" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">New invoice</span>
             </button>
+            )}
+            {canRecordStock && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -210,6 +268,8 @@ export function BottomNav() {
               <IconBadge icon={Package} tone="brand" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">Stock movement</span>
             </button>
+            )}
+            {canRecordIncome && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -221,6 +281,8 @@ export function BottomNav() {
               <IconBadge icon={Wallet} tone="brand" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">{t('common.recordIncome')}</span>
             </button>
+            )}
+            {canRecordExpense && (
             <button
               onClick={() => {
                 vibrate(10);
@@ -232,6 +294,7 @@ export function BottomNav() {
               <IconBadge icon={Receipt} tone="negative" size="sm" interactive />
               <span className="text-sm font-semibold text-gray-900">{t('common.recordExpense')}</span>
             </button>
+            )}
           </div>
         </div>
       )}
@@ -244,6 +307,7 @@ export function BottomNav() {
           ))}
 
           {/* FAB center button */}
+          {hasFabActions && (
           <button
             type="button"
             onClick={() => {
@@ -262,6 +326,7 @@ export function BottomNav() {
           >
             <Plus className="h-7 w-7 text-white" aria-hidden="true" />
           </button>
+          )}
 
           {rightItems.map((item) => (
             <NavTab key={item.path} {...item} />

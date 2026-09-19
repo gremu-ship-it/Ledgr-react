@@ -2,9 +2,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { posService } from '../posService';
 import { repos } from '@/lib/repositories';
-import { supabase } from '@/lib/supabase';
+import { realSupabase } from '@/lib/supabase';
 import { usageService } from '@/lib/billing/UsageService';
 import type { PosCartItem } from '@/types/pos';
+import { missingPostPosSale } from './helpers/postPosSaleStub';
 
 vi.mock('@/services/journalService', () => ({
   createInvoiceJournalEntry: vi.fn().mockResolvedValue({}),
@@ -45,7 +46,12 @@ describe('POS Integration & Acceptance Criteria', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // The client-side path is the fallback: it runs when post_pos_sale is not
+    // applied yet (stage 2 of docs/database/pos-sale-posting-rpc.md). These tests
+    // are about that path, so the RPC is stubbed as missing.
+    vi.spyOn(realSupabase, 'rpc').mockImplementation(
+      missingPostPosSale(() => ({ data: null, error: null })) as never,
+    );
     vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
     // Tender routing resolves the mobile-money leg to its float account
     // (1125 Airtel Money) at commit time.

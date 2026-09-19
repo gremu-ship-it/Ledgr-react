@@ -138,5 +138,28 @@ branches, departments, inventory_locations; 20260731000000 to accounts;
 
 ## Test suite
 
-`tests/database/rls_security.test.js` — 41 assertions, all PASS. Requires the
+`tests/database/rls_security.test.js` — 50 assertions, all PASS. Requires the
 disposable-Postgres harness (embedded-postgres + pg); see the file header.
+
+### 8B.4 — POS role write scope (20260922000000)
+
+The one-tier model above is unchanged for the six original roles. The POS roles
+added in `20260920000000_pos_module.sql` (cashier, manager, stock_clerk) needed
+two narrower tiers, because their job is deliberately limited:
+
+| Table group | Tier |
+| --- | --- |
+| `invoices`, `invoice_lines`, `invoice_payments` | `can_write_sales_data` — writer tier **minus `stock_clerk`** |
+| `expenses`, `expense_lines`, `expense_payments` | `can_write_expense_data` — writer tier **minus `cashier` and `stock_clerk`** |
+| everything else (34 tables, ledger included) | `can_write_business_data` — unchanged |
+
+The ledger tier is deliberately **not** narrowed: `posService.processSale`
+posts the sales journal, the invoice and its payments from the browser, so a
+cashier session must keep those writes for the till to function. Closing the
+ledger to cashiers requires moving sale posting behind a `SECURITY DEFINER`
+RPC first.
+
+Asserted in section 8B.4: cashier→expense denied, stock_clerk→expense and
+stock_clerk→invoice denied, while cashier→invoice/payment/journal and
+stock_clerk→stock_movement still succeed and the bookkeeping roles are
+unaffected.

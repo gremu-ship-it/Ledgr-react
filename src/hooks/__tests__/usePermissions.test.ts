@@ -22,6 +22,10 @@ describe('Role-Based Access Control (RBAC)', () => {
     'asset_manager',
     'board_member',
     'branch_manager',
+    // POS roles (20260920000000_pos_module.sql)
+    'cashier',
+    'manager',
+    'stock_clerk',
   ];
 
   describe('Sales Clerk & Data Entry restrictions', () => {
@@ -91,6 +95,48 @@ describe('Role-Based Access Control (RBAC)', () => {
       expect(isPathAllowedForRole('board_member', '/dashboard')).toBe(true);
       expect(isPathAllowedForRole('board_member', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('board_member', '/settings')).toBe(false);
+    });
+  });
+
+  describe('POS roles', () => {
+    it('cashier is confined to the till, sales documents and support', () => {
+      expect(isPathAllowedForRole('cashier', '/pos')).toBe(true);
+      expect(isPathAllowedForRole('cashier', '/income')).toBe(true);
+      expect(isPathAllowedForRole('cashier', '/invoices')).toBe(true);
+      expect(isPathAllowedForRole('cashier', '/support')).toBe(true);
+      // No back-office surfaces: these bounce to the role's home (/pos).
+      expect(isPathAllowedForRole('cashier', '/settings')).toBe(false);
+      expect(isPathAllowedForRole('cashier', '/reports')).toBe(false);
+      expect(isPathAllowedForRole('cashier', '/expenses')).toBe(false);
+      expect(isPathAllowedForRole('cashier', '/payroll')).toBe(false);
+      expect(getHomePathForRole('cashier')).toBe('/pos');
+    });
+
+    it('manager keeps the till plus the back-office pages it supervises', () => {
+      ['/pos', '/dashboard', '/products', '/warehouse', '/transfers', '/reports'].forEach((path) => {
+        expect(isPathAllowedForRole('manager', path)).toBe(true);
+      });
+      expect(isPathAllowedForRole('manager', '/settings')).toBe(false);
+      expect(isPathAllowedForRole('manager', '/payroll')).toBe(false);
+      expect(getHomePathForRole('manager')).toBe('/pos');
+    });
+
+    it('stock clerk handles stock only and gets no POS access', () => {
+      ['/products', '/warehouse', '/transfers', '/inventory'].forEach((path) => {
+        expect(isPathAllowedForRole('stock_clerk', path)).toBe(true);
+      });
+      expect(isPathAllowedForRole('stock_clerk', '/pos')).toBe(false);
+      expect(isPathAllowedForRole('stock_clerk', '/dashboard')).toBe(false);
+      expect(getHomePathForRole('stock_clerk')).toBe('/products');
+    });
+
+    it('gives every POS role at least one primary tab for the mobile bar', () => {
+      // BottomNav filters its tabs through isPathAllowedForRole; a role with
+      // nothing allowed would render a bar with only the FAB and "More".
+      const primaryPaths = ['/dashboard', '/pos', '/income', '/products', '/reports'];
+      ['cashier', 'manager', 'stock_clerk'].forEach((role) => {
+        expect(primaryPaths.some((p) => isPathAllowedForRole(role, p))).toBe(true);
+      });
     });
   });
 

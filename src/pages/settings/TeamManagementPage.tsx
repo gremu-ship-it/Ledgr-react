@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Trash2, Loader2, AlertCircle,
   Crown, Shield, Calculator, Users, Eye, BarChart3, Mail,
-  Link, Copy, ExternalLink, Plus, Clock, UserX
+  Link, Copy, ExternalLink, Plus, Clock, UserX, ShoppingBag, Package
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
@@ -35,7 +35,11 @@ type UserRole =
   | 'treasury_manager'
   | 'asset_manager'
   | 'board_member'
-  | 'branch_manager';
+  | 'branch_manager'
+  // POS roles (user_role enum values added by 20260920000000_pos_module.sql)
+  | 'manager'
+  | 'cashier'
+  | 'stock_clerk';
 
 interface Member {
   id: string;
@@ -193,6 +197,25 @@ const ROLE_CONFIG: Record<UserRole, {
     icon: Shield,
     badge: 'bg-lime-100 text-lime-700',
   },
+  // ── POS roles ──────────────────────────────────────────────────────────
+  manager: {
+    label: 'POS Manager',
+    description: 'Runs the till, approves overrides, voids, refunds, and views POS reports',
+    icon: Users,
+    badge: 'bg-indigo-100 text-indigo-700',
+  },
+  cashier: {
+    label: 'Cashier',
+    description: 'Opens/closes shifts and records sales at the POS only',
+    icon: ShoppingBag,
+    badge: 'bg-green-100 text-green-700',
+  },
+  stock_clerk: {
+    label: 'Stock Clerk',
+    description: 'Receives, transfers, and adjusts stock — no sales access',
+    icon: Package,
+    badge: 'bg-yellow-100 text-yellow-700',
+  },
 };
 
 const INVITABLE_ROLES: UserRole[] = [
@@ -214,6 +237,9 @@ const INVITABLE_ROLES: UserRole[] = [
   'asset_manager',
   'board_member',
   'branch_manager',
+  'manager',
+  'cashier',
+  'stock_clerk',
 ];
 
 // ── RoleBadge ────────────────────────────────────────────────────────────────
@@ -1252,12 +1278,12 @@ export function TeamManagementPage() {
                   <td className="px-4 py-2 font-medium text-gray-700">{label}</td>
                   {(Object.keys(ROLE_CONFIG) as UserRole[]).map((r) => {
                     const perm = {
-                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager'],
-                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','branch_manager'],
+                      canRead: ['owner','admin','accountant','payroll_manager','supervisor','data_entry','inventory_manager','sales_clerk','auditor','viewer','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager','manager','cashier','stock_clerk'],
+                      canWrite: ['owner','admin','accountant','supervisor','data_entry','inventory_manager','sales_clerk','purchasing_officer','warehouse_worker','sales_manager','customer_service_rep','tax_compliance_officer','treasury_manager','asset_manager','branch_manager','manager','cashier','stock_clerk'],
                       canWritePayroll: ['owner','admin','accountant','payroll_manager','supervisor'],
                       canDelete: ['owner','admin'],
                       canManageUsers: ['owner','admin'],
-                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor','purchasing_officer','sales_manager','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager'],
+                      canExport: ['owner','admin','accountant','payroll_manager','supervisor','inventory_manager','auditor','purchasing_officer','sales_manager','tax_compliance_officer','treasury_manager','asset_manager','board_member','branch_manager','manager'],
                       canManageBilling: ['owner'],
                     }[key] ?? [];
                     const has = perm.includes(r);

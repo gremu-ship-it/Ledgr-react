@@ -12,8 +12,9 @@ import { syncQueue } from '@/offline/syncEngine';
 import { usageService } from '@/lib/billing/UsageService';
 import { buildPosSaleQueuePayload } from '@/services/posService';
 import { repos } from '@/lib/repositories';
-import { supabase } from '@/lib/supabase';
+import { realSupabase } from '@/lib/supabase';
 import type { PosCartItem, PosSalePayload } from '@/types/pos';
+import { missingPostPosSale } from '@/services/__tests__/helpers/postPosSaleStub';
 
 /**
  * The end-to-end path this whole change is about: a sale taken at a till with
@@ -70,7 +71,12 @@ describe('a POS sale queued offline', () => {
   beforeEach(async () => {
     await offlineDB.queue.clear();
     vi.restoreAllMocks();
-    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: null, error: null } as never);
+    // The client-side path is the fallback: it runs when post_pos_sale is not
+    // applied yet (stage 2 of docs/database/pos-sale-posting-rpc.md). This suite
+    // covers the client-side write, so the RPC is stubbed as missing.
+    vi.spyOn(realSupabase, 'rpc').mockImplementation(
+      missingPostPosSale(() => ({ data: null, error: null })) as never,
+    );
     // The sync pass checks the plan limit before writing a document.
     vi.spyOn(usageService, 'assertCanCreateDocument').mockResolvedValue(undefined);
   });

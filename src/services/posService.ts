@@ -4,6 +4,7 @@ import { createLogger } from '@/lib/logger';
 import type { InsertDto, PaymentMethod, Row } from '@/dal/types/database';
 import type { PosSaleQueuePayload } from '@/offline/payloads';
 import { retryNonCritical } from '@/lib/nonCriticalRetry';
+import { postPosSaleViaRpc, type PosSaleRpcResult } from '@/services/posSaleRpc';
 import type {
   PosPaymentSplit,
   PosSalePayload,
@@ -595,15 +596,12 @@ export interface PosSaleCommitResult {
  * `buildPosSaleQueuePayload`. Used for online sales and for queued offline
  * sales when they sync — identical in both cases.
  *
- * Idempotent by construction: the invoice carries `clientKey`, each payment
- * row `${clientKey}:pmt:<n>`, and the repositories look the key up before
- * inserting, so a retry after a lost response returns what already exists
- * rather than duplicating the invoice or the cash rows. The two derived
- * halves that have no key of their own are guarded by what they left behind:
- * the sales entry is skipped when the invoice already carries a
- * `journal_entry_id`, and the stock/COGS release is skipped when the invoice
- * already has stock movements. Re-running a committed sale is therefore a
- * no-op in the ledger as well as in the documents.
+ * Since stage 2 of docs/database/pos-sale-posting-rpc.md the sale is posted
+ * server-side by `post_pos_sale`, in one transaction; the client-side path
+ * below is only reached when that function does not exist yet in the
+ * environment (frontend deployed ahead of `supabase db push`). Both paths are
+ * idempotent on the same client key, so whichever one commits, a retry — on
+ * either path — returns the committed sale instead of a second one.
  */
 export async function commitPosSaleDocuments(
   payload: PosSaleQueuePayload,
@@ -611,6 +609,72 @@ export async function commitPosSaleDocuments(
 ): Promise<PosSaleCommitResult> {
   const businessId = options.businessId ?? payload.invoice.business_id;
   const clientKey = options.clientKey ?? payload.invoice.client_key ?? newSaveClientKey();
+
+  // Server-side posting (stage 2 of docs/database/pos-sale-posting-rpc.md).
+  // One transaction writes the invoice, its tenders, the ledger and the stock
+  // release; the RPC is idempotent on the same client key, so a replay returns
+  // the committed sale and completes it if an earlier attempt left it
+  // half-posted. Falling back to the legacy path below is required while the
+  // function may not exist yet in an environment (PGRST202) — the RPC has no
+  // other caller and stage 3's policy narrowing is only safe once every
+  // environment is on this path.
+  const rpcSale = await postPosSaleViaRpc(payload, businessId, clientKey);
+  if (rpcSale) {
+    return loadCommittedPosSale(businessId, rpcSale);
+  }
+
+  log.info('post_pos_sale unavailable — falling back to the client-side sale path', {
+    businessId,
+    receiptNumber: payload.receiptNumber,
+  });
+  return commitPosSaleDocumentsLegacy(payload, { businessId, clientKey });
+}
+
+/**
+ * Reads back what an RPC-posted sale wrote, so callers keep receiving the same
+ * shape as the legacy path. Every write already happened inside the RPC's
+ * transaction; this is a read of a business the caller is a member of, so it
+ * needs no elevated access.
+ */
+async function loadCommittedPosSale(
+  businessId: string,
+  rpcSale: PosSaleRpcResult,
+): Promise<PosSaleCommitResult> {
+  const { invoice, lines } = await repos.invoice.findByIdWithLines(rpcSale.id);
+
+  return {
+    invoice: { ...invoice, business_id: invoice.business_id ?? businessId },
+    lines: lines ?? [],
+    // A successful RPC has nothing to warn about: every step it performs is in
+    // the same transaction, so there is no "the sale stands but step N failed"
+    // state to report. That state is exactly what this path removes.
+    warnings: [],
+  };
+}
+
+/**
+ * The client-side sale path, kept as the fallback for environments where the
+ * `post_pos_sale` migration is not applied yet. Deleted once stage 3 lands
+ * (see the design doc); both paths are idempotent on the same client key, so
+ * a fallback after a committed RPC call cannot double-post.
+ *
+ * Idempotent by construction: the invoice carries `clientKey`, each payment
+ * row a key derived from it with `deriveClientKey` (the same derivation the
+ * RPC payload uses), and the repositories look the key up before inserting,
+ * so a retry after a lost response returns what already exists rather than
+ * duplicating the invoice or the cash rows. The two derived halves that have
+ * no key of their own are guarded by what they left behind: the sales entry is
+ * skipped when the invoice already carries a `journal_entry_id`, and the
+ * stock/COGS release is skipped when the invoice already has stock movements.
+ * Re-running a committed sale is therefore a no-op in the ledger as well as in
+ * the documents.
+ */
+async function commitPosSaleDocumentsLegacy(
+  payload: PosSaleQueuePayload,
+  resolved: { businessId: string; clientKey: string },
+): Promise<PosSaleCommitResult> {
+  const businessId = resolved.businessId;
+  const clientKey = resolved.clientKey;
   const warnings: string[] = [];
 
   // 0. Plan limit, checked BEFORE anything is written. The guard used to run
