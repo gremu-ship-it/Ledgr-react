@@ -19,4 +19,13 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  // Entry points bootstrap the tree and intentionally export nothing.
+  // Fast Refresh does not apply to them, so the only-export-components
+  // rule is noise here (and fails CI after eslint-plugin-react-refresh bumps).
+  {
+    files: ['src/main.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
