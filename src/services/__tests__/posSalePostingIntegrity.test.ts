@@ -8,6 +8,7 @@ import { usageService } from '@/lib/billing/UsageService';
 import { webhookService } from '@/services/webhook/WebhookService';
 import type { PosCartItem } from '@/types/pos';
 import type { QueuePayloadFor } from '@/offline/payloads';
+import { missingPostPosSale } from './helpers/postPosSaleStub';
 
 /**
  * What a till sale puts in the ledger.
@@ -128,7 +129,12 @@ describe('POS sale posting integrity', () => {
     vi.restoreAllMocks();
     storedInvoiceOverrides = {};
 
-    vi.spyOn(realSupabase, 'rpc').mockResolvedValue({ data: 'JNL-20260919-000001', error: null } as never);
+    // `next_journal_entry_number` answers with a number; post_pos_sale is stubbed
+    // as not-yet-migrated so this suite keeps testing the client-side path
+    // (its fallback) rather than the RPC.
+    vi.spyOn(realSupabase, 'rpc').mockImplementation(
+      missingPostPosSale(() => ({ data: 'JNL-20260919-000001', error: null })) as never,
+    );
     // The plan guard runs before the document write (see the dedicated test
     // below); stubbed here so the ledger tests do not need a network.
     vi.spyOn(usageService, 'assertWithinTransactionLimit').mockResolvedValue(undefined);

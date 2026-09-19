@@ -1,9 +1,25 @@
-# Server-side POS sale posting — design and verified prototype
+# Server-side POS sale posting — design, migration and client switch
 
-**Status: prototype verified, not wired, not deployed.** The SQL lives in
-`docs/database/pos-sale-posting-rpc.prototype.sql` (deliberately *not* in
-`supabase/migrations/`). Section 6 is the rollout order; section 7 the reasons
-this is a project rather than a patch.
+**Status: stages 1 and 2 shipped** (rollout, section 6).
+
+* Stage 1 — the RPC landed as an additive migration:
+  `supabase/migrations/20260923000000_post_pos_sale_rpc.sql` (`can_operate_pos`,
+  `_ledgr_post_entry_keyed`, `_ledgr_resolve_sale_contact`,
+  `_ledgr_complete_pos_sale`, `post_pos_sale`). Nothing else changed for it.
+* Stage 2 — `commitPosSaleDocuments` now posts through `post_pos_sale`
+  (`src/services/posSaleRpc.ts`), falling back to the client-side path only when
+  the backend does not implement it: the function is not in the schema cache
+  (PGRST202 — a frontend deployed ahead of `supabase db push`), or the client
+  answered without a sale document (demo mode, where every unemulated RPC
+  returns `null`). A real rejection propagates: the RPC is atomic, so nothing
+  was written and a second, weaker write path would be the wrong answer.
+
+The verified prototype that preceded the migration is kept for reference in
+`docs/database/pos-sale-posting-rpc.prototype.sql`; the migration supersedes it
+(completion-on-replay, absolute shift arithmetic, contact resolution fixes).
+Stage 3 — narrowing the POS roles' ledger policies — is **not** in this change.
+Section 6 is the rollout order; section 7 the reasons this is a project rather
+than a patch.
 
 ## 1. Why
 
@@ -96,10 +112,20 @@ Result: a cashier session can produce a sale, a refund and a void — and cannot
 write an ad-hoc journal entry, invoice, expense or stock movement. Direct
 PostgREST calls with their own token get 42501.
 
-## 5. Verification (embedded Postgres, all 82 migrations replayed)
+## 5. Verification
 
-Harness per `docs/database/database-operations.md`. Probes run as
-`SET ROLE authenticated` with a real `cashier` membership.
+The migration is covered by `tests/database/pos_sale_rpc.test.js` (19 assertions,
+embedded Postgres, harness per `docs/database/database-operations.md`): a fresh
+sale, replay idempotency, completion of a half-posted sale, contact resolution,
+the validation rejections, the permission guard, split-tender routing and the
+discount/VAT ledger shape. Probes run as `SET ROLE authenticated` with a real
+`cashier` membership. The switch itself is covered by
+`src/services/__tests__/posSaleRpcPath.test.ts` (RPC posts and the legacy
+repositories stay untouched; missing function falls back with identical client
+keys; a real rejection propagates; one transient retry).
+
+**Prototype evidence** (the same SQL, all 82 migrations replayed, before
+promotion to a migration):
 
 **Lockout holds** (policies narrowed as in section 4, prototype loaded):
 
@@ -133,9 +159,10 @@ up as notes in the till.
 
 ## 6. Rollout — each stage independently safe
 
-1. **Land the RPC (additive).** Nothing calls it; policies unchanged. Reversible
-   by dropping the functions.
-2. **Switch `commitPosSaleDocuments` to it**, keeping the existing path as the
+1. **Land the RPC (additive).** ✅ *Shipped* —
+   `20260923000000_post_pos_sale_rpc.sql`. Nothing calls it; policies unchanged.
+   Reversible by dropping the functions.
+2. **Switch `commitPosSaleDocuments` to it** ✅ *Shipped*, keeping the existing path as the
    fallback exactly as the quick-save RPCs do (`save_quick_expense` unavailable →
    legacy path: `ExpensesPage.tsx:599`, `QuickExpenseMobile.tsx:302`,
    `syncEngine.ts:243`). Both paths are idempotent on the same `client_key`, so a
@@ -145,14 +172,18 @@ up as notes in the till.
    the RPCs.
 4. Repeat 1–3 for refund and void before stage 3 for those tables.
 
-Stages 1 and 2 can ship together; stage 3 must not precede them.
+Stages 1 and 2 shipped together (one reviewable change); stage 3 must not
+precede them. What stage 2 leaves in place: a live fallback, and therefore no
+change yet to what a cashier's session is allowed to write.
 
 ## 7. Residual risks and open questions
 
 * **The fallback weakens the lockout.** While the legacy path remains, a
   cashier whose RPC call fails plausibly could still need direct writes. Resolve
   by removing the fallback (after a soak period) and only then applying stage 3
-  — the order in section 6 keeps production safe at every step.
+  — the order in section 6 keeps production safe at every step. Stage 2 has not
+  yet realised the lockout: the till still writes the ledger itself whenever the
+  RPC is unavailable, and the *only* such case left is the missing function.
 * **Offline queue.** Queued sales replay through `commitPosSaleDocuments`, so a
   queue item written by the old code still posts through whichever path stage 2
   leaves in place. Items created by a cashier *before* stage 2 are unaffected by
@@ -175,8 +206,7 @@ Stages 1 and 2 can ship together; stage 3 must not precede them.
 ## 8. Cost to finish
 
 Rough shape, informed by the prototype: refund and void RPCs (~1.5× the sale
-one, reusing its skeleton), contact resolution inside the RPC, the client
-switch plus fallback removal, offline-queue tests, and the policy migration with
+one, reusing its skeleton), fallback removal, and the policy migration with
 its assertions in `tests/database/rls_security.test.js`. The sale RPC itself is ~230
 lines of SQL (364 with the prototype banner and comments) and was verified end
 to end; the risk is concentrated in stages 2–3,
