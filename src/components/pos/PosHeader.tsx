@@ -18,6 +18,8 @@ interface PosHeaderProps {
   branchName?: string;
   isOnline: boolean;
   pendingOfflineCount: number;
+  /** Queued changes the last sync pass could not complete. */
+  failedOfflineCount?: number;
   isSyncing?: boolean;
   canViewOwnerDashboard?: boolean;
   canManageRegisters?: boolean;
@@ -39,6 +41,7 @@ export function PosHeader({
   branchName = 'Main Branch',
   isOnline,
   pendingOfflineCount,
+  failedOfflineCount = 0,
   isSyncing = false,
   canViewOwnerDashboard = false,
   canManageRegisters = false,
@@ -138,15 +141,28 @@ export function PosHeader({
       <div className="flex items-center gap-2">
         {/* Offline / Online indicator & sync button */}
         {isOnline ? (
-          pendingOfflineCount > 0 ? (
+          pendingOfflineCount > 0 || failedOfflineCount > 0 ? (
             <button
               type="button"
               onClick={onSyncOfflineSales}
               disabled={isSyncing}
-              className="flex items-center gap-1.5 rounded-xl bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-800 border border-amber-200 hover:bg-amber-100"
+              title={
+                failedOfflineCount > 0
+                  ? `${failedOfflineCount} offline change(s) could not be synced — open the offline queue in the header for details.`
+                  : 'Send queued offline sales and entries to the server'
+              }
+              className={`flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-bold border ${
+                failedOfflineCount > 0
+                  ? 'bg-red-50 text-red-800 border-red-200 hover:bg-red-100'
+                  : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+              }`}
             >
               <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-              <span>Sync ({pendingOfflineCount})</span>
+              <span>
+                {failedOfflineCount > 0
+                  ? `${failedOfflineCount} need attention`
+                  : `Sync (${pendingOfflineCount})`}
+              </span>
             </button>
           ) : (
             <div className="flex items-center gap-1 rounded-xl bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 border border-emerald-200">

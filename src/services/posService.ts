@@ -1,8 +1,11 @@
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import { createLogger } from '@/lib/logger';
-import type { InsertDto } from '@/dal/types/database';
+import type { InsertDto, PaymentMethod, Row } from '@/dal/types/database';
+import type { PosSaleQueuePayload } from '@/offline/payloads';
+import { retryNonCritical } from '@/lib/nonCriticalRetry';
 import type {
+  PosPaymentSplit,
   PosSalePayload,
   PosSaleResult,
   PosReturnPayload,
@@ -19,8 +22,6 @@ import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueA
 import { newSaveClientKey } from '@/services/quickSaveService';
 
 const log = createLogger('PosService');
-
-const POS_OFFLINE_STORAGE_KEY = 'ledgr_pos_offline_queue';
 
 // ── Receipt Number Generation ───────────────────────────────────────────────
 
@@ -188,443 +189,743 @@ export function applyOrderDiscount(_currentItems: PosCartItem[], discount?: PosD
 
 // ── Complete POS Sale ───────────────────────────────────────────────────────
 
-export async function processSale(
+/**
+ * Sentinel contact id a queued offline sale carries until the sync handler
+ * resolves a real contact. Matches the sentinel the income queue already uses,
+ * so both paths resolve walk-in customers the same way.
+ */
+export const OFFLINE_WALK_IN_CONTACT_ID = 'offline_walk_in_customer';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * POS payment methods → the DB `payment_method` enum.
+ *
+ * 'credit'/'credit_sale' are not money received, so they never become payment
+ * rows; they only drive the invoice's status and due date. The DB enum has no
+ * credit value at all — that mapping is deliberate, not an oversight.
+ */
+const POS_TO_DB_PAYMENT_METHOD: Record<PosPaymentMethod, PaymentMethod> = {
+  cash: 'cash',
+  airtel_money: 'airtel_money',
+  tnm_mpamba: 'tnm_mpamba',
+  bank_transfer: 'bank_transfer',
+  card: 'card',
+  other: 'other',
+  credit: 'other',
+  credit_sale: 'other',
+};
+
+function isCreditMethod(method: PosPaymentMethod): boolean {
+  return method === 'credit' || method === 'credit_sale';
+}
+
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/** A payment leg that represents money actually taken at the till. */
+export interface PosPaymentLeg {
+  payment_method: PaymentMethod;
+  amount: number;
+  reference?: string | null;
+  bank_account_id?: string | null;
+}
+
+/** A POS sale after parsing: single representation shared by every write path. */
+export interface NormalizedPosSale {
+  businessId: string;
+  branchId: string | null;
+  shiftId: string | null;
+  customerId: string | null;
+  customerName: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  cashierId: string | null;
+  cashierName: string;
+  items: PosCartItem[];
+  /** Money received, in DB enum terms. Credit legs are excluded. */
+  payments: PosPaymentLeg[];
+  totals: PosCartTotals;
+  isCreditSale: boolean;
+  totalPaid: number;
+  changeGiven: number;
+  notes?: string;
+  dueDate?: string;
+  managerApproval?: { approverName: string; reason: string } | null;
+  receiptNumber: string;
+  clientKey: string;
+  issueDate: string;
+  /** Placeholder ('POS-OFFLINE-…') until the server reserves the real number. */
+  invoiceNumber?: string;
+}
+
+export interface NormalizePosSaleOptions {
+  /** Stable idempotency key; reused across retries of one logical sale. */
+  clientKey?: string;
+  /** Human receipt reference. Generated when absent. */
+  receiptNumber?: string;
+  /** Pre-reserved document number, when a caller already has one. */
+  invoiceNumber?: string;
+}
+
+/**
+ * Parses a caller-supplied `PosSalePayload` (two spellings for most fields)
+ * into the one shape every write path below works with, and enforces the two
+ * rules that make a sale valid: it has items, and a non-credit sale was
+ * actually paid for.
+ */
+export function normalizePosSale(
   payload: PosSalePayload,
-  options: { isOnline?: boolean; userRole?: string } = {},
-): Promise<PosSaleResult> {
-  const businessId = payload.businessId || payload.business_id || 'biz-default';
-  const branchId = payload.branchId ?? payload.branch_id ?? null;
-  const shiftId = payload.shiftId ?? payload.shift_id ?? null;
-  const customerId = payload.customerId ?? payload.customer_id ?? null;
-  const customerName = payload.customerName || payload.customer_name || 'Walk-in Customer';
-  const customerPhone = payload.customerPhone || payload.customer_phone;
-  const customerEmail = payload.customerEmail || payload.customer_email;
-  const cashierId = payload.cashierId ?? payload.cashier_id ?? null;
-  const cashierName = payload.cashierName || payload.cashier_name || 'Cashier';
+  options: NormalizePosSaleOptions = {},
+): NormalizedPosSale {
+  const businessId = payload.businessId || payload.business_id;
+  if (!businessId) {
+    throw new Error(
+      'Cannot record a POS sale without a business. Reload the page or select a business first.',
+    );
+  }
+
   const items: PosCartItem[] = payload.items || [];
-  const orderDiscount = payload.orderDiscount || payload.order_discount;
-  const rawPayments = payload.payments || payload.payment_splits || [{ payment_method: 'cash', amount: payload.totalPaid || 0 }];
-  const payments: { payment_method: PosPaymentMethod; amount: number; reference?: string; bank_account_id?: string; tendered?: number }[] =
-    rawPayments.map((p) => ({
-      payment_method: (p.payment_method || 'cash') as PosPaymentMethod,
-      amount: Number(p.amount) || 0,
-      reference: p.reference,
-      bank_account_id: p.bank_account_id,
-      tendered: p.tendered,
-    }));
-
-  const totalPaid = Number(payload.totalPaid ?? payload.total_paid ?? 0);
-  const changeGiven = Number(payload.changeGiven ?? payload.change_given ?? 0);
-  const notes = payload.notes;
-  const dueDate = payload.dueDate || payload.due_date;
-  const managerApproval = payload.managerApproval;
-
-  if (!items || items.length === 0) {
+  if (items.length === 0) {
     throw new Error('Cart is empty. Please add items to complete sale.');
   }
 
+  const orderDiscount = payload.orderDiscount || payload.order_discount;
   const totals = payload.totals || calculateCartTotals(items, orderDiscount);
-  const isCreditSale = Boolean(payload.isCreditSale || payload.is_credit_sale || payments.some((p) => p.payment_method === 'credit_sale' || p.payment_method === 'credit'));
+  const totalPaid = Number(payload.totalPaid ?? payload.total_paid ?? 0);
+  const changeGiven = Number(payload.changeGiven ?? payload.change_given ?? 0);
+
+  const rawPayments = payload.payments ||
+    payload.payment_splits || [{ payment_method: 'cash' as PosPaymentMethod, amount: totalPaid }];
+
+  // Payment methods arrive under two spellings ('method'/'payment_method') and
+  // may be absent entirely, in which case the till took cash.
+  const paymentMethodOf = (p: PosPaymentSplit): PosPaymentMethod =>
+    p.payment_method ?? p.method ?? 'cash';
+
+  const isCreditSale = Boolean(
+    payload.isCreditSale ||
+    payload.is_credit_sale ||
+    rawPayments.some((p) => isCreditMethod(paymentMethodOf(p))),
+  );
 
   if (!isCreditSale && totalPaid < totals.net_payable - 0.05) {
-    throw new Error(`Tendered payment (${totalPaid}) is less than net payable (${totals.net_payable}).`);
+    throw new Error(
+      `Tendered payment (${totalPaid}) is less than net payable (${totals.net_payable}).`,
+    );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const receiptNumber = generateReceiptNumber('REC');
-  const clientKey = payload.clientKey || newSaveClientKey();
-  const isOnline = options.isOnline !== false && (typeof navigator === 'undefined' || navigator.onLine);
+  const payments: PosPaymentLeg[] = rawPayments
+    .filter((p) => !isCreditMethod(paymentMethodOf(p)) && Number(p.amount) > 0)
+    .map((p) => ({
+      payment_method: POS_TO_DB_PAYMENT_METHOD[paymentMethodOf(p)] ?? 'other',
+      amount: Number(p.amount) || 0,
+      reference: p.reference ?? null,
+      bank_account_id: p.bank_account_id ?? null,
+    }));
 
-  // Offline queue storage helper
-  const storeOfflineSale = async (offlineNum: string) => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const raw = localStorage.getItem(POS_OFFLINE_STORAGE_KEY);
-        const list = raw ? JSON.parse(raw) : [];
-        list.push({ offlineNum, receiptNumber, payload, queuedAt: new Date().toISOString() });
-        localStorage.setItem(POS_OFFLINE_STORAGE_KEY, JSON.stringify(list));
-      }
-      await enqueue('income', businessId, {
-        notes: `POS offline sale ${receiptNumber} (${offlineNum})`,
-        items: items.map((i) => ({
-          productId: i.product_id || i.productId,
-          name: i.name,
-          quantity: i.quantity,
-          unitPrice: i.unit_price ?? i.unitPrice ?? 0,
-          lineTotal: i.line_total ?? i.lineTotal ?? 0,
-        })),
-        receiptNumber,
-      } as never).catch(() => {});
-    } catch {
-      // offline fallback ignored safely
-    }
+  const customerId = payload.customerId ?? payload.customer_id ?? null;
+
+  return {
+    businessId,
+    branchId: payload.branchId ?? payload.branch_id ?? null,
+    shiftId: payload.shiftId ?? payload.shift_id ?? null,
+    customerId,
+    customerName: payload.customerName || payload.customer_name || 'Walk-in Customer',
+    customerPhone: payload.customerPhone || payload.customer_phone || null,
+    customerEmail: payload.customerEmail || payload.customer_email || null,
+    cashierId: payload.cashierId ?? payload.cashier_id ?? null,
+    cashierName: payload.cashierName || payload.cashier_name || 'Cashier',
+    items,
+    payments,
+    totals,
+    isCreditSale,
+    totalPaid,
+    changeGiven,
+    notes: payload.notes,
+    dueDate: payload.dueDate || payload.due_date,
+    managerApproval: payload.managerApproval ?? null,
+    receiptNumber: options.receiptNumber ?? generateReceiptNumber('REC'),
+    clientKey: options.clientKey ?? payload.clientKey ?? newSaveClientKey(),
+    issueDate: new Date().toISOString().slice(0, 10),
+    invoiceNumber: options.invoiceNumber,
   };
+}
 
-  // Offline branch
-  if (!isOnline) {
-    const offlineInvoiceNum = generateOfflineNumber('POS');
-    await storeOfflineSale(offlineInvoiceNum);
+/**
+ * Builds the complete set of records a sale turns into, with no I/O at all.
+ *
+ * This is the single definition of "what a POS sale writes": the online till
+ * commits it immediately, the offline till stores it in the queue and commits
+ * the exact same payload when connectivity returns. Anything that differs
+ * between a synced offline sale and an online sale is therefore a bug in
+ * `commitPosSaleDocuments`, not a fork in the two code paths.
+ */
+export function buildPosSaleQueuePayload(
+  payload: PosSalePayload,
+  options: NormalizePosSaleOptions = {},
+): PosSaleQueuePayload {
+  const sale = normalizePosSale(payload, options);
+  const { totals, businessId, branchId, isCreditSale } = sale;
 
-    const saleResult: PosSaleResult = {
-      saleId: `offline-${Date.now()}`,
-      invoiceId: `offline-${Date.now()}`,
-      invoiceNumber: offlineInvoiceNum,
-      receiptNumber,
-      timestamp: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      cashierName,
-      branchName: branchId || 'Main Branch',
-      customerName,
-      customerPhone,
-      items: items.map((i) => ({
-        productId: i.product_id || i.productId,
-        product_id: i.product_id || i.productId,
-        name: i.name,
-        product_name: i.name,
-        quantity: i.quantity,
-        unitPrice: i.unit_price ?? i.unitPrice ?? 0,
-        unit_price: i.unit_price ?? i.unitPrice ?? 0,
-        lineTotal: i.line_total ?? i.lineTotal ?? 0,
-        line_total: i.line_total ?? i.lineTotal ?? 0,
-      })),
-      subtotal: totals.gross_total,
-      discountAmount: totals.discount_total,
-      taxAmount: totals.tax_total,
-      netPayable: totals.net_payable,
-      grandTotal: totals.net_payable,
-      totalPaid,
-      changeGiven,
-      payments: payments.map((p) => ({
-        payment_method: p.payment_method,
-        amount: p.amount,
-        reference: p.reference,
-      })),
-      notes,
-      isOffline: true,
-      sale: {
-        id: `offline-${Date.now()}`,
-        receipt_number: receiptNumber,
-        created_at: new Date().toISOString(),
-        customer_name: customerName,
-        cashier_name: cashierName,
-        net_amount: totals.net_payable,
-        gross_amount: totals.gross_total,
-        discount_amount: totals.discount_total,
-        total_paid: totalPaid,
-        change_given: changeGiven,
-        status: 'completed',
-      },
-    };
-    return saleResult;
-  }
+  // amount_paid is owned by the invoice_payments rows: recordPayment()
+  // increments it atomically for every row we insert below. Setting the full
+  // net payable on the header as well would count every shilling twice, which
+  // is exactly what left POS invoices with amount_paid at 2× the sale and a
+  // negative amount due (and, on the header, status 'paid' with no cash row).
+  // Only the part of the sale that no payment row covers is set directly.
+  const coveredByPayments = round2(sale.payments.reduce((sum, p) => sum + p.amount, 0));
+  const headerAmountPaid = isCreditSale
+    ? 0
+    : Math.max(0, round2(totals.net_payable - coveredByPayments));
 
-  try {
-    // 1. Resolve Contact
-    let finalContactId = customerId;
-    if (!finalContactId) {
-      const defaultContact = await repos.contact.findDefaultSaleContact(businessId).catch(() => null);
-      if (defaultContact) {
-        finalContactId = defaultContact.id;
-      } else {
-        const created = await repos.contact.createContact({
-          business_id: businessId,
-          name: customerName || 'Walk-in Customer',
-          contact_type: 'customer',
-          is_active: true,
-          phone: customerPhone || null,
-          email: customerEmail || null,
-        } as never).catch(() => null);
-        if (created) finalContactId = created.id;
-      }
-    }
+  const invoice = {
+    business_id: businessId,
+    // Placeholder until commit reserves the real sequence number. Keeping the
+    // marker means the sync handler knows to reserve one, and a retry after a
+    // lost response does not burn a second number.
+    invoice_number: sale.invoiceNumber ?? generateOfflineNumber('POS'),
+    invoice_type: 'invoice',
+    // Inserted as 'sent' and driven to paid/partially_paid by the payment rows.
+    // Inserting 'paid' up front would claim money we have not recorded yet —
+    // if a payment row then failed, the invoice would show as settled with an
+    // empty cash history.
+    status: 'sent',
+    contact_id: sale.customerId ?? OFFLINE_WALK_IN_CONTACT_ID,
+    issue_date: sale.issueDate,
+    due_date: isCreditSale ? (sale.dueDate || sale.issueDate) : sale.issueDate,
+    currency: 'MWK',
+    exchange_rate: 1,
+    subtotal: totals.gross_total,
+    discount_amount: totals.discount_total,
+    discount_percent: totals.gross_total > 0
+      ? Math.round((totals.discount_total / totals.gross_total) * 100)
+      : 0,
+    taxable_amount: totals.taxable_subtotal,
+    vat_amount: totals.tax_total,
+    wht_amount: 0,
+    total_amount: totals.net_payable,
+    amount_paid: headerAmountPaid,
+    // Resolved at commit time when the till was offline (the accounts table was
+    // unreachable); journalService falls back to the standard revenue account.
+    revenue_account_id: null,
+    notes: sale.notes
+      ? `${sale.notes} (Receipt: ${sale.receiptNumber})`
+      : `POS Sale Receipt ${sale.receiptNumber}`,
+    payment_reference: sale.receiptNumber,
+    created_by: sale.cashierName,
+    branch_id: branchId,
+    client_key: sale.clientKey,
+  } as InsertDto<'invoices'>;
 
-    // 2. Reserve Document Number
-    const invoiceNumber = await repos.business.reserveNextInvoiceNumber(businessId).catch(() => `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`);
-
-    // 3. Resolve Revenue Account
-    const incomeAccounts = await repos.account.findByBusiness(businessId).catch(() => []);
-    const revenueAccount = incomeAccounts.find((a) => a.code === '4000' || a.code === '4110' || a.account_type === 'income');
-
-    // 4. Create Invoice Header
-    const invoiceHeader: InsertDto<'invoices'> = {
-      business_id: businessId,
-      invoice_number: invoiceNumber,
-      invoice_type: 'invoice',
-      status: isCreditSale ? 'sent' : 'paid',
-      contact_id: finalContactId || null,
-      issue_date: today,
-      due_date: isCreditSale ? (dueDate || today) : today,
-      currency: 'MWK',
-      exchange_rate: 1,
-      subtotal: totals.gross_total,
-      discount_amount: totals.discount_total,
-      discount_percent: totals.gross_total > 0 ? Math.round((totals.discount_total / totals.gross_total) * 100) : 0,
-      taxable_amount: totals.taxable_subtotal,
-      vat_amount: totals.tax_total,
-      wht_amount: 0,
-      total_amount: totals.net_payable,
-      amount_paid: isCreditSale ? 0 : totals.net_payable,
-      revenue_account_id: revenueAccount?.id || null,
-      notes: notes ? `${notes} (Receipt: ${receiptNumber})` : `POS Sale Receipt ${receiptNumber}`,
-      payment_reference: receiptNumber,
-      created_by: cashierName,
-      branch_id: branchId || null,
-      client_key: clientKey,
-    } as InsertDto<'invoices'>;
-
-    // 5. Create Invoice Lines
-    const invoiceLines = items.map((item, index) => {
-      const uPrice = Number(item.unit_price ?? item.unitPrice ?? 0);
-      const lTotal = Number(item.line_total ?? item.lineTotal ?? (uPrice * item.quantity));
+  const lines: Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>[] = sale.items.map(
+    (item, index) => {
+      const unitPrice = Number(item.unit_price ?? item.unitPrice ?? 0);
+      const lineTotal = Number(item.line_total ?? item.lineTotal ?? unitPrice * item.quantity);
       return {
         line_number: index + 1,
         description: item.name + (item.sku ? ` [${item.sku}]` : ''),
         quantity: item.quantity,
-        unit_price: uPrice,
+        unit_price: unitPrice,
         discount_percent: item.discount?.type === 'percent' ? item.discount.value : 0,
-        discount_amount: item.discount ? (item.quantity * uPrice) - lTotal : 0,
+        discount_amount: item.discount ? item.quantity * unitPrice - lineTotal : 0,
         tax_code: 'none' as const,
         tax_rate: item.tax_rate || 0,
         tax_amount: 0,
-        line_total: lTotal,
-        account_id: revenueAccount?.id || null,
+        line_total: lineTotal,
+        // Filled in at commit time from the business's revenue account.
+        account_id: null,
         product_id: item.product_id || item.productId || null,
       };
+    },
+  );
+
+  const payments: Omit<InsertDto<'invoice_payments'>, 'invoice_id' | 'business_id'>[] =
+    sale.payments.map((p) => ({
+      amount: p.amount,
+      payment_date: sale.issueDate,
+      payment_method: p.payment_method,
+      bank_account_id: p.bank_account_id ?? null,
+      reference: p.reference ?? null,
+      notes: `POS Payment: ${p.payment_method} for ${sale.receiptNumber}`,
+      currency: 'MWK',
+      exchange_rate: 1,
+      created_by: sale.cashierName,
+    }));
+
+  const cashSales = round2(
+    sale.payments.filter((p) => p.payment_method === 'cash').reduce((s, p) => s + p.amount, 0),
+  );
+  const otherSales = round2(
+    sale.payments.filter((p) => p.payment_method !== 'cash').reduce((s, p) => s + p.amount, 0),
+  );
+
+  return {
+    invoice,
+    lines,
+    payments,
+    customer: {
+      name: sale.customerName,
+      phone: sale.customerPhone ?? null,
+      email: sale.customerEmail ?? null,
+    },
+    shiftId: sale.shiftId,
+    cashSales,
+    otherSales,
+    receiptNumber: sale.receiptNumber,
+    cashierId: sale.cashierId,
+    cashierName: sale.cashierName,
+    isCreditSale,
+    total: totals.net_payable,
+    itemCount: totals.item_count,
+    notes: sale.notes,
+  };
+}
+
+/**
+ * Raised when the sale document exists but a step that belongs to it failed
+ * for a reason retrying cannot fix. The invoice id is carried so callers can
+ * tell the cashier which document to look at instead of re-ringing the sale
+ * (which would duplicate revenue and stock).
+ */
+export class PosSalePostCommitError extends Error {
+  readonly invoiceId: string;
+  readonly invoiceNumber: string;
+  readonly stage: string;
+
+  constructor(
+    message: string,
+    invoice: { id: string; invoice_number: string },
+    stage: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.name = 'PosSalePostCommitError';
+    this.invoiceId = invoice.id;
+    this.invoiceNumber = invoice.invoice_number;
+    this.stage = stage;
+  }
+}
+
+export interface PosSaleCommitOptions {
+  /** Overrides the payload's business id (queue items scope by tenant). */
+  businessId?: string;
+  /** Idempotency key for the document and every row derived from it. */
+  clientKey?: string;
+}
+
+export interface PosSaleCommitResult {
+  invoice: Row<'invoices'>;
+  lines: Row<'invoice_lines'>[];
+  /** Warnings for steps that failed without endangering the sale. */
+  warnings: string[];
+}
+
+/**
+ * Writes a POS sale to the server, from a payload built by
+ * `buildPosSaleQueuePayload`. Used for online sales and for queued offline
+ * sales when they sync — identical in both cases.
+ *
+ * Idempotent by construction: the invoice carries `clientKey`, each payment
+ * row `${clientKey}:pmt:<n>`, and the repositories look the key up before
+ * inserting, so a retry after a lost response returns what already exists
+ * rather than duplicating revenue, cash or stock.
+ */
+export async function commitPosSaleDocuments(
+  payload: PosSaleQueuePayload,
+  options: PosSaleCommitOptions = {},
+): Promise<PosSaleCommitResult> {
+  const businessId = options.businessId ?? payload.invoice.business_id;
+  const clientKey = options.clientKey ?? payload.invoice.client_key ?? newSaveClientKey();
+  const warnings: string[] = [];
+
+  let invoice: InsertDto<'invoices'> = { ...payload.invoice, business_id: businessId };
+
+  // 1. Reserve a real document number for a number that was issued offline.
+  const isPlaceholderNumber =
+    !invoice.invoice_number ||
+    (typeof invoice.invoice_number === 'string' && invoice.invoice_number.includes('-OFFLINE-'));
+  if (isPlaceholderNumber) {
+    const reserved = await repos.business
+      .reserveNextInvoiceNumber(businessId)
+      .catch(() => `INV-${new Date().getFullYear()}-${String(Date.now()).slice(-4)}`);
+    invoice = { ...invoice, invoice_number: reserved };
+  }
+
+  // 2. Resolve the customer. A queued sale may hold the walk-in sentinel, or a
+  //    contact id that was invented offline (a customer created while the
+  //    contacts table was unreachable) which would fail the foreign key.
+  const contactId = await resolveSaleContact(businessId, invoice.contact_id, payload.customer);
+  invoice = { ...invoice, contact_id: contactId } as InsertDto<'invoices'>;
+
+  // 3. Resolve the revenue account when it could not be read offline, and
+  //    stamp it on the lines so reports agree with the invoice.
+  let lines = payload.lines;
+  let revenueAccountId = invoice.revenue_account_id ?? null;
+  if (!revenueAccountId) {
+    const accounts = await repos.account.findByBusiness(businessId).catch(() => []);
+    const revenueAccount = accounts.find(
+      (a) => a.code === '4000' || a.code === '4110' || a.account_type === 'income',
+    );
+    revenueAccountId = revenueAccount?.id ?? null;
+    if (revenueAccountId) {
+      invoice = { ...invoice, revenue_account_id: revenueAccountId };
+      lines = lines.map((line) =>
+        line.account_id ? line : { ...line, account_id: revenueAccountId },
+      );
+    }
+  }
+
+  // 4. The document itself: header + lines, atomically, under the client key.
+  const { invoice: createdInvoice, lines: createdLines } = await repos.invoice.createWithLines(
+    invoice,
+    lines,
+    clientKey,
+  );
+
+  // 5. Money received. These rows are what move `amount_paid` (and therefore
+  //    the invoice's status and amount due) — see the note in
+  //    buildPosSaleQueuePayload. A failure here is NOT retry-invisible: the
+  //    invoice would sit at 'sent' with cash taken but unrecorded, so it is
+  //    raised for the caller to retry (safe: same key) or surface.
+  for (const [index, payment] of payload.payments.entries()) {
+    try {
+      await repos.invoice.recordPayment(
+        { ...payment, business_id: businessId, invoice_id: createdInvoice.id } as InsertDto<'invoice_payments'>,
+        `${clientKey}:pmt:${index}`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      throw new PosSalePostCommitError(
+        `POS sale ${payload.receiptNumber} was saved as ${createdInvoice.invoice_number}, but payment ${index + 1}/${payload.payments.length} (${payment.payment_method} ${payment.amount}) could not be recorded: ${message}`,
+        createdInvoice,
+        'payment',
+        { cause: err },
+      );
+    }
+  }
+
+  // 6. Stock and cost of sale. `deductStockAndPostCogs` writes the movements
+  //    AND their COGS entry, skipping products that are not inventory-tracked
+  //    and reading the live average cost — which is why it has to run here and
+  //    not at the till: the device may have been offline for days while other
+  //    tills moved the same stock.
+  const stockLines = lines
+    .filter((line) => line.product_id && Number(line.quantity) > 0)
+    .map((line) => ({ productId: line.product_id as string, quantity: Number(line.quantity) }));
+
+  if (stockLines.length > 0) {
+    const result = await retryNonCritical(
+      () =>
+        deductStockAndPostCogs(
+          businessId,
+          createdInvoice,
+          stockLines,
+          createdInvoice.branch_id ?? null,
+          createdInvoice.department_id ?? null,
+          createdInvoice.created_by ?? null,
+        ),
+      { module: 'PosService', operation: 'pos_stock_cogs', businessId },
+    );
+    if (result === null) {
+      warnings.push('Stock and cost of sale could not be posted for this sale.');
+    }
+  }
+
+  // 7. Sales double-entry journal.
+  const journalPosted = await retryNonCritical(
+    () =>
+      createInvoiceJournalEntry(
+        businessId,
+        createdInvoice,
+        Number(createdInvoice.subtotal),
+        Number(createdInvoice.vat_amount),
+        createdInvoice.branch_id ?? null,
+        createdInvoice.department_id ?? null,
+      ),
+    { module: 'PosService', operation: 'pos_journal_entry', businessId },
+  );
+  if (journalPosted === null) {
+    warnings.push('The sales journal entry could not be posted for this sale.');
+  }
+
+  // 8. Drawer totals for the shift this sale belongs to.
+  if (payload.shiftId) {
+    const applied = await applyShiftTotals(businessId, payload);
+    if (!applied) {
+      warnings.push(
+        `Shift totals were not updated for ${payload.receiptNumber} (the shift is closed or was removed); reconcile the drawer manually.`,
+      );
+    }
+  }
+
+  // 9. Audit trail (best-effort; never blocks the sale).
+  await retryNonCritical(
+    () => logPosSaleAudit(businessId, payload, createdInvoice),
+    { module: 'PosService', operation: 'pos_audit_log', businessId },
+  );
+
+  return { invoice: createdInvoice, lines: createdLines, warnings };
+}
+
+/** True when an id is a real server-generated uuid rather than an offline placeholder. */
+function isServerId(value: string | null | undefined): boolean {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+/**
+ * Finds or creates the contact a sale is billed to, tolerating the two kinds
+ * of placeholder an offline till can leave behind.
+ */
+async function resolveSaleContact(
+  businessId: string,
+  contactId: string | null,
+  customer: PosSaleQueuePayload['customer'],
+): Promise<string | null> {
+  if (isServerId(contactId)) return contactId;
+
+  const name = (customer?.name ?? '').trim();
+  const isWalkIn = !name || /^walk[\s-]?in/i.test(name) || contactId === OFFLINE_WALK_IN_CONTACT_ID;
+
+  if (!isWalkIn) {
+    // A named customer created while offline: reuse the existing contact if
+    // one with that name is already on file (keeps retries from piling up
+    // duplicates), otherwise create it now.
+    const existing = await repos.contact.findByBusiness(businessId, 'customer').catch(() => []);
+    const match = existing.find((c) => c.name.trim().toLowerCase() === name.toLowerCase());
+    if (match) return match.id;
+
+    const created = await repos.contact
+      .createContact({
+        business_id: businessId,
+        name,
+        contact_type: 'customer',
+        is_active: true,
+        phone: customer?.phone ?? null,
+        email: customer?.email ?? null,
+      } as never)
+      .catch(() => null);
+    if (created) return created.id;
+  }
+
+  const walkIn = await repos.contact.findDefaultSaleContact(businessId).catch(() => null);
+  return walkIn?.id ?? null;
+}
+
+/**
+ * Adds a sale's takings to its shift's drawer totals — but only while the
+ * shift is still open.
+ *
+ * A closed shift has already been counted, its variance explained and its
+ * Z-report signed. Silently rewriting its expected cash afterwards would make
+ * the signed report disagree with the data behind it, which is worse for
+ * reconciliation than a shift that is visibly missing one sale. The caller
+ * surfaces a warning instead so the owner can adjust deliberately.
+ */
+async function applyShiftTotals(
+  businessId: string,
+  payload: PosSaleQueuePayload,
+): Promise<boolean> {
+  try {
+    const shift = await repos.pos.findShiftById(payload.shiftId!);
+    if (!shift || shift.status !== 'open') return false;
+
+    await repos.pos.updateShiftTotals(payload.shiftId!, {
+      cashSales: payload.cashSales,
+      otherSales: payload.otherSales,
+    });
+    return true;
+  } catch (err) {
+    log.warn('Could not update POS shift totals for a synced sale', {
+      error: err,
+      businessId,
+      receiptNumber: payload.receiptNumber,
+    });
+    return false;
+  }
+}
+
+async function logPosSaleAudit(
+  businessId: string,
+  payload: PosSaleQueuePayload,
+  invoice: Row<'invoices'>,
+): Promise<void> {
+  const rpcFn = supabase.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<unknown>;
+
+  await rpcFn('log_manual_audit_event', {
+    p_business_id: businessId,
+    p_event_type: 'pos_sale',
+    p_resource_type: 'invoices',
+    p_resource_id: invoice.id,
+    p_resource_ref: payload.receiptNumber,
+    p_old_values: null,
+    p_new_values: {
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoice_number,
+      receiptNumber: payload.receiptNumber,
+      branchId: invoice.branch_id,
+      cashierId: payload.cashierId,
+      cashierName: payload.cashierName,
+      total: payload.total,
+      itemsCount: payload.itemCount,
+      cashSales: payload.cashSales,
+      otherSales: payload.otherSales,
+      isCreditSale: payload.isCreditSale,
+    },
+    p_notes: `POS Sale #${payload.receiptNumber} completed by ${payload.cashierName} | Total: MK ${payload.total.toLocaleString()} | Cash: MK ${payload.cashSales.toLocaleString()}, Other: MK ${payload.otherSales.toLocaleString()}`,
+  });
+}
+
+/** Assembles the receipt/sale view model both branches return to the UI. */
+function buildPosSaleResult(
+  sale: NormalizedPosSale,
+  options: { invoiceId: string; invoiceNumber: string; isOffline: boolean; warnings?: string[] },
+): PosSaleResult {
+  const now = new Date().toISOString();
+  const resultItems = sale.items.map((i) => {
+    const productId = i.product_id || i.productId || null;
+    const unitPrice = i.unit_price ?? i.unitPrice ?? 0;
+    const lineTotal = i.line_total ?? i.lineTotal ?? 0;
+    return {
+      productId,
+      product_id: productId,
+      name: i.name,
+      product_name: i.name,
+      quantity: i.quantity,
+      unitPrice,
+      unit_price: unitPrice,
+      lineTotal,
+      line_total: lineTotal,
+    };
+  });
+
+  return {
+    saleId: options.invoiceId,
+    invoiceId: options.invoiceId,
+    invoiceNumber: options.invoiceNumber,
+    receiptNumber: sale.receiptNumber,
+    timestamp: now,
+    createdAt: now,
+    cashierName: sale.cashierName,
+    branchName: sale.branchId || 'Main Branch',
+    customerName: sale.customerName,
+    customerPhone: sale.customerPhone ?? undefined,
+    items: resultItems,
+    subtotal: sale.totals.gross_total,
+    discountAmount: sale.totals.discount_total,
+    taxAmount: sale.totals.tax_total,
+    netPayable: sale.totals.net_payable,
+    grandTotal: sale.totals.net_payable,
+    totalPaid: sale.totalPaid,
+    changeGiven: sale.changeGiven,
+    payments: sale.payments.map((p) => ({
+      payment_method: p.payment_method as PosPaymentMethod,
+      amount: p.amount,
+      reference: p.reference ?? undefined,
+    })),
+    notes: sale.notes,
+    isOffline: options.isOffline,
+    warnings: options.warnings,
+    sale: {
+      id: options.invoiceId,
+      receipt_number: sale.receiptNumber,
+      created_at: now,
+      customer_name: sale.customerName,
+      cashier_name: sale.cashierName,
+      net_amount: sale.totals.net_payable,
+      gross_amount: sale.totals.gross_total,
+      discount_amount: sale.totals.discount_total,
+      total_paid: sale.totalPaid,
+      change_given: sale.changeGiven,
+      status: 'completed',
+    },
+  };
+}
+
+export async function processSale(
+  payload: PosSalePayload,
+  options: { isOnline?: boolean; userRole?: string } = {},
+): Promise<PosSaleResult> {
+  const sale = normalizePosSale(payload);
+  const queuePayload = buildPosSaleQueuePayload(payload, {
+    clientKey: sale.clientKey,
+    receiptNumber: sale.receiptNumber,
+    invoiceNumber: sale.invoiceNumber,
+  });
+
+  const isOnline = options.isOnline !== false && (typeof navigator === 'undefined' || navigator.onLine);
+
+  if (!isOnline) {
+    await enqueuePosSale(queuePayload);
+    return buildPosSaleResult(sale, {
+      invoiceId: `offline-${queuePayload.invoice.invoice_number}`,
+      invoiceNumber: String(queuePayload.invoice.invoice_number),
+      isOffline: true,
+    });
+  }
+
+  try {
+    const committed = await commitPosSaleDocuments(queuePayload, {
+      businessId: sale.businessId,
+      clientKey: sale.clientKey,
     });
 
-    const { invoice: createdInvoice } = await repos.invoice.createWithLines(invoiceHeader, invoiceLines, clientKey);
-
-    // 6. Record Payments for Paid Sales
-    if (!isCreditSale) {
-      for (const p of payments) {
-        if (p.amount > 0) {
-          await repos.invoice.recordPayment({
-            business_id: businessId,
-            invoice_id: createdInvoice.id,
-            amount: p.amount,
-            payment_date: today,
-            payment_method: (p.payment_method === 'credit_sale' ? 'other' : p.payment_method) as never,
-            bank_account_id: p.bank_account_id || null,
-            notes: `POS Payment: ${p.payment_method} for ${receiptNumber}${p.reference ? ` (Ref: ${p.reference})` : ''}`,
-            currency: 'MWK',
-            exchange_rate: 1,
-            created_by: cashierName,
-          } as InsertDto<'invoice_payments'>).catch((err) => {
-            log.warn('Could not record pos payment record', { error: err });
-          });
-        }
-      }
-    }
-
-    // 7. Inventory Movements & COGS
-    const trackedItems = items.filter((it) => it.product_id || it.productId);
-    if (trackedItems.length > 0) {
-      try {
-        let locationId: string | null = null;
-        if (branchId) {
-          const loc = await repos.branch.findLocationByBranch(branchId).catch(() => null);
-          locationId = loc?.id || null;
-        }
-        if (!locationId) {
-          const defaultLoc = await repos.inventory.findDefaultLocation(businessId).catch(() => null);
-          locationId = defaultLoc?.id || null;
-        }
-
-        if (locationId) {
-          for (const item of trackedItems) {
-            const pId = item.product_id || item.productId!;
-            await repos.inventory.recordMovement({
-              business_id: businessId,
-              product_id: pId,
-              location_id: locationId,
-              movement_date: today,
-              movement_type: 'sale',
-              quantity: -Math.abs(item.quantity),
-              unit_cost: item.unit_cost || item.unitCost || 0,
-              reference: receiptNumber,
-              notes: `POS Sale ${receiptNumber} by ${cashierName}`,
-              source_type: 'pos_sale',
-              source_id: createdInvoice.id,
-              created_by: cashierName,
-            }).catch((e) => log.warn('Stock movement insert error', { error: e }));
-          }
-
-          // Post COGS journal entries
-          await deductStockAndPostCogs(
-            businessId,
-            createdInvoice,
-            trackedItems.map((it) => ({ productId: (it.product_id || it.productId)!, quantity: it.quantity })),
-            branchId || null,
-            null,
-            null,
-          ).catch((e) => log.warn('COGS journal deduction error', { error: e }));
-        }
-      } catch (invErr) {
-        log.warn('Inventory update failed during POS sale', { error: invErr });
-      }
-    }
-
-    // 8. Sales Double-entry Journal
-    try {
-      await createInvoiceJournalEntry(businessId, createdInvoice, totals.taxable_subtotal, totals.tax_total, branchId || null, null);
-    } catch (jErr) {
-      log.warn('Journal creation error for POS sale', { error: jErr });
-    }
-
-    // 9. Update Active Shift Totals
-    if (shiftId) {
-      const cashAmount = payments.filter((p) => p.payment_method === 'cash').reduce((s, p) => s + p.amount, 0);
-      const otherAmount = payments.filter((p) => p.payment_method !== 'cash').reduce((s, p) => s + p.amount, 0);
-
-      await repos.pos.updateShiftTotals(shiftId, {
-        cashSales: cashAmount,
-        otherSales: otherAmount,
-      }).catch((e) => log.warn('Could not update shift totals', { error: e }));
-    }
-
-    // 10. Audit Trail
-    const auditNotes = [
-      `POS Sale #${receiptNumber} completed by ${cashierName}`,
-      `Total: MK ${totals.net_payable.toLocaleString()}`,
-      payments.map((p) => `${p.payment_method}: MK ${p.amount.toLocaleString()}`).join(', '),
-      managerApproval ? `Manager Approval: ${managerApproval.approverName} (${managerApproval.reason})` : null,
-    ].filter(Boolean).join(' | ');
-
-    try {
-      const rpcFn = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<unknown>;
-      await rpcFn('log_manual_audit_event', {
-        p_business_id: businessId,
-        p_event_type: 'pos_sale',
-        p_resource_type: 'invoices',
-        p_resource_id: createdInvoice.id,
-        p_resource_ref: receiptNumber,
-        p_old_values: null,
-        p_new_values: {
-          invoiceId: createdInvoice.id,
-          receiptNumber,
-          branchId,
-          cashierId,
-          cashierName,
-          total: totals.net_payable,
-          itemsCount: items.length,
-          payments,
-          isCreditSale,
-        },
-        p_notes: auditNotes,
-      });
-    } catch (auditErr) {
-      log.warn('Audit logging failed for POS sale', { error: auditErr });
-    }
-
-    const saleResult: PosSaleResult = {
-      saleId: createdInvoice.id,
-      invoiceId: createdInvoice.id,
-      invoiceNumber,
-      receiptNumber,
-      timestamp: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      cashierName,
-      branchName: branchId || 'Main Branch',
-      customerName,
-      customerPhone,
-      items: items.map((i) => ({
-        productId: i.product_id || i.productId,
-        product_id: i.product_id || i.productId,
-        name: i.name,
-        product_name: i.name,
-        quantity: i.quantity,
-        unitPrice: i.unit_price ?? i.unitPrice ?? 0,
-        unit_price: i.unit_price ?? i.unitPrice ?? 0,
-        lineTotal: i.line_total ?? i.lineTotal ?? 0,
-        line_total: i.line_total ?? i.lineTotal ?? 0,
-      })),
-      subtotal: totals.gross_total,
-      discountAmount: totals.discount_total,
-      taxAmount: totals.tax_total,
-      netPayable: totals.net_payable,
-      grandTotal: totals.net_payable,
-      totalPaid,
-      changeGiven,
-      payments: payments.map((p) => ({
-        payment_method: p.payment_method,
-        amount: p.amount,
-        reference: p.reference,
-      })),
-      notes,
+    return buildPosSaleResult(sale, {
+      invoiceId: committed.invoice.id,
+      invoiceNumber: committed.invoice.invoice_number,
       isOffline: false,
-      sale: {
-        id: createdInvoice.id,
-        receipt_number: receiptNumber,
-        created_at: new Date().toISOString(),
-        customer_name: customerName,
-        cashier_name: cashierName,
-        net_amount: totals.net_payable,
-        gross_amount: totals.gross_total,
-        discount_amount: totals.discount_total,
-        total_paid: totalPaid,
-        change_given: changeGiven,
-        status: 'completed',
-      },
-    };
-    return saleResult;
+      warnings: committed.warnings,
+    });
   } catch (err) {
-    if (isOfflineError(err)) {
-      const offlineInvoiceNum = generateOfflineNumber('POS');
-      await storeOfflineSale(offlineInvoiceNum);
-
-      return {
-        saleId: `offline-${Date.now()}`,
-        invoiceId: `offline-${Date.now()}`,
-        invoiceNumber: offlineInvoiceNum,
-        receiptNumber,
-        timestamp: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        cashierName,
-        branchName: branchId || 'Main Branch',
-        customerName,
-        customerPhone,
-        items: items.map((i) => ({
-          productId: i.product_id || i.productId,
-          product_id: i.product_id || i.productId,
-          name: i.name,
-          product_name: i.name,
-          quantity: i.quantity,
-          unitPrice: i.unit_price ?? i.unitPrice ?? 0,
-          unit_price: i.unit_price ?? i.unitPrice ?? 0,
-          lineTotal: i.line_total ?? i.lineTotal ?? 0,
-          line_total: i.line_total ?? i.lineTotal ?? 0,
-        })),
-        subtotal: totals.gross_total,
-        discountAmount: totals.discount_total,
-        taxAmount: totals.tax_total,
-        netPayable: totals.net_payable,
-        grandTotal: totals.net_payable,
-        totalPaid,
-        changeGiven,
-        payments: payments.map((p) => ({
-          payment_method: p.payment_method,
-          amount: p.amount,
-          reference: p.reference,
-        })),
-        notes,
-        isOffline: true,
-        sale: {
-          id: `offline-${Date.now()}`,
-          receipt_number: receiptNumber,
-          created_at: new Date().toISOString(),
-          customer_name: customerName,
-          cashier_name: cashierName,
-          net_amount: totals.net_payable,
-          gross_amount: totals.gross_total,
-          discount_amount: totals.discount_total,
-          total_paid: totalPaid,
-          change_given: changeGiven,
-          status: 'completed',
-        },
-      };
+    // The document exists but a step belonging to it failed for a reason a
+    // retry cannot fix. Telling the cashier the sale failed would invite them
+    // to ring it up again, duplicating revenue and stock — so the sale stands,
+    // and the problem is handed to them as a follow-up on the receipt and in
+    // the offline drawer.
+    if (err instanceof PosSalePostCommitError) {
+      log.error('POS sale saved with a failed follow-up step', err, {
+        businessId: sale.businessId,
+        receiptNumber: sale.receiptNumber,
+        invoiceNumber: err.invoiceNumber,
+        stage: err.stage,
+      });
+      return buildPosSaleResult(sale, {
+        invoiceId: err.invoiceId,
+        invoiceNumber: err.invoiceNumber,
+        isOffline: false,
+        warnings: [err.message],
+      });
     }
+
+    // The till must not stop selling because the connection dropped, and we
+    // cannot know from a network failure whether the server committed. Queue
+    // the sale under the SAME client key: the replay returns whatever already
+    // exists instead of duplicating it, and fills in the rest.
+    if (isOfflineError(err)) {
+      await enqueuePosSale(queuePayload);
+      return buildPosSaleResult(sale, {
+        invoiceId: `offline-${queuePayload.invoice.invoice_number}`,
+        invoiceNumber: String(queuePayload.invoice.invoice_number),
+        isOffline: true,
+      });
+    }
+
     throw err;
   }
+}
+
+/**
+ * Queues a sale for the sync engine. Deliberately the only way a POS sale is
+ * stored offline — the device-local queue the POS module used to keep in
+ * localStorage is gone, because nothing but the POS screen could ever read,
+ * retry or report on it.
+ */
+async function enqueuePosSale(queuePayload: PosSaleQueuePayload): Promise<number> {
+  return enqueue('pos_sale', queuePayload.invoice.business_id, queuePayload);
 }
 
 export const createSale = processSale;
@@ -876,69 +1177,17 @@ export async function processVoid(
 
 export const voidSale = processVoid;
 
-export interface OfflineSaleItem {
-  offlineNum: string;
-  receiptNumber: string;
-  payload: PosSalePayload;
-  queuedAt: string;
-}
-
-// ── Offline Queue Helpers ───────────────────────────────────────────────────
-
-export function getOfflineQueue(): OfflineSaleItem[] {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const raw = localStorage.getItem(POS_OFFLINE_STORAGE_KEY);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-      }
-    }
-  } catch (e) {
-    log.warn('Could not read offline queue', { error: e });
-  }
-  return [];
-}
-
-export function getOfflineQueueLength(): number {
-  return getOfflineQueue().length;
-}
-
-export async function syncOfflineQueue(): Promise<number> {
-  const queue = getOfflineQueue();
-  if (queue.length === 0) return 0;
-
-  let synced = 0;
-  const remaining: OfflineSaleItem[] = [];
-
-  for (const item of queue) {
-    try {
-      await processSale(item.payload, { isOnline: true });
-      synced++;
-    } catch (err) {
-      log.warn('Failed to sync offline sale:', { error: err, item });
-      remaining.push(item);
-    }
-  }
-
-  if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.setItem(POS_OFFLINE_STORAGE_KEY, JSON.stringify(remaining));
-  }
-
-  return synced;
-}
-
 export const posService = {
   calculateCartTotals,
   generateReceiptNumber,
   processSale,
   createSale,
+  normalizePosSale,
+  buildPosSaleQueuePayload,
+  commitPosSaleDocuments,
   processReturn,
   processVoid,
   voidSale,
-  getOfflineQueue,
-  getOfflineQueueLength,
-  syncOfflineQueue,
   addProductToCart,
   updateCartItemQuantity,
   removeProductFromCart,

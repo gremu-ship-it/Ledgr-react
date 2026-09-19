@@ -351,6 +351,35 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     } as PosShift;
   }
 
+  /**
+   * Fetch one shift by id.
+   *
+   * Used where the caller must know whether a shift is still open *before*
+   * changing it — e.g. an offline sale syncing days later: adding its takings
+   * to a shift that has already been counted and Z-reported would silently
+   * rewrite a signed document.
+   */
+  async findShiftById(shiftId: string): Promise<PosShift | null> {
+    try {
+      const { data, error } = await this.client
+        .from('pos_shifts')
+        .select('*')
+        .eq('id', shiftId)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return {
+        ...(data as unknown as PosShift),
+        opening_float: data.opening_cash,
+        start_time: data.opened_at,
+        expectedCash: data.expected_cash,
+        status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+      } as PosShift;
+    } catch {
+      return null;
+    }
+  }
+
   async listShifts(
     businessId: string,
     branchId?: string | null,

@@ -71,6 +71,13 @@ async function nextSequence(): Promise<number> {
 export interface EnqueueOptions {
   /** localId of a parent queue item this operation depends on. */
   dependsOnLocalId?: number;
+  /**
+   * When the user actually performed the action, for items recovered from an
+   * older store that recorded its own timestamp. Defaults to now — a queued
+   * item should otherwise carry the moment it was queued, not the moment it
+   * happened to be imported.
+   */
+  createdAt?: string;
   /** Field in the payload to rewrite with the parent's server id once resolved. */
   dependentFkField?: string;
   /** Client-side modification timestamp, for last-write-wins on tables with updated_at. */
@@ -118,7 +125,7 @@ export async function enqueue<T extends QueueOperationType>(
     dependsOnLocalId: options?.dependsOnLocalId,
     dependentFkField: options?.dependentFkField,
     localUpdatedAt: options?.localUpdatedAt,
-    createdAt: new Date().toISOString(),
+    createdAt: options?.createdAt ?? new Date().toISOString(),
     attemptCount: 0,
     // Idempotency key: a stable, unique value so a retried sync can recognise
     // an already-committed record instead of inserting a duplicate.

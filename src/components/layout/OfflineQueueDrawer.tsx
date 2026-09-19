@@ -56,6 +56,11 @@ function QueueRow({ item, onDiscard, canDiscard }: {
               {item.lastError || 'This change could not be synced. Retry when your connection is stable.'}
             </p>
           )}
+          {item.status === 'synced' && item.lastError && (
+            <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-900">
+              Synced, but a follow-up step did not post — {item.lastError}
+            </p>
+          )}
           {item.attemptCount > 0 && item.status !== 'synced' && (
             <p className="mt-1 text-[11px] text-gray-500">
               {item.attemptCount} sync attempt{item.attemptCount === 1 ? '' : 's'}
@@ -223,7 +228,10 @@ export function OfflineQueueDrawer() {
                 </button>
               </div>
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50/50 p-2.5 text-[11px] text-blue-800 leading-normal">
-                <strong>Offline scope:</strong> Quick cash income/expense only; invoices, payments, and transfers require active internet connection.
+                <strong>Offline scope:</strong> quick cash income, quick expenses and POS till
+                sales are queued here and sync automatically — stock, the ledger and shift
+                totals follow when the connection returns. The invoice builder, payments,
+                payroll and transfers need an active connection.
               </div>
             </div>
 

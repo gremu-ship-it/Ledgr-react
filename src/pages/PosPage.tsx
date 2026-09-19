@@ -6,8 +6,6 @@ import {
   createSale,
   processReturn,
   processVoid,
-  syncOfflineQueue,
-  getOfflineQueue,
   addProductToCart,
   updateCartItemQuantity,
   removeProductFromCart,
@@ -15,6 +13,9 @@ import {
   applyItemDiscount,
 } from '@/services/posService';
 import { repos } from '@/lib/repositories';
+import { useOfflineQueue } from '@/hooks/useOfflineQueue';
+import { useOfflineSync } from '@/offline/offlineSyncContext';
+import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import type {
   PosCartItem,
   PosCustomer,
@@ -47,17 +48,23 @@ export function PosPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const permissions = usePosPermissions();
 
-  const businessId = currentBusiness?.business?.id || 'biz-default';
+  // Empty rather than a fabricated 'biz-default': a queued offline sale is
+  // filed under this id, and inventing one puts the sale in a tenant that does
+  // not exist (posService rejects the sale with a clear message instead).
+  const businessId = currentBusiness?.business?.id || '';
   const branchName = currentBusiness?.business?.name || 'Main Branch';
   const branchId = null;
 
   // Navigation / View state
   const [viewMode, setViewMode] = useState<'sales' | 'analytics' | 'history' | 'settings'>('sales');
 
-  // Network & Sync State
-  const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
-  const [pendingOfflineCount, setPendingOfflineCount] = useState<number>(() => getOfflineQueue().length);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  // Network & sync state. Both the queue and the sync pass are the app-wide
+  // ones: the POS screen used to keep its own localStorage list and its own
+  // sync loop, which is why offline sales it queued never showed up in the
+  // header's offline drawer.
+  const isOnline = useOnlineStatus();
+  const { pendingCount: pendingOfflineCount, failedCount: failedOfflineCount } = useOfflineQueue();
+  const { isSyncing, syncNow } = useOfflineSync();
 
   // Shifts & Register
   const [activeRegister] = useState<PosRegister | null>({
@@ -101,28 +108,6 @@ export function PosPage() {
   const cartTotals = useMemo(() => {
     return calculateCartTotals(cartItems, orderDiscount, 0);
   }, [cartItems, orderDiscount]);
-
-  const refreshOfflineCount = useCallback(() => {
-    const queue = getOfflineQueue();
-    setPendingOfflineCount(queue.length);
-  }, []);
-
-  // Online / Offline monitor
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      refreshOfflineCount();
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [refreshOfflineCount]);
 
   // Cart Management Handlers
   const handleAddToCart = useCallback((product: PosProduct) => {
@@ -340,9 +325,9 @@ export function PosPage() {
       setIsPaymentModalOpen(false);
       setIsReceiptModalOpen(true);
 
-      // Reset cart and update history
+      // Reset cart and update history. The offline queue count is live
+      // (Dexie live query), so a queued sale raises it without a manual refresh.
       handleClearCart();
-      refreshOfflineCount();
 
       // Refresh sales history list
       if (result.sale) {
@@ -420,18 +405,19 @@ export function PosPage() {
     }
   };
 
-  // Sync Offline Queue
+  // Sync offline changes through the app-wide sync engine, so the POS screen
+  // and the offline drawer always report the same numbers.
   const handleSyncOfflineSales = async () => {
-    setIsSyncing(true);
-    try {
-      const syncedCount = await syncOfflineQueue();
-      refreshOfflineCount();
-      alert(`Successfully synced ${syncedCount} offline sale(s) to server.`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Offline sync failed: ${message}`);
-    } finally {
-      setIsSyncing(false);
+    const result = await syncNow();
+    if (!result) return; // a sync pass was already running
+
+    if (result.failed > 0) {
+      alert(
+        `Synced ${result.completed} of ${result.total} offline change(s). ` +
+          `${result.failed} still need attention — open the offline queue in the header for details.`,
+      );
+    } else if (result.completed > 0) {
+      alert(`Successfully synced ${result.completed} offline change(s) to the server.`);
     }
   };
 
@@ -478,6 +464,7 @@ export function PosPage() {
         branchName={branchName}
         isOnline={isOnline}
         pendingOfflineCount={pendingOfflineCount}
+        failedOfflineCount={failedOfflineCount}
         isSyncing={isSyncing}
         canViewOwnerDashboard={permissions.canViewOwnerDashboard}
         canManageRegisters={permissions.canManageRegisters}

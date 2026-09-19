@@ -104,6 +104,15 @@ describe('POS Integration & Acceptance Criteria', () => {
       expect(result.payments).toHaveLength(2);
       expect(mockRecordPayment).toHaveBeenCalledTimes(2);
 
+      // amount_paid reaches 27,100 through the two payment rows, which
+      // increment it atomically. Pre-setting it on the header as well counted
+      // the sale twice (amount_paid = 2× total, negative amount due).
+      expect(mockCreateWithLines).toHaveBeenCalledWith(
+        expect.objectContaining({ amount_paid: 0, status: 'sent', total_amount: 27100 }),
+        expect.any(Array),
+        expect.any(String),
+      );
+
       mockCreateWithLines.mockRestore();
       mockRecordPayment.mockRestore();
     });
@@ -115,6 +124,9 @@ describe('POS Integration & Acceptance Criteria', () => {
       const branchId = 'branch-001';
 
       vi.spyOn(repos.business, 'reserveNextInvoiceNumber').mockResolvedValue('INV-2026-0006');
+      // The customer here is selected from the contacts list, so no lookup is
+      // needed; stubbed anyway so an accidental one cannot hit the network.
+      vi.spyOn(repos.contact, 'findByBusiness').mockResolvedValue([] as never);
 
       const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
         invoice: {
