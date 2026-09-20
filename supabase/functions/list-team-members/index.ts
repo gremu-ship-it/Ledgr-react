@@ -1,5 +1,5 @@
 // supabase/functions/list-team-members/index.ts
-// Returns team members for a business with email + profile, bypassing RLS
+// Returns team members for a business with email/phone + profile, bypassing RLS
 // limitation that anonymous users cannot join auth.users.
 //
 // Body: { business_id }
@@ -8,6 +8,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest } from '../_shared/cors.ts';
+import { isPhoneLoginEmail } from '../_shared/phone.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -121,10 +122,11 @@ serve(async (req) => {
     type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null };
     const profileMap = new Map((profiles ?? []).map((p: ProfileRow) => [p.id, p]));
 
-    // Fetch emails via Auth Admin — batch lookup by listing? We'll paginate and filter to needed ids for efficiency.
+    // Fetch emails + phones via Auth Admin — batch lookup by listing? We'll
+    // paginate and filter to needed ids for efficiency.
     // For small teams (< 20) it's cheap to list up to 100 users and match.
     // For larger, we list pages until we found all ids or hit limit.
-    const emailMap = new Map<string, string>();
+    const authMap = new Map<string, { email: string | null; phone: string | null }>();
     let page = 1;
     const perPage = 100;
     const needed = new Set(userIds);
@@ -135,7 +137,14 @@ serve(async (req) => {
       const users = data?.users ?? [];
       for (const u of users) {
         if (needed.has(u.id)) {
-          emailMap.set(u.id, u.email ?? '');
+          // A phone-provisioned account's email is synthetic
+          // (265991234567@phone.ledgr.app) and means nothing to a reader, so
+          // the number is the identity we surface and the address is dropped.
+          const rawEmail = u.email ?? null;
+          authMap.set(u.id, {
+            email: isPhoneLoginEmail(rawEmail) ? null : rawEmail,
+            phone: u.phone ?? null,
+          });
           needed.delete(u.id);
         }
       }
@@ -155,7 +164,8 @@ serve(async (req) => {
       invitation_token: m.invitation_token,
       invitation_expires_at: m.invitation_expires_at,
       created_at: m.created_at,
-      email: emailMap.get(m.user_id) ?? null,
+      email: authMap.get(m.user_id)?.email ?? null,
+      phone: authMap.get(m.user_id)?.phone ?? null,
       full_name: profileMap.get(m.user_id)?.full_name ?? null,
       avatar_url: profileMap.get(m.user_id)?.avatar_url ?? null,
     }));

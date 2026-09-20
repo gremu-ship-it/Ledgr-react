@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   UserPlus, Trash2, Loader2, AlertCircle,
   Crown, Shield, Calculator, Users, Eye, BarChart3, Mail,
-  Link, Copy, ExternalLink, Plus, Clock, UserX, ShoppingBag, Package
+  Link, Copy, ExternalLink, Plus, Clock, UserX, ShoppingBag, Package,
+  Smartphone, KeyRound, MessageCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAppStore } from '@/store/useAppStore';
@@ -11,6 +12,12 @@ import { PermissionGate } from '@/components/rbac/PermissionGate';
 import { clsx } from 'clsx';
 import { createLogger } from '@/lib/logger';
 import { handleError } from '@/lib/errorHandler';
+import {
+  formatPhoneForDisplay,
+  normalizePhone,
+  smsShareLink,
+  whatsappShareLink,
+} from '@/lib/phone';
 
 const log = createLogger('TeamManagementPage');
 
@@ -267,12 +274,20 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
   const [activeTab, setActiveTab] = useState<'direct' | 'link'>('direct');
   
   // Direct Add state
+  const [directMode, setDirectMode] = useState<'email' | 'phone'>('email');
   const [directEmail, setDirectEmail] = useState('');
+  const [directPhone, setDirectPhone] = useState('');
+  const [directName, setDirectName] = useState('');
   const [directRole, setDirectRole] = useState<UserRole>('viewer');
+  /** One-time credentials for a phone account, straight from the invite call. */
+  const [phoneLogin, setPhoneLogin] = useState<{ phone: string; password: string } | null>(null);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   
   // Invite Link state
   const [linkRole, setLinkRole] = useState<UserRole>('viewer');
+  const [linkMode, setLinkMode] = useState<'email' | 'phone'>('email');
   const [linkEmailRestriction, setLinkEmailRestriction] = useState('');
+  const [linkPhoneRestriction, setLinkPhoneRestriction] = useState('');
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -289,19 +304,39 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    setPhoneLogin(null);
     setLoading(true);
+
+    // Normalise here so the member is stored in E.164 and the failure is
+    // immediate, before a round trip that cannot succeed.
+    const normalizedPhone = directMode === 'phone' ? normalizePhone(directPhone) : null;
+    if (directMode === 'phone' && !normalizedPhone) {
+      setError('Enter a valid phone number, e.g. 0991234567 or +265991234567.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data, error: fnError } = await supabase.functions.invoke('invite-team-member', {
         body: {
           business_id: businessId,
-          email: directEmail.trim().toLowerCase(),
           role: directRole,
+          ...(directMode === 'phone'
+            ? { phone: normalizedPhone, full_name: directName.trim() || undefined }
+            : { email: directEmail.trim().toLowerCase() }),
         },
       });
 
       if (fnError) {
         const respData = data as { message?: string; error?: string } | null;
+
+        // The legacy RPC fallback only understands email. A phone invite is
+        // provisioned entirely by the Edge Function, so there is nothing to
+        // fall back to — surface the real error.
+        if (directMode === 'phone') {
+          throw new Error(respData?.message || respData?.error || fnError.message);
+        }
+
         const legacyMsg = respData?.message || respData?.error || fnError.message;
         if (legacyMsg.toLowerCase().includes('no account found') || legacyMsg.toLowerCase().includes('user not found')) {
           throw new Error(legacyMsg);
@@ -327,13 +362,28 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         }
       }
 
-      const okData = data as { error?: string; message?: string } | null;
+      const okData = data as {
+        error?: string;
+        message?: string;
+        login?: { phone?: string | null; temporary_password?: string };
+      } | null;
       if (okData?.error) {
         throw new Error(okData.message || okData.error);
       }
 
-      setSuccess(okData?.message || `Added ${directEmail} as ${directRole} successfully.`);
+      // A phone account comes back with one-time credentials. This is the only
+      // time they are returned — there is no inbox to recover them through.
+      if (okData?.login?.temporary_password && okData.login.phone) {
+        setPhoneLogin({ phone: okData.login.phone, password: okData.login.temporary_password });
+      }
+
+      setSuccess(
+        okData?.message ||
+          `Added ${directMode === 'phone' ? formatPhoneForDisplay(normalizedPhone) : directEmail} as ${directRole} successfully.`,
+      );
       setDirectEmail('');
+      setDirectPhone('');
+      setDirectName('');
       setDirectRole('viewer');
       onInvited();
     } catch (err) {
@@ -356,7 +406,9 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         body: {
           business_id: businessId,
           role: linkRole,
-          email: linkEmailRestriction.trim() || undefined,
+          ...(linkMode === 'phone'
+            ? { phone: normalizePhone(linkPhoneRestriction) || undefined }
+            : { email: linkEmailRestriction.trim() || undefined }),
           origin: window.location.origin,
         },
       });
@@ -418,12 +470,48 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
       {activeTab === 'direct' ? (
         <div>
           <div className="mb-3 rounded-lg bg-white border border-gray-100 p-3">
-            <p className="text-xs font-medium text-gray-700">How it works (server-side):</p>
-            <ol className="mt-1 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
-              <li>Person registers at <span className="font-medium">{window.location.origin}/register</span></li>
-              <li>You enter their email + role below and click Add member</li>
-              <li>They get instant access – no invitation link needed</li>
-            </ol>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-700">Add by</span>
+              <div className="inline-flex rounded-lg border border-gray-200 p-0.5">
+                {(['email', 'phone'] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setDirectMode(mode);
+                      setError(null);
+                      setSuccess(null);
+                      setPhoneLogin(null);
+                    }}
+                    className={clsx(
+                      'flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors',
+                      directMode === mode
+                        ? 'bg-brand-500 text-white'
+                        : 'text-gray-500 hover:text-gray-700',
+                    )}
+                  >
+                    {mode === 'email'
+                      ? <Mail className="h-3.5 w-3.5" />
+                      : <Smartphone className="h-3.5 w-3.5" />}
+                    {mode === 'email' ? 'Email' : 'Phone number'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {directMode === 'email' ? (
+              <ol className="mt-2 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
+                <li>Person registers at <span className="font-medium">{window.location.origin}/register</span></li>
+                <li>You enter their email + role below and click Add member</li>
+                <li>They get instant access – no invitation link needed</li>
+              </ol>
+            ) : (
+              <ol className="mt-2 list-decimal pl-4 text-xs text-gray-600 space-y-0.5">
+                <li>Enter their mobile number — no email address or existing account needed</li>
+                <li>Ledgr creates their login and shows you a one-time password</li>
+                <li>Send it over WhatsApp or SMS; they sign in with number + password</li>
+              </ol>
+            )}
             <p className="mt-2 text-[11px] text-gray-400">Uses Edge Function <code className="bg-gray-50 px-1 rounded">invite-team-member</code>.</p>
           </div>
 
@@ -441,18 +529,115 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
             </div>
           )}
 
+          {phoneLogin && (() => {
+            const message =
+              `Your Ledgr login\n` +
+              `Phone: ${phoneLogin.phone}\n` +
+              `Password: ${phoneLogin.password}\n` +
+              `Sign in at ${window.location.origin}/login`;
+            const waLink = whatsappShareLink(phoneLogin.phone, message);
+            const smsLink = smsShareLink(phoneLogin.phone, message);
+            return (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="flex items-start gap-2">
+                  <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-amber-900">
+                      One-time password for {formatPhoneForDisplay(phoneLogin.phone)}
+                    </p>
+                    <p className="mt-0.5 text-xs text-amber-700">
+                      Shown once and never stored in a readable form — send it now. They can
+                      change it after signing in.
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <code className="select-all rounded bg-white px-2 py-1 font-mono text-sm text-gray-900 ring-1 ring-amber-200">
+                        {phoneLogin.password}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard.writeText(phoneLogin.password);
+                          setPasswordCopied(true);
+                          setTimeout(() => setPasswordCopied(false), 2000);
+                        }}
+                        className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {passwordCopied ? 'Copied' : 'Copy'}
+                      </button>
+                      {waLink && (
+                        <a
+                          href={waLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          Send on WhatsApp
+                        </a>
+                      )}
+                      {smsLink && (
+                        <a
+                          href={smsLink}
+                          className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+                        >
+                          <Smartphone className="h-3.5 w-3.5" />
+                          Send by SMS
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <form onSubmit={handleDirectInvite} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-600">Email address</label>
-              <input
-                type="email"
-                required
-                value={directEmail}
-                onChange={(e) => setDirectEmail(e.target.value)}
-                placeholder="colleague@business.mw"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
-            </div>
+            {directMode === 'email' ? (
+              <div className="flex-1">
+                <label className="mb-1 block text-xs font-medium text-gray-600">Email address</label>
+                <input
+                  type="email"
+                  required
+                  value={directEmail}
+                  onChange={(e) => setDirectEmail(e.target.value)}
+                  placeholder="colleague@business.mw"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            ) : (
+              <>
+                <div className="flex-1">
+                  <label htmlFor="invite-phone" className="mb-1 block text-xs font-medium text-gray-600">
+                    Mobile number
+                  </label>
+                  <input
+                    id="invite-phone"
+                    type="tel"
+                    required
+                    inputMode="tel"
+                    autoComplete="tel"
+                    value={directPhone}
+                    onChange={(e) => setDirectPhone(e.target.value)}
+                    placeholder="0991234567 or +265991234567"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label htmlFor="invite-name" className="mb-1 block text-xs font-medium text-gray-600">
+                    Their name <span className="font-normal text-gray-400">(optional)</span>
+                  </label>
+                  <input
+                    id="invite-name"
+                    type="text"
+                    value={directName}
+                    onChange={(e) => setDirectName(e.target.value)}
+                    placeholder="John Banda"
+                    className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  />
+                </div>
+              </>
+            )}
 
             <div className="w-full sm:w-44">
               <label className="mb-1 block text-xs font-medium text-gray-600">Role</label>
@@ -537,14 +722,47 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
 
           <form onSubmit={handleCreateInviteLink} className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="mb-1 block text-xs font-medium text-gray-600">Restrict to email (Optional)</label>
-              <input
-                type="email"
-                value={linkEmailRestriction}
-                onChange={(e) => setLinkEmailRestriction(e.target.value)}
-                placeholder="Only this email can accept (Optional)"
-                className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-              />
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-gray-600">
+                  Restrict to {linkMode === 'phone' ? 'phone' : 'email'} (Optional)
+                </label>
+                <div className="inline-flex rounded-md border border-gray-200 p-0.5">
+                  {(['email', 'phone'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setLinkMode(mode)}
+                      className={clsx(
+                        'rounded px-2 py-0.5 text-[11px] font-semibold transition-colors',
+                        linkMode === mode
+                          ? 'bg-brand-500 text-white'
+                          : 'text-gray-500 hover:text-gray-700',
+                      )}
+                    >
+                      {mode === 'email' ? 'Email' : 'Phone'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {linkMode === 'email' ? (
+                <input
+                  type="email"
+                  value={linkEmailRestriction}
+                  onChange={(e) => setLinkEmailRestriction(e.target.value)}
+                  placeholder="Only this email can accept (Optional)"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              ) : (
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={linkPhoneRestriction}
+                  onChange={(e) => setLinkPhoneRestriction(e.target.value)}
+                  placeholder="Only this number can accept (Optional)"
+                  className="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              )}
             </div>
 
             <div className="w-full sm:w-44">

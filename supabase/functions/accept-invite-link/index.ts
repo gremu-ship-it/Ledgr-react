@@ -3,7 +3,8 @@
 // Consumes a shareable invitation token.
 // If the token is found in business_invitations:
 //   - Verifies the invitation is not expired and not already accepted.
-//   - If an email restriction was specified, verifies it matches the caller's email.
+//   - If an email or phone restriction was specified, verifies the caller holds
+//     it. Phone is checked first, matching create-invite-link.
 //   - Checks if caller is already an active member of that business.
 //   - Reactivates or inserts a business_users row with the invitation's role.
 //   - Marks invitation accepted.
@@ -15,6 +16,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest } from '../_shared/cors.ts';
+import { formatPhoneForDisplay, normalizePhone } from '../_shared/phone.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -160,8 +162,35 @@ serve(async (req) => {
       );
     }
 
-    // 4. Verify email restriction
-    if (invitation.email && invitation.email.toLowerCase() !== callerEmail.toLowerCase()) {
+    // 4. Verify the restriction the owner put on this link
+    if (invitation.phone) {
+      // A phone account carries its number on the auth user; older accounts may
+      // only have it on the profile, so check both before refusing.
+      let callerPhone = normalizePhone(callerData.user.phone ?? '');
+      if (!callerPhone) {
+        const { data: profile } = await admin
+          .from('user_profiles')
+          .select('phone')
+          .eq('id', callerId)
+          .maybeSingle();
+        callerPhone = normalizePhone(
+          (profile as { phone?: string | null } | null)?.phone ?? '',
+        );
+      }
+
+      if (callerPhone !== normalizePhone(invitation.phone)) {
+        return new Response(
+          JSON.stringify({
+            error: `This invitation link is for ${formatPhoneForDisplay(invitation.phone)}, but you are signed in as ${callerEmail || 'a different account'}.`,
+            code: 'PHONE_RESTRICTION_MISMATCH',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+          },
+        );
+      }
+    } else if (invitation.email && invitation.email.toLowerCase() !== callerEmail.toLowerCase()) {
       return new Response(
         JSON.stringify({
           error: `This invitation link is restricted to ${invitation.email}, but you are currently signed in as ${callerEmail}.`,
@@ -188,7 +217,21 @@ serve(async (req) => {
       });
     }
 
-    // 6. Check existing membership
+    // 6. Guarantee a profile row. user_profiles.full_name is NOT NULL and the
+    //    team list joins it, so a member without one appears blank. Mirrors
+    //    grant_user_business_access (20260728000003) and the invite RPC in
+    //    20260815000000. ignoreDuplicates keeps an existing name untouched.
+    const { data: callerAuth } = await admin.auth.admin.getUserById(callerId);
+    const callerName =
+      (callerAuth?.user?.user_metadata?.full_name as string | undefined) ||
+      (callerAuth?.user?.user_metadata?.name as string | undefined) ||
+      (callerEmail ? callerEmail.split('@')[0] : 'Team member');
+    await admin.from('user_profiles').upsert(
+      { id: callerId, full_name: callerName },
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
+
+    // 7. Check existing membership
     const { data: existing, error: existingErr } = await admin
       .from('business_users')
       .select('id, is_active, role')
@@ -261,7 +304,7 @@ serve(async (req) => {
       }
     }
 
-    // 7. Mark invitation accepted
+    // 8. Mark invitation accepted
     const { error: acceptErr } = await admin
       .from('business_invitations')
       .update({

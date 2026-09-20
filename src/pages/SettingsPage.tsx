@@ -938,6 +938,16 @@ function SecurityTab() {
 
 // ── Team Members Tab ──────────────────────────────────────────────────────────
 
+/**
+ * Legacy role list for the pre-extraction team tab below. The live UI is
+ * TeamManagementPage (rendered by this page's `team` tab) with its own
+ * ROLE_CONFIG / INVITABLE_ROLES — this list is NOT rendered anywhere today, but
+ * it must not drift: it was missing every role added after the POS module
+ * (cashier, manager, stock_clerk) plus the mid-2026 additions, so anyone wiring
+ * this component back up would silently lose those options from the picker.
+ * `staff` is kept because it predates the user_role enum and may still appear
+ * on old rows.
+ */
 const ROLES = [
   'owner',
   'admin',
@@ -949,6 +959,19 @@ const ROLES = [
   'sales_clerk',
   'auditor',
   'viewer',
+  'purchasing_officer',
+  'warehouse_worker',
+  'sales_manager',
+  'customer_service_rep',
+  'tax_compliance_officer',
+  'treasury_manager',
+  'asset_manager',
+  'board_member',
+  'branch_manager',
+  // POS roles (user_role enum values added by 20260920000000_pos_module.sql)
+  'manager',
+  'cashier',
+  'stock_clerk',
   'staff',
 ] as const;
 
