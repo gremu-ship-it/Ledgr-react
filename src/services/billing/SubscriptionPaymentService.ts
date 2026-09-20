@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { invokeFunction } from '@/lib/edgeFunctionErrors';
 import type { PlanTier } from '@/lib/billing/plans';
 
 export type BillingCycle = 'monthly' | 'annual';
@@ -52,63 +53,15 @@ export interface ManualGrantResult {
   business_name: string;
 }
 
-type EdgeFunctionErrorBody = {
-  error?: string;
-  message?: string;
-};
-
-function getFunctionDisplayName(functionName: string): string {
-  if (functionName === 'initiate-subscription-payment') return 'payments checkout service';
-  if (functionName === 'verify-subscription-payment') return 'payment verification service';
-  if (functionName === 'grant-manual-subscription') return 'manual subscription grant service';
-  return functionName;
-}
-
-async function readEdgeFunctionError(response: Response, fallback: string): Promise<string> {
-  const text = await response.text().catch(() => '');
-  if (!text) return fallback;
-
-  try {
-    const parsed = JSON.parse(text) as EdgeFunctionErrorBody;
-    return parsed.error || parsed.message || fallback;
-  } catch {
-    return text || fallback;
-  }
-}
-
-function getNetworkErrorMessage(functionName: string, error: unknown): string {
-  const displayName = getFunctionDisplayName(functionName);
-  const cause =
-    typeof error === 'object' && error !== null && 'context' in error
-      ? (error as { context?: unknown }).context
-      : undefined;
-  const causeMessage = cause instanceof Error ? cause.message : undefined;
-
-  return [
-    `Could not reach the ${displayName}.`,
-    `Please make sure the Supabase Edge Function "${functionName}" is deployed and reachable, then try again.`,
-    causeMessage ? `Details: ${causeMessage}` : null,
-  ].filter(Boolean).join(' ');
-}
-
 async function invokeEdgeFunction<T>(
   functionName: string,
   body: Record<string, unknown>,
 ): Promise<T> {
-  const { data, error, response } = await supabase.functions.invoke(functionName, { body });
-
-  if (error) {
-    if (response) {
-      const message = await readEdgeFunctionError(response, error.message);
-      throw new Error(message);
-    }
-
-    throw new Error(getNetworkErrorMessage(functionName, error));
-  }
-
-  const maybeError = data as EdgeFunctionErrorBody | null;
-  if (maybeError?.error) throw new Error(maybeError.error);
-
+  // Shared with every other call site: reads the function's own error body
+  // instead of the SDK's constant "Edge Function returned a non-2xx status
+  // code", and says something useful when the function never answered at all.
+  const { data, failure } = await invokeFunction<T>(functionName, body);
+  if (failure) throw new Error(failure.message);
   return data as T;
 }
 

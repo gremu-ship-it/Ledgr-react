@@ -6,6 +6,7 @@ import {
   Smartphone, KeyRound, MessageCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { invokeFunction } from '@/lib/edgeFunctionErrors';
 import { useAppStore } from '@/store/useAppStore';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PermissionGate } from '@/components/rbac/PermissionGate';
@@ -58,7 +59,25 @@ interface Member {
   invitation_token: string | null;
   invitation_expires_at: string | null;
   email: string | null;
+  /** E.164 number for a member added by phone; their identity when there is no email. */
+  phone: string | null;
   full_name: string | null;
+}
+
+/** What invite-team-member answers with on success. */
+interface InviteResult {
+  success?: boolean;
+  code?: string;
+  message?: string;
+  member?: {
+    user_id?: string;
+    email?: string | null;
+    phone?: string | null;
+    role?: string;
+    full_name?: string | null;
+  };
+  /** One-time credentials for a phone account. Returned once, never again. */
+  login?: { phone?: string | null; temporary_password?: string };
 }
 
 /** True when a pending invitation's role/access window has passed. */
@@ -262,6 +281,87 @@ function RoleBadge({ role }: { role: UserRole }) {
   );
 }
 
+// ── One-time phone credentials ───────────────────────────────────────────────
+
+/** A phone account's login, as returned once by invite-team-member. */
+export interface PhoneCredentials {
+  phone: string;
+  password: string;
+}
+
+/**
+ * The panel that hands a phone member's one-time password to the owner.
+ *
+ * Shared by the invite form (a new member) and the member list ("New password"
+ * for someone who lost theirs): a phone account has no inbox, so this panel is
+ * the only route the password ever travels, and both entry points must offer
+ * the same Copy / WhatsApp / SMS hand-over.
+ */
+export function PhoneCredentialsPanel({ credentials }: { credentials: PhoneCredentials }) {
+  const [copied, setCopied] = useState(false);
+  const message =
+    `Your Ledgr login\n` +
+    `Phone: ${credentials.phone}\n` +
+    `Password: ${credentials.password}\n` +
+    `Sign in at ${window.location.origin}/login`;
+  const waLink = whatsappShareLink(credentials.phone, message);
+  const smsLink = smsShareLink(credentials.phone, message);
+
+  return (
+    <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+      <div className="flex items-start gap-2">
+        <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-amber-900">
+            One-time password for {formatPhoneForDisplay(credentials.phone)}
+          </p>
+          <p className="mt-0.5 text-xs text-amber-700">
+            Shown once and never stored in a readable form — send it now. They can
+            change it after signing in.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="select-all rounded bg-white px-2 py-1 font-mono text-sm text-gray-900 ring-1 ring-amber-200">
+              {credentials.password}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(credentials.password);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+            {waLink && (
+              <a
+                href={waLink}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Send on WhatsApp
+              </a>
+            )}
+            {smsLink && (
+              <a
+                href={smsLink}
+                className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+              >
+                <Smartphone className="h-3.5 w-3.5" />
+                Send by SMS
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── InviteMemberForm ─────────────────────────────────────────────────────────
 
 interface InviteMemberFormProps {
@@ -280,8 +380,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
   const [directName, setDirectName] = useState('');
   const [directRole, setDirectRole] = useState<UserRole>('viewer');
   /** One-time credentials for a phone account, straight from the invite call. */
-  const [phoneLogin, setPhoneLogin] = useState<{ phone: string; password: string } | null>(null);
-  const [passwordCopied, setPasswordCopied] = useState(false);
+  const [phoneLogin, setPhoneLogin] = useState<PhoneCredentials | null>(null);
   
   // Invite Link state
   const [linkRole, setLinkRole] = useState<UserRole>('viewer');
@@ -317,27 +416,28 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
     }
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('invite-team-member', {
-        body: {
-          business_id: businessId,
-          role: directRole,
-          ...(directMode === 'phone'
-            ? { phone: normalizedPhone, full_name: directName.trim() || undefined }
-            : { email: directEmail.trim().toLowerCase() }),
-        },
+      // invokeFunction reads the Edge Function's own error body. The bare SDK
+      // call hands back a constant "Edge Function returned a non-2xx status
+      // code" and throws the reason away, which is why a phone invite used to
+      // fail with a message nobody could act on.
+      const { data: okData, failure } = await invokeFunction<InviteResult>('invite-team-member', {
+        business_id: businessId,
+        role: directRole,
+        ...(directMode === 'phone'
+          ? { phone: normalizedPhone, full_name: directName.trim() || undefined }
+          : { email: directEmail.trim().toLowerCase() }),
       });
 
-      if (fnError) {
-        const respData = data as { message?: string; error?: string } | null;
+      if (failure) {
+        const legacyMsg = failure.message;
 
         // The legacy RPC fallback only understands email. A phone invite is
         // provisioned entirely by the Edge Function, so there is nothing to
         // fall back to — surface the real error.
         if (directMode === 'phone') {
-          throw new Error(respData?.message || respData?.error || fnError.message);
+          throw new Error(legacyMsg);
         }
 
-        const legacyMsg = respData?.message || respData?.error || fnError.message;
         if (legacyMsg.toLowerCase().includes('no account found') || legacyMsg.toLowerCase().includes('user not found')) {
           throw new Error(legacyMsg);
         }
@@ -360,15 +460,6 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
         } catch {
           throw new Error(legacyMsg);
         }
-      }
-
-      const okData = data as {
-        error?: string;
-        message?: string;
-        login?: { phone?: string | null; temporary_password?: string };
-      } | null;
-      if (okData?.error) {
-        throw new Error(okData.message || okData.error);
       }
 
       // A phone account comes back with one-time credentials. This is the only
@@ -402,22 +493,20 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
     setLoading(true);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('create-invite-link', {
-        body: {
-          business_id: businessId,
-          role: linkRole,
-          ...(linkMode === 'phone'
-            ? { phone: normalizePhone(linkPhoneRestriction) || undefined }
-            : { email: linkEmailRestriction.trim() || undefined }),
-          origin: window.location.origin,
-        },
+      const { data, failure } = await invokeFunction<{ invite_url: string }>('create-invite-link', {
+        business_id: businessId,
+        role: linkRole,
+        ...(linkMode === 'phone'
+          ? { phone: normalizePhone(linkPhoneRestriction) || undefined }
+          : { email: linkEmailRestriction.trim() || undefined }),
+        origin: window.location.origin,
       });
 
-      if (fnError) {
-        throw new Error(fnError.message);
+      if (failure) {
+        throw new Error(failure.message);
       }
-      if (data?.error) {
-        throw new Error(data.message || data.error);
+      if (!data?.invite_url) {
+        throw new Error('The invitation service did not return a link. Please try again.');
       }
 
       setGeneratedLink(data.invite_url);
@@ -529,68 +618,7 @@ function InviteMemberForm({ businessId, currentRole, onInvited }: InviteMemberFo
             </div>
           )}
 
-          {phoneLogin && (() => {
-            const message =
-              `Your Ledgr login\n` +
-              `Phone: ${phoneLogin.phone}\n` +
-              `Password: ${phoneLogin.password}\n` +
-              `Sign in at ${window.location.origin}/login`;
-            const waLink = whatsappShareLink(phoneLogin.phone, message);
-            const smsLink = smsShareLink(phoneLogin.phone, message);
-            return (
-              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <div className="flex items-start gap-2">
-                  <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-amber-900">
-                      One-time password for {formatPhoneForDisplay(phoneLogin.phone)}
-                    </p>
-                    <p className="mt-0.5 text-xs text-amber-700">
-                      Shown once and never stored in a readable form — send it now. They can
-                      change it after signing in.
-                    </p>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <code className="select-all rounded bg-white px-2 py-1 font-mono text-sm text-gray-900 ring-1 ring-amber-200">
-                        {phoneLogin.password}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(phoneLogin.password);
-                          setPasswordCopied(true);
-                          setTimeout(() => setPasswordCopied(false), 2000);
-                        }}
-                        className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                        {passwordCopied ? 'Copied' : 'Copy'}
-                      </button>
-                      {waLink && (
-                        <a
-                          href={waLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
-                        >
-                          <MessageCircle className="h-3.5 w-3.5" />
-                          Send on WhatsApp
-                        </a>
-                      )}
-                      {smsLink && (
-                        <a
-                          href={smsLink}
-                          className="flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100"
-                        >
-                          <Smartphone className="h-3.5 w-3.5" />
-                          Send by SMS
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          {phoneLogin && <PhoneCredentialsPanel credentials={phoneLogin} />}
 
           <form onSubmit={handleDirectInvite} className="flex flex-col gap-3 sm:flex-row sm:items-end">
             {directMode === 'email' ? (
@@ -810,6 +838,10 @@ export function TeamManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
+  /** Which member a password reset is in flight for. */
+  const [resendingPassword, setResendingPassword] = useState<string | null>(null);
+  /** One-time credentials minted from the roster, shown once above the list. */
+  const [rosterCredentials, setRosterCredentials] = useState<PhoneCredentials | null>(null);
 
   const businessId = currentBusiness?.business.id;
   const currentRole = (currentBusiness?.role ?? 'viewer') as UserRole;
@@ -835,6 +867,7 @@ export function TeamManagementPage() {
           invitation_token?: string | null;
           invitation_expires_at?: string | null;
           email: string | null;
+          phone?: string | null;
           full_name: string | null;
         }> }).members;
         setMembers(
@@ -848,6 +881,7 @@ export function TeamManagementPage() {
             invitation_token: m.invitation_token ?? null,
             invitation_expires_at: m.invitation_expires_at ?? null,
             email: m.email,
+            phone: m.phone ?? null,
             full_name: m.full_name,
           })),
         );
@@ -873,12 +907,12 @@ export function TeamManagementPage() {
         };
         const userIds = (directMembers ?? []).map((r) => r.user_id);
         const { data: profiles } = userIds.length === 0
-          ? { data: [] as Array<{ id: string; full_name: string | null }> }
+          ? { data: [] as Array<{ id: string; full_name: string | null; phone: string | null }> }
           : await supabase
               .from('user_profiles')
-              .select('id, full_name')
+              .select('id, full_name, phone')
               .in('id', userIds);
-        const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
+        const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]));
         const mapped: Member[] = (directMembers ?? []).map((row: DirectMemberRow) => ({
           id: row.id,
           user_id: row.user_id,
@@ -889,7 +923,10 @@ export function TeamManagementPage() {
           invitation_token: row.invitation_token,
           invitation_expires_at: row.invitation_expires_at,
           email: null,
-          full_name: profileMap.get(row.user_id) ?? null,
+          // The fallback path cannot read auth.users, so the number on the
+          // profile is the only identity a phone-added member has here.
+          phone: profileMap.get(row.user_id)?.phone ?? null,
+          full_name: profileMap.get(row.user_id)?.full_name ?? null,
         }));
         setMembers(mapped);
       }
@@ -927,6 +964,56 @@ export function TeamManagementPage() {
       void loadMembersAndInvites();
     }
   }, [loadMembersAndInvites]);
+
+  /**
+   * Mint a fresh one-time password for a member who signs in with a number.
+   *
+   * A phone account has no inbox, so "I forgot my password" has no self-service
+   * route — the owner is the recovery path. Same call as an invite
+   * (invite-team-member with reset_password), and the password comes back once.
+   */
+  async function handleResendPassword(member: Member) {
+    if (!member.phone || !businessId) return;
+
+    const shown = formatPhoneForDisplay(member.phone);
+    if (
+      !window.confirm(
+        `Create a new password for ${shown}? Their current password stops working immediately.`,
+      )
+    ) {
+      return;
+    }
+
+    setResendingPassword(member.id);
+    setRosterCredentials(null);
+    setError(null);
+
+    try {
+      const { data, failure } = await invokeFunction<InviteResult>('invite-team-member', {
+        business_id: businessId,
+        // The member's current role: the function returns it unchanged for an
+        // active member, so a password reset never alters access.
+        role: member.role,
+        phone: member.phone,
+        reset_password: true,
+      });
+
+      if (failure) throw new Error(failure.message);
+
+      const login = data?.login;
+      if (!login?.phone || !login.temporary_password) {
+        throw new Error(
+          'No new password came back for that member. Phone passwords can only be reset for accounts Ledgr created from a number.',
+        );
+      }
+      setRosterCredentials({ phone: login.phone, password: login.temporary_password });
+    } catch (err) {
+      handleError(err, { module: 'TeamManagementPage', operation: 'resendPhonePassword', notify: false });
+      setError(err instanceof Error ? err.message : 'Could not create a new password');
+    } finally {
+      setResendingPassword(null);
+    }
+  }
 
   /**
    * Soft-remove (deactivate) an active member — keeps the row for audit history.
@@ -1162,6 +1249,10 @@ export function TeamManagementPage() {
           Active members ({activeMembers.length})
         </h3>
 
+        {rosterCredentials && (
+          <PhoneCredentialsPanel credentials={rosterCredentials} />
+        )}
+
         {loading ? (
           <div className="flex items-center gap-2 py-6 text-sm text-gray-500">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1182,18 +1273,29 @@ export function TeamManagementPage() {
               return (
                 <div key={member.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
-                    {(member.full_name ?? member.email ?? '?').charAt(0).toUpperCase()}
+                    {(member.full_name ?? member.email ?? member.phone ?? '?').charAt(0).toUpperCase()}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-gray-900">
-                      {member.full_name ?? member.email ?? 'Unknown user'}
+                      {member.full_name ??
+                        member.email ??
+                        (member.phone ? formatPhoneForDisplay(member.phone) : 'Unknown user')}
                       {isCurrentUser && (
                         <span className="ml-1.5 text-xs font-normal text-gray-400">(you)</span>
                       )}
                     </p>
                     {member.email && member.full_name && (
                       <p className="truncate text-xs text-gray-500">{member.email}</p>
+                    )}
+                    {/* A phone member's number IS their identity — there is no
+                        address behind it, so show it whenever it is not already
+                        the headline. */}
+                    {!member.email && member.phone && (
+                      <p className="flex items-center gap-1 truncate text-xs text-gray-500">
+                        <Smartphone className="h-3 w-3 shrink-0" />
+                        {formatPhoneForDisplay(member.phone)}
+                      </p>
                     )}
                   </div>
 
@@ -1211,12 +1313,31 @@ export function TeamManagementPage() {
                     <RoleBadge role={member.role} />
                   )}
 
+                  {canModify && member.phone && (
+                    <button
+                      onClick={() => void handleResendPassword(member)}
+                      disabled={resendingPassword === member.id}
+                      className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-amber-50 hover:text-amber-600 disabled:opacity-50"
+                      title="Create a new one-time password"
+                      aria-label={`Create a new one-time password for ${
+                        member.full_name ?? formatPhoneForDisplay(member.phone)
+                      }`}
+                    >
+                      {resendingPassword === member.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <KeyRound className="h-4 w-4" />}
+                    </button>
+                  )}
+
                   {canModify && (
                     <button
                       onClick={() => void handleRemove(member.id, member.user_id)}
                       disabled={removing === member.id}
                       className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
                       title="Remove member"
+                      aria-label={`Remove ${
+                        member.full_name ?? member.email ?? 'this member'
+                      } from the business`}
                     >
                       {removing === member.id
                         ? <Loader2 className="h-4 w-4 animate-spin" />
