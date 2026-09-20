@@ -104,15 +104,57 @@ export function formatPhoneForDisplay(
 }
 
 /**
- * A temporary password for a phone account. Deliberately unambiguous (no 0/O,
- * 1/l/I) because it is read off a screen or a printed slip, and long enough to
- * clear Supabase's minimum password length.
+ * Character classes for a temporary password.
+ *
+ * Deliberately unambiguous — no 0/O, no 1/l/I — because the owner reads it off
+ * a screen, or off a printed slip, and types it into a phone that autocorrects.
+ * Symbols skip the ones that are painful to dictate or that break out of a
+ * shell/URL if the owner pastes the password somewhere unexpected.
+ */
+const PASSWORD_LOWERS = 'abcdefghjkmnpqrstuvwxyz';
+const PASSWORD_UPPERS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+const PASSWORD_DIGITS = '23456789';
+const PASSWORD_SYMBOLS = '!@#%*+=?';
+const PASSWORD_ALL = PASSWORD_LOWERS + PASSWORD_UPPERS + PASSWORD_DIGITS + PASSWORD_SYMBOLS;
+
+function randomChar(alphabet: string): string {
+  const bytes = new Uint8Array(1);
+  crypto.getRandomValues(bytes);
+  return alphabet[bytes[0] % alphabet.length];
+}
+
+/** Fisher-Yates with crypto randomness, so the class guarantees below do not
+ *  leak as fixed positions. */
+function shuffle(chars: string[]): string[] {
+  const out = [...chars];
+  const bytes = new Uint8Array(out.length);
+  crypto.getRandomValues(bytes);
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = bytes[i] % (i + 1);
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * A temporary password for a phone account.
+ *
+ * A project can enforce a password policy (Auth → Password requirements:
+ * letters, digits and/or symbols, plus a minimum length) and GoTrue applies it
+ * to `auth.admin.createUser` as well as to sign-up. A password that fails the
+ * policy makes the invite fail with a 422 the owner cannot act on, so every
+ * password we hand out satisfies the strictest preset
+ * (`lower_upper_letters_digits_symbols`) by construction: one character from
+ * each class, the rest from the combined alphabet, then shuffled.
  */
 export function generateTempPassword(length = 12): string {
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
-  const bytes = new Uint8Array(length);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes)
-    .map((b) => alphabet[b % alphabet.length])
-    .join('');
+  const size = Math.max(length, 8);
+  const required = [
+    randomChar(PASSWORD_LOWERS),
+    randomChar(PASSWORD_UPPERS),
+    randomChar(PASSWORD_DIGITS),
+    randomChar(PASSWORD_SYMBOLS),
+  ];
+  const rest = Array.from({ length: size - required.length }, () => randomChar(PASSWORD_ALL));
+  return shuffle([...required, ...rest]).join('');
 }

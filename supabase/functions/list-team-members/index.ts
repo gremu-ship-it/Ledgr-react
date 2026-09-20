@@ -113,13 +113,20 @@ serve(async (req) => {
       });
     }
 
-    // Fetch profiles
+    // Fetch profiles. `phone` is the fallback identity for a phone-provisioned
+    // member: the number only lands on auth.users when GoTrue accepts it, and it
+    // always lands on the profile (see ensureProfile in invite-team-member).
     const { data: profiles } = await admin
       .from('user_profiles')
-      .select('id, full_name, avatar_url')
+      .select('id, full_name, avatar_url, phone')
       .in('id', userIds);
 
-    type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null };
+    type ProfileRow = {
+      id: string;
+      full_name: string | null;
+      avatar_url: string | null;
+      phone: string | null;
+    };
     const profileMap = new Map((profiles ?? []).map((p: ProfileRow) => [p.id, p]));
 
     // Fetch emails + phones via Auth Admin — batch lookup by listing? We'll
@@ -143,7 +150,9 @@ serve(async (req) => {
           const rawEmail = u.email ?? null;
           authMap.set(u.id, {
             email: isPhoneLoginEmail(rawEmail) ? null : rawEmail,
-            phone: u.phone ?? null,
+            // GoTrue stores an empty string, not null, for an account created
+            // without a phone — normalise so the profile fallback kicks in.
+            phone: u.phone || null,
           });
           needed.delete(u.id);
         }
@@ -165,7 +174,7 @@ serve(async (req) => {
       invitation_expires_at: m.invitation_expires_at,
       created_at: m.created_at,
       email: authMap.get(m.user_id)?.email ?? null,
-      phone: authMap.get(m.user_id)?.phone ?? null,
+      phone: authMap.get(m.user_id)?.phone ?? profileMap.get(m.user_id)?.phone ?? null,
       full_name: profileMap.get(m.user_id)?.full_name ?? null,
       avatar_url: profileMap.get(m.user_id)?.avatar_url ?? null,
     }));

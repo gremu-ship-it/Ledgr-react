@@ -39,6 +39,7 @@ import { BillingTab } from '@/components/billing/BillingTab';
 import { TeamManagementPage } from '@/pages/settings/TeamManagementPage';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { handleError } from '@/lib/errorHandler';
+import { describeFunctionFailure } from '@/lib/edgeFunctionErrors';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1117,7 +1118,7 @@ export function TeamMembersTab({ businessId }: { businessId: string }) {
       if (!email.includes('@')) throw new Error('Enter a valid email address');
       const normalizedRole = (directForm.role === 'staff' ? 'accountant' : directForm.role) as string;
 
-      const { data, error } = await supabase.functions.invoke<InviteResponse>('invite-team-member', {
+      const { data, error, response } = await supabase.functions.invoke<InviteResponse>('invite-team-member', {
         body: {
           business_id: businessId,
           email,
@@ -1126,8 +1127,10 @@ export function TeamMembersTab({ businessId }: { businessId: string }) {
       });
 
       if (error) {
-        const msg = (data && (data.message || data.error)) || error.message;
-        throw new Error(msg);
+        // The SDK's own message is a constant ("Edge Function returned a
+        // non-2xx status code"); the function's explanation is in the body.
+        const failure = await describeFunctionFailure('invite-team-member', error, response);
+        throw new Error(failure.message);
       }
       if (data?.error) {
         throw new Error(data.message || data.error);
@@ -1156,7 +1159,7 @@ export function TeamMembersTab({ businessId }: { businessId: string }) {
   const generateLinkMutation = useMutation({
     mutationFn: async () => {
       const normalizedRole = (linkRole === 'staff' ? 'accountant' : linkRole) as string;
-      const { data, error } = await supabase.functions.invoke('create-invite-link', {
+      const { data, error, response } = await supabase.functions.invoke('create-invite-link', {
         body: {
           business_id: businessId,
           role: normalizedRole,
@@ -1165,7 +1168,10 @@ export function TeamMembersTab({ businessId }: { businessId: string }) {
         },
       });
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        const failure = await describeFunctionFailure('create-invite-link', error, response);
+        throw new Error(failure.message);
+      }
       if (data?.error) throw new Error(data.message || data.error);
       return data as { invite_url: string };
     },

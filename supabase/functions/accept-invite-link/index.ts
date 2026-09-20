@@ -16,7 +16,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest } from '../_shared/cors.ts';
-import { formatPhoneForDisplay, normalizePhone } from '../_shared/phone.ts';
+import { formatPhoneForDisplay, isPhoneLoginEmail, normalizePhone, phoneLoginEmail } from '../_shared/phone.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -163,6 +163,14 @@ serve(async (req) => {
     }
 
     // 4. Verify the restriction the owner put on this link
+    /**
+     * The number this caller proved they hold, when the link was restricted to
+     * one. Kept so step 6 can put it on the profile even when GoTrue never
+     * stored it on the auth user — the team list and any later phone-restricted
+     * invite both read it from there.
+     */
+    let matchedPhone: string | null = null;
+
     if (invitation.phone) {
       // A phone account carries its number on the auth user; older accounts may
       // only have it on the profile, so check both before refusing.
@@ -178,10 +186,29 @@ serve(async (req) => {
         );
       }
 
+      // Third source, and the one that needs no query: a Ledgr-provisioned phone
+      // account signs in with an address derived from its number, so that address
+      // alone proves which number the caller holds. It covers accounts created
+      // before the number was written to auth.users or to the profile.
+      if (!callerPhone && isPhoneLoginEmail(callerEmail)) {
+        callerPhone = phoneLoginEmail(invitation.phone) === callerEmail.toLowerCase()
+          ? normalizePhone(invitation.phone)
+          : null;
+      }
+
       if (callerPhone !== normalizePhone(invitation.phone)) {
+        // Never quote the synthetic login address back at a person: it is an
+        // implementation detail, and "signed in as 265991234567@phone.ledgr.app"
+        // reads like a bug rather than like a mismatched number.
+        const signedInAs = callerPhone
+          ? formatPhoneForDisplay(callerPhone)
+          : isPhoneLoginEmail(callerEmail)
+            ? 'a different number'
+            : callerEmail || 'a different account';
+
         return new Response(
           JSON.stringify({
-            error: `This invitation link is for ${formatPhoneForDisplay(invitation.phone)}, but you are signed in as ${callerEmail || 'a different account'}.`,
+            error: `This invitation link is for ${formatPhoneForDisplay(invitation.phone)}, but you are signed in as ${signedInAs}.`,
             code: 'PHONE_RESTRICTION_MISMATCH',
           }),
           {
@@ -190,6 +217,8 @@ serve(async (req) => {
           },
         );
       }
+
+      matchedPhone = callerPhone;
     } else if (invitation.email && invitation.email.toLowerCase() !== callerEmail.toLowerCase()) {
       return new Response(
         JSON.stringify({
@@ -226,10 +255,25 @@ serve(async (req) => {
       (callerAuth?.user?.user_metadata?.full_name as string | undefined) ||
       (callerAuth?.user?.user_metadata?.name as string | undefined) ||
       (callerEmail ? callerEmail.split('@')[0] : 'Team member');
+    // GoTrue stores an empty string, not null, for an account created without a
+    // phone field, so normalise before falling back to the matched restriction.
+    const callerNumber = normalizePhone(callerAuth?.user?.phone ?? '') ?? matchedPhone;
+
     await admin.from('user_profiles').upsert(
-      { id: callerId, full_name: callerName },
+      { id: callerId, full_name: callerName, ...(callerNumber ? { phone: callerNumber } : {}) },
       { onConflict: 'id', ignoreDuplicates: true },
     );
+
+    // ignoreDuplicates skips the phone on a row that already existed, and that
+    // number is the member's only identity in the team list — fill a blank
+    // without ever overwriting one they set themselves.
+    if (callerNumber) {
+      await admin
+        .from('user_profiles')
+        .update({ phone: callerNumber })
+        .eq('id', callerId)
+        .is('phone', null);
+    }
 
     // 7. Check existing membership
     const { data: existing, error: existingErr } = await admin

@@ -13,9 +13,19 @@
 //      password, which we return once so the owner can hand it over. The member
 //      then signs in with number + password; no SMS gateway is involved and
 //      nothing is ever mailed to the synthetic address.
+//
+//      Only the synthetic email and the password are on the critical path,
+//      because they are the only things sign-in needs. The `phone` field is
+//      attached afterwards on a best-effort basis, so a project with no SMS
+//      provider — or a number GoTrue will not store — cannot fail an invite.
+//      Provisioning is also retry-safe: if the login already exists we adopt it,
+//      and if it exists but has never signed in we mint a fresh password,
+//      because the previous one can never have reached the member.
 //   4. Either way we insert/reactivate a business_users row with the role, and
 //      guarantee a user_profiles row (the invariant every membership-granting
-//      path upholds — see grant_user_business_access, 20260728000003).
+//      path upholds — see grant_user_business_access, 20260728000003). For a
+//      phone account the number goes on that profile too: it is what the team
+//      list shows and what accept-invite-link matches a restricted link against.
 //
 // Body: { business_id: string, email?: string, phone?: string, role: string,
 //         full_name?: string, reset_password?: boolean }
@@ -106,30 +116,99 @@ async function findUserByEmail(
 }
 
 /**
- * Resolves the account behind a phone number.
+ * auth-js THROWS (rather than returning an error) when handed a malformed id,
+ * and a corrupt row in one of our maps must not take the whole invite down —
+ * the caller simply moves on to the next lookup.
+ */
+async function userById(admin: SupabaseClient, userId: string): Promise<User | null> {
+  if (!userId) return null;
+  try {
+    const { data } = await admin.auth.admin.getUserById(userId);
+    return data?.user ?? null;
+  } catch (err) {
+    console.warn('could not resolve a mapped user, falling through:', (err as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Resolves the account behind a phone number, cheapest source first.
  *
- * The local phone_accounts map is the fast path (one indexed query). It can
- * miss for an account provisioned before the map existed, or one created by
- * hand, so we fall back to the auth scan using the deterministic synthetic
- * email. Both paths are read-only; provisioning happens in the caller.
+ * Three sources, in order:
+ *
+ *   1. phone_accounts — the purpose-built map, one indexed query. Can be
+ *      unavailable (migration not applied, or not granted to service_role) so
+ *      every failure here is a miss, not an error.
+ *   2. user_profiles.phone — the number we write for every phone account. This
+ *      table always exists and is always readable by the service role, so it is
+ *      the fallback that keeps the flow working when (1) cannot be read.
+ *   3. The Admin API scan for the deterministic synthetic email. Slow (up to
+ *      ten pages) and capped, so it is the last resort — but it also finds
+ *      accounts provisioned before either map existed.
+ *
+ * Read-only; provisioning happens in the caller.
  */
 async function findPhoneAccount(
   admin: SupabaseClient,
   phone: string,
   loginEmail: string,
 ): Promise<User | null> {
-  const { data } = await admin
+  const { data: mapped } = await admin
     .from('phone_accounts')
     .select('user_id')
     .eq('phone', phone)
     .maybeSingle();
 
-  if (data?.user_id) {
-    const { data: userData } = await admin.auth.admin.getUserById(data.user_id);
-    if (userData?.user) return userData.user;
+  if (mapped?.user_id) {
+    const user = await userById(admin, mapped.user_id);
+    if (user) return user;
+  }
+
+  const { data: profile } = await admin
+    .from('user_profiles')
+    .select('id')
+    .eq('phone', phone)
+    .maybeSingle();
+
+  if (profile?.id) {
+    const user = await userById(admin, profile.id);
+    if (user) return user;
   }
 
   return findUserByEmail(admin, loginEmail);
+}
+
+/** GoTrue's answer when the synthetic email is already taken. */
+function isDuplicateAccountError(message: string): boolean {
+  return /already registered|already exists|user_already_exists/i.test(message);
+}
+
+/**
+ * GoTrue enforces the project's password policy (Auth → Password requirements)
+ * on admin-created users too. generateTempPassword already satisfies the
+ * strictest preset, but a longer custom minimum would still reject it — and
+ * that must not strand the invite.
+ */
+function isWeakPasswordError(message: string): boolean {
+  return /password should|weak_password|password is known to be weak|weak password/i.test(message);
+}
+
+/**
+ * Puts the number on the auth user, best effort.
+ *
+ * Sign-in never reads it (the login is the synthetic email plus a password), so
+ * a project with no SMS provider, or a number GoTrue considers invalid, must
+ * not fail an invite. Keeping it in sync is still worth one call: the team list
+ * and the invite-link restriction both check auth.users.phone first.
+ */
+async function attachPhone(admin: SupabaseClient, userId: string, phone: string): Promise<void> {
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    phone,
+    phone_confirm: true,
+  });
+  if (error) {
+    console.warn('could not store the number on the auth user (sign-in is unaffected):', error.message);
+  }
 }
 
 /**
@@ -137,16 +216,37 @@ async function findPhoneAccount(
  * NULL and the team list joins this table, so a member without one shows up
  * blank. Mirrors grant_user_business_access (20260728000003) and the invite RPC
  * in 20260815000000.
+ *
+ * For a phone account the number goes on the profile as well. That is what
+ * makes the member identifiable in the team list when GoTrue would not take the
+ * phone field, and what accept-invite-link matches a phone-restricted link
+ * against.
  */
 async function ensureProfile(
   admin: SupabaseClient,
   userId: string,
   fullName: string,
+  phone?: string | null,
 ): Promise<void> {
   await admin.from('user_profiles').upsert(
-    { id: userId, full_name: fullName || 'Team member' },
+    {
+      id: userId,
+      full_name: fullName || 'Team member',
+      ...(phone ? { phone } : {}),
+    },
     { onConflict: 'id', ignoreDuplicates: true },
   );
+
+  // ignoreDuplicates means an existing row keeps its values, including an empty
+  // phone from before this function wrote it. Fill the number in without ever
+  // overwriting one the member set themselves.
+  if (phone) {
+    await admin
+      .from('user_profiles')
+      .update({ phone })
+      .eq('id', userId)
+      .is('phone', null);
+  }
 }
 
 serve(async (req) => {
@@ -317,6 +417,8 @@ serve(async (req) => {
       }
 
       targetUser = await findPhoneAccount(admin, phone, loginEmail);
+      /** True only when THIS call created the auth user. */
+      let provisionedNow = false;
 
       if (!targetUser) {
         tempPassword = generateTempPassword();
@@ -327,23 +429,27 @@ serve(async (req) => {
           invited_by: callerId,
         };
 
-        // Storing the number on the auth user needs the Phone provider enabled
-        // in the project. Sign-in does NOT depend on it — the synthetic email
-        // plus the phone_accounts map are enough — so if GoTrue refuses the
-        // phone field we retry without it rather than failing the invite.
+        // Sign-in needs exactly two things: the synthetic login email and a
+        // password. Everything else about the account is decoration, so the
+        // create call carries nothing that GoTrue can legitimately refuse for
+        // reasons that have nothing to do with this invite — no phone field
+        // (rejected when the project has no SMS provider, when the number is
+        // already on another account, or when GoTrue dislikes the format). The
+        // number is attached afterwards, best effort.
         let created = await admin.auth.admin.createUser({
           email: loginEmail,
-          phone,
           password: tempPassword,
           // The synthetic address is not a real inbox, so there is nothing to
           // confirm — mark it confirmed or the account cannot sign in.
           email_confirm: true,
-          phone_confirm: true,
           user_metadata: metadata,
         });
 
-        if (created.error && /phone|sms|provider/i.test(created.error.message)) {
-          console.warn('createUser rejected the phone field, retrying without it:', created.error.message);
+        // A project can enforce a password policy; retry with a longer one
+        // rather than failing an invite over our own generated secret.
+        if (created.error && isWeakPasswordError(created.error.message)) {
+          console.warn('password policy rejected the temporary password, regenerating:', created.error.message);
+          tempPassword = generateTempPassword(20);
           created = await admin.auth.admin.createUser({
             email: loginEmail,
             password: tempPassword,
@@ -352,49 +458,84 @@ serve(async (req) => {
           });
         }
 
-        if (created.error || !created.data?.user) {
-          console.error('phone account creation failed', created.error);
-          return new Response(
-            JSON.stringify({
-              error: `Failed to create the account: ${created.error?.message ?? 'unknown error'}`,
-            }),
+        // The login can already exist without any of our lookups finding it —
+        // most often because an earlier attempt created the account and then
+        // failed before granting membership. Failing here would leave the
+        // number permanently un-invitable: every retry hits the same duplicate.
+        if (created.error && isDuplicateAccountError(created.error.message)) {
+          console.warn('login already exists, adopting it:', created.error.message);
+          targetUser = await findPhoneAccount(admin, phone, loginEmail);
+        }
+
+        if (!targetUser) {
+          if (created.error || !created.data?.user) {
+            console.error('phone account creation failed', created.error);
+            return new Response(
+              JSON.stringify({
+                error: `Could not create the login for ${identity}: ${created.error?.message ?? 'unknown error'}`,
+                code: 'ACCOUNT_CREATION_FAILED',
+              }),
+              {
+                status: 502,
+                headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+              },
+            );
+          }
+
+          targetUser = created.data.user;
+          provisionedNow = true;
+
+          await attachPhone(admin, targetUser.id, phone);
+
+          // Map the number so the next invite is one query, not a user scan.
+          const { error: mapErr } = await admin.from('phone_accounts').upsert(
             {
-              status: 500,
-              headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+              phone,
+              user_id: targetUser.id,
+              business_id: businessId,
+              created_by: callerId,
+              temporary_password: true,
             },
+            { onConflict: 'phone' },
           );
+          if (mapErr) {
+            // The account exists and is usable; the map is an optimisation, so a
+            // failure here must not fail the invite.
+            console.error('phone_accounts upsert failed', mapErr);
+          }
         }
+      }
 
-        targetUser = created.data.user;
-
-        // Map the number so the next invite is one query, not a user scan.
-        const { error: mapErr } = await admin.from('phone_accounts').upsert(
-          {
-            phone,
-            user_id: targetUser.id,
-            business_id: businessId,
-            created_by: callerId,
-            temporary_password: true,
-          },
-          { onConflict: 'phone' },
-        );
-        if (mapErr) {
-          // The account exists and is usable; the map is an optimisation, so a
-          // failure here must not fail the invite.
-          console.error('phone_accounts upsert failed', mapErr);
-        }
-      } else if (wantsPasswordReset && isPhoneLoginEmail(targetUser.email)) {
-        // Forgotten password on a phone account: no inbox to reset through, so
-        // the owner mints a new temporary one.
+      // A phone account has no inbox, so a password reaches the member only
+      // through this response. Hand one over whenever the one already set can
+      // never have arrived:
+      //   - the owner asked for a reset, or
+      //   - the account exists but has never signed in, i.e. an earlier attempt
+      //     provisioned it and failed before the password was ever shown.
+      // Without this the member is "added" with a password nobody knows.
+      if (
+        isPhoneLoginEmail(targetUser.email) &&
+        !provisionedNow &&
+        (wantsPasswordReset || !targetUser.last_sign_in_at)
+      ) {
         tempPassword = generateTempPassword();
-        const { error: pwErr } = await admin.auth.admin.updateUserById(targetUser.id, {
+        let { error: pwErr } = await admin.auth.admin.updateUserById(targetUser.id, {
           password: tempPassword,
         });
+        if (pwErr && isWeakPasswordError(pwErr.message)) {
+          tempPassword = generateTempPassword(20);
+          ({ error: pwErr } = await admin.auth.admin.updateUserById(targetUser.id, {
+            password: tempPassword,
+          }));
+        }
         if (pwErr) {
           return new Response(
-            JSON.stringify({ error: `Failed to reset the password: ${pwErr.message}` }),
+            JSON.stringify({
+              error: `Failed to reset the password: ${pwErr.message}`,
+              code: 'PASSWORD_RESET_FAILED',
+            }),
             {
-              status: 500,
+              status: 502,
               headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
             },
           );
@@ -405,7 +546,7 @@ serve(async (req) => {
           .eq('user_id', targetUser.id);
       }
 
-      await ensureProfile(admin, targetUser.id, fullName || formatPhoneForDisplay(phone));
+      await ensureProfile(admin, targetUser.id, fullName || formatPhoneForDisplay(phone), phone);
     } else {
       targetUser = await findUserByEmail(admin, email);
 
@@ -439,6 +580,15 @@ serve(async (req) => {
       });
     }
 
+    /**
+     * A phone account's address is synthetic (265991234567@phone.ledgr.app) and
+     * means nothing to a reader — and worse, an owner who copies it into an
+     * email thread bounces. list-team-members suppresses it for the same reason,
+     * so the invite response does too: the number is the identity.
+     */
+    const publicEmail = isPhoneLoginEmail(targetUser.email) ? null : (targetUser.email ?? null);
+    const publicPhone = targetUser.phone || phone || null;
+
     // Check existing membership
     const { data: existing, error: existingErr } = await admin
       .from('business_users')
@@ -458,6 +608,35 @@ serve(async (req) => {
 
     if (existing) {
       if (existing.is_active) {
+        // Already a member — but if this call minted a password it now exists in
+        // Auth and this response is the only place it will ever be shown. Swallowing
+        // it behind a 409 would leave the member locked out with a password nobody
+        // knows, so the credentials go out and the message says nothing changed.
+        if (tempPassword) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              code: 'ALREADY_MEMBER',
+              message: wantsPasswordReset
+                ? `New password for ${identity}. They were already an active member with role '${existing.role}'.`
+                : `${identity} is already an active member with role '${existing.role}'. Here are their login details.`,
+              member: {
+                user_id: targetUser.id,
+                email: publicEmail,
+                phone: publicPhone,
+                role: existing.role,
+                business_id: businessId,
+                already_member: true,
+              },
+              login: { phone, temporary_password: tempPassword },
+            }),
+            {
+              status: 200,
+              headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+            },
+          );
+        }
+
         return new Response(
           JSON.stringify({
             error: 'Already a member',
@@ -498,8 +677,8 @@ serve(async (req) => {
             message: `${identity} has been re-added to the business as ${role}.`,
             member: {
               user_id: targetUser.id,
-              email: targetUser.email,
-              phone: targetUser.phone ?? phone ?? null,
+              email: publicEmail,
+              phone: publicPhone,
               role,
               business_id: businessId,
               reactivated: true,
@@ -531,10 +710,28 @@ serve(async (req) => {
       .maybeSingle();
 
     if (insertErr) {
-      return new Response(JSON.stringify({ error: `Failed to add member: ${insertErr.message}` }), {
-        status: 500,
-        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
-      });
+      // The most common reason this insert fails is a role the database does not
+      // know yet — the POS roles arrive with 20260920000000, so an environment
+      // behind on migrations rejects 'cashier' at the enum. Say that plainly
+      // instead of quoting Postgres at the owner. (The account we just created is
+      // not lost: the next attempt finds it by number and, because it has never
+      // signed in, hands over a fresh password.)
+      const roleUnsupported =
+        /invalid input value for enum|enum user_role/i.test(insertErr.message) &&
+        insertErr.message.includes(role);
+
+      return new Response(
+        JSON.stringify({
+          error: roleUnsupported
+            ? `This Ledgr database does not support the '${role}' role yet. Pick another role, or ask your administrator to run the pending database migrations.`
+            : `Failed to add member: ${insertErr.message}`,
+          code: roleUnsupported ? 'ROLE_NOT_SUPPORTED' : 'MEMBERSHIP_INSERT_FAILED',
+        }),
+        {
+          status: roleUnsupported ? 422 : 500,
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     // Try to fetch profile for nicer response
@@ -551,8 +748,8 @@ serve(async (req) => {
         member: {
           id: inserted?.id,
           user_id: targetUser.id,
-          email: targetUser.email,
-          phone: targetUser.phone ?? phone ?? null,
+          email: publicEmail,
+          phone: publicPhone,
           full_name: profile?.full_name ?? null,
           role,
           business_id: businessId,
