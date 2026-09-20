@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '@/lib/supabase';
 import { createLogger } from '@/lib/logger';
+import { phoneLoginEmail } from '@/lib/phone';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { usePartner } from '@/partner/PartnerContext';
 import {
@@ -78,8 +79,12 @@ export function LoginPage() {
   const from = safeReturnTo ?? fromState ?? '/dashboard';
   const inactivityLogout = (location.state as { reason?: string })?.reason === 'inactivity';
 
-  // Step 1: email + password
+  // Step 1: credentials. A phone-provisioned account has no real inbox — its
+  // login email is derived from the number (see lib/phone.ts), so the member
+  // signs in with the number their owner registered and the same password flow.
+  const [loginMode, setLoginMode] = useState<'email' | 'phone'>('email');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -94,10 +99,18 @@ export function LoginPage() {
   async function handleCredentials(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    const loginEmail =
+      loginMode === 'phone' ? phoneLoginEmail(phone) : email.trim().toLowerCase();
+    if (!loginEmail) {
+      setError(t('auth.invalidPhone'));
+      return;
+    }
+
     setLoading(true);
 
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: loginEmail,
       password,
     });
 
@@ -239,17 +252,49 @@ export function LoginPage() {
         )}
         {error && <AuthAlert type="error" message={error} />}
 
-        <FormField id="email" label={t('common.email')}>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@business.mw"
-          />
-        </FormField>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              setLoginMode((m) => (m === 'email' ? 'phone' : 'email'));
+              setError(null);
+            }}
+            className="text-xs font-medium text-brand-600 hover:text-brand-700"
+          >
+            {loginMode === 'email' ? t('auth.signInWithPhone') : t('auth.signInWithEmail')}
+          </button>
+        </div>
+
+        {loginMode === 'email' ? (
+          <FormField id="email" label={t('common.email')}>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@business.mw"
+            />
+          </FormField>
+        ) : (
+          <FormField
+            id="phone"
+            label={t('auth.phoneNumber')}
+            hint={t('auth.phonePasswordHint')}
+          >
+            <Input
+              id="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0991234567"
+            />
+          </FormField>
+        )}
 
         <FormField id="password" label={t('auth.password')}>
           <PasswordInput

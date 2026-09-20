@@ -4,12 +4,18 @@
 // Only owners and admins can create invitation links.
 // Only owners can generate invitations for owner or admin roles.
 //
-// Body: { business_id: string, role: string, email?: string, origin?: string }
-// Returns: { success, invite_url, business_name, role, email, expires_at }
+// Body: { business_id: string, role: string, email?: string, phone?: string,
+//         origin?: string }
+// Returns: { success, invite_url, business_name, role, email, phone, expires_at }
+//
+// `phone` is the alternative restriction: the owner shares the link over
+// WhatsApp/SMS from their own phone (no SMS gateway, no per-message cost) and
+// only the account holding that number can accept it.
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeadersForRequest } from '../_shared/cors.ts';
+import { normalizePhone } from '../_shared/phone.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -86,7 +92,13 @@ serve(async (req) => {
 
     const callerId = callerData.user.id;
 
-    let body: { business_id?: string; role?: string; email?: string; origin?: string };
+    let body: {
+      business_id?: string;
+      role?: string;
+      email?: string;
+      phone?: string;
+      origin?: string;
+    };
     try {
       body = await req.json();
     } catch {
@@ -98,7 +110,9 @@ serve(async (req) => {
 
     const businessId = (body.business_id || '').trim();
     const rawRole = (body.role || '').trim();
-    const email = body.email ? body.email.trim().toLowerCase() : null;
+    const rawPhone = body.phone ? body.phone.trim() : '';
+    const phone = rawPhone ? normalizePhone(rawPhone) : null;
+    const email = body.email && !phone ? body.email.trim().toLowerCase() : null;
     const origin = body.origin || '';
 
     if (!businessId) {
@@ -106,6 +120,18 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
+    }
+
+    if (rawPhone && !phone) {
+      return new Response(
+        JSON.stringify({
+          error: 'A valid phone number is required (e.g. 0991234567 or +265991234567)',
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+        },
+      );
     }
 
     const role = normalizeRole(rawRole);
@@ -201,6 +227,7 @@ serve(async (req) => {
       .insert({
         business_id: businessId,
         email: email || null,
+        phone: phone || null,
         role,
         token,
         invited_by: callerId,
@@ -226,6 +253,7 @@ serve(async (req) => {
         business_name: business?.name ?? null,
         role,
         email,
+        phone,
         expires_at: expiresAt,
       }),
       {
