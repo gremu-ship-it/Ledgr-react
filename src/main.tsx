@@ -8,7 +8,8 @@ import { supabase } from '@/lib/supabase';
 import { attemptChunkRecovery, clearChunkRecovery } from '@/lib/chunkRecovery';
 import { initErrorCapture } from '@/lib/errorCapture';
 import { queryClient } from '@/lib/queryClient';
-import { persistOptions, clearPersistedCache } from '@/lib/queryPersister';
+import { persistOptions } from '@/lib/queryPersister';
+import { wipeIdentityTransitionCaches } from '@/lib/cacheWipe';
 import './index.css';
 import './i18n';
 import App from './App.tsx';
@@ -82,20 +83,13 @@ function startApp() {
   // sitting in the browser after sign-out.
   supabase.auth.onAuthStateChange((event) => {
     if (event === 'SIGNED_OUT') {
-      void clearPersistedCache();
-      try {
-        // Only clear ledgr-prefixed keys so we don't touch third-party
-        // entries (Supabase session, analytics, etc.) that manage their
-        // own lifecycle.
-        const toRemove: string[] = [];
-        for (let i = 0; i < window.sessionStorage.length; i++) {
-          const k = window.sessionStorage.key(i);
-          if (k && k.startsWith('ledgr_')) toRemove.push(k);
-        }
-        for (const k of toRemove) window.sessionStorage.removeItem(k);
-      } catch {
-        // storage access disabled; ignore
-      }
+      // R09.1 (D-5 wipe model): erase every business-data CACHE for the
+      // outgoing identity — persisted React Query data, the Workbox REST
+      // cache, and enumerated session/local caches — verified empty before
+      // completion. Accepted offline financial evidence (the ledgr-offline
+      // queue DB and ledgr_pos_offline_queue) is explicitly NOT cache and is
+      // preserved for the R09.2 quarantine flow. Never a wildcard wipe.
+      void wipeIdentityTransitionCaches('signed-out');
     }
   });
 }

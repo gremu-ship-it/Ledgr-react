@@ -3,6 +3,10 @@ import 'fake-indexeddb/auto';
 import { beforeAll, afterAll, beforeEach, expect, vi } from 'vitest';
 import { offlineDB } from '@/offline/db';
 import { enqueue, recoverStaleSyncClaims, STALE_SYNC_CLAIM_MS } from '@/offline/queueApi';
+import Dexie from 'dexie';
+import { wipeIdentityTransitionCaches, verifyBusinessCacheEmptiness, WORKBOX_API_CACHE_NAME, LEGACY_POS_QUEUE_KEY, RQ_PERSIST_DB_NAME } from '@/lib/cacheWipe';
+import { MemoryCacheStorage } from '@/lib/cacheWipeTestAdapters';
+import { createIDBPersister } from '@/lib/queryPersister';
 import { syncQueue } from '@/offline/syncEngine';
 import { buildPosSaleQueuePayload } from '@/services/posService';
 import { realSupabase } from '@/lib/supabase';
@@ -115,3 +119,89 @@ test(meta('OFFLINE.RETRY','Failed synthetic sale retries with same key and exact
   const row=await offlineDB.queue.get(id);
   expect((await db.client.query('select count(*)::int n from public.invoices where business_id=$1 and client_key=$2',[orgs.A.business,row?.clientKey])).rows[0].n).toBe(1);
 });
+
+/* R09.1 cache confidentiality (D-5 wipe model) — additive evidence namespace R09.CACHE.* */
+
+const wipeMeta=(id:string,expectation:string)=>({id,expected:expectation,source:'src/lib/cacheWipe.ts + public/sw-events.js + main.tsx/useAuthListener.ts hooks',remediation:'R09.1',layer:'fake IndexedDB + in-memory CacheStorage stub + jsdom web storage; verified-emptiness loop, no arbitrary timeout',productionVerificationRequired:false});
+const countRQEntries=async()=>{const d=new Dexie(RQ_PERSIST_DB_NAME);await d.open();const n=d.tables.length===0?0:await d.table('cache').count();d.close();return n;};
+const seedRQEntry=async()=>{const persister=createIDBPersister();await persister.persistClient({timestamp:Date.now(),buster:'r13-test',clientState:{mutations:[],queries:[{queryKey:['invoices','r13-business'],queryHash:'["invoices","r13-business"]',state:{status:'success',data:[{id:'r13-invoice',total:1500}]}}]}} as never);};
+
+test(wipeMeta('R09.CACHE.WIPE-VERIFIED-EMPTY','Logout wipe removes persisted RQ DB contents and Workbox API cache; verified empty by read-back, not assumed'),async()=>{
+  const stub=new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  stub.seed(WORKBOX_API_CACHE_NAME,['GET /rest/v1/invoices 200 r13-tenant-a']);
+  await seedRQEntry();
+  expect(await countRQEntries()).toBeGreaterThan(0);
+  const result=await wipeIdentityTransitionCaches('signed-out');
+  expect(result.rqEntriesRemaining).toBe(0);
+  expect(result.apiCacheStillPresent).toBe(false);
+  expect(result.verifiedEmpty).toBe(true);
+  const probe=await verifyBusinessCacheEmptiness();
+  expect(probe.rqEntries).toBe(0);
+  expect(probe.apiCachePresent).toBe(false);
+});
+
+test(wipeMeta('R09.CACHE.EVIDENCE-PRESERVED','Offline financial queue (ledgr-offline) and legacy POS queue (ledgr_pos_offline_queue) survive the wipe byte-identical'),async()=>{
+  new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  const legacy=JSON.stringify([{receiptNumber:'R13-LEGACY-1',payload:{total:1500},queuedAt:'2026-09-20T08:00:00Z'}]);
+  window.localStorage.setItem(LEGACY_POS_QUEUE_KEY,legacy);
+  const queueRow={sequence:900,operationType:'pos_sale',status:'pending',businessId:'r13-business',payload:{invoice:{},lines:[]},clientKey:'r13-wipe-survival',createdAt:'2026-09-22T08:00:00Z',attemptCount:0} as never;
+  const id=await offlineDB.queue.add(queueRow);
+  const result=await wipeIdentityTransitionCaches('signed-out');
+  expect(result.storageKeysRemoved).not.toContain(LEGACY_POS_QUEUE_KEY);
+  expect(window.localStorage.getItem(LEGACY_POS_QUEUE_KEY)).toBe(legacy);
+  const rows=await offlineDB.queue.toArray();
+  expect(rows).toHaveLength(1);
+  expect(rows[0].localId).toBe(id);
+});
+
+test(wipeMeta('R09.CACHE.REPEAT-AND-EMPTY-SAFE','Repeated logout wipes are idempotent; wipe with no caches succeeds safely'),async()=>{
+  new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  await seedRQEntry();
+  const first=await wipeIdentityTransitionCaches('signed-out');
+  const second=await wipeIdentityTransitionCaches('signed-out');
+  expect(first.verifiedEmpty).toBe(true);expect(second.verifiedEmpty).toBe(true);
+  expect(second.storageKeysRemoved).toEqual([]);
+  window.sessionStorage.clear();
+  const pristine=new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  expect(pristine.keysOf(WORKBOX_API_CACHE_NAME)).toEqual([]);
+  const empty=await wipeIdentityTransitionCaches('signed-out');
+  expect(empty.verifiedEmpty).toBe(true);expect(empty.apiCacheStillPresent).toBe(false);
+});
+
+test(wipeMeta('R09.CACHE.USER-SWITCH-ISOLATION','After a same-tab user switch wipe, the next user cannot read the prior user’s cached business data from any addressed layer'),async()=>{
+  const stub=new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  stub.seed(WORKBOX_API_CACHE_NAME,['GET /rest/v1/journal_entries 200 user-a-data']);
+  await seedRQEntry();
+  window.sessionStorage.setItem('ledgr_draft_invoice-form_r13-biz-a',JSON.stringify({total:1500}));
+  await wipeIdentityTransitionCaches('user-switch');
+  // User B perspective: every surface the A session could have left must be empty.
+  const probe=await verifyBusinessCacheEmptiness();
+  expect(probe.rqEntries).toBe(0);expect(probe.apiCachePresent).toBe(false);
+  expect(window.sessionStorage.getItem('ledgr_draft_invoice-form_r13-biz-a')).toBeNull();
+});
+
+test(wipeMeta('R09.CACHE.REPOPULATION-REENFORCED','In-flight SW repopulation race: a late cache.put after delete is re-defeated until the cache verifies empty'),async()=>{
+  const stub=new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  stub.seed(WORKBOX_API_CACHE_NAME,['GET /rest/v1/invoices 200 pre-logout']);
+  stub.scheduleRepopulate(WORKBOX_API_CACHE_NAME,['GET /rest/v1/invoices 200 late-1']);
+  stub.scheduleRepopulate(WORKBOX_API_CACHE_NAME,['GET /rest/v1/invoices 200 late-2']);
+  const result=await wipeIdentityTransitionCaches('signed-out');
+  expect(result.apiCacheDeleteAttempts).toBeGreaterThanOrEqual(3);
+  expect(result.apiCacheStillPresent).toBe(false);
+  expect(stub.keysOf(WORKBOX_API_CACHE_NAME)).toEqual([]);
+});
+
+test(wipeMeta('R09.CACHE.NO-WILDCARD','Cache removal is per-key/per-store explicit: unrelated ledgr_* preference keys and preserved evidence are never enumerated by any wildcard'),async()=>{
+  new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  window.localStorage.setItem('ledgr-mobile-dashboard-preferences','{"quickActions":["/invoices/new"]}');
+  window.localStorage.setItem('ledgr_cookie_consent','accepted');
+  window.localStorage.setItem(LEGACY_POS_QUEUE_KEY,'[]');
+  window.sessionStorage.setItem('ledgr_draft_expense-form_r13-biz','{"amount":100}');
+  const result=await wipeIdentityTransitionCaches('signed-out');
+  expect(window.localStorage.getItem('ledgr-mobile-dashboard-preferences')).toBe('{"quickActions":["/invoices/new"]}');
+  expect(window.localStorage.getItem('ledgr_cookie_consent')).toBe('accepted');
+  expect(window.localStorage.getItem(LEGACY_POS_QUEUE_KEY)).toBe('[]');
+  expect(result.storageKeysRemoved).toEqual(['ledgr_draft_expense-form_r13-biz']);
+  for (const removed of result.storageKeysRemoved) expect(removed).not.toBe(LEGACY_POS_QUEUE_KEY);
+});
+

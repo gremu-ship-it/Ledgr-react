@@ -8,6 +8,7 @@ import { useNotificationStore } from '@/store/useNotificationStore';
 import { i18n, normalizeLanguage } from '@/i18n';
 import { createLogger } from '@/lib/logger';
 import { queryClient } from '@/lib/queryClient';
+import { wipeIdentityTransitionCaches } from '@/lib/cacheWipe';
 
 const log = createLogger('useAuthListener');
 
@@ -77,6 +78,15 @@ export function useAuthListener() {
         });
         isHydrating = false; // reset, in case previous hydration was mid-flight
         purgeAllUserData();
+        // R09.1 (D-5): the previous identity's business-data CACHES must be
+        // gone — and verified gone — before this new user's data hydrates.
+        // Awaiting here means no business query of the new identity is ever
+        // served from the old identity's Workbox/persisted copies.
+        try {
+          await wipeIdentityTransitionCaches('user-switch');
+        } catch (err) {
+          log.warn('Cache wipe during user switch failed', { error: err });
+        }
         // After purge, businesses is [] so the fetch below is forced on.
       }
 
