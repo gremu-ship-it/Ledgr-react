@@ -29,6 +29,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { sweepUnverifiableItems, replayViolation } from './provenance';
 import { claimLease, releaseLease, verifyLeaseOwnership } from './lease';
 import { getLeaseClaimantId } from './deviceIdentity';
+import { isQuotaDenial, QUOTA_DENIAL_SQLSTATE } from '@/lib/billing/quotaContract';
 import type {
   IncomeQueuePayload,
   InvoiceQueuePayload,
@@ -508,6 +509,9 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
       await offlineDB.queue.update(item.localId!, {
         status: 'failed',
         lastError: message,
+        // P-D2: expose the typed quota-denial signal at the boundary. No
+        // retry/quarantine behavior changes here — that is R09.3's decision.
+        lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
       });
 
       progress.failed += 1;
@@ -550,7 +554,11 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
         progress.completed += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown sync error';
-        await offlineDB.queue.update(item.localId!, { status: 'failed', lastError: message });
+        await offlineDB.queue.update(item.localId!, {
+          status: 'failed',
+          lastError: message,
+          lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+        });
         progress.failed += 1;
       } finally {
         await releaseLease(item.localId!, claim.lease!.token);

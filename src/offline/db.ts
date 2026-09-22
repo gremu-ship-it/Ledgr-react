@@ -167,6 +167,14 @@ export interface QueueItem {
   lastError?: string;
 
   /**
+   * R10 (P-D2): machine-readable discriminator of the last failed attempt —
+   * the typed quota-denial SQLSTATE ('P0QLT') when present, else null.
+   * Evidence only: R09.3 owns what happens because of it (retry vs quarantine
+   * vs reconcile); R10 merely exposes the signal at the error boundary.
+   */
+  lastErrorCode?: string | null;
+
+  /**
    * For conflict resolution on tables that have `updated_at` (invoices,
    * expenses, payroll_runs): the timestamp the user last modified this
    * record on this device, used for last-write-wins comparison against

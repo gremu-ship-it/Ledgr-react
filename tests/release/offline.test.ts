@@ -433,3 +433,111 @@ test(queueMeta('R09.QUEUE.REGRESSION.REPLAY-CONTRACT','R09.2 does not alter the 
   const result2=await syncQueue();expect(result2.failed).toBe(1);
   expect(((await offlineDB.queue.get(id2))!).lastError).toMatch(/R13 synthetic denied/);
 });
+
+/* R10 P-D2 typed quota-denial contract — additive R10.QUOTA.* records (server metering paths + client boundary) */
+
+const quotaMeta=(id:string,expectation:string)=>({id,expected:expectation,source:'supabase/migrations/20261001000000_r10_typed_quota_contract.sql + src/lib/billing/quotaContract.ts + src/offline/syncEngine.ts',remediation:'R10',layer:'disposable PostgreSQL real RPC raises (SQLSTATE via commitAsRole) + fake IndexedDB sync boundary',productionVerificationRequired:false});
+const seedUsageToLimit=async(n=50)=>{
+  // 50 monthly documents at the free-tier limit: plain superuser seed (setup
+  // privilege only); amount_due/updated_at triggers tolerate this shape.
+  await db.client.query(`insert into public.invoices(business_id,contact_id,branch_id,invoice_number,invoice_type,status,issue_date,due_date,amount_paid,currency,original_currency,exchange_rate,original_amount,functional_currency,functional_amount,subtotal,taxable_amount,discount_amount,discount_percent,vat_amount,wht_amount,total_amount,rate_date,rate_is_stale,client_key)
+    select $1,$2,$3,'R13-USG-'||gs,'sales','paid',$4,$4,0,'MWK','MWK',1,1500,'MWK',1500,1500,1500,0,0,0,0,1500,$4,false,gen_random_uuid() from generate_series(1,$5::int) gs`,
+    [orgs.A.business,orgs.A.customer,orgs.A.branch,DAY,n]);
+};
+const quotaErrorOf=(p:Promise<unknown>)=>p.then(()=>({code:null as string|null,message:'' as string})).catch((e)=>({code:(e as {code?:string}).code??null,message:(e as Error).message??''}));
+const minimalExpensePayload=(business:string,clientKey:string)=>({business_id:business,client_key:clientKey,
+  expense:{expense_date:DAY,total_amount:1500,original_currency:'MWK',exchange_rate:1,functional_amount:1500,discount_amount:0},
+  lines:[{description:'R13 synthetic expense line',amount:1500}],
+  allocations:[{amount:1500}],vat_amount:0,stock_lines:[]});
+
+test(quotaMeta('R10.QUOTA.SERVER-POS','Quota denial from post_pos_sale carries dedicated SQLSTATE P0QLT through the actual server raise, message text unchanged'),async()=>{
+  ready();await seedUsageToLimit();
+  const {buildPosSaleRpcPayload}=await import('@/services/posSaleRpc');
+  const rpcPayload=buildPosSaleRpcPayload(payload(301),orgs.A.business,key(8301));
+  const err=await quotaErrorOf(db.commitAsRole('authenticated',identities.A_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify(rpcPayload)]));
+  expect(err.code).toBe('P0QLT');
+  expect(err.message).toMatch(/^Monthly transaction limit reached \(50\)/);
+});
+
+test(quotaMeta('R10.QUOTA.SERVER-QUICKSAVE-EXPENSE','save_quick_expense asserts the same typed contract (P0QLT) inside its posting transaction'),async()=>{
+  ready();await seedUsageToLimit();
+  const err=await quotaErrorOf(db.commitAsRole('authenticated',identities.A_accountant.id,'select public.save_quick_expense($1::jsonb) data',[JSON.stringify(minimalExpensePayload(orgs.A.business,key(8302)))]));
+  expect(err.code).toBe('P0QLT');
+  expect(err.message).toMatch(/^Monthly transaction limit reached \(50\)/);
+});
+
+test(quotaMeta('R10.QUOTA.SERVER-QUICKSAVE-SALE','save_quick_sale asserts the same typed contract (P0QLT) inside its posting transaction'),async()=>{
+  ready();await seedUsageToLimit();
+  // Superuser setup probe (fixture layer): the sole server declaration
+  // asserts P0QLT at the limit — _ledgr_* execute is restricted from clients.
+  const direct=await quotaErrorOf(db.client.query('select public._ledgr_assert_usage_limit($1::uuid) data',[orgs.A.business]));
+  expect(direct.code).toBe('P0QLT');
+  // Metering path: every posting path that calls the declaration inherits the
+  // same signal (save_quick_sale calls _ledgr_assert_usage_limit at step 4).
+  // Minimal payload matching the function's reads (top-level subtotal/vat).
+  const sale={business_id:orgs.A.business,client_key:key(8303),subtotal:1500,vat_amount:0,
+    customer:{name:'R13 synthetic customer'},
+    invoice:{contact_id:orgs.A.customer,branch_id:orgs.A.branch,invoice_type:'sales',status:'paid',issue_date:DAY,due_date:DAY,
+      currency:'MWK',original_currency:'MWK',exchange_rate:1,original_amount:1500,functional_currency:'MWK',functional_amount:1500,
+      subtotal:1500,taxable_amount:1500,discount_amount:0,discount_percent:0,wht_amount:0,total_amount:1500,rate_date:DAY,rate_is_stale:false},
+    lines:[{line_number:1,description:'R13 synthetic stock item',quantity:1,unit_price:1500,line_total:1500,discount_percent:0,discount_amount:0,tax_code:'none',tax_rate:0,tax_amount:0}],
+    payments:[{amount:1500,payment_method:'cash',currency:'MWK',exchange_rate:1,functional_amount:1500,payment_date:DAY,client_key:key(9303)}]};
+  const err=await quotaErrorOf(db.commitAsRole('authenticated',identities.A_owner.id,'select public.save_quick_sale($1::jsonb) data',[JSON.stringify(sale)]));
+  expect(err.code).toBe('P0QLT');
+});
+
+test(quotaMeta('R10.QUOTA.SERVER-DISTINCT','Unrelated application P0001 raises and R08 permission denials are NOT the quota discriminator'),async()=>{
+  ready();await seedUsageToLimit(0);
+  // Unrelated application raise: malformed quick-expense payload (P0001).
+  const malformed=await quotaErrorOf(db.commitAsRole('authenticated',identities.A_accountant.id,'select public.save_quick_expense($1::jsonb) data',[JSON.stringify({business_id:orgs.A.business,client_key:key(8304),expense:{},lines:[],allocations:[]})]));
+  expect(malformed.code).toBe('P0001');
+  // R08 shift authority denial: org-B cashier has no access to org-A shift (42501).
+  const {buildPosSaleRpcPayload}=await import('@/services/posSaleRpc');
+  const denied=await quotaErrorOf(db.commitAsRole('authenticated',identities.B_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify(buildPosSaleRpcPayload(payload(305),orgs.A.business,key(8305)))]));
+  expect(denied.code).toBe('42501');
+  expect(denied.code).not.toBe('P0QLT');
+});
+
+test(quotaMeta('R10.QUOTA.CLIENT-CLASSIFIES-QUOTA','The sync error boundary exposes the typed signal on the failed item without English matching (lastErrorCode=P0QLT)'),async()=>{
+  ready();qUserA();
+  (realSupabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({data:null,error:{code:'P0QLT',message:'Monthly transaction limit reached (50). Please upgrade your plan.'}}));
+  const id=await enqueue('expense',orgs.A.business,{expense:{business_id:orgs.A.business,expense_date:DAY,total_amount:1500},lines:[]} as never);
+  const result=await syncQueue();
+  expect(result.failed).toBe(1);
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('failed');expect(row.lastErrorCode).toBe('P0QLT');
+});
+
+test(quotaMeta('R10.QUOTA.CLIENT-CLASSIFIES-NONQUOTA','Non-quota RPC failures do NOT set the quota discriminator (transient/RLS stays plain failed)'),async()=>{
+  ready();qUserA();
+  (realSupabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({data:null,error:{code:'42501',message:'R13 synthetic denied operation'}}));
+  const id=await enqueue('expense',orgs.A.business,{expense:{business_id:orgs.A.business,expense_date:DAY,total_amount:1500},lines:[]} as never);
+  await syncQueue();
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('failed');expect(row.lastErrorCode).toBeNull();
+});
+
+test(quotaMeta('R10.QUOTA.CLIENT-PRECHECK','UsageService client look-ahead produces the same typed discriminator at the sync boundary (UsageLimitError)'),async()=>{
+  ready();qUserA();
+  const {UsageLimitError}=await import('@/lib/billing/quotaContract');
+  const {usageService}=await import('@/lib/billing/UsageService');
+  vi.spyOn(usageService,'assertCanCreateDocument').mockRejectedValue(new UsageLimitError(50));
+  // quick-save RPC unavailable -> legacy path reaches the look-ahead precheck.
+  (realSupabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({data:null,error:{code:'PGRST202',message:'function public.save_quick_expense does not exist'}}));
+  const id=await enqueue('expense',orgs.A.business,{expense:{business_id:orgs.A.business,expense_date:DAY,total_amount:1500},lines:[]} as never);
+  await syncQueue();
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('failed');expect(row.lastErrorCode).toBe('P0QLT');
+});
+
+test(quotaMeta('R10.QUOTA.REGRESSION.SUCCESS-CLIENTKEY','Success path unchanged: synthetic commit completes, clientKey preserved, no quota signal set'),async()=>{
+  ready();qUserA();
+  const syn='R13-SYN-0000-0000-0000-000000000002'.replace('R','9').replace('S','0').replace('Y','0').replace('N','0');
+  (realSupabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({data:{id:syn,number:'R13-SYN-EXP-1',journal_entry_id:null,idempotent:false},error:null}));
+  const id=await enqueue('expense',orgs.A.business,{expense:{business_id:orgs.A.business,expense_date:DAY,total_amount:1500},lines:[]} as never);
+  const before=(await offlineDB.queue.get(id))!.clientKey;
+  const result=await syncQueue();
+  expect(result.completed).toBe(1);
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('synced');expect(row.clientKey).toBe(before);expect(row.lastErrorCode??null).toBeNull();
+});
