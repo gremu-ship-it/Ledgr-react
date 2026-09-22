@@ -91,6 +91,27 @@ describe('usePosPermissions & Role-Based Access Control', () => {
     expect(result.current.maxAllowedDiscount).toBe(100);
   });
 
+  it('F15: settings flags are read-only display — a stored `false` can no longer enable direct void/refund for non-tier roles', async () => {
+    const rq = await import('@tanstack/react-query');
+    (rq.useQuery as unknown as import('vitest').Mock).mockReturnValue({
+      data: {
+        max_cashier_discount_percent: 10,
+        require_manager_approval_void: false, // rogue stored flag must be ignored
+        require_manager_approval_refund: false,
+      },
+    });
+    useAppStore.setState({
+      currentBusiness: { role: 'cashier', business: { id: 'biz-001', name: 'Test Business' } } as never,
+    });
+
+    const { result } = renderHook(() => usePosPermissions());
+
+    expect(result.current.canVoidSale).toBe(false);
+    expect(result.current.canRefundSale).toBe(false);
+    expect(result.current.requireApprovalVoid).toBe(true);
+    expect(result.current.requireApprovalRefund).toBe(true);
+  });
+
   it('enforces route permissions and home paths for cashier, manager, and stock clerk', () => {
     // Cashier routes
     expect(isPathAllowedForRole('cashier', '/pos')).toBe(true);

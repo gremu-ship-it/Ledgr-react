@@ -15,9 +15,13 @@ interface PosSalesHistoryModalProps {
   sales: PosSale[];
   canProcessReturns?: boolean;
   canVoidSales?: boolean;
-  onProcessReturn?: (saleId: string, items: Array<{ product_id: string; quantity: number; refund_amount: number }>, refundMethod: string) => Promise<void>;
-  onVoidSale?: (saleId: string, reason: string) => Promise<void>;
-  onRequestManagerApproval?: (actionDescription: string, onApproved: (approverName: string) => void) => void;
+  onProcessReturn?: (saleId: string, items: Array<{ product_id: string; quantity: number; refund_amount: number }>, refundMethod: string, approvalToken?: string) => Promise<void>;
+  onVoidSale?: (saleId: string, reason: string, approvalToken?: string) => Promise<void>;
+  onRequestManagerApproval?: (
+    actionDescription: string,
+    onApproved: (approvalToken?: string) => void,
+    serverContext?: { action: 'void_sale' | 'refund_sale'; documentId: string },
+  ) => void;
 }
 
 export function PosSalesHistoryModal({
@@ -83,10 +87,10 @@ export function PosSalesHistoryModal({
       return;
     }
 
-    const runReturn = async () => {
+    const runReturn = async (approvalToken?: string) => {
       try {
         setIsProcessing(true);
-        await onProcessReturn(selectedSale.id, itemsToReturn, refundMethod);
+        await onProcessReturn(selectedSale.id, itemsToReturn, refundMethod, approvalToken);
         alert('Return processed successfully.');
         setSelectedSale(null);
       } catch (err: unknown) {
@@ -98,7 +102,11 @@ export function PosSalesHistoryModal({
     };
 
     if (!canProcessReturns && onRequestManagerApproval) {
-      onRequestManagerApproval(`Authorize customer return for receipt ${selectedSale.receipt_number || selectedSale.id}`, runReturn);
+      onRequestManagerApproval(
+        `Authorize customer return for receipt ${selectedSale.receipt_number || selectedSale.id}`,
+        (token) => { void runReturn(token); },
+        { action: 'refund_sale', documentId: selectedSale.id },
+      );
     } else {
       await runReturn();
     }
@@ -109,10 +117,10 @@ export function PosSalesHistoryModal({
     const reason = prompt('Enter reason for voiding this transaction:');
     if (!reason) return;
 
-    const runVoid = async () => {
+    const runVoid = async (approvalToken?: string) => {
       try {
         setIsProcessing(true);
-        await onVoidSale(selectedSale.id, reason);
+        await onVoidSale(selectedSale.id, reason, approvalToken);
         alert('Sale voided successfully.');
         setSelectedSale(null);
       } catch (err: unknown) {
@@ -124,7 +132,11 @@ export function PosSalesHistoryModal({
     };
 
     if (!canVoidSales && onRequestManagerApproval) {
-      onRequestManagerApproval(`Authorize sale void for receipt ${selectedSale.receipt_number || selectedSale.id}`, runVoid);
+      onRequestManagerApproval(
+        `Authorize sale void for receipt ${selectedSale.receipt_number || selectedSale.id}`,
+        (token) => { void runVoid(token); },
+        { action: 'void_sale', documentId: selectedSale.id },
+      );
     } else {
       await runVoid();
     }

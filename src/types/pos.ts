@@ -495,13 +495,21 @@ export interface PosReturnPayload {
   cashierId?: string | null;
   cashier_id?: string | null;
   cashierName?: string;
-  approverName?: string;
   returned_by?: string;
   reason?: string;
   refundMethod?: PosPaymentMethod;
   refund_payment_method?: PosPaymentMethod;
   items: PosReturnItem[];
   totalRefund?: number;
+  /**
+   * Server-minted approval token (R07). Required by the canonical refund
+   * command unless the caller's own role is in the direct correction tier
+   * (owner/admin/manager). The client never authorizes; it only carries a
+   * token the server already minted and authorized.
+   */
+  approvalToken?: string | null;
+  /** Idempotency key for the correction command; auto-generated when absent. */
+  commandKey?: string;
 }
 
 export interface PosVoidPayload {
@@ -517,7 +525,10 @@ export interface PosVoidPayload {
   cashierId?: string | null;
   cashier_id?: string | null;
   cashierName?: string;
-  approverName?: string;
   reason: string;
   voided_by?: string;
+  /** Server-minted approval token (R07); see PosReturnPayload.approvalToken. */
+  approvalToken?: string | null;
+  /** Idempotency key for the correction command; auto-generated when absent. */
+  commandKey?: string;
 }

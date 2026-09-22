@@ -18,9 +18,11 @@
 //      because they are the only things sign-in needs. The `phone` field is
 //      attached afterwards on a best-effort basis, so a project with no SMS
 //      provider — or a number GoTrue will not store — cannot fail an invite.
-//      Provisioning is also retry-safe: if the login already exists we adopt it,
-//      and if it exists but has never signed in we mint a fresh password,
-//      because the previous one can never have reached the member.
+//      Provisioning is retry-safe for genuinely new logins: a lookup that finds
+//      an existing account adopts it for MEMBERSHIP only. Rotating the
+//      credential of any account this call did not create — including one that
+//      has never signed in — is refused by the interim R02 containment below
+//      (a phone match is not proof of ownership; see DEC-02).
 //   4. Either way we insert/reactivate a business_users row with the role, and
 //      guarantee a user_profiles row (the invariant every membership-granting
 //      path upholds — see grant_user_business_access, 20260728000003). For a
@@ -31,8 +33,14 @@
 //         full_name?: string, reset_password?: boolean }
 // Returns: { success, member, message, login? }
 //
-// `reset_password` (phone accounts only) mints a fresh temporary password for a
-// member who has forgotten theirs — there is no email inbox to reset through.
+// `reset_password` (phone accounts only): INTERIM SECURITY CONTAINMENT (R02) —
+// credential rotation of an EXISTING account is refused (RECOVERY_UNAVAILABLE,
+// below) until the approved DEC-02 recovery-ownership proof is implemented, and
+// a reset request for a number with NO account is refused (ACCOUNT_NOT_FOUND):
+// an unknown recovery target must never be silently turned into onboarding.
+// A genuinely new number is still provisioned by a plain invite (no reset flag)
+// with a one-time handover password below — the account did not exist before
+// the call, so no existing credential is touched.
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js@2';
@@ -420,6 +428,26 @@ serve(async (req) => {
       /** True only when THIS call created the auth user. */
       let provisionedNow = false;
 
+      // R02 containment (single-owner phone model): a reset request for a
+      // number with NO account is still a recovery attempt. An unknown recovery
+      // target is denied — it must never be silently turned into onboarding.
+      // Onboarding a genuinely new number happens only on a plain invite
+      // (reset_password not set) below; the email path already behaves this
+      // way (USER_NOT_FOUND). Deliberately no identifiers in the log line.
+      if (!targetUser && wantsPasswordReset) {
+        console.warn('R02 containment: refused reset request for an unregistered phone number');
+        return new Response(
+          JSON.stringify({
+            error: 'No Ledgr account is registered for that phone number, so there is nothing to recover. Invite the member instead.',
+            code: 'ACCOUNT_NOT_FOUND',
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+          },
+        );
+      }
+
       if (!targetUser) {
         tempPassword = generateTempPassword();
         const metadata = {
@@ -506,44 +534,52 @@ serve(async (req) => {
         }
       }
 
-      // A phone account has no inbox, so a password reaches the member only
-      // through this response. Hand one over whenever the one already set can
-      // never have arrived:
-      //   - the owner asked for a reset, or
-      //   - the account exists but has never signed in, i.e. an earlier attempt
-      //     provisioned it and failed before the password was ever shown.
-      // Without this the member is "added" with a password nobody knows.
+      // ══ INTERIM SECURITY CONTAINMENT (R02) — NOT PERMANENT RECOVERY IMPLEMENTATION ══
+      //
+      // Proven vulnerability (reproduction in the R02 report): rotating the
+      // password here required only caller tenant-admin membership plus a phone
+      // match. No proof bound the request to the account owner, so an Org A
+      // administrator could rotate unrelated user B's global credential,
+      // phone/account mismatches fell through to the same mutation, and the
+      // mutation ran BEFORE the membership/self/owner guards below — a later
+      // rejection cannot roll back a completed Auth Admin call.
+      //
+      // Until the DEC-02 recovery-ownership contract is approved and
+      // implemented, any credential rotation of an account this call did NOT
+      // create is refused BEFORE any Auth or database write:
+      //   - explicit reset_password requests on an existing account, and
+      //   - the implicit re-credentialing of an account that never signed in.
+      // Onboarding of genuinely new numbers (provisionedNow above) is unchanged
+      // — that account did not exist before this call. Nothing is deleted or
+      // invalidated: members who know their password keep signing in, signed-in
+      // self-service password changes and provider email recovery remain
+      // available outside this endpoint.
+      //
+      // Removing this guard without the permanent R02 recovery implementation
+      // is a security regression.
+      // Tracking: docs/audits/LEDGR_R02_PHONE_RECOVERY_IDENTITY_TOKEN_REMEDIATION_2026-09-21.md
       if (
         isPhoneLoginEmail(targetUser.email) &&
         !provisionedNow &&
         (wantsPasswordReset || !targetUser.last_sign_in_at)
       ) {
-        tempPassword = generateTempPassword();
-        let { error: pwErr } = await admin.auth.admin.updateUserById(targetUser.id, {
-          password: tempPassword,
-        });
-        if (pwErr && isWeakPasswordError(pwErr.message)) {
-          tempPassword = generateTempPassword(20);
-          ({ error: pwErr } = await admin.auth.admin.updateUserById(targetUser.id, {
-            password: tempPassword,
-          }));
-        }
-        if (pwErr) {
-          return new Response(
-            JSON.stringify({
-              error: `Failed to reset the password: ${pwErr.message}`,
-              code: 'PASSWORD_RESET_FAILED',
-            }),
-            {
-              status: 502,
-              headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
-            },
-          );
-        }
-        await admin
-          .from('phone_accounts')
-          .update({ temporary_password: true })
-          .eq('user_id', targetUser.id);
+        // Deliberately no phone number, user id or other identifier in this log line.
+        console.warn('R02 containment: refused unproven credential rotation for an existing phone account');
+        return new Response(
+          JSON.stringify({
+            error: 'Account recovery is temporarily unavailable',
+            code: 'RECOVERY_UNAVAILABLE',
+            message:
+              'For security, resetting an existing account password is disabled until a verified ' +
+              'ownership check is in place (interim security containment). The member can change ' +
+              'their own password while signed in, or use email recovery from the sign-in page if ' +
+              'they have a verified email account. Contact Ledgr support if the member is locked out.',
+          }),
+          {
+            status: 403,
+            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+          },
+        );
       }
 
       await ensureProfile(admin, targetUser.id, fullName || formatPhoneForDisplay(phone), phone);
@@ -600,6 +636,16 @@ serve(async (req) => {
     if (existingErr) {
       return new Response(JSON.stringify({ error: `Failed to check existing membership: ${existingErr.message}` }), {
         status: 500,
+        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+      });
+    }
+
+    // R01: the service-backed reactivation path must not let an admin
+    // change an existing owner's membership to a lower role. Recovery and
+    // identity resolution above are unchanged and remain separate concerns.
+    if (existing && !existing.is_active && existing.role === 'owner' && callerRole !== 'owner') {
+      return new Response(JSON.stringify({ error: 'Only business owners can change an owner membership.' }), {
+        status: 403,
         headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
       });
     }

@@ -12,6 +12,7 @@ import {
   clearCart,
   applyItemDiscount,
 } from '@/services/posService';
+import { requestPosApproval, type PosCorrectionAction } from '@/services/posCorrectionRpc';
 import { repos } from '@/lib/repositories';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { VAT_STANDARD_RATE } from '@/lib/vat';
@@ -97,10 +98,13 @@ export function PosPage() {
   const [isCashMovementModalOpen, setIsCashMovementModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [approvalServerContext, setApprovalServerContext] = useState<{ action: PosCorrectionAction; documentId: string } | null>(null);
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [isZReportModalOpen, setIsZReportModalOpen] = useState(false);
+  // R08.4/5: the Z-report number is minted by the signed close, never client-side.
+  const [zReportServerNumber, setZReportServerNumber] = useState<string | null>(null);
   const [approvalActionDescription, setApprovalActionDescription] = useState('');
-  const [pendingApprovalCallback, setPendingApprovalCallback] = useState<((name: string) => void) | null>(null);
+  const [pendingApprovalCallback, setPendingApprovalCallback] = useState<((approvalToken?: string) => void) | null>(null);
 
   // Sales History List
   const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
@@ -284,22 +288,29 @@ export function PosPage() {
     };
   }, [businessId, currentUserId, branchId, dataVersion]);
 
-  // Manager Approval Interceptor
+  // Approval interceptor (R07): financial corrections route through a
+  // server-minted approval (workflows call with a document context); the
+  // callback then runs WITH the token and the SERVER decides whether it is
+  // live, bound and unconsumed. Display-mode nudges (over-cap discounts)
+  // carry no document context and confirm locally — they authorize nothing.
   const handleRequestManagerApproval = useCallback((
     actionDescription: string,
-    onApproved: (approverName: string) => void,
+    onApproved: (approvalToken?: string) => void,
+    serverContext?: { action: PosCorrectionAction; documentId: string },
   ) => {
     setApprovalActionDescription(actionDescription);
     setPendingApprovalCallback(() => onApproved);
+    setApprovalServerContext(serverContext ?? null);
     setIsApprovalModalOpen(true);
   }, []);
 
-  const handleManagerApproved = useCallback((_managerPin: string, approverName: string) => {
+  const handleManagerApproved = useCallback((approvalToken?: string) => {
     setIsApprovalModalOpen(false);
     if (pendingApprovalCallback) {
-      pendingApprovalCallback(approverName);
+      pendingApprovalCallback(approvalToken);
       setPendingApprovalCallback(null);
     }
+    setApprovalServerContext(null);
   }, [pendingApprovalCallback]);
 
   // Checkout Execution
@@ -392,6 +403,10 @@ export function PosPage() {
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
+      // Best-effort: surface the immutable Z-report number signed by the server.
+      const report = await repos.pos.getShiftReport(shift.id);
+      const closeBlock = (report?.close ?? null) as { report_number?: string } | null;
+      setZReportServerNumber(closeBlock?.report_number ?? null);
       // Offer opening Z-Report
       setIsZReportModalOpen(true);
     } catch (err: unknown) {
@@ -614,7 +629,7 @@ export function PosPage() {
         sales={salesHistory}
         canProcessReturns={permissions.canProcessReturns}
         canVoidSales={permissions.canVoidSales}
-        onProcessReturn={async (saleId, items, refundMethod) => {
+        onProcessReturn={async (saleId, items, refundMethod, approvalToken) => {
           await processReturn({
             businessId,
             originalInvoiceId: saleId,
@@ -629,15 +644,17 @@ export function PosPage() {
             reason: 'Customer return',
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
             branchId,
+            approvalToken: approvalToken ?? null,
           });
           setDataVersion((v) => v + 1);
         }}
-        onVoidSale={async (saleId, reason) => {
+        onVoidSale={async (saleId, reason, approvalToken) => {
           await processVoid({
             businessId,
             invoiceId: saleId,
             reason,
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
+            approvalToken: approvalToken ?? null,
           });
           setDataVersion((v) => v + 1);
         }}
@@ -649,8 +666,12 @@ export function PosPage() {
         onClose={() => {
           setIsApprovalModalOpen(false);
           setPendingApprovalCallback(null);
+          setApprovalServerContext(null);
         }}
         actionDescription={approvalActionDescription}
+        onRequestServerApproval={approvalServerContext
+          ? () => requestPosApproval(businessId, approvalServerContext.action, approvalServerContext.documentId, approvalActionDescription).then((a) => a.token)
+          : undefined}
         onApprove={handleManagerApproved}
       />
 
@@ -668,6 +689,7 @@ export function PosPage() {
         businessName={branchName}
         branchName={branchName}
         ownerEmail={currentUser?.email || undefined}
+        serverReportNumber={zReportServerNumber}
       />
     </div>
   );

@@ -44,7 +44,7 @@ interface PosCartProps {
   onProceedToPayment?: () => void;
   onCheckout?: () => void;
   onSetNotes?: (notes: string) => void;
-  onRequestManagerApproval?: (actionDescription: string, onApproved: (approverName: string) => void) => void;
+  onRequestManagerApproval?: (actionDescription: string, onApproved: (approvalToken?: string) => void) => void;
 }
 
 export function PosCart({

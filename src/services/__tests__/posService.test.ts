@@ -361,134 +361,99 @@ describe('posService', () => {
     });
   });
 
-  describe('returns and voids', () => {
-    it('processes returns by creating credit note, replenishing inventory, and posting GL entry', async () => {
-      const businessId = 'biz-test-01';
-      const branchId = 'branch-1';
+  describe('returns and voids (canonical correction commands, R07)', () => {
+    const businessId = 'biz-test-07';
+    const rpcOk = (fn: string, data: unknown) => {
+      vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string, args: Record<string, unknown>) => {
+        if (name === fn) return Promise.resolve({ data, error: null });
+        void args;
+        return Promise.resolve({ data: null, error: null });
+      }) as never);
+    };
+    const rpcSpyOk = (fn: string, data: unknown) => {
+      const spy = vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string, args: Record<string, unknown>) => {
+        if (name === fn) return Promise.resolve({ data, error: null });
+        void args;
+        return Promise.resolve({ data: null, error: null });
+      }) as never);
+      return spy;
+    };
+    void rpcOk;
 
-      const mockInvoiceFind = vi.spyOn(repos.invoice, 'findById').mockResolvedValue({
-        id: 'inv-orig-1',
-        business_id: businessId,
-        invoice_number: 'INV-2026-0001',
-        branch_id: branchId,
-        status: 'paid',
-        total_amount: 13000,
-        currency: 'MWK',
-      } as never);
-
-      const mockCreateWithLines = vi.spyOn(repos.invoice, 'createWithLines').mockResolvedValue({
-        invoice: { id: 'cn-1', invoice_number: 'CN-2026-0001', total_amount: -6500 } as never,
-        lines: [],
+    it('routes refunds exclusively through refund_pos_sale_command with line mapping and the approval token carried through', async () => {
+      const rpc = rpcSpyOk('refund_pos_sale_command', {
+        idempotent: false, amount: 6500, remaining: 0, journal_entry_id: 'je-refund-1',
       });
-
-      const mockFindLocation = vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({
-        id: 'loc-1',
-        business_id: businessId,
-      } as never);
-
-      const mockDefaultLocation = vi.spyOn(repos.inventory, 'findDefaultLocation').mockResolvedValue({
-        id: 'loc-1',
-        business_id: businessId,
-      } as never);
-
-      const mockRecordMovement = vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({
-        movement: { id: 'mov-ret-1' } as never,
-        balance: { id: 'bal-1', quantity_on_hand: 21 } as never,
-      });
-
-      const returnResult = await posService.processReturn({
+      const result = await posService.processReturn({
         businessId,
-        branchId,
         originalInvoiceId: 'inv-orig-1',
-        receiptNumber: 'RCPT-001',
         reason: 'Defective product',
-        refundMethod: 'cash',
+        approvalToken: 'tok-123',
         items: [
-          {
-            productId: 'prod-001',
-            productName: 'Whole Dressed Chicken 1.2kg',
-            quantity: 1,
-            unitPrice: 6500,
-            refundAmount: 6500,
-          },
+          { productId: 'prod-001', productName: 'Whole Dressed Chicken 1.2kg', quantity: 1, unitPrice: 6500, refundAmount: 6500 },
         ],
-        totalRefund: 6500,
-        cashierName: 'John Banda',
       });
-
-      expect(returnResult.returnInvoiceId).toBe('cn-1');
-      expect(mockRecordMovement).toHaveBeenCalledWith(
-        expect.objectContaining({
-          movement_type: 'return_in',
-          quantity: 1,
+      expect(rpc).toHaveBeenCalledWith('refund_pos_sale_command', {
+        p_payload: expect.objectContaining({
+          business_id: businessId,
+          invoice_id: 'inv-orig-1',
+          reason: 'Defective product',
+          approval_token: 'tok-123',
+          lines: [{ product_id: 'prod-001', quantity: 1, amount: 6500 }],
         }),
-      );
-
-      mockInvoiceFind.mockRestore();
-      mockCreateWithLines.mockRestore();
-      mockFindLocation.mockRestore();
-      mockDefaultLocation.mockRestore();
-      mockRecordMovement.mockRestore();
+      });
+      expect(result.returnInvoiceId).toBe('je-refund-1');
     });
 
-    it('voids a sale by marking invoice void, reversing inventory, and writing audit log', async () => {
-      const businessId = 'biz-test-01';
-
-      const mockFindWithLines = vi.spyOn(repos.invoice, 'findByIdWithLines').mockResolvedValue({
-        invoice: {
-          id: 'inv-void-1',
-          business_id: businessId,
-          invoice_number: 'INV-2026-0002',
-          branch_id: 'branch-1',
-          status: 'paid',
-          total_amount: 13000,
-        } as never,
-        lines: [
-          {
-            id: 'line-1',
-            product_id: 'prod-001',
-            quantity: 2,
-            unit_price: 6500,
-          } as never,
-        ],
+    it('routes voids exclusively through void_pos_sale_command and never touches raw invoice DML', async () => {
+      const spy = vi.spyOn(repos.invoice, 'update');
+      const rpc = rpcSpyOk('void_pos_sale_command', { idempotent: false, journal_entries: [] });
+      const result = await posService.processVoid({
+        businessId, invoiceId: 'inv-1', reason: 'Mis-scan', approvalToken: null,
       });
-
-      const mockUpdate = vi.spyOn(repos.invoice, 'update').mockResolvedValue({
-        id: 'inv-void-1',
-        status: 'void',
-      } as never);
-
-      const mockFindLocation = vi.spyOn(repos.branch, 'findLocationByBranch').mockResolvedValue({
-        id: 'loc-1',
-        business_id: businessId,
-      } as never);
-
-      const mockRecordMovement = vi.spyOn(repos.inventory, 'recordMovement').mockResolvedValue({
-        movement: { id: 'mov-void-1' } as never,
-        balance: { id: 'bal-1', quantity_on_hand: 22 } as never,
+      expect(rpc).toHaveBeenCalledWith('void_pos_sale_command', {
+        p_payload: expect.objectContaining({ business_id: businessId, invoice_id: 'inv-1', reason: 'Mis-scan', approval_token: null }),
       });
+      expect(spy).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+    });
 
-      const voidResult = await posService.processVoid({
-        businessId,
-        invoiceId: 'inv-void-1',
-        receiptNumber: 'RCPT-002',
-        reason: 'Cashier entered wrong customer',
-        cashierName: 'John Banda',
-      });
+    it('fails closed when the correction commands do not exist on the backend (no raw-DML fallback)', async () => {
+      vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string) => {
+        if (name === 'void_pos_sale_command') {
+          return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.void_pos_sale_command in the schema cache' } });
+        }
+        return Promise.resolve({ data: null, error: null });
+      }) as never);
+      await expect(posService.processVoid({ businessId, invoiceId: 'inv-1', reason: 'x' }))
+        .rejects.toThrow(/correction update/);
+    });
 
-      expect(voidResult.success).toBe(true);
-      expect(mockUpdate).toHaveBeenCalledWith('inv-void-1', expect.objectContaining({ status: 'void' }));
-      expect(mockRecordMovement).toHaveBeenCalledWith(
-        expect.objectContaining({
-          movement_type: 'adjustment_in',
-          quantity: 2,
-        }),
-      );
+    it('classifies an authorized-manager-still-missing denial as a pending-approval state for the UI', async () => {
+      vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string) => {
+        if (name === 'refund_pos_sale_command') {
+          return Promise.resolve({ data: null, error: { code: '22023', message: 'This approval has not been authorized.' } });
+        }
+        return Promise.resolve({ data: null, error: null });
+      }) as never);
+      await expect(posService.processReturn({
+        businessId, originalInvoiceId: 'inv-orig-1', reason: 'x', approvalToken: 'tok-123',
+        items: [{ productId: 'prod-001', quantity: 1, refundAmount: 100 }],
+      })).rejects.toThrow(/still pending/);
+    });
 
-      mockFindWithLines.mockRestore();
-      mockUpdate.mockRestore();
-      mockFindLocation.mockRestore();
-      mockRecordMovement.mockRestore();
+    it('auto-generates an idempotent command key and lets callers pin their own', async () => {
+      const captured: unknown[] = [];
+      vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string, args: Record<string, unknown>) => {
+        if (name === 'void_pos_sale_command') { captured.push(args); return Promise.resolve({ data: { idempotent: true, journal_entries: [] }, error: null }); }
+        return Promise.resolve({ data: null, error: null });
+      }) as never);
+      await posService.processVoid({ businessId, invoiceId: 'inv-1', reason: 'a' });
+      await posService.processVoid({ businessId, invoiceId: 'inv-1', reason: 'a', commandKey: 'pinned-key' });
+      const k1 = (captured[0] as { p_payload: { command_key: string } }).p_payload.command_key;
+      const k2 = (captured[1] as { p_payload: { command_key: string } }).p_payload.command_key;
+      expect(k1).toMatch(/^[0-9a-f-]{36}$/);
+      expect(k2).toBe('pinned-key');
     });
   });
 });

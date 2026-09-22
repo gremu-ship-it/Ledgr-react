@@ -38,6 +38,20 @@ const AI_MODEL = Deno.env.get('AI_MODEL');
 /** Requests per user per rolling minute (mirrors the former ai-insights fn). */
 const RATE_LIMIT = 40;
 
+/**
+ * Roles permitted business financial-performance context through AI — a
+ * verbatim mirror of canViewReports = true in src/hooks/usePermissions.ts and
+ * of v_reports_roles in 20260927000000_r03_ai_context_authorization.sql.
+ * Operational roles (cashier, stock_clerk, ...) receive no business data
+ * here; the ai_context RPC enforces the same list independently. When the
+ * canonical matrix changes, update all three — UI first, then mirror here.
+ */
+const AI_FINANCIAL_CONTEXT_ROLES = new Set([
+  'owner', 'admin', 'accountant', 'manager', 'sales_manager',
+  'tax_compliance_officer', 'treasury_manager', 'asset_manager',
+  'board_member', 'auditor', 'viewer', 'branch_manager',
+]);
+
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
@@ -117,10 +131,10 @@ async function checkRateLimit(req: Request, userId: string): Promise<Response | 
 async function resolveBusiness(
   userId: string,
   requestedId: string | null,
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; role: string } | null> {
   const { data, error } = await admin
     .from('business_users')
-    .select('business_id, businesses:business_id (id, name, deleted_at)')
+    .select('business_id, role, businesses:business_id (id, name, deleted_at)')
     .eq('user_id', userId)
     .eq('is_active', true);
 
@@ -128,6 +142,7 @@ async function resolveBusiness(
 
   type Membership = {
     business_id: string;
+    role: string | null;
     businesses: { id: string; name: string; deleted_at: string | null } | null;
   };
 
@@ -141,7 +156,7 @@ async function resolveBusiness(
     : memberships[0];
 
   if (!chosen || !chosen.businesses) return null;
-  return { id: chosen.businesses.id, name: chosen.businesses.name };
+  return { id: chosen.businesses.id, name: chosen.businesses.name, role: String(chosen.role ?? '') };
 }
 
 // ── Data context (same source as src/lib/ai/context.ts) ─────────────────────
@@ -504,6 +519,16 @@ serve(async (req: Request): Promise<Response> => {
 
     const business = await resolveBusiness(userId, hintedId);
     if (!business) return json(req, { error: 'No active business found for this user.' }, 403);
+
+    // 4b. Role gate — the data context is financial-performance information,
+    //     so the caller needs a reports-visibility role in that business. The
+    //     role comes from the server-side membership row: a shaped request
+    //     body, org hint or prompt cannot widen it (R03). Fails closed on
+    //     unknown roles. No data context is built and no provider is called
+    //     before this point.
+    if (!AI_FINANCIAL_CONTEXT_ROLES.has(business.role)) {
+      return json(req, { error: 'Your role cannot access business financial insights.' }, 403);
+    }
 
     // 5. Rebuild the data context from the database — never from the client.
     const data = await buildDataContext(business.id);

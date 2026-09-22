@@ -67,3 +67,32 @@ jobs:
           VITE_SUPABASE_URL: https://placeholder.supabase.co
           VITE_SUPABASE_ANON_KEY: placeholder-anon-key
         run: npm run build
+
+  release-evidence:
+    name: Isolated release evidence (R13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # No deployment environment, secrets, external database or provider credentials.
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.x
+          cache: npm
+      - name: Install locked test tooling without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Hydrate packaged PostgreSQL symlinks (Linux runner only)
+        run: npm rebuild @embedded-postgres/linux-x64
+      - name: Typecheck release harness
+        run: npm run test:release:types
+      - name: Run isolated release evidence
+        # FAIL and BLOCKED both return nonzero. No continue-on-error or expected-failure masking.
+        run: npm run test:release
+      - name: Retain sanitized evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: r13-local-evidence
+          path: .cache/r13/ledgr-r13-*/evidence.json
+          if-no-files-found: error
+          retention-days: 7

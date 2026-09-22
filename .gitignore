@@ -32,3 +32,6 @@ dev-dist/
 
 # Local-only AI assistant preview harness (not part of the app)
 .preview
+
+# R13 disposable test evidence (sanitized; retained by CI separately)
+.cache/

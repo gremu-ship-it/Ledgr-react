@@ -5,6 +5,8 @@ import type { InsertDto, PaymentMethod, Row } from '@/dal/types/database';
 import type { PosSaleQueuePayload } from '@/offline/payloads';
 import { retryNonCritical } from '@/lib/nonCriticalRetry';
 import { postPosSaleViaRpc, type PosSaleRpcResult } from '@/services/posSaleRpc';
+import { refundPosSaleViaRpc, voidPosSaleViaRpc } from '@/services/posCorrectionRpc';
+import { isDemoMode } from '@/lib/demo/mode';
 import type {
   PosPaymentSplit,
   PosSalePayload,
@@ -1149,7 +1151,73 @@ export const createSale = processSale;
 
 // ── Process POS Return / Refund ─────────────────────────────────────────────
 
+// ── Process POS Return / Refund (canonical, server-authoritative) ───────────
+//
+// R07 correction-safety release: a refund is a financial correction and can
+// therefore ONLY be executed by the canonical server command — see
+// services/posCorrectionRpc.ts for the failure policy. The raw-DML bodies
+// live on exclusively for the offline demo simulator (an in-memory dataset
+// with no server boundary at all) and are unreachable for any real session.
+
 export async function processReturn(
+  payload: PosReturnPayload,
+  options: { isOnline?: boolean; userRole?: string } = {},
+): Promise<{ returnInvoiceId: string; returnNumber: string }> {
+  const businessId = payload.businessId || payload.business_id || 'biz-default';
+  const originalInvoiceId = payload.originalInvoiceId || payload.sale_id || '';
+  const reason = payload.reason || 'Customer return';
+  const rawItems = payload.items || [];
+  const lines = rawItems.map((it) => ({
+    product_id: it.productId || it.product_id || null,
+    quantity: Math.abs(Number(it.quantity) || 0),
+    amount: Math.abs(Number(it.refundAmount ?? it.refund_amount ?? ((it.unitPrice ?? it.unit_price ?? 0) * it.quantity)) || 0),
+  }));
+
+  if (isDemoMode()) {
+    return processReturnLocal(payload, options);
+  }
+
+  const result = await refundPosSaleViaRpc({
+    businessId,
+    invoiceId: originalInvoiceId,
+    reason,
+    approvalToken: payload.approvalToken ?? null,
+    commandKey: payload.commandKey,
+    lines,
+  });
+
+  return {
+    returnInvoiceId: result.journalEntryId ?? originalInvoiceId,
+    returnNumber: generateReceiptNumber('RET'),
+  };
+}
+
+// ── Process POS Void (canonical, server-authoritative) ──────────────────────
+
+export async function processVoid(
+  payload: PosVoidPayload,
+  options: { isOnline?: boolean; userRole?: string } = {},
+): Promise<{ success: boolean }> {
+  const businessId = payload.businessId || payload.business_id || 'biz-default';
+  const invoiceId = payload.invoiceId || payload.sale_id || '';
+  const reason = payload.reason || 'Transaction voided';
+
+  if (isDemoMode()) {
+    return processVoidLocal(payload, options);
+  }
+
+  await voidPosSaleViaRpc({
+    businessId,
+    invoiceId,
+    reason,
+    approvalToken: payload.approvalToken ?? null,
+    commandKey: payload.commandKey,
+  });
+
+  return { success: true };
+}
+
+async function processReturnLocal(
   payload: PosReturnPayload,
   options: { isOnline?: boolean; userRole?: string } = {},
 ): Promise<{ returnInvoiceId: string; returnNumber: string }> {
@@ -1160,7 +1228,7 @@ export async function processReturn(
   const originalInvoiceId = payload.originalInvoiceId || payload.sale_id || '';
   const receiptNumber = payload.receiptNumber || 'REC';
   const cashierName = payload.cashierName || payload.returned_by || 'Cashier';
-  const approverName = payload.approverName;
+  
   const reason = payload.reason || 'Customer return';
   const refundMethod = payload.refundMethod || payload.refund_payment_method || 'cash';
   const rawItems = payload.items || [];
@@ -1200,7 +1268,7 @@ export async function processReturn(
     total_amount: -Math.abs(totalRefund),
     amount_paid: -Math.abs(totalRefund),
     credit_note_for: original.id,
-    notes: `Refund for Receipt #${receiptNumber}. Reason: ${reason}${approverName ? ` (Approved by: ${approverName})` : ''}`,
+    notes: `Refund for Receipt #${receiptNumber}. Reason: ${reason} (demo-simulated correction)`,
     created_by: cashierName,
     branch_id: branchId || original.branch_id,
   } as InsertDto<'invoices'>;
@@ -1279,10 +1347,9 @@ export async function processReturn(
         refundMethod,
         items,
         cashierName,
-        approverName,
         reason,
       },
-      p_notes: `POS Refund of MK ${totalRefund.toLocaleString()} for #${receiptNumber}. Reason: ${reason} (Approved: ${approverName || 'N/A'})`,
+      p_notes: `POS Refund of MK ${totalRefund.toLocaleString()} for #${receiptNumber}. Reason: ${reason} (demo simulation)`,  
     });
   } catch (auditErr) {
     log.warn('Audit log failed for POS refund', { error: auditErr });
@@ -1293,7 +1360,7 @@ export async function processReturn(
 
 // ── Process POS Void ────────────────────────────────────────────────────────
 
-export async function processVoid(
+async function processVoidLocal(
   payload: PosVoidPayload,
   options: { isOnline?: boolean; userRole?: string } = {},
 ): Promise<{ success: boolean }> {
@@ -1303,7 +1370,7 @@ export async function processVoid(
   const invoiceId = payload.invoiceId || payload.sale_id || '';
   const receiptNumber = payload.receiptNumber || 'REC';
   const cashierName = payload.cashierName || payload.voided_by || 'Cashier';
-  const approverName = payload.approverName;
+  
   const reason = payload.reason || 'Transaction voided';
   const today = new Date().toISOString().slice(0, 10);
 
@@ -1313,7 +1380,7 @@ export async function processVoid(
   // 2. Mark invoice as void
   await repos.invoice.update(invoiceId, {
     status: 'void',
-    notes: `${invoice.notes || ''} [VOIDED: ${reason} by ${cashierName}${approverName ? `, approved by ${approverName}` : ''}]`,
+    notes: `${invoice.notes || ''} [VOIDED: ${reason} by ${cashierName} (demo-simulated correction)]`,
   } as never);
 
   // 3. Reverse stock movements
@@ -1381,9 +1448,8 @@ export async function processVoid(
         status: 'void',
         voidReason: reason,
         cashierName,
-        approverName,
       },
-      p_notes: `POS Void of #${receiptNumber} (MK ${Number(invoice.total_amount).toLocaleString()}). Reason: ${reason} (Approved by: ${approverName || 'N/A'})`,
+      p_notes: `POS Void of #${receiptNumber} (MK ${Number(invoice.total_amount).toLocaleString()}). Reason: ${reason} (demo simulation)`,
     });
   } catch (auditErr) {
     log.warn('Audit log failed for POS void', { error: auditErr });

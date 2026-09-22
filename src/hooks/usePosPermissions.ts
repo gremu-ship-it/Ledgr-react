@@ -4,6 +4,10 @@ import { repos } from '@/lib/repositories';
 import { hasPosPermission, type PosPermission, type PosSettings } from '@/types/pos';
 
 export interface PosUserPermissions {
+  /** F15: read-only display of the effective R07 server contract (always true). */
+  requireApprovalVoid?: boolean;
+  /** F15: read-only display of the effective R07 server contract (always true). */
+  requireApprovalRefund?: boolean;
   role: string | null;
   isOwnerOrAdmin: boolean;
   isManager: boolean;
@@ -118,14 +122,24 @@ export function usePosPermissions(): PosUserPermissions {
   // Settings modification check
   const canEditSettings = isOwnerOrAdmin || isManager;
 
-  const requireApprovalVoid = settings.require_manager_approval_void ?? settings.require_approval_for_void ?? true;
-  const requireApprovalRefund = settings.require_manager_approval_refund ?? settings.require_approval_for_refund ?? true;
+  // F15 (R08.1 sign-off): pos_settings.require_approval_for_void/refund are
+  // read-only DISPLAY of the effective R07 server contract — void/refund
+  // always require direct tier (owner/admin/manager) or a live approval
+  // token. The flags are no longer consulted by any decision path, so a
+  // stored `false` can no longer promise a rogue direct-action button the
+  // server would reject anyway. Non-tier holders reach the approval-request
+  // flow (PosSalesHistoryModal routes them there when these are false).
+  const requireApprovalVoid = true;
+  const requireApprovalRefund = true;
 
-  const canVoid = isOwnerOrAdmin || isManager || (!requireApprovalVoid && check('void_sale'));
-  const canRefund = isOwnerOrAdmin || isManager || (!requireApprovalRefund && check('refund_sale'));
+  const canVoid = isOwnerOrAdmin || isManager;
+  const canRefund = isOwnerOrAdmin || isManager;
 
   return {
     role,
+    // F15: read-only display of the effective R07 server contract.
+    requireApprovalVoid,
+    requireApprovalRefund,
     isOwnerOrAdmin,
     isManager,
     isCashier,

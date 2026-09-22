@@ -966,11 +966,13 @@ export function TeamManagementPage() {
   }, [loadMembersAndInvites]);
 
   /**
-   * Mint a fresh one-time password for a member who signs in with a number.
+   * Ask invite-team-member for a fresh password for a phone login.
    *
-   * A phone account has no inbox, so "I forgot my password" has no self-service
-   * route — the owner is the recovery path. Same call as an invite
-   * (invite-team-member with reset_password), and the password comes back once.
+   * INTERIM SECURITY CONTAINMENT (R02): the server currently refuses this for
+   * every existing account with a controlled RECOVERY_UNAVAILABLE response —
+   * a phone match alone is not proof of ownership (DEC-02), and admin-driven
+   * recovery must wait for the permanent verified-ownership implementation.
+   * The action stays visible and surfaces that message; it is not a workaround.
    */
   async function handleResendPassword(member: Member) {
     if (!member.phone || !businessId) return;
@@ -1305,7 +1307,10 @@ export function TeamManagementPage() {
                       onChange={(e) => void handleChangeRole(member.id, e.target.value as UserRole)}
                       className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                     >
-                      {(currentRole === 'owner' ? Object.keys(ROLE_CONFIG) as UserRole[] : INVITABLE_ROLES).map((r) => (
+                      {currentRole !== 'owner' && member.role === 'admin' && (
+                        <option value="admin" disabled>{ROLE_CONFIG.admin.label}</option>
+                      )}
+                      {(currentRole === 'owner' ? Object.keys(ROLE_CONFIG) as UserRole[] : INVITABLE_ROLES.filter((r) => r !== 'admin')).map((r) => (
                         <option key={r} value={r}>{ROLE_CONFIG[r]?.label || r}</option>
                       ))}
                     </select>
