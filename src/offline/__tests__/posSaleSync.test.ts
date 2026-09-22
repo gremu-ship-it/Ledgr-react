@@ -15,6 +15,17 @@ import { repos } from '@/lib/repositories';
 import { realSupabase } from '@/lib/supabase';
 import type { PosCartItem, PosSalePayload } from '@/types/pos';
 import { missingPostPosSale } from '@/services/__tests__/helpers/postPosSaleStub';
+import { useAppStore } from '@/store/useAppStore';
+
+/**
+ * R09.2 test identity: replay requires provenance matching the current
+ * session. This suite models the same signed-in cashier capturing and later
+ * replaying its own sales (Case A — the normal path).
+ */
+const TEST_CASHIER = { id: 'r09-pos-sync-cashier', email: 'cashier@r13.test', profile: null };
+beforeEach(() => {
+  useAppStore.setState({ currentUser: TEST_CASHIER });
+});
 
 /**
  * The end-to-end path this whole change is about: a sale taken at a till with

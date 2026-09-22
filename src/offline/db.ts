@@ -24,10 +24,39 @@ export type QueueOperationType =
   | 'pos_sale';         // a full POS till sale: invoice + lines + payments + stock + shift
 
 export type QueueItemStatus =
-  | 'pending'   // waiting to sync
-  | 'syncing'   // currently being sent to Supabase
-  | 'synced'    // successfully written
-  | 'failed';   // sync attempted and failed (see lastError)
+  | 'pending'    // waiting to sync
+  | 'syncing'    // currently being sent to Supabase
+  | 'synced'     // successfully written
+  | 'failed'     // sync attempted and failed (see lastError)
+  | 'quarantined'; // R09.2: held out of ALL replay paths pending assisted
+                   // recovery (see quarantineReason). Durable: survives
+                   // reload, never touched by the background sync loop.
+
+/**
+ * R09.2 (D-1): why an item was taken out of the replay path.
+ *  - 'actor-mismatch'      — trustworthy origin differs from the currently
+ *                            authenticated actor (Case B: DENY + quarantine).
+ *  - 'missing-provenance'  — no trustworthy origin evidence (legacy v1 rows,
+ *                            forged/stripped rows). Case C.
+ *  - 'legacy'              — originated in the retired localStorage POS queue
+ *                            or an old-build stub; accepted financial evidence
+ *                            with unknown actor (§5).
+ */
+export type QuarantineReason = 'actor-mismatch' | 'missing-provenance' | 'legacy';
+
+/**
+ * R09.2 cross-tab replay lease metadata (see ./lease.ts). The lease is the
+ * OWNED, browser-visible lock: an in-memory ref cannot coordinate two tabs.
+ * The claimant token identifies an install+tab pair, never a user alone.
+ */
+export interface QueueLease {
+  /** Random unique token for THIS acquisition (changes on every claim). */
+  token: string;
+  /** install:tab claimant identifier that took the lease. */
+  claimant: string;
+  /** ISO timestamp after which another tab may reclaim the item. */
+  expiresAt: string;
+}
 
 /**
  * A single queued offline write operation.
@@ -93,6 +122,41 @@ export interface QueueItem {
   /** Client-side timestamp of when the user performed the action (ISO string). */
   createdAt: string;
 
+  /* ── R09.2 provenance (evidence only — NEVER an authorization credential) ── */
+
+  /** Payload schema version written at enqueue (see QUEUE_PAYLOAD_VERSION). */
+  payloadVersion?: number | null;
+
+  /**
+   * `auth.users.id` of the session that captured this operation. Evidence
+   * only: replay re-derives the real actor from the server session; this
+   * field decides only whether the item may LEAVE for the server at all
+   * (same actor) or must be quarantined (different/unknown actor).
+   */
+  originUserId?: string | null;
+
+  /** Stable per-install device identifier present when the op was captured. */
+  originDeviceId?: string | null;
+
+  /** ISO capture timestamp recorded at enqueue (never re-imputed later). */
+  capturedAt?: string | null;
+
+  /** Business/branch/terminal/shift context recorded where available. */
+  branchId?: string | null;
+  shiftId?: string | null;
+  terminalId?: string | null;
+
+  /* ── R09.2 quarantine metadata ── */
+
+  quarantineReason?: QuarantineReason | null;
+  quarantinedAt?: string | null;
+  /** Short human-safe detail shown in the drawer (no payload contents). */
+  quarantineDetails?: string | null;
+
+  /* ── R09.2 cross-tab lease ── */
+
+  lease?: QueueLease | null;
+
   /** Last sync attempt timestamp, if any. */
   lastAttemptAt?: string;
 
@@ -140,6 +204,36 @@ class LedgrOfflineDB extends Dexie {
       // businessId (tenant scoping), dependsOnLocalId (dependency lookups).
       queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
     });
+
+    // R09.2 v2: provenance/quarantine/lease fields. Indexes are unchanged
+    // (additive, lossless); the upgrade populates ONLY-defensive defaults and
+    // never fabricates provenance: v1 rows keep payloadVersion/origin* as
+    // null, which the sync engine treats as "unverifiable" (Case C →
+    // quarantine). Dexie applies the upgrade atomically; re-running it on a
+    // partially upgraded store is idempotent because defaults are only
+    // written where a field is still undefined.
+    this.version(2)
+      .stores({
+        queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('queue')
+          .toCollection()
+          .modify((item: QueueItem) => {
+            if (item.payloadVersion === undefined) item.payloadVersion = null;
+            if (item.originUserId === undefined) item.originUserId = null;
+            if (item.originDeviceId === undefined) item.originDeviceId = null;
+            if (item.capturedAt === undefined) item.capturedAt = null;
+            if (item.branchId === undefined) item.branchId = null;
+            if (item.shiftId === undefined) item.shiftId = null;
+            if (item.terminalId === undefined) item.terminalId = null;
+            if (item.quarantineReason === undefined) item.quarantineReason = null;
+            if (item.quarantinedAt === undefined) item.quarantinedAt = null;
+            if (item.quarantineDetails === undefined) item.quarantineDetails = null;
+            if (item.lease === undefined) item.lease = null;
+          });
+      });
   }
 }
 

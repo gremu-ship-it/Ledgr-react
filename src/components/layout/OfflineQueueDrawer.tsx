@@ -21,6 +21,14 @@ const STATUS_STYLES: Record<QueueItemStatus, { label: string; className: string 
   syncing: { label: 'Syncing', className: 'bg-blue-100 text-blue-900' },
   synced: { label: 'Synced', className: 'bg-emerald-100 text-emerald-900' },
   failed: { label: 'Needs attention', className: 'bg-red-100 text-red-900' },
+  quarantined: { label: 'Security hold', className: 'bg-violet-100 text-violet-900' },
+};
+
+/** R09.2: why a quarantined item is held, phrased for the till user. */
+const QUARANTINE_LABELS: Record<string, string> = {
+  'actor-mismatch': 'Recorded by a different signed-in user. It will not be synced as you.',
+  'missing-provenance': 'Recorded before secure capture existed (or capture details were lost). It cannot be synced automatically.',
+  legacy: 'Saved by an older Ledgr version without user details. It cannot be synced automatically.',
 };
 
 function formatQueuedAt(date: string): string {
@@ -61,7 +69,22 @@ function QueueRow({ item, onDiscard, canDiscard }: {
               Synced, but a follow-up step did not post — {item.lastError}
             </p>
           )}
-          {item.attemptCount > 0 && item.status !== 'synced' && (
+          {item.status === 'quarantined' && (
+            <div className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-2.5 py-2 text-xs leading-5 text-violet-900">
+              <p className="font-semibold">
+                {QUARANTINE_LABELS[item.quarantineReason ?? ''] ??
+                  'Held for review. It will not be synced automatically.'}
+              </p>
+              <p className="mt-1 text-violet-800">Requires assisted recovery — the sale data is preserved.</p>
+              <dl className="mt-1 space-y-0.5 text-[11px] text-violet-800">
+                {item.capturedAt && <div>Captured: {formatQueuedAt(item.capturedAt)}</div>}
+                {item.branchId && <div>Branch recorded: yes</div>}
+                {item.shiftId && <div>Shift recorded: yes</div>}
+                {item.quarantineDetails ? null : null}
+              </dl>
+            </div>
+          )}
+          {item.attemptCount > 0 && item.status !== 'synced' && item.status !== 'quarantined' && (
             <p className="mt-1 text-[11px] text-gray-500">
               {item.attemptCount} sync attempt{item.attemptCount === 1 ? '' : 's'}
             </p>
@@ -91,6 +114,7 @@ function QueueRow({ item, onDiscard, canDiscard }: {
 /** A header-triggered drawer for reviewing and managing locally queued offline changes. */
 export function OfflineQueueDrawer() {
   const { items, pendingCount, failedCount } = useOfflineQueue();
+  const quarantinedCount = items.filter((item) => item.status === 'quarantined').length;
   const isOnline = useOnlineStatus();
   const { isSyncing, progress, syncNow } = useOfflineSync();
   const [isOpen, setIsOpen] = useState(false);
@@ -217,6 +241,11 @@ export function OfflineQueueDrawer() {
                     {pendingCount === 0 ? 'All changes are synced' : `${pendingCount} change${pendingCount === 1 ? '' : 's'} waiting`}
                   </p>
                   {failedCount > 0 && <p className="mt-0.5 text-xs font-medium text-red-700">{failedCount} need{failedCount === 1 ? 's' : ''} attention</p>}
+                  {quarantinedCount > 0 && (
+                    <p className="mt-0.5 text-xs font-medium text-violet-700">
+                      {quarantinedCount} on security hold — assisted recovery required
+                    </p>
+                  )}
                   {!isOnline && <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-800"><CloudOff className="h-3.5 w-3.5" /> You are offline</p>}
                   {isSyncing && progress && <p className="mt-0.5 text-xs font-medium text-brand-700">Syncing {progress.completed + progress.failed} of {progress.total}</p>}
                 </div>

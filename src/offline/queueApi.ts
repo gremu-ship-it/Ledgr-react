@@ -1,6 +1,8 @@
 import { offlineDB, type QueueOperationType, type QueueItem } from './db';
 import type { QueuePayloadFor } from './payloads';
 import { requestBackgroundSync } from './backgroundSync';
+import { useAppStore } from '@/store/useAppStore';
+import { buildProvenance, captureContext } from './provenance';
 
 /**
  * Determines whether an error occurred because the device is offline or
@@ -116,6 +118,13 @@ export async function enqueue<T extends QueueOperationType>(
   }
   const sequence = await nextSequence();
 
+  // R09.2 provenance: captured at enqueue from the hydrated app session.
+  // Never manufactured — when no authenticated user is hydrated, originUserId
+  // is null and the sync engine will quarantine the item before any replay
+  // (Case C), exactly like an old-build v1 row.
+  const provenance = buildProvenance(useAppStore.getState().currentUser?.id ?? null);
+  const context = captureContext(operationType, payload);
+
   const item: QueueItem = {
     sequence,
     operationType,
@@ -130,6 +139,9 @@ export async function enqueue<T extends QueueOperationType>(
     // Idempotency key: a stable, unique value so a retried sync can recognise
     // an already-committed record instead of inserting a duplicate.
     clientKey: crypto.randomUUID(),
+    ...provenance,
+    ...context,
+    lease: null,
   };
 
   const localId = await offlineDB.queue.add(item);

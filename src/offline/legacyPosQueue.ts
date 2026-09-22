@@ -3,7 +3,49 @@ import type { PosSalePayload } from '@/types/pos';
 import { buildPosSaleQueuePayload } from '@/services/posService';
 import { offlineDB, type QueueItem } from './db';
 import type { PosSaleQueuePayload } from './payloads';
-import { enqueue } from './queueApi';
+
+export const LEGACY_QUARANTINE_DETAILS =
+  'Captured by the retired localStorage POS queue, which records no trustworthy original actor. ' +
+  'Preserved as accepted financial evidence and held for assisted recovery — never automatically replayed or attributed to the current user.';
+
+/**
+ * R09.2 §5: place a converted legacy sale straight into the security
+ * quarantine with provenance deliberately ABSENT (nothing is fabricated).
+ * Written here rather than via `enqueue` so no capture-time provenance can
+ * be invented by whoever happens to be signed in when the migration runs.
+ */
+export async function enqueueQuarantinedLegacy(
+  businessId: string,
+  payload: PosSaleQueuePayload,
+  createdAt?: string,
+): Promise<number> {
+  const last = await offlineDB.queue.orderBy('sequence').last();
+  const sequence = (last?.sequence ?? 0) + 1;
+  const item: QueueItem = {
+    sequence,
+    operationType: 'pos_sale',
+    status: 'quarantined',
+    quarantineReason: 'legacy',
+    quarantinedAt: new Date().toISOString(),
+    quarantineDetails: LEGACY_QUARANTINE_DETAILS,
+    businessId,
+    payload,
+    createdAt: createdAt ?? new Date().toISOString(),
+    attemptCount: 0,
+    clientKey: crypto.randomUUID(),
+    // No provenance — explicit nulls, never fabricated: unknown origin is
+    // the whole point of quarantine (Case C).
+    payloadVersion: null,
+    originUserId: null,
+    originDeviceId: null,
+    capturedAt: null,
+    branchId: null,
+    shiftId: null,
+    terminalId: null,
+    lease: null,
+  };
+  return (await offlineDB.queue.add(item)) as number;
+}
 
 const log = createLogger('LegacyPosQueue');
 
@@ -14,15 +56,17 @@ const log = createLogger('LegacyPosQueue');
  * never ran through the sync engine's retry/backoff, and a failure was recorded
  * with a `console.warn` on a device nobody was looking at.
  *
- * This module retires that store:
+ * This module retires that store — into QUARANTINE (R09.2 §5):
  *
  *   1. Entries still sitting in localStorage are converted into real
- *      `pos_sale` queue items, so they sync with everything else.
- *   2. The stubs the old code wrote into the canonical queue at the same time
- *      — an `income` item whose payload is a receipt/items summary rather than
- *      an invoice, which could therefore never sync — are either repaired from
- *      the matching localStorage entry or marked failed with an explanation,
- *      instead of sitting in "needs attention" forever with a nonsense error.
+ *      `pos_sale` queue items, but placed straight into the security
+ *      quarantine: the legacy store carries NO trustworthy original-actor
+ *      evidence, so these sales may never be silently attributed to, or
+ *      replayed as, whichever user is signed in now. They are accepted
+ *      financial evidence — payloads preserved verbatim for assisted recovery.
+ *   2. The stubs the old code wrote into the canonical queue likewise become
+ *      quarantined legacy items (repaired with the localStorage details where
+ *      available), never ordinary 'pending'.
  */
 export const LEGACY_POS_QUEUE_KEY = 'ledgr_pos_offline_queue';
 
@@ -142,11 +186,15 @@ export async function migrateLegacyPosQueue(): Promise<LegacyPosQueueMigration> 
 
     if (index === -1) {
       await offlineDB.queue.update(item.localId!, {
-        status: 'failed',
+        status: 'quarantined',
+        quarantineReason: 'legacy',
+        quarantinedAt: new Date().toISOString(),
         attemptCount: 0,
         lastError:
           `Queued by an older POS build with only a receipt summary attached (receipt ${stub.receiptNumber}); ` +
           'the sale details are not on this device, so it cannot be synced. Re-enter the sale if it is missing from your books, or discard this item.',
+        quarantineDetails:
+          'Old-build stub without the sale details on this device. ' + LEGACY_QUARANTINE_DETAILS,
       });
       summary.flagged += 1;
       continue;
@@ -159,7 +207,11 @@ export async function migrateLegacyPosQueue(): Promise<LegacyPosQueueMigration> 
       const changes: Partial<QueueItem> = {
         operationType: 'pos_sale',
         payload,
-        status: 'pending',
+        // R09.2 §5: repaired from a legacy store => quarantine, never replay.
+        status: 'quarantined',
+        quarantineReason: 'legacy',
+        quarantinedAt: new Date().toISOString(),
+        quarantineDetails: LEGACY_QUARANTINE_DETAILS,
         attemptCount: 0,
         lastError: undefined,
       };
@@ -182,9 +234,13 @@ export async function migrateLegacyPosQueue(): Promise<LegacyPosQueueMigration> 
     }
 
     try {
-      await enqueue('pos_sale', businessId, legacyEntryToQueuePayload(entry), {
-        createdAt: entry.queuedAt,
-      });
+      // R09.2 §5: writes go through the quarantined enqueue path — never a
+      // replayable pending item, never attributed to the current session.
+      await enqueueQuarantinedLegacy(
+        businessId,
+        legacyEntryToQueuePayload(entry),
+        entry.queuedAt,
+      );
       summary.migrated += 1;
     } catch (err) {
       // Most likely a full queue (see MAX_PENDING_QUEUE_ITEMS). Keep the entry

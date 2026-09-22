@@ -5,6 +5,11 @@ import { offlineDB } from '@/offline/db';
 import { enqueue, recoverStaleSyncClaims, STALE_SYNC_CLAIM_MS } from '@/offline/queueApi';
 import Dexie from 'dexie';
 import { wipeIdentityTransitionCaches, verifyBusinessCacheEmptiness, WORKBOX_API_CACHE_NAME, LEGACY_POS_QUEUE_KEY, RQ_PERSIST_DB_NAME } from '@/lib/cacheWipe';
+import { useAppStore } from '@/store/useAppStore';
+import { sweepUnverifiableItems } from '@/offline/provenance';
+import { claimLease, releaseLease, verifyLeaseOwnership, LEASE_TTL_MS } from '@/offline/lease';
+import { migrateLegacyPosQueue, enqueueQuarantinedLegacy, LEGACY_POS_QUEUE_KEY as LEGACY_LS_KEY } from '@/offline/legacyPosQueue';
+import { getInstallId } from '@/offline/deviceIdentity';
 import { MemoryCacheStorage } from '@/lib/cacheWipeTestAdapters';
 import { createIDBPersister } from '@/lib/queryPersister';
 import { syncQueue } from '@/offline/syncEngine';
@@ -17,6 +22,7 @@ import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test=evidenceSuite('offline-indexeddb-postgres');
 let db:Awaited<ReturnType<typeof createDatabaseFixture>>;
+const rpcCalls:string[]=[];
 let orgs:Awaited<ReturnType<typeof seedFixture>>;
 let setupError='';
 let simulateFailure=false;
@@ -26,6 +32,11 @@ beforeAll(async()=>{
 });
 beforeEach(async()=>{
   await offlineDB.open(); await offlineDB.queue.clear();
+  // R09.2 session identity for the normal (Case A) replay path: queue capture
+  // and replay both read the hydrated app session user. Additive fixture
+  // wiring only — record assertions are untouched.
+  useAppStore.setState({ currentUser: { id: identities.A_cashier.id, email: 'a-cashier@r13.test', profile: null } });
+  rpcCalls.length=0;
   simulateFailure=false; vi.restoreAllMocks();
   vi.spyOn(repos.invoice,'findByIdWithLines').mockImplementation(async(id:string)=>{
     const invoice=(await db.asRole('authenticated',identities.A_cashier.id,'select * from public.invoices where id=$1',[id])).rows[0];
@@ -34,6 +45,7 @@ beforeEach(async()=>{
   });
   vi.spyOn(realSupabase,'rpc').mockImplementation((async(name:string,args:Record<string,unknown>)=>{
     if(!db||!orgs) throw new Error('R13 fixture unavailable');
+    rpcCalls.push(name);
     if(simulateFailure) return {data:null,error:{code:'42501',message:'R13 synthetic denied operation'}};
     if(name!=='post_pos_sale') throw new Error('Unexpected RPC; no network fallback permitted');
     try {
@@ -205,3 +217,219 @@ test(wipeMeta('R09.CACHE.NO-WILDCARD','Cache removal is per-key/per-store explic
   for (const removed of result.storageKeysRemoved) expect(removed).not.toBe(LEGACY_POS_QUEUE_KEY);
 });
 
+
+/* R09.2 queue provenance, actor binding, cross-tab lease & legacy quarantine — additive R09.QUEUE.* records */
+
+const queueMeta=(id:string,expectation:string)=>({id,expected:expectation,source:'src/offline/{provenance,lease,queueApi,syncEngine,legacyPosQueue,deviceIdentity}.ts',remediation:'R09.2',layer:'fake IndexedDB + real syncEngine/POS RPC + disposable PostgreSQL; lease claims in deterministic fake-IDB; mocked transport, not browser/gateway',productionVerificationRequired:false});
+const qUserA=()=>{useAppStore.setState({currentUser:{id:identities.A_cashier.id,email:'a-cashier@r13.test',profile:null}});};
+const TABX='r13-install-a/tab-x';const TABY='r13-install-b/tab-y';
+
+test(queueMeta('R09.QUEUE.PROVENANCE.CAPTURE','New queue items record origin user, origin device identity, payload version, capture timestamp and business/branch/shift context'),async()=>{
+  ready();qUserA();
+  const id=await queued(201);
+  const item=(await offlineDB.queue.get(id))!;
+  expect(item.originUserId).toBe(identities.A_cashier.id);
+  expect(item.originDeviceId).toBe(getInstallId());
+  expect(item.payloadVersion).toBe(1);
+  expect(typeof item.capturedAt).toBe('string');
+  expect(item.businessId).toBe(orgs.A.business);
+  expect(item.branchId).toBe(orgs.A.branch);
+  expect(item.shiftId).toBe(orgs.A.shift);
+});
+
+test(queueMeta('R09.QUEUE.PROVENANCE.NO-FABRICATE','Enqueue without an authenticated capture user records null provenance; the sync sweep quarantines it instead of imputing an actor'),async()=>{
+  ready();useAppStore.setState({currentUser:null});
+  const id=await enqueue('pos_sale',orgs.A.business,payload(202));
+  expect((await offlineDB.queue.get(id))!.originUserId).toBeNull();
+  qUserA();
+  await sweepUnverifiableItems(identities.A_cashier.id);
+  const item=(await offlineDB.queue.get(id))!;
+  expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('missing-provenance');
+  expect(item.originUserId).toBeNull(); // never imputed
+});
+
+test(queueMeta('R09.QUEUE.ACTOR-BINDING.SAME-USER','Case A: provenance matching the current session enters the existing replay path (post_pos_sale) with clientKey idempotency intact'),async()=>{
+  ready();qUserA();
+  // Same migration-only profile limit as OFFLINE.REOPEN/RETRY: full real-DB
+  // replay + 'authenticated' invoice readback is unavailable here, so this
+  // record is BLOCKED rather than assert a manufactured pass. The actor-gate
+  // positives that ARE deterministic in this profile are PASS records
+  // (MISMATCH/FORGED/MISSING, MULTITAB.SUCCESS-RELEASES).
+  await requireReadback();
+  const id=await queued(203);
+  const before=(await offlineDB.queue.get(id))!;
+  const result=await syncQueue();
+  expect(result.completed).toBe(1);expect(result.failed).toBe(0);
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('synced');expect(row.clientKey).toBe(before.clientKey);
+  expect(rpcCalls).toContain('post_pos_sale');
+  const inv=await db.client.query('select client_key from public.invoices where business_id=$1 and id=$2',[orgs.A.business,row.resolvedServerId]);
+  expect(inv.rows[0].client_key).toBe(before.clientKey);
+});
+
+test(queueMeta('R09.QUEUE.ACTOR-BINDING.MISMATCH','Case B: a queue item captured by user A is quarantined before any network submission when the session is user B'),async()=>{
+  ready();qUserA();
+  const id=await queued(204);
+  const captured=(await offlineDB.queue.get(id))!;
+  const result=await syncQueue(undefined,{currentUserId:identities.B_cashier.id});
+  expect(result.completed).toBe(0);
+  const item=(await offlineDB.queue.get(id))!;
+  expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('actor-mismatch');
+  expect(item.originUserId).toBe(identities.A_cashier.id);
+  expect(item.payload).toEqual(captured.payload); // complete financial payload preserved
+  expect(item.clientKey).toBe(captured.clientKey);
+  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  const inv=await db.client.query('select count(*)::int n from public.invoices where client_key=$1',[captured.clientKey]);
+  expect(inv.rows[0].n).toBe(0);
+});
+
+test(queueMeta('R09.QUEUE.ACTOR-BINDING.FORGED','A forged origin_user_id cannot grant authority: the client gate quarantines it; direct server call as a non-member is rejected by the server contract'),async()=>{
+  ready();qUserA();
+  const id=await queued(205);
+  await offlineDB.queue.update(id,{originUserId:'r13-forged-admin-uuid'});
+  const result=await syncQueue(); // still session A: forged origin mismatches -> deny
+  expect(result.completed).toBe(0);
+  const item=(await offlineDB.queue.get(id))!;
+  expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('actor-mismatch');
+  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  // Server-authoritative proof: the forged payload itself supplies no actor;
+  // calling post_pos_sale as org-B (not a member of org A) is denied.
+  const {buildPosSaleQueuePayload}=await import('@/services/posService');
+  void buildPosSaleQueuePayload;
+  const argued=await db.commitAsRole('authenticated',identities.B_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify((await offlineDB.queue.get(id))!.payload)]).then(r=>({ok:true,r})).catch((e)=>({ok:false,code:(e as {code?:string}).code}));
+  if((argued as {ok:boolean}).ok){
+    // If B succeeded, it could only be because B CAN see nothing of org A —
+    // a real insert would violate tenant isolation; treat as failure signal.
+    expect(false).toBe(true);
+  }
+});
+
+test(queueMeta('R09.QUEUE.ACTOR-BINDING.MISSING','Case C: a v1-shape item (no provenance written) is quarantined as missing-provenance and never replayed'),async()=>{
+  ready();
+  const id=(await offlineDB.queue.add({sequence:9001,operationType:'pos_sale',status:'pending',businessId:orgs.A.business,payload:payload(206),
+    clientKey:key(9006),createdAt:`${DAY}T08:00:00Z`,attemptCount:0})) as number;
+  const result=await syncQueue();
+  expect(result.completed).toBe(0);
+  const item=(await offlineDB.queue.get(id))!;
+  expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('missing-provenance');
+  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+});
+
+test(queueMeta('R09.QUEUE.QUARANTINE.DENY-RETRY-DURABLE','A quarantined item is never automatically retried and survives reload intact'),async()=>{
+  ready();qUserA();
+  const id=await queued(207);
+  await syncQueue(undefined,{currentUserId:identities.B_cashier.id});
+  expect(((await offlineDB.queue.get(id))!).status).toBe('quarantined');
+  rpcCalls.length=0;
+  await syncQueue(undefined,{currentUserId:identities.A_cashier.id}); // even as the original actor: no silent revival
+  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  const before=(await offlineDB.queue.get(id))!;
+  offlineDB.close();await offlineDB.open();
+  const after=(await offlineDB.queue.get(id))!;
+  expect(after.status).toBe('quarantined');expect(after.quarantinedAt).toBe(before.quarantinedAt);
+  expect(after.payload).toEqual(before.payload);
+});
+
+test(queueMeta('R09.QUEUE.MULTITAB.LEASE-EXCLUSIVE','Two tabs cannot simultaneously hold the lease on the same queue item; the loser cannot renew, release or impersonate ownership'),async()=>{
+  ready();qUserA();
+  const id=await queued(208);
+  const a=await claimLease(id,TABX);
+  const b=await claimLease(id,TABY);
+  expect(a.ok).toBe(true);expect(b.ok).toBe(false);expect(b.reason).toBe('held-by-other');
+  expect(await verifyLeaseOwnership(id,a.lease!.token)).toBe(true);
+  await releaseLease(id,TABY); // not theirs: no-op
+  expect(((await offlineDB.queue.get(id))!.lease)!.claimant).toBe(TABX);
+});
+
+test(queueMeta('R09.QUEUE.MULTITAB.EXPIRED-RECLAIM','An expired lease may be reclaimed; concurrent stale reclaim remains single-owner; before expiry nobody takes over'),async()=>{
+  ready();qUserA();
+  const id=await queued(209);
+  const t0=Date.parse('2026-09-15T08:00:00Z');
+  const a=await claimLease(id,TABX,LEASE_TTL_MS,t0);expect(a.ok).toBe(true);
+  const early=await claimLease(id,TABY,LEASE_TTL_MS,t0+LEASE_TTL_MS-1);
+  expect(early.ok).toBe(false);
+  const [r1,r2]=await Promise.all([
+    claimLease(id,TABY,LEASE_TTL_MS,t0+LEASE_TTL_MS+10),
+    claimLease(id,TABX,LEASE_TTL_MS,t0+LEASE_TTL_MS+10),
+  ]);
+  expect([r1,r2].filter(c=>c.ok)).toHaveLength(1);
+  const loser=r1.ok?r2:r1;expect(await verifyLeaseOwnership(id,loser.lease?.token??'x')).toBe(false);
+});
+
+test(queueMeta('R09.QUEUE.MULTITAB.SUCCESS-RELEASES','Successful replay releases the lease: after sync the item is synced with no lock retained'),async()=>{
+  ready();qUserA();
+  // Deterministic synthetic commit: simulates the RPC's accepted response
+  // without writing to real PG (full real-commit proof lives in the BLOCKED
+  // SAME-USER/REGRESSION records pending the migration-only readback grant).
+  const syn='R13-SYN-0000-0000-0000-000000000001'.replace('R','9').replace('S','0').replace('Y','0').replace('N','0');
+  (repos.invoice.findByIdWithLines as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({
+    invoice:{id:syn,business_id:orgs.A.business} as never,lines:[] as never[],
+  }));
+  (realSupabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({
+    data:{id:syn,number:'R13-SYN-1',journal_entry_id:null,idempotent:false},error:null,
+  }));
+  const id=await queued(210);
+  const result=await syncQueue();
+  expect(result.completed).toBe(1);
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('synced');expect(row.lease).toBeNull();
+  expect(row.resolvedServerId).toBe(syn);
+});
+
+test(queueMeta('R09.QUEUE.MULTITAB.FAILURE-RELEASES','Terminal failure does not retain an unusable lease: item is failed with no lock retained'),async()=>{
+  ready();qUserA();simulateFailure=true;
+  const id=await queued(211);
+  const result=await syncQueue();
+  expect(result.failed).toBe(1);
+  const row=(await offlineDB.queue.get(id))!;
+  expect(row.status).toBe('failed');expect(row.lease).toBeNull();
+});
+
+test(queueMeta('R09.QUEUE.LEGACY.QUARANTINED','Legacy localStorage POS entries enter quarantine, are never attributed to the current user, keep their full payload, and stay put across reload'),async()=>{
+  ready();qUserA();
+  const entry={offlineNum:'POS-OFFLINE-R13-LEG-1',receiptNumber:'R13-LEG-1',
+    payload:{businessId:orgs.A.business,branchId:orgs.A.branch,items:[{product_id:orgs.A.product,name:'R13 item',quantity:1,unit_price:1500,line_total:1500}],payments:[{payment_method:'cash',amount:1500,tendered:1500}],totalPaid:1500,changeGiven:0},
+    queuedAt:'2026-09-20T07:30:00.000Z'};
+  window.localStorage.setItem(LEGACY_LS_KEY,JSON.stringify([entry]));
+  const summary=await migrateLegacyPosQueue();
+  expect(summary.migrated).toBe(1);
+  const rows=await offlineDB.queue.toArray();expect(rows).toHaveLength(1);
+  const item=rows[0];
+  expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('legacy');
+  expect(item.originUserId).toBeNull(); // never attributed to signed-in A
+  expect((item.payload as {receiptNumber:string}).receiptNumber).toBe('R13-LEG-1');
+  expect((item.payload as {invoice:{branch_id:string}}).invoice.branch_id).toBe(orgs.A.branch ?? null);
+  offlineDB.close();await offlineDB.open();
+  expect(((await offlineDB.queue.get(item.localId!))!).status).toBe('quarantined');
+});
+
+test(queueMeta('R09.QUEUE.LEGACY.WIPE-NONDELETION','R09.1 cache wipe leaves quarantined legacy evidence in ledgr-offline and the legacy localStorage byte-identical'),async()=>{
+  ready();
+  await enqueueQuarantinedLegacy(orgs.A.business,payload(212),'2026-09-20T07:30:00.000Z');
+  const legacy='R13-LEGACY-BYTES';window.localStorage.setItem(LEGACY_LS_KEY,legacy);
+  new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
+  await wipeIdentityTransitionCaches('signed-out');
+  expect(window.localStorage.getItem(LEGACY_LS_KEY)).toBe(legacy);
+  const rows=await offlineDB.queue.toArray();expect(rows).toHaveLength(1);
+  expect(rows[0].status).toBe('quarantined');expect(rows[0].quarantineReason).toBe('legacy');
+});
+
+test(queueMeta('R09.QUEUE.REGRESSION.REPLAY-CONTRACT','R09.2 does not alter the replay contract: clientKey idempotency survives lost-ack replay; R08/R07/R06/R05 server behavior unchanged (same sanctioned post_pos_sale path, same denial classes)'),async()=>{
+  ready();qUserA();
+  // Migration-only profile: real exact-once replay needs 'authenticated'
+  // invoice readback, unavailable here — same limit as OFFLINE.RETRY.
+  await requireReadback();
+  const id=await queued(213);
+  const result=await syncQueue();expect(result.completed).toBe(1);
+  // Simulate lost local acknowledgement; replay the SAME durable item once more.
+  await offlineDB.queue.update(id,{status:'pending'});
+  const again=await syncQueue();expect(again.completed).toBe(1);expect(again.failed).toBe(0);
+  const clientKey=(await offlineDB.queue.get(id))!.clientKey;
+  const r=await db.client.query('select count(*)::int n from public.invoices where business_id=$1 and client_key=$2',[orgs.A.business,clientKey]);
+  expect(r.rows[0].n).toBe(1); // exactly once despite two acceptances
+  expect(rpcCalls.filter(n=>n==='post_pos_sale').length).toBe(2);
+  // R08 closed-shift/R06 stock denials still surface through the SAME error path.
+  simulateFailure=true;const id2=await queued(214);
+  const result2=await syncQueue();expect(result2.failed).toBe(1);
+  expect(((await offlineDB.queue.get(id2))!).lastError).toMatch(/R13 synthetic denied/);
+});

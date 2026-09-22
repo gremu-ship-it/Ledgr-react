@@ -6,6 +6,7 @@ import { getPendingCount } from '@/offline/queueApi';
 import { QUEUE_TYPE_LABELS } from '@/offline/db';
 import { invalidateAfterSync } from '@/lib/queryInvalidation';
 import { isServiceWorkerSyncRequest } from '@/offline/backgroundSync';
+import { useAppStore } from '@/store/useAppStore';
 import { migrateLegacyPosQueue } from '@/offline/legacyPosQueue';
 
 export interface SyncQueueState {
@@ -51,7 +52,11 @@ export function useSyncQueue(): SyncQueueState {
     setIsSyncing(true);
 
     try {
-      const res = await syncQueue((p) => setProgress({ ...p }));
+      const res = await syncQueue((p) => setProgress({ ...p }), {
+        // R09.2 actor binding: replay only items provably captured by the
+        // session now signed in.
+        currentUserId: useAppStore.getState().currentUser?.id ?? null,
+      });
       if (res.completed > 0) {
         // Refresh the caches the queue can have written to, so synced items
         // appear immediately. Scoped rather than a blanket invalidate: the
