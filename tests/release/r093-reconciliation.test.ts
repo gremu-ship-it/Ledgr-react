@@ -9,6 +9,7 @@ import { claimLease } from '@/offline/lease';
 import { enqueueQuarantinedLegacy } from '@/offline/legacyPosQueue';
 import { useAppStore } from '@/store/useAppStore';
 import { buildPosSaleQueuePayload } from '@/services/posService';
+import { buildPosSaleRpcPayload } from '@/services/posSaleRpc';
 import { realSupabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { createDatabaseFixture } from './database.mjs';
@@ -41,6 +42,7 @@ let orgs: Awaited<ReturnType<typeof seedFixture>>;
 let setupError = '';
 const rpcCalls: string[] = [];
 let rpcActor: string = identities.A_cashier.id;
+let transientFailuresRemaining = 0;
 let usageSeededB = false;
 
 beforeAll(async () => {
@@ -71,6 +73,13 @@ beforeEach(async () => {
   vi.spyOn(realSupabase, 'rpc').mockImplementation((async (name: string, args: Record<string, unknown>) => {
     if (!db || !orgs) throw new Error('R13 fixture unavailable');
     rpcCalls.push(name);
+    // R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY knob: transport-level failure
+    // with NO SQLSTATE and no typed business code on the next N post_pos_sale
+    // attempts (the server is never reached). Test-only fixture signaling.
+    if (name === 'post_pos_sale' && transientFailuresRemaining > 0) {
+      transientFailuresRemaining -= 1;
+      return { data: null, error: { message: 'R093 synthetic transport failure: network request failed' } };
+    }
     if (name === 'post_pos_sale') {
       try {
         const result = await db.commitAsRole('authenticated', rpcActor, 'select public.post_pos_sale($1::jsonb) data', [JSON.stringify(args.p_payload)]);
@@ -613,4 +622,128 @@ test(meta('R093.RECON.POLICY-REVALIDATION', 'Reconciling a quota exception while
   expect(audit[0].exception_class).toBe('policy-denied');
   expect(audit[0].origin_user_id).toBe(identities.B_cashier.id);
   expect(audit[0].reconciled_by).toBe(identities.B_owner.id);
+});
+
+/* ── P-D3-FINAL §13.12: transient failures keep the ordinary retry path ─ */
+
+test(meta('R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY', 'A transient/transport failure (no SQLSTATE, no typed business code) keeps the ordinary failure path exactly as R09.2 defines it — status failed, NO exceptionClass, NO lastErrorCode, payload/provenance/client key preserved, zero financial mutation; the production single internal transient retry (same client key) is exercised; and subsequent sync passes keep REPLAYING the item (never classified as a policy exception merely for being offline-originated) until the real post_pos_sale accepts it exactly once under the ORIGINAL client key, with later passes resolving idempotently against the committed document (no second financial mutation)'), async () => {
+  ready();
+  const id = await queued(40);
+  const before = (await offlineDB.queue.get(id))!;
+  // Two transport failures cover the production single internal retry
+  // (transient error text matches posSaleRpc's retriable-transient pattern).
+  transientFailuresRemaining = 2;
+  const first = await syncQueue();
+  transientFailuresRemaining = 0;
+  expect(first.failed).toBe(1);
+  expect(rpcCalls.filter((n) => n === 'post_pos_sale')).toHaveLength(2); // production internal retry, same key
+  const failedItem = (await offlineDB.queue.get(id))!;
+  expect(failedItem.status).toBe('failed');
+  expect(failedItem.exceptionClass ?? null).toBeNull(); // transient is never a policy exception
+  expect(failedItem.lastErrorCode ?? null).toBeNull(); // the quota discriminator stays clean
+  expect(failedItem.quarantineReason ?? null).toBeNull();
+  expect(failedItem.payload).toEqual(before.payload);
+  expect(failedItem.clientKey).toBe(before.clientKey);
+  expect(await financialMutationCount(orgs.A.business, before.clientKey!)).toBe(0);
+  expect(await invoiceCountFor(before.clientKey!)).toBe(0);
+  // Retry behavior retained: the next pass reaches the server again with the
+  // same client key, and the REAL post_pos_sale accepts it. Exactly-once is
+  // pinned at the server oracle; the queue item keeps status 'failed' in
+  // this suite because its local success decoration reads
+  // repos.invoice.findByIdWithLines, which this suite's fixture guard
+  // intentionally refuses (the sealed-pair authenticated-readback
+  // limitation, filed in R093.SEALED-PAIR.READBACK-INVESTIGATION) — that
+  // refusal carries no SQLSTATE, so the classification contract is also
+  // verified across the successful-commit passes below.
+  const second = await syncQueue();
+  expect(rpcCalls.filter((n) => n === 'post_pos_sale')).toHaveLength(3); // replayed, not skipped
+  expect(await invoiceCountFor(before.clientKey!)).toBe(1); // committed exactly once, original key
+  const afterSecond = (await offlineDB.queue.get(id))!;
+  expect(afterSecond.exceptionClass ?? null).toBeNull();
+  expect(afterSecond.lastErrorCode ?? null).toBeNull();
+  // Third pass: the replay contract stays exactly-once against the committed
+  // document (lost-ack shape), still with no classification drift.
+  const third = await syncQueue();
+  expect(rpcCalls.filter((n) => n === 'post_pos_sale')).toHaveLength(4);
+  expect(await invoiceCountFor(before.clientKey!)).toBe(1);
+  const afterThird = (await offlineDB.queue.get(id))!;
+  expect(afterThird.exceptionClass ?? null).toBeNull();
+  expect(afterThird.clientKey).toBe(before.clientKey);
+  expect(afterThird.payload).toEqual(before.payload);
+  void second;
+  void third;
+});
+
+/* ── P-D3-FINAL §8: D-4 legacy branch-resolution rider evidence ─────────── */
+
+test(meta('R093.D4.LEGACY-BRANCH-RIDER', 'D-4 rider (shape tolerance, not authority tolerance) at the real posting boundary: a legacy pre-R08 branch-less payload (built by the same capture builder the offline queue uses, with the branch field absent) claiming the caller\'s own open shift resolves the branch server-side from the shift (post_pos_sale coalesce rider, 20260930000001) and commits exactly once under its client key; the identical branch-less shape claiming ANOTHER user\'s same-business shift is denied by server steering (42501, zero financial mutation); and a branch-less claim onto a foreign-business shift is refused as unknown/foreign (22023, zero mutation). Branch-less tolerance never extends authority'), async () => {
+  ready();
+  const legacyQueue = (n: number) => {
+    const q = salePayload(n, 'A'); // the queue capture builder used by the offline path
+    delete (q.invoice as Record<string, unknown>).branch_id; // pre-R08 branch-less shape
+    return q;
+  };
+  // Generated Database types only carry RPC names from earlier migrations;
+  // post_pos_sale reaches the same (mocked) transport through a narrow cast —
+  // the identical convention reconciliation.ts uses for reconcile_offline_queue_item.
+  type RpcClient = { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { id?: string } | null; error: { code?: string; message?: string } | null }> };
+  const rpcClient = realSupabase as unknown as RpcClient;
+  const post = (queuePayload: ReturnType<typeof salePayload>, clientKey: string) =>
+    rpcClient.rpc('post_pos_sale', {
+      p_payload: buildPosSaleRpcPayload(queuePayload, orgs.A.business, clientKey),
+    });
+
+  // (a) Shape tolerance: branch-less + own shift → shift.branch server-side.
+  const a = await post(legacyQueue(41), key(21041));
+  expect(a.error).toBeNull();
+  expect(typeof a.data?.id).toBe('string');
+  const inv = await db.client.query('select branch_id, pos_shift_id from public.invoices where business_id=$1 and client_key=$2', [orgs.A.business, key(21041)]);
+  expect(inv.rows).toHaveLength(1); // exactly once under the original key
+  expect(inv.rows[0].branch_id).toBe(orgs.A.branch); // shift.branch resolved server-side
+  expect(inv.rows[0].pos_shift_id).toBe(orgs.A.shift);
+
+  // (b) Not authority tolerance: branch-less + another user's same-business
+  //     shift → server steering denies; zero financial mutation.
+  const otherShift = (await db.client.query(
+    "insert into public.pos_shifts(business_id,cashier_id,cashier_name,opening_cash,status,branch_id) values($1,$2,'R13 other cashier',50000,'open',$3) returning id",
+    [orgs.A.business, identities.B_cashier.id, orgs.A.branch],
+  )).rows[0];
+  const bPayload = legacyQueue(42);
+  bPayload.shiftId = otherShift.id as string;
+  const b = await post(bPayload, key(21042));
+  expect(b.error).not.toBeNull();
+  expect(b.error?.code).toBe('42501'); // steering authority denial
+  expect(await financialMutationCount(orgs.A.business, key(21042))).toBe(0);
+  expect(await invoiceCountFor(key(21042))).toBe(0);
+
+  // (c) Branch-less + foreign-business shift → unknown/foreign shift (22023), zero mutation.
+  const cPayload = legacyQueue(43);
+  cPayload.shiftId = orgs.B.shift;
+  const c = await post(cPayload, key(21043));
+  expect(c.error).not.toBeNull();
+  expect(c.error?.code).toBe('22023');
+  expect(await financialMutationCount(orgs.A.business, key(21043))).toBe(0);
+  expect(await invoiceCountFor(key(21043))).toBe(0);
+});
+
+/* ── P-D3-FINAL §11: sealed R09.2 pair readback investigation (honest limitation filing) ─ */
+
+test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'P-D3-FINAL §11 investigation of the two sealed R09.2 acceptance records (R09.QUEUE.ACTOR-BINDING.SAME-USER, R09.QUEUE.REGRESSION.REPLAY-CONTRACT): whether authenticated invoice readback required by requireReadback is genuinely available under the migration-declared schema — probed live against the replayed migration set; not available → both records stay BLOCKED, no grants added, no privileged readback fabricated'), async () => {
+  ready();
+  // Live probe 1: authenticated table privileges on the two readback tables.
+  const priv = await db.client.query(
+    "select has_table_privilege('authenticated','public.invoices','SELECT') inv, has_table_privilege('authenticated','public.invoice_lines','SELECT') lines",
+  );
+  // Live probe 2: every SELECT policy on the two tables, from the catalog.
+  const pol = await db.client.query(
+    "select tablename, policyname from pg_policies where schemaname='public' and tablename in ('invoices','invoice_lines') and (cmd = 'SELECT' or cmd = 'ALL')",
+  );
+  throw new Blocked(
+    'P-D3-FINAL §11 outcome: the sealed R09.2 pair stays BLOCKED — genuine authenticated invoice readback is NOT available under the migration-declared schema. Live-probed facts: '
+    + `has_table_privilege(authenticated,public.invoices,SELECT)=${priv.rows[0].inv}, has_table_privilege(authenticated,public.invoice_lines,SELECT)=${priv.rows[0].lines}; `
+    + `SELECT/ALL policies on those tables in pg_policies=${JSON.stringify(pol.rows)} (zero exist anywhere in the 20250101..20261002 migration chain — the only invoice policies are writer insert/update in 20260922000000). `
+    + 'requireReadback therefore cannot honestly activate: activating it would require an authenticated SELECT grant plus a member-scoped SELECT RLS policy on public.invoices/public.invoice_lines — a product read-surface/schema decision that P-D3-FINAL §12 (NOT AUTHORIZED) and §14 (STOP-and-report, never opportunistic) place outside this package. No grants were added solely to make records pass; no privileged (fixture-oracle) readback was substituted. The same limitation also guards local success decoration in this suite (repos.invoice.findByIdWithLines refusal), pinned as evidence in R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY. '
+    + 'Activation prerequisite (exact): an owner-level decision authorizing member invoice readback migrations (grant select to authenticated plus a business-scoped select policy); the existing requireReadback() gate in tests/release/offline.test.ts then activates both sealed records unchanged. '
+    + 'Adjacent-requirement report (§14, documentation only): production reads through InvoiceRepository.findByIdWithLines/IncomeRepository/.from(\'invoices\') currently depend on out-of-band platform privileges not declared in the migration chain; the migration-only deployment profile has no invoice read path for authenticated members.',
+  );
 });
