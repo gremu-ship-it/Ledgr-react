@@ -15,7 +15,7 @@ const directory = mkdtempSync(resolve('.cache/r13/ledgr-r13-'));
 const env = { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR,
   LEDGR_TEST_ENV: 'local', R13_EVIDENCE_DIR: directory, NO_COLOR: '1' };
 const child = spawnSync(process.execPath, ['node_modules/vitest/vitest.mjs', 'run', '--config', 'tests/release/vitest.config.ts'],
-  { env, encoding: 'utf8', timeout: 240000, maxBuffer: 8 * 1024 * 1024 });
+  { env, encoding: 'utf8', timeout: 900000 /* R09.4 browser runtime: binary extract + PWA build inside the suite */, maxBuffer: 8 * 1024 * 1024 });
 // Raw framework/application output is intentionally not retained or uploaded.
 const outcomes = readdirSync(directory).filter(f => f.endsWith('.json')).flatMap(f => JSON.parse(readFileSync(join(directory, f), 'utf8')));
 for (const [source, artifact] of Object.entries(suites)) {

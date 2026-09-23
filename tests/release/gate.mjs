@@ -21,4 +21,5 @@ export const suites = {
   'r08-shifts.test.ts': 'r08-shifts.json',
   'r07-corrections.test.ts': 'r07-corrections.json',
   'r093-reconciliation.test.ts': 'r093-reconciliation.json',
+  'r094-browser.test.ts': 'r094-browser.json',
 };
