@@ -24,4 +24,5 @@ export const suites = {
   'r094-browser.test.ts': 'r094-browser.json',
   'r094-sw-update.test.ts': 'r094-sw-update.json',
   'r094-revalidation-investigation.test.ts': 'r094-revalidation-investigation.json',
+  'r06-concurrent-2c.test.ts': 'r06-concurrent-2c.json',
 };

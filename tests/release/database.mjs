@@ -32,8 +32,10 @@ export async function createDatabaseFixture() {
     onLog() {}, onError() {},
   });
   let client;
+  const extraClients = new Set();
   let started = false;
   const cleanup = async () => {
+    for (const c of extraClients) { try { await c.end(); } catch {} }
     if (client) await client.end();
     if (started) await pg.stop();
     await removeOwnedDirectory(directory, parent, nonce);
@@ -71,7 +73,44 @@ export async function createDatabaseFixture() {
         return result;
       } catch (e) { await client.query('rollback'); throw e; }
     };
-    return { client, asRole, commitAsRole: (role, uid, sql, values) => asRole(role, uid, sql, values, true), cleanup, migrations,
+    const pgConnectionConfig = { host: '127.0.0.1', port, user: 'postgres', password, database: 'postgres' };
+    const createSecondClient = async () => {
+      const c2 = new Client({ ...pgConnectionConfig, connectionTimeoutMillis: 5000 });
+      await c2.connect();
+      extraClients.add(c2);
+      const asRoleOnSecond = async (role, uid, sql, values = [], commit = false) => {
+        if (!['anon', 'authenticated', 'service_role'].includes(role)) throw new Error('Invalid test role');
+        await c2.query('begin');
+        try {
+          await c2.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role',$2,true)", [uid ?? '', role]);
+          await c2.query(`set local role ${role}`);
+          const result = typeof sql === 'function' ? await sql(c2) : await c2.query(sql, values);
+          await c2.query(commit ? 'commit' : 'rollback');
+          return result;
+        } catch (e) { try { await c2.query('rollback'); } catch {} throw e; }
+      };
+      // Low-level transaction handle for true concurrent BEGIN/COMMIT races.
+      const beginAsRole = async (role, uid) => {
+        if (!['anon', 'authenticated', 'service_role'].includes(role)) throw new Error('Invalid test role');
+        await c2.query('begin');
+        await c2.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role',$2,true)", [uid ?? '', role]);
+        await c2.query(`set local role ${role}`);
+      };
+      const commitTx = async () => { await c2.query('commit'); };
+      const rollbackTx = async () => { try { await c2.query('rollback'); } catch {} };
+      const close = async () => { try { await c2.end(); } catch {} extraClients.delete(c2); };
+      return { client: c2, asRole: asRoleOnSecond, commitAsRole: (role, uid, sql, values) => asRoleOnSecond(role, uid, sql, values, true), beginAsRole, commitTx, rollbackTx, close };
+    };
+    // Also expose helpers on primary client for symmetry (concurrent BEGIN/COMMIT)
+    const beginAsRolePrimary = async (role, uid) => {
+      if (!['anon', 'authenticated', 'service_role'].includes(role)) throw new Error('Invalid test role');
+      await client.query('begin');
+      await client.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role',$2,true)", [uid ?? '', role]);
+      await client.query(`set local role ${role}`);
+    };
+    const commitTxPrimary = async () => { await client.query('commit'); };
+    const rollbackTxPrimary = async () => { try { await client.query('rollback'); } catch {} };
+    return { client, asRole, commitAsRole: (role, uid, sql, values) => asRole(role, uid, sql, values, true), beginAsRole: beginAsRolePrimary, commitTx: commitTxPrimary, rollbackTx: rollbackTxPrimary, createSecondClient, pgConnectionConfig, cleanup, migrations,
       version: (await client.query('show server_version')).rows[0].server_version };
   } catch (e) { await cleanup(); throw e; }
 }
