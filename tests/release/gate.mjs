@@ -16,6 +16,7 @@ export const suites = {
   'r04-roles.test.ts': 'r04-roles.json',
   'r05-finance.test.ts': 'r05-finance.json',
   'r06-pos.test.ts': 'r06-pos.json',
+  'r06-stock.test.ts': 'r06-stock.json',
   'r07-approvals.test.ts': 'r07-approvals.json',
   'r08-shifts.test.ts': 'r08-shifts.json',
   'r07-corrections.test.ts': 'r07-corrections.json',
