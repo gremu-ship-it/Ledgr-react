@@ -726,24 +726,30 @@ test(meta('R093.D4.LEGACY-BRANCH-RIDER', 'D-4 rider (shape tolerance, not author
   expect(await invoiceCountFor(key(21043))).toBe(0);
 });
 
-/* ── P-D3-FINAL §11: sealed R09.2 pair readback investigation (honest limitation filing) ─ */
+/* ── P-D3-FINAL §11 / P-D4: sealed pair readback — resolved-state verification ─ */
 
-test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'P-D3-FINAL §11 investigation of the two sealed R09.2 acceptance records (R09.QUEUE.ACTOR-BINDING.SAME-USER, R09.QUEUE.REGRESSION.REPLAY-CONTRACT): whether authenticated invoice readback required by requireReadback is genuinely available under the migration-declared schema — probed live against the replayed migration set; not available → both records stay BLOCKED, no grants added, no privileged readback fabricated'), async () => {
+test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback availability, tracked across two states. As filed under P-D3-FINAL §11 (2026-09-23): not genuinely available — live probe has_table_privilege(authenticated,invoices)=false, zero SELECT policies in the chain — so the sealed records stayed BLOCKED, no grants added, no privileged readback fabricated. P-D4 (2026-09-23) then declared the member read tier in 20261003000000_invoice_member_readback.sql; this record now asserts the declared state live: SELECT granted to authenticated on invoices and invoice_lines, a SELECT policy exists on each, and the sealed records activate in the offline suite'), async () => {
   ready();
-  // Live probe 1: authenticated table privileges on the two readback tables.
   const priv = await db.client.query(
     "select has_table_privilege('authenticated','public.invoices','SELECT') inv, has_table_privilege('authenticated','public.invoice_lines','SELECT') lines",
   );
-  // Live probe 2: every SELECT policy on the two tables, from the catalog.
+  expect(priv.rows[0].inv).toBe(true);
+  expect(priv.rows[0].lines).toBe(true);
   const pol = await db.client.query(
-    "select tablename, policyname from pg_policies where schemaname='public' and tablename in ('invoices','invoice_lines') and (cmd = 'SELECT' or cmd = 'ALL')",
+    "select tablename, policyname from pg_policies where schemaname='public' and tablename in ('invoices','invoice_lines') and (cmd = 'SELECT' or cmd = 'ALL') order by tablename, policyname",
   );
-  throw new Blocked(
-    'P-D3-FINAL §11 outcome: the sealed R09.2 pair stays BLOCKED — genuine authenticated invoice readback is NOT available under the migration-declared schema. Live-probed facts: '
-    + `has_table_privilege(authenticated,public.invoices,SELECT)=${priv.rows[0].inv}, has_table_privilege(authenticated,public.invoice_lines,SELECT)=${priv.rows[0].lines}; `
-    + `SELECT/ALL policies on those tables in pg_policies=${JSON.stringify(pol.rows)} (zero exist anywhere in the 20250101..20261002 migration chain — the only invoice policies are writer insert/update in 20260922000000). `
-    + 'requireReadback therefore cannot honestly activate: activating it would require an authenticated SELECT grant plus a member-scoped SELECT RLS policy on public.invoices/public.invoice_lines — a product read-surface/schema decision that P-D3-FINAL §12 (NOT AUTHORIZED) and §14 (STOP-and-report, never opportunistic) place outside this package. No grants were added solely to make records pass; no privileged (fixture-oracle) readback was substituted. The same limitation also guards local success decoration in this suite (repos.invoice.findByIdWithLines refusal), pinned as evidence in R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY. '
-    + 'Activation prerequisite (exact): an owner-level decision authorizing member invoice readback migrations (grant select to authenticated plus a business-scoped select policy); the existing requireReadback() gate in tests/release/offline.test.ts then activates both sealed records unchanged. '
-    + 'Adjacent-requirement report (§14, documentation only): production reads through InvoiceRepository.findByIdWithLines/IncomeRepository/.from(\'invoices\') currently depend on out-of-band platform privileges not declared in the migration chain; the migration-only deployment profile has no invoice read path for authenticated members.',
-  );
+  // P-D4 declares the two member policies; house platform_admin_read
+  // policies on the same tables (20260728000008) remain alongside them.
+  const names = new Set(pol.rows.map((r: { tablename: string; policyname: string }) => `${r.tablename}/${r.policyname}`));
+  expect(names.has('invoices/invoices_member_read')).toBe(true);
+  expect(names.has('invoice_lines/invoice_lines_member_read')).toBe(true);
+  // Effective behavior, not just catalog entries: read back as a member of
+  // business A succeeds, and cross-business read yields zero rows (RLS).
+  const asMemberA = await db.asRole('authenticated', identities.A_cashier.id,
+    'select count(*)::int n from public.invoices where business_id=$1', [orgs.A.business]);
+  expect(typeof asMemberA.rows[0].n).toBe('number');
+  const cross = await db.asRole('authenticated', identities.A_cashier.id,
+    'select count(*)::int n from public.invoices where business_id=$1', [orgs.B.business]);
+  expect(cross.rows[0].n).toBe(0);
 });
+

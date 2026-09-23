@@ -925,9 +925,12 @@ test(meta('R08.BRANCH.SERVER-SCOPE', "§6: DEC-03 matrix proven AT THE SERVER �
     const aSalePayload = saleFixture(orgs.A, 514) as Record<string, unknown>;
     delete aSalePayload.shift_id;
     await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(aSalePayload)]), ['42501', '22023']);
-    // Zero leakage: even the invoices table grant itself is closed to app roles (hard 42501
-    // before any row logic), and the branch/member-scoped RLS surfaces resolve to zero rows.
-    await deniedInTx(c, () => c.query('select count(*)::int n from public.invoices where business_id=$1', [orgs.A.business]), ['42501']);
+    // Zero leakage: the member invoices/invoice_lines grants now exist (P-D4
+    // 20261003000000, house member_read tier) — foreign-business rows are not
+    // denied by grant but resolve to zero rows via RLS, while branch/member-
+    // scoped pos_shifts likewise resolves to zero.
+    expect((await c.query('select count(*)::int n from public.invoices where business_id=$1', [orgs.A.business])).rows[0].n).toBe(0);
+    expect((await c.query('select count(*)::int n from public.invoice_lines where business_id=$1', [orgs.A.business])).rows[0].n).toBe(0);
     expect((await c.query('select count(*)::int n from public.pos_shifts where business_id=$1', [orgs.A.business])).rows[0].n).toBe(0);
     // Zero mutation from the entire denied cross-organisation window.
     await c.query('reset role');

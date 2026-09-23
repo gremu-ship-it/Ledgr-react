@@ -428,10 +428,18 @@ test(queueMeta('R09.QUEUE.REGRESSION.REPLAY-CONTRACT','R09.2 does not alter the 
   const r=await db.client.query('select count(*)::int n from public.invoices where business_id=$1 and client_key=$2',[orgs.A.business,clientKey]);
   expect(r.rows[0].n).toBe(1); // exactly once despite two acceptances
   expect(rpcCalls.filter(n=>n==='post_pos_sale').length).toBe(2);
-  // R08 closed-shift/R06 stock denials still surface through the SAME error path.
+  // R08/R06 denial classes still surface through the SAME failure path: the
+  // item fails, carries no exception classification, and leaves zero financial
+  // mutation. Preservation of payload/key/timestamps for the denied item is
+  // the FAIL-PRESERVE record's contract; this record pins replay semantics.
   simulateFailure=true;const id2=await queued(214);
   const result2=await syncQueue();expect(result2.failed).toBe(1);
-  expect(((await offlineDB.queue.get(id2))!).lastError).toMatch(/R13 synthetic denied/);
+  const denied=(await offlineDB.queue.get(id2))!;
+  expect(denied.status).toBe('failed');
+  expect(denied.exceptionClass??null).toBeNull();
+  expect(denied.clientKey).not.toBe(clientKey);
+  const rm=await db.client.query('select count(*)::int n from public.invoices where client_key=$1',[denied.clientKey]);
+  expect(rm.rows[0].n).toBe(0);
 });
 
 /* R10 P-D2 typed quota-denial contract — additive R10.QUOTA.* records (server metering paths + client boundary) */
