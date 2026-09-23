@@ -74,11 +74,56 @@ test(meta('EDGE.RECOVERY.foreign-identity','An Org A owner cannot reset a global
   expect(client.authUpdates).toHaveLength(0);
 });
 
+test(meta('EDGE.RETRY.invalid-secret','Invalid job secret is rejected with 401 before any retry work','retry-failed-webhooks','R12'),async()=>{
+  const client=mockClient({resolveQuery:()=>({data:[],error:null})});
+  const edge=loadEdge('retry-failed-webhooks',{client});
+  const r=await edge.invoke(new Request('https://r13.invalid/retry',{method:'POST',headers:{'x-cron-secret':'r13-synthetic-wrong-secret'},body:'{}'}));
+  expect(r.status).toBe(401);expect(client.calls).toHaveLength(0);
+});
+
+test(meta('EDGE.RETRY.valid-secret-reaches','Configured job secret reaches the exclusively secret-gated retry path','retry-failed-webhooks','R12'),async()=>{
+  const client=mockClient({resolveQuery:(c:{table:string;operation:string})=>({data:[],error:null})});
+  const edge=loadEdge('retry-failed-webhooks',{client});
+  const r=await edge.invoke(new Request('https://r13.invalid/retry',{method:'POST',headers:{'x-cron-secret':'r13-synthetic-cron'},body:'{}'}));
+  expect(r.status).toBe(200);
+  // Authorized invocation reached the protected query surface; an empty queue
+  // means zero retry mutations and zero outbound dispatches.
+  expect(client.calls.some((c:{table?:string})=>c.table==='webhook_deliveries')).toBe(true);
+  expect(client.calls.filter((c:{operation?:string})=>c.operation&&c.operation!=='select')).toHaveLength(0);
+  const body=await r.json();
+  expect(typeof body.redispatched).toBe('number');
+  expect(JSON.stringify(body).includes('r13-synthetic-cron')).toBe(false);
+});
+
 test(meta('EDGE.WEBHOOK.viewer','Viewer cannot emit authoritative arbitrary financial event payload','webhook-dispatcher','R12'),async()=>{
   const client=mockClient({user:{id:identities.A_viewer.id},resolveQuery:(c:{table:string})=>({data:c.table==='business_users'?{id:key(1)}:[],error:null})});
   const edge=loadEdge('webhook-dispatcher',{client});
   const r=await edge.invoke(new Request('https://r13.invalid/webhook',{method:'POST',headers:{Authorization:'Bearer r13-synthetic'},body:JSON.stringify({business_id:key(201),event:'invoice.paid',payload:{id:key(501),amount:999999}})}));
   expect(r.status).toBe(403);expect(edge.effects.network).toBe(0);
+});
+
+test(meta('EDGE.WEBHOOK.role-spoof','Caller-supplied role claims in the payload cannot elevate a viewer to emitter','webhook-dispatcher','R12'),async()=>{
+  const client=mockClient({user:{id:identities.A_viewer.id},resolveQuery:(c:{table:string})=>({data:c.table==='business_users'?{id:key(1),role:'viewer'}:[],error:null})});
+  const edge=loadEdge('webhook-dispatcher',{client});
+  const r=await edge.invoke(new Request('https://r13.invalid/webhook',{method:'POST',headers:{Authorization:'Bearer r13-synthetic'},body:JSON.stringify({business_id:key(201),event:'invoice.paid',payload:{id:key(501),amount:999999,role:'owner'}})}));
+  expect(r.status).toBe(403);expect(edge.effects.network).toBe(0);
+  // Denied request produced no enqueue/mutation anywhere.
+  expect(client.calls.filter((c:{operation?:string})=>c.operation&&c.operation!=='select')).toHaveLength(0);
+});
+
+test(meta('EDGE.WEBHOOK.writer-ok','Existing writer-tier emitter path remains functional (owner reaches delivery core, no unauthorized-work bypass)','webhook-dispatcher','R12'),async()=>{
+  const business=key(201);
+  const client=mockClient({user:{id:identities.A_owner.id},resolveQuery:(c:{table:string;operation:string})=>({data:
+    c.table==='business_users'?{id:key(1),role:'owner'}:
+    c.table==='webhooks'?[]:[],error:null})});
+  const edge=loadEdge('webhook-dispatcher',{client});
+  const r=await edge.invoke(new Request('https://r13.invalid/webhook',{method:'POST',headers:{Authorization:'Bearer r13-synthetic'},body:JSON.stringify({business_id:business,event:'invoice.created',payload:{id:key(501)}})}));
+  expect(r.status).toBe(200);
+  const body=await r.json();
+  expect(body.ok).toBe(true);
+  // Zero subscribed webhooks -> zero delivery inserts and zero outbound calls.
+  expect(edge.effects.network).toBe(0);
+  expect(client.calls.filter((c:{object?:string;operation?:string})=>c.operation==='insert'&&c.table==='webhook_deliveries')).toHaveLength(0);
 });
 
 

@@ -14,7 +14,12 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET') ?? Deno.env.get('INVOICE_CRON_SE
 
 serve(async (req) => {
   try {
-    if (req.headers.get('x-cron-secret') !== CRON_SECRET) {
+    // R12 (EDGE.RETRY.no-secret): fail closed. When the job secret is not
+    // configured the previous comparison degenerated to '' === '' and let an
+    // explicitly EMPTY header authorize the dead-letter retry. An unconfigured
+    // or missing secret is never a valid credential.
+    const providedSecret = req.headers.get('x-cron-secret');
+    if (!CRON_SECRET || !providedSecret || providedSecret !== CRON_SECRET) {
       return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401 });
     }
 

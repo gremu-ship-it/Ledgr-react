@@ -31,6 +31,19 @@ async function hmacSha256(secret: string, payload: string): Promise<string> {
   return Array.from(new Uint8Array(signature)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// R12 (EDGE.WEBHOOK.viewer): emitting an authoritative financial event is a
+// write-class action. Mirror the application's existing writer tier from
+// public.can_write_business_data (20260728000008) — deliberately excludes the
+// read-only roles (viewer, auditor, board_member, payroll_manager). Keep in
+// sync with that helper and canWrite in src/hooks/usePermissions.ts.
+const EVENT_EMITTER_ROLES = new Set([
+  'owner', 'admin', 'accountant', 'supervisor', 'data_entry',
+  'inventory_manager', 'sales_clerk', 'purchasing_officer', 'warehouse_worker',
+  'sales_manager', 'customer_service_rep', 'tax_compliance_officer',
+  'treasury_manager', 'asset_manager', 'branch_manager', 'cashier',
+  'manager', 'stock_clerk',
+]);
+
 async function assertMember(authHeader: string, businessId: string): Promise<Response | null> {
   const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
     global: { headers: { Authorization: authHeader } },
@@ -41,7 +54,7 @@ async function assertMember(authHeader: string, businessId: string): Promise<Res
 
   const { data: membership } = await supabase
     .from('business_users')
-    .select('id')
+    .select('id, role')
     .eq('business_id', businessId)
     .eq('user_id', callerData.user.id)
     .eq('is_active', true)
@@ -51,7 +64,13 @@ async function assertMember(authHeader: string, businessId: string): Promise<Res
   // the browser, so active membership is required here. Event names are
   // separately allowlisted below; moving dispatch fully server-side is the
   // next step before arbitrary user-supplied payloads can be eliminated.
-  return membership ? null : json({ error: 'Not authorized for this business' }, 403);
+  if (!membership) return json({ error: 'Not authorized for this business' }, 403);
+  // Server-side role gate: read-only members (viewer et al.) must not reach
+  // the delivery path, regardless of any role claim inside the request body.
+  if (!EVENT_EMITTER_ROLES.has(membership.role)) {
+    return json({ error: 'This role cannot emit authoritative financial events' }, 403);
+  }
+  return null;
 }
 
 function isPrivateIp(address: string): boolean {
