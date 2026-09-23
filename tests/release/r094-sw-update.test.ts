@@ -171,7 +171,11 @@ async function waitActiveDigest(page: any, expected: string, timeoutMs = 25_000)
     try {
       last = await swSnapshot(page);
     } catch (e: any) {
-      if (!isContextDestroyed(e)) throw e; // mid-navigation transient: retry
+      // mid-navigation transients: the production auto-reload (or the harness
+      // fallback navigation) aborts in-flight fetches ('Failed to fetch') and
+      // destroys execution contexts; both are retryable within the bound. A
+      // genuinely persistent failure surfaces at the deadline with last-state.
+      if (!isContextDestroyed(e) && !String(e?.message ?? e).includes('Failed to fetch')) throw e;
     }
     if (last != null && last.active === 'activated' && last.swDigest === expected && last.registrations === 1) return last;
     await new Promise((r) => setTimeout(r, 300));
@@ -292,6 +296,7 @@ async function performUpdate(page: any, duringProbe?: () => Promise<any>): Promi
   await stub.control({ action: 'setDistDir', dirAbs: DIST_B }); // same origin now serves Version B
   await attachRegistrationCapture(page);
   const baselineControllerChanges = await go('claim baseline', ev(page, () => ((window as any).__r094SwEvents ?? []).filter((e: any) => e.type === 'controllerchange').length));
+  const docStart: string = await go('doc generation', ev(page, () => String(performance.timeOrigin)));
   await go('reg.update()', ev(page, async () => {
     const reg = await navigator.serviceWorker.getRegistration('/');
     await reg?.update();
@@ -318,7 +323,7 @@ async function performUpdate(page: any, duringProbe?: () => Promise<any>): Promi
       for (const st of states.split(',')) if (st && !timeline.includes(st)) timeline.push(st);
       settled = await swSnapshot(page);
     } catch (e: any) {
-      if (!isContextDestroyed(e)) throw e;
+      if (!isContextDestroyed(e) && !String(e?.message ?? e).includes('Failed to fetch')) throw e;
       // The production auto-reload fired mid-transition: the Version-A
       // document is gone; activation+claim already happened (the reload is
       // gated on the claimed worker). That IS the production evidence.
@@ -338,6 +343,13 @@ async function performUpdate(page: any, duringProbe?: () => Promise<any>): Promi
         if (count > baselineControllerChanges) {
           claimed = true;
           claimMs = Date.now() - tClaim0;
+          break;
+        }
+        const start = await go('doc generation watch', ev(page, () => String(performance.timeOrigin)));
+        if (start !== docStart) {
+          claimed = true;
+          claimMs = Date.now() - tClaim0;
+          autoReloaded = true;
           break;
         }
         if (count < baselineControllerChanges) {
@@ -367,13 +379,14 @@ async function performUpdate(page: any, duringProbe?: () => Promise<any>): Promi
     const watchDeadline = Date.now() + 8_000;
     while (Date.now() < watchDeadline) {
       try {
-        await go('auto-reload watch', ev(page, () => true));
+        const start = await go('auto-reload watch', ev(page, () => String(performance.timeOrigin)));
+        if (start !== docStart) { autoReloaded = true; break; }
       } catch (e: any) {
         if (!isContextDestroyed(e)) throw e;
         autoReloaded = true;
         break;
       }
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
     }
   }
   if (autoReloaded) {

@@ -116,4 +116,17 @@ Filed: **`R094.BROWSER.SERVER-REVALIDATION.INVESTIGATION`** (additive BLOCKED re
 
 ---
 
+## Post-filing addendum (2026-09-23) — determinism hardening, harness-only
+
+During post-filing re-verification under **full-gate system load**, one transient failure class surfaced that the solo-run environment had masked: the production `autoUpdate` reload can land inside a narrow window after the claim advance — after the harness had (correctly) stopped watching for an execution-context destruction but before its fallback navigation check completed. The harness could then issue its own reload concurrently with the production reload; the first navigation aborts the in-flight digests fetches (Chromium surfaces aborted fetches as `TypeError: Failed to fetch`), and a polling snapshot could land mid-flight. The affected area was the harness's observation loop only — **no product behavior, no record verdict, and no gate semantics** were implicated.
+
+Hardening applied (harness-only, additive; commit following this addendum):
+
+1. **Document-generation detection:** the harness now watches `performance.timeOrigin` (changes on every navigation) in both the in-transition claim watch and the post-claim reload watch, instead of relying solely on catching an execution-context destruction in flight. The production reload is therefore detected deterministically whenever it occurs within the bounded windows.
+2. **Abort-tolerant polling:** navigation-aborted digests (`Failed to fetch`) are treated as retryable transients inside the bounded state polls, exactly like context destructions; a genuinely persistent failure still surfaces at the deadline with full last-state detail.
+
+Re-verification after hardening: the SW suite was executed **twice more, fully green, byte-identical** (`r094-sw-update.json` diff-clean), and the **full gate was re-run: 733 PASS / 0 FAIL / 56 BLOCKED / 789 TOTAL** — identical to §20. The investigation suite remains byte-identical (`R094.BROWSER.SERVER-REVALIDATION.INVESTIGATION`, BLOCKED). No record was reclassified; no product code, migration, or Edge function was touched; the Phase-B conclusions are unaffected.
+
+---
+
 *Report produced 2026-09-23 under the R09.4 follow-on authorization. All product code, migrations, Edge functions, and every pre-existing release record are untouched; all additions are evidence, harness, investigation, and documentation only.*
