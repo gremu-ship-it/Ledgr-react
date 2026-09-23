@@ -6,6 +6,35 @@
 **Baseline commit:** `194a8f4` (tree clean at start; decision package `docs/audits/LEDGR_R09.3_DECISION_PACKAGE_2026-09-23.md`)
 **Scope:** R09.3 only. No out-of-scope package (Part L) was modified.
 
+### Baseline reconciliation (§1 of the authorization)
+
+The authorization restates the verified decision-package baseline as `0e6e1e8`
+with **684 PASS / 0 FAIL / 53 BLOCKED / 737**. Commit chain disclosure — no
+substitution occurred:
+
+```text
+0e6e1e8   R12 COMPLETE (684/0/53/737 measured)
+   │  Δ = docs/audits/LEDGR_R09.3_DECISION_PACKAGE_2026-09-23.md ONLY
+   │     (git diff 0e6e1e8..194a8f4 --stat: 1 file changed, +220/-0; zero code,
+   │      migration, test, CI or evidence delta — the 684/0/53/737 measurements
+   │      apply bit-for-bit to both commits; decision-package §15 records this)
+   ▼
+194a8f4   R09.3 implementation baseline for this work
+   │  Δ = R09.3 implementation (16 files, +2029/−9 — see §2)
+   ▼
+2b01054   R09.3 implementation complete (700/0/53/753, validated)
+   │  Δ = audit-trail only (this report incl. this disclosure; zero code,
+   │     migration, test or evidence delta — measured outcomes apply unchanged)
+   ▼
+(final tip: audit-report disclosure commit)
+```
+
+Both owner authorization forms (the detailed authorization of 2026-09-23 and
+its original issue) select **Model 3 + Model 4** with the same non-negotiable
+controls; the implementation below satisfies both. No clause required
+rework after a clause-by-clause conformance check against the restated form
+(§§4–18 of the authorization vs. the delivered evidence in §§3–11 here).
+
 ---
 
 ## 1. Authorization
