@@ -19,4 +19,5 @@ export const suites = {
   'r07-approvals.test.ts': 'r07-approvals.json',
   'r08-shifts.test.ts': 'r08-shifts.json',
   'r07-corrections.test.ts': 'r07-corrections.json',
+  'r093-reconciliation.test.ts': 'r093-reconciliation.json',
 };

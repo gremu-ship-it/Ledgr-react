@@ -3,6 +3,7 @@ import type { QueuePayloadFor } from './payloads';
 import { requestBackgroundSync } from './backgroundSync';
 import { useAppStore } from '@/store/useAppStore';
 import { buildProvenance, captureContext } from './provenance';
+import { hashQueuePayload } from './payloadIntegrity';
 
 /**
  * Determines whether an error occurred because the device is offline or
@@ -125,6 +126,11 @@ export async function enqueue<T extends QueueOperationType>(
   const provenance = buildProvenance(useAppStore.getState().currentUser?.id ?? null);
   const context = captureContext(operationType, payload);
 
+  // R09.3 integrity: freeze the payload's identity at capture. Replay and
+  // reconciliation re-verify against this hash; a mismatch quarantines the
+  // item as 'payload-tampered' before any network submission.
+  const payloadHash = await hashQueuePayload(payload);
+
   const item: QueueItem = {
     sequence,
     operationType,
@@ -141,6 +147,9 @@ export async function enqueue<T extends QueueOperationType>(
     clientKey: crypto.randomUUID(),
     ...provenance,
     ...context,
+    payloadHash,
+    exceptionClass: null,
+    reconcileAttempts: 0,
     lease: null,
   };
 

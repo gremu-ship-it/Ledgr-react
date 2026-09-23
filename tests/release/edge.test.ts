@@ -82,7 +82,7 @@ test(meta('EDGE.RETRY.invalid-secret','Invalid job secret is rejected with 401 b
 });
 
 test(meta('EDGE.RETRY.valid-secret-reaches','Configured job secret reaches the exclusively secret-gated retry path','retry-failed-webhooks','R12'),async()=>{
-  const client=mockClient({resolveQuery:(c:{table:string;operation:string})=>({data:[],error:null})});
+  const client=mockClient({resolveQuery:(c:{table:string;operation:string})=>{void c;return{data:[],error:null};}});
   const edge=loadEdge('retry-failed-webhooks',{client});
   const r=await edge.invoke(new Request('https://r13.invalid/retry',{method:'POST',headers:{'x-cron-secret':'r13-synthetic-cron'},body:'{}'}));
   expect(r.status).toBe(200);
@@ -123,7 +123,7 @@ test(meta('EDGE.WEBHOOK.writer-ok','Existing writer-tier emitter path remains fu
   expect(body.ok).toBe(true);
   // Zero subscribed webhooks -> zero delivery inserts and zero outbound calls.
   expect(edge.effects.network).toBe(0);
-  expect(client.calls.filter((c:{object?:string;operation?:string})=>c.operation==='insert'&&c.table==='webhook_deliveries')).toHaveLength(0);
+  expect(client.calls.filter((c:{object?:string;operation?:string;table?:string})=>c.operation==='insert'&&c.table==='webhook_deliveries')).toHaveLength(0);
 });
 
 

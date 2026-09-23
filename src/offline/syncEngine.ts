@@ -26,10 +26,12 @@ import { createLogger } from '@/lib/logger';
 import { recoverStaleSyncClaims } from './queueApi';
 import { offlineDB, type QueueItem } from './db';
 import { useAppStore } from '@/store/useAppStore';
-import { sweepUnverifiableItems, replayViolation } from './provenance';
+import { sweepUnverifiableItems, replayViolation, quarantineItem } from './provenance';
 import { claimLease, releaseLease, verifyLeaseOwnership } from './lease';
 import { getLeaseClaimantId } from './deviceIdentity';
 import { isQuotaDenial, QUOTA_DENIAL_SQLSTATE } from '@/lib/billing/quotaContract';
+import { classifyReplayException, exceptionDetails } from './exceptions';
+import { verifyPayloadIntegrity } from './payloadIntegrity';
 import type {
   IncomeQueuePayload,
   InvoiceQueuePayload,
@@ -438,6 +440,28 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
   const deferred: QueueItem[] = [];
 
   for (const item of items) {
+    // R09.3 Model 3: typed business/policy exceptions are out of the blind
+    // retry path entirely (Part C: no indefinite retry of an authoritative
+    // denial). The only way forward is Model 4 reconciliation.
+    if (item.exceptionClass) {
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+
+    // R09.3 integrity hardening: verify the stored payload against its
+    // capture-time hash BEFORE any network submission (and before the
+    // in-memory FK resolution below can touch the copy). A tampered payload
+    // becomes an integrity quarantine — durable, visible, never retried.
+    if (!(await verifyPayloadIntegrity(item))) {
+      await quarantineItem(
+        item.localId!,
+        'payload-tampered',
+        'The stored payload no longer matches its capture-time integrity hash (local edit or store corruption). Never replayed; held for assisted recovery.',
+      );
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+
     if (item.dependsOnLocalId !== undefined) {
       const parentServerId =
         resolvedIds.get(item.dependsOnLocalId) ??
@@ -505,6 +529,11 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
       progress.completed += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown sync error';
+      // R09.3 Model 3: an authoritative business/policy denial becomes a
+      // durable typed exception (held out of blind retry, reconcilable via
+      // Model 4). Transient and authority failures keep the ordinary path
+      // untouched — authority denials are never converted into overrides.
+      const exceptionClass = classifyReplayException(error);
 
       await offlineDB.queue.update(item.localId!, {
         status: 'failed',
@@ -512,6 +541,13 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
         // P-D2: expose the typed quota-denial signal at the boundary. No
         // retry/quarantine behavior changes here — that is R09.3's decision.
         lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+        ...(exceptionClass
+          ? {
+              exceptionClass,
+              exceptionAt: new Date().toISOString(),
+              exceptionDetails: exceptionDetails(exceptionClass),
+            }
+          : {}),
       });
 
       progress.failed += 1;
@@ -554,10 +590,18 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
         progress.completed += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown sync error';
+        const exceptionClass = classifyReplayException(error);
         await offlineDB.queue.update(item.localId!, {
           status: 'failed',
           lastError: message,
           lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+          ...(exceptionClass
+            ? {
+                exceptionClass,
+                exceptionAt: new Date().toISOString(),
+                exceptionDetails: exceptionDetails(exceptionClass),
+              }
+            : {}),
         });
         progress.failed += 1;
       } finally {

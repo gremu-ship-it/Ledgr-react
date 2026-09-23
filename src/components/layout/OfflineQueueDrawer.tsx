@@ -4,6 +4,7 @@ import {
   ChevronRight,
   CloudOff,
   CloudUpload,
+  Handshake,
   LoaderCircle,
   RefreshCw,
   Trash2,
@@ -15,6 +16,8 @@ import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { announce } from '@/lib/a11y';
 import { QUEUE_TYPE_LABELS, type QueueItem, type QueueItemStatus } from '@/offline/db';
 import { isStaleSyncClaim, removeQueueItem } from '@/offline/queueApi';
+import { isReconcilable, reconcileQueueItem } from '@/offline/reconciliation';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const STATUS_STYLES: Record<QueueItemStatus, { label: string; className: string }> = {
   pending: { label: 'Queued', className: 'bg-amber-100 text-amber-900' },
@@ -29,6 +32,13 @@ const QUARANTINE_LABELS: Record<string, string> = {
   'actor-mismatch': 'Recorded by a different signed-in user. It will not be synced as you.',
   'missing-provenance': 'Recorded before secure capture existed (or capture details were lost). It cannot be synced automatically.',
   legacy: 'Saved by an older Ledgr version without user details. It cannot be synced automatically.',
+  'payload-tampered': 'The saved data changed after it was recorded. It will never be synced or reconciled.',
+};
+
+/** R09.3 Model 3: typed exceptions, phrased for the till user. */
+const EXCEPTION_BADGES: Record<string, { label: string; className: string }> = {
+  'stock-denied': { label: 'Stock hold', className: 'bg-orange-100 text-orange-900' },
+  'policy-denied': { label: 'Plan limit hold', className: 'bg-sky-100 text-sky-900' },
 };
 
 function formatQueuedAt(date: string): string {
@@ -37,13 +47,17 @@ function formatQueuedAt(date: string): string {
   return parsed.toLocaleString('en-MW', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function QueueRow({ item, onDiscard, canDiscard }: {
+function QueueRow({ item, onDiscard, canDiscard, onReconcile, canReconcile, isReconciling }: {
   item: QueueItem;
   onDiscard: (item: QueueItem) => void;
   canDiscard: boolean;
+  onReconcile: (item: QueueItem) => void;
+  canReconcile: boolean;
+  isReconciling: boolean;
 }) {
   const status = STATUS_STYLES[item.status];
   const label = QUEUE_TYPE_LABELS[item.operationType];
+  const exceptionBadge = item.exceptionClass ? EXCEPTION_BADGES[item.exceptionClass] : undefined;
 
   return (
     <li className="border-b border-gray-100 px-5 py-4 last:border-b-0">
@@ -57,14 +71,41 @@ function QueueRow({ item, onDiscard, canDiscard }: {
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${status.className}`}>
               {status.label}
             </span>
+            {exceptionBadge && (
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${exceptionBadge.className}`}>
+                {exceptionBadge.label}
+              </span>
+            )}
           </div>
           <p className="mt-1 text-xs text-gray-600">Queued {formatQueuedAt(item.createdAt)}</p>
-          {item.status === 'failed' && (
+          {item.exceptionClass && (
+            <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 px-2.5 py-2 text-xs leading-5 text-orange-900">
+              <p className="font-semibold">
+                {item.exceptionDetails ?? 'The server refused this change. It will not sync automatically.'}
+              </p>
+              <p className="mt-1 text-orange-800">
+                {item.status === 'synced'
+                  ? 'Reconciled by an authorized manager — the original sale was posted unchanged.'
+                  : 'The original sale data is preserved. A manager can reconcile it — the server checks everything again before posting.'}
+              </p>
+              {(item.reconcileAttempts ?? 0) > 0 && item.status !== 'synced' && (
+                <p className="mt-1 text-[11px] text-orange-800">
+                  {item.reconcileAttempts} reconciliation attempt{item.reconcileAttempts === 1 ? '' : 's'} so far — all recorded.
+                </p>
+              )}
+            </div>
+          )}
+          {item.status === 'failed' && !item.exceptionClass && (
             <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs leading-5 text-red-800">
               {item.lastError || 'This change could not be synced. Retry when your connection is stable.'}
             </p>
           )}
-          {item.status === 'synced' && item.lastError && (
+          {item.status === 'failed' && item.exceptionClass && item.lastError && (
+            <p className="mt-2 text-[11px] leading-4 text-orange-800">
+              {item.lastError}
+            </p>
+          )}
+          {item.status === 'synced' && item.lastError && !item.exceptionClass && (
             <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-900">
               Synced, but a follow-up step did not post — {item.lastError}
             </p>
@@ -87,6 +128,26 @@ function QueueRow({ item, onDiscard, canDiscard }: {
           {item.attemptCount > 0 && item.status !== 'synced' && item.status !== 'quarantined' && (
             <p className="mt-1 text-[11px] text-gray-500">
               {item.attemptCount} sync attempt{item.attemptCount === 1 ? '' : 's'}
+            </p>
+          )}
+          {isReconcilable(item) && canReconcile && (
+            <button
+              type="button"
+              onClick={() => onReconcile(item)}
+              disabled={isReconciling}
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-orange-700 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-800 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {isReconciling ? (
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Handshake className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+              {isReconciling ? 'Reconciling' : 'Reconcile (manager)'}
+            </button>
+          )}
+          {isReconcilable(item) && !canReconcile && (
+            <p className="mt-2 text-[11px] leading-4 text-gray-500">
+              Requires an owner, admin or manager signed in on this device — the server verifies authority before anything posts.
             </p>
           )}
         </div>
@@ -115,13 +176,22 @@ function QueueRow({ item, onDiscard, canDiscard }: {
 export function OfflineQueueDrawer() {
   const { items, pendingCount, failedCount } = useOfflineQueue();
   const quarantinedCount = items.filter((item) => item.status === 'quarantined').length;
+  const exceptionCount = items.filter((item) => item.exceptionClass && item.status !== 'synced').length;
   const isOnline = useOnlineStatus();
   const { isSyncing, progress, syncNow } = useOfflineSync();
+  const { role } = usePermissions();
   const [isOpen, setIsOpen] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState<number | null>(null);
+  const [isReconciling, setIsReconciling] = useState<number | null>(null);
   const openButtonRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
+
+  // UX hint only: the SERVER decides reconciliation authority
+  // (owner/admin/manager, re-verified on every attempt). This mirrors that
+  // tier so non-managers see guidance instead of a button that must fail.
+  const canAttemptReconcile =
+    isOnline && role != null && ['owner', 'admin', 'manager'].includes(role);
 
   const visibleItems = [...items].sort((a, b) => b.sequence - a.sequence);
   const activeItems = visibleItems.filter((item) => item.status !== 'synced');
@@ -153,6 +223,26 @@ export function OfflineQueueDrawer() {
   async function handleRetry() {
     await syncNow();
     announce('Offline queue sync finished.');
+  }
+
+  async function handleReconcile(item: QueueItem) {
+    if (item.localId === undefined) return;
+    const label = QUEUE_TYPE_LABELS[item.operationType];
+    const reason = window.prompt(
+      `Reconcile this ${label}? The original sale will be replayed unchanged — the server re-checks stock, plan limit and shift authority first.\n\nReason (recorded in the audit trail):`,
+    );
+    if (reason == null) return; // cancelled
+
+    setIsReconciling(item.localId);
+    try {
+      const result = await reconcileQueueItem(item.localId, reason);
+      announce(result.detail);
+      if (!result.ok && result.disposition === 'rejected') {
+        window.alert(result.detail);
+      }
+    } finally {
+      setIsReconciling(null);
+    }
   }
 
   async function handleDiscard(item: QueueItem) {
@@ -246,6 +336,11 @@ export function OfflineQueueDrawer() {
                       {quarantinedCount} on security hold — assisted recovery required
                     </p>
                   )}
+                  {exceptionCount > 0 && (
+                    <p className="mt-0.5 text-xs font-medium text-orange-700">
+                      {exceptionCount} on hold by the server — manager reconciliation available
+                    </p>
+                  )}
                   {!isOnline && <p className="mt-0.5 flex items-center gap-1 text-xs font-medium text-amber-800"><CloudOff className="h-3.5 w-3.5" /> You are offline</p>}
                   {isSyncing && progress && <p className="mt-0.5 text-xs font-medium text-brand-700">Syncing {progress.completed + progress.failed} of {progress.total}</p>}
                 </div>
@@ -279,13 +374,13 @@ export function OfflineQueueDrawer() {
                   {activeItems.length > 0 && (
                     <section aria-labelledby={`${titleId}-active`}>
                       <h3 id={`${titleId}-active`} className="bg-gray-50 px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-600">Waiting to sync</h3>
-                      <ul>{activeItems.map((item) => <QueueRow key={item.localId} item={item} onDiscard={(queuedItem) => void handleDiscard(queuedItem)} canDiscard={canDiscard(item)} />)}</ul>
+                      <ul>{activeItems.map((item) => <QueueRow key={item.localId} item={item} onDiscard={(queuedItem) => void handleDiscard(queuedItem)} canDiscard={canDiscard(item)} onReconcile={(queuedItem) => void handleReconcile(queuedItem)} canReconcile={canAttemptReconcile} isReconciling={isReconciling === item.localId} />)}</ul>
                     </section>
                   )}
                   {syncedItems.length > 0 && (
                     <section aria-labelledby={`${titleId}-synced`}>
                       <h3 id={`${titleId}-synced`} className="bg-gray-50 px-5 py-2 text-xs font-bold uppercase tracking-wider text-gray-600">Recently synced</h3>
-                      <ul>{syncedItems.map((item) => <QueueRow key={item.localId} item={item} onDiscard={(queuedItem) => void handleDiscard(queuedItem)} canDiscard={canDiscard(item)} />)}</ul>
+                      <ul>{syncedItems.map((item) => <QueueRow key={item.localId} item={item} onDiscard={(queuedItem) => void handleDiscard(queuedItem)} canDiscard={canDiscard(item)} onReconcile={(queuedItem) => void handleReconcile(queuedItem)} canReconcile={false} isReconciling={false} />)}</ul>
                     </section>
                   )}
                 </>

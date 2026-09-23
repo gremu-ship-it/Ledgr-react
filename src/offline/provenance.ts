@@ -157,6 +157,17 @@ export async function sweepUnverifiableItems(
       continue;
     }
     if (currentUserId && item.originUserId !== currentUserId) {
+      // R09.3 Model 4 window: an item carrying a typed business exception is
+      // already held out of EVERY automatic replay path (the sync engine
+      // skips it before any gate), so cross-user quarantine would add no
+      // replay protection — but it WOULD destroy the authorized recovery
+      // surface: a manager-tier user must be able to reconcile this device's
+      // exception under fresh server validation, with the original actor
+      // preserved as evidence (never replaced). Integrity classes remain
+      // unreachable for reconciliation both client- and server-side.
+      if (item.exceptionClass) {
+        continue;
+      }
       await quarantineItem(
         item.localId!,
         'actor-mismatch',

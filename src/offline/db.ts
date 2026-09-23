@@ -41,8 +41,31 @@ export type QueueItemStatus =
  *  - 'legacy'              — originated in the retired localStorage POS queue
  *                            or an old-build stub; accepted financial evidence
  *                            with unknown actor (§5).
+ *  - 'payload-tampered'    — R09.3 integrity hardening: the stored payload no
+ *                            longer matches its capture-time integrity hash.
+ *                            Never replayed, never reconciled; held for
+ *                            assisted recovery like every integrity class.
  */
-export type QuarantineReason = 'actor-mismatch' | 'missing-provenance' | 'legacy';
+export type QuarantineReason =
+  | 'actor-mismatch'
+  | 'missing-provenance'
+  | 'legacy'
+  | 'payload-tampered';
+
+/**
+ * R09.3 Model 3 (P-D3-FINAL): the typed business/policy exception classes a
+ * replay-time authoritative denial can produce. Durable, visible, held out
+ * of every blind retry path, and the ONLY classes eligible for Model 4
+ * reconciliation:
+ *  - 'stock-denied'  — the R06 non-negative on-hand invariant refused the
+ *                      replay (SQLSTATE 23514 on the on_hand constraint).
+ *  - 'policy-denied' — the R10 quota contract refused the replay (SQLSTATE
+ *                      'P0QLT', the sole typed quota-denial signal).
+ * Realized as additive fields on the queue row (status stays 'failed'), NOT
+ * a quarantine: R09.2 quarantines remain reserved for integrity classes, and
+ * the R10 evidence asserting failed+lastErrorCode stays intact.
+ */
+export type ExceptionClass = 'stock-denied' | 'policy-denied';
 
 /**
  * R09.2 cross-tab replay lease metadata (see ./lease.ts). The lease is the
@@ -153,6 +176,42 @@ export interface QueueItem {
   /** Short human-safe detail shown in the drawer (no payload contents). */
   quarantineDetails?: string | null;
 
+  /* ── R09.3 Model 3 typed exceptions (durable, additive) ── */
+
+  /**
+   * Set exactly once, at the replay attempt where the server's authoritative
+   * answer was a typed business/policy denial. While set, the item is held
+   * out of every automatic replay path (the sync engine skips it before any
+   * gate); the only way forward is Model 4 reconciliation. Never cleared
+   * locally: accepted reconciliations keep it as evidence of what happened.
+   */
+  exceptionClass?: ExceptionClass | null;
+
+  /** ISO timestamp of the attempt that produced the exception. */
+  exceptionAt?: string | null;
+
+  /** Short human-safe detail shown in the drawer (no payload contents). */
+  exceptionDetails?: string | null;
+
+  /* ── R09.3 Model 4 reconciliation evidence (local mirror) ── */
+
+  /** Number of reconciliation attempts initiated for this item. */
+  reconcileAttempts?: number;
+
+  /** ISO timestamp of the most recent reconciliation attempt. */
+  lastReconcileAt?: string | null;
+
+  /* ── R09.3 integrity hardening ── */
+
+  /**
+   * SHA-256 (hex) of the canonical JSON payload computed ONCE at enqueue.
+   * Verified before every replay/reconciliation: a mismatch means local
+   * tampering (or store corruption) and the item is quarantined as
+   * 'payload-tampered'. Null on rows captured before v3 — those keep R09.2
+   * provenance protection only (documented limitation).
+   */
+  payloadHash?: string | null;
+
   /* ── R09.2 cross-tab lease ── */
 
   lease?: QueueLease | null;
@@ -240,6 +299,29 @@ class LedgrOfflineDB extends Dexie {
             if (item.quarantinedAt === undefined) item.quarantinedAt = null;
             if (item.quarantineDetails === undefined) item.quarantineDetails = null;
             if (item.lease === undefined) item.lease = null;
+          });
+      });
+
+    // R09.3 v3: typed-exception, reconciliation-evidence and payload-integrity
+    // fields. Indexes are unchanged (additive, lossless); the upgrade writes
+    // ONLY defensive defaults and never fabricates evidence: pre-v3 rows get
+    // payloadHash = null (no capture-time hash exists to recover, so they
+    // cannot be retroactively protected — see payloadHash docblock).
+    this.version(3)
+      .stores({
+        queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('queue')
+          .toCollection()
+          .modify((item: QueueItem) => {
+            if (item.exceptionClass === undefined) item.exceptionClass = null;
+            if (item.exceptionAt === undefined) item.exceptionAt = null;
+            if (item.exceptionDetails === undefined) item.exceptionDetails = null;
+            if (item.reconcileAttempts === undefined) item.reconcileAttempts = 0;
+            if (item.lastReconcileAt === undefined) item.lastReconcileAt = null;
+            if (item.payloadHash === undefined) item.payloadHash = null;
           });
       });
   }
