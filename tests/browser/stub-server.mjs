@@ -56,6 +56,9 @@ const MIME = {
 export async function createStubServer({ distDir, pagesDir, tlsCertDir = null }) {
   const scenarios = new Map(); // `${fn}|${clientKey}` → { mode, status, body, delayMs }
   const calls = [];            // rpc call log
+  // Current dist dir is MUTABLE via control so Phase-A SW update evidence can
+  // swap the served build on the same origin (A→B) mid-session.
+  let currentDistDir = distDir;
   // Minimal PostgREST data seam: rows "committed" by a successful rpc
   // scenario (the only modeled writes) become readable shadows, so the
   // production read-back path (findByIdWithLines) sees exactly one row.
@@ -82,6 +85,7 @@ export async function createStubServer({ distDir, pagesDir, tlsCertDir = null })
       }
       if (body?.action === 'calls') { json(res, 200, { calls }); return; }
       if (body?.action === 'resetCalls') { calls.length = 0; json(res, 200, { ok: true }); return; }
+      if (body?.action === 'setDistDir') { currentDistDir = body.dirAbs; json(res, 200, { ok: true }); return; }
       if (body?.action === 'resetAll') { scenarios.clear(); calls.length = 0; actor = null; shadows.invoices.clear(); json(res, 200, { ok: true }); return; }
       json(res, 400, { error: 'unknown action' }); return;
     }
@@ -144,10 +148,10 @@ export async function createStubServer({ distDir, pagesDir, tlsCertDir = null })
 
     // PWA static + SPA fallback
     let rel = path === '/' ? 'index.html' : path.slice(1);
-    let f = resolve(join(distDir, rel));
-    if (!f.startsWith(resolve(distDir))) { json(res, 403, { error: 'forbidden' }); return; }
+    let f = resolve(join(currentDistDir, rel));
+    if (!f.startsWith(resolve(currentDistDir))) { json(res, 403, { error: 'forbidden' }); return; }
     try { const st = await stat(f); if (!st.isFile()) throw 0; }
-    catch { f = join(distDir, 'index.html'); }
+    catch { f = join(currentDistDir, 'index.html'); }
     const headers = { 'content-type': MIME[extname(f)] ?? 'application/octet-stream' };
     if (rel === 'sw.js') { headers['cache-control'] = 'no-cache'; headers['service-worker-allowed'] = '/'; }
     res.writeHead(200, headers);

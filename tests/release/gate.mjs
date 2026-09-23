@@ -22,4 +22,5 @@ export const suites = {
   'r07-corrections.test.ts': 'r07-corrections.json',
   'r093-reconciliation.test.ts': 'r093-reconciliation.json',
   'r094-browser.test.ts': 'r094-browser.json',
+  'r094-sw-update.test.ts': 'r094-sw-update.json',
 };
