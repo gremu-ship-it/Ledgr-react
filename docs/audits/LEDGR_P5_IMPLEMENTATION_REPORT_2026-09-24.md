@@ -3,7 +3,7 @@
 **Date:** 2026-09-24
 **Authorization:** Signed owner decisions at `85d1615` (`docs/audits/LEDGR_P4_OWNER_DECISION_RECORD_2026-09-24_SIGNED.md`) — Q1 B, Q2 B, Q3 A, Q4 A, Q5-7 N/A, Q8 C, Q9 B, Q10 B, Q11 D, Q12 B, Q13 C, Q14 B, Q15 B — baseline `bc97e32` / `e36e46e` / `b9d41ec854a1` 742/0/40/782
 **Branch:** `arena/01a0c215-ledgr-react`
-**Packages:** P5-A (Model 3 typed offline exceptions) — P5-B…F pending. This report is updated per package gate; P5 is PARTIALLY COMPLETE until all packages pass.
+**Packages:** P5-A (Model 3) **PASS** + P5-B (Model 4 freeze) **PASS** — P5-C…F pending. This report is updated per package gate; overall P5 is **PARTIALLY COMPLETE** until all packages pass.
 
 ---
 
@@ -82,7 +82,81 @@
 
 ## §4 P5-B — Reconciliation Freeze (Model 4)
 
-*Pending.* Must ensure `RECONCILABLE_EXCEPTION_CLASSES = ['stock-denied','policy-denied']` remains frozen, verify stale-version/unknown-version/branch-denied/terminal-denied/clientKey-payload-mismatch/payload-tampered cannot reconcile, and reconciliation does not mutate client identity or transform quarantined into posting. Awaits P5-A gate (done) — next.
+**Scope:** Q3 A + Q11 D — `RECONCILABLE_EXCEPTION_CLASSES` permanently frozen at `['stock-denied','policy-denied']`. No P5-A typed class may become reconcilable; payload `clientKey`/hash immutable; quarantined never becomes posting; relabeling fails closed; server does not trust caller-supplied class.
+
+### Implementation
+
+- **Verification before change:** `HEAD 112ebec` (P5-A), `git status` clean, `RECONCILABLE_EXCEPTION_CLASSES` already `['stock-denied','policy-denied']`, `INTEGRITY_QUARANTINE_REASONS` already 7 incl `stale-version`/`unknown-version`/`clientKey-payload-mismatch`, `exceptions.ts` branch/terminal typed failed but not reconcilable, `reconciliation.ts` client gate (`quarantined`/`integrity-class` → `integrity-class`, `!isReconcilable` → `not-an-exception`, payload hash, lease), server guard `20261002000000_r093_offline_reconciliation.sql` already `exception_class in ('stock-denied','policy-denied')` + `22023` else, `queueApi.ts`/`db.ts` unchanged, `reconciliation.test.ts` 11 PASS pre-mod.
+- **Product code:** **No migration, no product behaviour changed** — P5-B is a freeze/proof, not a redesign. Existing client (`src/offline/exceptions.ts`, `src/offline/reconciliation.ts`, `src/offline/db.ts`) and server (`20261002000000_r093_offline_reconciliation.sql` + P5-A `20261005000000_p5a_typed_offline_exceptions.sql`) already enforce the frozen contract. Added only evidence/tests/docs.
+- **New evidence:** `src/offline/__tests__/p5b_model4.test.ts` — **25 tests** (see below) proving real `reconcileQueueItem` path, not just `includes()`.
+- **Files changed:** `src/offline/__tests__/p5b_model4.test.ts` (new 483L, 25 tests) + `docs/audits/LEDGR_P5_IMPLEMENTATION_REPORT_2026-09-24.md` §4/§9–§12.
+
+### Contract
+
+```ts
+RECONCILABLE_EXCEPTION_CLASSES = ['stock-denied', 'policy-denied'] // frozen Q3 A/Q11 D
+INTEGRITY_QUARANTINE_REASONS = ['actor-mismatch','missing-provenance','legacy','payload-tampered','stale-version','unknown-version','clientKey-payload-mismatch'] // 7, never reconcilable
+```
+
+Must NOT be reconcilable (fail closed, never `replay-accepted`, never mutation, never new posting, never inventory movement):
+`stale-version`, `unknown-version`, `branch-denied`, `terminal-denied`, `clientKey-payload-mismatch`, `payload-tampered` + any unknown/future class. Only `stock-denied`/`policy-denied` with `status='failed'` may enter `reconcile_offline_queue_item` via `isReconcilable` and server `22023` guard.
+
+### Tests — P5-B matrix (25 PASS)
+
+**Contract (§4, §8 16-18):**
+- 16. reconcilable set is exactly `['stock-denied','policy-denied']`
+- 17. no P5-A exception appears in RECONCILABLE; quarantine set frozen (stale/unknown/mismatch/tamper in integrity, branch/terminal NOT in integrity yet also NOT in reconcilable)
+- 18. unknown/future class fails closed (`future-unknown-class` → `isReconcilable false`, `hasException false`)
+- + integrity set length 7 containing P5-A version/mismatch; server migration CHECK frozen and P5-A migration does not relax it (reads SQL)
+
+**Reconcilable (§8 1-2):**
+- 1. `stock-denied` → `isReconcilable true`, `reconcileQueueItem` reaches `reconcile_offline_queue_item` with `exception_class=stock-denied` + original `client_key` → `replay-accepted`, `getExceptionItems` no longer surfaces after `synced`
+- 2. `policy-denied` → `isReconcilable true`, RPC reached → `replay-denied P0QLT`, item stays `failed`/`policy-denied` with `reconcileAttempts 1`
+
+**Non-reconcilable (§8 3-8): real path, zero RPC:**
+- 3. `stale-version` quarantined → `rejected integrity-class`
+- 4. `unknown-version` → `integrity-class`
+- 5. `branch-denied` failed → `rejected not-an-exception`
+- 6. `terminal-denied` → `not-an-exception`
+- 7. `clientKey-payload-mismatch` quarantined → `integrity-class`
+- 8. `payload-tampered` quarantined → `integrity-class`; live hash-mismatch quarantines before RPC (`payload-tampered`)
+
+**Identity protection (§8 9-13):**
+- 9. accepted preserves `clientKey` (request `client_key` + `payload.client_key` == before)
+- 10. accepted preserves `payload` byte-identical; 10b denied also preserves `payload`/`clientKey`/`originUserId`/`payloadHash`
+- 11. quarantined → rejected, stays `quarantined`, `resolvedServerId undefined`, no RPC = no new posting
+- 12. exactly-once: lost-ack replay resolves same `document_id` idempotently, `Set([doc1,doc2]).size 1`, `payload` unchanged
+- 13. denied/tampered → `replay-denied 23514` or `integrity-class`, `status failed/quarantined`, zero financial mutation (mock never mutates)
+
+**Relabeling (§8 14-15) + frozen-list 16-18:**
+- 14. `stale-version` relabeled to `stock-denied` (mutated `exceptionClass`) → still `integrity-class` (quarantineReason wins, status `quarantined` or `failed` with quarantineReason)
+- 15. `unknown-version` relabeled to `policy-denied` → `integrity-class`
+- 16/17. `clientKey-payload-mismatch` quarantined relabeled to `stock-denied` + `status failed` → still `integrity-class`
+- 18. `branch-denied → stock-denied` via direct IDB edit: **documents residual vector** — `isReconcilable false → true` after mutation, client WOULD reach server (mocked `replay-denied 23514`), server's fresh `post_pos_sale` still enforces branch/terminal/shift/quota/stock so no invariant bypass; **UI freeze is via `isReconcilable` + `getExceptionItems`** (never exposes branch/terminal). Quarantined relabel still blocked; server CHECK rejects non-stock/policy if sent verbatim (proven via migration SQL, and `r093-reconciliation.test.ts` disposable PG).
+- + `server CHECK would reject…` — client never sends `branch-denied`/`stale-version` to server for non-reconcilable items (assert `rpcMock.not.toHaveBeenCalled()`)
+
+### Results
+
+- `src/offline/__tests__/p5b_model4.test.ts` **25 PASS**
+- `src/offline/__tests__/reconciliation.test.ts` 11 PASS (unchanged)
+- `src/offline/__tests__/p5a_model3.test.ts` 18 PASS, `exceptions 6`, `provenance 11` etc
+- Full `src` suite **774 PASS / 0 FAIL** (88 files, +25 P5-B, up from 749)
+- `tsc -b` clean, `eslint` 0 errors 1 warning, `SKIP_ENV_CHECK=1 vite build` OK (1.97s PWA 111)
+- `npm run test:release:types` clean (no DB migration needed — P5-B additive test-only)
+- `git diff --check` clean
+
+### Identity evidence
+
+- Every `reconcileQueueItem` acceptance test asserts `after.clientKey === before.clientKey`, `after.payload === before.payload` (stringified), `after.originUserId` unchanged, `after.payloadHash` unchanged, `after.exceptionClass` kept as evidence, `lease` null, `reconcileAttempts` incremented, `resolvedServerId` set only on `synced`, never overwriting original `clientKey`/`payload`/`payloadHash`. Denied path preserves `failed` + `exceptionClass` + payload/clientKey. Tampered path quarantines `payload-tampered` before any RPC. Quarantined relabel tests prove `quarantineReason` persists and blocks even after `exceptionClass` overwrite. Branch/terminal relabel vector documented: direct IDB mutation can make `isReconcilable true` (client tamper), but server revalidation (`post_pos_sale` inside `reconcile_offline_queue_item`) still rolls back on authority failure — zero financial/inventory mutation.
+
+### Regression
+
+- **Before P5-B:** `749 PASS / 0 FAIL` unit (87 files) after P5-A, `742/0/40/782` release `b9d41ec854a1` baseline.
+- **After P5-B:** `774 PASS / 0 FAIL` unit (88 files, +25), `742/0/40/782` release unchanged (no DB change). Release harness still honest `P5-A PENDING DB RE-PROOF` (§9).
+
+### Scope
+
+- **P5-C through P5-F NOT started** — no billing/quota, no `branch_id` remediation, no `ai_context`, no browser verification, no TTL/`MAX_PENDING`/`sourceItemId`/`new-capture`/`expiry`, no RLS/billing/AI/POS redesign. Documented defer only.
 
 ## §5 P5-C — Uniform Billing Quota + Dual Authority
 
@@ -106,39 +180,41 @@
 
 - **Before P5:** `742 PASS / 0 FAIL / 40 BLOCKED / 782` release (`794` incl 12 LEGACY) at `bc97e32`/`e36e46e` `b9d41ec854a1` two identical, `731/731` unit, `tsc -b` clean, `eslint` 0, `vite build` OK.
 - **After P5-A:** `749 PASS / 0 FAIL` unit (87 files, +18 P5-A), `tsc -b` clean, `eslint` 0/1w, `vite build` OK, `test:release:types` clean. **Release harness `tests/release/run.mjs` not yet re-executed against live DB with `20261005000000_p5a_typed_offline_exceptions.sql`** — would need Supabase to re-prove `742/0/40` plus new behaviour does not break existing 742. `supabase/migrations` change is additive and contains no existing-policy weakening (verified by diff), but honest gate is `P5-A PASS at unit level, release re-proof pending DB`.
+- **After P5-B:** `774 PASS / 0 FAIL` unit (88 files, +25 P5-B), `tsc -b` clean, `eslint` 0/1w, `vite build` OK, `test:release:types` clean. **No DB migration in P5-B** (freeze proof only — no `supabase/migrations` change). Release `742/0/40/782` re-proof still pending same P5-A DB state (honest BLOCKED — not collapsed).
 
 Do not collapse BLOCKED into FAIL or PASS.
 
 ## §10 Remaining Risks / Gaps
 
-- Release harness re-proof pending live Supabase (new migration not yet applied to DB, so 742/0/40 is pre-P5-A gate; next gate must run two deterministic `tests/release` runs after P5-C or before claiming final 742).
+- Release harness re-proof pending live Supabase (new `20261005000000` migration not yet applied to disposable DB, so `742/0/40` is pre-P5-A gate; next gate must run two deterministic `tests/release` runs after P5-C or before claiming final 742).
 - `R09.4` browser `IndexedDB` real-process persistence, `payloadVersion`/`mismatch` via true offline→online, drawer copy for `stale-version`/`unknown-version`/`clientKey-payload-mismatch` not yet browser-verified.
 - Server `payload_hash` text `NULL` on pre-P5-A rows — fallback field comparison guards mismatch for old rows, but hash path only for post-migration rows (documented).
 - `branch-denied`/`terminal-denied` classification relies on message containing `branch`/`terminal` (R08 messages do; unrelated 42501/22023 with those words would be typed — acceptable per "server can establish semantics").
+- **P5-B residual IDB-tamper vector:** `branch-denied`/`terminal-denied` are `failed` (not `quarantined`), so direct IDB edit `branch-denied → stock-denied` makes `isReconcilable true` client-side and reaches server; server's `post_pos_sale` inside `reconcile_offline_queue_item` still re-validates branch/terminal/shift/quota/stock in sub-transaction — zero financial/inventory mutation if denied — but freeze is enforced at UI/API via `isReconcilable`/`getExceptionItems` (never exposes branch/terminal). Quarantined vectors (`stale-version` etc.) remain blocked even after relabel because `quarantineReason` persists.
 - TTL not introduced per Q4 A — queue remains indefinite until `MAX_PENDING 2000`.
 
 ## §11 Scope Attestation
 
-- **Product behavior changed:** **Yes — only P5-A Model 3 as authorized:** version quarantine (`stale-version`/`unknown-version`), branch/terminal typed failed, clientKey mismatch quarantined with authoritative hash guard in `post_pos_sale`. No other product behaviour changed.
-- **SQL changed:** **Yes — additive** `invoices.payload_hash`, `_ledgr_pos_payload_hash`, `post_pos_sale` replacement (hash/mismatch guard, store hash, race handler) — no other SQL/RLS/policy changed; R08/R06/P0QLT logic preserved verbatim.
+- **Product behavior changed:** **Yes — P5-A Model 3 as authorized + P5-B freeze (no new behaviour):** P5-A version quarantine (`stale-version`/`unknown-version`), branch/terminal typed failed, clientKey mismatch quarantined with authoritative hash guard in `post_pos_sale`; P5-B proves `RECONCILABLE` frozen, no product code changed.
+- **SQL changed:** **Yes — P5-A additive only** `invoices.payload_hash`, `_ledgr_pos_payload_hash`, `post_pos_sale` replacement (hash/mismatch guard, store hash, race handler) — P5-B **no SQL change**; no other SQL/RLS/policy changed; R08/R06/P0QLT logic preserved verbatim.
 - **RLS changed:** No.
 - **Edge functions changed:** No.
 - **AI behavior changed:** No (Q14/Q15 after P8).
 - **Billing behavior changed:** No (P5-C pending).
-- **Offline behavior changed:** **Yes — P5-A only** (provenance version, exceptions, syncEngine mismatch quarantine, Dexie v4).
-- **Tests changed:** **Yes — additive:** `p5a_model3.test.ts` + `provenance.test.ts` expectation fix for new sweep fields; no weakening.
+- **Offline behavior changed:** **P5-A yes** (provenance version, exceptions, syncEngine mismatch quarantine, Dexie v4); **P5-B freeze only** (no queue semantics changed).
+- **Tests changed:** **Yes — additive:** `p5a_model3.test.ts` (18) + `p5b_model4.test.ts` (25) + `provenance.test.ts` fix; no weakening.
 - **Package/CI changed:** No.
 
 ## §12 Final Gate
 
-- **Implementation:** `P5-A COMPLETE` (typed offline exceptions). `P5-B`…`P5-F` pending — overall `P5 PARTIALLY COMPLETE`.
-- **Exact commit:** (next commit) — files `src/offline/db.ts`, `src/offline/provenance.ts`, `src/offline/exceptions.ts`, `src/offline/syncEngine.ts`, `src/offline/__tests__/provenance.test.ts`, `src/offline/__tests__/p5a_model3.test.ts`, `supabase/migrations/20261005000000_p5a_typed_offline_exceptions.sql`, `docs/audits/LEDGR_P5_IMPLEMENTATION_REPORT_2026-09-24.md`
-- **Exact test counts:** `749 PASS / 0 FAIL` unit (87 files) (+18 P5-A), `742/0/40` release pending DB, `tsc -b` clean, `eslint` 0, `vite build` OK.
-- **Remaining blockers:** P5-B…F not yet implemented; release harness with new migration not yet live-DB-proven; branch/P8 and AI/R11 not yet started.
-- **Another owner decision required:** No — P5-A choices were `85d1615`. Any new policy question will be surfaced and STOPPED rather than assumed.
+- **Implementation:** `P5-A COMPLETE` (typed offline exceptions) + `P5-B COMPLETE` (reconciliation freeze). `P5-C`…`P5-F` pending — overall `P5 PARTIALLY COMPLETE` (2/6 packages).
+- **Exact commit:** (next commit) — files `src/offline/__tests__/p5b_model4.test.ts`, `docs/audits/LEDGR_P5_IMPLEMENTATION_REPORT_2026-09-24.md` (P5-B additive)
+- **Exact test counts:** `774 PASS / 0 FAIL` unit (88 files, +18 P5-A +25 P5-B), `742/0/40` release pending DB re-proof, `tsc -b` clean, `eslint` 0/1w, `vite build` OK.
+- **Remaining blockers:** P5-C…F not yet implemented; release harness with new migration not yet live-DB-proven; branch/P8 and AI/R11 not yet started.
+- **Another owner decision required:** No — P5-B has no open decision; choices remain `85d1615` Q3 A/Q11 D. Any new policy question will be surfaced and STOPPED rather than assumed.
 
 ---
 
-## STOP — P5-A gate clean, awaiting next package GO
+## STOP — P5-B gate clean, awaiting next package GO
 
-P5-A satisfies all 17 P5-A test requirements deterministically without weakening. Do not proceed to P5-B…F until this gate is reviewed. If a later package exposes a dependency that prevents safe continuation, STOP at that gate and do not weaken the contract.
+P5-A (17 requirements) + P5-B (18 checks, 25 tests) satisfy frozen `RECONCILABLE=['stock-denied','policy-denied']` deterministically without weakening. Non-reconcilable P5-A classes fail closed on real `reconcileQueueItem` path, identity preserved, relabeling fails closed (quarantined vectors) or is server-revalidated (branch/terminal tamper docs). Do not start P5-C…F until this gate is reviewed. If a later package exposes a dependency that prevents safe continuation, STOP at that gate and do not weaken the contract.
