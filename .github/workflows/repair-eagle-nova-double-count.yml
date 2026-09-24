@@ -39,6 +39,7 @@ on:
     branches: [main]
     paths:
       - scripts/repair-eagle-nova-double-count.sql
+      - scripts/diagnose-eagle-nova-chicken-manure.sql
       - scripts/database/run-support-sql-via-api.sh
       - .github/workflows/repair-eagle-nova-double-count.yml
   workflow_dispatch:
@@ -77,7 +78,7 @@ jobs:
       STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
       # push → full repair; dispatch → honour the dry_run input (default true)
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '0' }}
-      SQL_FILE: scripts/repair-eagle-nova-double-count.sql
+      SQL_FILE: scripts/diagnose-eagle-nova-chicken-manure.sql
       OUT_DIR: artifacts/support-sql
     steps:
       - name: Checkout
@@ -136,7 +137,7 @@ jobs:
           # Keep each message single-line and under the annotation size cap.
           while IFS= read -r line || [[ -n "$line" ]]; do
             [[ -n "${line//[[:space:]]/}" ]] || continue
-            safe="$(printf '%s' "$line" | tr '\r\n\t' '   ' | cut -c1-800)"
+            safe="$(printf '%s' "$line" | tr '\r\n\t' '   ' | cut -c1-6000)"
             echo "::notice title=Eagle Nova repair::${safe}"
           done < <(cat "${OUT_DIR}"/run.log "${OUT_DIR}"/stmt-*.txt 2>/dev/null || true)
 
