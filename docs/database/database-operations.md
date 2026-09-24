@@ -172,3 +172,16 @@ inventory) is the substitute.
    `pg_policies` from staging and reconcile before Phase 8B.
 4. Storage bucket size limits / MIME restrictions and storage policies are
    unverified.
+5. `inventory_balances.quantity_available` is a **STORED GENERATED column**
+   (`quantity_on_hand - quantity_reserved`) on the live project, but a plain
+   nullable column in the repository's base schema. Any migration or function
+   that maintains balances must therefore *omit* the column and let the database
+   derive it, or branch on `pg_attribute.attgenerated` — PostgreSQL cannot
+   convert an existing plain column into a generated one (`ALTER COLUMN ... ADD
+   GENERATED ALWAYS AS` does not exist), so the two shapes have to be tolerated
+   rather than normalised. Writing it is a hard error: `SQLSTATE 428C9 cannot
+   insert a non-DEFAULT value into column "quantity_available"`.
+   `20260924000001_fix_stock_movement_balance_trigger.sql` failed on production
+   with exactly that until it stopped writing the column;
+   `tests/database/stock_movement_balance_trigger.test.js` replays the migration
+   against both shapes so the next deploy cannot rediscover it.
