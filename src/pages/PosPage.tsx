@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { usePosPermissions } from '@/hooks/usePosPermissions';
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/services/posService';
 import { requestPosApproval, type PosCorrectionAction } from '@/services/posCorrectionRpc';
 import { repos } from '@/lib/repositories';
+import { weightedAverageCost } from '@/services/inventoryValuation';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { VAT_STANDARD_RATE } from '@/lib/vat';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
@@ -55,8 +56,19 @@ export function PosPage() {
   // filed under this id, and inventing one puts the sale in a tenant that does
   // not exist (posService rejects the sale with a clear message instead).
   const businessId = currentBusiness?.business?.id || '';
-  const branchName = currentBusiness?.business?.name || 'Main Branch';
-  const branchId = null;
+  // A till with no branch posts every sale against the default warehouse, so
+  // Airwing and Area 49 stock never moved when those shops sold. The cashier's
+  // assigned branch wins; otherwise they pick the shop in the header.
+  const [branchId, setBranchId] = useState<string | null>(null);
+  const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
+  // A membership with a shop is the till. Don't offer a switch — that is how
+  // an Airwing sale was posted against the default warehouse.
+  const [assignedBranchId, setAssignedBranchId] = useState<string | null>(null);
+  const assignedBranchRef = useRef<string | null>(null);
+  const branchTouched = useRef(false);
+  const branchName = branches.find((b) => b.id === branchId)?.name
+    || currentBusiness?.business?.name
+    || 'Shop';
 
   // Navigation / View state
   const [viewMode, setViewMode] = useState<'sales' | 'analytics' | 'history' | 'settings'>('sales');
@@ -196,38 +208,115 @@ export function PosPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [cartItems, isPaymentModalOpen, handleParkOrder]);
 
-  // Fetch initial data: Products, Customers, Shifts
+  // Fetch initial data: Products, Customers, Shifts, real shop stock
   const currentUserId = currentUser?.id;
+
+  useEffect(() => {
+    let ignore = false;
+    async function loadBranches() {
+      if (!businessId) return;
+      try {
+        const [active, membership] = await Promise.all([
+          repos.branch.findActive(businessId).catch(() => []),
+          currentUserId
+            ? repos.branch.db
+                .from('business_users')
+                .select('branch_id')
+                .eq('business_id', businessId)
+                .eq('user_id', currentUserId)
+                .eq('is_active', true)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        if (ignore) return;
+        setBranches(active.map((b) => ({ id: b.id, name: b.name })));
+        const assigned = (membership.data as { branch_id?: string | null } | null)?.branch_id ?? null;
+        assignedBranchRef.current = assigned;
+        setAssignedBranchId(assigned);
+        if (assigned) {
+          setBranchId(assigned);
+        } else if (!branchTouched.current) {
+          setBranchId((current) => current ?? (active.length === 1 ? active[0].id : null));
+        }
+      } catch {
+        // The till still opens. Stock follows the default warehouse until a shop is known.
+      }
+    }
+    void loadBranches();
+    return () => { ignore = true; };
+  }, [businessId, currentUserId]);
 
   useEffect(() => {
     let ignore = false;
     async function loadData() {
       if (!businessId) return;
       try {
-        const [prods, custs, shift, recentInvoices] = await Promise.all([
+        const loadBalances = async (): Promise<{
+          product_id: string;
+          location_id: string;
+          quantity_on_hand: number;
+          average_cost: number;
+        }[]> => {
+          const { data, error } = await repos.inventory['client']
+            .from('inventory_balances')
+            .select('product_id, location_id, quantity_on_hand, average_cost')
+            .eq('business_id', businessId);
+          if (error) throw new Error(error.message);
+          return data ?? [];
+        };
+        const [prods, custs, shift, recentInvoices, locations, balanceRows] = await Promise.all([
           repos.inventory.findAllProducts(businessId).catch(() => []),
           repos.contact.findByBusiness(businessId, 'customer').catch(() => []),
           currentUserId ? repos.pos.findActiveShift(businessId, currentUserId, branchId).catch(() => null) : Promise.resolve(null),
           repos.invoice.findByBusiness(businessId, undefined, 30).catch(() => []),
+          repos.inventory.findLocations(businessId).catch(() => []),
+          loadBalances().catch(() => [] as Awaited<ReturnType<typeof loadBalances>>),
         ]);
 
         if (ignore) return;
 
+        // No assigned shop: an open shift still names the till. Never override
+        // an assignment — that ref is set before this effect can win the race.
+        if (shift?.branch_id && !assignedBranchRef.current && !branchTouched.current) {
+          setBranchId((current) => current ?? shift.branch_id);
+        }
+
+        // Same location the sale will deduct from: the shop linked to this
+        // branch, otherwise the default warehouse. Summing every location
+        // would show Airwing + Area 49 as one pile while the sale only
+        // moved the warehouse.
+        const shopLocation = branchId
+          ? locations.find((l) => l.branch_id === branchId) ?? null
+          : null;
+        const targetLocation = shopLocation
+          ?? locations.find((l) => l.is_default)
+          ?? locations[0]
+          ?? null;
+        const stockHere = targetLocation
+          ? balanceRows.filter((b) => b.location_id === targetLocation.id)
+          : [];
+
         if (prods && prods.length > 0) {
-        const mapped: PosProduct[] = prods.map((p) => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku || '',
-          barcode: p.barcode || '',
-          unit_price: Number(p.sale_price) || 0,
-          unitPrice: Number(p.sale_price) || 0,
-          selling_price: Number(p.sale_price) || 0,
-          cost_price: Number(p.purchase_price) || 0,
-          stock_quantity: 100,
-          stockQuantity: 100,
-          category: p.category_id || 'General',
-          category_id: p.category_id || 'General',
-        }));
+          const mapped: PosProduct[] = prods.map((p) => {
+            const rows = stockHere.filter((b) => b.product_id === p.id);
+            const onHand = rows.reduce((sum, b) => sum + Number(b.quantity_on_hand || 0), 0);
+            const avgCost = weightedAverageCost(rows);
+            return {
+              id: p.id,
+              name: p.name,
+              sku: p.sku || '',
+              barcode: p.barcode || '',
+              unit_price: Number(p.sale_price) || 0,
+              unitPrice: Number(p.sale_price) || 0,
+              selling_price: Number(p.sale_price) || 0,
+              cost_price: avgCost > 0 ? avgCost : (Number(p.purchase_price) || 0),
+              track_inventory: p.track_inventory !== false,
+              stock_quantity: p.track_inventory === false ? undefined : onHand,
+              stockQuantity: p.track_inventory === false ? undefined : onHand,
+              category: p.category_id || 'General',
+              category_id: p.category_id || 'General',
+            };
+          });
           setProducts(mapped);
           const rawCats = mapped.map((p) => p.category || 'General');
           const cats = Array.from(new Set(rawCats)).filter((c): c is string => typeof c === 'string');
@@ -362,10 +451,11 @@ export function PosPage() {
       // (Dexie live query), so a queued sale raises it without a manual refresh.
       handleClearCart();
 
-      // Refresh sales history list
+      // Refresh sales history list and the shop's on-hand, which the sale just moved.
       if (result.sale) {
         setSalesHistory((prev) => [result.sale as PosSale, ...prev]);
       }
+      setDataVersion((v) => v + 1);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error('Sale completion error:', err);
@@ -499,6 +589,12 @@ export function PosPage() {
         currentShift={currentShift}
         activeRegister={activeRegister}
         branchName={branchName}
+        branches={assignedBranchId ? [] : branches}
+        selectedBranchId={branchId}
+        onBranchChange={assignedBranchId ? undefined : (id) => {
+          branchTouched.current = true;
+          setBranchId(id || null);
+        }}
         isOnline={isOnline}
         pendingOfflineCount={pendingOfflineCount}
         failedOfflineCount={failedOfflineCount}

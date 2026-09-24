@@ -16,6 +16,9 @@ interface PosHeaderProps {
   currentShift: PosShift | null;
   activeRegister?: PosRegister | null;
   branchName?: string;
+  branches?: { id: string; name: string }[];
+  selectedBranchId?: string | null;
+  onBranchChange?: (branchId: string) => void;
   isOnline: boolean;
   pendingOfflineCount: number;
   /** Queued changes the last sync pass could not complete. */
@@ -39,6 +42,9 @@ export function PosHeader({
   currentShift,
   activeRegister,
   branchName = 'Main Branch',
+  branches = [],
+  selectedBranchId = null,
+  onBranchChange,
   isOnline,
   pendingOfflineCount,
   failedOfflineCount = 0,
@@ -68,9 +74,23 @@ export function PosHeader({
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-sm font-black text-gray-900 tracking-tight">Ledgr POS</h1>
-            <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-700">
-              {branchName}
-            </span>
+            {branches.length > 1 && onBranchChange ? (
+              <select
+                aria-label="Shop"
+                value={selectedBranchId ?? ''}
+                onChange={(e) => onBranchChange(e.target.value)}
+                className="max-w-[160px] rounded-md border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-gray-700"
+              >
+                <option value="">Warehouse (default)</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-700">
+                {branchName}
+              </span>
+            )}
             {activeRegister && (
               <span className="rounded-md bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
                 {activeRegister.name}

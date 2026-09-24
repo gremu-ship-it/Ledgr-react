@@ -57,11 +57,11 @@ export function PosProductCatalog({
           (p.sku && p.sku.toLowerCase() === q.toLowerCase()),
       );
 
-      if (exactMatch) {
-        onAddToCart(exactMatch);
-        setSearchQuery('');
-      } else if (filteredProducts.length === 1) {
-        onAddToCart(filteredProducts[0]);
+      const sellable = (product: PosProduct) =>
+        product.track_inventory === false || (product.stock_quantity ?? product.stockQuantity ?? 0) > 0;
+      const pick = exactMatch ?? (filteredProducts.length === 1 ? filteredProducts[0] : null);
+      if (pick && sellable(pick)) {
+        onAddToCart(pick);
         setSearchQuery('');
       }
     }
@@ -138,9 +138,10 @@ export function PosProductCatalog({
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
             {filteredProducts.map((p) => {
               const price = p.unit_price ?? p.unitPrice ?? p.selling_price ?? 0;
+              const tracksStock = p.track_inventory !== false;
               const stock = p.stock_quantity ?? p.stockQuantity ?? 0;
-              const isLowStock = stock <= 5;
-              const isOutOfStock = stock <= 0;
+              const isLowStock = tracksStock && stock > 0 && stock <= 5;
+              const isOutOfStock = tracksStock && stock <= 0;
 
               return (
                 <button
@@ -168,7 +169,7 @@ export function PosProductCatalog({
                             : 'bg-emerald-50 text-emerald-700'
                         }`}
                       >
-                        {isOutOfStock ? 'Out' : `${stock} left`}
+                        {!tracksStock ? 'Service' : isOutOfStock ? 'Out' : `${stock} left`}
                       </span>
                     </div>
 
