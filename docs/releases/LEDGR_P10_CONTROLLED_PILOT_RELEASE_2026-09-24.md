@@ -1,12 +1,15 @@
-# LEDGR CONTROLLED PILOT — Release Candidate
+# LEDGR CONTROLLED PILOT — Release Candidate (RE-CREATED for remediated source)
 
-**Date:** 2026-09-24 (Africa/Johannesburg, UTC)
+**Date:** 2026-09-24 (Africa/Johannesburg, UTC) — **RE-CREATION** per owner re-authorization `GO — P10 RE-CREATION AUTHORIZED FOR REMEDIATED SOURCE 013b37b` (2026-09-24)
 **Branch:** `arena/01a0c215-ledgr-react`
-**Source commit:** `6f5843b` `P9: record owner release decision` (parent `268fd67` P9 prepare, `dc80e1c` P8, `874c6df` P7, `090870b` P6)
+**Source commit:** `013b37bf3533c7be3e529d5a2939f4f3fcf9456c` `P5-E: fix branch_manager/sales_manager NULL fail-closed (DEC-03) + service_role branch filter + remove dead v_org_wide_roles` (application/runtime tree unchanged after docs-only `a42a9bcbce455cc990dc43b41362e5e6d79624bf`)
+**Parent chain:** `a42a9bc` (Post-P5-E gate closure docs-only, HEAD) → `013b37b` (P5-E fix) → `950bb67` (security review REMEDIATION REQUIRED) → `a9eeed6` → `682ebbc` (deploy harden) → `df7ee1c` P12 → `ed5c06b` P11 → `19e712b` P10 → `6f5843b` P9 GO
+**Pilot tag:** `v0.1.0-pilot → 682ebbcf83d8299f2e9ce557d724e1882af31bd1` (unchanged, stale 2 behind, contains violating `f6d9cb3` — **not moved** in this re-creation per authorization)
 **Release mode:** `PILOT / LIMITED CONTROLLED USERS`
-**Owner decision:** `GO — Limited Controlled Release` (recorded `6f5843b`, P9 Q9 GO, Q1–Q8 YES)
+**Owner decision:** `GO — Limited Controlled Release` (recorded `6f5843b`, P9 Q9 GO, Q1–Q8 YES) **preserved** + **Re-authorization:** `GO — P10 RE-CREATION AUTHORIZED FOR REMEDIATED SOURCE 013b37b` (owner message 2026-09-24, same 20 CERTIFIED / 21B+4D deferred / 15C accepted, DEC-03/R03/P0QLT preserved)
 **Release status at creation:** `PENDING` — preparation only, not deployed, not `RELEASED`
-**Evidence baseline (unchanged from P9):** `742 PASS / 0 FAIL / 52 BLOCKED / 794` at `.cache/r13/ledgr-r13-ecFOuO/evidence.json` + `807 PASS / 0 FAIL` unit (91 files) + `tsc -b` PASS + `lint` 0 errors / 3 warnings + `build` PASS
+**Evidence baseline (re-verified for remediated source):** `742 PASS / 0 FAIL / 52 BLOCKED / 794` at `.cache/r13/ledgr-r13-ecFOuO/evidence.json` (unchanged, P8 classification) + `807 PASS / 0 FAIL` unit (91 files, 59.38s, re-verified at `a42a9bc`/`013b37b`) + `P5-E remediation PASS 24/24 data-verified (branch_manager NULL 42501, sales_manager NULL 42501, service_role 5000, 12000 preserved)` + `tsc -b` PASS + `lint` 0 errors / 3 warnings + `build` PASS (2.14s 112 precache 3752.63 KiB, VitePWA)
+**Remediation:** `P5-E remediation: PASS 24/24 data-verified matrix PASS, 807/807 unit PASS, 91/91 groups PASS, TypeScript PASS, Lint PASS, Build PASS` — corrected behaviour `branch_manager + NULL branch → 42501`, `sales_manager + NULL branch → 42501`
 
 > **P10 is release preparation, not feature development.** This document packages and verifies exactly what the owner authorized in P9. It does not expand scope, remediate deferred B/C/D, or convert BLOCKED into PASS. `EXCLUDED ≠ FAILED, EXCLUDED ≠ PASS, EXCLUDED = OUTSIDE CURRENT CERTIFICATION BOUNDARY`.
 
@@ -16,15 +19,16 @@
 
 | Field | Value |
 |---|---|
-| **Release name** | `LEDGR CONTROLLED PILOT` |
-| **Source commit** | `6f5843b` (`P9: record owner release decision`) |
-| **Parent chain** | `268fd67` (P9 prepare) → `dc80e1c` (P8) → `874c6df` (P7) → `090870b` (P6) |
+| **Release name** | `LEDGR CONTROLLED PILOT` (RE-CREATED) |
+| **Source commit** | `013b37bf3533c7be3e529d5a2939f4f3fcf9456c` (`P5-E: fix branch_manager/sales_manager NULL fail-closed (DEC-03) + service_role branch filter + remove dead v_org_wide_roles`) — **must explicitly identify `source_commit = 013b37bf3533c7be3e529d5a2939f4f3fcf9456c`** per re-authorization |
+| **Parent chain** | `a42a9bc` (Post-P5-E gate closure, HEAD docs-only) → `013b37b` (P5-E fix) → `950bb67` (security review) → `a9eeed6` → `682ebbc` (`v0.1.0-pilot`, not moved) → `df7ee1c` → `ed5c06b` → `19e712b` → `6f5843b` (P9 GO) |
+| **Pilot tag** | `v0.1.0-pilot → 682ebbcf83d8299f2e9ce557d724e1882af31bd1` — **remains at `682ebbc`, not moved merely because this authorization has been granted** (per authorization) |
 | **Release branch** | `arena/01a0c215-ledgr-react` |
-| **Owner authorization ref** | `6f5843b` + `docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md` + `.json` |
-| **Commercial mode** | `PILOT / LIMITED CONTROLLED USERS` (not Full Commercial) |
-| **Semantic version** | **Not invented** — repository has no established semver scheme; release is identified by commit + branch + date. `VITE_APP_VERSION` defaults to `local-<ISO>` or `process.env.VITE_APP_VERSION` (see `vite.config.ts`) — no version bump in P10. |
+| **Owner authorization ref** | `6f5843b` + `docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md` + `.json` (P9 GO) + **Owner re-authorization** `GO — P10 RE-CREATION AUTHORIZED FOR REMEDIATED SOURCE 013b37b` (2026-09-24, same 20 CERTIFIED / 21B+4D / 15C, preserves DEC-03/R03/P0QLT) |
+| **Commercial mode** | `PILOT / LIMITED CONTROLLED USERS` (not Full Commercial) — re-authorization explicitly **NOT** commercial release / large rollout |
+| **Semantic version** | **Not invented** — repository has no established semver scheme; release is identified by commit + branch + date. `VITE_APP_VERSION` defaults to `local-<ISO>` or `process.env.VITE_APP_VERSION` (see `vite.config.ts`) — no version bump in P10 re-creation. |
 | **Build guard** | `scripts/check-env.mjs` (prebuild) + `src/lib/supabase.ts` placeholder fallback + `<ConfigError />` |
-| **Deployment target** | Controlled pilot cohort only — no public/commercial rollout |
+| **Deployment target** | Controlled pilot cohort only — no public/commercial rollout — **deployment NOT authorized in this re-authorization** (infra block remains) |
 
 ---
 
@@ -36,9 +40,13 @@ Commercial mode: PILOT / LIMITED CONTROLLED USERS
 Recorded at:    2026-09-24T10:45:00+02:00 (Africa/Johannesburg) via ask_user Q1–Q9
 Baseline:       268fd67 P9: prepare owner release decision
 Commit:         6f5843b P9: record owner release decision (docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md + .json)
+Re-authorization: GO — P10 RE-CREATION AUTHORIZED FOR REMEDIATED SOURCE 013b37bf3533c7be3e529d5a2939f4f3fcf9456c
+                (current HEAD may include docs-only child a42a9bcbce455cc990dc43b41362e5e6d79624bf, application/runtime tree unchanged after 013b37b)
+                P5-E remediation PASS 24/24, 807/807, 91/91, TypeScript PASS — branch_manager NULL →42501, sales_manager NULL →42501
+                P9 GO remains governing scope — P10 re-creation preserves 20 CERTIFIED / 21B+4D deferred / 15C accepted, DEC-03/R03/P0QLT, no deferred B/C/D remediation, no Storage/Auth/R094/generic offline/OTP/SMS/billing redesign, no branch/role redesign, no commercial/large rollout, no deploy/tag move/merge
 ```
 
-**Q1–Q9 answers (verbatim, no inference):**
+**Q1–Q9 answers (verbatim, no inference, preserved from P9 GO — re-authorization does not change them):**
 
 | Q | Text | Answer |
 |---|---|---|
@@ -425,10 +433,10 @@ AI release boundary: PASS
 ### 13.1 Unit
 
 ```bash
-npm test — 91 files
+npm test — 91 files — re-verified for remediated source 013b37b (application tree unchanged after a42a9bc)
 ```
 
-Expected baseline (P9): `807 PASS / 0 FAIL`
+Expected baseline (P9 + P5-E remediation): `807 PASS / 0 FAIL` + `P5-E 24/24 data-verified`
 
 > Fill after run in §13.5.
 
@@ -449,24 +457,25 @@ eslint — 0 errors / 3 warnings (unused eslint-disable) — historical baseline
 ### 13.4 Build
 
 ```bash
-vite build — PASS (placeholder VITE_SUPABASE_URL allowed via check-env preview path)
+vite build — PASS (placeholder VITE_SUPABASE_URL allowed via check-env preview path) — re-verified for remediated source
 ```
 
-### 13.5 Results (filled after execution)
+### 13.5 Results (filled after execution — RE-CREATION for 013b37b)
 
 ```text
-npm test:        PASS — 807 PASS / 0 FAIL / 807 total across 91 files (vitest run, 57.38s, same baseline as P9)
-                 Sample tail: ✓ fallback.test.ts (10), legacyPosQueue (6), p5d_branchScope (8), TeamManagementPagePhoneInvite (5/642-1044ms),
-                              91 passed (91), Tests 807 passed (807), Duration 57.38s
-npx tsc -b:      PASS — exit 0, no type errors
-npm run lint:    PASS — eslint: 0 errors, 3 warnings (unused eslint-disable at artifacts/database/fresh-database.generated.approx.ts:1:1 and src/offline/queueApi.ts:181/186 no-console) — matches P9 baseline 0e/3w
+npm test:        PASS — 807 PASS / 0 FAIL / 807 total across 91 files (vitest run, 59.38s at a42a9bc/013b37b — same 807 as P9, now includes remediated P5-E 24/24 branch_manager NULL 42501, sales_manager NULL 42501)
+                 Sample tail: ✓ fallback.test.ts (10), legacyPosQueue (6), p5d_branchScope (8), branch.test.ts (10), TeamManagementPagePhoneInvite (5/642-1044ms),
+                              91 passed (91), Tests 807 passed (807), Duration 59.38s (environment 48%, import 25%, tests 19% — isolate:false shared)
+npx tsc -b:      PASS — exit 0, no type errors (Projects tsconfig.app.json + tsconfig.node.json + tsconfig.json — Building tsconfig.app.json)
+npm run lint:    PASS — eslint: 0 errors, 3 warnings (unused eslint-disable at artifacts/database/fresh-database.generated.approx.ts:1:1 and src/offline/queueApi.ts:181/186 no-console) — matches P9/P10 baseline 0e/3w
 git diff --check: PASS — exit 0, no whitespace errors
 VITE_SUPABASE_URL=https://placeholder.supabase.co VITE_SUPABASE_ANON_KEY=placeholder-anon-key npm run build:
-                 PASS — vite build 2.03s, 112 precache entries (3752.60 KiB) via VitePWA generateSW, dist/sw.js + workbox-802c4cd3.js produced,
-                 chunks vendor-react 214 KiB, vendor-data 339 KiB, vendor-charts 345 KiB, index 414 KiB (all gzip noted)
+                 PASS — vite build 2.14s, 112 precache entries (3752.63 KiB) via VitePWA generateSW, dist/sw.js + workbox-802c4cd3.js produced,
+                 chunks vendor-react 214 KiB, vendor-data 339 KiB, vendor-charts 345 KiB, index 414 KiB (all gzip noted) — P10 re-creation build matches P10 baseline within 0.11s/0.03 KiB (migration comment only)
+P5-E remediation: PASS — 24/24 data-verified matrix (embedded-postgres 17, invoices 5000/7000) — branch_manager NULL 42501 fixed from 12000, sales_manager NULL 42501 fixed, service_role A1 5000, owner/viewer 12000, cashier 42501 — see docs/releases/LEDGR_P5E_REMEDIATION_2026-09-24.md
 ```
 
-All four production checks match the P9 historical baseline exactly (807 unit PASS, typecheck PASS, lint 0e/3w, build PASS). No test was modified to make it pass; no harness weakening.
+All four production checks match the P9 historical baseline exactly (807 unit PASS, typecheck PASS, lint 0e/3w, build PASS) **and** include the remediated `P5-E 24/24`. No test was modified to make it pass; no harness weakening.
 
 ---
 
@@ -519,21 +528,21 @@ Summary here: controlled users only (invited cohort, not named customers), scope
 
 ## §16 Release Artifact
 
-*Manifest:* `docs/releases/LEDGR_P10_CONTROLLED_PILOT_RELEASE_2026-09-24.json`
+*Manifest:* `docs/releases/LEDGR_P10_CONTROLLED_PILOT_RELEASE_2026-09-24.json` — **RE-CREATED** for remediated source
 
 ```json
 {
-  "release": { "name": "LEDGR CONTROLLED PILOT", "source_commit": "6f5843b", "mode": "PILOT / LIMITED CONTROLLED USERS", "owner_decision": "GO" },
+  "release": { "name": "LEDGR CONTROLLED PILOT", "source_commit": "013b37bf3533c7be3e529d5a2939f4f3fcf9456c", "branch": "arena/01a0c215-ledgr-react", "mode": "PILOT / LIMITED CONTROLLED USERS", "owner_decision": "GO — P10 RE-CREATION AUTHORIZED FOR REMEDIATED SOURCE 013b37b", "pilot_tag": "v0.1.0-pilot → 682ebbcf83d8299f2e9ce557d724e1882af31bd1 (remains, not moved)", "re_authorization": "2026-09-24 — same 20 CERTIFIED / 21B+4D deferred / 15C accepted, DEC-03/R03/P0QLT preserved" },
   "certified_scope": [],
   "excluded_scope": [],
   "accepted_limitations": [],
   "deferred_evidence": [],
-  "verification": { "unit": null, "typecheck": null, "lint": null, "build": null, "smoke": null },
-  "release_status": "PENDING"
+  "verification": { "unit": "807/807 PASS (59.38s) + 24/24 P5-E matrix", "typecheck": "PASS", "lint": "0e/3w", "build": "2.14s 112/3752.63KiB", "smoke": "§14 PASS" },
+  "release_status": "PENDING — READY FOR PILOT DEPLOYMENT (re-created, not RELEASED)"
 }
 ```
 
-Do not mark `RELEASED` — P10 is preparation.
+Do not mark `RELEASED` — P10 is preparation; re-creation status remains `PENDING`. Tag `v0.1.0-pilot` remains at `682ebbc` — not moved in this re-creation.
 
 ---
 
@@ -583,36 +592,39 @@ Readiness recorded in manifest `release_status` + below §19 verdict after build
 
 ---
 
-## §19 Verification (filled after production checks)
+## §19 Verification (filled after production checks — RE-CREATED for 013b37b)
 
 ```text
-Baseline:   6f5843b P9: record owner release decision (arena/01a0c215-ledgr-react)
-            Parent 268fd67 P9 prepare, dc80e1c P8, 874c6df P7, 090870b P6
-            Evidence 742/0/52 at .cache/r13/ledgr-r13-ecFOuO/evidence.json — unchanged
+Baseline:   013b37bf3533c7be3e529d5a2939f4f3fcf9456c P5-E fix (remediated source) — a42a9bcbce455cc990dc43b41362e5e6d79624bf (Post-P5-E gate closure docs-only, application tree unchanged)
+            Parent a42a9bc → 013b37b → 950bb67 → a9eeed6 → 682ebbc (v0.1.0-pilot, not moved) → df7ee1c → ed5c06b → 19e712b → 6f5843b P9 GO (preserved)
+            Evidence 742/0/52 at .cache/r13/ledgr-r13-ecFOuO/evidence.json — unchanged (P8 classification) + P5-E remediation 24/24 data-verified (embedded-postgres 17, 12000/7000/5000)
+            Re-authorization: GO — P10 RE-CREATION AUTHORIZED FOR REMEDIATED SOURCE 013b37b (owner 2026-09-24, same 20 CERTIFIED / 21B+4D / 15C, DEC-03/R03/P0QLT preserved, no deferred B/C/D remediation)
 
-Unit:       PASS — npm test 807/807 across 91 files (vitest 57.38s)
-Typecheck:  PASS — npx tsc -b exit 0
-Lint:       PASS — npm run lint 0 errors, 3 warnings (historical baseline)
-Build:      PASS — vite build 2.03s, 112 precache 3752 KiB, dist/sw.js + workbox
+Unit:       PASS — npm test 807/807 across 91 files (vitest 59.38s at a42a9bc/013b37b — includes P5-E branch.test.ts 10, p5d_branchScope 8/8, now with branch_manager NULL 42501)
+Typecheck:  PASS — npx tsc -b exit 0 (tsconfig.app.json + tsconfig.node.json + tsconfig.json)
+Lint:       PASS — npm run lint 0 errors, 3 warnings (historical baseline 0e/3w)
+Build:      PASS — vite build 2.14s, 112 precache 3752.63 KiB, dist/sw.js + workbox-802c4cd3.js (same PWA)
 Diff check: PASS — git diff --check exit 0
 Config:     PASS — §7 — no deferred capability auto-enabled, no service_role exposure
 Secret:     PASS — §8 — no real secret in client bundle/tracked files
 Client:     PASS — §9 — post_pos_sale / can_access_branch / P0QLT / 23514 / FOR UPDATE remain server-authoritative
 PWA:        PASS — §10 — RECONCILABLE stock-denied|policy-denied only, branch-denied/stale-version/unknown-version/payload-tampered quarantined, no universal/multitab claim
 Billing:    PASS — §11 — PILOT/LIMITED CONTROLLED USERS maintained, P0QLT + BEFORE INSERT active, BILLING.SERVER-QUOTA deferred
-AI:         PASS — §12 — read-only non-authoritative ai_context via server can_access_branch, no mutation authority, no new AI
+AI:         PASS — §12 — read-only non-authoritative ai_context via server can_access_branch (now with branch_manager/sales_manager NULL 42501 per P5-E fix), no mutation authority, no new AI
 Smoke:      PASS — §14 — 30-row deterministic matrix linked to existing evidence/tests, no new security claims invented
 Hard stops: 0 triggered (P10 §21 1-10 all PASS — no security/financial regression, no secret exposure, no deferred enablement, no business-logic change needed)
+P5-E:       PASS — 24/24 data-verified matrix (branch_manager NULL 42501, sales_manager NULL 42501, service_role 5000, owner/viewer 12000) — see docs/releases/LEDGR_P5E_REMEDIATION_2026-09-24.md
+Pilot tag:  v0.1.0-pilot → 682ebbcf83d8299f2e9ce557d724e1882af31bd1 — remains at 682ebbc, not moved in this re-creation (per authorization, deployment NOT authorized)
 
 Release diff control (§17): RELEASE PREPARATION vs PRODUCT BEHAVIOUR CHANGE
   Expected: docs/releases/* only, PRODUCT 0
-  Observed before commit: untracked docs/releases/ + modified docs/releases/LEDGR_P10...md
-  git diff --stat after add: docs/releases/* only — docs-only confirmed
+  Observed before commit: modified docs/releases/LEDGR_P10_CONTROLLED_PILOT_RELEASE_2026-09-24.md + .json (re-creation)
+  git diff --stat after add: docs/releases/* only — docs-only confirmed (no src/supabase/migrations/RLS/SECURITY DEFINER change beyond already-committed 013b37b fix)
   git diff --check: PASS
 
-Overall P10: READY FOR PILOT DEPLOYMENT (bounded to P9 GO pilot scope — not FULL PRODUCTION / FULL COMMERCIAL)
+Overall P10 (RE-CREATED): READY FOR PILOT DEPLOYMENT (bounded to P9 GO pilot scope + P10 re-authorization for 013b37b — not FULL PRODUCTION / FULL COMMERCIAL, not deployed, tag not moved)
 ```
 
 ---
 
-*This release candidate does not rewrite P6/P7/P8/P9 evidence. Original `LEDGR_P9_OWNER_RELEASE_DECISION_2026-09-24.md` remains preparation; `LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md`+`.json` remain authorization. No P11, no deferred package remediation, no B/C/D → PASS conversion, PR #164 not merged.*
+*This release candidate (RE-CREATED) does not rewrite P6/P7/P8/P9 evidence. Original `LEDGR_P9_OWNER_RELEASE_DECISION_2026-09-24.md` remains preparation; `LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md`+`.json` remain authorization; `LEDGR_P10_CONTROLLED_PILOT_RELEASE_2026-09-24.md` previous version at `19e712b`/`6f5843b` is superseded by this RE-CREATED version for `013b37b` (history preserved via git). No P11 deployment, no tag move, no deferred B/C/D → PASS, PR #164 not merged. After P10 re-creation, STOP and await next gate (P11).*
