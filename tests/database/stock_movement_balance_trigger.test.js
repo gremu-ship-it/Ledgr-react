@@ -530,11 +530,10 @@ async function bootScenario({ name, port, dataDir, productionShape }) {
     }
   });
   if (applied === null) {
-    await check('20261009000000 leaves exactly one balance writer (the R06 duplicate is gone)', async () => {
+    await check('later migrations leave the R06 writer as the only balance trigger', async () => {
       const names = await prodScenario.userTriggers();
-      assert(!names.includes('trg_stock_movement_apply_balance'), `duplicate survived: ${names.join(', ')}`);
       const balanceWriters = names.filter((n) => n.toLowerCase().includes('balance'));
-      assert(balanceWriters.length === 1, `expected one balance trigger, got ${names.join(', ')}`);
+      assert(balanceWriters.join(',') === 'trg_stock_movement_apply_balance', `balance writers: ${names.join(', ')}`);
       assert(names.includes('trg_stock_immutable'), `immutability guard was dropped: ${names.join(', ')}`);
     });
 
@@ -642,7 +641,8 @@ async function bootScenario({ name, port, dataDir, productionShape }) {
       assert(Number(after.quantity_on_hand) === beforeQty + 3, `on_hand=${after.quantity_on_hand}, expected ${beforeQty + 3}`);
       assert(Math.abs(Number(after.average_cost) - beforeCost) < 1e-9, `average_cost=${after.average_cost}, expected ${beforeCost}`);
       const names = await fresh.userTriggers();
-      assert(!names.includes('trg_stock_movement_apply_balance'), `duplicate survived: ${names.join(', ')}`);
+      const balanceWriters = names.filter((n) => n.toLowerCase().includes('balance'));
+      assert(balanceWriters.join(',') === 'trg_stock_movement_apply_balance', `balance writers: ${names.join(', ')}`);
     });
   }
   await teardown(fresh.c, fresh.PG);
