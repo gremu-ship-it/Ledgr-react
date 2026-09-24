@@ -7,7 +7,7 @@
  * vs expected 99 — byte-identical to the R05-era evidence), and one verified
  * residual defect on the POS command boundary (foreign product id silently
  * accepted) was closed by
- * supabase/migrations/20261003000000_r06_pos_product_tenant_validation.sql.
+ * supabase/migrations/20261003000001_r06_pos_product_tenant_validation.sql.
  * These records pin the full mandated matrix: normal propagation, exact
  * 23514 oversell denial, sell-to-zero, single-execution replay, tenant
  * isolation (command authz and product reference), all-surface atomicity,
@@ -26,9 +26,9 @@ const test = evidenceSuite('r06-stock');
 const M_TRIG = 'supabase/migrations/20260928000001_r06_stock_balance_authority.sql';
 const M_RPC = 'supabase/migrations/20260923000000_post_pos_sale_rpc.sql';
 const M_BIND = 'supabase/migrations/20260930000001_r08_post_pos_sale_binding.sql';
-const M_TENANT = 'supabase/migrations/20261003000000_r06_pos_product_tenant_validation.sql';
+const M_TENANT = 'supabase/migrations/20261003000001_r06_pos_product_tenant_validation.sql';
 const M_CHECK = 'supabase/migrations/20260817000001_phase10_nonneg_quantity_checks.sql';
-const LAYER = 'real PostgreSQL17 full migration replay incl. 20260928000001 R06 trigger + 20261003000000 R06 product tenant validation; synthetic identities; observer-position probes; no customer data';
+const LAYER = 'real PostgreSQL17 full migration replay incl. 20260928000001 R06 trigger + 20261003000001 R06 product tenant validation; synthetic identities; observer-position probes; no customer data';
 const meta = (id: string, expected: string, source: string) => ({
   id, expected, remediation: 'R06', source, layer: LAYER,
 });

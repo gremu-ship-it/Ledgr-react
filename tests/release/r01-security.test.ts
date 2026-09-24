@@ -313,7 +313,7 @@ for(const mode of ['valid','wrong-identity','expired','invalid'] as const) test(
 });
 
 
-const currentSource='supabase/migrations/20260926000001_r01_acceptance_current_authority.sql';
+const currentSource='supabase/migrations/20260926000002_r01_acceptance_current_authority.sql';
 for(const role of assignmentRoles) for(const state of ['authorized','inactive','demoted','owner-to-admin','wrong-org','missing','null-issuer','banned','deleted','unverifiable'] as const){
   const allowed=state==='authorized'||(state==='owner-to-admin'&&!['owner','admin'].includes(role));
   test(meta(`CURRENT.${role}.${state}`,`Acceptance of ${role} with ${state} issuer is ${allowed?'ALLOWED':'DENIED'} under current role authority`,currentSource),async()=>{
