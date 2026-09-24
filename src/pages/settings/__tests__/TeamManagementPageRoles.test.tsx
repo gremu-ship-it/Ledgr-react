@@ -126,3 +126,21 @@ describe('Settings → Team role pickers', () => {
     expect(values).toContain('cashier');
   });
 });
+
+for (const existingRole of ['viewer', 'admin']) {
+  it(`does not offer admin assignment to an admin editing another ${existingRole}`, async () => {
+    state.role = 'admin';
+    state.members = [{ id: 'bu-r01', user_id: 'user-other', role: existingRole,
+      is_active: true, full_name: 'R01 synthetic member', email: 'r01@example.invalid',
+      invited_at: null, accepted_at: null, invitation_token: null, invitation_expires_at: null }];
+    const { container } = await renderTeamPage();
+    await waitFor(() => expect(container.querySelectorAll('select').length).toBeGreaterThanOrEqual(2));
+    const selects = Array.from(container.querySelectorAll<HTMLSelectElement>('select'));
+    const memberSelect = selects[selects.length - 1];
+    expect(memberSelect.value).toBe(existingRole);
+    const enabled = Array.from(memberSelect.options).filter(option => !option.disabled).map(option => option.value);
+    expect(enabled).not.toContain('admin');
+    expect(enabled).not.toContain('owner');
+    expect(enabled).toContain('cashier'); // Existing peer-admin demotion remains available.
+  });
+}

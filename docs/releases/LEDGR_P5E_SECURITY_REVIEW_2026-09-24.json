@@ -1,0 +1,86 @@
+{
+  "title": "P5-E Security Review — ai_branch_context (20261008000000) vs DEC-03",
+  "date": "2026-09-24",
+  "timezone": "Africa/Johannesburg",
+  "branch": "arena/01a0c215-ledgr-react",
+  "commit": "a9eeed6",
+  "tag": "v0.1.0-pilot",
+  "tag_points_at": "682ebbc",
+  "migration": "supabase/migrations/20261008000000_p5e_ai_branch_context.sql",
+  "authoritative_contract": "supabase/migrations/20261007000000_p5d_branch_scope_remediation.sql (can_access_branch DEC-03)",
+  "migration_lines": 636,
+  "deployment_status": "DEPLOYMENT BLOCKED",
+  "deployment_runs": ["36029382645", "36030232211"],
+  "deployment_failure_step": "Link & migrate production database",
+  "production_exposure": false,
+  "review_mode": "EVIDENCE-ONLY",
+  "product_behaviour_change": 0,
+  "verdict": "REMEDIATION REQUIRED",
+  "classification": "UNAUTHORIZED CONTRACT CHANGE — DEC-03 VIOLATION",
+  "owner_decision_required": false,
+  "remediation_type": "remove hybrid exception for branch_manager/sales_manager NULL assignment (omitted branch must be 42501 fail-closed, not org-wide)",
+  "violating_lines": "20261008000000:534,541-546",
+  "violating_code": "elsif v_membership_role = any (v_assigned_roles) and v_caller_branch_id is null and v_membership_role not in ('branch_manager','sales_manager') then raise 42501 else v_effective_branch_id := null -- branch_manager/sales_manager with NULL assignment land here = org-wide",
+  "contracts_violated": [
+    "DEC-03 P5-D can_access_branch assigned-scope NULL = fail-closed (branch_manager, sales_manager)",
+    "R08 till/branch isolation (intra-tenant cross-branch read via AI alternate path)",
+    "R03 AI authorization data minimization (implied branch for assigned-scope must be 42501 not org-wide)",
+    "Least-privilege / complete mediation (second ad-hoc role check diverges from authoritative predicate)"
+  ],
+  "dead_code": {
+    "symbol": "v_org_wide_roles",
+    "declared_line": 494,
+    "occurrences": 1,
+    "used": false,
+    "note": "array['owner','admin','manager','accountant','auditor'] declared but never referenced in effective-branch logic"
+  },
+  "views_audited": [
+    "v_ai_revenue_invoices",
+    "v_ai_expense_docs",
+    "v_ai_cash_accounts",
+    "v_ai_cash_movements",
+    "v_ai_kpis",
+    "v_ai_monthly_trend",
+    "v_ai_overdue_invoices",
+    "v_ai_top_expenses",
+    "v_ai_top_customers",
+    "v_ai_customer_concentration",
+    "v_ai_upcoming_receivables",
+    "v_ai_upcoming_payables",
+    "v_ai_anomalies"
+  ],
+  "view_security": "security_invoker = true, predicate auth.uid() is null or is_business_member(business_id), branch filtering at SQL layer via WHERE branch_id is not distinct from v_effective_branch_id, grant select to authenticated,service_role only, revoke anon",
+  "security_definer": "ai_context(uuid,uuid) security definer search_path=public, wrapper ai_context(uuid) delegates to null branch, revoke public/anon, grant authenticated/service_role, anon insufficient_privilege verified in migration DO block",
+  "service_role_path": {
+    "auth_uid_null": true,
+    "tenant_check": "branches.business_id = p_business_id via exists check before can_access_branch",
+    "branch_validation": "both explicit and tenant-mismatch denied 42501, null = org-wide allowed (trusted Edge path)"
+  },
+  "null_semantics": {
+    "p_branch_id_null": "caller omitted branch filter (default) — org-wide roles get null, assigned with branch gets own branch, assigned null must be 42501",
+    "business_users_branch_id_null": "unassigned user — org-wide roles legitimate, assigned-scope fail-closed",
+    "v_ai_partitions_branch_id_null": "business-wide aggregate view row, matched only when v_effective is null"
+  },
+  "test_matrix_required": 19,
+  "critical_rows": ["P5E.BRANCH.BM-NULL-OMITTED-DENIED (T11)", "P5E.BRANCH.SM-NULL-OMITTED-DENIED (T14)"],
+  "critical_expectation": "branch_manager/sales_manager with NULL assignment calling ai_context(business) or ai_context(business,null) must raise SQLSTATE 42501 and return zero business data; current returns org-wide sum 12000 (both branches) proving leakage — data verification required not just code",
+  "reproduction_harness": "tmp_p5e_verify.mjs (19 data-verified rows, both ai_context signatures, invoice 5000/7000/9000 fixtures, sums checked) — retained uncommitted, runnable after npm ci",
+  "proposed_diff": "remove hybrid comment line 534, remove v_org_wide_roles declaration line 494, change elsif to handle all assigned null as 42501 (see md §7.1 minimal diff)",
+  "alternative_diff": "keep v_org_wide_roles and use explicit elsif any(v_org_wide_roles) then null else legacy null branch",
+  "other_findings": ["self-verification block does not check hybrid denial (passes while violation remains)", "direct v_ai_* select could leak branch if queried outside ai_context — out of scope but note"],
+  "mandatory_validations": [
+    "git diff HEAD -- supabase tests src empty (no remediation applied)",
+    "violating grep still present before fix",
+    "git tag v0.1.0-pilot still at 682ebbc",
+    "deployment still blocked (no production exposure)"
+  ],
+  "next_steps": [
+    "author remediation migration (squash 20261008000000 or new 20261009 fix) with diff §7.1",
+    "remove dead v_org_wide_roles or use it",
+    "run tmp_p5e_verify.mjs and R13 harness proving T11/T14 now 42501 and sums correct",
+    "run typecheck and unit tests branch/p5d/r03",
+    "commit remediation before any deploy/tag move"
+  ],
+  "deployment_authorized": false,
+  "merge_pr_164_authorized": false
+}

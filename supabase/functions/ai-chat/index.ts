@@ -38,6 +38,20 @@ const AI_MODEL = Deno.env.get('AI_MODEL');
 /** Requests per user per rolling minute (mirrors the former ai-insights fn). */
 const RATE_LIMIT = 40;
 
+/**
+ * Roles permitted business financial-performance context through AI — a
+ * verbatim mirror of canViewReports = true in src/hooks/usePermissions.ts and
+ * of v_reports_roles in 20260927000000_r03_ai_context_authorization.sql.
+ * Operational roles (cashier, stock_clerk, ...) receive no business data
+ * here; the ai_context RPC enforces the same list independently. When the
+ * canonical matrix changes, update all three — UI first, then mirror here.
+ */
+const AI_FINANCIAL_CONTEXT_ROLES = new Set([
+  'owner', 'admin', 'accountant', 'manager', 'sales_manager',
+  'tax_compliance_officer', 'treasury_manager', 'asset_manager',
+  'board_member', 'auditor', 'viewer', 'branch_manager',
+]);
+
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
@@ -117,10 +131,10 @@ async function checkRateLimit(req: Request, userId: string): Promise<Response | 
 async function resolveBusiness(
   userId: string,
   requestedId: string | null,
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; role: string } | null> {
   const { data, error } = await admin
     .from('business_users')
-    .select('business_id, businesses:business_id (id, name, deleted_at)')
+    .select('business_id, role, businesses:business_id (id, name, deleted_at)')
     .eq('user_id', userId)
     .eq('is_active', true);
 
@@ -128,6 +142,7 @@ async function resolveBusiness(
 
   type Membership = {
     business_id: string;
+    role: string | null;
     businesses: { id: string; name: string; deleted_at: string | null } | null;
   };
 
@@ -141,14 +156,21 @@ async function resolveBusiness(
     : memberships[0];
 
   if (!chosen || !chosen.businesses) return null;
-  return { id: chosen.businesses.id, name: chosen.businesses.name };
+  return { id: chosen.businesses.id, name: chosen.businesses.name, role: String(chosen.role ?? '') };
 }
 
 // ── Data context (same source as src/lib/ai/context.ts) ─────────────────────
-async function buildDataContext(businessId: string): Promise<Json | null> {
-  const { data, error } = await admin.rpc('ai_context', { p_business_id: businessId });
+// P5-E: optional branch filter, server-authorized via ai_context(p_business_id, p_branch_id)
+// The RPC validates can_access_branch() and filters branch-sensitive metrics at the SQL layer.
+async function buildDataContext(businessId: string, branchId: string | null): Promise<Json | null> {
+  const { data, error } = await admin.rpc('ai_context', { p_business_id: businessId, p_branch_id: branchId });
   if (error) {
     console.error('[ai-chat] ai_context failed:', error.message);
+    // Surface authorization failures (42501) so the client can degrade appropriately;
+    // other errors return null as before.
+    if (error.message.includes('42501') || error.message.includes('permission denied')) {
+      throw new Error(error.message);
+    }
     return null;
   }
   return (data ?? null) as Json | null;
@@ -335,7 +357,7 @@ function buildAdvice(data: Json, f: ServerForecast): Json {
 const MAX_DATA_CHARS = 16_000;
 const MAX_KB_CHARS = 20_000;
 
-function buildSystemPrompt(companyName: string, payload: Json, knowledgeBase: string): string {
+function buildSystemPrompt(companyName: string, payload: Json, knowledgeBase: string, branchId: string | null): string {
   let dataJson = JSON.stringify(payload);
   if (dataJson.length > MAX_DATA_CHARS) {
     const data = (payload.data ?? {}) as Json;
@@ -348,9 +370,10 @@ function buildSystemPrompt(companyName: string, payload: Json, knowledgeBase: st
     }
     dataJson = dataJson.slice(0, MAX_DATA_CHARS);
   }
+  const branchScope = branchId ? ` for branch ${branchId} (branch-filtered data)` : ' (org-wide data, all branches)';
 
   return [
-    `You are Ledgr AI, the financial assistant built into Ledgr, an accounting platform for small and medium businesses in Malawi. You are answering for the business "${companyName}".`,
+    `You are Ledgr AI, the financial assistant built into Ledgr, an accounting platform for small and medium businesses in Malawi. You are answering for the business "${companyName}"${branchScope}.`,
     '',
     'RULES — these are absolute:',
     '1. Use ONLY the numbers in the JSON below. Never invent, estimate or extrapolate a figure that is not there. If the answer is not in the data, say so plainly.',
@@ -361,6 +384,7 @@ function buildSystemPrompt(companyName: string, payload: Json, knowledgeBase: st
     '6. Answer in markdown. Be concise: under 200 words unless the user asks you to expand. Small tables are fine for forecasts.',
     '7. You advise, you do not act. Point at the relevant screen: /invoices, /expenses, /reports, /payroll, /tax, /bank-reconcile, /contacts.',
     '8. Never ask for or repeat passwords, API keys, card numbers or other secrets.',
+    branchId ? '9. You are answering for a SINGLE BRANCH. Every figure in the JSON is already filtered to that branch — do not claim org-wide totals and do not reveal data from other branches.' : '9. You are answering org-wide (all branches).',
     '',
     `LIVE BUSINESS DATA (JSON):\n${dataJson}`,
     knowledgeBase ? `\nPRODUCT KNOWLEDGE BASE:\n${knowledgeBase.slice(0, MAX_KB_CHARS)}` : '',
@@ -505,8 +529,45 @@ serve(async (req: Request): Promise<Response> => {
     const business = await resolveBusiness(userId, hintedId);
     if (!business) return json(req, { error: 'No active business found for this user.' }, 403);
 
+    // 4b. Role gate — the data context is financial-performance information,
+    //     so the caller needs a reports-visibility role in that business. The
+    //     role comes from the server-side membership row: a shaped request
+    //     body, org hint or prompt cannot widen it (R03). Fails closed on
+    //     unknown roles. No data context is built and no provider is called
+    //     before this point.
+    if (!AI_FINANCIAL_CONTEXT_ROLES.has(business.role)) {
+      return json(req, { error: 'Your role cannot access business financial insights.' }, 403);
+    }
+
+    // 4c. Optional branch filter (P5-E) — read-only, never authority.
+    //     The client may suggest a branch via `context.branchId` or `context.data.company.branch_id`,
+    //     but the server passes it to `ai_context(business_id, branch_id)` which enforces
+    //     `can_access_branch()` and filters at the SQL layer. A forged or cross-business
+    //     branchId results in 42501/22023 from the RPC, surfaced as 403 here.
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const rawBranch =
+      typeof (clientContext.branchId as unknown) === 'string' ? (clientContext.branchId as string)
+      : typeof (clientContext.selectedBranchId as unknown) === 'string' ? (clientContext.selectedBranchId as string)
+      : typeof ((clientContext.data as Json | undefined)?.company as Json | undefined)?.branch_id === 'string'
+        ? String(((clientContext.data as Json).company as Json).branch_id)
+        : null;
+    const branchId = rawBranch && UUID_RE.test(rawBranch) ? rawBranch : null;
+
     // 5. Rebuild the data context from the database — never from the client.
-    const data = await buildDataContext(business.id);
+    let data: Json | null;
+    try {
+      data = await buildDataContext(business.id, branchId);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('42501') || msg.includes('permission denied') || msg.includes('does not belong') || msg.includes('Access denied')) {
+        return json(req, { error: 'You do not have access to this branch.' }, 403);
+      }
+      if (msg.includes('22023') || msg.includes('does not belong to business')) {
+        return json(req, { error: 'Branch does not belong to this business.' }, 400);
+      }
+      console.error('[ai-chat] ai_context branch error:', msg);
+      return json(req, { error: 'Could not load business data for this conversation.' }, 502);
+    }
     if (!data) {
       return json(req, { error: 'Could not load business data for this conversation.' }, 502);
     }
@@ -527,6 +588,7 @@ serve(async (req: Request): Promise<Response> => {
       business.name,
       { data, forecast: serverForecast, advice },
       knowledgeBase,
+      branchId,
     );
 
     const content = (await callProvider(system, messages)).trim();

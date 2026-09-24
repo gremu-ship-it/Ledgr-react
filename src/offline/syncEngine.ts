@@ -25,6 +25,17 @@ import { commitPosSaleDocuments } from '@/services/posService';
 import { createLogger } from '@/lib/logger';
 import { recoverStaleSyncClaims } from './queueApi';
 import { offlineDB, type QueueItem } from './db';
+import { useAppStore } from '@/store/useAppStore';
+import { sweepUnverifiableItems, replayViolation, quarantineItem } from './provenance';
+import { claimLease, releaseLease, verifyLeaseOwnership } from './lease';
+import { getLeaseClaimantId } from './deviceIdentity';
+import { isQuotaDenial, QUOTA_DENIAL_SQLSTATE } from '@/lib/billing/quotaContract';
+import {
+  classifyReplayException,
+  exceptionDetails,
+  isClientKeyPayloadMismatch,
+} from './exceptions';
+import { verifyPayloadIntegrity } from './payloadIntegrity';
 import type {
   IncomeQueuePayload,
   InvoiceQueuePayload,
@@ -43,6 +54,19 @@ export interface SyncProgress {
   completed: number;
   failed: number;
   current?: string;
+  /** R09.2: items skipped because this pass could not verify the self actor,
+   *  or another tab owns the replay lease. Not failed — retriable next pass. */
+  skipped?: number;
+}
+
+export interface SyncQueueOptions {
+  /**
+   * R09.2 actor binding: the authenticated actor for THIS pass. Defaults to
+   * the hydrated app session user (never a network lookup — the sync engine
+   * runs offline-tolerant and the identity that matters is the app session
+   * whose token the repository layer will send).
+   */
+  currentUserId?: string | null;
 }
 
 export type SyncProgressListener = (progress: SyncProgress) => void;
@@ -384,7 +408,7 @@ async function syncItem(item: QueueItem): Promise<string> {
   }
 }
 
-export async function syncQueue(onProgress?: SyncProgressListener): Promise<SyncProgress> {
+export async function syncQueue(onProgress?: SyncProgressListener, options: SyncQueueOptions = {}): Promise<SyncProgress> {
   // Recover anything a previous session abandoned mid-write (app closed,
   // tab killed, crash): those items are stuck in `syncing` and would never be
   // selected below, so a queued sale could sit on the device forever with
@@ -396,12 +420,22 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
     });
   }
 
+  // R09.2 provenance + actor binding: decide, BEFORE any network replay,
+  // which items may leave for the server at all. Cross-user and
+  // unverifiable items are quarantined — durable, visible, never silently
+  // retried. Everything below only ever replays Case A (same actor).
+  const currentUserId = options.currentUserId !== undefined
+    ? options.currentUserId
+    : useAppStore.getState().currentUser?.id ?? null;
+  await sweepUnverifiableItems(currentUserId);
+
   const items = await offlineDB.queue
     .where('status')
     .anyOf('pending', 'failed')
     .sortBy('sequence');
 
-  const progress: SyncProgress = { total: items.length, completed: 0, failed: 0 };
+  const progress: SyncProgress = { total: items.length, completed: 0, failed: 0, skipped: 0 };
+  const claimant = getLeaseClaimantId();
   onProgress?.(progress);
 
   if (items.length === 0) return progress;
@@ -410,6 +444,28 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
   const deferred: QueueItem[] = [];
 
   for (const item of items) {
+    // R09.3 Model 3: typed business/policy exceptions are out of the blind
+    // retry path entirely (Part C: no indefinite retry of an authoritative
+    // denial). The only way forward is Model 4 reconciliation.
+    if (item.exceptionClass) {
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+
+    // R09.3 integrity hardening: verify the stored payload against its
+    // capture-time hash BEFORE any network submission (and before the
+    // in-memory FK resolution below can touch the copy). A tampered payload
+    // becomes an integrity quarantine — durable, visible, never retried.
+    if (!(await verifyPayloadIntegrity(item))) {
+      await quarantineItem(
+        item.localId!,
+        'payload-tampered',
+        'The stored payload no longer matches its capture-time integrity hash (local edit or store corruption). Never replayed; held for assisted recovery.',
+      );
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+
     if (item.dependsOnLocalId !== undefined) {
       const parentServerId =
         resolvedIds.get(item.dependsOnLocalId) ??
@@ -423,6 +479,25 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
       resolveForeignKey(item, parentServerId);
     }
 
+    // R09.2 fail-closed replay gate (defense in depth after the sweep):
+    // self actor unknown -> never replays, never mutates status.
+    if (!currentUserId) {
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+    const violation = replayViolation(item, currentUserId);
+    if (violation) {
+      continue; // already quarantined by the sweep; never selected again.
+    }
+
+    // R09.2 cross-tab exclusive lease: claim BEFORE writing 'syncing', so two
+    // tabs can never both process the same item.
+    const claim = await claimLease(item.localId!, claimant);
+    if (!claim.ok) {
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+
     progress.current = item.operationType;
     onProgress?.(progress);
 
@@ -432,25 +507,76 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
       attemptCount: item.attemptCount + 1,
     });
 
+    // Lease-loss guard: if another force took the item (e.g. after tab death
+    // recovery raced us), this tab must not continue replay (§14).
+    if (!(await verifyLeaseOwnership(item.localId!, claim.lease!.token))) {
+      progress.skipped = (progress.skipped ?? 0) + 1;
+      continue;
+    }
+
     try {
       const serverId = await syncItem(item);
+      if (!(await verifyLeaseOwnership(item.localId!, claim.lease!.token))) {
+        // We lost the item mid-write: the operation already reached the
+        // server, so do NOT write local state the owner should own.
+        progress.skipped = (progress.skipped ?? 0) + 1;
+        continue;
+      }
       resolvedIds.set(item.localId!, serverId);
 
       await offlineDB.queue.update(item.localId!, {
         status: 'synced',
         resolvedServerId: serverId,
+        lease: null,
       });
 
       progress.completed += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown sync error';
+      // P5-A Q10: same clientKey with materially different payload must be
+      // quarantined (clientKey-payload-mismatch), never retried, permanently
+      // non-reconcilable, replay-safe (no second posting). Detect server
+      // authoritative mismatch before general exception classification.
+      if (isClientKeyPayloadMismatch(error)) {
+        await quarantineItem(
+          item.localId!,
+          'clientKey-payload-mismatch',
+          'The server detected that this clientKey was re-delivered with a different payload. Held for assisted recovery; not retried, never reconciled via this path.',
+        );
+        // Preserve lastError for drawer visibility (the quarantine reason is authoritative).
+        await offlineDB.queue.update(item.localId!, {
+          lastError: message,
+          lastErrorCode: (error as { code?: string })?.code ?? '22023',
+        });
+        progress.failed += 1;
+      } else {
+        // R09.3 Model 3: an authoritative business/policy denial becomes a
+        // durable typed exception (held out of blind retry, reconcilable via
+        // Model 4 for stock/policy only; branch/terminal are typed but frozen
+        // — Q11 D). Transient and unrelated authority failures keep the
+        // ordinary path untouched.
+        const exceptionClass = classifyReplayException(error);
 
-      await offlineDB.queue.update(item.localId!, {
-        status: 'failed',
-        lastError: message,
-      });
+        await offlineDB.queue.update(item.localId!, {
+          status: 'failed',
+          lastError: message,
+          // P-D2: expose the typed quota-denial signal at the boundary. No
+          // retry/quarantine behavior changes here — that is R09.3's decision.
+          lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+          ...(exceptionClass
+            ? {
+                exceptionClass,
+                exceptionAt: new Date().toISOString(),
+                exceptionDetails: exceptionDetails(exceptionClass),
+              }
+            : {}),
+        });
 
-      progress.failed += 1;
+        progress.failed += 1;
+      }
+    } finally {
+      // Terminal or successful: never retain an unusable lease (§17/§18).
+      await releaseLease(item.localId!, claim.lease!.token);
     }
 
     onProgress?.(progress);
@@ -459,6 +585,16 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
   for (const item of deferred) {
     const parent = await offlineDB.queue.get(item.dependsOnLocalId!);
     if (parent?.status === 'synced' && parent.resolvedServerId) {
+      // Same R09.2 gates as the main loop: actor binding + cross-tab lease.
+      if (!currentUserId || replayViolation(item, currentUserId)) {
+        progress.skipped = (progress.skipped ?? 0) + 1;
+        continue;
+      }
+      const claim = await claimLease(item.localId!, claimant);
+      if (!claim.ok) {
+        progress.skipped = (progress.skipped ?? 0) + 1;
+        continue;
+      }
       resolveForeignKey(item, parent.resolvedServerId);
 
       await offlineDB.queue.update(item.localId!, {
@@ -469,12 +605,43 @@ export async function syncQueue(onProgress?: SyncProgressListener): Promise<Sync
 
       try {
         const serverId = await syncItem(item);
-        await offlineDB.queue.update(item.localId!, { status: 'synced', resolvedServerId: serverId });
+        await offlineDB.queue.update(item.localId!, {
+          status: 'synced',
+          resolvedServerId: serverId,
+          lease: null,
+        });
         progress.completed += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown sync error';
-        await offlineDB.queue.update(item.localId!, { status: 'failed', lastError: message });
-        progress.failed += 1;
+        if (isClientKeyPayloadMismatch(error)) {
+          await quarantineItem(
+            item.localId!,
+            'clientKey-payload-mismatch',
+            'The server detected that this clientKey was re-delivered with a different payload. Held for assisted recovery; not retried, never reconciled via this path.',
+          );
+          await offlineDB.queue.update(item.localId!, {
+            lastError: message,
+            lastErrorCode: (error as { code?: string })?.code ?? '22023',
+          });
+          progress.failed += 1;
+        } else {
+          const exceptionClass = classifyReplayException(error);
+          await offlineDB.queue.update(item.localId!, {
+            status: 'failed',
+            lastError: message,
+            lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+            ...(exceptionClass
+              ? {
+                  exceptionClass,
+                  exceptionAt: new Date().toISOString(),
+                  exceptionDetails: exceptionDetails(exceptionClass),
+                }
+              : {}),
+          });
+          progress.failed += 1;
+        }
+      } finally {
+        await releaseLease(item.localId!, claim.lease!.token);
       }
       onProgress?.(progress);
     }

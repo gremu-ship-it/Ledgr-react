@@ -11,34 +11,43 @@ const log = createLogger('ai/context');
  *
  * TENANT SCOPING
  *   The only identifier that ever reaches the database is `companyId`, and it
- *   is passed as a bound parameter to `public.ai_context(uuid)`. That function
- *   re-checks membership server-side with `public.is_business_member()`, and
- *   every v_ai_* view is `security_invoker`, so RLS applies to the caller.
- *   A user who passes someone else's business id gets a 42501 error, not data.
+ *   is passed as a bound parameter to `public.ai_context(uuid, uuid)`. That function
+ *   re-checks membership server-side with `public.is_business_member()` and
+ *   `can_access_branch()`, and every v_ai_* view is `security_invoker`, so RLS
+ *   applies to the caller. A user who passes someone else's business id gets
+ *   a 42501 error, not data. Branch filtering is server-side at the SQL layer.
  *
  *   `userId` is accepted for logging/telemetry symmetry with the Edge Function
  *   (which derives the company from `business_users` itself) — it is never
  *   used to widen the query.
+ *
+ *   `branchId` is optional. When supplied, the server verifies
+ *   `can_access_branch(business_id, branch_id)` and filters all branch-sensitive
+ *   metrics to that branch. When omitted, org-wide roles retain org-wide data
+ *   where permitted, while assigned-scope roles are implicitly filtered to
+ *   their own branch (DEC-03, P5-D/P5-E). The branch filter is read-only and
+ *   never broadens access.
  */
 export async function buildAssistantContext(
   userId: string | null | undefined,
   companyId: string | null | undefined,
   mode: AssistantMode,
+  branchId?: string | null,
 ): Promise<DataContext> {
   const companyName = await fetchCompanyName(companyId);
 
   if (mode === 'support') {
-    return { companyName, knowledgeBase: KNOWLEDGE_BASE };
+    return { companyName, knowledgeBase: KNOWLEDGE_BASE, branchId: branchId ?? null };
   }
 
   if (!companyId) {
     log.warn('AI context requested without a company id', { userId: userId ?? null });
-    return { companyName, knowledgeBase: KNOWLEDGE_BASE };
+    return { companyName, knowledgeBase: KNOWLEDGE_BASE, branchId: branchId ?? null };
   }
 
-  const data = await fetchAiData(companyId);
+  const data = await fetchAiData(companyId, branchId ?? null);
   if (!data) {
-    return { companyName, knowledgeBase: KNOWLEDGE_BASE };
+    return { companyName, knowledgeBase: KNOWLEDGE_BASE, branchId: branchId ?? null };
   }
 
   return {
@@ -46,19 +55,26 @@ export async function buildAssistantContext(
     data,
     knowledgeBase: KNOWLEDGE_BASE,
     forecast: forecast(data, 3),
+    branchId: branchId ?? null,
   };
 }
 
 /**
- * Reads `public.ai_context(company_id)` — one round trip for KPIs, trend,
+ * Reads `public.ai_context(business_id, branch_id)` — one round trip for KPIs, trend,
  * overdue invoices, top expenses/customers, concentration, anomalies and the
  * receivable/payable schedules. Returns null (never throws) so the assistant
  * degrades to knowledge-base answers instead of breaking.
+ *
+ * `branchId` is optional. When supplied, the RPC verifies branch authorization
+ * via `can_access_branch` and filters branch-sensitive data at the SQL layer.
+ * When omitted, the server preserves org-wide for org-wide roles and implicitly
+ * filters to own branch for assigned-scope roles (P5-E).
  */
-export async function fetchAiData(companyId: string): Promise<AiData | null> {
+export async function fetchAiData(companyId: string, branchId?: string | null): Promise<AiData | null> {
   try {
     const { data, error } = await supabase.rpc('ai_context' as never, {
       p_business_id: companyId,
+      p_branch_id: branchId ?? null,
     } as never);
 
     if (error) {

@@ -24,10 +24,89 @@ export type QueueOperationType =
   | 'pos_sale';         // a full POS till sale: invoice + lines + payments + stock + shift
 
 export type QueueItemStatus =
-  | 'pending'   // waiting to sync
-  | 'syncing'   // currently being sent to Supabase
-  | 'synced'    // successfully written
-  | 'failed';   // sync attempted and failed (see lastError)
+  | 'pending'    // waiting to sync
+  | 'syncing'    // currently being sent to Supabase
+  | 'synced'     // successfully written
+  | 'failed'     // sync attempted and failed (see lastError)
+  | 'quarantined'; // R09.2: held out of ALL replay paths pending assisted
+                   // recovery (see quarantineReason). Durable: survives
+                   // reload, never touched by the background sync loop.
+
+/**
+ * R09.2 (D-1): why an item was taken out of the replay path.
+ *  - 'actor-mismatch'      — trustworthy origin differs from the currently
+ *                            authenticated actor (Case B: DENY + quarantine).
+ *  - 'missing-provenance'  — no trustworthy origin evidence (legacy v1 rows,
+ *                            forged/stripped rows). Case C.
+ *  - 'legacy'              — originated in the retired localStorage POS queue
+ *                            or an old-build stub; accepted financial evidence
+ *                            with unknown actor (§5).
+ *  - 'payload-tampered'    — R09.3 integrity hardening: the stored payload no
+ *                            longer matches its capture-time integrity hash.
+ *                            Never replayed, never reconciled; held for
+ *                            assisted recovery like every integrity class.
+ *  - 'stale-version'       — P5-A (Q1): payloadVersion < QUEUE_PAYLOAD_VERSION.
+ *                            Durable, visible, quarantined, never retried,
+ *                            permanently non-reconcilable (Q3/Q11).
+ *  - 'unknown-version'     — P5-A (Q2): payloadVersion > QUEUE_PAYLOAD_VERSION.
+ *                            Durable, visible, quarantined, never retried,
+ *                            permanently non-reconcilable.
+ *  - 'clientKey-payload-mismatch' — P5-A (Q10): same clientKey re-delivered
+ *                            with materially different payload (authoritative
+ *                            hash/payload comparison in post_pos_sale;
+ *                            replay-safe, no second posting, quarantined).
+ */
+export type QuarantineReason =
+  | 'actor-mismatch'
+  | 'missing-provenance'
+  | 'legacy'
+  | 'payload-tampered'
+  | 'stale-version'
+  | 'unknown-version'
+  | 'clientKey-payload-mismatch';
+
+/**
+ * R09.3 Model 3 (P-D3-FINAL): the typed business/policy exception classes a
+ * replay-time authoritative denial can produce. Durable, visible, held out
+ * of every blind retry path, and the ONLY classes eligible for Model 4
+ * reconciliation:
+ *  - 'stock-denied'  — the R06 non-negative on-hand invariant refused the
+ *                      replay (SQLSTATE 23514 on the on_hand constraint).
+ *  - 'policy-denied' — the R10 quota contract refused the replay (SQLSTATE
+ *                      'P0QLT', the sole typed quota-denial signal).
+ * Realized as additive fields on the queue row (status stays 'failed'), NOT
+ * a quarantine: R09.2 quarantines remain reserved for integrity classes, and
+ * the R10 evidence asserting failed+lastErrorCode stays intact.
+ *
+ * P5-A (Q8): additional typed but permanently non-reconcilable exceptions
+ * (frozen by Q11 D — never added to RECONCILABLE):
+ *  - 'branch-denied'   — 42501 branch access denial (server can establish
+ *                         branch semantics; see exceptions.ts).
+ *  - 'terminal-denied' — 22023 terminal authority denial (server can
+ *                         establish terminal semantics).
+ * P5-A version quarantines are QuarantineReason (stale-version/
+ * unknown-version), not ExceptionClass, per Q1/Q2 (quarantined, never
+ * reconcilable). clientKey-payload-mismatch is also a quarantine.
+ */
+export type ExceptionClass =
+  | 'stock-denied'
+  | 'policy-denied'
+  | 'branch-denied'
+  | 'terminal-denied';
+
+/**
+ * R09.2 cross-tab replay lease metadata (see ./lease.ts). The lease is the
+ * OWNED, browser-visible lock: an in-memory ref cannot coordinate two tabs.
+ * The claimant token identifies an install+tab pair, never a user alone.
+ */
+export interface QueueLease {
+  /** Random unique token for THIS acquisition (changes on every claim). */
+  token: string;
+  /** install:tab claimant identifier that took the lease. */
+  claimant: string;
+  /** ISO timestamp after which another tab may reclaim the item. */
+  expiresAt: string;
+}
 
 /**
  * A single queued offline write operation.
@@ -93,6 +172,77 @@ export interface QueueItem {
   /** Client-side timestamp of when the user performed the action (ISO string). */
   createdAt: string;
 
+  /* ── R09.2 provenance (evidence only — NEVER an authorization credential) ── */
+
+  /** Payload schema version written at enqueue (see QUEUE_PAYLOAD_VERSION). */
+  payloadVersion?: number | null;
+
+  /**
+   * `auth.users.id` of the session that captured this operation. Evidence
+   * only: replay re-derives the real actor from the server session; this
+   * field decides only whether the item may LEAVE for the server at all
+   * (same actor) or must be quarantined (different/unknown actor).
+   */
+  originUserId?: string | null;
+
+  /** Stable per-install device identifier present when the op was captured. */
+  originDeviceId?: string | null;
+
+  /** ISO capture timestamp recorded at enqueue (never re-imputed later). */
+  capturedAt?: string | null;
+
+  /** Business/branch/terminal/shift context recorded where available. */
+  branchId?: string | null;
+  shiftId?: string | null;
+  terminalId?: string | null;
+
+  /* ── R09.2 quarantine metadata ── */
+
+  quarantineReason?: QuarantineReason | null;
+  quarantinedAt?: string | null;
+  /** Short human-safe detail shown in the drawer (no payload contents). */
+  quarantineDetails?: string | null;
+
+  /* ── R09.3 Model 3 typed exceptions (durable, additive) ── */
+
+  /**
+   * Set exactly once, at the replay attempt where the server's authoritative
+   * answer was a typed business/policy denial. While set, the item is held
+   * out of every automatic replay path (the sync engine skips it before any
+   * gate); the only way forward is Model 4 reconciliation. Never cleared
+   * locally: accepted reconciliations keep it as evidence of what happened.
+   */
+  exceptionClass?: ExceptionClass | null;
+
+  /** ISO timestamp of the attempt that produced the exception. */
+  exceptionAt?: string | null;
+
+  /** Short human-safe detail shown in the drawer (no payload contents). */
+  exceptionDetails?: string | null;
+
+  /* ── R09.3 Model 4 reconciliation evidence (local mirror) ── */
+
+  /** Number of reconciliation attempts initiated for this item. */
+  reconcileAttempts?: number;
+
+  /** ISO timestamp of the most recent reconciliation attempt. */
+  lastReconcileAt?: string | null;
+
+  /* ── R09.3 integrity hardening ── */
+
+  /**
+   * SHA-256 (hex) of the canonical JSON payload computed ONCE at enqueue.
+   * Verified before every replay/reconciliation: a mismatch means local
+   * tampering (or store corruption) and the item is quarantined as
+   * 'payload-tampered'. Null on rows captured before v3 — those keep R09.2
+   * provenance protection only (documented limitation).
+   */
+  payloadHash?: string | null;
+
+  /* ── R09.2 cross-tab lease ── */
+
+  lease?: QueueLease | null;
+
   /** Last sync attempt timestamp, if any. */
   lastAttemptAt?: string;
 
@@ -101,6 +251,14 @@ export interface QueueItem {
 
   /** Human-readable error from the last failed attempt, if any. */
   lastError?: string;
+
+  /**
+   * R10 (P-D2): machine-readable discriminator of the last failed attempt —
+   * the typed quota-denial SQLSTATE ('P0QLT') when present, else null.
+   * Evidence only: R09.3 owns what happens because of it (retry vs quarantine
+   * vs reconcile); R10 merely exposes the signal at the error boundary.
+   */
+  lastErrorCode?: string | null;
 
   /**
    * For conflict resolution on tables that have `updated_at` (invoices,
@@ -140,6 +298,74 @@ class LedgrOfflineDB extends Dexie {
       // businessId (tenant scoping), dependsOnLocalId (dependency lookups).
       queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
     });
+
+    // R09.2 v2: provenance/quarantine/lease fields. Indexes are unchanged
+    // (additive, lossless); the upgrade populates ONLY-defensive defaults and
+    // never fabricates provenance: v1 rows keep payloadVersion/origin* as
+    // null, which the sync engine treats as "unverifiable" (Case C →
+    // quarantine). Dexie applies the upgrade atomically; re-running it on a
+    // partially upgraded store is idempotent because defaults are only
+    // written where a field is still undefined.
+    this.version(2)
+      .stores({
+        queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('queue')
+          .toCollection()
+          .modify((item: QueueItem) => {
+            if (item.payloadVersion === undefined) item.payloadVersion = null;
+            if (item.originUserId === undefined) item.originUserId = null;
+            if (item.originDeviceId === undefined) item.originDeviceId = null;
+            if (item.capturedAt === undefined) item.capturedAt = null;
+            if (item.branchId === undefined) item.branchId = null;
+            if (item.shiftId === undefined) item.shiftId = null;
+            if (item.terminalId === undefined) item.terminalId = null;
+            if (item.quarantineReason === undefined) item.quarantineReason = null;
+            if (item.quarantinedAt === undefined) item.quarantinedAt = null;
+            if (item.quarantineDetails === undefined) item.quarantineDetails = null;
+            if (item.lease === undefined) item.lease = null;
+          });
+      });
+
+    // R09.3 v3: typed-exception, reconciliation-evidence and payload-integrity
+    // fields. Indexes are unchanged (additive, lossless); the upgrade writes
+    // ONLY defensive defaults and never fabricates evidence: pre-v3 rows get
+    // payloadHash = null (no capture-time hash exists to recover, so they
+    // cannot be retroactively protected — see payloadHash docblock).
+    this.version(3)
+      .stores({
+        queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table('queue')
+          .toCollection()
+          .modify((item: QueueItem) => {
+            if (item.exceptionClass === undefined) item.exceptionClass = null;
+            if (item.exceptionAt === undefined) item.exceptionAt = null;
+            if (item.exceptionDetails === undefined) item.exceptionDetails = null;
+            if (item.reconcileAttempts === undefined) item.reconcileAttempts = 0;
+            if (item.lastReconcileAt === undefined) item.lastReconcileAt = null;
+            if (item.payloadHash === undefined) item.payloadHash = null;
+          });
+      });
+
+    // P5-A v4: Model 3 typed quarantines/exceptions (stale-version,
+    // unknown-version, clientKey-payload-mismatch, branch-denied,
+    // terminal-denied). No new indexes or columns — the string union
+    // extension is additive and all existing rows remain valid; defaults
+    // already cover null quarantineReason/exceptionClass, so upgrade is
+    // idempotent and lossless (no evidence fabricated).
+    this.version(4)
+      .stores({
+        queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
+      })
+      .upgrade(async () => {
+        // No structural change — type extension only; existing rows keep
+        // null quarantineReason/exceptionClass where not set.
+      });
   }
 }
 

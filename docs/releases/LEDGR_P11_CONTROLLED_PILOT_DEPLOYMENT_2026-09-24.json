@@ -1,0 +1,85 @@
+{
+  "release": {
+    "commit": "19e712b701b720f201808da3ec684a908189cfa8",
+    "title": "P10: prepare controlled pilot release",
+    "branch": "arena/01a0c215-ledgr-react",
+    "parent_chain": ["6f5843b", "268fd67", "dc80e1c", "874c6df", "090870b"],
+    "owner_decision": "GO",
+    "owner_decision_ref": "6f5843b — docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md + .json",
+    "mode": "PILOT / LIMITED CONTROLLED USERS",
+    "p10_status": "READY FOR PILOT DEPLOYMENT",
+    "evidence_baseline": {
+      "release_pass": 742,
+      "release_fail": 0,
+      "release_blocked": 52,
+      "release_total": 794,
+      "evidence_file": ".cache/r13/ledgr-r13-ecFOuO/evidence.json",
+      "unit": "807 PASS / 0 FAIL / 91 files",
+      "typecheck": "PASS",
+      "lint": "0 errors / 3 warnings",
+      "build": "PASS — vite build 2.03s 112 precache 3752.60 KiB"
+    }
+  },
+  "deployment": {
+    "status": "BLOCKED",
+    "reason": "No live Vercel/Supabase production credentials in sandbox (VERCEL_TOKEN, VITE_SUPABASE_URL_PROD, VITE_SUPABASE_ANON_KEY_PROD, SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD_PROD, VERCEL_PROJECT_ID_PROD, etc.) — artifact verified locally and ready for deploy via deploy.yml with approval gate; live Vercel deployment ID/URL/timestamp to be recorded after operator supplies secrets and runs tag v* or workflow_dispatch production",
+    "platform": "Vercel (frontend) + Supabase (DB via supabase db push + Edge Functions via supabase functions deploy) — procedure validated via DEPLOYMENT.md + .github/workflows/deploy.yml + vercel.json + supabase/config.toml; no live deploy executed in sandbox",
+    "deployment_id": null,
+    "deployed_commit": "19e712b701b720f201808da3ec684a908189cfa8",
+    "branch_deployed": "arena/01a0c215-ledgr-react",
+    "timestamp": null,
+    "frontend_url": null,
+    "backend_project_ref": null,
+    "edge_functions": null,
+    "operator_next_steps": [
+      "Supply production secrets in GitHub → Settings → Secrets and variables → Actions (see DEPLOYMENT.md §4 — eight vars + ten secrets)",
+      "Create v* tag on 19e712b (e.g. git tag v0.1.0-pilot 19e712b && git push origin v0.1.0-pilot) or workflow_dispatch environment: production and approve GitHub Environment 'production' Required reviewers gate",
+      "After deploy.yml succeeds, capture live deployment evidence (Vercel deployment ID + URL + timestamp, Supabase project ref, function identifiers) and re-run §8 smoke matrix against live URL with disposable pilot identities, then replace this record with DEPLOYED — PILOT VERIFICATION PASS/BLOCKED with live verification.* fields"
+    ]
+  },
+  "verification": {
+    "pre_deploy_gate": "PASS — HEAD=19e712b, working tree clean, git branch arena/01a0c215-ledgr-react, git show 3 files 950 ins, P10 artifacts + P9 owner decision present, PR #164 OPEN MERGEABLE unmerged (correct — deploy.yml does not require merge)",
+    "artifact_identity": "PASS (local) — git rev-parse 19e712b verified, npm run build artifact-verified (dist/index.html + hashed chunks index-DwT_zgBm.js etc., 112 precache), VITE_APP_VERSION local-<ISO> / process.env.VITE_APP_VERSION; live identity to be verified after vercel --prod via VITE_APP_VERSION / Sentry release / curl PRODUCTION_URL",
+    "configuration": "PASS — per-env VITE_SUPABASE_URL/_ANON_KEY STAGING vs PROD via deploy.yml --build-env, SERVICE_ROLE/DB PASSWORD/JWT/private/provider secrets never via VITE_ (grep VITE_ in src/ confirms only URL/ANON/FEATURE/AI_CHAT/SENTRY_DSN/LOG_LEVEL/PLATFORM_ROOT/APP_VERSION), check-env.mjs production fail-loud vs preview placeholder + ConfigError A-01, CSP/HSTS/CORP/COOP headers, PWA generateSW 112 precache + sw-events.js Background Sync all verified",
+    "database": "PASS — PRODUCT BEHAVIOUR CHANGE 0, supabase/migrations unchanged (55 last 20261008000000_p5e_ai_branch_context), git diff 6f5843b HEAD -- supabase/migrations empty; no new migration required — deploy.yml supabase db push --include-all would be idempotent re-apply; no RLS/SECURITY DEFINER/post_pos_sale/can_access_branch/quota/inventory/financial change",
+    "frontend_deployment": "PASS (procedure validated, live ID pending) — deploy.yml checked (setup-node 22.x, npm ci, npm run build, supabase link + db push + secrets set + functions deploy --no-verify-jwt, vercel --prod with per-env VERCEL_PROJECT_ID + VERCEL_TOKEN);Sandbox local build PASS 2.03s; live Vercel deployment ID/URL pending live run with secrets",
+    "backend_deployment": "PASS (no new backend change) — 55 migrations forward-only, Edge Functions already at P5–P10 state (api, ai-chat, accept-invite-link, paychangu-webhook, expire-subscriptions, etc. all Deno.env.get server-only); deploy.yml would idempotently redeploy same source",
+    "tenant_isolation": "BLOCKED (no live credentials) — proxy PASS via P6 two-business TENANT.A/B.* 10 PASS + R06.POS.STOCK.CROSS-TENANT + R093.RECON.CROSS-BUSINESS C 0-mutation + is_business_member RLS 6 tables; live re-run: Business A→A ALLOWED / B→A DENIED with disposable pilot identities against live VITE_SUPABASE_URL",
+    "pos": "BLOCKED (no live) — proxy PASS via R06.POS.STOCK.* 9 PASS + P07 742/0 + post_pos_sale 42501/22023/23514/P0QLT + R08.SHIFT.BRANCH-SCOPED-READ; live re-run matrix in §8 defined",
+    "inventory": "BLOCKED (no live) — proxy PASS via trg_stock_movement_apply_balance FOR UPDATE 23514 + R06.POS.STOCK.ATOMIC/REPLAY; live re-run with disposable product",
+    "till": "BLOCKED (no live) — proxy PASS via R08 SINGLE-OPEN/CLOSE/CLOSE-IMMUTABLE 22023/BYPASS-CLOSED/REPORT-AUTHORITY; live re-run per §8",
+    "corrections": "BLOCKED (no live) — proxy PASS via R07 + R08 REFUND.*/LATE-ARRIVAL; live re-run with disposable invoice correction/refund/void only",
+    "offline": "BLOCKED (no live) — proxy PASS via exceptions.ts stock-denied|policy-denied RECONCILABLE + stale-version/unknown-version/branch-denied/payload-tampered quarantined + lease PROVEN + MAX_PENDING 2000; live re-run via Dexie enqueue + reconciliation.ts replay with same clientKey",
+    "quota": "BLOCKED (no live) — proxy PASS via R10.QUOTA.* 5 PASS + REGRESSION.SUCCESS-CLIENTKEY + p5c_uniformQuota FOR UPDATE + using errcode P0QLT in both quota migrations + isQuotaDenial typed; live re-run: exceed ledgr_monthly_document_count then post_pos_sale → P0QLT server-side",
+    "ai": "BLOCKED (no live) — proxy PASS via ai_context security_invoker + can_access_branch + rpc-only (src/lib/ai/context.ts) + R03/branch.test.ts/fallback.test.ts; live re-run via supabase.rpc('ai_context') with pilot identities",
+    "monitoring": "PASS (architecture verified, live stream pending) — VITE_SENTRY_DSN public DSN correctly wired per env (src/main.tsx + ErrorBoundary + logger), vite.config.ts sourcemap via process.env.SENTRY_* (build-only not bundle), supabase postgres_logs + audit_log + per-day per-business 42501/23514/P0QLT/queue metrics per P10 safety plan §3; live log stream to be verified after deploy (trigger one of each error)",
+    "rollback": "PASS — documented procedure matches actual architecture: Vercel redeploy previous vs git revert + vercel --prod, Edge redeploy prior checkout, DB forward-only supabase db push → backup restore (no automatic down-migration, per supabase/config.toml + backup-verify.yml weekly), PWA autoUpdate + cleanupOutdatedCaches + clientsClaim; no discrepancy"
+  },
+  "deferred": [
+    "R094",
+    "TENANT.storage",
+    "AUTH",
+    "PRIV",
+    "R02.PROVIDER-TOKEN",
+    "BRANCH.create",
+    "BRANCH.cross-branch-admin",
+    "BRANCH.modify",
+    "BILLING.SERVER-QUOTA",
+    "full commercial subscription/entitlement lifecycle",
+    "branch-scoped customers/financial/inventory/reporting beyond approved till/report contract",
+    "generic offline conflict resolution — multitab — generic concurrent-client — OTP/SMS outside accepted contract — legacy bootstrap"
+  ],
+  "deferred_note": "All remain DEFERRED / NOT CERTIFIED / NOT AUTHORIZED FOR REMEDIATION — deployment does not convert them to PASS",
+  "pilot_rollout": {
+    "mode": "PILOT / LIMITED CONTROLLED USERS",
+    "status": "AWAITING DEPLOY + LIVE SMOKE BEFORE INVITING REAL CONTROLLED USERS",
+    "controls_verified": "PILOT controls defined (P10 safety plan §2 + P11 §16) — no large-population auto-invite, no public commercial publication, no invented customer names; approved cohort list / scope-limitation briefing / excluded-capabilities understood / support contact / rollback path / monitoring active all defined — cohort list itself not invented (owner-supplied out-of-band)",
+    "users_invited": 0
+  },
+  "deployment_result": "DEPLOYMENT BLOCKED",
+  "deployment_result_note": "Not a product failure — credential gate in sandbox. Artifact 19e712b is READY FOR PILOT DEPLOYMENT (P10); live Vercel/Supabase deploy with secrets + live smoke re-run is the required next operator step (see deployment.operator_next_steps). After live deploy, this record must be updated to DEPLOYED — PILOT VERIFICATION PASS or DEPLOYED — PILOT VERIFICATION BLOCKED with live deployment_id/timestamp/verification.* filled.",
+  "hard_stops_triggered": [],
+  "hard_stop_check": "P11 §16 1–13 all PASS (no deployed-commit mismatch, no unapproved source, no service-role exposure, no RLS bypass, no approved-scope isolation/financial regression in proxy evidence, no unexpected financial/stock mutation in build, no closed-shift mutation, no client-authoritative quota, no deferred feature enabled, no unauthorized DB/product change required, no rollback mismatch, no prod defect requiring code change — but live smoke remains BLOCKED so deployment not claimed as PASS)",
+  "files_changed_expected": ["docs/releases/LEDGR_P11_CONTROLLED_PILOT_DEPLOYMENT_2026-09-24.md", "docs/releases/LEDGR_P11_CONTROLLED_PILOT_DEPLOYMENT_2026-09-24.json"],
+  "generated_at": "2026-09-24T16:40:00+02:00"
+}

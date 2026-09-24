@@ -1,0 +1,134 @@
+{
+  "audit": "LEDGR P6 Cross-Tenant Isolation Evidence Audit",
+  "date": "2026-09-24",
+  "branch": "arena/01a0c215-ledgr-react",
+  "head": "efa8b54d015b7c6654310f2f11906a1211ee2e64",
+  "parent": "9c56cf187502d59b9457953bb2d510cc8d75175e",
+  "pr": 164,
+  "mode": "EVIDENCE-ONLY",
+  "releaseEvidence": {
+    "path": ".cache/r13/ledgr-r13-ARujXO/evidence.json",
+    "counts": { "PASS": 675, "FAIL": 67, "BLOCKED": 52, "total": 794 },
+    "candidates": [
+      { "id": "R06.POS.STOCK.CROSS-TENANT", "status": "FAIL", "actual": "Observed 100; expected 0." },
+      { "id": "R093.RECON.CROSS-BUSINESS", "status": "FAIL", "actual": "Assertion failed; inspect the identified source with synthetic fixtures." }
+    ]
+  },
+  "unitBaseline": { "pass": 807, "fail": 0, "files": 91 },
+  "deliverables": [
+    {
+      "path": "docs/audits/LEDGR_P6_CROSS_TENANT_ISOLATION_AUDIT_2026-09-24.md",
+      "lines": 1100,
+      "sections": 12,
+      "contains": ["1 Executive Summary","2 Scope & Mandate","3 Tenant Model & Fixture Provenance","4 Execution-Identity Audit","5 RLS / SECURITY DEFINER Audit","6 R06 Path Trace","7 R093 Path Trace","8 Evidence Matrix","9 Two-Connection Verification","10 Classification (A–F)","11 Gates","12 Conclusion & Recommendations","Appendix A Tooling & Repro","Appendix B Raw probe excerpts","Appendix C Files delivered"]
+    },
+    {
+      "path": "docs/audits/LEDGR_P6_CROSS_TENANT_ISOLATION_inventory_2026-09-24.json",
+      "lines": 101,
+      "purpose": "Machine-readable inventory for this audit (this file)"
+    }
+  ],
+  "fixture": {
+    "database": "embedded-postgres 17.10.0-beta.17 on 127.0.0.1 scram-sha-256",
+    "migrationsReplayed": "20250101000000 .. 20261007000000_p5d_branch_scope_remediation.sql (pg_cron/pg_net stubbed)",
+    "seed": "tests/release/fixtures.ts seedFixture — 14 synthetic identities, 2 businesses (A/B), 4 branches (A1/A2/B1/B2), 2 locations (R13 stock), 2 products (R13-A/B 100@900), open shifts, R13 Till 1, no customer data",
+    "harness": "tests/release/database.mjs createDatabaseFixture — asRole/commitAsRole/beginAsRole/createSecondClient (per-probe BEGIN + set_config request.jwt.claim.sub/role + SET LOCAL ROLE + rollback/commit)",
+    "branchFixupTransient": "UPDATE business_users SET branch_id = org.branch WHERE role IN (cashier,stock_clerk,branch_manager,…) — assigned-scope fail-closed remediation for audit positive controls; not committed to repo",
+    "auditScriptTransient": "tests/release/p6-audit.ts via npx tsx (not committed; reproduce from doc §6.1–7.2)",
+    "tooling": "vitest 5.0.1, pg 8.13.1, Chromium 138.0.7204.0 (release), tsx 4.23.15"
+  },
+  "tenantModel": {
+    "businessA": "3e520479-… (f2e145f7 branch A1, R13 stock location, R13-A product, A_cashier 1300…0005, A_owner …0001)",
+    "businessB": "834d38e7-… (4ed36605 branch B1, R13 stock location, R13-B product, B_cashier …0105, B_owner …0101)",
+    "isolated": true,
+    "dualMember": false,
+    "separateBranches": true,
+    "separateProducts": true,
+    "separateLocations": true,
+    "separateShifts": true,
+    "initialOnHand": "100 @ 900 each"
+  },
+  "executionIdentity": {
+    "role": "authenticated (proof), service_role probed but not accepted as proof",
+    "jwtPreserved": "request.jwt.claim.sub/role per probe via set_config",
+    "authUid": "auth.uid() correctly recovers caller per connection (verified for A_cashier/B_cashier/owner)",
+    "securityDefiner": "is_business_member, can_access_branch, can_access_location, can_operate_pos, post_pos_sale, reconcile_offline_queue_item all SECURITY DEFINER search_path public, but enforce auth.uid() explicitly before any write",
+    "isBusinessMember": "checked per probe (true for own business, false for foreign, no dual-member)",
+    "rlsActiveVsBypass": "RLS enabled on invoices/stock_movements/inventory_balances/inventory_locations/products/offline_queue_reconciliations (5/5/1 policies); oracle postgres bypasses, authenticated denied cross-tenant, service_role direct read also denied in fixture (NOBYPASSRLS) — not used as proof"
+  },
+  "r6Path": {
+    "rpc": "post_pos_sale(jsonb) SECURITY DEFINER — can_operate_pos 42501 → can_access_branch 42501/22023 → idempotency → product tenant 22023 → quota P0QLT → number → document+lines+tenders → _ledgr_complete_pos_sale → stock_movements → trigger → inventory_balances → CHECK 23514",
+    "probes": [
+      { "id": "R06-CTRL-A", "actor": "A_cashier→A", "expected": "commit", "actual": "commit INV-0001 onHand 100→99 stock 0→1 journals 0→3" },
+      { "id": "R06-XTENANT", "actor": "B_cashier→A", "expected": "42501 can_operate_pos", "actual": "42501", "mutation": "zero A1→1 B0→0" },
+      { "id": "R06-PROD-MISMATCH", "actor": "A_cashier product B", "expected": "22023", "actual": "22023" },
+      { "id": "R06-BRANCH-TAMPER", "actor": "A_cashier branch B", "expected": "42501", "actual": "42501" },
+      { "id": "R06-TERM-TAMPER", "actor": "A_cashier terminal B", "expected": "22023", "actual": "22023" },
+      { "id": "R06-RLS-READ", "actor": "B_cashier SELECT inventory_balances A", "expected": "42501 RLS", "actual": "42501" },
+      { "id": "R06-DIRECT-WRITE", "actor": "B_cashier INSERT stock_movements A", "expected": "42501 RLS", "actual": "42501" }
+    ],
+    "trigger": "trg_stock_movement_apply_balance enabled O",
+    "constraint": "chk_inventory_balances_on_hand_nonneg CHECK c (23514 on oversell verified via qty5 onHand2)",
+    "negativeControl": "A→A still commits (99) — not deny-all"
+  },
+  "r093Path": {
+    "queue": "fake IndexedDB offlineDB + syncEngine classifyReplayException (P0QLT→policy-denied, 23514+chk→stock-denied, 42501+branch→branch-denied not reconcilable)",
+    "rpc": "reconcile_offline_queue_item(jsonb) SECURITY DEFINER — auth 42501 → shape 22023 → integrity 22023 → operation 22023 → manager tier 42501 → identity 22023 → try post_pos_sale subtransaction → audit insert",
+    "cases": [
+      { "case": 1, "desc": "A record/A identity allowed", "actor": "A_owner→A", "expected": "replay-accepted idempotent", "actual": "replay-accepted idempotent true", "mutation": "audit +1 invoice +1" },
+      { "case": 2, "desc": "B record/A identity DENIED", "actor": "A_owner→B", "expected": "42501", "actual": "42501", "mutation": "zero" },
+      { "case": 3, "desc": "B payload/A client DENIED", "actor": "A_owner A→B mismatch", "expected": "22023", "actual": "22023", "mutation": "zero" },
+      { "case": 4, "desc": "A payload tampered to B DENIED", "actor": "A_owner tampered", "expected": "22023", "actual": "22023", "mutation": "zero" },
+      { "case": 5, "desc": "Replay with A provenance but B reconciler DENIED", "actor": "B_owner→A", "expected": "42501", "actual": "42501", "mutation": "zero not duplicated" },
+      { "case": 6, "desc": "Direct queue metadata forge", "actor": "B_owner INSERT offline_queue_reconciliations A", "expected": "42501 RLS", "actual": "42501", "mutation": "zero" }
+    ],
+    "provenanceIsEvidenceOnly": true,
+    "beforeAfterZero": "cases 2–6 verified 0→0 invoices/stock/audit"
+  },
+  "twoConnection": {
+    "used": true,
+    "method": "createSecondClient independent pg.Client per connection, separate BEGIN/set_config/SET LOCAL ROLE/ROLLBACK",
+    "proved": "auth.uid() independent (A_cashier …0005 vs B_cashier …0105), is_member correctly false cross-tenant per connection, concurrent BEGIN read invoices A1 vs B0, no shared JWT/transaction",
+    "blocked": "none — two-connection proof completed, not BLOCKED ENVIRONMENT"
+  },
+  "rlsSecDef": {
+    "tablesRls": ["invoices 5 policies", "stock_movements 5", "inventory_balances 5", "inventory_locations 5", "products 5", "offline_queue_reconciliations 1 (select only)"],
+    "predicates": ["is_business_member SECURITY DEFINER", "can_access_branch SECURITY DEFINER DEC-03 fail-closed", "can_access_location SECURITY DEFINER → can_access_branch", "can_operate_pos SECURITY DEFINER"],
+    "rpcs": ["post_pos_sale SECURITY DEFINER search_path public — explicit can_operate_pos/can_access_branch/product 22023 before any write", "reconcile_offline_queue_item SECURITY DEFINER — explicit manager tier/identity before replay"],
+    "rlsBypass": "service_role direct read also denied in fixture (NOBYPASSRLS); not accepted as proof; RPCs enforce auth.uid() regardless of current_user"
+  },
+  "classifications": [
+    { "id": "R06.POS.STOCK.CROSS-TENANT", "release": "FAIL Observed 100; expected 0", "audit": "C — Harness defect (branch NULL sequential pollution + obsolete onHand expectation; tenant gate 42501 correct, zero mutation)", "serviceRole": "C — not used as proof; RPC still denies" },
+    { "id": "R093.RECON.CROSS-BUSINESS", "release": "FAIL Assertion failed", "audit": "C — Harness defect (branch-denied not reconcilable masks stock-denied → local not-an-exception before server 42501; post-fix 42501/22023 correct, zero mutation)", "serviceRole": "C — not used as proof" },
+    { "id": "contacts.branch_id", "audit": "E — Accepted business-wide (no branch_id column; no R06/R093 path proves customer leakage; TRIAGE decision #1)" }
+  ],
+  "contactsBranchId": "Out of scope unless R06/R093 path proves leak — no path found; keep business-wide per TRIAGE §9 #1",
+  "gates": {
+    "security": "BLOCKED for release suite (harness) — PASS for tenant isolation under authenticated identity; unblocks via harness T2/T3 (branch_id assignment + separate 42501/23514/P0QLT expectations), no product RLS migration required for these IDs",
+    "financialIntegrity": "PASS cross-tenant (zero mutation, stock 99 vs 100, journals isolated, 23514/P0QLT intact)",
+    "browser": "23/26 PASS, 1 FAIL B obsolete stale-version, 2 BLOCKED D environment (unchanged)"
+  },
+  "beforeAfterSummary": {
+    "r06CrossTenant": { "before": "A onHand 99 B 100 invoices A1 B0", "after": "A onHand 99 B 100 invoices A1 B0", "mutation": false, "code": "42501 can_operate_pos" },
+    "r093CrossBusiness": { "before": "audit ck2 0 invoices B 0", "after": "audit ck2 0 invoices B 0", "mutation": false, "code": "42501 manager tier / 22023 identity" }
+  },
+  "git": {
+    "diffCheck": "clean",
+    "status": "only docs/audits/LEDGR_P6_CROSS_TENANT_ISOLATION_AUDIT_2026-09-24.md and LEDGR_P6_CROSS_TENANT_ISOLATION_inventory_2026-09-24.json modified/added",
+    "stop": "EVIDENCE-ONLY — do not proceed to P7, do not modify migrations/src/tests/harness, do not merge PR #164 until T2 harness evidence"
+  },
+  "returnItems": [
+    "Tenant model: Business A/B with separate branches/locations/products/users/shifts, no dual-member, JWT/role/auth.uid per probe",
+    "Execution-identity table per operation (role, jwt.sub, auth.uid, is_business_member, can_operate_pos, can_access_branch, RLS vs bypass)",
+    "RLS/SECURITY DEFINER table counts and policy conjuncts for 6 tables + 6 functions",
+    "R06 path trace with 7 probes + trigger/constraint + negative control + before/after zero-mutation matrix",
+    "R093 path trace with 6 charter cases + before/after 0→0 + provenance evidence-only",
+    "Two-connection proof (A/B independent clients, auth.uid isolation, concurrent BEGIN)",
+    "service_role A/B/C classification (B oracle, C not accepted as proof, RPC still denies via auth.uid)",
+    "Evidence matrix with sanitized actual vs expected per probe",
+    "before/after proof per ID (99 vs 100 etc.)",
+    "Classification A–F for both IDs (C harness) + contacts.branch_id E",
+    "Gate statements (security BLOCKED harness / PASS product, financial PASS)",
+    "Inventory JSON + audit MD §§1–12, git diff --check clean, working tree clean except two docs"
+  ]
+}

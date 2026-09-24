@@ -1,13 +1,12 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import {
   X,
   Printer,
   FileSpreadsheet,
-  CheckCircle2,
-  Send,
+  Mail,
 } from 'lucide-react';
 import type { PosShift, PosSale } from '@/types/pos';
-import { generateZReportSummary, formatZReportEmailBody } from '@/services/posReportService';
+import { generateZReportSummary } from '@/services/posReportService';
 import { formatMwkDetailed } from '@/lib/formatters';
 
 interface PosZReportModalProps {
@@ -18,6 +17,8 @@ interface PosZReportModalProps {
   businessName?: string;
   branchName?: string;
   ownerEmail?: string;
+  /** Immutable report number minted by the signed close (R08); preferred over any client-side value. */
+  serverReportNumber?: string | null;
 }
 
 export function PosZReportModal({
@@ -27,37 +28,19 @@ export function PosZReportModal({
   sales = [],
   businessName = 'Ledgr Store',
   branchName = 'Main Branch',
-  ownerEmail,
+  serverReportNumber,
 }: PosZReportModalProps) {
   const printRef = useRef<HTMLDivElement>(null);
-  const [recipientEmail, setRecipientEmail] = useState(ownerEmail || 'owner@example.com');
-  const [isSending, setIsSending] = useState(false);
-  const [sendSuccess, setSendSuccess] = useState(false);
 
   if (!open || !shift) return null;
 
   const summary = generateZReportSummary(shift, sales, businessName, branchName);
+  // The signed close mints the sequential Z number; a client-side frame is
+  // only a rendering fallback when the server value is unavailable.
+  const reportNumber = serverReportNumber ?? summary.reportNumber;
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleSendEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSending(true);
-    try {
-      const emailBody = formatZReportEmailBody(summary);
-      console.info('Dispatched Z-Report email to:', recipientEmail, emailBody);
-      // Simulate dispatch success
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      setSendSuccess(true);
-      setTimeout(() => setSendSuccess(false), 3000);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Email dispatch failed: ${message}`);
-    } finally {
-      setIsSending(false);
-    }
   };
 
   return (
@@ -91,7 +74,7 @@ export function PosZReportModal({
               <p className="font-bold text-xs pt-1 uppercase tracking-wider text-brand-700">
                 *** END OF SHIFT Z-REPORT ***
               </p>
-              <p className="text-[10px] text-gray-400">Report #: {summary.reportNumber}</p>
+              <p className="text-[10px] text-gray-400">Report #: {reportNumber}</p>
             </div>
 
             <div className="border-t border-dashed border-gray-300 my-2" />
@@ -193,32 +176,19 @@ export function PosZReportModal({
           </div>
         </div>
 
-        {/* Email Dispatch & Print Toolbar */}
+        {/* Email state (honest) & Print Toolbar */}
         <div className="pt-3 border-t border-gray-100 space-y-3">
-          <form onSubmit={handleSendEmail} className="flex gap-2">
-            <input
-              type="email"
-              required
-              placeholder="recipient@business.com"
-              value={recipientEmail}
-              onChange={(e) => setRecipientEmail(e.target.value)}
-              className="flex-1 rounded-xl border border-gray-300 px-3 py-2 text-xs focus:border-brand-500 focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={isSending}
-              className="flex items-center gap-1.5 rounded-xl bg-brand-50 px-3 py-2 text-xs font-bold text-brand-700 hover:bg-brand-100 disabled:opacity-50"
-            >
-              <Send className="h-3.5 w-3.5" />
-              {isSending ? 'Sending...' : 'Email Report'}
-            </button>
-          </form>
-
-          {sendSuccess && (
-            <p className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Z-Report successfully emailed to {recipientEmail}.
-            </p>
-          )}
+          <p
+            data-testid="zreport-email-unavailable"
+            className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800"
+          >
+            <Mail className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Z-Report email dispatch is not available in this build — delivery has not been
+              implemented and arrives with the upcoming R14 package. Nothing was sent. Use Print
+              below to export the report.
+            </span>
+          </p>
 
           <div className="flex gap-2">
             <button

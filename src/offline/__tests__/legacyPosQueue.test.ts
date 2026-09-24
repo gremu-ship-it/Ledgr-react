@@ -84,7 +84,11 @@ describe('migrateLegacyPosQueue', () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       operationType: 'pos_sale',
-      status: 'pending',
+      // R09.2: legacy evidence enters the security quarantine — never a
+      // replayable pending item, never attributed to the current session.
+      status: 'quarantined',
+      quarantineReason: 'legacy',
+      originUserId: null,
       businessId: 'biz-legacy-1',
       // The sale keeps the time it was actually taken, not the time it was
       // recovered.
@@ -114,7 +118,8 @@ describe('migrateLegacyPosQueue', () => {
       localId,
       sequence: 1,
       operationType: 'pos_sale',
-      status: 'pending',
+      status: 'quarantined',
+      quarantineReason: 'legacy',
       attemptCount: 0,
     });
     expect(item?.lastError).toBeUndefined();
@@ -131,7 +136,9 @@ describe('migrateLegacyPosQueue', () => {
 
     expect(summary.flagged).toBe(1);
     const item = await offlineDB.queue.get(localId);
-    expect(item?.status).toBe('failed');
+    // R09.2: unrecoverable old-build stubs are held as legacy evidence too.
+    expect(item?.status).toBe('quarantined');
+    expect(item?.quarantineReason).toBe('legacy');
     expect(item?.lastError).toMatch(/older POS build/i);
     expect(item?.lastError).toMatch(/REC-3003/);
   });

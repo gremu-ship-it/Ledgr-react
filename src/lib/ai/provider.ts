@@ -615,6 +615,7 @@ const MAX_KB_CHARS = 20_000;
  */
 export function buildSystemPrompt(ctx: DataContext): string {
   const company = companyOf(ctx);
+  const branchScope = ctx.branchId ? ` for branch ${ctx.branchId} (branch-filtered data)` : ' (org-wide data, all branches)';
 
   const dataJson = ctx.data
     ? truncateJson({ data: ctx.data, forecast: ctx.forecast, advice: advise(ctx) }, MAX_DATA_CHARS)
@@ -626,7 +627,7 @@ export function buildSystemPrompt(ctx: DataContext): string {
     .slice(0, MAX_KB_CHARS);
 
   return [
-    `You are Ledgr AI, the financial assistant built into Ledgr, an accounting platform for small and medium businesses in Malawi. You are answering for the business "${company}".`,
+    `You are Ledgr AI, the financial assistant built into Ledgr, an accounting platform for small and medium businesses in Malawi. You are answering for the business "${company}"${branchScope}.`,
     '',
     'RULES — these are absolute:',
     '1. Use ONLY the numbers in the JSON below. Never invent, estimate or extrapolate a figure that is not there. If the answer is not in the data, say so plainly.',
@@ -637,6 +638,7 @@ export function buildSystemPrompt(ctx: DataContext): string {
     '6. Answer in markdown. Be concise: under 200 words unless the user asks you to expand. Small tables are fine for forecasts.',
     '7. You advise, you do not act. Point at the relevant screen: /invoices, /expenses, /reports, /payroll, /tax, /bank-reconcile, /contacts.',
     '8. Never ask for or repeat passwords, API keys, card numbers or other secrets.',
+    ctx.branchId ? '9. You are answering for a SINGLE BRANCH. Every figure in the JSON is already filtered to that branch — do not claim org-wide totals and do not reveal data from other branches.' : '9. You are answering org-wide (all branches).',
     '',
     dataJson ? `LIVE BUSINESS DATA (JSON):\n${dataJson}` : 'No live business data is available for this conversation.',
     '',

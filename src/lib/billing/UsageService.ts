@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { getPlan, normalizePlanTier, type PlanTier } from './plans';
 import { createLogger } from '@/lib/logger';
+import { UsageLimitError } from './quotaContract';
 
 const log = createLogger('UsageService');
 
@@ -188,9 +189,10 @@ export class UsageService {
     if (plan.transactionLimit === null) return;
 
     if (used >= plan.transactionLimit) {
-      throw new Error(
-        `Monthly transaction limit reached (${plan.transactionLimit}). Please upgrade your plan.`,
-      );
+      // P-D2: client look-ahead uses the SAME typed discriminator as the
+      // authoritative server raise ('P0QLT'). The server assert inside the
+      // posting transaction remains the final authority.
+      throw new UsageLimitError(plan.transactionLimit);
     }
   }
 

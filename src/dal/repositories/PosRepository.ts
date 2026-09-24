@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, InsertDto, UpdateDto } from '../types/database';
+import type { Database, InsertDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import type {
@@ -216,6 +216,61 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     };
   }
 
+  /** Idempotency key for the R08 command surface (server enforces ^[A-Za-z0-9:_-]{4,64}$). */
+  private newCommandKey(prefix: string): string {
+    const uuid = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    return `${prefix}:${uuid}`;
+  }
+
+  /**
+   * R08.5 rewire: tills are server-registered (`pos_terminals`). The client
+   * never claims a branch — the till's branch is the only branch the server
+   * will stamp. Resolves the business's first active till; till assignment
+   * per device lands with the terminal-assignment surface (documented gap).
+   */
+  private async resolveActiveTerminalId(businessId: string): Promise<string | null> {
+    // Generated row types predate the R08 `pos_terminals` table; query it
+    // through an untyped handle (row contract: { id } only).
+    const untyped = this.client as unknown as SupabaseClient;
+    const { data, error } = await untyped
+      .from('pos_terminals')
+      .select('id')
+      .eq('business_id', businessId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return (data as { id: string }).id;
+  }
+
+  private toShift(data: Record<string, unknown>): PosShift {
+    return {
+      ...(data as unknown as PosShift),
+      opening_float: data.opening_cash as number,
+      start_time: data.opened_at as string,
+      expectedCash: data.expected_cash as number,
+      status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+    } as PosShift;
+  }
+
+  private async readShiftRow(shiftId: string): Promise<PosShift> {
+    const { data, error } = await this.client
+      .from('pos_shifts')
+      .select('*')
+      .eq('id', shiftId)
+      .single();
+    if (error) throw toRepositoryError('pos_shifts', error);
+    return this.toShift(data as Record<string, unknown>);
+  }
+
+  /**
+   * R08.5: raw INSERT on `pos_shifts` is revoked (R08.2). The canonical
+   * command resolves cashier identity (auth.uid → user_profiles) and branch
+   * (from the till) server-side — caller-supplied cashier/branch/name values
+   * are intentionally NOT forwarded, and `notes` is not part of the command
+   * contract. Rejection surfaces as an honest error (zero server mutation).
+   */
   async openShift(
     arg1: string | {
       business_id?: string;
@@ -241,51 +296,37 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     },
   ): Promise<PosShift> {
     const businessId = typeof arg1 === 'string' ? arg1 : (arg1.business_id || arg1.businessId || 'biz-default');
-    const branchId = typeof arg1 === 'string' ? (arg2?.branchId ?? null) : (arg1.branch_id ?? arg1.branchId ?? null);
-    const cashierId = typeof arg1 === 'string' ? (arg2?.cashierId ?? null) : (arg1.cashier_id ?? arg1.cashierId ?? null);
-    const cashierName = typeof arg1 === 'string' ? (arg2?.cashierName ?? null) : (arg1.cashier_name ?? arg1.cashierName ?? null);
     const openingFloat = typeof arg1 === 'string'
       ? Number(arg2?.openingCash ?? arg2?.opening_float ?? 0)
       : Number(arg1.opening_float ?? arg1.openingCash ?? 0);
-    const notes = typeof arg1 === 'string' ? (arg2?.notes ?? null) : (arg1.notes ?? null);
 
-    const newShift: InsertDto<'pos_shifts'> = {
-      business_id: businessId,
-      branch_id: branchId,
-      cashier_id: cashierId,
-      cashier_name: cashierName,
-      opened_at: new Date().toISOString(),
-      opening_cash: openingFloat,
-      expected_cash: openingFloat,
-      actual_cash: null,
-      cash_variance: null,
-      variance_reason: null,
-      total_sales_amount: 0,
-      cash_sales_amount: 0,
-      other_sales_amount: 0,
-      refunds_amount: 0,
-      cash_in_amount: 0,
-      cash_out_amount: 0,
-      status: 'open',
-      notes,
-    };
+    const terminalId = await this.resolveActiveTerminalId(businessId);
+    if (!terminalId) {
+      throw new Error('No active POS terminal is registered for this business. Ask an administrator to register a till before opening a shift.');
+    }
 
-    const { data, error } = await this.client
-      .from('pos_shifts')
-      .insert(newShift)
-      .select('*')
-      .single();
-
+    const { data, error } = await this.client.rpc('open_pos_shift_command' as never, {
+      p_payload: {
+        business_id: businessId,
+        terminal_id: terminalId,
+        command_key: this.newCommandKey('open'),
+        opening_cash: openingFloat,
+      },
+    } as never);
     if (error) throw toRepositoryError('pos_shifts', error);
-    return {
-      ...(data as unknown as PosShift),
-      opening_float: data.opening_cash,
-      start_time: data.opened_at,
-      expectedCash: data.expected_cash,
-      status: 'open',
-    } as PosShift;
+    const shiftId = (data as { shift_id?: string } | null)?.shift_id;
+    if (!shiftId) throw new Error('open_pos_shift_command returned no shift id.');
+    return this.readShiftRow(shiftId);
   }
 
+  /**
+   * R08.5: raw UPDATE on `pos_shifts` is revoked. The canonical command
+   * derives expected cash from invoice_payments/pos_corrections/movements
+   * (never client counters), signs the immutable close, and returns the
+   * server-computed expected/actual/variance + sequential Z report number.
+   * `notes` is not part of the command contract; the read-back row carries
+   * the server-set values.
+   */
   async closeShift(
     shiftId: string,
     payload: {
@@ -297,58 +338,22 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       variance_reason?: string;
       notes?: string | null;
     } | number,
-    notesArg?: string,
   ): Promise<PosShift> {
-    const { data: shift, error: fetchErr } = await this.client
-      .from('pos_shifts')
-      .select('*')
-      .eq('id', shiftId)
-      .single();
-
-    if (fetchErr) throw toRepositoryError('pos_shifts', fetchErr);
-
     const actualCash = typeof payload === 'number'
       ? payload
       : Number(payload.closingCashActual ?? payload.closing_cash_actual ?? payload.actualCash ?? 0);
-    const variance = typeof payload === 'number' ? undefined : payload.variance;
     const varianceReason = typeof payload === 'number' ? null : (payload.varianceReason || payload.variance_reason || null);
-    const notes = typeof payload === 'number' ? (notesArg ?? null) : (payload.notes ?? null);
 
-    const expectedCash =
-      Number(shift.opening_cash || 0) +
-      Number(shift.cash_sales_amount || 0) +
-      Number(shift.cash_in_amount || 0) -
-      Number(shift.cash_out_amount || 0) -
-      Number(shift.refunds_amount || 0);
-
-    const calculatedVariance = variance !== undefined ? variance : actualCash - expectedCash;
-
-    const updatePayload: UpdateDto<'pos_shifts'> = {
-      closed_at: new Date().toISOString(),
-      actual_cash: actualCash,
-      expected_cash: expectedCash,
-      cash_variance: calculatedVariance,
-      variance_reason: varianceReason,
-      status: 'closed',
-      notes: notes || shift.notes,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await this.client
-      .from('pos_shifts')
-      .update(updatePayload)
-      .eq('id', shiftId)
-      .select('*')
-      .single();
-
+    const { error } = await this.client.rpc('close_pos_shift_command' as never, {
+      p_payload: {
+        shift_id: shiftId,
+        command_key: this.newCommandKey('close'),
+        closing_cash: actualCash,
+        variance_reason: varianceReason,
+      },
+    } as never);
     if (error) throw toRepositoryError('pos_shifts', error);
-    return {
-      ...(data as unknown as PosShift),
-      opening_float: data.opening_cash,
-      start_time: data.opened_at,
-      expectedCash: data.expected_cash,
-      status: 'closed',
-    } as PosShift;
+    return this.readShiftRow(shiftId);
   }
 
   /**
@@ -468,6 +473,12 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
   // ── Cash Movements ────────────────────────────────────────────────────────
 
+  /**
+   * R08.5: raw INSERT on `pos_cash_movements` is revoked; the command writes
+   * movement row + drawer totals atomically with server-resolved actor and
+   * branch. Caller-supplied names/ids are intentionally NOT forwarded.
+   * 'safe_drop' aliases to the canonical 'safe_deposit'.
+   */
   async recordCashMovement(payload: {
     business_id?: string;
     businessId?: string;
@@ -490,44 +501,55 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
     authorized_by?: string | null;
     created_by?: string | null;
   }): Promise<PosCashMovement> {
-    const businessId = payload.business_id || payload.businessId || 'biz-default';
-    const branchId = payload.branch_id ?? payload.branchId ?? null;
     const shiftId = payload.shift_id ?? payload.shiftId ?? null;
-    const cashierId = payload.cashier_id ?? payload.cashierId ?? payload.userId ?? payload.created_by ?? null;
-    const cashierName = payload.cashier_name ?? payload.cashierName ?? payload.userName ?? null;
     const movementType = payload.type || payload.movement_type || payload.movementType || 'cash_in';
+    const serverType = movementType === 'safe_drop' ? 'safe_deposit' : movementType;
     const amount = Math.abs(Number(payload.amount) || 0);
 
-    const row: InsertDto<'pos_cash_movements'> = {
-      business_id: businessId,
-      branch_id: branchId,
-      shift_id: shiftId,
-      user_id: cashierId,
-      user_name: cashierName,
-      movement_type: movementType,
-      amount,
-      reason: payload.reason,
-      created_at: new Date().toISOString(),
-    };
-
-    const { data, error } = await this.client
-      .from('pos_cash_movements')
-      .insert(row)
-      .select('*')
-      .single();
-
+    const { data, error } = await this.client.rpc('record_pos_cash_movement_command' as never, {
+      p_payload: {
+        shift_id: shiftId,
+        command_key: this.newCommandKey('movement'),
+        movement_type: serverType,
+        amount,
+        reason: payload.reason,
+      },
+    } as never);
     if (error) throw toRepositoryError('pos_cash_movements', error);
 
-    // If linked to an open shift, update shift cash movement totals
-    if (shiftId) {
-      const isCashIn = movementType === 'cash_in';
-      await this.updateShiftTotals(shiftId, {
-        cashIn: isCashIn ? amount : 0,
-        cashOut: !isCashIn ? amount : 0,
-      }).catch((e) => log.warn('Failed to sync cash movement with shift totals', { error: e }));
+    const movementId = (data as { movement_id?: string } | null)?.movement_id ?? null;
+    if (movementId) {
+      const { data: row } = await this.client
+        .from('pos_cash_movements')
+        .select('*')
+        .eq('id', movementId)
+        .maybeSingle();
+      if (row) return row as PosCashMovement;
     }
+    return {
+      id: movementId ?? 'rpc',
+      shift_id: shiftId,
+      movement_type: serverType,
+      amount,
+      reason: payload.reason,
+    } as PosCashMovement;
+  }
 
-    return data as PosCashMovement;
+  /**
+   * R08.4 read surface: tender-derived shift report (live derivation + the
+   * immutable close snapshot after signing). Returns null when the backend
+   * predates the R08 migration or the caller may not read the shift.
+   */
+  async getShiftReport(shiftId: string): Promise<Record<string, unknown> | null> {
+    try {
+      const { data, error } = await this.client.rpc('get_pos_shift_report' as never, {
+        p_shift_id: shiftId,
+      } as never);
+      if (error) return null;
+      return (data ?? null) as Record<string, unknown> | null;
+    } catch {
+      return null;
+    }
   }
 
   async listCashMovements(businessId: string, shiftId?: string): Promise<PosCashMovement[]> {

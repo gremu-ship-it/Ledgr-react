@@ -246,6 +246,22 @@ serve(async (req) => {
       });
     }
 
+    // R01: commit the role transition only after current issuer/target authority
+    // is checked under database locks. Pass the DB snapshot, never body role/org/user.
+    // Existing email/phone restrictions above remain the identity boundary.
+    const { data: accepted, error: authorityErr } = await admin.rpc('accept_invitation_membership', {
+      p_invitation_id: invitation.id,
+      p_recipient_id: callerId,
+      p_expected_invitation: invitation,
+    });
+    if (authorityErr || !accepted) {
+      const status = authorityErr?.code === '42501' ? 403
+        : authorityErr?.code === 'P0002' ? 404
+        : authorityErr?.code === '55000' ? 400 : 500;
+      return new Response(JSON.stringify({ error: 'Invitation cannot be authorized. Ask an authorized owner or admin to reissue it.' }), {
+        status, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
+      });
+    }
     // 6. Guarantee a profile row. user_profiles.full_name is NOT NULL and the
     //    team list joins it, so a member without one appears blank. Mirrors
     //    grant_user_business_access (20260728000003) and the invite RPC in
@@ -275,91 +291,11 @@ serve(async (req) => {
         .is('phone', null);
     }
 
-    // 7. Check existing membership
-    const { data: existing, error: existingErr } = await admin
-      .from('business_users')
-      .select('id, is_active, role')
-      .eq('business_id', invitation.business_id)
-      .eq('user_id', callerId)
-      .maybeSingle();
-
-    if (existingErr) {
-      return new Response(JSON.stringify({ error: `Membership check failed: ${existingErr.message}` }), {
-        status: 500,
-        headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
-      });
-    }
-
-    const nowStr = now.toISOString();
-
-    if (existing) {
-      if (existing.is_active) {
-        return new Response(
-          JSON.stringify({
-            error: `You are already an active member of this business with the role '${existing.role}'.`,
-            code: 'ALREADY_MEMBER',
-            business_id: invitation.business_id,
-          }),
-          {
-            status: 409,
-            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
-          },
-        );
-      } else {
-        // Reactivate inactive membership
-        const { error: updateErr } = await admin
-          .from('business_users')
-          .update({
-            role: invitation.role,
-            is_active: true,
-            accepted_at: nowStr,
-            updated_at: nowStr,
-            invited_by: invitation.invited_by,
-            invited_at: invitation.invited_at,
-          })
-          .eq('id', existing.id);
-
-        if (updateErr) {
-          return new Response(JSON.stringify({ error: `Failed to reactivate membership: ${updateErr.message}` }), {
-            status: 500,
-            headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
-          });
-        }
-      }
-    } else {
-      // Create new membership
-      const { error: insertErr } = await admin
-        .from('business_users')
-        .insert({
-          business_id: invitation.business_id,
-          user_id: callerId,
-          role: invitation.role,
-          is_active: true,
-          invited_by: invitation.invited_by,
-          invited_at: invitation.invited_at,
-          accepted_at: nowStr,
-        });
-
-      if (insertErr) {
-        return new Response(JSON.stringify({ error: `Failed to create membership: ${insertErr.message}` }), {
-          status: 500,
-          headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' },
-        });
-      }
-    }
-
-    // 8. Mark invitation accepted
-    const { error: acceptErr } = await admin
-      .from('business_invitations')
-      .update({
-        accepted_at: nowStr,
-        accepted_by: callerId,
-      })
-      .eq('id', invitation.id);
-
-    if (acceptErr) {
-      // Log error, but don't fail request since membership was already written
-      console.error('Failed to mark invitation as accepted:', acceptErr);
+    if (accepted.already_member) {
+      return new Response(JSON.stringify({
+        error: `You are already an active member of this business with the role '${accepted.role}'.`,
+        code: 'ALREADY_MEMBER', business_id: accepted.business_id,
+      }), { status: 409, headers: { ...corsHeadersForRequest(_req), 'Content-Type': 'application/json' } });
     }
 
     return new Response(

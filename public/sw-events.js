@@ -100,3 +100,35 @@ self.addEventListener('sync', (event) => {
       }),
   );
 });
+
+/*
+ * R09.1 cache confidentiality (D-5 wipe model): cooperative API-cache flush.
+ * On identity transition the page asks the active worker to drop the Workbox
+ * runtime cache from its side as well. The reply is advisory coordination —
+ * the page ALSO deletes the cache from its own origin view and verifies
+ * emptiness before reporting the wipe complete, so a missing/slow worker can
+ * never turn a wipe into a silent skip. The page owns verification; this
+ * listener only makes the race window smaller and explicit.
+ */
+const R09_CACHE_FLUSH = 'R09_CACHE_FLUSH';
+const R09_CACHE_FLUSHED = 'R09_CACHE_FLUSHED';
+const R09_API_CACHE_NAME = 'ledgr-api-cache';
+
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== R09_CACHE_FLUSH) return;
+  const port = event.ports && event.ports[0];
+  event.waitUntil(
+    (async () => {
+      try {
+        await self.caches.delete(R09_API_CACHE_NAME);
+      } catch {
+        // Cache API unavailable in this context — the page-side loop still
+        // owns the deterministic delete→verify of the same origin storage.
+      }
+      if (port) {
+        port.postMessage({ type: R09_CACHE_FLUSHED, requestId: data.requestId });
+      }
+    })(),
+  );
+});
