@@ -331,10 +331,11 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
 }
 
 // ── Duplicate receipt repair panel ───────────────────────────────────────────
-// One-off cleanup for the bug where rapid Receive Stock retries could insert
-// the same legacy, unkeyed warehouse receipt twice. The repair is additive and
-// auditable: it posts compensating stock movements plus a GRNI reversal rather
-// than deleting history.
+// Cleanup for the bug where Receive Stock retries could post the same
+// warehouse receipt twice: legacy unkeyed receipts submitted in quick
+// succession, and replays that re-posted an existing receipt key. The repair
+// is additive and auditable: it posts compensating stock movements plus a
+// GRNI reversal rather than deleting history.
 
 function DuplicateReceiptRepairPanel({
   businessId,
@@ -376,8 +377,9 @@ function DuplicateReceiptRepairPanel({
         <div>
           <p className="text-sm font-semibold text-gray-900">Repair duplicate Receive Stock entries</p>
           <p className="text-xs text-gray-500">
-            If an old receive action was submitted twice, this scans for identical legacy receipts created within
-            two minutes, posts a stock correction, and reverses the duplicated GRNI accounting.
+            If a receive action was submitted twice, this finds the re-posted receipt — the same receipt posted
+            again under its own reference, or an identical legacy receipt created within two minutes — posts a
+            stock correction, and reverses the duplicated GRNI accounting.
           </p>
         </div>
         <button

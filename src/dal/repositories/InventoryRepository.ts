@@ -310,21 +310,44 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
   }
 
   /**
-   * Find legacy Receive Stock rows that look like duplicate clicks/retries.
+   * Find Receive Stock rows that look like duplicate clicks/retries.
    *
-   * Before warehouse receipts carried a `source_id`/`client_key`, a rapid
-   * double submit wrote two indistinguishable positive `purchase` movements.
-   * This scan is deliberately conservative: it only considers old direct
-   * warehouse receipts (no source/ref/client_key, created_by present), and only
-   * flags rows with the same product, location, date, quantity, cost, notes and
-   * user that landed within a short time window. Expense purchases and new
-   * idempotent receipts are excluded.
+   * A double submit writes two indistinguishable positive `purchase`
+   * movements. Two detection rules, both conservative — a false positive
+   * would reverse genuine stock, so every rule prefers to miss a duplicate
+   * over flagging a legitimate receipt:
+   *
+   * 1. SAME RECEIPT IDENTITY — rows that share a non-null `source_id` (the
+   *    receipt key) plus identical product/location/date/quantity/cost are
+   *    the same receipt posted twice. A receive modal rotates its receipt
+   *    key per fresh receipt, so two genuinely different receipts can never
+   *    share a source_id, and the elapsed time between the rows does not
+   *    matter. The current keyed writer cannot produce these (the unique
+   *    (business_id, client_key) index blocks the retry); they come from
+   *    pre-idempotency replays.
+   *
+   * 2. IDENTICAL UNKEYED RECEIPTS — legacy rows with no source identity are
+   *    flagged when they match on product, location, date, quantity, cost,
+   *    notes, creator and reference AND landed within `windowMinutes` of
+   *    each other — unless BOTH rows carry distinct client_keys, in which
+   *    case they are two separate idempotent receipts that legitimately
+   *    happen to look identical.
+   *
+   * Rows with exactly equal created_at are never paired: a multi-line insert
+   * shares one transaction timestamp, so two identical lines intentionally
+   * entered on a single receipt would otherwise be repaired away. Rows that
+   * differ in notes/creator/reference/source fall into different groups and
+   * are never compared.
+   *
+   * Candidates already neutralised by a prior repair movement
+   * (source_type 'inventory_duplicate_repair') are filtered out, which makes
+   * the scan idempotent.
    */
   async findDuplicateWarehouseReceiptCandidates(
     businessId: string,
     windowMinutes = 2,
   ): Promise<DuplicateWarehouseReceiptCandidate[]> {
-    type LegacyReceiptMovement = Pick<
+    type ReceiptMovement = Pick<
       Row<'stock_movements'>,
       | 'id'
       | 'product_id'
@@ -335,21 +358,23 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       | 'notes'
       | 'created_by'
       | 'created_at'
+      | 'source_type'
+      | 'source_id'
+      | 'reference'
+      | 'client_key'
     >;
 
-    let rows: LegacyReceiptMovement[];
+    let rows: ReceiptMovement[];
     try {
-      rows = await fetchAllRows<LegacyReceiptMovement>(
+      rows = await fetchAllRows<ReceiptMovement>(
         this.client
           .from('stock_movements')
-          .select('id, product_id, location_id, movement_date, quantity, unit_cost, notes, created_by, created_at')
+          .select(
+            'id, product_id, location_id, movement_date, quantity, unit_cost, ' +
+            'notes, created_by, created_at, source_type, source_id, reference, client_key',
+          )
           .eq('business_id', businessId)
-          .eq('movement_type', 'purchase')
-          .is('source_type', null)
-          .is('source_id', null)
-          .is('reference', null)
-          .is('client_key', null)
-          .not('created_by', 'is', null),
+          .eq('movement_type', 'purchase'),
         { orderBy: 'created_at', maxRows: 50_000 },
       );
     } catch (error) {
@@ -358,7 +383,7 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
 
     if (rows.length === 0) return [];
 
-    const groups = new Map<string, LegacyReceiptMovement[]>();
+    const groups = new Map<string, ReceiptMovement[]>();
     for (const row of rows) {
       const key = JSON.stringify([
         row.product_id,
@@ -368,6 +393,9 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
         Number(row.unit_cost),
         row.notes ?? '',
         row.created_by ?? '',
+        row.source_type ?? '',
+        row.source_id ?? '',
+        row.reference ?? '',
       ]);
       const existing = groups.get(key) ?? [];
       existing.push(row);
@@ -385,12 +413,23 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
 
       for (const row of sorted.slice(1)) {
         const elapsed = Date.parse(row.created_at) - Date.parse(previous.created_at);
-        // Rows from the same multi-line insert share the same created_at
-        // (`now()` is transaction-stable). Do not treat exact timestamp ties as
-        // duplicate submits, or two identical lines intentionally entered on a
-        // single old receipt would be repaired away. A genuine retry/double
-        // submit is a separate transaction and should have a later timestamp.
-        if (elapsed > 0 && elapsed <= windowMs) {
+        // Same multi-line insert: `now()` is transaction-stable, so exact
+        // timestamp ties are never duplicate submits (see docstring).
+        if (elapsed === 0) {
+          previous = row;
+          continue;
+        }
+
+        // Rule 1: same receipt identity replays, whenever they landed.
+        const sameReceiptIdentity = Boolean(row.source_id);
+        // Rule 2 guard: two distinct client_keys are two different keyed
+        // receipts, not one receipt submitted twice.
+        const distinctKeyedReceipts =
+          Boolean(previous.client_key)
+          && Boolean(row.client_key)
+          && previous.client_key !== row.client_key;
+
+        if (sameReceiptIdentity || (!distinctKeyedReceipts && elapsed <= windowMs)) {
           const quantity = Number(row.quantity);
           const unitCost = Number(row.unit_cost);
           candidates.push({
