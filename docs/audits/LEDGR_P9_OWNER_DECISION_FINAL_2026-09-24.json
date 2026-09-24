@@ -1,0 +1,115 @@
+{
+  "baseline_commit": "268fd67",
+  "baseline_parent": "dc80e1c",
+  "branch": "arena/01a0c215-ledgr-react",
+  "evidence": {
+    "release_pass": 742,
+    "release_fail": 0,
+    "release_blocked": 52,
+    "release_total": 794,
+    "evidence_file": ".cache/r13/ledgr-r13-ecFOuO/evidence.json",
+    "unit_pass": 807,
+    "p8_classification": { "A": 0, "B": 21, "C": 15, "D": 4, "E": 0, "F": 12 }
+  },
+  "owner_answers": {
+    "Q1_release_scope": "YES",
+    "Q2_environment_B21": "YES",
+    "Q3_accepted_C15": "YES",
+    "Q4_branch_admin_D3": "YES",
+    "Q5_billing": "YES",
+    "Q5_billing_mode": "PILOT / LIMITED CONTROLLED USERS",
+    "Q6_storage": "YES",
+    "Q7_provider_auth": "YES",
+    "Q8_browser_revalidation": "YES",
+    "Q9_release_decision": "GO"
+  },
+  "approved_scope": [
+    "Tenant isolation (two-business authenticated, RLS is_business_member)",
+    "POS sales / till operations (post_pos_sale 42501/23514/P0QLT)",
+    "Inventory / stock integrity (trg_stock_movement_apply_balance FOR UPDATE 23514)",
+    "Branch authorization — till family only (can_access_branch DEC-03 fail-closed)",
+    "Sales and payments",
+    "Customers/suppliers org-wide (current contract)",
+    "Financial reporting org-wide + POS shift report branch-enforced",
+    "POS corrections/refunds/voids + till/shift integrity (R08)",
+    "Offline queue/reconciliation within RECONCILABLE stock-denied|policy-denied only (P5-B Q3/Q11)",
+    "Billing/quota within tested P0QLT for POS/quick + uniform BEFORE INSERT (P5-C Q12/Q13)",
+    "AI/business reporting with optional branch filter read-only (P5-E Q14/Q15 after P8)",
+    "Multi-business tenant isolation"
+  ],
+  "excluded_scope": [
+    {
+      "capability": "Storage isolation (storage.objects RLS, path, signed URL)",
+      "evidence": "BLOCKED B 2 TENANT.storage — no Storage infrastructure",
+      "owner_acceptance": "YES Q6",
+      "release_status": "EXCLUDED"
+    },
+    {
+      "capability": "Provider authentication (AUTH valid/invalid/expired/logout + PRIV + R02 PROVIDER-TOKEN 9)",
+      "evidence": "BLOCKED B 21 — no isolated GoTrue",
+      "owner_acceptance": "YES Q7",
+      "release_status": "EXCLUDED"
+    },
+    {
+      "capability": "Browser/server revalidation (R094 2× B CRITICAL)",
+      "evidence": "BLOCKED B — no wire-reachable PostgREST/GoTrue/JWT",
+      "owner_acceptance": "YES Q8",
+      "release_status": "EXCLUDED"
+    },
+    {
+      "capability": "Full commercial billing lifecycle (BILLING.SERVER-QUOTA D)",
+      "evidence": "OWNER DECISION D — canonical command not defined (POS/quick P0QLT proven)",
+      "owner_acceptance": "YES Q5 PILOT",
+      "release_status": "EXCLUDED"
+    },
+    {
+      "capability": "App-wide branch admin (BRANCH.create/cross-branch-admin/modify 3× D)",
+      "evidence": "OWNER DECISION D — writer can_write_* org-wide escape, till family sealed but branches not",
+      "owner_acceptance": "YES Q4",
+      "release_status": "EXCLUDED"
+    },
+    {
+      "capability": "Branch-scoped customers/financial/inventory/reports beyond till (5× C)",
+      "evidence": "ACCEPTED C — R08.7 org-wide intentional, till family only",
+      "owner_acceptance": "YES Q3",
+      "release_status": "EXCLUDED"
+    },
+    {
+      "capability": "Generic offline conflict/multitab/browser process + concurrent stock 2-client + legacy bootstrap",
+      "evidence": "ACCEPTED C/F — no approved contract / honest harness / superseded",
+      "owner_acceptance": "YES Q3",
+      "release_status": "EXCLUDED"
+    }
+  ],
+  "accepted_limitations": [
+    "BRANCH.customers", "BRANCH.financial", "BRANCH.inventory", "BRANCH.read", "BRANCH.reports",
+    "OFFLINE.ACTOR-BINDING", "OFFLINE.BROWSER", "OFFLINE.CONFLICT", "OFFLINE.MULTITAB",
+    "R06.POS.STOCK.CONCURRENT", "AI.BRANCH",
+    "R02.DEC-02.LEGITIMATE-PHONE-RECOVERY", "R02.RECOVERY.OTP.FUTURE-VALID-ALLOWS-RECOVERY", "R02.RECOVERY.OTP.SUBSTITUTED-TARGET-DENIED", "R02.RECOVERY.OTP.WRONG-DENIED"
+  ],
+  "deferred_evidence": [
+    { "group": "R094 browser/server", "count": 2, "test_ids": ["R094.BROWSER.SERVER-REVALIDATION", "R094.BROWSER.SERVER-REVALIDATION.INVESTIGATION"], "why": "No Docker Supabase stack for browser traffic" },
+    { "group": "TENANT.storage", "count": 2, "test_ids": ["TENANT.A.storage", "TENANT.B.storage"], "why": "No Real Storage + effective business_users grants" },
+    { "group": "AUTH", "count": 4, "test_ids": ["AUTH.expired-session", "AUTH.invalid-login", "AUTH.logout-revocation", "AUTH.valid-login"], "why": "No isolated GoTrue" },
+    { "group": "PRIV", "count": 4, "test_ids": ["PRIV.INVITATION", "PRIV.MEMBERSHIP", "PRIV.PROFILE", "PRIV.RECOVERY"], "why": "No Auth Admin + delivery" },
+    { "group": "R02 provider-token", "count": 9, "test_ids": ["R02.PROVIDER-TOKEN.consumed", "R02.PROVIDER-TOKEN.expired", "R02.PROVIDER-TOKEN.identity-changed-after-issuance", "R02.PROVIDER-TOKEN.invalid", "R02.PROVIDER-TOKEN.malformed", "R02.PROVIDER-TOKEN.missing", "R02.PROVIDER-TOKEN.replay", "R02.PROVIDER-TOKEN.substituted", "R02.PROVIDER-TOKEN.valid-own-identity"], "why": "No recovery service/delivery" },
+    { "group": "BRANCH admin", "count": 3, "test_ids": ["BRANCH.create", "BRANCH.cross-branch-admin", "BRANCH.modify"], "why": "Writer org-wide escape per R08.7" },
+    { "group": "BILLING canonical", "count": 1, "test_ids": ["BILLING.SERVER-QUOTA"], "why": "Generic command not defined per Q12/Q13" }
+  ],
+  "billing_mode": "PILOT / LIMITED CONTROLLED USERS",
+  "release_decision": "GO",
+  "conditions": [],
+  "future_authorized_packages": [],
+  "decision_timestamp": "2026-09-24T10:45:00+02:00",
+  "consistency_check": {
+    "passed": true,
+    "flagged_contradictions": []
+  },
+  "verification": {
+    "git_diff_stat_since_baseline": "docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md + .json only",
+    "src_changed": false,
+    "supabase_changed": false,
+    "tests_changed": false,
+    "p4_signed_unchanged": true
+  }
+}
