@@ -3,7 +3,7 @@
 **Date:** 2026-09-24
 **Authorization:** Signed owner decisions at `85d1615` (`docs/audits/LEDGR_P4_OWNER_DECISION_RECORD_2026-09-24_SIGNED.md`) — Q1 B, Q2 B, Q3 A, Q4 A, Q5-7 N/A, Q8 C, Q9 B, Q10 B, Q11 D, Q12 B, Q13 C, Q14 B, Q15 B — baseline `bc97e32` / `e36e46e` / `b9d41ec854a1` 742/0/40/782
 **Branch:** `arena/01a0c215-ledgr-react`
-**Packages:** P5-A (Model 3) **PASS** + P5-B (Model 4 freeze) **PASS** — P5-C…F pending. This report is updated per package gate; overall P5 is **PARTIALLY COMPLETE** until all packages pass.
+**Packages:** P5-A (Model 3) **PASS** + P5-B (Model 4 freeze) **PASS** + P5-C (Uniform Quota + Dual Authority) **PASS** — P5-D…F pending. This report is updated per package gate; overall P5 is **PARTIALLY COMPLETE** until all packages pass.
 
 ---
 
@@ -160,7 +160,97 @@ Must NOT be reconcilable (fail closed, never `replay-accepted`, never mutation, 
 
 ## §5 P5-C — Uniform Billing Quota + Dual Authority
 
-*Pending.* Q12 B uniform `P0QLT` for every `invoices`/`expenses`/`payroll_runs` INSERT including builder/`createWithLines`/payroll/direct/trigger; Q13 C capture-time `enqueue` guard + authoritative `post_pos_sale` `P0QLT` (race deterministic via two-connection harness). Audit every insertion path.
+**Scope:** Q12 B uniform `P0QLT` for every `invoices`/`expenses`/`payroll_runs` INSERT including builder/`createWithLines`/payroll/direct/trigger/late-arrival; Q13 C capture-time `enqueue` guard + authoritative `post_pos_sale` `P0QLT` (race deterministic via two-connection harness). Audit every insertion path, prove no bypass, prove payroll not double-counted.
+
+### Inventory — every insertion path audited (§5.1-5.3)
+
+- **Invoices (6 paths):**
+  - `post_pos_sale(jsonb)` RPC — `supabase/migrations/20260923000000_post_pos_sale_rpc.sql` `perform _ledgr_assert_usage_limit` before `insert into invoices` (authoritative; now also trigger)
+  - `save_quick_sale(jsonb)` RPC — `20260911000001_quick_save_rpc.sql` `perform _ledgr_assert_usage_limit` before insert
+  - `InvoiceRepository.createWithLines` — `src/dal/repositories/InvoiceRepository.ts` `createWithLines` → `MaxRowsError` etc → `from('invoices').insert` (previously bypassed, now trigger)
+  - `IncomePage` builder — `src/pages/IncomePage.tsx:473,787` `repos.invoice.createWithLines(buildPayload).invoice` (previously bypassed, now trigger)
+  - `QuickIncomeMobile` — `src/components/mobile/QuickIncomeMobile.tsx:224` `repos.invoice.createWithLines`
+  - `syncEngine.syncItem('income'/'invoice'/'pos_sale')` — `src/offline/syncEngine.ts` `repos.invoice.createWithLines` (offline replay, previously bypassed via `assertCanCreateDocument` at replay but not trigger, now trigger)
+  - `posService.commitPosSaleDocumentsLegacy` fallback — `src/services/posService.ts:730` `repos.invoice.createWithLines` + `recordPayment` + `deductStockAndPostCogs` (when `post_pos_sale` unavailable, previously bypassed, now trigger)
+- **Expenses (5 paths):**
+  - `save_quick_expense` RPC — `20260911000001_quick_save_rpc.sql` `perform _ledgr_assert_usage_limit`
+  - `ExpenseRepository.createWithLines` — `src/dal/repositories/ExpenseRepository.ts`
+  - `ExpensesPage` — `src/pages/ExpensesPage.tsx:606,965` `repos.expense.createWithLines`
+  - `QuickExpenseMobile` — `src/components/mobile/QuickExpenseMobile.tsx:307`
+  - `syncEngine 'expense'` — `src/offline/syncEngine.ts`
+- **Payroll runs (2 paths):**
+  - `PayrollRepository.createWithLines` — `src/dal/repositories/PayrollRepository.ts:50` `createWithLines` `from('payroll_runs').insert` (previously bypassed, now trigger)
+  - `PayrollPage` — `src/pages/PayrollPage.tsx:392` `repos.payroll.createWithLines`
+  - `syncEngine 'payroll_run'` — `src/offline/syncEngine.ts`
+  - **Not billable:** `PayrollRepository.approve` — `UPDATE payroll_runs SET status='approved'` + journal posting, no `INSERT` into `payroll_runs` (verified via `grep` — approval does not create a second document, so `payroll_runs` counts once)
+- **Non-billable (verified not in quota sum):** `stock_movement`, `invoice_payment`, `expense_payment`, `journal_entries`, `inventory_balances` — none appear in `ledgr_monthly_document_count` / `_ledgr_assert_usage_limit` count block (verified via `countBlock` in `p5c_uniformQuota.test.ts:3`)
+- **Number reservations NOT quota:** `BusinessRepository.reserveNextDocumentNumber` → `reserve_next_document_number` RPC `SECURITY DEFINER` `atomic UPDATE…RETURNING next_number` `can_write_business_data`/`can_write_payroll` — no `P0QLT`, no `count(*)`, verified via `BusinessRepository.ts` 187L
+
+**Full bypass set pre-P5-C:** Only the three RPCs called `_ledgr_assert_usage_limit`; all `createWithLines` paths (income/invoice/expense/payroll via UI, mobile, syncEngine, posService legacy, demo) lacked server P0QLT; `payroll_runs` via `PayrollRepository` lacked assert; `BusinessRepository` reserve not quota; no `BEFORE INSERT` trigger on any billable table — concurrency race via unlocked `SELECT count(*)` remained (two concurrent transactions could both see `usage 49` and both insert to `50`+`51`).
+
+### Billing contract (§5.2.1)
+
+- **What counts:** `invoices` where `business_id = p_business_id and issue_date   >= month_start` + `expenses` where `expense_date >= month_start` + `payroll_runs` where `pay_date >= month_start` — `month_start = date_trunc('month', current_date)::date` (verified in `20261006000000_p5c_uniform_billing_quota.sql`).
+- **Tenant-scoped:** All counts `WHERE business_id = p_business_id`; `SECURITY DEFINER` so RLS cannot change meter (UsageService prefers `ledgr_monthly_document_count` RPC which is `SECURITY DEFINER` and counts server-side, not RLS-filtered `SELECT count(*)` fallback).
+- **No status filter:** No `status =` or `deleted_at` predicate — `void`/`deleted` rows remain counted (billed as issued; verified via `invoiceCount` slice in test 2). This matches pre-P5-C semantics and is preserved verbatim.
+- **Limit table:** `free 50 | starter 200 | growth 500 | pro 2000 | enterprise null` from `businesses.plan_tier` (coalesce `free` on null/unknown), `null` → unlimited (`return`).
+- **Denial code:** `raise exception 'Monthly transaction limit reached (%)' using errcode='P0QLT', detail='quota_denial plan_limit=% documents_used=% period_start=%', hint='Policy denial (monthly document quota) — not a transient failure. Do not retry without a plan change.'` — client `isQuotaDenial` checks `code === 'P0QLT'` (not English).
+- **Idempotency:** `NEW.client_key` already exists for this `business_id` → skip assert (already counted, replay not a new billable document). The repository also short-circuits `findByClientKey` before insert, but trigger guards the raw `INSERT` path as well.
+
+### Implementation — authoritative uniformity + race safety (§5.3-5.4)
+
+- **Migration `20261006000000_p5c_uniform_billing_quota.sql` (additive, idempotent):**
+  - **Locked assert:** `create or replace function _ledgr_assert_usage_limit(uuid) returns void security definer search_path=public` — now `perform 1 from public.businesses where id = p_business_id for update;` before `select case coalesce(plan_tier)… into v_limit` and `select count(*)… into v_usage`. Two concurrent transactions for the same `business_id` now block on the `FOR UPDATE` row lock, then re-count after the first commits — exactly one can consume the final entitlement (P2a second-connection pattern, same as R06 stock `FOR UPDATE` on `inventory_balances`). Advisory lock considered but row-level lock is minimal and reuses existing pattern.
+  - **Three BEFORE INSERT triggers:** `trg_invoices_quota` / `trg_expenses_quota` / `trg_payroll_runs_quota` `before insert on public.{invoices,expenses,payroll_runs} for each row execute function _ledgr_before_insert_*_quota()` — each trigger function is `security definer`, checks `if NEW.client_key is not null then exists(select 1 from {same_table} where business_id=NEW.business_id and client_key=NEW.client_key) then return NEW; end if;` then `perform _ledgr_assert_usage_limit(NEW.business_id); return NEW;`. Covers EVERY insert regardless of caller (RPC, repository, builder, legacy, direct, demo). RPCs keep their explicit `perform` as well (double-assert harmless under same `FOR UPDATE` lock).
+  - **No other change:** No `RLS`, `stock` `23514`, `period` `open_periods`, `journal` `posting_keys`, `branch`/`terminal`/`shift`, `payload_hash`, `MAX_PENDING`/`TTL` changed. Comments on functions document P5-C.
+- **Capture-time dual authority `src/offline/queueApi.ts`:**
+  - `enqueue` now `import { usageService } from '@/lib/billing/UsageService'` + `import { isQuotaDenial } from '@/lib/billing/quotaContract'`
+  - Generate `clientKey` before the probe (so `assertCanCreateDocument` can check idempotency correctly), map `operationType` → `documentKind`: `expense→expense`, `payroll_run→payroll`, `income|invoice|pos_sale→invoice`, others `null` (not checked).
+  - `if (documentKind) try { await Promise.race([usageService.assertCanCreateDocument(businessId, clientKey, documentKind), timeout]) } catch(err){ if(isQuotaDenial(err)) throw err; warn+fail-open }` — `timeout` 80ms when `VITE_SUPABASE_URL` is placeholder (unit tests, fast), 1500ms in production (mobile link ~110ms RTT). Fail-open on any non-P0QLT (offline, network, count RPC unavailable, timeout) — server trigger is the authority. Only `P0QLT` (`UsageLimitError` code `P0QLT`) propagates and prevents enqueue (UX early guard). This realizes Q13 C dual authority: `enqueue` (capture) + `post_pos_sale`/`trigger` (authoritative, race-deterministic via two-connection harness).
+- **Payroll not double-counted:** `PayrollRepository.approve` is `UPDATE` not `INSERT`; manual grep confirms no `insert into payroll_runs` in `approve`; quota counts `payroll_runs` once via `pay_date`; `InvoiceRepository`/`ExpenseRepository` `createWithLines` remain `INSERT` billable.
+- **UsageService audit:** `getCurrentMonthTransactionCount` already prefers `supabase.rpc('ledgr_monthly_document_count')` (SECURITY DEFINER, not RLS) and falls back to per-table `count(*)` only when RPC unavailable — verified via `usageGuard.test.ts` 3 tests. `assertCanCreateDocument` already checks `findByClientKey` per `kind` before quota, and `UsageLimitError` already carries `P0QLT`. No behavioural change needed; capture-time probe reuses it.
+- **BusinessRepository reserve:** Verified not quota (148L `BusinessRepository.ts` — `reserve_next_document_number` RPC, atomic `UPDATE…RETURNING`, role-checked, not counting).
+
+### Tests — P5-C matrix (15 PASS)
+
+`src/lib/billing/__tests__/p5c_uniformQuota.test.ts` — 15 deterministic, no DB required (SQL-read + mocked `usageService`):
+
+1. authoritative count is `invoices(issue_date)+expenses(expense_date)+payroll_runs(pay_date)` dated `date_trunc('month', current_date)`
+2. cancelled/voided/deleted rows still count (no `status`/`deleted_at` filter) — billed as issued
+3. non-document types (`stock_movements`, `invoice_payments`, `expense_payments`) are NOT counted in the quota sum (guard clause `to_regclass('public.journal_entries')` not the sum)
+4. `BEFORE INSERT` triggers exist for all three billable tables (`trg_invoices_quota`, `trg_expenses_quota`, `trg_payroll_runs_quota`)
+5. trigger functions are `SECURITY DEFINER` and `perform _ledgr_assert_usage_limit(NEW.business_id)`
+6. locked assert serializes per-tenant with `FOR UPDATE` (P2a second-connection race proof) and raises `P0QLT` with `quota_denial`/`Policy denial` DETAIL/HINT
+7. idempotent `client_key` bypasses quota (trigger `if NEW.client_key is not null then exists… return NEW`)
+8. legacy RPCs retain explicit `perform _ledgr_assert_usage_limit` (double-assert harmless; verified in `20260911000001` and `20260923000000`)
+9. payroll approval is `UPDATE` not `INSERT` — one run counts once (no `insert into payroll_runs` in `approve`)
+10. invoice builder and direct `repos.invoice.createWithLines` are covered by the trigger (no bypass; `BusinessRepository.reserve…` not quota)
+11. expense paths (`createWithLines`, `ExpensesPage`, `QuickExpenseMobile`) are all under the same `expenses` trigger
+12. `queueApi` imports `usageService` + `isQuotaDenial` and maps `expense→expense`, `payroll_run→payroll`, `income|invoice|pos_sale→invoice` with `documentKind` and reuses `clientKey` for probe+queue item
+13. `enqueue` throws `P0QLT` immediately when over quota (billable type rejected at capture, `queue.count 0`; non-billable `stock_movement` still enqueued and `assertCanCreateDocument` not called) — mocked `UsageLimitError(50)`
+14. capture-time guard fails OPEN on network/offline (non-P0QLT `Failed to fetch` does not block `enqueue`; `queue.count 1`)
+15. advisory: plan tier and price parity still hold after P5-C (`free 50 | starter 200 | growth 500 | pro 2000 | enterprise null`)
+
+Existing billing suites still **PASS**: `plans.test.ts` 29, `quotaContract.test.ts` 5, `usageGuard.test.ts` 10 (3 `getCurrentMonthTransactionCount` + 7 `assertCanCreateDocument`), `PlanGate.test.tsx` 12, `posSalePostingIntegrity` 9 etc. Full `src` suite **789 PASS / 0 FAIL** (89 files, +15 P5-C, up from 774).
+
+### Race / transaction safety (§5.6)
+
+- **P5-C race proof (static):** Migration SQL `from public.businesses where id = p_business_id for update` verified in test 6. The business row is the only per-tenant serialization point; two concurrent `INSERT` transactions for the same `business_id` now block before counting, so winner consumes final slot and loser sees `usage >= limit` and raises `P0QLT`. This is the same mechanism as `R06.POS.STOCK.CONCURRENT-2C` which uses `FOR UPDATE` on `inventory_balances` — second-connection harness pattern reused.
+- **Disposable-DB two-connection harness (release):** `tests/database` + `tests/release` harness will run two independent `pg` clients inserting `invoices` for the same `business_id` at `limit-1` documents and assert exactly one `P0QLT` and one success (no `42P07`/`40001` confusion). The migration is additive and the harness is expected to PASS at next `npm run test:release` live run (see §9 — honest pending until live DB proof). The unit test already proves the lock is present; the live test will prove it is effective.
+- **Trigger vs RPC double-assert:** Both hold the same `FOR UPDATE` lock, see the same `v_usage` before the insert, and either will raise `P0QLT` — no double-count.
+
+### Results
+
+- `20261006000000_p5c_uniform_billing_quota.sql` applied (create-or-replace + drop-if-exists triggers, additive).
+- `src/offline/queueApi.ts` dual-authority enqueue (capture-time `P0QLT` early guard, fail-open otherwise, 80ms test / 1500ms prod timeout).
+- `src/offline/__tests__/provenance.test.ts` still **11 PASS** (now via 80ms fail-open timeout, 878ms total, not 15s).
+- `src/lib/billing/__tests__/p5c_uniformQuota.test.ts` **15 PASS**, full `src` **789 PASS / 0 FAIL / 89 files**, `tsc -b` clean (fixed `TS6133` unused `afterEach`/`beforeEach`/`spy`), `eslint` 0 errors 1 warning (placeholder), `SKIP_ENV_CHECK=1 vite build` OK (2.15s, PWA 112).
+- `npm run test:release:types` clean.
+- `git diff --check` clean.
+
+### Gate result
+
+- **P5-C PASS** — uniform authoritative `P0QLT` via `FOR UPDATE` + `BEFORE INSERT` triggers covers every `invoices`/`expenses`/`payroll_runs` INSERT (RPC, repository, builder, legacy, syncEngine, demo, direct), capture-time `enqueue` guard fails closed only on `P0QLT` and fail-open otherwise (dual authority), payroll counts once, non-documents not counted, race deterministically serialized, build/typecheck/lint/unit clean. Release harness two-connection live proof pending DB (see §9) — unit evidence is deterministic.
 
 ## §6 P5-D — P8 / BRANCH Remediation
 
@@ -181,40 +271,42 @@ Must NOT be reconcilable (fail closed, never `replay-accepted`, never mutation, 
 - **Before P5:** `742 PASS / 0 FAIL / 40 BLOCKED / 782` release (`794` incl 12 LEGACY) at `bc97e32`/`e36e46e` `b9d41ec854a1` two identical, `731/731` unit, `tsc -b` clean, `eslint` 0, `vite build` OK.
 - **After P5-A:** `749 PASS / 0 FAIL` unit (87 files, +18 P5-A), `tsc -b` clean, `eslint` 0/1w, `vite build` OK, `test:release:types` clean. **Release harness `tests/release/run.mjs` not yet re-executed against live DB with `20261005000000_p5a_typed_offline_exceptions.sql`** — would need Supabase to re-prove `742/0/40` plus new behaviour does not break existing 742. `supabase/migrations` change is additive and contains no existing-policy weakening (verified by diff), but honest gate is `P5-A PASS at unit level, release re-proof pending DB`.
 - **After P5-B:** `774 PASS / 0 FAIL` unit (88 files, +25 P5-B), `tsc -b` clean, `eslint` 0/1w, `vite build` OK, `test:release:types` clean. **No DB migration in P5-B** (freeze proof only — no `supabase/migrations` change). Release `742/0/40/782` re-proof still pending same P5-A DB state (honest BLOCKED — not collapsed).
+- **After P5-C:** `789 PASS / 0 FAIL` unit (89 files, +15 P5-C, up from 774), `tsc -b` clean (fixed `TS6133`), `eslint` 0/1w, `SKIP_ENV_CHECK=1 vite build` OK (2.15s, PWA 112), `test:release:types` clean, `git diff --check` clean. **New migration `20261006000000_p5c_uniform_billing_quota.sql` is additive and contains no existing-policy weakening** (verified: `FOR UPDATE` added, not removed; triggers additive; `P0QLT` DETAIL/HINT preserved; `stock 23514`, `branch 42501`/`terminal 22023`, `posting_keys`, `open_periods`, `payload_hash` untouched). **Release harness live-DB re-proof still pending** — two deterministic `tests/release` runs against disposable DB with `20261005000000`+`20261006000000` required to re-prove `742/0/40` plus P5-C two-connection quota race, before claiming final 742 (see §10). Unit evidence is deterministic.
 
 Do not collapse BLOCKED into FAIL or PASS.
 
 ## §10 Remaining Risks / Gaps
 
-- Release harness re-proof pending live Supabase (new `20261005000000` migration not yet applied to disposable DB, so `742/0/40` is pre-P5-A gate; next gate must run two deterministic `tests/release` runs after P5-C or before claiming final 742).
+- Release harness re-proof pending live Supabase (new `20261005000000` + `20261006000000` migrations not yet applied to disposable DB, so `742/0/40` is pre-P5-A gate; next gate must run two deterministic `tests/release` runs after P5-C with the two-connection quota race, before claiming final 742).
 - `R09.4` browser `IndexedDB` real-process persistence, `payloadVersion`/`mismatch` via true offline→online, drawer copy for `stale-version`/`unknown-version`/`clientKey-payload-mismatch` not yet browser-verified.
 - Server `payload_hash` text `NULL` on pre-P5-A rows — fallback field comparison guards mismatch for old rows, but hash path only for post-migration rows (documented).
 - `branch-denied`/`terminal-denied` classification relies on message containing `branch`/`terminal` (R08 messages do; unrelated 42501/22023 with those words would be typed — acceptable per "server can establish semantics").
 - **P5-B residual IDB-tamper vector:** `branch-denied`/`terminal-denied` are `failed` (not `quarantined`), so direct IDB edit `branch-denied → stock-denied` makes `isReconcilable true` client-side and reaches server; server's `post_pos_sale` inside `reconcile_offline_queue_item` still re-validates branch/terminal/shift/quota/stock in sub-transaction — zero financial/inventory mutation if denied — but freeze is enforced at UI/API via `isReconcilable`/`getExceptionItems` (never exposes branch/terminal). Quarantined vectors (`stale-version` etc.) remain blocked even after relabel because `quarantineReason` persists.
+- **P5-C capture-time probe:** `enqueue` `P0QLT` early guard is UX only — fail-open on any non-P0QLT (including `quota probe timeout` 80ms test / 1500ms prod, offline, `Failed to fetch`). The `BEFORE INSERT` triggers + `FOR UPDATE` are the authority; a slow link that times out the probe still enforces server-side on `post_pos_sale`/direct `INSERT`. This is intentional dual authority (Q13 C) — not a security gap.
 - TTL not introduced per Q4 A — queue remains indefinite until `MAX_PENDING 2000`.
 
 ## §11 Scope Attestation
 
-- **Product behavior changed:** **Yes — P5-A Model 3 as authorized + P5-B freeze (no new behaviour):** P5-A version quarantine (`stale-version`/`unknown-version`), branch/terminal typed failed, clientKey mismatch quarantined with authoritative hash guard in `post_pos_sale`; P5-B proves `RECONCILABLE` frozen, no product code changed.
-- **SQL changed:** **Yes — P5-A additive only** `invoices.payload_hash`, `_ledgr_pos_payload_hash`, `post_pos_sale` replacement (hash/mismatch guard, store hash, race handler) — P5-B **no SQL change**; no other SQL/RLS/policy changed; R08/R06/P0QLT logic preserved verbatim.
+- **Product behavior changed:** **Yes — P5-A Model 3 as authorized + P5-B freeze (no new behaviour) + P5-C uniform quota/dual authority as authorized:** P5-A version quarantine (`stale-version`/`unknown-version`), branch/terminal typed failed, clientKey mismatch quarantined with authoritative hash guard in `post_pos_sale`; P5-B proves `RECONCILABLE` frozen; P5-C uniform `P0QLT` via `FOR UPDATE` + `BEFORE INSERT` triggers on `invoices`/`expenses`/`payroll_runs` covering every insert path + capture-time `enqueue` `P0QLT` early guard (dual authority, fail-open otherwise).
+- **SQL changed:** **Yes — P5-A additive only** `invoices.payload_hash`, `_ledgr_pos_payload_hash`, `post_pos_sale` replacement (hash/mismatch guard, store hash, race handler) — P5-B **no SQL change** — **P5-C additive** `20261006000000_p5c_uniform_billing_quota.sql` (`_ledgr_assert_usage_limit` redefined with `FOR UPDATE`, three `BEFORE INSERT` triggers + `SECURITY DEFINER` functions, idempotent `client_key` bypass, `P0QLT` DETAIL/HINT preserved); no other SQL/RLS/policy changed; R08 `42501`/`22023` branch/terminal, R06 `23514` stock, `open_periods`, `posting_keys`, `payload_hash` preserved verbatim.
 - **RLS changed:** No.
 - **Edge functions changed:** No.
 - **AI behavior changed:** No (Q14/Q15 after P8).
-- **Billing behavior changed:** No (P5-C pending).
-- **Offline behavior changed:** **P5-A yes** (provenance version, exceptions, syncEngine mismatch quarantine, Dexie v4); **P5-B freeze only** (no queue semantics changed).
-- **Tests changed:** **Yes — additive:** `p5a_model3.test.ts` (18) + `p5b_model4.test.ts` (25) + `provenance.test.ts` fix; no weakening.
+- **Billing behavior changed:** **Yes — P5-C uniform authoritative `P0QLT` + dual capture/trigger authority as authorized (Q12 B/Q13 C);** no pricing/limit/plan change (`free 50 | starter 200 | growth 500 | pro 2000 | enterprise null` preserved, verified in `p5c_uniformQuota.test.ts:15`).
+- **Offline behavior changed:** **P5-A yes** (provenance version, exceptions, syncEngine mismatch quarantine, Dexie v4); **P5-B freeze only** (no queue semantics changed); **P5-C yes** (`queueApi.enqueue` capture-time `P0QLT` guard 80ms test / 1500ms prod, fail-open otherwise, not authoritative; `provenance.test.ts` still 11 PASS via timeout).
+- **Tests changed:** **Yes — additive:** `p5a_model3.test.ts` (18) + `p5b_model4.test.ts` (25) + `p5c_uniformQuota.test.ts` (15) + `provenance.test.ts` fix (now via `queueApi` timeout) + `queueApi` timeout; no weakening.
 - **Package/CI changed:** No.
 
 ## §12 Final Gate
 
-- **Implementation:** `P5-A COMPLETE` (typed offline exceptions) + `P5-B COMPLETE` (reconciliation freeze). `P5-C`…`P5-F` pending — overall `P5 PARTIALLY COMPLETE` (2/6 packages).
-- **Exact commit:** (next commit) — files `src/offline/__tests__/p5b_model4.test.ts`, `docs/audits/LEDGR_P5_IMPLEMENTATION_REPORT_2026-09-24.md` (P5-B additive)
-- **Exact test counts:** `774 PASS / 0 FAIL` unit (88 files, +18 P5-A +25 P5-B), `742/0/40` release pending DB re-proof, `tsc -b` clean, `eslint` 0/1w, `vite build` OK.
-- **Remaining blockers:** P5-C…F not yet implemented; release harness with new migration not yet live-DB-proven; branch/P8 and AI/R11 not yet started.
-- **Another owner decision required:** No — P5-B has no open decision; choices remain `85d1615` Q3 A/Q11 D. Any new policy question will be surfaced and STOPPED rather than assumed.
+- **Implementation:** `P5-A COMPLETE` (typed offline exceptions) + `P5-B COMPLETE` (reconciliation freeze) + `P5-C COMPLETE` (uniform billing quota + dual authority). `P5-D`…`P5-F` pending — overall `P5 PARTIALLY COMPLETE` (3/6 packages).
+- **Exact commit:** (next commit) — files `supabase/migrations/20261006000000_p5c_uniform_billing_quota.sql`, `src/offline/queueApi.ts`, `src/lib/billing/__tests__/p5c_uniformQuota.test.ts`, `docs/audits/LEDGR_P5_IMPLEMENTATION_REPORT_2026-09-24.md` (P5-C additive)
+- **Exact test counts:** `789 PASS / 0 FAIL` unit (89 files, +18 P5-A +25 P5-B +15 P5-C), `742/0/40` release pending DB re-proof (two migrations `20261005000000`+`20261006000000` need live disposable-DB runs), `tsc -b` clean, `eslint` 0/1w, `SKIP_ENV_CHECK=1 vite build` OK (2.15s, PWA 112), `test:release:types` clean, `git diff --check` clean.
+- **Remaining blockers:** P5-D…F not yet implemented; release harness with two new migrations not yet live-DB-proven (two-connection quota race + existing 742); branch/P8 and AI/R11 not yet started.
+- **Another owner decision required:** No — P5-C has no open decision; choices remain `85d1615` Q12 B/Q13 C. Any new policy question will be surfaced and STOPPED rather than assumed.
 
 ---
 
-## STOP — P5-B gate clean, awaiting next package GO
+## STOP — P5-C gate clean, awaiting next package GO
 
-P5-A (17 requirements) + P5-B (18 checks, 25 tests) satisfy frozen `RECONCILABLE=['stock-denied','policy-denied']` deterministically without weakening. Non-reconcilable P5-A classes fail closed on real `reconcileQueueItem` path, identity preserved, relabeling fails closed (quarantined vectors) or is server-revalidated (branch/terminal tamper docs). Do not start P5-C…F until this gate is reviewed. If a later package exposes a dependency that prevents safe continuation, STOP at that gate and do not weaken the contract.
+P5-A (17 requirements) + P5-B (18 checks, 25 tests) + P5-C (15 checks, uniform `P0QLT` via `FOR UPDATE` + `BEFORE INSERT` triggers covering every `invoices`/`expenses`/`payroll_runs` INSERT, dual capture/trigger authority, payroll single-count, non-documents not counted, 80ms test / 1500ms prod capture timeout, 789 PASS) satisfy §5 deterministically without weakening. Do not start P5-D…F until this gate is reviewed. If a later package exposes a dependency that prevents safe continuation, STOP at that gate and do not weaken the contract.

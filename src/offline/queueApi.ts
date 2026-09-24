@@ -4,6 +4,8 @@ import { requestBackgroundSync } from './backgroundSync';
 import { useAppStore } from '@/store/useAppStore';
 import { buildProvenance, captureContext } from './provenance';
 import { hashQueuePayload } from './payloadIntegrity';
+import { usageService } from '@/lib/billing/UsageService';
+import { isQuotaDenial } from '@/lib/billing/quotaContract';
 
 /**
  * Determines whether an error occurred because the device is offline or
@@ -117,6 +119,76 @@ export async function enqueue<T extends QueueOperationType>(
       `Offline queue is full (${MAX_PENDING_QUEUE_ITEMS} items). Go online and sync before creating more transactions.`,
     );
   }
+
+  // P5-C (Q13 C) capture-time quota guard — per-tenant monthly document
+  // entitlement (invoices + expenses + payroll_runs dated this month).
+  // This is UX early feedback: it throws P0QLT immediately when the tenant
+  // is over quota, instead of queueing and failing later during sync.
+  // It is NOT authoritative — the BEFORE INSERT triggers + locked
+  // _ledgr_assert_usage_limit are. On any failure that is not a quota
+  // denial (offline, network, count RPC unavailable) we fail OPEN and
+  // enqueue anyway — the server will enforce. Only P0QLT is propagated.
+  const documentKind: 'invoice' | 'expense' | 'payroll' | null =
+    operationType === 'expense'
+      ? 'expense'
+      : operationType === 'payroll_run'
+        ? 'payroll'
+        : operationType === 'income' || operationType === 'invoice' || operationType === 'pos_sale'
+          ? 'invoice'
+          : null;
+  // Generate the idempotency key before the quota probe so the probe can
+  // correctly consider an already-committed replay (same client_key) as
+  // idempotent and not a new billable document. Reuse the same key for the
+  // queue item — one logical document, one key.
+  const clientKey =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+  if (documentKind) {
+    try {
+      // Bound the capture-time probe so a hanging count RPC (e.g. DNS
+      // ENOTFOUND to placeholder.supabase.co in unit tests, or a slow
+      // mobile link) never stalls the UI or the test suite. Production
+      // quota is still enforced authoritatively by the BEFORE INSERT
+      // triggers + locked _ledgr_assert_usage_limit — this is only the
+      // UX early guard (fail-open on any non-P0QLT, including timeout).
+      // In unit tests the Supabase URL is the placeholder and the RPC
+      // would otherwise hang for seconds — use a very short timeout so
+      // those tests stay fast, while production keeps a realistic budget.
+      const probeTimeoutMs = (() => {
+        try {
+          const url = (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_SUPABASE_URL ?? '';
+          if (!url || String(url).includes('placeholder')) return 80;
+        } catch {
+          // ignore — fall through to production timeout
+        }
+        return 1500;
+      })();
+      await Promise.race([
+        usageService.assertCanCreateDocument(businessId, clientKey, documentKind),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('quota probe timeout')), probeTimeoutMs),
+        ),
+      ]);
+    } catch (err) {
+      if (isQuotaDenial(err)) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'quota probe timeout') {
+        // eslint-disable-next-line no-console
+        console.warn('[queueApi] quota capture check timed out — fail open (server will enforce)');
+      } else {
+        // Fail open — offline/unreachable count must not block queueing;
+        // the server trigger is the authority. Log at warn for observability.
+        // eslint-disable-next-line no-console
+        console.warn('[queueApi] quota capture check failed open', err);
+      }
+    }
+  }
+
   const sequence = await nextSequence();
 
   // R09.2 provenance: captured at enqueue from the hydrated app session.
@@ -144,7 +216,8 @@ export async function enqueue<T extends QueueOperationType>(
     attemptCount: 0,
     // Idempotency key: a stable, unique value so a retried sync can recognise
     // an already-committed record instead of inserting a duplicate.
-    clientKey: crypto.randomUUID(),
+    // Reused from the quota probe above — one key per logical document.
+    clientKey,
     ...provenance,
     ...context,
     payloadHash,
