@@ -22,6 +22,11 @@
 #     chicken-manure product — never stock_movements, never journals.
 #   * Never writes quantity_available on the production GENERATED column.
 #
+# RESULTS VISIBILITY
+#   Job logs/artifacts live on Azure Blob Storage, which some networks cannot
+#   reach (SSL reset). Every result line is therefore also emitted as a
+#   check-run annotation (`::notice …`), readable via the GitHub API.
+#
 # USAGE
 #   Auto: merge a change to scripts/repair-eagle-nova-double-count.sql.
 #   Manual: Actions → "Repair Eagle Nova chicken-manure double-count"
@@ -54,6 +59,7 @@ on:
 permissions:
   contents: read
   actions: write   # upload the run output as an artifact
+  checks: write    # annotations carrying the diagnosis/repair/verify lines
 
 concurrency:
   group: repair-eagle-nova-double-count
@@ -112,8 +118,7 @@ jobs:
             echo "==== ${f} ===="
             cat "$f"
           done
-          # Publish to the check-run summary (readable via API without
-          # downloading the Azure-hosted log zip, which some networks block).
+          # Step summary for the Actions UI.
           {
             echo "## Eagle Nova chicken-manure repair (DRY_RUN=${DRY_RUN})"
             echo ""
@@ -126,6 +131,14 @@ jobs:
             done
             echo '```'
           } >> "${GITHUB_STEP_SUMMARY}"
+
+          # Annotations → check-run API (reachable when Azure blobs are not).
+          # Keep each message single-line and under the annotation size cap.
+          while IFS= read -r line || [[ -n "$line" ]]; do
+            [[ -n "${line//[[:space:]]/}" ]] || continue
+            safe="$(printf '%s' "$line" | tr '\r\n\t' '   ' | cut -c1-800)"
+            echo "::notice title=Eagle Nova repair::${safe}"
+          done < <(cat "${OUT_DIR}"/run.log "${OUT_DIR}"/stmt-*.txt 2>/dev/null || true)
 
       - name: Upload run output
         if: always()
