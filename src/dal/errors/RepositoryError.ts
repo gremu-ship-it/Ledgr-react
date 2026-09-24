@@ -46,7 +46,16 @@ export function toRepositoryError(resource: string, error: unknown): RepositoryE
   const message = err?.message ?? 'Unknown error';
   const code = err?.code;
   if (code === '23505' || code === '23503' || code === '23514')
-    return new ValidationError(resource, err?.details ?? message, error);
+    // PostgREST splits a constraint violation into message ("…violates check
+    // constraint chk_…") and details ("Failing row contains (…)"). Show BOTH:
+    // the message names the rule that was broken, the details name the row.
+    // Showing only the details once left a user staring at a failing row with
+    // no idea which constraint produced it.
+    return new ValidationError(
+      resource,
+      err?.details ? `${message} — ${err.details}` : message,
+      error,
+    );
   if (code === 'PGRST116') return new NotFoundError(resource, 'unknown', error);
   if (code === '42501' || code === 'PGRST301' || code === '401' || code === '403')
     return new UnauthorizedError(resource, message, error);

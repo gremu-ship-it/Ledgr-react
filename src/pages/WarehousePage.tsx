@@ -268,19 +268,23 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
 
   const syncMutation = useMutation({
     mutationFn: () => repos.inventory.backfillFromSalesAndPurchases(businessId),
-    onSuccess: ({ salesBackfilled, purchasesBackfilled, balancesUpdated }) => {
-      if (salesBackfilled === 0 && purchasesBackfilled === 0) {
+    onSuccess: ({ salesBackfilled, purchasesBackfilled, adjustmentsInserted, balancesUpdated }) => {
+      if (salesBackfilled === 0 && purchasesBackfilled === 0 && adjustmentsInserted === 0) {
         setFeedback({
           type: 'success',
           message: 'Every tracked sale and purchase already has a matching stock movement — nothing to sync.',
         });
       } else {
+        const plural = (n: number) => (n === 1 ? '' : 's');
         setFeedback({
           type: 'success',
           message:
-            `Added ${salesBackfilled} missing sale movement${salesBackfilled === 1 ? '' : 's'} and ` +
-            `${purchasesBackfilled} missing purchase movement${purchasesBackfilled === 1 ? '' : 's'}, ` +
-            `then recalculated ${balancesUpdated} stock balance${balancesUpdated === 1 ? '' : 's'}. ` +
+            `Added ${salesBackfilled} missing sale movement${plural(salesBackfilled)} and ` +
+            `${purchasesBackfilled} missing purchase movement${plural(purchasesBackfilled)}` +
+            (adjustmentsInserted > 0
+              ? `, plus ${adjustmentsInserted} opening-stock movement${plural(adjustmentsInserted)} for goods sold before tracking began`
+              : '') +
+            `, then updated ${balancesUpdated} stock balance${plural(balancesUpdated)}. ` +
             'Check the ledger reconciliation below next, since stock values have changed.',
         });
       }
@@ -298,7 +302,9 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
           <p className="text-xs text-gray-500">
             If inventory tracking started after invoices or expenses were already recorded, stock on hand can
             disagree with what those transactions imply. This finds tracked-product sale/purchase lines with no
-            matching stock movement, adds the missing movements, and recalculates balances.
+            matching stock movement and adds the missing movements, updating stock balances by the same amounts.
+            Sales whose goods were never recorded as received get a one-off opening-stock movement so quantities
+            stay valid.
           </p>
         </div>
         <button
@@ -325,10 +331,11 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
 }
 
 // ── Duplicate receipt repair panel ───────────────────────────────────────────
-// One-off cleanup for the bug where rapid Receive Stock retries could insert
-// the same legacy, unkeyed warehouse receipt twice. The repair is additive and
-// auditable: it posts compensating stock movements plus a GRNI reversal rather
-// than deleting history.
+// Cleanup for the bug where Receive Stock retries could post the same
+// warehouse receipt twice: legacy unkeyed receipts submitted in quick
+// succession, and replays that re-posted an existing receipt key. The repair
+// is additive and auditable: it posts compensating stock movements plus a
+// GRNI reversal rather than deleting history.
 
 function DuplicateReceiptRepairPanel({
   businessId,
@@ -370,8 +377,9 @@ function DuplicateReceiptRepairPanel({
         <div>
           <p className="text-sm font-semibold text-gray-900">Repair duplicate Receive Stock entries</p>
           <p className="text-xs text-gray-500">
-            If an old receive action was submitted twice, this scans for identical legacy receipts created within
-            two minutes, posts a stock correction, and reverses the duplicated GRNI accounting.
+            If a receive action was submitted twice, this finds the re-posted receipt — the same receipt posted
+            again under its own reference, or an identical legacy receipt created within two minutes — posts a
+            stock correction, and reverses the duplicated GRNI accounting.
           </p>
         </div>
         <button
