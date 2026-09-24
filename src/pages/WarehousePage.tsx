@@ -268,19 +268,23 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
 
   const syncMutation = useMutation({
     mutationFn: () => repos.inventory.backfillFromSalesAndPurchases(businessId),
-    onSuccess: ({ salesBackfilled, purchasesBackfilled, balancesUpdated }) => {
-      if (salesBackfilled === 0 && purchasesBackfilled === 0) {
+    onSuccess: ({ salesBackfilled, purchasesBackfilled, adjustmentsInserted, balancesUpdated }) => {
+      if (salesBackfilled === 0 && purchasesBackfilled === 0 && adjustmentsInserted === 0) {
         setFeedback({
           type: 'success',
           message: 'Every tracked sale and purchase already has a matching stock movement — nothing to sync.',
         });
       } else {
+        const plural = (n: number) => (n === 1 ? '' : 's');
         setFeedback({
           type: 'success',
           message:
-            `Added ${salesBackfilled} missing sale movement${salesBackfilled === 1 ? '' : 's'} and ` +
-            `${purchasesBackfilled} missing purchase movement${purchasesBackfilled === 1 ? '' : 's'}, ` +
-            `then recalculated ${balancesUpdated} stock balance${balancesUpdated === 1 ? '' : 's'}. ` +
+            `Added ${salesBackfilled} missing sale movement${plural(salesBackfilled)} and ` +
+            `${purchasesBackfilled} missing purchase movement${plural(purchasesBackfilled)}` +
+            (adjustmentsInserted > 0
+              ? `, plus ${adjustmentsInserted} opening-stock movement${plural(adjustmentsInserted)} for goods sold before tracking began`
+              : '') +
+            `, then updated ${balancesUpdated} stock balance${plural(balancesUpdated)}. ` +
             'Check the ledger reconciliation below next, since stock values have changed.',
         });
       }
@@ -298,7 +302,9 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
           <p className="text-xs text-gray-500">
             If inventory tracking started after invoices or expenses were already recorded, stock on hand can
             disagree with what those transactions imply. This finds tracked-product sale/purchase lines with no
-            matching stock movement, adds the missing movements, and recalculates balances.
+            matching stock movement and adds the missing movements, updating stock balances by the same amounts.
+            Sales whose goods were never recorded as received get a one-off opening-stock movement so quantities
+            stay valid.
           </p>
         </div>
         <button

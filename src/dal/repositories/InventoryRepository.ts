@@ -486,11 +486,17 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
   /**
    * Reconciles stock levels against sales & purchase records: backfills any
    * `stock_movements` row missing for a tracked-product invoice or expense
-   * line, then recomputes `inventory_balances` from the full movement
-   * history. For businesses where inventory tracking was switched on after
+   * line. For businesses where inventory tracking was switched on after
    * income/expense transactions already existed, this is what closes the
    * gap between quantity on hand and what those transactions imply it
    * should be.
+   *
+   * Balances are never recomputed from the ledger (the ledger is not a
+   * complete account of stock — see migration 20260926000001): every
+   * backfilled movement flows through the canonical balance trigger as a
+   * delta. Where missing sales exceed what is on hand, the RPC records the
+   * difference as `adjustmentsInserted` opening-stock movements so no
+   * balance can go negative.
    *
    * `backfill_and_recalculate_inventory` is not in the generated Supabase
    * types (see phase-9-type-regeneration.md for the regeneration)
@@ -501,6 +507,7 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
   async backfillFromSalesAndPurchases(businessId: string): Promise<{
     salesBackfilled: number;
     purchasesBackfilled: number;
+    adjustmentsInserted: number;
     balancesUpdated: number;
   }> {
     const { data, error } = await (
@@ -513,6 +520,7 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
             out_business_id: string;
             sales_backfilled: number;
             purchases_backfilled: number;
+            adjustments_inserted?: number;
             balances_updated: number;
           }[] | null;
           error: { code?: string; message?: string } | null;
@@ -526,6 +534,8 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
     return {
       salesBackfilled: Number(row?.sales_backfilled ?? 0),
       purchasesBackfilled: Number(row?.purchases_backfilled ?? 0),
+      // Absent only against the pre-fix RPC; default keeps the UI honest.
+      adjustmentsInserted: Number(row?.adjustments_inserted ?? 0),
       balancesUpdated: Number(row?.balances_updated ?? 0),
     };
   }

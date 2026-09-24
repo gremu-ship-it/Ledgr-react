@@ -163,12 +163,16 @@ WHERE e.deleted_at IS NULL
 ORDER BY b.name, e.expense_date DESC;
 
 
--- ── 4. Per-product reconstruction: what quantity_on_hand SHOULD be ───────────
+-- ── 4. Per-product reconstruction: what the sales/purchase records imply ────
 -- Recomputes the stock position purely from invoices (sales, negative) and
--- expenses (purchases, positive) — i.e. what the sales/purchase records
--- imply — and compares it against the current inventory_balances figure.
--- A non-zero variance here confirms the discrepancy independent of whether
--- stock_movements rows exist at all.
+-- expenses (purchases, positive) and compares it against the current
+-- inventory_balances figure. A non-zero variance here confirms the
+-- discrepancy independent of whether stock_movements rows exist at all.
+-- READ CAREFULLY: a positive variance is only "missing stock movements" when
+-- the business truly has no pre-ledger history. Opening stock that was never
+-- recorded as a movement makes the balance LEGITIMATELY higher than this
+-- reconstruction (see 20260925000001 / database-operations.md §9.6) — the
+-- backfill RPC deliberately does NOT rewrite such balances down.
 
 WITH implied AS (
   SELECT business_id, product_id, SUM(qty) AS implied_qty
@@ -210,7 +214,13 @@ ORDER BY b.name, ABS(COALESCE(im.implied_qty, 0) - COALESCE(ac.actual_qty, 0)) D
 
 
 -- ── 5. Run the fix (after reviewing sections 1-4) ────────────────────────────
--- Requires migration 20260730000005 (permission + costing fix) to be applied.
+-- Requires migration 20260926000001 (movements-only rewrite; supersedes
+-- 20260730000005, whose final balance rewrite could trip
+-- chk_inventory_balances_on_hand_nonneg and abort the whole run). The
+-- function now only inserts movements — the canonical balance trigger applies
+-- each one as a delta, and sales whose units were never received are covered
+-- by explicit opening_balance movements — so it is safe to run even for
+-- businesses whose stock history predates their movements.
 -- Pass a specific business_id — the fixed function requires it and no longer
 -- accepts NULL from the SQL editor's `authenticated` role (only service_role
 -- may run the all-businesses form). Run once per business you want to catch

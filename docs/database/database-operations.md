@@ -198,10 +198,17 @@ inventory) is the substitute.
      out-of-band (`trg_update_inventory_balance`,
      `trg_stock_movement_apply_balance`), which is what made a 10-unit receipt
      land as 20. `trg_stock_immutable`, also out-of-band, is deliberately kept.
-   * `backfill_and_recalculate_inventory()` (20260730000005) still recomputes a
-     business's balances from the ledger. Do not run it against a business
-     whose history predates its movements — it will either produce negatives
-     or be rejected by `chk_inventory_balances_on_hand_nonneg`.
+   * `backfill_and_recalculate_inventory()` used to recompute a business's
+     balances from the ledger — the last writer violating this rule — and was
+     rejected by `chk_inventory_balances_on_hand_nonneg` on production when a
+     customer clicked Warehouse → "Reconcile stock levels" (2026-09-24,
+     proposed `on_hand = -3`). `20260926000001_fix_backfill_and_recalculate_inventory.sql`
+     replaces it with a movements-only version: it backfills purchases, then
+     records any shortfall between missing sales and on-hand stock as explicit
+     `opening_balance` movements, then backfills the sales — every row applied
+     by the canonical delta trigger, so no balance is ever rewritten or driven
+     negative. `tests/database/backfill_reconcile_inventory.test.js` replays
+     it against the production shape.
    * Any writer of `inventory_balances` must UPDATE first and INSERT only when
      the row is missing. `INSERT ... ON CONFLICT DO UPDATE` evaluates CHECK
      constraints on the *proposed* row before it finds the conflict, so a
