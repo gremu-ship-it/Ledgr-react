@@ -183,5 +183,46 @@ inventory) is the substitute.
    insert a non-DEFAULT value into column "quantity_available"`.
    `20260924000001_fix_stock_movement_balance_trigger.sql` failed on production
    with exactly that until it stopped writing the column;
-   `tests/database/stock_movement_balance_trigger.test.js` replays the migration
-   against both shapes so the next deploy cannot rediscover it.
+   `tests/database/stock_movement_balance_trigger.test.js` replays the
+   current balance-trigger migration against both shapes so the next deploy
+   cannot rediscover it.
+6. **`stock_movements` is not a complete ledger of on-hand stock on
+   production.** The 2026-09-24 deploy showed `sum(stock_movements.quantity)`
+   netting to **-1829** for a live product: opening stock and older history
+   were never written as movements. Consequences:
+   * `inventory_balances` must be maintained as a **delta**
+     (`balance += movement.quantity`), never recomputed as `sum(ledger)`.
+     `20260925000001_stock_movement_balance_delta_trigger.sql` is the canonical
+     writer; it also asserts that exactly one balance-maintaining trigger
+     exists on `stock_movements` — production had carried two additive ones
+     out-of-band (`trg_update_inventory_balance`,
+     `trg_stock_movement_apply_balance`), which is what made a 10-unit receipt
+     land as 20. `trg_stock_immutable`, also out-of-band, is deliberately kept.
+   * `backfill_and_recalculate_inventory()` (20260730000005) still recomputes a
+     business's balances from the ledger. Do not run it against a business
+     whose history predates its movements — it will either produce negatives
+     or be rejected by `chk_inventory_balances_on_hand_nonneg`.
+   * Any writer of `inventory_balances` must UPDATE first and INSERT only when
+     the row is missing. `INSERT ... ON CONFLICT DO UPDATE` evaluates CHECK
+     constraints on the *proposed* row before it finds the conflict, so a
+     negative movement (every sale) trips the non-negative check even when the
+     resulting balance is valid.
+   * Balances the old double-count overstated are **not** rewritten by the
+     migration — blanket repairs cannot tell an over-count from imported
+     opening stock. `public.v_inventory_balance_ledger_drift` lists every
+     `(business, product, location)` whose balance differs from its ledger.
+     For a key you have confirmed is a pure double-count (all of its history is
+     in the ledger, `difference` equals the duplicated quantity), correct the
+     **balance row**, not the ledger — the movement was recorded once; posting
+     an `adjustment_out` would leave the offset in the view forever and book a
+     stock loss that never happened:
+     ```sql
+     update public.inventory_balances ib
+        set quantity_on_hand = d.ledger_quantity, updated_at = now()
+       from public.v_inventory_balance_ledger_drift d
+      where d.business_id = ib.business_id and d.product_id = ib.product_id
+        and d.location_id = ib.location_id
+        and ib.product_id = '<product uuid>' and ib.location_id = '<location uuid>';
+     ```
+     Keys with a large positive `difference` and an old `last_ledger_movement_at`
+     are pre-ledger opening stock; leave them alone.
