@@ -1,7 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row } from '../types/database';
+import { deriveClientKey } from '@/lib/clientKeys';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError } from '../errors/RepositoryError';
+import { InventoryRepository } from './InventoryRepository';
+import { ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
 export type TransferStatus =
   | 'draft'
@@ -98,42 +100,62 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
     dispatchedBy: string,
     lineQuantities: { lineId: string; quantityDispatched: number }[],
   ): Promise<Row<'stock_transfers'>> {
-    for (const { lineId, quantityDispatched } of lineQuantities) {
-      const { error } = await this.client
-        .from('stock_transfer_lines')
-        .update({ quantity_dispatched: quantityDispatched } as never)
-        .eq('id', lineId)
-        .eq('transfer_id', transferId);
-      if (error) throw toRepositoryError('stock_transfer_lines', error);
+    const current = await this.findById(transferId);
+    if (current.status === 'dispatched' || current.status === 'received') {
+      return current;
+    }
+    if (current.status !== 'approved') {
+      throw new ValidationError(
+        'stock_transfers',
+        `Cannot dispatch transfer ${transferId}: current status is '${current.status}'. Only 'approved' transfers can be dispatched.`,
+      );
     }
 
-    const { lines, transfer } = await this.findWithLines(transferId);
+    const inventoryRepo = new InventoryRepository(this.client);
+    const existingMovements = await inventoryRepo.findMovementsForSource(
+      current.business_id,
+      'stock_transfer',
+      transferId,
+    );
+    const alreadyDispatched = existingMovements.some((m) => m.movement_type === 'transfer_out');
 
-    const movements = lines
-      .filter((l) => (l.quantity_dispatched ?? 0) > 0)
-      .map((l) => ({
-        business_id: transfer.business_id,
-        product_id: l.product_id,
-        location_id: transfer.from_location_id,
-        movement_type: 'transfer_out' as const,
-        movement_date: new Date().toISOString().slice(0, 10),
-        // Negative: stock is LEAVING the source location. The
-        // update_inventory_balance() trigger just adds this quantity to
-        // the balance, so the sign here is what makes it a decrease.
-        quantity: -Number(l.quantity_dispatched),
-        unit_cost: Number(l.unit_cost),
-        // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
-        source_type: 'stock_transfer',
-        source_id: transferId,
-        reference: transfer.transfer_number,
-        created_by: dispatchedBy,
-      }));
+    if (!alreadyDispatched) {
+      for (const { lineId, quantityDispatched } of lineQuantities) {
+        const { error } = await this.client
+          .from('stock_transfer_lines')
+          .update({ quantity_dispatched: quantityDispatched } as never)
+          .eq('id', lineId)
+          .eq('transfer_id', transferId);
+        if (error) throw toRepositoryError('stock_transfer_lines', error);
+      }
 
-    if (movements.length > 0) {
-      const { error: movErr } = await this.client
-        .from('stock_movements')
-        .insert(movements as never);
-      if (movErr) throw toRepositoryError('stock_movements', movErr);
+      const { lines, transfer } = await this.findWithLines(transferId);
+
+      const dispatchKey = `${transferId}:dispatch`;
+      const movements = lines
+        .filter((l) => (l.quantity_dispatched ?? 0) > 0)
+        .map((l, index) => ({
+          business_id: transfer.business_id,
+          product_id: l.product_id,
+          location_id: transfer.from_location_id,
+          movement_type: 'transfer_out' as const,
+          movement_date: new Date().toISOString().slice(0, 10),
+          // Negative: stock is LEAVING the source location. The
+          // update_inventory_balance() trigger just adds this quantity to
+          // the balance, so the sign here is what makes it a decrease.
+          quantity: -Number(l.quantity_dispatched),
+          unit_cost: Number(l.unit_cost),
+          // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
+          source_type: 'stock_transfer',
+          source_id: transferId,
+          reference: transfer.transfer_number,
+          created_by: dispatchedBy,
+          client_key: deriveClientKey(dispatchKey, index),
+        }));
+
+      if (movements.length > 0) {
+        await inventoryRepo.recordMovements(movements);
+      }
     }
 
     return this.updateStatus(transferId, 'dispatched', {
@@ -146,39 +168,59 @@ export class TransferRepository extends BaseRepository<'stock_transfers'> {
     receivedBy: string,
     lineQuantities: { lineId: string; quantityReceived: number }[],
   ): Promise<Row<'stock_transfers'>> {
-    for (const { lineId, quantityReceived } of lineQuantities) {
-      const { error } = await this.client
-        .from('stock_transfer_lines')
-        .update({ quantity_received: quantityReceived } as never)
-        .eq('id', lineId)
-        .eq('transfer_id', transferId);
-      if (error) throw toRepositoryError('stock_transfer_lines', error);
+    const current = await this.findById(transferId);
+    if (current.status === 'received') {
+      return current;
+    }
+    if (current.status !== 'dispatched') {
+      throw new ValidationError(
+        'stock_transfers',
+        `Cannot receive transfer ${transferId}: current status is '${current.status}'. Only 'dispatched' transfers can be received.`,
+      );
     }
 
-    const { lines, transfer } = await this.findWithLines(transferId);
+    const inventoryRepo = new InventoryRepository(this.client);
+    const existingMovements = await inventoryRepo.findMovementsForSource(
+      current.business_id,
+      'stock_transfer',
+      transferId,
+    );
+    const alreadyReceived = existingMovements.some((m) => m.movement_type === 'transfer_in');
 
-    const movements = lines
-      .filter((l) => (l.quantity_received ?? 0) > 0)
-      .map((l) => ({
-        business_id: transfer.business_id,
-        product_id: l.product_id,
-        location_id: transfer.to_location_id,
-        movement_type: 'transfer_in' as const,
-        movement_date: new Date().toISOString().slice(0, 10),
-        quantity: Number(l.quantity_received),
-        unit_cost: Number(l.unit_cost),
-        // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
-        source_type: 'stock_transfer',
-        source_id: transferId,
-        reference: transfer.transfer_number,
-        created_by: receivedBy,
-      }));
+    if (!alreadyReceived) {
+      for (const { lineId, quantityReceived } of lineQuantities) {
+        const { error } = await this.client
+          .from('stock_transfer_lines')
+          .update({ quantity_received: quantityReceived } as never)
+          .eq('id', lineId)
+          .eq('transfer_id', transferId);
+        if (error) throw toRepositoryError('stock_transfer_lines', error);
+      }
 
-    if (movements.length > 0) {
-      const { error: movErr } = await this.client
-        .from('stock_movements')
-        .insert(movements as never);
-      if (movErr) throw toRepositoryError('stock_movements', movErr);
+      const { lines, transfer } = await this.findWithLines(transferId);
+
+      const receiptKey = `${transferId}:receipt`;
+      const movements = lines
+        .filter((l) => (l.quantity_received ?? 0) > 0)
+        .map((l, index) => ({
+          business_id: transfer.business_id,
+          product_id: l.product_id,
+          location_id: transfer.to_location_id,
+          movement_type: 'transfer_in' as const,
+          movement_date: new Date().toISOString().slice(0, 10),
+          quantity: Number(l.quantity_received),
+          unit_cost: Number(l.unit_cost),
+          // total_cost is a Postgres GENERATED ALWAYS column — do not set explicitly.
+          source_type: 'stock_transfer',
+          source_id: transferId,
+          reference: transfer.transfer_number,
+          created_by: receivedBy,
+          client_key: deriveClientKey(receiptKey, index),
+        }));
+
+      if (movements.length > 0) {
+        await inventoryRepo.recordMovements(movements);
+      }
     }
 
     return this.updateStatus(transferId, 'received', {
