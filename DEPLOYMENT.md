@@ -275,6 +275,36 @@ the script then fails fast and prints the manual commands —
 `supabase migration repair --status reverted <version…>`, or `supabase db pull`
 if the remote database should become the source of truth instead.
 
+#### `duplicate key value violates unique constraint "schema_migrations_pkey"`
+
+`supabase link` finishes but `supabase db push` aborts after the **first
+applied file of the run** with:
+
+```
+Applying migration 20260926000001_r01_acceptance_current_authority.sql...
+ERROR: duplicate key value violates unique constraint "schema_migrations_pkey" (SQLSTATE 23505)
+Key (version)=(20260926000001) already exists.
+At statement: 15
+INSERT INTO supabase_migrations.schema_migrations(version, name, statements) VALUES($1, $2, $3)
+```
+
+`supabase_migrations.schema_migrations` is keyed by the **version prefix** of the
+file name, so two files sharing a prefix can never both be recorded: the CLI
+applies the second file and then collides inserting its history row. This is
+deterministic — every retry reproduces it byte for byte — so the retry loop
+cannot clear it, and the generic "the database is likely unresponsive" message
+sends the reader to the Supabase dashboard instead of the repository. This is
+what blocked the staging deploy on 2026-09-24 (`20260926000001` and
+`20261003000000` each held two files after a large merge).
+
+Fix: rename the **newer** file of each colliding pair to a free version that
+keeps its position in the replay order — never rename a file whose version is
+already recorded remotely (that turns into the drift case above). Do not rename
+an applied migration. The deploy script now refuses to run when it detects two
+files sharing a version prefix, and reports the colliding files by name instead
+of retrying; `src/lib/__tests__/migrationInvariants.test.ts` fails the fast CI
+suite for the same reason.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to
