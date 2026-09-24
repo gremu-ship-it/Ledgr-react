@@ -5,24 +5,37 @@
 # Supabase project over the Management API (same SUPABASE_ACCESS_TOKEN the
 # deploy workflow already uses — no database password needed).
 #
+# TRIGGERS
+#   * push to main when this workflow or the SQL file changes → runs the
+#     FULL repair (DRY_RUN=0). The SQL is double-guarded (exact business +
+#     product + pure double-count signature + optimistic re-check) and
+#     idempotent, so an auto-run is safe; a no-op re-run just logs
+#     "REPAIR no-op".
+#   * workflow_dispatch → dry_run input (default true) for a read-only
+#     diagnosis first, or dry_run=false to force the repair.
+#
 # SAFETY
-#   * workflow_dispatch ONLY — never runs automatically.
-#   * Dry-run by default: only the read-only diagnostic SELECTs run until you
-#     re-dispatch with dry_run=false after reviewing section 1's failure_mode.
-#   * The SQL itself is double-guarded: the repair DO block only updates rows
-#     matching the pure double-count signature (on_hand=320, ledger=160) for
-#     this business + product, and is idempotent.
 #   * Production isolation: hard-fails if SUPABASE_PROJECT_REF_PROD equals
 #     SUPABASE_PROJECT_REF_STAGING or is empty.
+#   * The repair DO block only updates inventory_balances rows matching
+#     quantity_on_hand=320 AND ledger_quantity=160 for Eagle Nova's
+#     chicken-manure product — never stock_movements, never journals.
+#   * Never writes quantity_available on the production GENERATED column.
 #
 # USAGE
-#   GitHub → Actions → "Repair Eagle Nova chicken-manure double-count"
-#   → Run workflow → dry_run=true first → review job log → re-run with
-#   dry_run=false to apply the balance correction.
+#   Auto: merge a change to scripts/repair-eagle-nova-double-count.sql.
+#   Manual: Actions → "Repair Eagle Nova chicken-manure double-count"
+#           → Run workflow → dry_run=true|false.
 # ============================================================================
 name: Repair Eagle Nova chicken-manure double-count
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/repair-eagle-nova-double-count.sql
+      - scripts/database/run-support-sql-via-api.sh
+      - .github/workflows/repair-eagle-nova-double-count.yml
   workflow_dispatch:
     inputs:
       dry_run:
@@ -48,7 +61,7 @@ concurrency:
 
 jobs:
   repair:
-    name: Diagnose${{ inputs.dry_run == 'false' && ' + repair' || '' }} (production)
+    name: Repair chicken-manure double-count (production)
     runs-on: ubuntu-latest
     environment: Production
     env:
@@ -56,14 +69,15 @@ jobs:
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
       PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
       STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
-      DRY_RUN: ${{ inputs.dry_run }}
+      # push → full repair; dispatch → honour the dry_run input (default true)
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '0' }}
       SQL_FILE: scripts/repair-eagle-nova-double-count.sql
       OUT_DIR: artifacts/support-sql
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || github.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
 
       - name: Verify environment isolation + credentials
@@ -80,7 +94,7 @@ jobs:
           test -f "$SQL_FILE" || { echo "::error::Missing $SQL_FILE"; exit 1; }
           chmod +x scripts/database/run-support-sql-via-api.sh
           echo "Isolation OK: targeting production ref ${SUPABASE_PROJECT_REF} (distinct from staging)."
-          echo "Mode: DRY_RUN=${DRY_RUN}"
+          echo "Mode: DRY_RUN=${DRY_RUN} (event=${GITHUB_EVENT_NAME})"
 
       - name: Run support SQL (Management API)
         shell: bash
