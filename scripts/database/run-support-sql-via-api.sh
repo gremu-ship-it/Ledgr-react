@@ -166,6 +166,7 @@ print(parts[0].upper() if parts else "EMPTY")
        -H "Content-Type: application/json" \
        -d "$payload" -o "$resp_file"; then
     log "FAIL statement ${IDX} (network error)"
+    echo "::error title=SQL statement ${IDX} (${kind}) failed::network error"
     FAILED=1
     continue
   fi
@@ -175,7 +176,11 @@ import json, sys
 d = json.load(open(sys.argv[1]))
 sys.exit(0 if isinstance(d, dict) and (d.get("message") or d.get("error")) else 1)
 ' "$resp_file" 2>/dev/null; then
-    log "FAIL statement ${IDX}: $(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(str(d.get("message") or d)[:300])' "$resp_file")"
+    ERRMSG="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(str(d.get("message") or d.get("error") or d)[:1200])' "$resp_file")"
+    log "FAIL statement ${IDX}: ${ERRMSG}"
+    # Annotations are the only output readable from networks that cannot reach
+    # the Azure-hosted log zip, so surface the SQL error there too.
+    echo "::error title=SQL statement ${IDX} (${kind}) failed::${ERRMSG}"
     FAILED=1
     continue
   fi
