@@ -1,0 +1,121 @@
+{
+  "release": {
+    "name": "LEDGR CONTROLLED PILOT",
+    "source_commit": "6f5843b",
+    "branch": "arena/01a0c215-ledgr-react",
+    "parent_chain": ["268fd67", "dc80e1c", "874c6df", "090870b"],
+    "owner_decision": "GO",
+    "owner_decision_ref": "6f5843b — docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md + .json",
+    "mode": "PILOT / LIMITED CONTROLLED USERS",
+    "date": "2026-09-24",
+    "versioning": "no established semver — identified by commit + branch + date; VITE_APP_VERSION defaults local-<ISO> or process.env.VITE_APP_VERSION",
+    "baseline_evidence": {
+      "release_pass": 742,
+      "release_fail": 0,
+      "release_blocked": 52,
+      "release_total": 794,
+      "evidence_file": ".cache/r13/ledgr-r13-ecFOuO/evidence.json",
+      "unit_pass": 807,
+      "unit_total": 807,
+      "typecheck": "PASS",
+      "lint": "0 errors / 3 warnings",
+      "build": "PASS",
+      "p8_classification": { "A": 0, "B": 21, "C": 15, "D": 4, "E": 0, "F": 12 }
+    }
+  },
+  "certified_scope": [
+    { "id": 1, "capability": "Tenant isolation", "contract": "two-business authenticated + separate pg clients, relrowsecurity true + is_business_member on 6 tenant tables", "evidence": "P6 two-business A 13000000-...-0005 vs B ...-0105, P7 742/0", "status": "CERTIFIED" },
+    { "id": 2, "capability": "POS / till operations", "contract": "sale, till open/close, cash movements, post_pos_sale at server", "evidence": "R06/P6/P7 post_pos_sale 42501/23514/P0QLT", "status": "CERTIFIED" },
+    { "id": 3, "capability": "post_pos_sale", "contract": "sole authoritative POS path: can_operate_pos + can_access_branch + product tenant + FOR UPDATE + P0QLT", "evidence": "R06/P5-D/P7, R08.SHIFT.*", "status": "CERTIFIED" },
+    { "id": 4, "capability": "Sales and payments", "contract": "invoices + invoice_lines + journal + payments via post_pos_sale", "evidence": "R06/P7", "status": "CERTIFIED" },
+    { "id": 5, "capability": "Inventory / stock integrity", "contract": "trg_stock_movement_apply_balance FOR UPDATE 23514", "evidence": "R06, P6, P7", "status": "CERTIFIED" },
+    { "id": 6, "capability": "Stock 23514", "contract": "negative-stock protection is authoritative server constraint 23514", "evidence": "R06 23514, STOCK_NONNEG_CONSTRAINT", "status": "CERTIFIED" },
+    { "id": 7, "capability": "FOR UPDATE stock authority", "contract": "row-lock serialization on stock balance", "evidence": "stock_movements trigger FOR UPDATE + P5-C _ledgr_assert_usage_limit FOR UPDATE", "status": "CERTIFIED" },
+    { "id": 8, "capability": "Branch — till family", "contract": "pos_shifts/pos_cash_movements/pos_shift_closes + post_pos_sale via can_access_branch fail-closed per DEC-03", "evidence": "P5-D 20261007000000, P7 matrix U805 false,false, R08.SHIFT.BRANCH-SCOPED-READ", "status": "CERTIFIED" },
+    { "id": 9, "capability": "DEC-03 can_access_branch fail-closed", "contract": "branch_id IS NULL → false for assigned-scope; org-wide roles NULL legitimately org-wide", "evidence": "P5-D, P7 NULL→42501", "status": "CERTIFIED" },
+    { "id": 10, "capability": "Customers / suppliers — org-wide contract", "contract": "org-wide is_business_member + can_write_business_data; contacts.branch_id out-of-scope per R08.7/P6", "evidence": "P6/P7, R08.7, P8 BRANCH.customers C", "status": "CERTIFIED" },
+    { "id": 11, "capability": "Financial recording", "contract": "invoices/invoice_lines/journal_entries/journal_lines/payments with R05 invariants", "evidence": "R05 + R08 ZREPORT.RECONCILES-TENDERS", "status": "CERTIFIED" },
+    { "id": 12, "capability": "Financial reporting — org-wide contract", "contract": "org-wide intentional; POS shift report branch-enforced only", "evidence": "R08 SINGLE-OPEN/CLOSE/REPORT-AUTHORITY, R08.7", "status": "CERTIFIED" },
+    { "id": 13, "capability": "POS shift reporting — branch-enforced", "contract": "get_pos_shift_report 42501 when branch mismatch", "evidence": "R08 R08.REFUND.SCOPE-ATTACK + P7", "status": "CERTIFIED" },
+    { "id": 14, "capability": "Corrections / refunds / voids", "contract": "R07 corrections + R08 REFUND.*/LATE-ARRIVAL with immutable history", "evidence": "R07 + R08", "status": "CERTIFIED" },
+    { "id": 15, "capability": "Till / shift integrity", "contract": "SINGLE-OPEN/CLOSE/CLOSE-IMMUTABLE 22023/BYPASS-CLOSED 0-rows/REPORT-AUTHORITY", "evidence": "R08", "status": "CERTIFIED" },
+    { "id": 16, "capability": "Offline reconciliation — RECONCILABLE only stock-denied|policy-denied", "contract": "reconcile_offline_queue_item manager-tier 42501 + isReconcilable stock-denied|policy-denied only (Q3/Q11), lease/provenance", "evidence": "P5-B Q3/Q11, P6 R093.RECON.* 9 PASS, R093.EXCEPTION.* + TAMPER", "status": "CERTIFIED within RECONCILABLE contract" },
+    { "id": 17, "capability": "Tested POS/quick quota P0QLT", "contract": "uniform P0QLT 20261001000000 on post_pos_sale/save_quick_sale/save_quick_expense/execute_pending_payroll_run + ledgr_monthly_document_count vs head:true + Q13 C dual authority", "evidence": "P5-C Q12 B, Q13 C, R10.QUOTA.* 5 PASS + REGRESSION.SUCCESS-CLIENTKEY, isQuotaDenial", "status": "CERTIFIED within tested POS/quick contract" },
+    { "id": 18, "capability": "Uniform BEFORE INSERT quota", "contract": "BEFORE INSERT triggers calling _ledgr_assert_usage_limit where already proven", "evidence": "P5-C 20261006000000_p5c_uniform_billing_quota, p5c_uniformQuota tests", "status": "CERTIFIED where proven" },
+    { "id": 19, "capability": "AI ai_context — read-only, non-authoritative", "contract": "ai_context(business_id, branch_id?) optional can_access_branch check, security_invoker views + RLS, never mutates", "evidence": "P5-E Q14 B, Q15 B after P8, R03", "status": "CERTIFIED within contract" },
+    { "id": 20, "capability": "Multi-business tenant isolation", "contract": "TENANT.A/B.* 10 PASS via is_business_member (excluding Storage per Q6)", "evidence": "P6/P7", "status": "CERTIFIED" }
+  ],
+  "excluded_scope": [
+    { "capability": "Storage isolation (storage.objects RLS, path, signed URL)", "evidence": "BLOCKED B 2 TENANT.A/B.storage — no Storage infrastructure", "owner_acceptance": "YES Q6", "release_status": "EXCLUDED", "note": "OWNER ACCEPTED ≠ ENGINEERING PROVEN; do not claim as certified" },
+    { "capability": "Provider authentication (AUTH valid/invalid/expired/logout + PRIV + R02 PROVIDER-TOKEN 9)", "evidence": "BLOCKED B 17 — no isolated GoTrue", "owner_acceptance": "YES Q7", "release_status": "EXCLUDED" },
+    { "capability": "Browser/server revalidation (R094 2× B CRITICAL)", "evidence": "BLOCKED B — no wire-reachable PostgREST/GoTrue/JWT", "owner_acceptance": "YES Q8", "release_status": "EXCLUDED" },
+    { "capability": "Full commercial billing lifecycle (BILLING.SERVER-QUOTA D)", "evidence": "OWNER DECISION D — canonical billing command not defined (POS/quick P0QLT proven)", "owner_acceptance": "YES Q5 PILOT", "release_status": "EXCLUDED — limited to tested POS/quick P0QLT; full subscription deferred to Future Package E" },
+    { "capability": "App-wide branch admin (BRANCH.create/cross-branch-admin/modify 3× D)", "evidence": "OWNER DECISION D — writer can_write_* org-wide escape, till family sealed but branches not (R08.7)", "owner_acceptance": "YES Q4", "release_status": "EXCLUDED — till via post_pos_sale certified only" },
+    { "capability": "Branch-scoped customers/financial/inventory/reports beyond till (5× C)", "evidence": "ACCEPTED C — R08.7 org-wide intentional, till family only", "owner_acceptance": "YES Q3", "release_status": "EXCLUDED — org-wide is current contract" },
+    { "capability": "Generic offline conflict/multitab/browser process + concurrent stock 2-client + legacy bootstrap (OFFLINE 4 + R06.CONCURRENT 1 + F 12)", "evidence": "ACCEPTED C/F — no approved contract / honest harness / superseded", "owner_acceptance": "YES Q3", "release_status": "EXCLUDED" },
+    { "capability": "AI branch beyond P5-E / OTP/SMS recovery beyond accepted contract", "evidence": "ACCEPTED C — no SMS/OTP per P4 DEC-02, after P8 per Q15", "owner_acceptance": "YES Q3", "release_status": "EXCLUDED" }
+  ],
+  "accepted_limitations": [
+    { "test_id": "BRANCH.customers", "limitation": "contacts org-wide, no branch predicate", "current_contract": "is_business_member + can_write_business_data org-wide; contacts.branch_id out-of-scope per R08.7/P6", "affects": "none for certified scope" },
+    { "test_id": "BRANCH.financial", "limitation": "journal_entries org-wide, no branch dimension", "current_contract": "Org-wide intentional; POS shift report branch-enforced only", "affects": "none" },
+    { "test_id": "BRANCH.inventory", "limitation": "stock_movements org-wide", "current_contract": "inventory_locations branch_id but stock_movements org-wide; POS branch via can_operate_pos proven", "affects": "none" },
+    { "test_id": "BRANCH.read", "limitation": "core tables org-wide is_business_member SELECT; till family branch-enforced only", "current_contract": "Till family can_access_branch proven; core org-wide intentional per R08.7 do-not-expand", "affects": "none" },
+    { "test_id": "BRANCH.reports", "limitation": "general reports org-wide, POS shift report branch-enforced only", "current_contract": "POS subset proven via R08.REFUND.SCOPE-ATTACK", "affects": "none" },
+    { "test_id": "OFFLINE.ACTOR-BINDING", "limitation": "no durable originating-user/device for generic queue", "current_contract": "P5-A provenance originUserId is contract", "affects": "none" },
+    { "test_id": "OFFLINE.BROWSER", "limitation": "fake IndexedDB not browser process proof", "current_contract": "P5-F R094.BROWSER.SW.* 8 PASS fake adapters", "affects": "none" },
+    { "test_id": "OFFLINE.CONFLICT", "limitation": "no generic conflict resolution", "current_contract": "P4 Q8 C + Q10 B typed branch-denied/stale-version/payload-tampered as failed/quarantined", "affects": "none" },
+    { "test_id": "OFFLINE.MULTITAB", "limitation": "no generic multitab workers", "current_contract": "Lease R093.LEASE-EXCLUSIVE proven; workers R11 future", "affects": "none" },
+    { "test_id": "R06.POS.STOCK.CONCURRENT", "limitation": "concurrent post_pos_sale needs 2-client harness", "current_contract": "FOR UPDATE is contract; sequential 23514 proven; honest harness limitation", "affects": "none — stock 23514 still PASS" },
+    { "test_id": "AI.BRANCH", "limitation": "AI branch filter optional, after P8 per Q14/Q15 B", "current_contract": "ai_context(business_id, branch_id?) can_access_branch read-only", "affects": "none" },
+    { "test_id": "R02.DEC-02.LEGITIMATE-PHONE-RECOVERY", "limitation": "DEC-02 single-owner phone recovery, no SMS/OTP", "current_contract": "Owner accepted no SMS/OTP per P4", "affects": "none" },
+    { "test_id": "R02.RECOVERY.OTP.FUTURE-VALID-ALLOWS-RECOVERY", "limitation": "OTP future-valid", "current_contract": "No OTP mechanism", "affects": "none" },
+    { "test_id": "R02.RECOVERY.OTP.SUBSTITUTED-TARGET-DENIED", "limitation": "OTP substituted-target", "current_contract": "Same", "affects": "none" },
+    { "test_id": "R02.RECOVERY.OTP.WRONG-DENIED", "limitation": "OTP wrong", "current_contract": "Same", "affects": "none" }
+  ],
+  "deferred_evidence": [
+    { "group": "R094 browser/server", "count": 2, "test_ids": ["R094.BROWSER.SERVER-REVALIDATION", "R094.BROWSER.SERVER-REVALIDATION.INVESTIGATION"], "why": "No Docker Supabase stack for browser traffic", "severity": "CRITICAL", "p10_authorized_remediation": false },
+    { "group": "TENANT.storage", "count": 2, "test_ids": ["TENANT.A.storage", "TENANT.B.storage"], "why": "No Real Storage + effective business_users grants", "severity": "HIGH", "p10_authorized_remediation": false },
+    { "group": "AUTH", "count": 4, "test_ids": ["AUTH.expired-session", "AUTH.invalid-login", "AUTH.logout-revocation", "AUTH.valid-login"], "why": "No isolated GoTrue", "severity": "MEDIUM", "p10_authorized_remediation": false },
+    { "group": "PRIV", "count": 4, "test_ids": ["PRIV.INVITATION", "PRIV.MEMBERSHIP", "PRIV.PROFILE", "PRIV.RECOVERY"], "why": "No Auth Admin + delivery / migration-only ACL", "severity": "HIGH/MEDIUM/LOW", "p10_authorized_remediation": false },
+    { "group": "R02 provider-token", "count": 9, "test_ids": ["R02.PROVIDER-TOKEN.consumed", "R02.PROVIDER-TOKEN.expired", "R02.PROVIDER-TOKEN.identity-changed-after-issuance", "R02.PROVIDER-TOKEN.invalid", "R02.PROVIDER-TOKEN.malformed", "R02.PROVIDER-TOKEN.missing", "R02.PROVIDER-TOKEN.replay", "R02.PROVIDER-TOKEN.substituted", "R02.PROVIDER-TOKEN.valid-own-identity"], "why": "No isolated recovery service/delivery", "severity": "HIGH", "p10_authorized_remediation": false },
+    { "group": "BRANCH admin", "count": 3, "test_ids": ["BRANCH.create", "BRANCH.cross-branch-admin", "BRANCH.modify"], "why": "Writer org-wide escape per R08.7 — needs can_access_branch reshape + direct-API audit", "severity": "HIGH", "p10_authorized_remediation": false },
+    { "group": "BILLING canonical", "count": 1, "test_ids": ["BILLING.SERVER-QUOTA"], "why": "Generic command not defined per Q12/Q13 — needs canonical command/approval/entitlement + concurrency + idempotency + Stripe/subscription", "severity": "HIGH", "p10_authorized_remediation": false }
+  ],
+  "configuration_audit": {
+    "result": "PASS",
+    "details": "VITE_ only anon URL/anon key/feature flags/AI_CHAT_URL/SENTRY_DSN/log level/platform domain/app version — no service_role/secret via VITE_; Supabase client anon only with fetchWithTimeout + placeholder fallback + check-env guard; Vite PWA generateSW runtimeCaching NetworkFirst rest/NetworkOnly auth/CacheFirst static + sw-events.js Background Sync; supabase/config.toml local major_version 17; deploy.yml STAGING vs PROD secret separation via --build-env + supabase secrets set; no deferred feature auto-enabled"
+  },
+  "secret_audit": {
+    "result": "PASS",
+    "details": "No real SUPABASE_SERVICE_ROLE_KEY/service_role/JWT/private/PayChangu/SendGrid/Anthropic/CRON secret in src/ client bundle or tracked files; all service_role in supabase/functions Deno.env server-only + .env.example placeholders; VITE_ANON_KEY is public RLS-enforced by design"
+  },
+  "client_authority_audit": {
+    "result": "PASS",
+    "details": "Tenant is_business_member, branch can_access_branch DEC-03, financial post_pos_sale, stock FOR UPDATE 23514, quota _ledgr_assert_usage_limit FOR UPDATE P0QLT all remain server/database authoritative; client UsageService/queueApi are early UX guard only (fail-open except P0QLT); no si-lent prod logic change, no RLS/SECURITY DEFINER/migration change"
+  },
+  "pwa_offline_boundary": {
+    "result": "PASS",
+    "details": "RECONCILABLE stock-denied|policy-denied only per Q3/Q11; branch-denied/stale-version/unknown-version/payload-tampered quarantined/failed via exceptions.ts + payloadIntegrity + lease/provenance; MAX_PENDING_QUEUE_ITEMS 2000; no claim universal offline/multitab/concurrent 2-client"
+  },
+  "billing_boundary": {
+    "result": "PASS",
+    "details": "PILOT / LIMITED CONTROLLED USERS maintained; P0QLT + post_pos_sale/save_quick_* + uniform BEFORE INSERT active; BILLING.SERVER-QUOTA canonical/subscription lifecycle remains deferred (Future Package E), Stripe not certified for pilot"
+  },
+  "ai_boundary": {
+    "result": "PASS",
+    "details": "ai_context read-only non-authoritative: supabase.rpc ai_context with server is_business_member + can_access_branch, security_invoker views, no insert/update/delete, no quota/financial/stock/branch authority; VITE_AI_CHAT_URL unset falls back to rules engine; no new AI capabilities in P10"
+  },
+  "verification": {
+    "unit": { "result": "PASS", "pass": 807, "fail": 0, "total": 807, "files": 91, "command": "npm test (vitest run)", "note": "All 91 files passed — see P10 §13.5" },
+    "typecheck": { "result": "PASS", "command": "npx tsc -b" },
+    "lint": { "result": "PASS", "errors": 0, "warnings": 3, "details": "0 errors, 3 warnings (unused eslint-disable)", "command": "npm run lint (eslint .)" },
+    "build": { "result": "PASS", "command": "VITE_SUPABASE_URL=https://placeholder.supabase.co VITE_SUPABASE_ANON_KEY=placeholder-anon-key npm run build (vite build + VitePWA generateSW 112 precache 3752 KiB)" },
+    "diff_check": { "result": "PASS", "command": "git diff --check", "note": "no whitespace errors; see git diff --stat" },
+    "smoke": { "result": "PASS", "domains": ["auth/tenant", "pos", "inventory", "till", "corrections", "offline", "quota", "AI"], "note": "Deterministic linkage to existing evidence/tests per manifest §14 — no new security claims" }
+  },
+  "smoke_matrix_ref": "docs/releases/LEDGR_P10_CONTROLLED_PILOT_RELEASE_2026-09-24.md §14",
+  "safety_plan": "docs/releases/LEDGR_P10_PILOT_SAFETY_PLAN_2026-09-24.md",
+  "release_status": "READY FOR PILOT DEPLOYMENT",
+  "hard_stops_triggered": [],
+  "generated_at": "2026-09-24T16:31:00+02:00"
+}
