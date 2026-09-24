@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
+import { fetchAllRows } from '@/lib/paginateQuery';
 import { BaseRepository } from './BaseRepository';
 import { UnsupportedOperationError, toRepositoryError } from '../errors/RepositoryError';
 
@@ -22,6 +23,19 @@ export interface BalanceWithProduct {
   inventory_locations: {
     name: string;
   } | null;
+}
+
+export interface DuplicateWarehouseReceiptCandidate {
+  duplicateMovementId: string;
+  keptMovementId: string;
+  productId: string;
+  locationId: string;
+  movementDate: string;
+  createdAt: string;
+  quantity: number;
+  unitCost: number;
+  value: number;
+  notes: string | null;
 }
 
 export class InventoryRepository extends BaseRepository<'inventory_balances'> {
@@ -199,14 +213,16 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
 
   /**
    * Bulk-insert multiple stock movements in one round-trip.
-   * Used by WarehousePage "Receive Stock" and the sale/COGS stock release.
+   * Used by WarehousePage "Receive Stock", stock transfers and the sale/COGS
+   * stock release.
    *
    * Movements that carry a `client_key` are de-duplicated before inserting: a
-   * retried release (queue replay, lost response, a second `retryNonCritical`
-   * attempt) must not move the same stock twice, and the table's unique
-   * `(business_id, client_key)` index would otherwise reject the whole batch.
-   * Costs one extra round-trip on keyed batches only — unkeyed batches
-   * (warehouse receipts) insert exactly as before.
+   * retried release/receipt (queue replay, lost response, double click, a
+   * second `retryNonCritical` attempt) must not move the same stock twice. For
+   * keyed batches we also use `upsert(..., ignoreDuplicates: true)` as the
+   * database backstop, so two browser calls that race past the lookup do not
+   * trip over the unique `(business_id, client_key)` index or double-adjust the
+   * balance trigger. Unkeyed batches keep the old plain insert behaviour.
    */
   async recordMovements(
     movements: InsertDto<'stock_movements'>[],
@@ -234,10 +250,18 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       if (toInsert.length === 0) return [];
     }
 
-    const { data, error } = await this.client
-      .from('stock_movements')
-      .insert(toInsert as never)
-      .select('*');
+    const query = this.client.from('stock_movements');
+    const { data, error } = keys.length > 0
+      ? await query
+          .upsert(toInsert as never, {
+            onConflict: 'business_id,client_key',
+            ignoreDuplicates: true,
+          })
+          .select('*')
+      : await query
+          .insert(toInsert as never)
+          .select('*');
+
     if (error) throw toRepositoryError('stock_movements', error);
     return data ?? [];
   }
@@ -246,12 +270,11 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
    * Whether any stock movement has already been recorded for a source
    * document (e.g. `('invoice', invoice.id)`).
    *
-   * `recordMovements` writes a batch with no client key, so a caller that can
-   * be replayed (a retried offline sale, a lost response, a queue retry) has
-   * no way to know whether its movements already landed. The COGS journal
-   * entry is derived from those movements, so releasing them twice double
-   * counts both stock and cost of sales — hence this cheap existence check
-   * before the release, not a re-insert.
+   * Some callers may still write a batch with no client key, so a replayable
+   * workflow needs a source-level guard to know whether its movements already
+   * landed. The COGS journal entry is derived from those movements, so
+   * releasing them twice double counts both stock and cost of sales — hence
+   * this cheap existence check before the release, not a re-insert.
    */
   async hasMovementsForSource(
     businessId: string,
@@ -267,6 +290,141 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       .limit(1);
     if (error) throw toRepositoryError('stock_movements', error);
     return (data?.length ?? 0) > 0;
+  }
+
+  /** Fetch the movements already recorded for one source document. */
+  async findMovementsForSource(
+    businessId: string,
+    sourceType: string,
+    sourceId: string,
+  ): Promise<Row<'stock_movements'>[]> {
+    const { data, error } = await this.client
+      .from('stock_movements')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('source_type', sourceType)
+      .eq('source_id', sourceId)
+      .order('created_at', { ascending: true });
+    if (error) throw toRepositoryError('stock_movements', error);
+    return data ?? [];
+  }
+
+  /**
+   * Find legacy Receive Stock rows that look like duplicate clicks/retries.
+   *
+   * Before warehouse receipts carried a `source_id`/`client_key`, a rapid
+   * double submit wrote two indistinguishable positive `purchase` movements.
+   * This scan is deliberately conservative: it only considers old direct
+   * warehouse receipts (no source/ref/client_key, created_by present), and only
+   * flags rows with the same product, location, date, quantity, cost, notes and
+   * user that landed within a short time window. Expense purchases and new
+   * idempotent receipts are excluded.
+   */
+  async findDuplicateWarehouseReceiptCandidates(
+    businessId: string,
+    windowMinutes = 2,
+  ): Promise<DuplicateWarehouseReceiptCandidate[]> {
+    type LegacyReceiptMovement = Pick<
+      Row<'stock_movements'>,
+      | 'id'
+      | 'product_id'
+      | 'location_id'
+      | 'movement_date'
+      | 'quantity'
+      | 'unit_cost'
+      | 'notes'
+      | 'created_by'
+      | 'created_at'
+    >;
+
+    let rows: LegacyReceiptMovement[];
+    try {
+      rows = await fetchAllRows<LegacyReceiptMovement>(
+        this.client
+          .from('stock_movements')
+          .select('id, product_id, location_id, movement_date, quantity, unit_cost, notes, created_by, created_at')
+          .eq('business_id', businessId)
+          .eq('movement_type', 'purchase')
+          .is('source_type', null)
+          .is('source_id', null)
+          .is('reference', null)
+          .is('client_key', null)
+          .not('created_by', 'is', null),
+        { orderBy: 'created_at', maxRows: 50_000 },
+      );
+    } catch (error) {
+      throw toRepositoryError('stock_movements', error);
+    }
+
+    if (rows.length === 0) return [];
+
+    const groups = new Map<string, LegacyReceiptMovement[]>();
+    for (const row of rows) {
+      const key = JSON.stringify([
+        row.product_id,
+        row.location_id,
+        row.movement_date,
+        Number(row.quantity),
+        Number(row.unit_cost),
+        row.notes ?? '',
+        row.created_by ?? '',
+      ]);
+      const existing = groups.get(key) ?? [];
+      existing.push(row);
+      groups.set(key, existing);
+    }
+
+    const windowMs = Math.max(1, windowMinutes) * 60 * 1000;
+    const candidates: DuplicateWarehouseReceiptCandidate[] = [];
+
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const sorted = [...group].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+      let kept = sorted[0];
+      let previous = sorted[0];
+
+      for (const row of sorted.slice(1)) {
+        const elapsed = Date.parse(row.created_at) - Date.parse(previous.created_at);
+        // Rows from the same multi-line insert share the same created_at
+        // (`now()` is transaction-stable). Do not treat exact timestamp ties as
+        // duplicate submits, or two identical lines intentionally entered on a
+        // single old receipt would be repaired away. A genuine retry/double
+        // submit is a separate transaction and should have a later timestamp.
+        if (elapsed > 0 && elapsed <= windowMs) {
+          const quantity = Number(row.quantity);
+          const unitCost = Number(row.unit_cost);
+          candidates.push({
+            duplicateMovementId: row.id,
+            keptMovementId: kept.id,
+            productId: row.product_id,
+            locationId: row.location_id,
+            movementDate: row.movement_date,
+            createdAt: row.created_at,
+            quantity,
+            unitCost,
+            value: quantity * unitCost,
+            notes: row.notes,
+          });
+        } else {
+          kept = row;
+        }
+        previous = row;
+      }
+    }
+
+    if (candidates.length === 0) return [];
+
+    const duplicateIds = candidates.map((candidate) => candidate.duplicateMovementId);
+    const { data: existingRepairs, error: repairLookupError } = await this.client
+      .from('stock_movements')
+      .select('source_id')
+      .eq('business_id', businessId)
+      .eq('source_type', 'inventory_duplicate_repair')
+      .in('source_id', duplicateIds);
+    if (repairLookupError) throw toRepositoryError('stock_movements', repairLookupError);
+
+    const alreadyRepaired = new Set((existingRepairs ?? []).map((row) => row.source_id));
+    return candidates.filter((candidate) => !alreadyRepaired.has(candidate.duplicateMovementId));
   }
 
   async findMovementHistory(

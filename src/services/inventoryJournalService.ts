@@ -128,6 +128,14 @@ export interface InventoryReconciliation {
   accounts: { id: string; code: string; name: string; balance: number }[];
 }
 
+export interface DuplicateWarehouseReceiptRepairResult {
+  duplicatesFound: number;
+  stockAdjustmentsCreated: number;
+  quantityAdjusted: number;
+  valueAdjusted: number;
+  reversalEntryId: string | null;
+}
+
 // ── Account resolution ───────────────────────────────────────────────────────
 
 async function getAccountByCode(businessId: string, code: string): Promise<Row<'accounts'>> {
@@ -557,6 +565,11 @@ export async function deductStockAndPostCogs(
  *
  * Without this the receipt would move the subledger and leave the ledger
  * behind, recreating the very divergence this module exists to prevent.
+ *
+ * `receiptKey` is the same logical-receipt id used on the stock movements.
+ * When present it becomes the journal `posting_key`, making a retry or rapid
+ * double submit resume the existing GRNI entry instead of posting the receipt
+ * twice.
  */
 export async function postWarehouseReceipt(
   businessId: string,
@@ -565,6 +578,7 @@ export async function postWarehouseReceipt(
   reference: string | null,
   branchId?: string | null,
   departmentId?: string | null,
+  receiptKey?: string | null,
 ): Promise<string | null> {
   try {
     const valued = receiptLines.filter((l) => Number(l.quantity) > 0 && Number(l.unitCost) > 0);
@@ -605,14 +619,15 @@ export async function postWarehouseReceipt(
       false, total, currency, branchId, departmentId,
     ));
 
-    const { entry } = await repos.journal.createBalancedEntry(
+    const entry = await postKeyedEntry(
       {
         business_id: businessId,
         entry_number: inventoryEntryNumber('GRN'),
         entry_date: movementDate,
         description: `${label} — goods received not invoiced`,
         source_type: 'stock_receipt',
-        source_id: null,
+        source_id: receiptKey ?? null,
+        posting_key: receiptKey ? `stock_receipt:${receiptKey}:grni` : null,
         currency,
         exchange_rate: 1,
         status: 'draft',
@@ -622,7 +637,6 @@ export async function postWarehouseReceipt(
       lines,
     );
 
-    await repos.journal.post(entry.id, null);
     return entry.id;
   } catch (err) {
     log.error(
@@ -632,6 +646,154 @@ export async function postWarehouseReceipt(
     );
     return null;
   }
+}
+
+// ── Repair: duplicate legacy warehouse receipts ──────────────────────────────
+
+/**
+ * Reverses the GL side of duplicated legacy warehouse receipts.
+ *
+ * The stock repair below records negative adjustment movements to bring the
+ * warehouse quantity back down. This companion entry reverses the duplicated
+ * direct-receipt accounting model (DR Inventory / CR GRNI) with DR GRNI /
+ * CR Inventory so both the subledger and balance sheet move together.
+ */
+export async function postWarehouseReceiptDuplicateReversal(
+  businessId: string,
+  duplicateLines: ReceiptCostLine[],
+  repairDate: string,
+  reference: string,
+  repairKey: string,
+): Promise<string | null> {
+  const valued = duplicateLines.filter((l) => Number(l.quantity) > 0 && Number(l.unitCost) > 0);
+  if (valued.length === 0) return null;
+
+  const products = await loadProducts(businessId, valued.map((l) => l.productId));
+  const productById = new Map(products.map((p) => [p.id, p]));
+
+  const creditsByAccount = new Map<string, number>();
+  let total = 0;
+
+  for (const line of valued) {
+    const product = productById.get(line.productId) ?? null;
+    const inventoryAccount = await resolveInventoryAccount(businessId, product);
+    const amount = roundMoney(Number(line.quantity) * Number(line.unitCost));
+    creditsByAccount.set(
+      inventoryAccount.id,
+      roundMoney((creditsByAccount.get(inventoryAccount.id) ?? 0) + amount),
+    );
+    total = roundMoney(total + amount);
+  }
+
+  if (total < TOLERANCE) return null;
+
+  const grni = assertPostable(await getAccountByCode(businessId, GRNI_ACCOUNT_CODE), 'GRNI');
+  const currency = await functionalCurrencyFor(businessId);
+  const label = `Duplicate stock receipt repair — ${reference}`;
+
+  const lines: JournalLineInput[] = [];
+  let lineNumber = 1;
+  lines.push(functionalLine(
+    lineNumber++, grni.id, `${label} — reverse duplicated GRNI`,
+    true, total, currency, null, null,
+  ));
+  for (const [accountId, amount] of creditsByAccount) {
+    lines.push(functionalLine(
+      lineNumber++, accountId, `${label} — reduce duplicated inventory`,
+      false, amount, currency, null, null,
+    ));
+  }
+
+  const entry = await postKeyedEntry(
+    {
+      business_id: businessId,
+      entry_number: inventoryEntryNumber('DUPGRN'),
+      entry_date: repairDate,
+      description: `${label} — reverse duplicate warehouse receipt`,
+      source_type: 'inventory_duplicate_repair',
+      source_id: repairKey,
+      posting_key: `inventory_duplicate_repair:${repairKey}:grni_reversal`,
+      currency,
+      exchange_rate: 1,
+      status: 'draft',
+      branch_id: null,
+      department_id: null,
+    },
+    lines,
+  );
+
+  return entry.id;
+}
+
+/**
+ * Finds old duplicate Receive Stock movements, posts compensating stock
+ * adjustments, and reverses the matching duplicated GRNI accounting. It is
+ * additive/auditable — it does not delete historical movement rows.
+ */
+export async function repairDuplicateWarehouseReceiptAnomalies(
+  businessId: string,
+  createdBy: string | null,
+): Promise<DuplicateWarehouseReceiptRepairResult> {
+  const candidates = await repos.inventory.findDuplicateWarehouseReceiptCandidates(businessId);
+  if (candidates.length === 0) {
+    return {
+      duplicatesFound: 0,
+      stockAdjustmentsCreated: 0,
+      quantityAdjusted: 0,
+      valueAdjusted: 0,
+      reversalEntryId: null,
+    };
+  }
+
+  const repairDate = new Date().toISOString().slice(0, 10);
+  const repairKey = deriveClientKey(
+    candidates.map((candidate) => candidate.duplicateMovementId).sort().join('|'),
+    0,
+  );
+
+  // Post the accounting reversal first. If the ledger side cannot be written
+  // (missing GRNI account, permissions, network), abort before changing stock;
+  // the keyed posting makes a later retry resume instead of duplicating it.
+  const reversalEntryId = await postWarehouseReceiptDuplicateReversal(
+    businessId,
+    candidates.map((candidate) => ({
+      productId: candidate.productId,
+      quantity: candidate.quantity,
+      unitCost: candidate.unitCost,
+    })),
+    repairDate,
+    'legacy duplicate Receive Stock entries',
+    repairKey,
+  );
+
+  const movements = candidates.map((candidate) => {
+    const repairMovementKey = `duplicate-receipt-repair:${candidate.duplicateMovementId}`;
+    return {
+      business_id: businessId,
+      product_id: candidate.productId,
+      location_id: candidate.locationId,
+      movement_type: 'adjustment_out' as const,
+      movement_date: repairDate,
+      quantity: -candidate.quantity,
+      unit_cost: candidate.unitCost,
+      source_type: 'inventory_duplicate_repair',
+      source_id: candidate.duplicateMovementId,
+      reference: 'DUP-RECEIPT-REPAIR',
+      notes: `Correction for duplicate warehouse receipt movement ${candidate.duplicateMovementId}`,
+      created_by: createdBy,
+      client_key: deriveClientKey(repairMovementKey, 0),
+    };
+  });
+
+  const recorded = await repos.inventory.recordMovements(movements);
+
+  return {
+    duplicatesFound: candidates.length,
+    stockAdjustmentsCreated: recorded.length,
+    quantityAdjusted: candidates.reduce((sum, candidate) => sum + candidate.quantity, 0),
+    valueAdjusted: roundMoney(candidates.reduce((sum, candidate) => sum + candidate.value, 0)),
+    reversalEntryId,
+  };
 }
 
 // ── Posting: manual stock movement (adjustment / opening balance) ────────────
