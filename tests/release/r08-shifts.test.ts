@@ -154,8 +154,8 @@ test(meta('R08.SHIFT.CLOSE-IMMUTABLE', 'A signed close is immutable: re-close un
     await c.query('set local role authenticated');
     await setActor(c, identities.A_cashier.id);
     await deniedInTx(c, () => closeShift(c, shiftId, 'r13-r08-imm-k2', 999999), ['22023'], /already closed|immutable/i);
-    // Raw DML bypass of the close is closed (update policy revoked entirely).
-    await deniedInTx(c, () => c.query("update public.pos_shifts set actual_cash=999999, cash_variance=0 where id=$1", [shiftId]), ['42501']);
+    // P7: after P5-D grant all, UPDATE pos_shifts with no RLS FOR UPDATE policy affects 0 rows (still immutable); pos_shift_closes still permission denied
+    expect(((await c.query("update public.pos_shifts set actual_cash=999999, cash_variance=0 where id=$1", [shiftId])) as unknown as { rowCount: number }).rowCount).toBe(0);
     await deniedInTx(c, () => c.query("update public.pos_shift_closes set expected_cash=999999 where shift_id=$1", [shiftId]), ['42501']);
     await c.query('reset role');
     const after = (await c.query('select md5(payload::text) h, expected_cash from public.pos_shift_closes where shift_id=$1', [shiftId])).rows[0];
@@ -220,12 +220,13 @@ test(meta('R08.MOVEMENT.ATOMIC-PAIR', 'Movement row and shift totals transition 
   });
 });
 
-test(meta('R08.SHIFT.BYPASS-CLOSED', 'Raw DML bypass is closed: INSERT/UPDATE on pos_shifts and INSERT on pos_cash_movements are denied to app roles (42501), incl. any attempt to fabricate an open shift'), async () => {
+test(meta('R08.SHIFT.BYPASS-CLOSED', 'Raw DML bypass is closed: INSERT on pos_shifts/pos_cash_movements denied 42501, UPDATE on pos_shifts affects 0 rows (P5-D grant all + RLS no FOR UPDATE policy — still closed)'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
     await deniedInTx(c, () => c.query(`insert into public.pos_shifts(business_id,branch_id,cashier_id,cashier_name,opened_at,opening_cash,expected_cash,status)
       values($1,$2,$3,'ghost',now(),1,1,'open')`, [orgs.A.business, orgs.A.branch, identities.A_owner.id]), ['42501']);
-    await deniedInTx(c, () => c.query(`update public.pos_shifts set expected_cash=9 where business_id=$1`, [orgs.A.business]), ['42501']);
+    // P7: UPDATE with no RLS FOR UPDATE policy affects 0 rows (grant all + RLS)
+    expect(((await c.query(`update public.pos_shifts set expected_cash=9 where business_id=$1`, [orgs.A.business])) as unknown as { rowCount: number }).rowCount).toBe(0);
     await deniedInTx(c, () => c.query(`insert into public.pos_cash_movements(business_id,shift_id,user_id,user_name,movement_type,amount,reason,created_at)
       values($1,$2,$3,'ghost','cash_in',1,'fake',now())`, [orgs.A.business, orgs.A.shift, identities.A_owner.id]), ['42501']);
   });
@@ -841,7 +842,7 @@ test(meta('R08.BRANCH.SERVER-SCOPE', "§6: DEC-03 matrix proven AT THE SERVER �
       [U(802), true, true],   // manager org-wide despite A2 assignment
       [U(803), true, false],  // A1 cashier → A1 only
       [U(804), false, true],  // A2 branch_manager → A2 only
-      [U(805), true, true],   // NULL branch = explicit org-wide
+      [U(805), false, false], // P7 DEC-03 P5-D: assigned cashier NULL = fail-closed (not org-wide)
       [U(806), false, false], // inactive
     ];
     for (const [uid, a1, a2] of matrix) {
@@ -870,17 +871,20 @@ test(meta('R08.BRANCH.SERVER-SCOPE', "§6: DEC-03 matrix proven AT THE SERVER �
     await deniedInTx(c, () => c.query('select public.close_pos_shift_command($1::jsonb)', [JSON.stringify({
       shift_id: orgs.A.shift, command_key: 'r13-r08-ss-3', closing_cash: 0 })]), ['42501'], /may not operate POS/);
 
-    // ── (c) NULL branch = explicit org-wide: the SEEDED cashier (branch_id NULL) legitimately works A2 ──
-    // (the seeded A_cashier row still has branch_id NULL — the CROSS-BRANCH record's assignment rolled back)
-    await setActor(c, identities.A_cashier.id);
+    // ── (c) NULL branch = fail-closed for assigned-scope (P7 DEC-03 P5-D): cashier NULL cannot open at A2 ──
+    // Seeded A_cashier is now assigned to A1 per fixture; use dedicated NULL cashier U(805) for negative test
+    await setActor(c, U(805));
     await c.query('reset role');
     const terminalA2b = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till A2 SS',$2) returning id", [orgs.A.business, orgs.A.branch2])).rows[0].id);
     await c.query('set local role authenticated');
-    const openedByNullBranch = await openShift(c, { key: 'r13-r08-ss-4', terminal: terminalA2b });
-    expect(openedByNullBranch.idempotent).toBe(false);
-    expect(String(openedByNullBranch.branch_id)).toBe(orgs.A.branch2); // server-resolved from the terminal
-    const closedNull = await closeShift(c, String(openedByNullBranch.shift_id), 'r13-r08-ss-5', 100000);
-    expect(closedNull.idempotent).toBe(false);
+    await deniedInTx(c, () => openShift(c, { key: 'r13-r08-ss-4', terminal: terminalA2b }), ['42501'], /no access.*branch/i);
+    // Positive control: A2-assigned branch_manager (U804) can open at A2
+    await setActor(c, U(804));
+    const openedByA2 = await openShift(c, { key: 'r13-r08-ss-4b', terminal: terminalA2b });
+    expect(openedByA2.idempotent).toBe(false);
+    expect(String(openedByA2.branch_id)).toBe(orgs.A.branch2);
+    const closedA2 = await closeShift(c, String(openedByA2.shift_id), 'r13-r08-ss-5b', 100000);
+    expect(closedA2.idempotent).toBe(false);
 
     // ── (d) Caller-controlled branch substitution on the document surface ──
     await c.query('reset role');

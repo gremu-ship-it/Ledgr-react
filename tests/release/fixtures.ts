@@ -61,6 +61,13 @@ export async function seedFixture(client: { query: (sql: string, values?: unknow
     const insertId = async (sql: string, values: unknown[]) => (await client.query(sql, values)).rows[0].id;
     const branch = await insertId('insert into public.branches(business_id,name,code) values($1,$2,$3) returning id', [business, `${org}1`, `${org}1`]);
     const branch2 = await insertId('insert into public.branches(business_id,name,code) values($1,$2,$3) returning id', [business, `${org}2`, `${org}2`]);
+    // P7 T2 — DEC-03: assigned-scope roles must have an explicit branch assignment; NULL is fail-closed.
+    // Seed the fixture with branch_id = A1/B1 for assigned-scope so positive-stock/pos tests can succeed,
+    // while NULL-branch negative cases remain testable via explicit negative fixtures.
+    await client.query(
+      `update public.business_users set branch_id=$1 where business_id=$2 and role::text = any($3)`,
+      [branch, business, ['cashier','stock_clerk','branch_manager','sales_clerk','sales_manager','purchasing_officer','warehouse_worker','customer_service_rep']]
+    );
     const customer = await insertId("insert into public.contacts(business_id,name,contact_type,is_active,wht_exempt) values($1,$2,'customer',true,false) returning id", [business, `R13 ${org} private customer`]);
     const location = await insertId('insert into public.inventory_locations(business_id,name,is_default,branch_id) values($1,$2,true,$3) returning id', [business, 'R13 stock', branch]);
     const product = await insertId("insert into public.products(business_id,name,sku,sale_price,purchase_price,currency,product_type,track_inventory,sales_tax_code,purchase_tax_code) values($1,'R13 item',$2,1500,900,'MWK','product',true,'none','none') returning id", [business, `R13-${org}`]);

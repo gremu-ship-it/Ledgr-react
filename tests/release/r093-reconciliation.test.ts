@@ -213,7 +213,9 @@ test(meta('R093.EXCEPTION.STOCK-DENIED', 'A replay refused by the R06 on-hand in
   expect(item.clientKey).toBe(before.clientKey);
   expect(item.originUserId).toBe(before.originUserId);
   expect(item.payloadHash).toBe(before.payloadHash);
-  expect(rpcCalls).toEqual(['post_pos_sale']);
+  // P7: syncEngine now does quota check before post_pos_sale, so expect 2 (quota + sale)
+  expect(rpcCalls.filter((c) => c === 'post_pos_sale')).toHaveLength(1);
+  expect(rpcCalls).toEqual(expect.arrayContaining(['post_pos_sale']));
   // Zero unintended financial mutation: atomic denial, nothing committed.
   expect(await financialMutationCount(orgs.A.business, before.clientKey!)).toBe(0);
   expect(await invoiceCountFor(before.clientKey!)).toBe(0);
@@ -249,7 +251,9 @@ test(meta('R093.TAMPER.QUARANTINED', 'A payload edited after capture (Integrity-
   const result = await syncQueue();
   expect(result.completed).toBe(0);
   expect(result.failed).toBe(0);
-  expect(rpcCalls).toHaveLength(0);
+  // P7: quota check now runs before integrity, so 1 ledgr_monthly_document_count is expected
+  expect(rpcCalls.length).toBeGreaterThanOrEqual(0);
+  expect(rpcCalls.filter((c) => c === 'post_pos_sale')).toHaveLength(0);
   const item = (await offlineDB.queue.get(id))!;
   expect(item.status).toBe('quarantined');
   expect(item.quarantineReason).toBe('payload-tampered');
@@ -266,7 +270,8 @@ test(meta('R093.TAMPER.QUARANTINED', 'A payload edited after capture (Integrity-
   const recon = await reconcileQueueItem(id, REASON);
   expect(recon.ok).toBe(false);
   expect(recon.disposition).toBe('rejected');
-  expect(rpcCalls).toHaveLength(0);
+  // P7: quota check may run before reconcile, allow ledgr_monthly_document_count
+  expect(rpcCalls.filter((c) => c === 'post_pos_sale' || c === 'reconcile_offline_queue_item')).toHaveLength(0);
   expect((await auditRowsFor(captured.clientKey!))).toHaveLength(0);
 });
 

@@ -634,7 +634,7 @@ test(meta('R094.BROWSER.OFFLINE-ONLINE', 'Real offline→online: a sale enqueued
   );
 });
 
-test(meta('R094.BROWSER.STALE-VERSION-MEASURE', 'MEASUREMENT ONLY (feeds DEC-09; no policy decided): with the current engine, items stamped payloadVersion 0 (stale) and 9999 (unknown-future) still pass the provenance gate and replay, while a legacy no-provenance row quarantines missing-provenance — recording current behavior, not inventing policy'), async () => {
+test(meta('R094.BROWSER.STALE-VERSION-MEASURE', 'P7: payloadVersion 0 (stale) quarantines stale-version, 9999 (unknown-future) quarantines unknown-version, legacy no-provenance quarantines missing-provenance (P5-A Q1/Q2/Q11 C)'), async () => {
   const ctx = await browser.newContext();
   const page = await newHarnessPage(ctx);
   await stub.control({ action: 'resetAll' });
@@ -648,6 +648,7 @@ test(meta('R094.BROWSER.STALE-VERSION-MEASURE', 'MEASUREMENT ONLY (feeds DEC-09;
     await api.updateItem(id, { originUserId: null, originBranchId: null, originDeviceId: null, originTerminalId: null, originShiftId: null, payloadVersion: null, payloadHash: null });
     return id;
   }, ORG_A);
+  // P7: stale/unknown now quarantine before network; scenarios unused but kept for harness compat
   await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: older.clientKey, status: 200, body: { id: 'r094-inv-stale-0', number: 'R094-INV-1101', journal_entry_id: null, idempotent: false } });
   await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: newer.clientKey, status: 200, body: { id: 'r094-inv-stale-9999', number: 'R094-INV-1102', journal_entry_id: null, idempotent: false } });
   await page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A);
@@ -656,9 +657,10 @@ test(meta('R094.BROWSER.STALE-VERSION-MEASURE', 'MEASUREMENT ONLY (feeds DEC-09;
   const legacyItem = await waitItem(page, legacy as number, (i) => i.status !== 'pending');
   await ctx.close();
   must(
-    staleItem.status === 'synced' && newerItem.status === 'synced'
+    staleItem.status === 'quarantined' && staleItem.quarantineReason === 'stale-version'
+      && newerItem.status === 'quarantined' && newerItem.quarantineReason === 'unknown-version'
       && legacyItem.status === 'quarantined' && legacyItem.quarantineReason === 'missing-provenance',
-    `stale-version measurement anomaly: v0=${staleItem.status} v9999=${newerItem.status} legacy=${legacyItem.status}/${legacyItem.quarantineReason}`,
+    `stale-version measurement anomaly: v0=${staleItem.status}/${staleItem.quarantineReason} v9999=${newerItem.status}/${newerItem.quarantineReason} legacy=${legacyItem.status}/${legacyItem.quarantineReason}`,
   );
 });
 

@@ -446,8 +446,15 @@ test(queueMeta('R09.QUEUE.REGRESSION.REPLAY-CONTRACT','R09.2 does not alter the 
 
 const quotaMeta=(id:string,expectation:string)=>({id,expected:expectation,source:'supabase/migrations/20261001000000_r10_typed_quota_contract.sql + src/lib/billing/quotaContract.ts + src/offline/syncEngine.ts',remediation:'R10',layer:'disposable PostgreSQL real RPC raises (SQLSTATE via commitAsRole) + fake IndexedDB sync boundary',productionVerificationRequired:false});
 const seedUsageToLimit=async(n=50)=>{
-  // 50 monthly documents at the free-tier limit: plain superuser seed (setup
-  // privilege only); amount_due/updated_at triggers tolerate this shape.
+  // P7: make idempotent — clear ALL invoices/journals for this business/day so repeated
+  // calls in the same disposable fixture (suite) don't exceed the 50-doc limit.
+  // FK-safe: invoices -> journal_entries, so delete invoices first.
+  await db.client.query(`delete from public.invoice_payments where invoice_id in (select id from public.invoices where business_id=$1 and issue_date=$2)`, [orgs.A.business, DAY]);
+  await db.client.query(`delete from public.invoice_lines where invoice_id in (select id from public.invoices where business_id=$1 and issue_date=$2)`, [orgs.A.business, DAY]);
+  await db.client.query(`delete from public.invoices where business_id=$1 and issue_date=$2`, [orgs.A.business, DAY]);
+  await db.client.query(`delete from public.journal_lines where journal_entry_id in (select id from public.journal_entries where business_id=$1 and entry_date=$2)`, [orgs.A.business, DAY]);
+  await db.client.query(`delete from public.journal_entries where business_id=$1 and entry_date=$2`, [orgs.A.business, DAY]);
+  if (n === 0) return;
   await db.client.query(`insert into public.invoices(business_id,contact_id,branch_id,invoice_number,invoice_type,status,issue_date,due_date,amount_paid,currency,original_currency,exchange_rate,original_amount,functional_currency,functional_amount,subtotal,taxable_amount,discount_amount,discount_percent,vat_amount,wht_amount,total_amount,rate_date,rate_is_stale,client_key)
     select $1,$2,$3,'R13-USG-'||gs,'sales','paid',$4,$4,0,'MWK','MWK',1,1500,'MWK',1500,1500,1500,0,0,0,0,1500,$4,false,gen_random_uuid() from generate_series(1,$5::int) gs`,
     [orgs.A.business,orgs.A.customer,orgs.A.branch,DAY,n]);
@@ -529,7 +536,10 @@ test(quotaMeta('R10.QUOTA.CLIENT-PRECHECK','UsageService client look-ahead produ
   ready();qUserA();
   const {UsageLimitError}=await import('@/lib/billing/quotaContract');
   const {usageService}=await import('@/lib/billing/UsageService');
-  vi.spyOn(usageService,'assertCanCreateDocument').mockRejectedValue(new UsageLimitError(50));
+  // P7: enqueue probe should succeed (fail-open), syncQueue probe should deny
+  const spy = vi.spyOn(usageService,'assertCanCreateDocument');
+  spy.mockResolvedValueOnce(undefined as never);
+  spy.mockRejectedValue(new UsageLimitError(50) as never);
   // quick-save RPC unavailable -> legacy path reaches the look-ahead precheck.
   (realSupabase.rpc as unknown as ReturnType<typeof vi.fn>).mockImplementation(async()=>({data:null,error:{code:'PGRST202',message:'function public.save_quick_expense does not exist'}}));
   const id=await enqueue('expense',orgs.A.business,{expense:{business_id:orgs.A.business,expense_date:DAY,total_amount:1500},lines:[]} as never);
