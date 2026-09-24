@@ -168,6 +168,24 @@ export function Assistant({
     isFeatureEnabled('ai_agent') && Boolean(businessId) && hasCapability(planTier, 'ai_insights');
   const mode: AssistantMode = aiAvailable ? tab : 'support';
 
+  // P5-E: optional branch filter for AI context (read-only, server-authorized)
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const { data: branches = [] } = useQuery({
+    queryKey: ['branches', businessId],
+    queryFn: async () => {
+      if (!businessId) return [];
+      const { supabase } = await import('@/lib/supabase');
+      const { data, error } = await supabase.from('branches').select('id, name').eq('business_id', businessId).eq('is_active', true).order('name');
+      if (error) return [];
+      return (data ?? []) as Array<{ id: string; name: string }>;
+    },
+    enabled: isOpen && aiAvailable && !!businessId,
+    staleTime: 5 * 60_000,
+  });
+  // Reset branch selection when business changes
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional branch reset on business switch
+  useEffect(() => { setSelectedBranchId(null); }, [businessId]);
+
   // One conversation per tab so switching tabs never loses the transcript.
   const [conversations, setConversations] = useState<Record<AssistantMode, DisplayMessage[]>>({
     support: [],
@@ -183,11 +201,12 @@ export function Assistant({
   // Live data context, fetched on first open (drawer) or mount (page) and
   // cached by React Query so re-opening is instant. buildAssistantContext
   // never throws for data reasons — the catch is a last-resort guard.
+  // P5-E: branch filter is part of the cache key to avoid cross-branch contamination
   const contextQuery = useQuery<DataContext>({
-    queryKey: ['assistant-context', mode, businessId ?? null, currentUser?.id ?? null],
+    queryKey: ['assistant-context', mode, businessId ?? null, currentUser?.id ?? null, selectedBranchId ?? null],
     queryFn: async () => {
       try {
-        return await buildAssistantContext(currentUser?.id ?? null, businessId ?? null, mode);
+        return await buildAssistantContext(currentUser?.id ?? null, businessId ?? null, mode, selectedBranchId ?? null);
       } catch (err) {
         log.error('Failed to build assistant context', err as Error);
         return { companyName: resolvedName };
@@ -432,6 +451,37 @@ export function Assistant({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* P5-E: optional branch filter for Ledgr AI (read-only, server-authorized) */}
+      {mode === 'ai' && aiAvailable && branches.length > 0 && (
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-white px-4 py-2">
+          <label htmlFor="ai-branch-filter" className="text-xs font-medium text-gray-600">
+            Branch
+          </label>
+          <select
+            id="ai-branch-filter"
+            value={selectedBranchId ?? ''}
+            onChange={(e) => setSelectedBranchId(e.target.value || null)}
+            className="flex-1 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="">All branches (org-wide, if permitted)</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+          {selectedBranchId && (
+            <button
+              type="button"
+              onClick={() => setSelectedBranchId(null)}
+              className="text-xs text-brand-600 hover:text-brand-700"
+            >
+              Clear
+            </button>
+          )}
         </div>
       )}
 

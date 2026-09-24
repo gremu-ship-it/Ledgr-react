@@ -219,6 +219,9 @@ export interface DataContext {
   forecast?: Forecast;
   /** Present in Support mode — category + optional attached diagnostics. */
   support?: SupportPayload;
+  /** P5-E: optional branch filter (read-only, server-authorized via ai_context). */
+  branchId?: string | null;
+  branchName?: string | null;
 }
 
 export interface AIChartSeries {
