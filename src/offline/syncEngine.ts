@@ -30,7 +30,11 @@ import { sweepUnverifiableItems, replayViolation, quarantineItem } from './prove
 import { claimLease, releaseLease, verifyLeaseOwnership } from './lease';
 import { getLeaseClaimantId } from './deviceIdentity';
 import { isQuotaDenial, QUOTA_DENIAL_SQLSTATE } from '@/lib/billing/quotaContract';
-import { classifyReplayException, exceptionDetails } from './exceptions';
+import {
+  classifyReplayException,
+  exceptionDetails,
+  isClientKeyPayloadMismatch,
+} from './exceptions';
 import { verifyPayloadIntegrity } from './payloadIntegrity';
 import type {
   IncomeQueuePayload,
@@ -529,28 +533,47 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
       progress.completed += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown sync error';
-      // R09.3 Model 3: an authoritative business/policy denial becomes a
-      // durable typed exception (held out of blind retry, reconcilable via
-      // Model 4). Transient and authority failures keep the ordinary path
-      // untouched — authority denials are never converted into overrides.
-      const exceptionClass = classifyReplayException(error);
+      // P5-A Q10: same clientKey with materially different payload must be
+      // quarantined (clientKey-payload-mismatch), never retried, permanently
+      // non-reconcilable, replay-safe (no second posting). Detect server
+      // authoritative mismatch before general exception classification.
+      if (isClientKeyPayloadMismatch(error)) {
+        await quarantineItem(
+          item.localId!,
+          'clientKey-payload-mismatch',
+          'The server detected that this clientKey was re-delivered with a different payload. Held for assisted recovery; not retried, never reconciled via this path.',
+        );
+        // Preserve lastError for drawer visibility (the quarantine reason is authoritative).
+        await offlineDB.queue.update(item.localId!, {
+          lastError: message,
+          lastErrorCode: (error as { code?: string })?.code ?? '22023',
+        });
+        progress.failed += 1;
+      } else {
+        // R09.3 Model 3: an authoritative business/policy denial becomes a
+        // durable typed exception (held out of blind retry, reconcilable via
+        // Model 4 for stock/policy only; branch/terminal are typed but frozen
+        // — Q11 D). Transient and unrelated authority failures keep the
+        // ordinary path untouched.
+        const exceptionClass = classifyReplayException(error);
 
-      await offlineDB.queue.update(item.localId!, {
-        status: 'failed',
-        lastError: message,
-        // P-D2: expose the typed quota-denial signal at the boundary. No
-        // retry/quarantine behavior changes here — that is R09.3's decision.
-        lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
-        ...(exceptionClass
-          ? {
-              exceptionClass,
-              exceptionAt: new Date().toISOString(),
-              exceptionDetails: exceptionDetails(exceptionClass),
-            }
-          : {}),
-      });
+        await offlineDB.queue.update(item.localId!, {
+          status: 'failed',
+          lastError: message,
+          // P-D2: expose the typed quota-denial signal at the boundary. No
+          // retry/quarantine behavior changes here — that is R09.3's decision.
+          lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+          ...(exceptionClass
+            ? {
+                exceptionClass,
+                exceptionAt: new Date().toISOString(),
+                exceptionDetails: exceptionDetails(exceptionClass),
+              }
+            : {}),
+        });
 
-      progress.failed += 1;
+        progress.failed += 1;
+      }
     } finally {
       // Terminal or successful: never retain an unusable lease (§17/§18).
       await releaseLease(item.localId!, claim.lease!.token);
@@ -590,20 +613,33 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
         progress.completed += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown sync error';
-        const exceptionClass = classifyReplayException(error);
-        await offlineDB.queue.update(item.localId!, {
-          status: 'failed',
-          lastError: message,
-          lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
-          ...(exceptionClass
-            ? {
-                exceptionClass,
-                exceptionAt: new Date().toISOString(),
-                exceptionDetails: exceptionDetails(exceptionClass),
-              }
-            : {}),
-        });
-        progress.failed += 1;
+        if (isClientKeyPayloadMismatch(error)) {
+          await quarantineItem(
+            item.localId!,
+            'clientKey-payload-mismatch',
+            'The server detected that this clientKey was re-delivered with a different payload. Held for assisted recovery; not retried, never reconciled via this path.',
+          );
+          await offlineDB.queue.update(item.localId!, {
+            lastError: message,
+            lastErrorCode: (error as { code?: string })?.code ?? '22023',
+          });
+          progress.failed += 1;
+        } else {
+          const exceptionClass = classifyReplayException(error);
+          await offlineDB.queue.update(item.localId!, {
+            status: 'failed',
+            lastError: message,
+            lastErrorCode: isQuotaDenial(error) ? QUOTA_DENIAL_SQLSTATE : null,
+            ...(exceptionClass
+              ? {
+                  exceptionClass,
+                  exceptionAt: new Date().toISOString(),
+                  exceptionDetails: exceptionDetails(exceptionClass),
+                }
+              : {}),
+          });
+          progress.failed += 1;
+        }
       } finally {
         await releaseLease(item.localId!, claim.lease!.token);
       }

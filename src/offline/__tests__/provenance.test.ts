@@ -105,7 +105,7 @@ describe('R09.2 actor binding at replay gate (tests 7–12 pure parts)', () => {
     const item = (await offlineDB.queue.get(id))!;
     expect(replayViolation(item, USER_A.id)).toBeNull();
     const sweep = await sweepUnverifiableItems(USER_A.id);
-    expect(sweep).toEqual({ actorMismatch: 0, missingProvenance: 0 });
+    expect(sweep).toEqual({ actorMismatch: 0, missingProvenance: 0, staleVersion: 0, unknownVersion: 0 });
     expect((await offlineDB.queue.get(id))!.status).toBe('pending');
   });
 

@@ -85,6 +85,29 @@ export function hasTrustworthyProvenance(item: QueueItem): boolean {
 }
 
 /**
+ * P5-A version quarantine helpers.
+ *
+ * QUEUE_PAYLOAD_VERSION = 1. Only missing (null) → missing-provenance;
+ * < 1 → stale-version; > 1 → unknown-version. Current (===1) is not
+ * version-quarantined. Missing remains governed by hasTrustworthyProvenance
+ * / missing-provenance contract — never conflated with stale.
+ */
+export function isStaleVersion(item: QueueItem): boolean {
+  return typeof item.payloadVersion === 'number' && item.payloadVersion < QUEUE_PAYLOAD_VERSION;
+}
+
+export function isUnknownVersion(item: QueueItem): boolean {
+  return typeof item.payloadVersion === 'number' && item.payloadVersion > QUEUE_PAYLOAD_VERSION;
+}
+
+export function getVersionQuarantineReason(item: QueueItem): QuarantineReason | null {
+  if (!hasTrustworthyProvenance(item)) return null; // missing-provenance owns null
+  if (isStaleVersion(item)) return 'stale-version';
+  if (isUnknownVersion(item)) return 'unknown-version';
+  return null;
+}
+
+/**
  * Item-level replay gate (§4). Pure: returns the quarantine reason when the
  * item must NOT be sent to the server, or null when it may enter the normal
  * replay path (where full server authorization still applies).
@@ -92,9 +115,15 @@ export function hasTrustworthyProvenance(item: QueueItem): boolean {
  * Callers must only consult this once the self actor IS known (the sync
  * engine resolves the session user first; when unknown it replays nothing
  * and mutates no provenance-bearing item — fail closed).
+ *
+ * P5-A: version quarantines are checked after missing-provenance but before
+ * actor-mismatch, so a stale or unknown version is held out regardless of
+ * actor (and never reaches the server). Missing (null) is not stale.
  */
 export function replayViolation(item: QueueItem, currentUserId: string): QuarantineReason | null {
   if (!hasTrustworthyProvenance(item)) return 'missing-provenance';
+  const versionReason = getVersionQuarantineReason(item);
+  if (versionReason) return versionReason;
   if (item.originUserId !== currentUserId) return 'actor-mismatch';
   return null;
 }
@@ -123,6 +152,8 @@ export async function quarantineItem(
 export interface QuarantineSweepResult {
   actorMismatch: number;
   missingProvenance: number;
+  staleVersion: number;
+  unknownVersion: number;
 }
 
 /**
@@ -145,7 +176,12 @@ export async function sweepUnverifiableItems(
     .anyOf('pending', 'failed')
     .toArray();
 
-  const result: QuarantineSweepResult = { actorMismatch: 0, missingProvenance: 0 };
+  const result: QuarantineSweepResult = {
+    actorMismatch: 0,
+    missingProvenance: 0,
+    staleVersion: 0,
+    unknownVersion: 0,
+  };
   for (const item of candidates) {
     if (!hasTrustworthyProvenance(item)) {
       await quarantineItem(
@@ -154,6 +190,22 @@ export async function sweepUnverifiableItems(
         'No trustworthy capture evidence (recorded before queue v2, or edited after capture). Held for assisted recovery.',
       );
       result.missingProvenance += 1;
+      continue;
+    }
+    // P5-A version quarantines: durable, visible, never retried, never
+    // reconcilable (Q3/Q11). Checked before actor so stale/unknown is held
+    // out even for the capturing actor; missing (null) already handled.
+    const versionReason = getVersionQuarantineReason(item);
+    if (versionReason) {
+      await quarantineItem(
+        item.localId!,
+        versionReason,
+        versionReason === 'stale-version'
+          ? 'Captured with an obsolete payload version and cannot be replayed. Held for assisted recovery; update the app and re-create if needed.'
+          : 'Captured with an unknown future payload version and cannot be replayed by this build. Held for assisted recovery.',
+      );
+      if (versionReason === 'stale-version') result.staleVersion += 1;
+      else result.unknownVersion += 1;
       continue;
     }
     if (currentUserId && item.originUserId !== currentUserId) {
@@ -183,7 +235,13 @@ export async function sweepUnverifiableItems(
     // Case A: provenance matches the current actor — allowed into the
     // existing replay path, where server authorization still applies.
   }
-  if (result.actorMismatch + result.missingProvenance > 0) {
+  if (
+    result.actorMismatch +
+      result.missingProvenance +
+      result.staleVersion +
+      result.unknownVersion >
+    0
+  ) {
     log.warn('Queue quarantine sweep held items out of replay', { ...result });
   }
   return result;

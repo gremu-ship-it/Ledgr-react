@@ -45,12 +45,25 @@ export type QueueItemStatus =
  *                            longer matches its capture-time integrity hash.
  *                            Never replayed, never reconciled; held for
  *                            assisted recovery like every integrity class.
+ *  - 'stale-version'       — P5-A (Q1): payloadVersion < QUEUE_PAYLOAD_VERSION.
+ *                            Durable, visible, quarantined, never retried,
+ *                            permanently non-reconcilable (Q3/Q11).
+ *  - 'unknown-version'     — P5-A (Q2): payloadVersion > QUEUE_PAYLOAD_VERSION.
+ *                            Durable, visible, quarantined, never retried,
+ *                            permanently non-reconcilable.
+ *  - 'clientKey-payload-mismatch' — P5-A (Q10): same clientKey re-delivered
+ *                            with materially different payload (authoritative
+ *                            hash/payload comparison in post_pos_sale;
+ *                            replay-safe, no second posting, quarantined).
  */
 export type QuarantineReason =
   | 'actor-mismatch'
   | 'missing-provenance'
   | 'legacy'
-  | 'payload-tampered';
+  | 'payload-tampered'
+  | 'stale-version'
+  | 'unknown-version'
+  | 'clientKey-payload-mismatch';
 
 /**
  * R09.3 Model 3 (P-D3-FINAL): the typed business/policy exception classes a
@@ -64,8 +77,22 @@ export type QuarantineReason =
  * Realized as additive fields on the queue row (status stays 'failed'), NOT
  * a quarantine: R09.2 quarantines remain reserved for integrity classes, and
  * the R10 evidence asserting failed+lastErrorCode stays intact.
+ *
+ * P5-A (Q8): additional typed but permanently non-reconcilable exceptions
+ * (frozen by Q11 D — never added to RECONCILABLE):
+ *  - 'branch-denied'   — 42501 branch access denial (server can establish
+ *                         branch semantics; see exceptions.ts).
+ *  - 'terminal-denied' — 22023 terminal authority denial (server can
+ *                         establish terminal semantics).
+ * P5-A version quarantines are QuarantineReason (stale-version/
+ * unknown-version), not ExceptionClass, per Q1/Q2 (quarantined, never
+ * reconcilable). clientKey-payload-mismatch is also a quarantine.
  */
-export type ExceptionClass = 'stock-denied' | 'policy-denied';
+export type ExceptionClass =
+  | 'stock-denied'
+  | 'policy-denied'
+  | 'branch-denied'
+  | 'terminal-denied';
 
 /**
  * R09.2 cross-tab replay lease metadata (see ./lease.ts). The lease is the
@@ -323,6 +350,21 @@ class LedgrOfflineDB extends Dexie {
             if (item.lastReconcileAt === undefined) item.lastReconcileAt = null;
             if (item.payloadHash === undefined) item.payloadHash = null;
           });
+      });
+
+    // P5-A v4: Model 3 typed quarantines/exceptions (stale-version,
+    // unknown-version, clientKey-payload-mismatch, branch-denied,
+    // terminal-denied). No new indexes or columns — the string union
+    // extension is additive and all existing rows remain valid; defaults
+    // already cover null quarantineReason/exceptionClass, so upgrade is
+    // idempotent and lossless (no evidence fabricated).
+    this.version(4)
+      .stores({
+        queue: '++localId, sequence, status, businessId, dependsOnLocalId, operationType',
+      })
+      .upgrade(async () => {
+        // No structural change — type extension only; existing rows keep
+        // null quarantineReason/exceptionClass where not set.
       });
   }
 }
