@@ -63,6 +63,7 @@ status_payload="$(curl -sS --max-time 30 \
   "https://api.supabase.com/v1/projects/${SUPABASE_PROJECT_REF}" || true)"
 project_status="$(printf '%s' "${status_payload}" | grep -o '"status":"[^"]*"' | head -n 1 | cut -d'"' -f4 || true)"
 echo "Project status: ${project_status:-unknown}"
+echo "::notice::Supabase project ${SUPABASE_PROJECT_REF} (${label}) status: ${project_status:-unknown}"
 if [[ "${project_status}" == "INACTIVE" ]]; then
   echo "::error::Supabase project ${SUPABASE_PROJECT_REF} (${label}) is PAUSED. Resume it in the Supabase dashboard (open the project, click Restore/Resume, wait a few minutes) and re-run this workflow. Pausing does not reset the DB password. See DEPLOYMENT.md."
   exit 1
@@ -135,9 +136,39 @@ while :; do
   fi
 
   if ((attempt >= max_attempts)); then
-    echo "Final attempt with --debug for diagnostics ..."
-    supabase db push --password "${SUPABASE_DB_PASSWORD}" --include-all --debug || true
-    echo "::error::supabase db push failed after ${max_attempts} attempts for ${label}. If the project status above is ACTIVE_HEALTHY, the database is likely unresponsive: restart the project in the Supabase dashboard (General settings -> Restart project), check https://status.supabase.com for incidents, then re-run. See DEPLOYMENT.md."
+    # Job logs live on Azure blob storage and often cannot be downloaded.
+    # Annotations are the only failure text this network can read. Keep to
+    # eight lines: GitHub caps annotations per step, and the password must
+    # never appear in one.
+    echo "::error::supabase db push failed after ${max_attempts} attempts for ${label} (project status: ${project_status:-unknown})."
+    mapfile -t fail_lines < <(grep -E 'ERROR|error|SQLSTATE|exception|failed|violat|not found|password authentication' "${push_output}" | tail -n 8 || true)
+    if ((${#fail_lines[@]} == 0)); then
+      mapfile -t fail_lines < <(tail -n 8 "${push_output}" || true)
+    fi
+    for line in "${fail_lines[@]}"; do
+      line="${line//$'\r'/}"
+      line="${line//${SUPABASE_DB_PASSWORD}/***}"
+      line="${line//::/: :}"
+      [[ -z "${line}" ]] && continue
+      echo "::error::${line:0:400}"
+    done
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      {
+        echo "### supabase db push failed (${label})"
+        echo "Project status: ${project_status:-unknown}"
+        echo
+        echo '```'
+        python3 - "${push_output}" << 'PY'
+import os, sys
+pw = os.environ.get("SUPABASE_DB_PASSWORD", "")
+text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+if pw:
+    text = text.replace(pw, "***")
+print("\n".join(text.splitlines()[-60:]))
+PY
+        echo '```'
+      } >> "${GITHUB_STEP_SUMMARY}"
+    fi
     exit 1
   fi
   echo "supabase db push failed (attempt ${attempt}/${max_attempts}) — retrying in $((attempt * 20))s ..."
