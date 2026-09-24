@@ -287,14 +287,12 @@ jobs:
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (production)
         run: |
-          NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation ai-chat support-agent suggest-bank-matches accept-invite-link create-invite-link invite-team-member list-team-members create-api-key cancel-account-deletion request-account-deletion export-my-data send-invoice webhook-dispatcher"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
-            if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
-              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
-            else
-              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+            if ! supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"; then
+              echo "::error::supabase functions deploy failed for ${fn}"
+              exit 1
             fi
           done
       - name: Deploy Express gateway to Railway (if configured)
