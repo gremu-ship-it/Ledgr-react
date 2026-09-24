@@ -172,3 +172,64 @@ inventory) is the substitute.
    `pg_policies` from staging and reconcile before Phase 8B.
 4. Storage bucket size limits / MIME restrictions and storage policies are
    unverified.
+5. `inventory_balances.quantity_available` is a **STORED GENERATED column**
+   (`quantity_on_hand - quantity_reserved`) on the live project, but a plain
+   nullable column in the repository's base schema. Any migration or function
+   that maintains balances must therefore *omit* the column and let the database
+   derive it, or branch on `pg_attribute.attgenerated` — PostgreSQL cannot
+   convert an existing plain column into a generated one (`ALTER COLUMN ... ADD
+   GENERATED ALWAYS AS` does not exist), so the two shapes have to be tolerated
+   rather than normalised. Writing it is a hard error: `SQLSTATE 428C9 cannot
+   insert a non-DEFAULT value into column "quantity_available"`.
+   `20260924000001_fix_stock_movement_balance_trigger.sql` failed on production
+   with exactly that until it stopped writing the column;
+   `tests/database/stock_movement_balance_trigger.test.js` replays the
+   current balance-trigger migration against both shapes so the next deploy
+   cannot rediscover it.
+6. **`stock_movements` is not a complete ledger of on-hand stock on
+   production.** The 2026-09-24 deploy showed `sum(stock_movements.quantity)`
+   netting to **-1829** for a live product: opening stock and older history
+   were never written as movements. Consequences:
+   * `inventory_balances` must be maintained as a **delta**
+     (`balance += movement.quantity`), never recomputed as `sum(ledger)`.
+     `20260925000001_stock_movement_balance_delta_trigger.sql` is the canonical
+     writer; it also asserts that exactly one balance-maintaining trigger
+     exists on `stock_movements` — production had carried two additive ones
+     out-of-band (`trg_update_inventory_balance`,
+     `trg_stock_movement_apply_balance`), which is what made a 10-unit receipt
+     land as 20. `trg_stock_immutable`, also out-of-band, is deliberately kept.
+   * `backfill_and_recalculate_inventory()` used to recompute a business's
+     balances from the ledger — the last writer violating this rule — and was
+     rejected by `chk_inventory_balances_on_hand_nonneg` on production when a
+     customer clicked Warehouse → "Reconcile stock levels" (2026-09-24,
+     proposed `on_hand = -3`). `20260926000001_fix_backfill_and_recalculate_inventory.sql`
+     replaces it with a movements-only version: it backfills purchases, then
+     records any shortfall between missing sales and on-hand stock as explicit
+     `opening_balance` movements, then backfills the sales — every row applied
+     by the canonical delta trigger, so no balance is ever rewritten or driven
+     negative. `tests/database/backfill_reconcile_inventory.test.js` replays
+     it against the production shape.
+   * Any writer of `inventory_balances` must UPDATE first and INSERT only when
+     the row is missing. `INSERT ... ON CONFLICT DO UPDATE` evaluates CHECK
+     constraints on the *proposed* row before it finds the conflict, so a
+     negative movement (every sale) trips the non-negative check even when the
+     resulting balance is valid.
+   * Balances the old double-count overstated are **not** rewritten by the
+     migration — blanket repairs cannot tell an over-count from imported
+     opening stock. `public.v_inventory_balance_ledger_drift` lists every
+     `(business, product, location)` whose balance differs from its ledger.
+     For a key you have confirmed is a pure double-count (all of its history is
+     in the ledger, `difference` equals the duplicated quantity), correct the
+     **balance row**, not the ledger — the movement was recorded once; posting
+     an `adjustment_out` would leave the offset in the view forever and book a
+     stock loss that never happened:
+     ```sql
+     update public.inventory_balances ib
+        set quantity_on_hand = d.ledger_quantity, updated_at = now()
+       from public.v_inventory_balance_ledger_drift d
+      where d.business_id = ib.business_id and d.product_id = ib.product_id
+        and d.location_id = ib.location_id
+        and ib.product_id = '<product uuid>' and ib.location_id = '<location uuid>';
+     ```
+     Keys with a large positive `difference` and an old `last_ledger_movement_at`
+     are pre-ledger opening stock; leave them alone.

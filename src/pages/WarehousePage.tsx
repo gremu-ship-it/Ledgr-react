@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle, CheckCircle2,
@@ -8,10 +8,13 @@ import { repos } from '@/lib/repositories';
 import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
+import { deriveClientKey } from '@/lib/clientKeys';
+import { newSaveClientKey } from '@/services/quickSaveService';
 import {
   postWarehouseReceipt,
   reconcileInventoryToLedger,
   postInventoryReconciliationAdjustment,
+  repairDuplicateWarehouseReceiptAnomalies,
 } from '@/services/inventoryJournalService';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -265,19 +268,23 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
 
   const syncMutation = useMutation({
     mutationFn: () => repos.inventory.backfillFromSalesAndPurchases(businessId),
-    onSuccess: ({ salesBackfilled, purchasesBackfilled, balancesUpdated }) => {
-      if (salesBackfilled === 0 && purchasesBackfilled === 0) {
+    onSuccess: ({ salesBackfilled, purchasesBackfilled, adjustmentsInserted, balancesUpdated }) => {
+      if (salesBackfilled === 0 && purchasesBackfilled === 0 && adjustmentsInserted === 0) {
         setFeedback({
           type: 'success',
           message: 'Every tracked sale and purchase already has a matching stock movement — nothing to sync.',
         });
       } else {
+        const plural = (n: number) => (n === 1 ? '' : 's');
         setFeedback({
           type: 'success',
           message:
-            `Added ${salesBackfilled} missing sale movement${salesBackfilled === 1 ? '' : 's'} and ` +
-            `${purchasesBackfilled} missing purchase movement${purchasesBackfilled === 1 ? '' : 's'}, ` +
-            `then recalculated ${balancesUpdated} stock balance${balancesUpdated === 1 ? '' : 's'}. ` +
+            `Added ${salesBackfilled} missing sale movement${plural(salesBackfilled)} and ` +
+            `${purchasesBackfilled} missing purchase movement${plural(purchasesBackfilled)}` +
+            (adjustmentsInserted > 0
+              ? `, plus ${adjustmentsInserted} opening-stock movement${plural(adjustmentsInserted)} for goods sold before tracking began`
+              : '') +
+            `, then updated ${balancesUpdated} stock balance${plural(balancesUpdated)}. ` +
             'Check the ledger reconciliation below next, since stock values have changed.',
         });
       }
@@ -295,7 +302,9 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
           <p className="text-xs text-gray-500">
             If inventory tracking started after invoices or expenses were already recorded, stock on hand can
             disagree with what those transactions imply. This finds tracked-product sale/purchase lines with no
-            matching stock movement, adds the missing movements, and recalculates balances.
+            matching stock movement and adds the missing movements, updating stock balances by the same amounts.
+            Sales whose goods were never recorded as received get a one-off opening-stock movement so quantities
+            stay valid.
           </p>
         </div>
         <button
@@ -305,6 +314,81 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
         >
           {syncMutation.isPending && <Loader2 size={12} className="animate-spin" />}
           Reconcile stock levels
+        </button>
+      </div>
+
+      {feedback && (
+        <div
+          className={`mt-2 rounded-lg px-3 py-2 text-xs ${
+            feedback.type === 'success' ? 'bg-brand-50 text-brand-700' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Duplicate receipt repair panel ───────────────────────────────────────────
+// Cleanup for the bug where Receive Stock retries could post the same
+// warehouse receipt twice: legacy unkeyed receipts submitted in quick
+// succession, and replays that re-posted an existing receipt key. The repair
+// is additive and auditable: it posts compensating stock movements plus a
+// GRNI reversal rather than deleting history.
+
+function DuplicateReceiptRepairPanel({
+  businessId,
+  currentUserId,
+}: {
+  businessId: string;
+  currentUserId: string | null;
+}) {
+  const queryClient = useQueryClient();
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const repairMutation = useMutation({
+    mutationFn: () => repairDuplicateWarehouseReceiptAnomalies(businessId, currentUserId),
+    onSuccess: (result) => {
+      if (result.duplicatesFound === 0) {
+        setFeedback({
+          type: 'success',
+          message: 'No duplicate legacy warehouse receipts were found.',
+        });
+      } else {
+        setFeedback({
+          type: 'success',
+          message:
+            `Corrected ${result.duplicatesFound} duplicate receipt movement${result.duplicatesFound === 1 ? '' : 's'}, ` +
+            `reducing stock by ${result.quantityAdjusted.toLocaleString()} unit${result.quantityAdjusted === 1 ? '' : 's'} ` +
+            `and reversing ${formatMwk(result.valueAdjusted)} from duplicated GRNI accounting.`,
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
+      queryClient.invalidateQueries({ queryKey: ['journal', businessId] });
+    },
+    onError: (err: Error) => setFeedback({ type: 'error', message: err.message }),
+  });
+
+  return (
+    <div className="mb-4 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">Repair duplicate Receive Stock entries</p>
+          <p className="text-xs text-gray-500">
+            If a receive action was submitted twice, this finds the re-posted receipt — the same receipt posted
+            again under its own reference, or an identical legacy receipt created within two minutes — posts a
+            stock correction, and reverses the duplicated GRNI accounting.
+          </p>
+        </div>
+        <button
+          onClick={() => repairMutation.mutate()}
+          disabled={repairMutation.isPending}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {repairMutation.isPending && <Loader2 size={12} className="animate-spin" />}
+          Scan & repair duplicates
         </button>
       </div>
 
@@ -450,6 +534,11 @@ export function WarehousePage() {
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [receiveOpen, setReceiveOpen]     = useState(false);
   const [receiveError, setReceiveError]   = useState<string | null>(null);
+  // One idempotency key per logical warehouse receipt. Keep it stable while
+  // the modal is open so a double click or retry cannot insert the same stock
+  // movement twice; rotate it when the user starts a fresh receipt.
+  const receiveClientKeyRef = useRef(newSaveClientKey());
+  const receiveSubmittingRef = useRef(false);
 
   const { data: locations } = useQuery({
     queryKey: ['locations', businessId],
@@ -481,14 +570,17 @@ export function WarehousePage() {
       lines,
       locationId,
       notes,
+      receiptKey,
     }: {
       lines: ReceiveLineForm[];
       locationId: string;
       notes: string;
+      receiptKey: string;
     }) => {
       if (!locationId) throw new Error('Please select a location to receive stock into.');
       const movementDate = new Date().toISOString().slice(0, 10);
-      const movements = lines.map((l) => ({
+      const receiptReference = `GRN-${receiptKey.slice(0, 8).toUpperCase()}`;
+      const movements = lines.map((l, index) => ({
         business_id:   businessId!,
         product_id:    l.productId,
         location_id:   locationId,
@@ -497,9 +589,25 @@ export function WarehousePage() {
         quantity:      l.quantity,
         unit_cost:     l.unitCost,
         notes:         notes || null,
+        source_type:   'stock_receipt',
+        source_id:     receiptKey,
+        reference:     receiptReference,
         created_by:    currentUser?.id ?? null,
+        client_key:    deriveClientKey(receiptKey, index),
       }));
-      const recorded = await repos.inventory.recordMovements(movements);
+      await repos.inventory.recordMovements(movements);
+
+      // If this is a retry after the first request committed but the response
+      // was lost, `recordMovements` will skip the existing keyed rows. Build
+      // the GL entry from the rows that actually exist for this receipt key,
+      // not from whatever the user may have edited in the still-open modal.
+      const receiptMovements = await repos.inventory.findMovementsForSource(
+        businessId!,
+        'stock_receipt',
+        receiptKey,
+      );
+
+      const receiptDate = receiptMovements[0]?.movement_date ?? movementDate;
 
       // PERPETUAL INVENTORY: a receipt with no supplier invoice still has to
       // hit the ledger, or the subledger walks away from the balance sheet.
@@ -507,25 +615,35 @@ export function WarehousePage() {
       // clears when the supplier's expense is eventually recorded.
       await postWarehouseReceipt(
         businessId!,
-        lines.map((l) => ({
-          productId: l.productId,
-          quantity:  l.quantity,
-          unitCost:  l.unitCost,
+        receiptMovements.map((m) => ({
+          productId: m.product_id,
+          quantity:  Number(m.quantity),
+          unitCost:  Number(m.unit_cost),
         })),
-        movementDate,
-        notes || null,
+        receiptDate,
+        notes || receiptReference,
+        null,
+        null,
+        receiptKey,
       );
 
-      return recorded;
+      return receiptMovements;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['inventory_balances', businessId] });
       queryClient.invalidateQueries({ queryKey: ['inventory_reconciliation', businessId] });
       setReceiveError(null);
       setReceiveOpen(false);
+      receiveClientKeyRef.current = newSaveClientKey();
     },
     onError: (err: Error) => {
+      // Keep receiveClientKeyRef unchanged on error: if the stock movement
+      // committed but the response was lost, pressing Receive Stock again is a
+      // safe retry of the same logical receipt instead of a second receipt.
       setReceiveError(err.message);
+    },
+    onSettled: () => {
+      receiveSubmittingRef.current = false;
     },
   });
 
@@ -555,7 +673,12 @@ export function WarehousePage() {
           {!isMobile && <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>}
         </div>
         <button
-          onClick={() => { setReceiveError(null); setReceiveOpen(true); }}
+          onClick={() => {
+            receiveClientKeyRef.current = newSaveClientKey();
+            receiveSubmittingRef.current = false;
+            setReceiveError(null);
+            setReceiveOpen(true);
+          }}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
         >
           <Plus size={16} /> {isMobile ? 'Receive' : 'Receive Stock'}
@@ -563,6 +686,7 @@ export function WarehousePage() {
       </div>
 
       <StockSyncPanel businessId={businessId} />
+      <DuplicateReceiptRepairPanel businessId={businessId} currentUserId={currentUser?.id ?? null} />
       <ReconciliationPanel businessId={businessId} />
 
       {lowStock.length > 0 && (
@@ -694,10 +818,22 @@ export function WarehousePage() {
         open={receiveOpen}
         products={products ?? []}
         locations={locations ?? []}
-        onClose={() => { setReceiveOpen(false); setReceiveError(null); }}
-        onSubmit={(lines, locationId, notes) =>
-          receiveMutation.mutate({ lines, locationId, notes })
-        }
+        onClose={() => {
+          setReceiveOpen(false);
+          setReceiveError(null);
+          receiveSubmittingRef.current = false;
+          receiveClientKeyRef.current = newSaveClientKey();
+        }}
+        onSubmit={(lines, locationId, notes) => {
+          if (receiveSubmittingRef.current || receiveMutation.isPending) return;
+          receiveSubmittingRef.current = true;
+          receiveMutation.mutate({
+            lines,
+            locationId,
+            notes,
+            receiptKey: receiveClientKeyRef.current,
+          });
+        }}
         isLoading={receiveMutation.isPending}
         error={receiveError}
       />

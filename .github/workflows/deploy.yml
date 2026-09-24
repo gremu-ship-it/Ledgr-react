@@ -262,10 +262,13 @@ jobs:
       # the running (old) client keeps working throughout the rollout.
       - name: Link & migrate production database
         shell: bash
-        # Retries link + push (transient pooler timeouts) and fails fast with an
-        # actionable error when the project is paused/unresponsive. See script.
-        # P12 fix: production now uses the same retry wrapper as staging to avoid
-        # transient pooler failures that blocked v0.1.0-pilot (run 36029382645).
+        # Same shared script the staging job uses: project-status pre-flight,
+        # retries around link/push, and migration-history drift repair (a
+        # remote-only version no longer aborts the deploy — the script marks
+        # it reverted per the CLI's own guidance and re-pushes). See script
+        # header and DEPLOYMENT.md.
+        env:
+          SUPABASE_ENV_LABEL: production
         run: bash scripts/ci/supabase-link-and-push.sh
       - name: Set Edge Function secrets (production)
         run: |
