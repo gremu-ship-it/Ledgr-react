@@ -59,6 +59,29 @@ export function computeStockValue(
 }
 
 /**
+ * Quantity-weighted average cost across locations.
+ *
+ * A product held at two shops is not "the first row the query returned".
+ * Only positive on-hand quantities vote; a zero-stock location must not
+ * pull the displayed average toward its stale cost. Returns 0 when nothing
+ * is on hand.
+ */
+export function weightedAverageCost(
+  balances: { quantity_on_hand: number | string; average_cost: number | string }[],
+): number {
+  let quantity = 0;
+  let value = 0;
+  for (const balance of balances) {
+    const qty = Number(balance.quantity_on_hand);
+    const cost = Number(balance.average_cost);
+    if (!Number.isFinite(qty) || qty <= 0 || !Number.isFinite(cost)) continue;
+    quantity += qty;
+    value += qty * cost;
+  }
+  return quantity > 0 ? value / quantity : 0;
+}
+
+/**
  * Total cost of goods sold for a set of sale lines.
  * Lines with a zero/unknown cost contribute nothing — see buildCogsPostings.
  */

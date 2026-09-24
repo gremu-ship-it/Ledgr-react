@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -10,6 +10,8 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { postStockMovementAdjustment } from '@/services/inventoryJournalService';
+import { weightedAverageCost } from '@/services/inventoryValuation';
+import { newSaveClientKey } from '@/services/quickSaveService';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -637,7 +639,12 @@ function StockTab({ businessId }: { businessId: string }) {
             const totalOnHand = balances
               .filter((b) => b.product_id === p.id)
               .reduce((s, b) => s + Number(b.quantity_on_hand), 0);
-            const avgCost = balances.find((b) => b.product_id === p.id)?.average_cost ?? 0;
+            // Quantity-weighted across locations. The first balance row is not
+            // an average — that is how mixed manure was shown costing more
+            // than pure when the warehouse row happened to come back first.
+            const avgCost = weightedAverageCost(
+              balances.filter((b) => b.product_id === p.id),
+            );
             const low = isLowStock(p.id);
 
             return (
@@ -675,6 +682,10 @@ function StockTab({ businessId }: { businessId: string }) {
 function MovementsTab({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  // One key per click. A double tap or a lost response must not insert the
+  // movement twice — the balance trigger would add the quantity twice.
+  const movementKey = useRef(newSaveClientKey());
+  const submitLock = useRef(false);
   const [selectedProduct, setSelectedProduct] = useState('');
   const [form, setForm] = useState<MovementForm>({
     product_id: '', location_id: '', movement_type: 'purchase',
@@ -721,38 +732,45 @@ function MovementsTab({ businessId }: { businessId: string }) {
       const qty = parseFloat(form.quantity);
       if (isNaN(qty) || qty <= 0) throw new Error('Enter a valid quantity');
       const unitCost = parseFloat(form.unit_cost) || 0;
+      if (submitLock.current) throw new Error('This movement is already being recorded');
+      submitLock.current = true;
 
       // adjustment_out removes stock, so the movement quantity must be
-      // negative — the DB trigger sums quantities to derive on-hand.
+      // negative — the DB trigger adds this quantity to on-hand.
       const signedQty = form.movement_type === 'adjustment_out' ? -qty : qty;
 
-      await repos.inventory.recordMovement({
-        business_id: businessId,
-        product_id: form.product_id,
-        location_id: form.location_id,
-        movement_type: form.movement_type,
-        movement_date: form.movement_date,
-        quantity: signedQty,
-        unit_cost: unitCost,
-        reference: form.reference || null,
-        notes: form.notes || null,
-        created_by: null,
-      } as InsertDto<'stock_movements'>);
+      try {
+        await repos.inventory.recordMovement({
+          business_id: businessId,
+          product_id: form.product_id,
+          location_id: form.location_id,
+          movement_type: form.movement_type,
+          movement_date: form.movement_date,
+          quantity: signedQty,
+          unit_cost: unitCost,
+          reference: form.reference || null,
+          notes: form.notes || null,
+          created_by: null,
+        } as InsertDto<'stock_movements'>, movementKey.current);
 
-      // PERPETUAL INVENTORY: mirror the movement into the general ledger so
-      // the stock actually shows under Current Assets. Opening balances in
-      // particular were the most common way to end up with stock on hand
-      // and nothing on the balance sheet.
-      await postStockMovementAdjustment(businessId, {
-        productId:    form.product_id,
-        quantity:     qty,
-        unitCost,
-        movementType: form.movement_type,
-        movementDate: form.movement_date,
-        reference:    form.reference || null,
-      });
+        // PERPETUAL INVENTORY: mirror the movement into the general ledger so
+        // the stock actually shows under Current Assets. Opening balances in
+        // particular were the most common way to end up with stock on hand
+        // and nothing on the balance sheet.
+        await postStockMovementAdjustment(businessId, {
+          productId:    form.product_id,
+          quantity:     qty,
+          unitCost,
+          movementType: form.movement_type,
+          movementDate: form.movement_date,
+          reference:    form.reference || null,
+        });
+      } finally {
+        submitLock.current = false;
+      }
     },
     onSuccess: () => {
+      movementKey.current = newSaveClientKey();
       setAlert({ type: 'success', message: 'Stock movement recorded.' });
       setForm((f) => ({ ...f, quantity: '', unit_cost: '', reference: '', notes: '' }));
       queryClient.invalidateQueries({ queryKey: ['balances'] });
@@ -828,6 +846,7 @@ function MovementsTab({ businessId }: { businessId: string }) {
             <input type="number" min="0" step="0.01" value={form.unit_cost}
               onChange={(e) => setF('unit_cost', e.target.value)} placeholder="0.00"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            <p className="mt-1 text-[11px] text-gray-500">Leave blank to add quantity without changing the average cost.</p>
           </div>
 
           <div>

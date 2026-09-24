@@ -529,6 +529,30 @@ async function bootScenario({ name, port, dataDir, productionShape }) {
       await prodScenario.c.query(fs.readFileSync(path.join(MIG_DIR, f), 'utf8'));
     }
   });
+  if (applied === null) {
+    await check('20261009000000 leaves exactly one balance writer (the R06 duplicate is gone)', async () => {
+      const names = await prodScenario.userTriggers();
+      assert(!names.includes('trg_stock_movement_apply_balance'), `duplicate survived: ${names.join(', ')}`);
+      const balanceWriters = names.filter((n) => n.toLowerCase().includes('balance'));
+      assert(balanceWriters.length === 1, `expected one balance trigger, got ${names.join(', ')}`);
+      assert(names.includes('trg_stock_immutable'), `immutability guard was dropped: ${names.join(', ')}`);
+    });
+
+    await check('a blank (zero) inbound cost adds quantity and does not dilute the average', async () => {
+      const before = await prodScenario.balance();
+      const beforeQty = Number(before.quantity_on_hand);
+      const beforeCost = Number(before.average_cost);
+      // Superuser insert: later branch-scope policies must not hide a trigger bug.
+      await prodScenario.c.query(
+        `insert into public.stock_movements (business_id, product_id, location_id, movement_type, movement_date, quantity, unit_cost, source_type, reference)
+         values ($1,$2,$3,'purchase','2026-09-24',3,0,'expense','RCPT-ZERO')`,
+        [prodScenario.biz, prodScenario.prod, prodScenario.loc],
+      );
+      const after = await prodScenario.balance();
+      assert(Number(after.quantity_on_hand) === beforeQty + 3, `on_hand=${after.quantity_on_hand}, expected ${beforeQty + 3}`);
+      assert(Math.abs(Number(after.average_cost) - beforeCost) < 1e-9, `average_cost=${after.average_cost}, expected ${beforeCost}`);
+    });
+  }
   await teardown(prodScenario.c, prodScenario.PG);
 
   // ── Scenario 2: the shape the repository migrations produce (staging) ────
@@ -603,6 +627,22 @@ async function bootScenario({ name, port, dataDir, productionShape }) {
       for (const f of AFTER_TARGET) {
         await fresh.c.query(fs.readFileSync(path.join(MIG_DIR, f), 'utf8'));
       }
+    });
+
+    await check('a blank inbound cost does not dilute the average on the fresh shape either', async () => {
+      const before = await fresh.balance();
+      const beforeQty = Number(before.quantity_on_hand);
+      const beforeCost = Number(before.average_cost);
+      await fresh.c.query(
+        `insert into public.stock_movements (business_id, product_id, location_id, movement_type, movement_date, quantity, unit_cost, source_type, reference)
+         values ($1,$2,$3,'purchase','2026-09-24',3,0,'expense','RCPT-ZERO')`,
+        [fresh.biz, fresh.prod, fresh.loc],
+      );
+      const after = await fresh.balance();
+      assert(Number(after.quantity_on_hand) === beforeQty + 3, `on_hand=${after.quantity_on_hand}, expected ${beforeQty + 3}`);
+      assert(Math.abs(Number(after.average_cost) - beforeCost) < 1e-9, `average_cost=${after.average_cost}, expected ${beforeCost}`);
+      const names = await fresh.userTriggers();
+      assert(!names.includes('trg_stock_movement_apply_balance'), `duplicate survived: ${names.join(', ')}`);
     });
   }
   await teardown(fresh.c, fresh.PG);

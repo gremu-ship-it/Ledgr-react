@@ -14,6 +14,7 @@ import {
   computeInventoryVariance,
   buildCogsPostings,
   roundMoney,
+  weightedAverageCost,
   TOLERANCE,
   type SaleCostLine,
 } from '../inventoryValuation';
@@ -34,6 +35,18 @@ describe('computeStockValue', () => {
 
   it('returns zero for no stock', () => {
     expect(computeStockValue([])).toBe(0);
+  });
+
+  it('weights average cost by on-hand quantity, ignoring empty locations', () => {
+    // Mixed at the warehouse must not be reported as "the" cost just because
+    // that row came back first, and a zero-stock shop must not vote.
+    expect(weightedAverageCost([
+      { quantity_on_hand: 610, average_cost: 6_482 },
+      { quantity_on_hand: 58, average_cost: 3_823 },
+      { quantity_on_hand: 0, average_cost: 9_999 },
+    ])).toBeCloseTo((610 * 6_482 + 58 * 3_823) / 668, 6);
+    expect(weightedAverageCost([])).toBe(0);
+    expect(weightedAverageCost([{ quantity_on_hand: 0, average_cost: 5_000 }])).toBe(0);
   });
 
   it('keeps negative on-hand quantities visible instead of clamping them', () => {

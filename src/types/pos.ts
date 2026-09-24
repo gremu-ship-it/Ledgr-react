@@ -146,6 +146,8 @@ export interface PosProduct {
   unitCost?: number;
   stock_quantity?: number;
   stockQuantity?: number;
+  /** False for services. The till must not treat those as out of stock. */
+  track_inventory?: boolean;
   category?: string | null;
   category_id?: string | null;
   tax_rate?: number;
