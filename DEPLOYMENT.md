@@ -232,6 +232,49 @@ likelihood:
 Before re-running, glance at https://status.supabase.com — if an incident is
 open, restarting the project (step 1) is still the fastest path back to green.
 
+#### `Remote migration versions not found in local migrations directory`
+
+`supabase link` finishes but `supabase db push` aborts with:
+
+```
+Connecting to remote database...
+Remote migration versions not found in local migrations directory.
+Make sure your local git repo is up-to-date. If the error persists, try repairing the migration history table:
+
+supabase migration repair --status reverted <version>
+
+And update local migrations to match remote database:
+
+supabase db pull
+```
+
+The remote history table (`supabase_migrations.schema_migrations`) records a
+migration version that has no file under `supabase/migrations/` in the commit
+being deployed — the database is **ahead of the checkout**. That happens when
+somebody pushed to the project from another working copy: typically a
+feature-branch migration applied to a shared project before its PR merged.
+Concrete example (2026-09 stock-count incident): the
+`20260925000001_stock_movement_balance_delta_trigger.sql` hotfix was pushed to
+the production project directly, and PR #167 merged the same file into `main`
+minutes later — every CI run checked out a `main` commit without the file, so
+the next production deploy aborted here. Note that `--include-all` does not
+help: it only permits older **local** files to apply out of order; it does not
+satisfy versions that exist remotely but not locally.
+
+`scripts/ci/supabase-link-and-push.sh` (used by both environments since this
+fix) handles it automatically: it detects the drift signature in the push
+output, marks exactly the reported remote-only versions `reverted` — which
+rewrites the history table only, no schema object is touched — and pushes
+again. Versions that do have a local file at the checked-out commit are never
+touched (they still count as applied). When the corresponding file lands in
+the repo later, its next push simply applies and records it. One repair per
+deploy run, loudly logged as `::warning::` lines naming each version.
+
+Set `SUPABASE_MIGRATION_AUTO_REPAIR=0` (job env) to disable the auto-repair:
+the script then fails fast and prints the manual commands —
+`supabase migration repair --status reverted <version…>`, or `supabase db pull`
+if the remote database should become the source of truth instead.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to

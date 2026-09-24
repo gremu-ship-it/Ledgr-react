@@ -261,9 +261,15 @@ jobs:
       # Backend-first is the safe direction: the migrations are additive, so
       # the running (old) client keeps working throughout the rollout.
       - name: Link & migrate production database
-        run: |
-          supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
-          supabase db push --password "$SUPABASE_DB_PASSWORD" --include-all
+        shell: bash
+        # Same shared script the staging job uses: project-status pre-flight,
+        # retries around link/push, and migration-history drift repair (a
+        # remote-only version no longer aborts the deploy — the script marks
+        # it reverted per the CLI's own guidance and re-pushes). See script
+        # header and DEPLOYMENT.md.
+        env:
+          SUPABASE_ENV_LABEL: production
+        run: bash scripts/ci/supabase-link-and-push.sh
       - name: Set Edge Function secrets (production)
         run: |
           supabase secrets set \
