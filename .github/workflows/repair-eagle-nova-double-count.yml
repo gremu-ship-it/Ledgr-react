@@ -40,6 +40,7 @@ on:
     paths:
       - scripts/repair-eagle-nova-double-count.sql
       - scripts/diagnose-eagle-nova-chicken-manure.sql
+      - scripts/diagnose-eagle-nova-area49.sql
       - scripts/database/run-support-sql-via-api.sh
       - .github/workflows/repair-eagle-nova-double-count.yml
   workflow_dispatch:
@@ -78,7 +79,7 @@ jobs:
       STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
       # push → full repair; dispatch → honour the dry_run input (default true)
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '0' }}
-      SQL_FILE: scripts/diagnose-eagle-nova-chicken-manure.sql
+      SQL_FILE: scripts/diagnose-eagle-nova-area49.sql
       OUT_DIR: artifacts/support-sql
     steps:
       - name: Checkout
