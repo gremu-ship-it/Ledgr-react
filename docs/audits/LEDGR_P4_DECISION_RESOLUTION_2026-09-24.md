@@ -46,7 +46,7 @@ This report is the required deliverable `docs/audits/LEDGR_P4_DECISION_RESOLUTIO
 
 ---
 
-## 4. DEC-09 Findings — Stale / Unknown Payload Version
+## 4. DEC-09 — Stale Payload Version
 
 ### 4.1 Technically Settled (Already)
 
@@ -97,7 +97,7 @@ Each preserves `missing-provenance` (null). **No option is selected; no ranking.
 
 ---
 
-## 5. DEC-TTL Findings — Queue Backlog Horizon
+## 5. DEC-TTL — Queue TTL / Backlog Horizon
 
 ### 5.1 Technically Settled (Already)
 
@@ -137,7 +137,7 @@ Each non-`no-expiry` must respect lease and must not overwrite provenance `quara
 
 ---
 
-## 6. OFFLINE.CONFLICT Findings
+## 6. OFFLINE.CONFLICT
 
 ### 6.1 Technically Settled (P3 Taxonomy Preserved — No New Classes)
 
@@ -208,7 +208,7 @@ All probes used `createDatabaseFixture` + `seedFixture` (`orgs A/B`, `A_cashier`
 
 ---
 
-## 7. BILLING.SERVER-QUOTA Findings
+## 7. BILLING.SERVER-QUOTA
 
 ### 7.1 Observed Fact
 
@@ -252,7 +252,7 @@ All probes used `createDatabaseFixture` + `seedFixture` (`orgs A/B`, `A_cashier`
 
 ---
 
-## 8. DEC-AI-BRANCH Findings
+## 8. DEC-AI-BRANCH
 
 ### 8.1 Technically Settled (Already)
 
@@ -354,145 +354,170 @@ All of the following are **OPEN — MORE EVIDENCE REQUIRED** and are **NOT EVIDE
 
 ---
 
-## 14. Explicit Owner Decision Checklist
+## 14. Owner Decision Checklist
 
-*For every decision provide: Decision ID, Question, Verified facts, Evidence still missing, Available policy choices, Implementation consequences, Dependencies, Owner decision required — DO NOT fill the owner's decision.*
+*For every decision provide:*
+
+*Decision ID:*
+*Question:*
+*Technically settled facts:*
+*Additional evidence obtained:*
+*Evidence still missing:*
+*Available policy choices:*
+*Implementation consequences:*
+*Dependencies:*
+*Owner decision required:*
+
+*Leave the final owner decision blank. Do not fill it on Alexander's behalf.*
 
 **DEC-09-1**
 - Decision ID: **DEC-09**
 - Question: Should `payloadVersion < QUEUE_PAYLOAD_VERSION` (stale, e.g., `0` when current `1`) remain replayable as today, or become a typed exception (`stale-version` quarantine)?
-- Verified facts: `QUEUE_PAYLOAD_VERSION=1`, `hasTrustworthyProvenance` only `!=null`, `0` and `9999` currently pass (R09.4 browser measurement), `null` → `missing-provenance` quarantine, no v2 shape has shipped, server `post_pos_sale` does not receive `payloadVersion` (queue-only).
+- Technically settled facts: `QUEUE_PAYLOAD_VERSION=1`, `hasTrustworthyProvenance` only `!=null` (`payloadVersion != null && originUserId && capturedAt`), `0` and `9999` currently pass (R09.4 `R094.BROWSER.STALE-VERSION-MEASURE`), `null` → `missing-provenance` quarantine, no v2 shape has shipped.
+- Additional evidence obtained: P4 local PG probe `post_pos_sale` with `client_key 5001` PASS `1e9aa9fd-…` identical for conceptual `0`/`1`/`9999`; verified `payloadVersion` is queue-only (Dexie, not in `post_pos_sale` JSON, grep 0 hits), server cannot distinguish, no `stale-version` UI exists, no version distinction elsewhere.
 - Evidence still missing: Real v2 shape; `R094` extended through `post_pos_sale` with stale shape; drawer UX probe; analytics; stale-reconciliation test.
 - Available policy choices: A. Accept all non-null (keep) / B. Reject stale as `stale-version` typed.
 - Implementation consequences: B needs new `exceptionClass`, `hasTrustworthyProvenance`/`sweepUnverifiableItems` change, `RECONCILABLE` decision, drawer, migration.
 - Dependencies: `DEC-10` (`legacy` `null`), `R09.3 Model 3` (new typed), `R09.3 Model 4` (`RECONCILABLE`), `R09.4` (measurement).
-- Owner decision required: ☐ Keep replayable  ☐ Reject stale as typed — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-09-2**
 - Decision ID: **DEC-09**
 - Question: Should `payloadVersion > QUEUE_PAYLOAD_VERSION` (unknown-future, e.g., `9999`) remain replayable, or become a typed exception (`unknown-version`)?
-- Verified facts: Same as DEC-09-1; `9999` currently passes.
+- Technically settled facts: Same as DEC-09-1; `9999` currently passes, no v2 shape.
+- Additional evidence obtained: Same as DEC-09-1 — P4 verified queue-only, server `post_pos_sale` identical for `9999`, no `unknown-version` exception, R09.4 browser measured `9999` passes.
 - Evidence still missing: Same as DEC-09-1 (forward-compatibility).
 - Available policy choices: A. Accept all non-null (keep) / C. Reject unknown-future as `unknown-version` typed.
 - Implementation consequences: C needs same as B but for forward clients (frequent if version bumps).
 - Dependencies: Same as DEC-09-1.
-- Owner decision required: ☐ Keep replayable  ☐ Reject unknown-future as typed — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-09-3**
 - Decision ID: **DEC-09**
 - Question: If either becomes a typed exception, should it be `RECONCILABLE` (and by re-hydration or new capture) or permanently non-reconcilable?
-- Verified facts: `RECONCILABLE = ['stock-denied','policy-denied']` at `d384736`; `reconcile_offline_queue_item` replays original `clientKey` immutably; `payload-tampered`/`missing-provenance` are permanently non-reconcilable.
+- Technically settled facts: `RECONCILABLE = ['stock-denied','policy-denied']` at `d384736` (`reconciliation.ts`), `reconcile_offline_queue_item` replays original `clientKey` immutably; `payload-tampered`/`missing-provenance` are permanently non-reconcilable.
+- Additional evidence obtained: P4 verified `hasTrustworthyProvenance` and `isReconcilable` do not check `payloadVersion`; no stale-reconciliation path exists at `d384736`.
 - Evidence still missing: Deterministic stale-reconciliation test.
 - Available policy choices: `RECONCILABLE` via re-hydration / `RECONCILABLE` via new capture / permanently non-reconcilable.
 - Implementation consequences: Re-hydration needs payload migration; new capture is already the current `reconcile` philosophy (changed transaction is new `clientKey`).
 - Dependencies: `R09.3 Model 4`.
-- Owner decision required: ☐ Reconcilable (re-hydration)  ☐ Reconcilable (new capture)  ☐ Permanently non-reconcilable — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-TTL-1**
 - Decision ID: **DEC-TTL**
 - Question: Should the queue keep **indefinite retention** (current `pending`/`failed`/`quarantined` forever, `synced` 7d manual prune, `MAX_PENDING 2000`, `STALE_SYNC_CLAIM 2m`, `LEASE 30s`) or impose a time-based horizon?
-- Verified facts: No TTL for `pending`/`failed`/`quarantined` at `d384736`; `pruneSyncedItems` manual-only; `syncQueue` O(n) sequential; **NOT EVIDENCED** for 500/1000/2000 perf and age distribution.
+- Technically settled facts: No TTL for `pending`/`failed`/`quarantined` at `d384736`; `pruneSyncedItems` manual-only (not called by `useSyncQueue`); `syncQueue` is `where('status').anyOf('pending','failed').toArray()` then sequential `syncItem`; `STALE_SYNC_CLAIM_MS=120000`, `LEASE_TTL_MS=30000`, `MAX_PENDING_QUEUE_ITEMS=2000`, `quarantined` never retried.
+- Additional evidence obtained: P4 verified via code inspection and `grep -rn pruneSyncedItems` (only definition + tests), old `createdAt` 180d still `pending` and replayable (no age branch), `post_pos_sale` does not read `createdAt`; processing cost for 500/1000/2000 — NOT EVIDENCED in PG harness (requires browser IndexedDB/Dexie, per R09.2) — explicitly stated NOT EVIDENCED — NO CUSTOMER POPULATION INFERENCE PERMITTED.
 - Evidence still missing: Age distribution p50/p95; 30/60/90-day replay; backlog perf; lease+TTL race; prune auto policy.
 - Available policy choices: No expiry (keep) / Expiry with threshold 7d/30d/90d/other.
 - Implementation consequences: New threshold + disposition + lease-aware expiry.
 - Dependencies: `R09.2`, `R09.3 Model 3/4`, `R09.4`, `DEC-09`, `DEC-10`, `Auth/Recovery`.
-- Owner decision required: ☐ No expiry  ☐ 7d  ☐ 30d  ☐ 90d  ☐ other — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-TTL-2**
 - Decision ID: **DEC-TTL**
 - Question: What disposition on expiry: quarantine (`expired`) / delete / `failed` / require new capture?
-- Verified facts: `quarantined` is durable and auditable (`offline_queue_reconciliations` append-only); `failed` (no `exceptionClass`) loops forever; delete loses evidence (violates R09.2).
+- Technically settled facts: `quarantined` is durable, visible, never retried, never reconcilable, auditable via `offline_queue_reconciliations` append-only `SELECT` policy; `failed` (no `exceptionClass`) is retried by `syncQueue` forever; delete loses evidence and violates R09.2 preservation.
+- Additional evidence obtained: P4 verified `quarantined` vs `failed` vs `syncing` lease semantics and `pruneSyncedItems` manual-only; lease/TTL race would require respecting lease — NOT EVIDENCED as TTL does not exist.
 - Evidence still missing: Same as DEC-TTL-1.
 - Available policy choices: quarantine (`expired`) / delete / `failed` / require new capture.
 - Implementation consequences: `expired` needs new `quarantineReason`, drawer, `RECONCILABLE`?; delete conflicts with audit; `failed` creates loop.
 - Dependencies: Same as DEC-TTL-1.
-- Owner decision required: ☐ quarantine  ☐ delete  ☐ failed  ☐ new capture — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-TTL-3**
 - Decision ID: **DEC-TTL**
 - Question: Should `expired` be `RECONCILABLE`?
-- Verified facts: `RECONCILABLE` currently `['stock-denied','policy-denied']`; `expired` does not exist.
+- Technically settled facts: `RECONCILABLE` currently `['stock-denied','policy-denied']` at `d384736`; `expired` does not exist; `quarantined` is never reconcilable at `d384736`.
+- Additional evidence obtained: P4 verified `RECONCILABLE_EXCEPTION_CLASSES` at `reconciliation.ts` and `offline_queue_reconciliations` CHECK does not include `expired`.
 - Evidence still missing: Same as DEC-TTL-1.
 - Available policy choices: Reconcilable / permanently non-reconcilable (likely **not**).
 - Implementation consequences: If reconcilable, needs payload re-hydration vs new capture + migration.
 - Dependencies: `R09.3 Model 4`.
-- Owner decision required: ☐ Reconcilable  ☐ Permanently non-reconcilable — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-CONFLICT-1**
 - Decision ID: **DEC-CONFLICT**
-- Question: Should `payload-version` (class 7) and `already-posted key + differing payload` (class 8) be promoted to typed exceptions (`stale-version`/`unknown-version`/`tampered`) or remain **NOT EVIDENCED**/ordinary/`quarantine` as today? (Same as DEC-09 but via conflict lens; server dedupes by `client_key` alone, returns original `idempotent:true` with no double apply — verified via `client_key 6001` probe.)
-- Verified facts: Class 7: code does **not** check version (any non-null passes) — **NOT EVIDENCED** as conflict, only measurement; Class 8: `post_pos_sale` returns original `id` with `idempotent:true` for same `client_key` even with `line_total 9999` vs `1500`, no new invoice/movement — verified via `p4_evidence.mjs` (count stays `1`).
+- Question: Should `payload-version` (class 7) and `already-posted key + differing payload` (class 8) be promoted to typed exceptions (`stale-version`/`unknown-version`/`tampered`) or remain **NOT EVIDENCED**/ordinary/`quarantine` as today? (Same as DEC-09 but via conflict lens.)
+- Technically settled facts: Class 7: code does **not** check version (any non-null passes) — **NOT EVIDENCED** as conflict, only `R094.BROWSER.STALE-VERSION-MEASURE` measurement; Class 8: `post_pos_sale` dedupes by `client_key` alone (no payload comparison) — **NOT EVIDENCED** as denial at `d384736`.
+- Additional evidence obtained: P4 disposable PG probe same `clientKey 6001` `qty1 total1500` first PASS `dee7abf8-… idempotent:false`, second same key `line_total 9999` returned `id dee7abf8-… idempotent:true` count stays `1` (no double apply, tampered ignored at server, client `reconciliation.ts` would refuse locally); class 7 through `post_pos_sale` identical JSON for `0`/`1`/`9999` — server cannot distinguish.
 - Evidence still missing: Real v2 shape; version-gated matrix with v2 shape through `post_pos_sale`.
 - Available policy choices: Keep NOT EVIDENCED/ordinary / promote to typed `stale-version`/`tampered`.
 - Implementation consequences: New `exceptionClass`, `hasTrustworthyProvenance`/`sweepUnverifiableItems` vs `verifyPayloadIntegrity` change, drawer.
 - Dependencies: `DEC-09`, `DEC-10`, `R09.4`.
-- Owner decision required: ☐ Keep as is  ☐ Promote to typed — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-CONFLICT-2**
 - Decision ID: **DEC-CONFLICT**
 - Question: Should ordinary `failed` authority denials (`42501` branch/tenant/auth, `22023` terminal/product-tenant) be promoted to `quarantine` or typed `exceptionClass` to avoid infinite retry, or remain ordinary `failed` (current, re-denied forever)?
-- Verified facts: `42501`/`22023` → ordinary `failed` (no `exceptionClass`) at `d384736` (only `23514`/`P0QLT` are typed); `syncQueue` retries forever; mutation envelope is zero on each attempt (full rollback) — verified via `B_cashier` on `A` business `42501` twice, `A` invoices delta `0`.
+- Technically settled facts: `42501`/`22023` → ordinary `failed` (no `exceptionClass`) at `d384736` (only `23514` `stock-denied` and `P0QLT` `policy-denied` are typed via `classifyReplayException`); `syncQueue` selects `pending+failed` and retries forever, re-denied deterministically, never `quarantined`, never `RECONCILABLE`.
+- Additional evidence obtained: P4 disposable PG probe `B_cashier` on `A` business `sizedSale 6002` → `42501` twice, `A` invoices `before 2 → after 2` delta `0`, `B` invoices `0` (zero mutation each attempt, full rollback); terminal mismatch code at `20260930000001:114` `22023` but `pos_shifts.terminal_id` null vs `pos_terminals 3bfbf62c-…`, client does not send `terminal_id` — standard POS never hits, only direct RPC — source-declared, NOT EVIDENCED as lived.
 - Evidence still missing: Terminal-mismatch lived `R09.*` record (**NOT EVIDENCED**).
 - Available policy choices: Keep ordinary `failed` (re-tried forever) / promote to `quarantine` / promote to typed `exceptionClass`.
 - Implementation consequences: New `exceptionClass`/`quarantineReason`, `lastErrorCode` handling, retry vs quarantine branching.
 - Dependencies: `DEC-03`/`BRANCH.*` (classes 5/6), `R09.3 Model 3`.
-- Owner decision required: ☐ Keep ordinary  ☐ Promote to quarantine  ☐ Promote to typed — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-CONFLICT-3**
 - Decision ID: **DEC-CONFLICT**
 - Question: What is `RECONCILABLE_EXCEPTION_CLASSES`: keep **current** `['stock-denied','policy-denied']`, expand to include `stale-version`, or never expand?
-- Verified facts: At `d384736`, `RECONCILABLE` is `['stock-denied','policy-denied']` + `payloadHash` + lease; `payload-tampered`/`missing-provenance`/`legacy`/`actor-mismatch` are permanently non-reconcilable (client+server `22023` before audit).
+- Technically settled facts: At `d384736`, `RECONCILABLE` is `['stock-denied','policy-denied']` (`reconciliation.ts`) + `payloadHash` + lease; `payload-tampered`/`missing-provenance`/`legacy`/`actor-mismatch` are permanently non-reconcilable (client+server `22023` before audit, `offline_queue_reconciliations` CHECK).
+- Additional evidence obtained: P4 verified `isReconcilable` checks `stock-denied`/`policy-denied` + `payloadHash` + lease, not `payloadVersion`; deterministic stale-reconciliation test still NOT EVIDENCED.
 - Evidence still missing: Deterministic stale-reconciliation test.
 - Available policy choices: Keep current / expand to `stale-version` / never expand.
 - Implementation consequences: Expansion needs re-hydration vs new-capture decision per `reconcile_offline_queue_item` immutability.
 - Dependencies: `R09.3 Model 4`, `DEC-09`.
-- Owner decision required: ☐ Keep current  ☐ Expand  ☐ Never expand — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-QUOTA-1**
 - Decision ID: **DEC-QUOTA**
 - Question: Should server enforcement remain **POS+quick only** (`post_pos_sale`, `save_quick_sale`, `save_quick_expense` — **Yes** `P0QLT`, atomic, `R10.QUOTA.*` PASS) or be extended to **uniform** (`createWithLines` legacy + invoice-builder draft→post + `payroll_runs` direct inserts — **No** `P0QLT`, client-only RLS-filtered look-ahead, **NOT EVIDENCED** as `P0QLT`) so every document insertion is `P0QLT`-metered?
-- Verified facts: `grep -rn _ledgr_assert_usage_limit` shows only three RPCs; `InvoiceRepository.createWithLines`/`BusinessRepository.reserveDocumentNumber` and `PayrollRepository` direct inserts have no `P0QLT`; `UsageService` fallback is RLS-filtered `head:true` counts — can under-count `payroll_runs` for roles without SELECT.
+- Technically settled facts: `grep -rn _ledgr_assert_usage_limit` shows only three RPCs at `20261001000000` + `post_pos_sale`/`save_quick_*`; `InvoiceRepository.createWithLines`/`BusinessRepository.reserveDocumentNumber` and `PayrollRepository` direct inserts have no `P0QLT` at `d384736`; `UsageService` fallback is RLS-filtered `head:true` counts — can under-count `payroll_runs` for roles without SELECT; `R10.QUOTA.*` 7 PASS pin three metered RPCs.
+- Additional evidence obtained: P4 verified complete document-creation matrix via code inspection and disposable PG probe (set `plan_tier='free'`, `ledgr_monthly_document_count` returned `null` in harness — NOT EVIDENCED as quota-hit, full 50-row fill not performed); builder/payroll/legacy under quota for `P0QLT` vs `P0001` vs success — NOT EVIDENCED; concurrent two-connection quota race (count without `FOR UPDATE`) — NOT EVIDENCED but known gap from `count(*)` without lock.
 - Evidence still missing: Builder full flow under quota for `P0QLT`, payroll under quota, legacy `vat>0` under quota, concurrent quota race, RLS divergence as a lived test — all **NOT EVIDENCED** (but code directly shows the gap).
 - Available policy choices: Keep POS+quick only (current `R10` scope) / require uniform `P0QLT` on every `INSERT` (builder/payroll/legacy).
 - Implementation consequences: Uniform needs `_ledgr_assert_usage_limit` added to `createWithLines`/builder/`PayrollRepository` (new `save_quick_payroll` RPC or direct check), `billing/page.tsx` copy and `UsageService` counts aligned to uniform scope, migration for `payroll_runs` trigger if direct `INSERT` must be metered.
 - Dependencies: `GAP-1` invoice lifecycle, `GAP-3` payroll, `BRANCH.*` (invoice scope).
-- Owner decision required: ☐ Keep POS+quick only  ☐ Require uniform — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-QUOTA-2**
 - Decision ID: **DEC-QUOTA**
 - Question: Is quota a **per-transaction server assertion** (current, inside each posting RPC) or also an **entitlement/command** gating offline capture before replay?
-- Verified facts: At `d384736`, quota is per-transaction assert (inside RPC, atomic with `invoices`+`journal`+`movement`).
+- Technically settled facts: At `d384736`, quota is per-transaction assert (inside RPC, atomic with `invoices`+`journal`+`movement`), `_ledgr_assert_usage_limit` raises `P0QLT` with `detail`/`hint`; client `UsageService` is look-ahead, not authoritative.
+- Additional evidence obtained: P4 verified `quotaContract.ts` `isQuotaDenial` checks `code==='P0QLT'` only, `classifyReplayException` prioritizes `P0QLT` over `23514`.
 - Evidence still missing: Entitlement model spec.
 - Available policy choices: Per-transaction assert (current) / entitlement/command before capture.
 - Implementation consequences: Entitlement needs capture-time gate + offline `policy-denied` before `post_pos_sale`.
 - Dependencies: Same as DEC-QUOTA-1.
-- Owner decision required: ☐ Per-transaction  ☐ Entitlement — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-AI-BRANCH-1**
 - Decision ID: **DEC-AI-BRANCH**
 - Question: Should AI remain **org-wide only** (current, `ai_context(business_id)` aggregated at `business_id`, no `branch_id` param) , gain an **optional branch filter (read-only, non-authoritative)** (`ai_context(business_id, branch_id?)` with `can_access_branch` check), or become **mandatory branch dimension** (every AI call is branch-scoped)?
-- Verified facts: `ai_context` 12 roles (`v_reports_roles`) — `A_owner` PASS, `A_cashier` `42501` denied, `A_branch_manager` PASS, `A_viewer` PASS (P4 probe); branch data exists (`invoices.branch_id`, `inventory_locations.branch_id`, etc.) but not in `ai_context`; `R08.BRANCH.*` 8 escapes; `R11` branch **NOT EVIDENCED**.
+- Technically settled facts: `ai_context(business_id)` org-wide, 12 `v_reports_roles` (`owner,admin,accountant,manager,sales_manager,tax_compliance_officer,treasury_manager,asset_manager,board_member,auditor,viewer,branch_manager`), `R03.AI.RPC.*` 5 PASS, `R08.BRANCH.*` 8 BLOCKED, branch data exists (`invoices.branch_id`, `inventory_balances.location_id→inventory_locations.branch_id`, `pos_shifts.branch_id`), `can_access_branch()` predicate exists, `AI.BRANCH` no PASS, `R11` branch NOT EVIDENCED.
+- Additional evidence obtained: P4 disposable PG probe `A_owner` PASS `kpis.revenue_mtd…`, `A_cashier` DENIED `42501`, `A_branch_manager` PASS, `A_viewer` PASS (confirms `v_reports_roles` gate); verified branch KPIs derivable without schema changes (`WHERE branch_id`), `can_access_branch` can govern filter without new RLS, no existing report surface provides branch-filtered KPIs — NOT EVIDENCED.
 - Evidence still missing: Branch-filtered `ai_context` disposable prototype with `can_access_branch` (not committed as product behaviour per authorization); `R11` branch lane; `P8` 8 escapes closed.
 - Available policy choices: Org-wide only / optional branch filter / mandatory branch dimension.
 - Implementation consequences: Optional filter needs `ai_context` signature or `ai_branch_context`, `can_access_branch` check, branch-filtered `v_ai_*` `WHERE branch_id`; mandatory also needs `v_reports_roles` per-branch for `cashier`.
 - Dependencies: `DEC-03` (one-vs-multi), `BRANCH.*` P8 (8 escapes), `R11`.
-- Owner decision required: ☐ Org-wide only  ☐ Optional branch filter  ☐ Mandatory — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 **DEC-AI-BRANCH-2**
 - Decision ID: **DEC-AI-BRANCH**
 - Question: Timing: Should `AI.BRANCH` ship **after `BRANCH.*` P8** (coherent, branch AI and branch writes share `can_access_branch`) or **before** (read-only filter, not remediation)?
-- Verified facts: `can_access_branch` exists and is used in `R08`; branch-filtered metrics can be derived without schema changes (`WHERE branch_id`) — verified via existing tables.
+- Technically settled facts: `can_access_branch(business_id, branch_id)` exists and is used in `R08`; branch data exists and is authoritative; `P8` must close 8 `BRANCH.*` writer escapes before coherent branch AI.
+- Additional evidence obtained: P4 verified `SELECT count(*) FROM invoices WHERE business_id=$1 AND branch_id=$2` and `quantity_on_hand` via `inventory_locations` need only `WHERE branch_id`; `R11` metric-consistency lane branch NOT EVIDENCED; branch-filtered `ai_context` disposable prototype with `can_access_branch` check — NOT EVIDENCED as committed prototype per P4 carve-out.
 - Evidence still missing: Same as DEC-AI-BRANCH-1.
 - Available policy choices: After P8 (coherent) / before (read-only filter, not remediation).
 - Implementation consequences: Before P8, AI would say “A1 sales 10” while `cashier` in `A1` could still `INSERT` `A2` via raw writer path — must be explicitly scoped as non-remediation.
 - Dependencies: `DEC-03`, `BRANCH.*` P8, `R11`.
-- Owner decision required: ☐ After P8  ☐ Before — **OPEN — OWNER DECISION REQUIRED**
+- Owner decision required: _[blank — owner to fill]_ — **OPEN — OWNER DECISION REQUIRED**
 
 *All questions remain UNDECIDED — DO NOT fill the owner's decision.*
 
 ---
 
-## 15. Preservation / Integrity Statement
+## 15. Preservation / Integrity Verification
 
 - **Baseline preserved:** `bc97e32` / `d384736` `742/0/40/782` (794 total) `b9d41ec854a1` two byte-identical gates — no historical `BLOCKED→PASS` flip without direct evidence; no TEST expectation weakened; no approved migration modified; no `R09.3 Model 3`/`Model 4`/`R09.4`/`P2a`/`R01–R10` contract rewritten.
 - **P4 is analysis-only:** No migration, RLS, Edge, AI, billing, queue lifecycle, exception taxonomy, schema, branch-policy, or UI change was made. The disposable `p4_evidence.mjs` harness used `EmbeddedPostgres` `createDatabaseFixture` + `seedFixture` with savepoint/rollback-disposable data; it is deleted after recording results and is **not committed as product behaviour** per authorization.
@@ -507,11 +532,11 @@ All of the following are **OPEN — MORE EVIDENCE REQUIRED** and are **NOT EVIDE
 
 **All 16 sections are present. No policy has been selected for Alexander Gremu. No recommendation or ranking has been made.**
 
-- **DEC-09 — OPEN**
-- **QUEUE TTL — OPEN**
-- **OFFLINE.CONFLICT — OPEN**
-- **BILLING.SERVER-QUOTA — OPEN**
-- **AI.BRANCH — OPEN**
+- **DEC-09 — OPEN — OWNER DECISION REQUIRED**
+- **DEC-TTL — OPEN — OWNER DECISION REQUIRED**
+- **OFFLINE.CONFLICT — OPEN — OWNER DECISION REQUIRED**
+- **BILLING.SERVER-QUOTA — OPEN — OWNER DECISION REQUIRED**
+- **DEC-AI-BRANCH — OPEN — OWNER DECISION REQUIRED**
 
 > **STOP.** This P4 report is the decision-ready package. Separate owner authorization is required before any implementation package (including any `payloadVersion` bump, TTL, conflict resolver, uniform `P0QLT`, or `ai_context` branch). Do not implement. Do not choose. Do not start P5, P6, R11, R14, GAP-6, R02 implementation, P8, P9, or R15.
 
