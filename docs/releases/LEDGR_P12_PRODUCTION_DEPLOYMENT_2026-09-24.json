@@ -1,0 +1,131 @@
+{
+  "release": {
+    "commit": "19e712b701b720f201808da3ec684a908189cfa8",
+    "short": "19e712b",
+    "title": "P10: prepare controlled pilot release",
+    "branch": "arena/01a0c215-ledgr-react",
+    "parent_chain": ["6f5843b", "268fd67", "dc80e1c", "874c6df", "090870b"],
+    "owner_decision": "GO",
+    "owner_decision_ref": "6f5843b — docs/audits/LEDGR_P9_OWNER_DECISION_FINAL_2026-09-24.md + .json",
+    "mode": "PILOT / LIMITED CONTROLLED USERS",
+    "p10_status": "READY FOR PILOT DEPLOYMENT",
+    "p11_status": "DEPLOYMENT BLOCKED",
+    "p11_reason": "No live Vercel/Supabase production credentials in sandbox — artifact 19e712b verified locally, ready for deploy.yml with approval gate",
+    "p11_commit": "ed5c06bba707594596996c08a8424ba3ad4dc437",
+    "evidence_baseline": {
+      "release_pass": 742,
+      "release_fail": 0,
+      "release_blocked": 52,
+      "release_total": 794,
+      "evidence_file": ".cache/r13/ledgr-r13-ecFOuO/evidence.json",
+      "unit": "807 PASS / 0 FAIL / 91 files",
+      "typecheck": "PASS",
+      "lint": "0 errors / 3 warnings",
+      "build": "PASS — vite build 2.03s 112 precache 3752.60 KiB"
+    }
+  },
+  "deployment": {
+    "status": "BLOCKED",
+    "attempted_artifact": "19e712b701b720f201808da3ec684a908189cfa8",
+    "wrong_commit_deployed": null,
+    "tag": "v0.1.0-pilot",
+    "tag_target": "19e712b701b720f201808da3ec684a908189cfa8",
+    "platform": "Vercel (frontend) + Supabase (DB via supabase db push + Edge Functions) via .github/workflows/deploy.yml on push tag v* (workflow Deploy)",
+    "run": {
+      "id": 36029382645,
+      "head_branch": "v0.1.0-pilot",
+      "head_sha": "19e712b701b720f201808da3ec684a908189cfa8",
+      "event": "push",
+      "workflow": "Deploy",
+      "displayTitle": "P10: prepare controlled pilot release",
+      "createdAt": "2026-09-24T16:43:49Z",
+      "total_duration": "1m 3s",
+      "conclusion": "failure",
+      "url": "https://github.com/gremu-ship-it/Ledgr-react/actions/runs/36029382645",
+      "jobs": [
+        {
+          "name": "Deploy to production",
+          "conclusion": "failure",
+          "steps": [
+            {"name": "Set up job", "conclusion": "success"},
+            {"name": "Run actions/checkout@v7", "conclusion": "success"},
+            {"name": "Run actions/setup-node@v7", "conclusion": "success"},
+            {"name": "Run npm ci", "conclusion": "success"},
+            {"name": "Build frontend", "conclusion": "success"},
+            {"name": "Deploy Supabase backend (production)", "conclusion": "success"},
+            {"name": "Verify Supabase credentials are configured (production)", "conclusion": "success"},
+            {"name": "Link & migrate production database", "conclusion": "failure"},
+            {"name": "Set Edge Function secrets (production)", "conclusion": "skipped"},
+            {"name": "Deploy Edge Functions (production)", "conclusion": "skipped"},
+            {"name": "Deploy Express gateway to Railway (if configured)", "conclusion": "skipped"},
+            {"name": "Deploy frontend to Vercel (production)", "conclusion": "skipped"}
+          ]
+        },
+        {"name": "Deploy to staging", "conclusion": "skipped"}
+      ],
+      "failed_step": "Link & migrate production database",
+      "failed_step_detail": "Process completed with exit code 1 — runs supabase link --project-ref \"$SUPABASE_PROJECT_REF\" --password \"$SUPABASE_DB_PASSWORD\" && supabase db push --password \"$SUPABASE_DB_PASSWORD\" --include-all (no retry script, unlike staging's scripts/ci/supabase-link-and-push.sh). Verify step passed, so SUPABASE_ACCESS_TOKEN/PROJECT_REF/DB_PASSWORD were considered configured.",
+      "annotation": "Deploy to production — Process completed with exit code 1"
+    },
+    "deployment_id": null,
+    "deployment_url": null,
+    "timestamp": null,
+    "vercel_result": "NOT DEPLOYED — step skipped because DB link failed (therefore no deployment URL/ID/timestamp)",
+    "supabase_result": "BLOCKED — Link & migrate production database failed exit 1 (operational infra: Management API link or db push pooler / paused project / password / network; not a new migration — PRODUCT BEHAVIOUR CHANGE 0, 55 migrations last 20261008000000_p5e)",
+    "edge_functions_result": "NOT DEPLOYED — step skipped (supabase functions deploy --no-verify-jwt would have deployed api, invoice-open, initiate-subscription-payment, verify-subscription-payment, grant-manual-subscription, paychangu-webhook, expire-subscriptions, etc. but was skipped)",
+    "operator_next_steps": [
+      "Inspect production project status in Supabase dashboard for SUPABASE_PROJECT_REF_PROD — if INACTIVE/PAUSED, Resume/Restore and wait ACTIVE_HEALTHY (see DEPLOYMENT.md §4); if ACTIVE_HEALTHY but still fails, Restart project (General settings → Restart project) and check https://status.supabase.com, then re-run",
+      "Verify SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF_PROD / SUPABASE_DB_PASSWORD_PROD are current in GitHub → Settings → Secrets and variables → Actions (rotate only if compromised, never commit)",
+      "Re-run the failed workflow: GitHub → Actions → Deploy run 36029382645 → Re-run failed jobs, or recreate tag (git tag -d v0.1.0-pilot && git push --delete origin v0.1.0-pilot && git tag v0.1.0-pilot 19e712b && git push origin v0.1.0-pilot) or workflow_dispatch environment: production with production Environment approval",
+      "Consider updating production Link & migrate step to use scripts/ci/supabase-link-and-push.sh (as staging does) so it retries pooler timeouts and checks project_status (currently production inline step has no retries)",
+      "After a successful Deploy to production (all steps success, Vercel deployment ID/URL issued, Edge Functions deployed), re-verify live release identity and re-run P12 §9 live smoke matrix with disposable pilot identities, then replace this BLOCKED record with DEPLOYED — PILOT VERIFICATION PASS/BLOCKED with live verification.* fields filled"
+    ]
+  },
+  "verification": {
+    "absolute_identity": "PASS — git rev-parse 19e712b → 19e712b701b720f..., git show --no-patch P10: prepare controlled pilot release, tag v0.1.0-pilot → 19e712b (tree 1de5e8c, 3 P10 docs), git diff 19e712b HEAD -- src supabase supabase/migrations empty, PRODUCT BEHAVIOUR CHANGE 0 relative to P10",
+    "credential_handling": "PASS — no credentials committed, no service_role into VITE_* (grep VITE_ src/ only URL/ANON/FEATURE/AI_CHAT/SENTRY_DSN/LOG_LEVEL/PLATFORM_ROOT/APP_VERSION), no secret printed; credentials remain via GitHub Secrets/Environment + Vercel env + Supabase CLI as documented",
+    "vercel": "NOT DEPLOYED — Build frontend succeeded (success) but Deploy frontend to Vercel (production) was skipped because DB link failed; therefore no production VITE_SUPABASE_URL_PROD / ANON_KEY live build and no deployment URL/ID to capture. Correct that this is not claimed as PASS.",
+    "supabase": "BLOCKED — Link & migrate production database exit 1; no new migration required (55 migrations, last 20261008000000_p5e), no RLS/SECURITY DEFINER/post_pos_sale/can_access_branch/_ledgr_assert_usage_limit/inventory/financial/quota change — DB would have been supabase db push --include-all forward-only idempotent re-apply",
+    "edge_functions": "NOT DEPLOYED — skipped; would have been supabase secrets set + supabase functions deploy --no-verify-jwt per function (api, ai-chat, support-agent, etc.) with per-env PROD secrets, never via VITE_",
+    "live_release_identity": "BLOCKED — no live frontend to inspect (curl $PRODUCTION_URL would serve dist/index.html and VITE_APP_VERSION local-<ISO> / Sentry release process.env.VITE_APP_VERSION || mode after successful Vercel deploy); do not claim LIVE RELEASE IDENTITY = PASS",
+    "tenant_isolation": "BLOCKED (no live) — proxy PASS via P6 two-business TENANT.A/B.* 10 PASS + R06/R093 0-mutation + DB.ANON-SERVICE-DISTINCT; live re-run: A→A ALLOWED / B→A DENIED 42501/22023 no unauthorized mutation with disposable pilot businesses (not executed)",
+    "pos": "BLOCKED — proxy PASS via R06.POS.STOCK.* 9 PASS + P07 742/0 + post_pos_sale 42501/22023/23514/P0QLT + R08.SHIFT.BRANCH-SCOPED-READ (not executed live — 8-point list in §11)",
+    "inventory": "BLOCKED — proxy PASS via trg_stock_movement_apply_balance FOR UPDATE 23514 + R06.POS.STOCK.ATOMIC/REPLAY (not executed live)",
+    "till": "BLOCKED — proxy PASS via R08 SINGLE-OPEN/CLOSE/CLOSE-IMMUTABLE 22023/BYPASS-CLOSED/REPORT-AUTHORITY (not executed live)",
+    "corrections": "BLOCKED — proxy PASS via R07 + R08 REFUND.*/LATE-ARRIVAL (not executed live, disposable only)",
+    "offline": "BLOCKED — proxy PASS via exceptions stock-denied|policy-denied RECONCILABLE + stale-version/unknown-version/branch-denied/payload-tampered quarantined + lease/MAX_PENDING 2000 (not executed live)",
+    "quota": "BLOCKED — proxy PASS via R10.QUOTA.* 5 PASS + REGRESSION.SUCCESS-CLIENTKEY + p5c_uniformQuota FOR UPDATE P0QLT (not executed live; client cannot bypass)",
+    "ai": "BLOCKED — proxy PASS via ai_context security_invoker + can_access_branch + rpc-only read-only (not executed live)",
+    "monitoring": "BLOCKED (live stream not yet) — architecture PASS via P10 112 precache etc. and per-env VITE_SENTRY_DSN wired (deploy.yml _STAGING vs _PROD), log wiring correct in deploy.yml; live log stream not verified because deploy failed before Vercel (no production event to check)",
+    "rollback": "PASS — documented procedure matches reality: Vercel redeploy previous or git revert + vercel --prod; Edge redeploy prior checkout; DB supabase db push forward-only → backup restore (no down-migration, per supabase/config.toml + backup-verify.yml); PWA autoUpdate + cleanupOutdatedCaches + clientsClaim — no destructive rollback executed"
+  },
+  "deferred": [
+    "R094",
+    "TENANT.storage",
+    "AUTH",
+    "PRIV",
+    "R02.PROVIDER-TOKEN",
+    "BRANCH.create",
+    "BRANCH.cross-branch-admin",
+    "BRANCH.modify",
+    "BILLING.SERVER-QUOTA",
+    "full commercial subscription/entitlement lifecycle",
+    "branch-scoped customers/financial/inventory/reporting beyond approved till/report contract",
+    "generic offline conflict — multitab — generic concurrent-client — OTP/SMS outside approved contract — legacy bootstrap"
+  ],
+  "deferred_note": "All remain DEFERRED / NOT CERTIFIED / NOT AUTHORIZED FOR REMEDIATION — deployment attempt (even successful) does not convert to PASS",
+  "pilot": {
+    "mode": "PILOT / LIMITED CONTROLLED USERS",
+    "status": "NOT READY TO INVITE — DEPLOYMENT BLOCKED (operational DB gate)",
+    "users_invited": 0,
+    "controls": "P10 safety plan + P11 §16 controls verified (no large-population auto-invite, no public commercial publication, no invented customer names; approved cohort list / scope briefing / excluded-understood / support contact / rollback path / monitoring active all defined — cohort list not invented, owner-supplied out-of-band; but monitoring not yet live-verified and live smoke not executed, so invitation must not proceed)",
+    "invite_blocked_reason": "Production DB link/migrate failure prevents Vercel deploy and therefore prevents live smoke + monitoring verification that must precede any controlled-user invitation (P12 §20)"
+  },
+  "deployment_result": "DEPLOYMENT BLOCKED",
+  "deployment_result_detail": "Production deploy of approved artifact 19e712b via tag v0.1.0-pilot failed at production DB gate (run 36029382645, Link & migrate production database exit 1, subsequent Vercel and Edge steps skipped). Build frontend had succeeded, so Vercel build would succeed after DB fix. This is operational infrastructure (Management API link or db push pooler / paused project / password / network), not a migration-authorization or product-code defect (PRODUCT BEHAVIOUR CHANGE 0, 55 migrations). Next: check Supabase project status ACTIVE_HEALTHY / Restart, verify secrets, re-run failed jobs or recreate tag or workflow_dispatch production with approval, then re-verify live identity + smoke matrix. After success, replace this record with DEPLOYED — PILOT VERIFICATION PASS/BLOCKED with live verification.* fields.",
+  "hard_stops_triggered": [],
+  "hard_stop_check": "P12 §24 1–13 all checked: no wrong commit deployed (19e712b correct, ed5c06b not deployed as application — git diff proves same src/supabase), no staging config in production (vars correctly PROD via _PROD), no production secret exposure (grep VITE_ PASS), no unauthorized source/migration required (PRODUCT BEHAVIOUR CHANGE 0), no RLS bypass / tenant isolation failure / unauthorized financial mutation / negative inventory / closed till mutation / quota bypass / AI mutation observed in proxy evidence (all PASS in P6-P10), no monitoring wrong-env, no rollback mismatch — but live verification is BLOCKED because no live deploy, so deployment not claimed as PASS; hard-stop not triggered, operational blocker is DB connectivity",
+  "files_changed_expected": ["docs/releases/LEDGR_P12_PRODUCTION_DEPLOYMENT_2026-09-24.md", "docs/releases/LEDGR_P12_PRODUCTION_DEPLOYMENT_2026-09-24.json"],
+  "generated_at": "2026-09-24T17:00:00+02:00",
+  "commit_to_push": "P12: execute production pilot deployment and verify live environment"
+}
