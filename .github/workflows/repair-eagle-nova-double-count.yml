@@ -1,0 +1,108 @@
+# ============================================================================
+# Repair: Eagle Nova Horizon chicken-manure double-count (160 → 320)
+# ============================================================================
+# Runs scripts/repair-eagle-nova-double-count.sql against the PRODUCTION
+# Supabase project over the Management API (same SUPABASE_ACCESS_TOKEN the
+# deploy workflow already uses — no database password needed).
+#
+# SAFETY
+#   * workflow_dispatch ONLY — never runs automatically.
+#   * Dry-run by default: only the read-only diagnostic SELECTs run until you
+#     re-dispatch with dry_run=false after reviewing section 1's failure_mode.
+#   * The SQL itself is double-guarded: the repair DO block only updates rows
+#     matching the pure double-count signature (on_hand=320, ledger=160) for
+#     this business + product, and is idempotent.
+#   * Production isolation: hard-fails if SUPABASE_PROJECT_REF_PROD equals
+#     SUPABASE_PROJECT_REF_STAGING or is empty.
+#
+# USAGE
+#   GitHub → Actions → "Repair Eagle Nova chicken-manure double-count"
+#   → Run workflow → dry_run=true first → review job log → re-run with
+#   dry_run=false to apply the balance correction.
+# ============================================================================
+name: Repair Eagle Nova chicken-manure double-count
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = diagnostics only (SELECTs); false = also run the repair"
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+      ref:
+        description: Branch/ref containing this workflow + SQL
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: write   # upload the run output as an artifact
+
+concurrency:
+  group: repair-eagle-nova-double-count
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Diagnose${{ inputs.dry_run == 'false' && ' + repair' || '' }} (production)
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
+      DRY_RUN: ${{ inputs.dry_run }}
+      SQL_FILE: scripts/repair-eagle-nova-double-count.sql
+      OUT_DIR: artifacts/support-sql
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify environment isolation + credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN is not configured."; exit 1; }
+          test -n "$SUPABASE_PROJECT_REF"   || { echo "::error::SUPABASE_PROJECT_REF_PROD is not configured."; exit 1; }
+          test -n "$STAGING_SUPABASE_PROJECT_REF" || { echo "::error::SUPABASE_PROJECT_REF_STAGING is not configured (isolation check needs it)."; exit 1; }
+          if [[ "$SUPABASE_PROJECT_REF" == "$STAGING_SUPABASE_PROJECT_REF" ]]; then
+            echo "::error::ENVIRONMENT ISOLATION FAILURE — production ref equals staging ref. Not connecting."
+            exit 1
+          fi
+          test -f "$SQL_FILE" || { echo "::error::Missing $SQL_FILE"; exit 1; }
+          chmod +x scripts/database/run-support-sql-via-api.sh
+          echo "Isolation OK: targeting production ref ${SUPABASE_PROJECT_REF} (distinct from staging)."
+          echo "Mode: DRY_RUN=${DRY_RUN}"
+
+      - name: Run support SQL (Management API)
+        shell: bash
+        run: bash scripts/database/run-support-sql-via-api.sh
+
+      - name: Show results
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "==== run.log ===="
+          cat "${OUT_DIR}/run.log" || true
+          for f in "${OUT_DIR}"/stmt-*.txt; do
+            [[ -e "$f" ]] || continue
+            echo "==== ${f} ===="
+            cat "$f"
+          done
+
+      - name: Upload run output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eagle-nova-double-count-repair
+          path: artifacts/support-sql/
+          if-no-files-found: warn
