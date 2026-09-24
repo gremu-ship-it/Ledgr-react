@@ -491,7 +491,6 @@ declare
   v_caller_branch_id uuid;
   v_effective_branch_id uuid;
   v_reports_roles constant text[] := array['owner','admin','accountant','manager','sales_manager','tax_compliance_officer','treasury_manager','asset_manager','board_member','auditor','viewer','branch_manager'];
-  v_org_wide_roles constant text[] := array['owner','admin','manager','accountant','auditor'];
   v_assigned_roles constant text[] := array['cashier','stock_clerk','branch_manager','sales_clerk','sales_manager','purchasing_officer','warehouse_worker','customer_service_rep'];
 begin
   if p_business_id is null then
@@ -509,6 +508,9 @@ begin
       if not exists (select 1 from public.branches where id = p_branch_id and business_id = p_business_id) then
         raise exception 'ai_context: branch not found in this business' using errcode = '42501';
       end if;
+      v_effective_branch_id := p_branch_id;
+    else
+      v_effective_branch_id := null;
     end if;
   elsif not public.is_business_member(p_business_id) then
     raise exception 'ai_context: not authorised for this business' using errcode = '42501';
@@ -530,16 +532,15 @@ begin
       end if;
       v_effective_branch_id := p_branch_id;
     else
-      -- Omitted branch: org-wide roles keep org-wide (null), assigned-scope with branch gets their branch
-      -- branch_manager/sales_manager are hybrid (reports-tier + assigned) — null branch is legacy org-wide, not fail-closed
+      -- Omitted branch: org-wide and legacy roles keep org-wide (null); assigned-scope with branch gets their branch;
+      -- assigned-scope with NULL assignment is fail-closed (DEC-03 P5-D: can_access_branch branch_id IS NOT NULL)
       if v_membership_role = any (v_assigned_roles) and v_caller_branch_id is not null then
         -- Assigned-scope caller who omitted branch must not receive org-wide; filter to their branch
         if not public.can_access_branch(p_business_id, v_caller_branch_id) then
           raise exception 'ai_context: no access to the requested branch' using errcode = '42501';
         end if;
         v_effective_branch_id := v_caller_branch_id;
-      elsif v_membership_role = any (v_assigned_roles) and v_caller_branch_id is null and v_membership_role not in ('branch_manager','sales_manager') then
-        -- Assigned-scope with NULL assignment (fail-closed) — no authorized branch (except hybrid reports-tier managers)
+      elsif v_membership_role = any (v_assigned_roles) and v_caller_branch_id is null then
         raise exception 'ai_context: no access to the requested branch' using errcode = '42501';
       else
         -- Org-wide or legacy null-assignment: org-wide
