@@ -112,6 +112,20 @@ jobs:
             echo "==== ${f} ===="
             cat "$f"
           done
+          # Publish to the check-run summary (readable via API without
+          # downloading the Azure-hosted log zip, which some networks block).
+          {
+            echo "## Eagle Nova chicken-manure repair (DRY_RUN=${DRY_RUN})"
+            echo ""
+            echo '```'
+            cat "${OUT_DIR}/run.log" 2>/dev/null || true
+            for f in "${OUT_DIR}"/stmt-*.txt; do
+              [[ -e "$f" ]] || continue
+              echo "---- ${f} ----"
+              cat "$f"
+            done
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload run output
         if: always()
