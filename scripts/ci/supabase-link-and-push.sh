@@ -51,6 +51,34 @@ case "${auto_repair}" in
   *) auto_repair=1 ;;
 esac
 
+# --- 0. Migration-integrity pre-flight --------------------------------------
+# supabase_migrations.schema_migrations is keyed by the version prefix of the
+# file name, so two files sharing a prefix can never both be recorded: the CLI
+# applies the first, then fails inserting the second with
+#   ERROR: duplicate key value violates unique constraint
+#          "schema_migrations_pkey" (SQLSTATE 23505)
+# That is deterministic — every retry reproduces it byte for byte — and the
+# generic retry advice ("the database is likely unresponsive") sends the reader
+# to the Supabase dashboard instead of the repository. Two version collisions
+# sat in supabase/migrations/ exactly that way on 2026-09-24
+# (20260926000001 and 20261003000000, each holding two files) and blocked the
+# staging deploy. Catch it here, before any project is touched.
+migrations_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/supabase/migrations"
+duplicate_versions="$(
+  for f in "${migrations_dir}"/*.sql; do basename "${f}" | cut -d_ -f1; done | sort | uniq -d
+)"
+if [[ -n "${duplicate_versions}" ]]; then
+  echo "::error::supabase/migrations contains migration files sharing a version prefix — supabase_migrations.schema_migrations is keyed by version, so only one of each pair can ever be recorded:"
+  while read -r version; do
+    [[ -n "${version}" ]] || continue
+    for f in "${migrations_dir}/${version}"_*.sql; do
+      echo "::error::  $(basename "${f}")"
+    done
+  done <<< "${duplicate_versions}"
+  echo "::error::Rename the newer file of each pair to a unique version, keeping its position in the replay order, then re-run. See DEPLOYMENT.md."
+  exit 1
+fi
+
 # --- 1. Project-status pre-flight -------------------------------------------
 # A paused (INACTIVE) project still answers the Management API, so `link`
 # succeeds — but the database refuses connections, which surfaces as a pooler
@@ -106,6 +134,19 @@ while :; do
 
   if ((push_status == 0)); then
     break
+  fi
+
+  # Duplicate-version check: history-table INSERT collided, which means two
+  # local files share a version prefix (see the pre-flight above; it can be
+  # bypassed by a checkout that changed after it ran). Deterministic — no retry.
+  if grep -q 'duplicate key value violates unique constraint "schema_migrations_pkey"' "${push_output}"; then
+    collided="$(grep -oE 'Key \(version\)=\([0-9]+\) already exists' "${push_output}" | grep -oE '[0-9]+' | head -n 1 || true)"
+    echo "::error::supabase db push for ${label} could not record migration version ${collided:-<unknown>}: another file in supabase/migrations already owns that version (schema_migrations is keyed by it)."
+    for f in "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/supabase/migrations/${collided}"_*.sql; do
+      [[ -e "${f}" ]] && echo "::error::  $(basename "${f}")"
+    done
+    echo "::error::Rename the newer file of each pair to a unique version, keeping its position in the replay order. Not retrying: this failure is identical on every attempt."
+    exit 1
   fi
 
   # Drift check: the CLI prints one "supabase migration repair --status
