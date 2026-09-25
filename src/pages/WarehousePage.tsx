@@ -262,6 +262,15 @@ function StockCard({ balance }: { balance: BalanceRow }) {
 // scripts/diagnose-sales-vs-inventory.sql for the read-only version of this
 // check.
 
+// INCIDENT CONTAINMENT 2026-09-25 (P2): backfill_and_recalculate_inventory()
+// was reproduced consuming stock for draft/void/credit-note invoices at
+// unposted WAC. EXECUTE is revoked from client roles server-side (migration
+// 20261011000000); this flag only keeps the UI honest — it is NOT the control.
+export const STOCK_SYNC_SUSPENDED = true;
+export const STOCK_SYNC_SUSPENDED_MESSAGE =
+  'Stock reconciliation is temporarily suspended while an inventory integrity issue is investigated. ' +
+  'No stock levels will be changed from this screen. Contact support if you need a correction.';
+
 function StockSyncPanel({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -308,14 +317,21 @@ function StockSyncPanel({ businessId }: { businessId: string }) {
           </p>
         </div>
         <button
-          onClick={() => syncMutation.mutate()}
-          disabled={syncMutation.isPending}
+          onClick={() => { if (!STOCK_SYNC_SUSPENDED) syncMutation.mutate(); }}
+          disabled={STOCK_SYNC_SUSPENDED || syncMutation.isPending}
+          title={STOCK_SYNC_SUSPENDED ? STOCK_SYNC_SUSPENDED_MESSAGE : undefined}
           className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           {syncMutation.isPending && <Loader2 size={12} className="animate-spin" />}
           Reconcile stock levels
         </button>
       </div>
+
+      {STOCK_SYNC_SUSPENDED && (
+        <div role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {STOCK_SYNC_SUSPENDED_MESSAGE}
+        </div>
+      )}
 
       {feedback && (
         <div

@@ -2,122 +2,78 @@ import { describe, it, expect, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { InvoiceRepository } from '../InvoiceRepository';
 import { ExpenseRepository } from '../ExpenseRepository';
+import { ValidationError } from '../../errors/RepositoryError';
 import type { Database } from '../../types/database';
 
-// InvoiceRepository imports triggerWebhook -> webhook-triggers -> supabase,
-// which throws at import time without env vars. The guard under test never
-// reaches the webhook, so stub the module out of the import graph.
 vi.mock('@/services/webhook/webhook-triggers', () => ({
   triggerWebhook: vi.fn(async () => {}),
 }));
 
 /**
- * Regression cover for C-03: payments were only blocked on void/credit_note
- * documents in the UI (and via non-existent status values 'voided'/'credited').
- * A direct client/API write could still record a payment and inflate
- * amount_paid on a cancelled document.
+ * Regression cover for C-03 (payments against void / credit-note documents),
+ * updated for IC 2026-09-25 P6.
  *
- * The repository now rejects such a payment with a clear ValidationError
- * before any insert; the DB trigger (20260813000002) is the backstop. These
- * tests pin the repository-level guard.
+ * The guard now lives in the atomic server commands record_invoice_payment /
+ * record_expense_payment (plus the 20260813000002 trigger backstop): the
+ * document is locked and its status checked in the same transaction as the
+ * insert, so there is no read-then-write gap. The server raises SQLSTATE
+ * 23514; the repository must surface that as a ValidationError and must not
+ * attempt any direct write of its own. The SQL behaviour itself is proven on
+ * real PostgreSQL in tests/release/ic-containment.test.ts.
  */
 
-function invoiceClient(status: string) {
-  const invoice = { id: 'inv-1', business_id: 'biz-1', status, total_amount: 100, amount_paid: 0 };
-
-  const invoicesChain = () => ({
-    select: () => ({
-      eq: () => ({
-        is: () => ({
-          maybeSingle: async () => ({ data: invoice, error: null }),
-        }),
-      }),
-    }),
-  });
-
-  const paymentsChain = () => ({
-    insert: () => ({
-      select: () => ({
-        single: async () => ({ data: { id: 'pay-1' }, error: null }),
-      }),
-    }),
-  });
-
-  const from = vi.fn((table: string) => {
-    if (table === 'invoices') return invoicesChain();
-    if (table === 'invoice_payments') return paymentsChain();
-    throw new Error(`unexpected table: ${table}`);
-  });
-
-  const rpc = vi.fn(async () => ({ error: null }));
-
-  return {
-    client: { from, rpc } as unknown as SupabaseClient<Database>,
-    from,
-    rpc,
-  };
+function serverRejects(message: string) {
+  const rpc = vi.fn(async () => ({ data: null, error: { code: '23514', message } }));
+  const from = vi.fn(() => { throw new Error('no direct table writes expected'); });
+  return { client: { rpc, from } as unknown as SupabaseClient<Database>, rpc, from };
 }
 
 describe('payment guard against cancelled documents', () => {
   it('rejects a payment against a void invoice before writing', async () => {
-    const { client, from } = invoiceClient('void');
-    const repo = new InvoiceRepository(client);
-
+    const { client, rpc, from } = serverRejects('Cannot record a payment against a void invoice.');
     await expect(
-      repo.recordPayment({ invoice_id: 'inv-1', amount: 10, business_id: 'biz-1' } as never),
-    ).rejects.toMatchObject({ name: 'ValidationError' });
-
-    const paymentWrites = from.mock.calls.filter(([t]) => t === 'invoice_payments');
-    expect(paymentWrites).toHaveLength(0);
+      new InvoiceRepository(client).recordPayment({ business_id: 'biz-1', invoice_id: 'inv-1', amount: 10 } as never, 'k'),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(rpc).toHaveBeenCalledWith('record_invoice_payment', expect.anything());
+    expect(from).not.toHaveBeenCalled();
   });
 
   it('rejects a payment against a credit_note invoice before writing', async () => {
-    const { client, from } = invoiceClient('credit_note');
-    const repo = new InvoiceRepository(client);
-
+    const { client, from } = serverRejects('Cannot record a payment against a credit_note invoice.');
     await expect(
-      repo.recordPayment({ invoice_id: 'inv-1', amount: 10, business_id: 'biz-1' } as never),
-    ).rejects.toMatchObject({ name: 'ValidationError' });
-
-    expect(from.mock.calls.filter(([t]) => t === 'invoice_payments')).toHaveLength(0);
+      new InvoiceRepository(client).recordPayment({ business_id: 'biz-1', invoice_id: 'inv-1', amount: 10 } as never, 'k'),
+    ).rejects.toThrow(/credit_note/);
+    expect(from).not.toHaveBeenCalled();
   });
 
   it('allows a payment against a live invoice', async () => {
-    const { client } = invoiceClient('sent');
-    const repo = new InvoiceRepository(client);
+    const rpc = vi.fn(async () => ({
+      data: { payment: { id: 'pay-1' }, invoice: { id: 'inv-1', business_id: 'biz-1', status: 'partially_paid' }, journal_entry_id: 'je', idempotent: false },
+      error: null,
+    }));
+    const client = { rpc, from: vi.fn() } as unknown as SupabaseClient<Database>;
+    const result = await new InvoiceRepository(client).recordPayment(
+      { business_id: 'biz-1', invoice_id: 'inv-1', amount: 10 } as never, 'k',
+    );
+    expect(result.payment).toEqual({ id: 'pay-1' });
+    expect(result.invoice.status).toBe('partially_paid');
+  });
 
-    // amount_paid stays 0, status stays 'sent' → no update, no webhook.
+  it('surfaces an overpayment rejection as a ValidationError', async () => {
+    const { client } = serverRejects('Payment of 150.00 exceeds the outstanding balance of 100.00 on invoice INV-1.');
     await expect(
-      repo.recordPayment({ invoice_id: 'inv-1', amount: 10, business_id: 'biz-1' } as never),
-    ).resolves.toMatchObject({ invoice: { status: 'sent' } });
+      new InvoiceRepository(client).recordPayment({ business_id: 'b', invoice_id: 'i', amount: 150 } as never, 'k'),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 });
 
 describe('expense payment guard', () => {
   it('rejects a payment against a void expense before writing', async () => {
-    const expense = { id: 'exp-1', business_id: 'biz-1', status: 'void' };
-
-    const expensesChain = () => ({
-      select: () => ({
-        eq: () => ({
-          is: () => ({
-            maybeSingle: async () => ({ data: expense, error: null }),
-          }),
-        }),
-      }),
-    });
-
-    const from = vi.fn((table: string) => {
-      if (table === 'expenses') return expensesChain();
-      throw new Error(`unexpected table: ${table}`);
-    });
-    const client = { from } as unknown as SupabaseClient<Database>;
-    const repo = new ExpenseRepository(client);
-
+    const { client, rpc, from } = serverRejects('Cannot record a payment against a void expense.');
     await expect(
-      repo.recordPayment({ expense_id: 'exp-1', amount: 10, business_id: 'biz-1' } as never),
-    ).rejects.toMatchObject({ name: 'ValidationError' });
-
-    expect(from.mock.calls.filter(([t]) => t === 'expense_payments')).toHaveLength(0);
+      new ExpenseRepository(client).recordPayment({ business_id: 'biz-1', expense_id: 'exp-1', amount: 10 } as never, 'k'),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(rpc).toHaveBeenCalledWith('record_expense_payment', expect.anything());
+    expect(from).not.toHaveBeenCalled();
   });
 });
