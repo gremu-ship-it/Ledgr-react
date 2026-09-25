@@ -174,7 +174,10 @@ jobs:
       # Last, deliberately — see the ordering note at the migration step.
       - name: Deploy frontend to Vercel (staging)
         run: |
+          set -o pipefail
           npm i -g vercel@latest
+          vercel_log="$(mktemp)"
+          set +e
           vercel deploy \
             --prod \
             --token "$VERCEL_TOKEN" \
@@ -185,7 +188,22 @@ jobs:
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
             --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
-            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}"
+            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}" \
+            2>&1 | tee "$vercel_log"
+          vercel_status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$vercel_status" -ne 0 ]]; then
+            echo "::error::vercel deploy (staging) failed (exit ${vercel_status})"
+            tail -n 8 "$vercel_log" | while IFS= read -r line; do
+              line="${line//$'\r'/}"
+              line="${line//$VERCEL_TOKEN/***}"
+              line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+              line="${line//::/: :}"
+              [[ -z "$line" ]] && continue
+              echo "::error::${line:0:400}"
+            done
+            exit "$vercel_status"
+          fi
 
   # =========================================================================
   # PRODUCTION — only on a `v*` tag, behind a manual approval gate
