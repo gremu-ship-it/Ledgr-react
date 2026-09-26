@@ -65,8 +65,6 @@ Scope: the owner asked to implement the H04 controls "as recommended" (a period 
 
 ## 3. Release gate
 Two runs, identical record-by-record: **820 PASS / 0 FAIL / 54 BLOCKED** each (all 54 environment-bound, same as before). Versus f5a4843 (809/0/55): +10 new PL records; H04.INVOICE.PERIOD-AND-APPROVAL-POLICY BLOCKED → PASS. Build OK.
-- added: the new PL records;
-- changed: H04 moves from BLOCKED to PASS.
 
 ## 4. Historical repair: what the owner must do (I have no production access)
 I did **not** run anything in production, and none of this is claimed to have happened. Order:
