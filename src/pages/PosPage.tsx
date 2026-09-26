@@ -11,8 +11,10 @@ import {
   removeProductFromCart,
   clearCart,
   applyItemDiscount,
+  applyItemPriceOverride,
 } from '@/services/posService';
 import { requestPosApproval, type PosCorrectionAction } from '@/services/posCorrectionRpc';
+import { requestPosPriceOverride, isPosSupervisorRole } from '@/services/posPriceOverrideRpc';
 import { repos } from '@/lib/repositories';
 import { weightedAverageCost } from '@/services/inventoryValuation';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -31,12 +33,15 @@ import type {
   PosRegister,
   PosProduct,
   PosPaymentMethod,
+  PosStockAvailability,
+  PosStockStatus,
 } from '@/types/pos';
 
 // Components
 import { PosHeader } from '@/components/pos/PosHeader';
 import { PosProductCatalog } from '@/components/pos/PosProductCatalog';
-import { PosCart } from '@/components/pos/PosCart';
+import { PosStockStatusBanner } from '@/components/pos/PosStockStatusBanner';
+import { PosCart, type PosOverrideServerRequest } from '@/components/pos/PosCart';
 import { PosPaymentModal } from '@/components/pos/PosPaymentModal';
 import { PosReceiptModal } from '@/components/pos/PosReceiptModal';
 import { PosShiftModal } from '@/components/pos/PosShiftModal';
@@ -94,6 +99,8 @@ export function PosPage() {
   const [categories, setCategories] = useState<string[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [dataVersion, setDataVersion] = useState(0);
+  // IC 2026-09-25 P4: server stock-read state (never silently zero).
+  const [stockStatus, setStockStatus] = useState<PosStockStatus>({ state: 'loading' });
 
   // Active Sale Cart
   const [cartItems, setCartItems] = useState<PosCartItem[]>([]);
@@ -110,7 +117,11 @@ export function PosPage() {
   const [isCashMovementModalOpen, setIsCashMovementModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
-  const [approvalServerContext, setApprovalServerContext] = useState<{ action: PosCorrectionAction; documentId: string } | null>(null);
+  const [approvalServerContext, setApprovalServerContext] = useState<
+    { action: PosCorrectionAction; documentId: string } | PosOverrideServerRequest | null
+  >(null);
+  // Owner decision 2026-09-26: server token for an over-cap discount, sent with the sale.
+  const [discountOverrideToken, setDiscountOverrideToken] = useState<string | null>(null);
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [isZReportModalOpen, setIsZReportModalOpen] = useState(false);
   // R08.4/5: the Z-report number is minted by the signed close, never client-side.
@@ -157,6 +168,11 @@ export function PosPage() {
     setCartItems(clearCart());
     setSelectedCustomer(null);
     setOrderDiscount(undefined);
+    setDiscountOverrideToken(null);
+  }, []);
+
+  const handleOverrideLinePrice = useCallback((productId: string, unitPrice: number, token?: string | null) => {
+    setCartItems((prev) => applyItemPriceOverride(prev, productId, unitPrice, token));
   }, []);
 
   const handleUpdateLineDiscount = useCallback((productId: string, discount?: PosDiscount) => {
@@ -251,6 +267,8 @@ export function PosPage() {
     async function loadData() {
       if (!businessId) return;
       try {
+        // Cost only (RLS-scoped, best effort): quantities no longer come from
+        // this read. See pos_stock_availability below.
         const loadBalances = async (): Promise<{
           product_id: string;
           location_id: string;
@@ -264,13 +282,29 @@ export function PosPage() {
           if (error) throw new Error(error.message);
           return data ?? [];
         };
-        const [prods, custs, shift, recentInvoices, locations, balanceRows] = await Promise.all([
+        // IC 2026-09-25 P4: the displayed stock comes from the SAME server
+        // resolver the sale deducts from (_ledgr_stock_location), gated like
+        // selling there. A failed read is surfaced as an error + "stock
+        // unknown" — never as 0 / "Out".
+        const loadAvailability = async (): Promise<PosStockAvailability> => {
+          const { data, error } = await (repos.inventory['client'] as unknown as {
+            rpc: (fn: 'pos_stock_availability', args: { p_business_id: string; p_branch_id: string | null }) =>
+              Promise<{ data: PosStockAvailability | null; error: { message?: string } | null }>;
+          }).rpc('pos_stock_availability', { p_business_id: businessId, p_branch_id: branchId ?? null });
+          if (error) throw new Error(error.message || 'Stock levels could not be loaded.');
+          if (!data) throw new Error('Stock levels could not be loaded.');
+          return data;
+        };
+        const [prods, custs, shift, recentInvoices, balanceRows, availability] = await Promise.all([
           repos.inventory.findAllProducts(businessId).catch(() => []),
           repos.contact.findByBusiness(businessId, 'customer').catch(() => []),
           currentUserId ? repos.pos.findActiveShift(businessId, currentUserId, branchId).catch(() => null) : Promise.resolve(null),
           repos.invoice.findByBusiness(businessId, undefined, 30).catch(() => []),
-          repos.inventory.findLocations(businessId).catch(() => []),
           loadBalances().catch(() => [] as Awaited<ReturnType<typeof loadBalances>>),
+          loadAvailability().then(
+            (value) => ({ ok: true as const, value }),
+            (error: unknown) => ({ ok: false as const, message: error instanceof Error ? error.message : String(error) }),
+          ),
         ]);
 
         if (ignore) return;
@@ -281,26 +315,34 @@ export function PosPage() {
           setBranchId((current) => current ?? shift.branch_id);
         }
 
-        // Same location the sale will deduct from: the shop linked to this
-        // branch, otherwise the default warehouse. Summing every location
-        // would show Airwing + Area 49 as one pile while the sale only
-        // moved the warehouse.
-        const shopLocation = branchId
-          ? locations.find((l) => l.branch_id === branchId) ?? null
-          : null;
-        const targetLocation = shopLocation
-          ?? locations.find((l) => l.is_default)
-          ?? locations[0]
-          ?? null;
-        const stockHere = targetLocation
-          ? balanceRows.filter((b) => b.location_id === targetLocation.id)
+        const stockKnown = availability.ok;
+        const serverLocationId = availability.ok ? availability.value.location?.id ?? null : null;
+        const onHandByProduct = new Map<string, number>(
+          availability.ok
+            ? availability.value.balances.map((b) => [b.product_id, Number(b.quantity_on_hand || 0)] as [string, number])
+            : [],
+        );
+        const costRowsHere = serverLocationId
+          ? balanceRows.filter((b) => b.location_id === serverLocationId)
           : [];
+        setStockStatus(
+          availability.ok
+            ? {
+                state: 'ok',
+                locationName: availability.value.location?.name ?? null,
+                isFallback: availability.value.is_fallback,
+                noLocation: availability.value.location == null,
+                branchLocationMissing: availability.value.branch_location_missing === true,
+              }
+            : { state: 'error', message: availability.message },
+        );
 
         if (prods && prods.length > 0) {
           const mapped: PosProduct[] = prods.map((p) => {
-            const rows = stockHere.filter((b) => b.product_id === p.id);
-            const onHand = rows.reduce((sum, b) => sum + Number(b.quantity_on_hand || 0), 0);
+            const rows = costRowsHere.filter((b) => b.product_id === p.id);
+            const onHand = onHandByProduct.get(p.id) ?? 0;
             const avgCost = weightedAverageCost(rows);
+            const tracks = p.track_inventory !== false;
             return {
               id: p.id,
               name: p.name,
@@ -311,8 +353,9 @@ export function PosPage() {
               selling_price: Number(p.sale_price) || 0,
               cost_price: avgCost > 0 ? avgCost : (Number(p.purchase_price) || 0),
               track_inventory: p.track_inventory !== false,
-              stock_quantity: p.track_inventory === false ? undefined : onHand,
-              stockQuantity: p.track_inventory === false ? undefined : onHand,
+              stock_quantity: !tracks || !stockKnown ? undefined : onHand,
+              stockQuantity: !tracks || !stockKnown ? undefined : onHand,
+              stock_unknown: tracks && !stockKnown,
               category: p.category_id || 'General',
               category_id: p.category_id || 'General',
             };
@@ -385,10 +428,14 @@ export function PosPage() {
   const handleRequestManagerApproval = useCallback((
     actionDescription: string,
     onApproved: (approvalToken?: string) => void,
-    serverContext?: { action: PosCorrectionAction; documentId: string },
+    serverContext?: { action: PosCorrectionAction; documentId: string } | PosOverrideServerRequest,
   ) => {
     setApprovalActionDescription(actionDescription);
-    setPendingApprovalCallback(() => onApproved);
+    const isDiscount = !!serverContext && 'kind' in serverContext && serverContext.kind === 'discount';
+    setPendingApprovalCallback(() => (token?: string) => {
+      if (isDiscount) setDiscountOverrideToken(token ?? null);
+      onApproved(token);
+    });
     setApprovalServerContext(serverContext ?? null);
     setIsApprovalModalOpen(true);
   }, []);
@@ -434,6 +481,7 @@ export function PosPage() {
         // make the receipt disagree with the document.
         totals: cartTotals,
         orderDiscount,
+        discountOverrideToken,
         payments: paymentData.payments,
         totalPaid: paymentData.totalPaid,
         changeGiven: paymentData.changeGiven,
@@ -625,13 +673,16 @@ export function PosPage() {
       ) : (
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
           {/* Left Column: Product Catalog & Barcode Scanner */}
-          <div className="flex-1 overflow-hidden border-r border-gray-200 bg-white">
+          <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-200 bg-white">
+            <PosStockStatusBanner status={stockStatus} onRetry={() => setDataVersion((v) => v + 1)} />
+            <div className="flex-1 overflow-hidden">
             <PosProductCatalog
               products={products}
               categories={categories}
               isLoading={isLoadingProducts}
               onAddToCart={handleAddToCart}
             />
+            </div>
           </div>
 
           {/* Right Column: Dynamic Cart & Quick Actions */}
@@ -663,7 +714,9 @@ export function PosPage() {
               orderDiscount={orderDiscount}
               selectedCustomer={selectedCustomer}
               customers={customers}
-              maxCashierDiscountPercent={permissions.maxCashierDiscountPercent}
+              maxCashierDiscountPercent={permissions.maxDiscountPercent > 0 ? permissions.maxDiscountPercent : permissions.maxCashierDiscountPercent}
+              canOverridePriceDirectly={isPosSupervisorRole(permissions.role)}
+              onOverrideLinePrice={handleOverrideLinePrice}
               canApplyLineDiscount={permissions.canApplyLineDiscount}
               canApplyOrderDiscount={permissions.canApplyOrderDiscount}
               notes={cartNotes}
@@ -766,7 +819,12 @@ export function PosPage() {
         }}
         actionDescription={approvalActionDescription}
         onRequestServerApproval={approvalServerContext
-          ? () => requestPosApproval(businessId, approvalServerContext.action, approvalServerContext.documentId, approvalActionDescription).then((a) => a.token)
+          ? () => ('kind' in approvalServerContext
+            ? requestPosPriceOverride(businessId, approvalServerContext.kind === 'price'
+              ? { kind: 'price', productId: approvalServerContext.productId, unitPrice: approvalServerContext.unitPrice, reason: approvalActionDescription }
+              : { kind: 'discount', maxDiscountPercent: approvalServerContext.percent, reason: approvalActionDescription })
+            : requestPosApproval(businessId, approvalServerContext.action, approvalServerContext.documentId, approvalActionDescription)
+          ).then((a) => a.token)
           : undefined}
         onApprove={handleManagerApproved}
       />

@@ -855,7 +855,10 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
             form.department_id || null,
           );
         } catch (err) {
-          log.warn('Journal entry failed (non-critical)', { error: err });
+          // HARDENING 2026-09-26: a missing revenue journal is not
+          // "non-critical" — the invoice would be off the ledger silently.
+          log.error('Journal entry failed', { error: err });
+          throw new Error(`Invoice ${created.invoice_number} was saved, but its journal entry failed: ${(err as Error).message}. Please contact support before retrying.`, { cause: err });
         }
 
         // Reduce stock for every line that has a product selected, and post

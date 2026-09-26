@@ -1,0 +1,126 @@
+# ============================================================================
+# Historical data repair 2026-09 (owner-authorised 2026-09-26)
+# ============================================================================
+# Two separate, manual runs against the PRODUCTION project over the Supabase
+# Management API (the same runner as the other support-SQL workflows):
+#
+#   1. mode=size   — scripts/repair/2026-09-sizing.sql, SELECT-only (DRY_RUN=1
+#                    enforced). Prints the proposed corrections and the PLAN HASH.
+#   2. mode=apply  — ONE statement: ledgr_repair.apply_2026_09(evidence_ref,
+#                    plan_hash). The database refuses unless the evidence ref is
+#                    present and the plan is byte-for-byte the one reviewed; it
+#                    then applies everything in one transaction or nothing.
+#
+# Prerequisites (the workflow cannot check them for you):
+#   * migration 20261013000001_ledgr_repair_2026_09.sql is deployed;
+#   * the P0 evidence-preservation snapshot/export exists
+#     (docs/runbooks/IC_2026-09-25_P0_EVIDENCE_PRESERVATION.md) and its id is
+#     what you pass as evidence_ref;
+#   * the size output was reviewed by the owner.
+#
+# Nothing here deletes or rewrites history: corrections are new, labelled rows
+# (see the migration header). Gate: manual dispatch from main, repository
+# owner, confirmation phrase, vars.LEDGR_REPAIR_WORKFLOW_ENABLED == 'true'.
+# ============================================================================
+name: Repair 2026-09 inventory and COGS (historical)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "size = read-only plan + hash; apply = apply the reviewed plan"
+        required: true
+        default: "size"
+        type: choice
+        options: ["size", "apply"]
+      evidence_ref:
+        description: "apply only: P0 evidence snapshot/export id (8–120 chars: letters, digits, . _ : / -)"
+        required: false
+        default: ""
+      plan_hash:
+        description: "apply only: the 32-hex plan_hash printed by the size run you reviewed"
+        required: false
+        default: ""
+      confirm:
+        description: "Type exactly: I AM THE OWNER AND APPROVE A PRODUCTION DATA REPAIR"
+        required: true
+        default: ""
+
+permissions:
+  contents: read
+  actions: write
+  checks: write
+
+concurrency:
+  group: repair-2026-09-inventory
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair 2026-09 (${{ inputs.mode }})
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner &&
+      vars.LEDGR_REPAIR_WORKFLOW_ENABLED == 'true' &&
+      inputs.confirm == 'I AM THE OWNER AND APPROVE A PRODUCTION DATA REPAIR'
+    environment: Production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+      STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
+      MODE: ${{ inputs.mode }}
+      # Inputs are passed through env, never interpolated into shell/SQL text.
+      EVIDENCE_REF: ${{ inputs.evidence_ref }}
+      PLAN_HASH: ${{ inputs.plan_hash }}
+      OUT_DIR: artifacts/support-sql
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+
+      - name: Verify isolation, credentials and inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_ACCESS_TOKEN" || { echo "::error::SUPABASE_ACCESS_TOKEN is not configured."; exit 1; }
+          test -n "$SUPABASE_PROJECT_REF" || { echo "::error::SUPABASE_PROJECT_REF_PROD is not configured."; exit 1; }
+          test -n "$STAGING_SUPABASE_PROJECT_REF" || { echo "::error::SUPABASE_PROJECT_REF_STAGING is not configured."; exit 1; }
+          [[ "$SUPABASE_PROJECT_REF" != "$STAGING_SUPABASE_PROJECT_REF" ]] || { echo "::error::production ref equals staging ref."; exit 1; }
+          case "$MODE" in
+            size)
+              echo "SQL_FILE=scripts/repair/2026-09-sizing.sql" >> "$GITHUB_ENV"
+              echo "DRY_RUN=1" >> "$GITHUB_ENV" ;;
+            apply)
+              [[ "$EVIDENCE_REF" =~ ^[A-Za-z0-9._:/-]{8,120}$ ]] || { echo "::error::evidence_ref missing or has invalid characters."; exit 1; }
+              [[ "$PLAN_HASH" =~ ^[0-9a-f]{32}$ ]] || { echo "::error::plan_hash must be the 32-hex value from the size run."; exit 1; }
+              mkdir -p "$OUT_DIR"
+              # Values are validated against strict allow-lists above, so they
+              # cannot contain quotes; the file holds ONE statement.
+              printf "select ledgr_repair.apply_2026_09('%s', '%s', null) as result;\n" "$EVIDENCE_REF" "$PLAN_HASH" > "$OUT_DIR/apply.sql"
+              echo "SQL_FILE=$OUT_DIR/apply.sql" >> "$GITHUB_ENV"
+              echo "DRY_RUN=0" >> "$GITHUB_ENV" ;;
+            *) echo "::error::unknown mode"; exit 1 ;;
+          esac
+          chmod +x scripts/database/run-support-sql-via-api.sh
+
+      - name: Run (Management API)
+        shell: bash
+        run: bash scripts/database/run-support-sql-via-api.sh
+
+      - name: Show results
+        if: always()
+        shell: bash
+        run: |
+          cat "${OUT_DIR}/run.log" || true
+          for f in "${OUT_DIR}"/*.json; do [ -f "$f" ] && { echo "== $f"; cat "$f"; echo; }; done || true
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: repair-2026-09-${{ inputs.mode }}-${{ github.run_id }}
+          path: artifacts/support-sql
+          retention-days: 90

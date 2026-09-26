@@ -57,8 +57,11 @@ export function PosProductCatalog({
           (p.sku && p.sku.toLowerCase() === q.toLowerCase()),
       );
 
+      // IC 2026-09-25 P4: unknown stock (failed read) is not "out" — the
+      // server (R06) rejects a real shortfall when the sale is recorded.
       const sellable = (product: PosProduct) =>
-        product.track_inventory === false || (product.stock_quantity ?? product.stockQuantity ?? 0) > 0;
+        product.track_inventory === false || product.stock_unknown === true
+        || (product.stock_quantity ?? product.stockQuantity ?? 0) > 0;
       const pick = exactMatch ?? (filteredProducts.length === 1 ? filteredProducts[0] : null);
       if (pick && sellable(pick)) {
         onAddToCart(pick);
@@ -139,9 +142,10 @@ export function PosProductCatalog({
             {filteredProducts.map((p) => {
               const price = p.unit_price ?? p.unitPrice ?? p.selling_price ?? 0;
               const tracksStock = p.track_inventory !== false;
+              const stockUnknown = tracksStock && p.stock_unknown === true;
               const stock = p.stock_quantity ?? p.stockQuantity ?? 0;
-              const isLowStock = tracksStock && stock > 0 && stock <= 5;
-              const isOutOfStock = tracksStock && stock <= 0;
+              const isLowStock = tracksStock && !stockUnknown && stock > 0 && stock <= 5;
+              const isOutOfStock = tracksStock && !stockUnknown && stock <= 0;
 
               return (
                 <button
@@ -162,14 +166,16 @@ export function PosProductCatalog({
                       </span>
                       <span
                         className={`rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase ${
-                          isOutOfStock
+                          stockUnknown
+                            ? 'bg-gray-100 text-gray-600'
+                            : isOutOfStock
                             ? 'bg-red-100 text-red-700'
                             : isLowStock
                             ? 'bg-amber-100 text-amber-700'
                             : 'bg-emerald-50 text-emerald-700'
                         }`}
                       >
-                        {!tracksStock ? 'Service' : isOutOfStock ? 'Out' : `${stock} left`}
+                        {!tracksStock ? 'Service' : stockUnknown ? 'Stock ?' : isOutOfStock ? 'Out' : `${stock} left`}
                       </span>
                     </div>
 

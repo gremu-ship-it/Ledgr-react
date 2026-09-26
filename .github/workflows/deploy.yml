@@ -90,6 +90,10 @@ jobs:
           node-version: 22.x
           cache: npm
       - run: npm ci
+      # IC 2026-09-25 P9: the DB migration this commit expects (verified on the
+      # remote before the frontend ships; embedded in /version.json).
+      - name: Record migration target
+        run: echo "MIGRATION_TARGET=$(node scripts/ci/migration-target.mjs)" >> "$GITHUB_ENV"
       - name: Build frontend
         run: npm run build
       - name: Deploy Supabase backend (staging)
@@ -124,11 +128,33 @@ jobs:
       # first leaves a window where new code writes against an old schema.
       # Backend-first is the safe direction: the migrations are additive, so
       # the running (old) client keeps working throughout the rollout.
+      # IC 2026-09-25 P9: fail BEFORE the irreversible DB migration when the
+      # frontend cannot possibly be deployed (missing/invalid Vercel token or
+      # project). On 2026-09-24 the backend shipped and Vercel then failed,
+      # leaving ~23.5 h of new-backend/old-frontend skew.
+      - name: Pre-flight frontend deploy credentials (staging)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo "::error::VERCEL_TOKEN is not configured; refusing to migrate the database without a deployable frontend."; exit 1; }
+          test -n "${VERCEL_PROJECT_ID:-}" || { echo "::error::Vercel project id for staging is not configured; refusing to migrate."; exit 1; }
+          test -n "${VERCEL_ORG_ID:-}" || echo "::warning::VERCEL_ORG_ID is empty."
+          npm i -g vercel@latest >/dev/null 2>&1
+          if ! vercel whoami --token "$VERCEL_TOKEN" >/dev/null 2>&1; then
+            echo "::error::Vercel token rejected (vercel whoami failed); refusing to migrate the database."
+            exit 1
+          fi
+          echo "Vercel credentials valid; project ${VERCEL_PROJECT_ID}."
       - name: Link & migrate staging database
+        id: migrate
         shell: bash
         # Retries link + push (transient pooler timeouts) and fails fast with an
         # actionable error when the project is paused/unresponsive. See script.
         run: bash scripts/ci/supabase-link-and-push.sh
+      - name: Verify DB reached migration target (staging)
+        id: verify_migration
+        shell: bash
+        run: bash scripts/ci/verify-migration-target.sh
       - name: Set Edge Function secrets (staging)
         run: |
           supabase secrets set \
@@ -145,6 +171,7 @@ jobs:
             CRON_SECRET="${{ secrets.CRON_SECRET_STAGING }}" \
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (staging)
+        id: edge
         run: |
           # Functions that handle their own JWT/auth verification and must not
           # be blocked at the Supabase gateway. Deploying without this flag causes
@@ -173,6 +200,7 @@ jobs:
 
       # Last, deliberately — see the ordering note at the migration step.
       - name: Deploy frontend to Vercel (staging)
+        id: frontend
         run: |
           set -o pipefail
           npm i -g vercel@latest
@@ -186,6 +214,7 @@ jobs:
             --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
             --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
+            --build-env VITE_MIGRATION_TARGET="$MIGRATION_TARGET" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
             --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
             --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}" \
@@ -204,6 +233,48 @@ jobs:
             done
             exit "$vercel_status"
           fi
+          deploy_url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' "$vercel_log" | tail -n 1 || true)"
+          echo "FRONTEND_URL=${deploy_url}" >> "$GITHUB_ENV"
+      # IC 2026-09-25 P9: evidence that the LIVE frontend is this commit and
+      # expects this migration target (compatibility with the DB just verified).
+      - name: Verify deployed frontend version (staging)
+        id: frontend_verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="${FRONTEND_URL:-}"
+          [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
+          body="$(curl -fsS --max-time 20 "${url}/version.json" || true)"
+          if [[ -z "$body" ]]; then
+            echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
+            exit 0
+          fi
+          echo "$body"
+          commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit)})')"
+          target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget)})')"
+          if [[ "$commit" != "$GITHUB_SHA" || "$target" != "$MIGRATION_TARGET" ]]; then
+            echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}."
+            exit 1
+          fi
+          echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+      - name: Release manifest (staging)
+        if: always()
+        shell: bash
+        env:
+          ENV_LABEL: staging
+          OUT_MIGRATE: ${{ steps.migrate.outcome }}
+          OUT_VERIFY: ${{ steps.verify_migration.outcome }}
+          OUT_EDGE: ${{ steps.edge.outcome }}
+          OUT_FRONTEND: ${{ steps.frontend.outcome }}
+          OUT_FRONTEND_VERIFY: ${{ steps.frontend_verify.outcome }}
+        run: node scripts/ci/release-manifest.mjs
+      - name: Upload release manifest (staging)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest-staging
+          path: artifacts/release/release-manifest.json
+          if-no-files-found: warn
 
   # =========================================================================
   # PRODUCTION — only on a `v*` tag, behind a manual approval gate
@@ -244,6 +315,10 @@ jobs:
           node-version: 22.x
           cache: npm
       - run: npm ci
+      # IC 2026-09-25 P9: the DB migration this commit expects (verified on the
+      # remote before the frontend ships; embedded in /version.json).
+      - name: Record migration target
+        run: echo "MIGRATION_TARGET=$(node scripts/ci/migration-target.mjs)" >> "$GITHUB_ENV"
       - name: Build frontend
         run: npm run build
       - name: Deploy Supabase backend (production)
@@ -278,7 +353,25 @@ jobs:
       # first leaves a window where new code writes against an old schema.
       # Backend-first is the safe direction: the migrations are additive, so
       # the running (old) client keeps working throughout the rollout.
+      # IC 2026-09-25 P9: fail BEFORE the irreversible DB migration when the
+      # frontend cannot possibly be deployed (missing/invalid Vercel token or
+      # project). On 2026-09-24 the backend shipped and Vercel then failed,
+      # leaving ~23.5 h of new-backend/old-frontend skew.
+      - name: Pre-flight frontend deploy credentials (production)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo "::error::VERCEL_TOKEN is not configured; refusing to migrate the database without a deployable frontend."; exit 1; }
+          test -n "${VERCEL_PROJECT_ID:-}" || { echo "::error::Vercel project id for production is not configured; refusing to migrate."; exit 1; }
+          test -n "${VERCEL_ORG_ID:-}" || echo "::warning::VERCEL_ORG_ID is empty."
+          npm i -g vercel@latest >/dev/null 2>&1
+          if ! vercel whoami --token "$VERCEL_TOKEN" >/dev/null 2>&1; then
+            echo "::error::Vercel token rejected (vercel whoami failed); refusing to migrate the database."
+            exit 1
+          fi
+          echo "Vercel credentials valid; project ${VERCEL_PROJECT_ID}."
       - name: Link & migrate production database
+        id: migrate
         shell: bash
         # Same shared script the staging job uses: project-status pre-flight,
         # retries around link/push, and migration-history drift repair (a
@@ -288,6 +381,10 @@ jobs:
         env:
           SUPABASE_ENV_LABEL: production
         run: bash scripts/ci/supabase-link-and-push.sh
+      - name: Verify DB reached migration target (production)
+        id: verify_migration
+        shell: bash
+        run: bash scripts/ci/verify-migration-target.sh
       - name: Set Edge Function secrets (production)
         run: |
           supabase secrets set \
@@ -304,6 +401,7 @@ jobs:
             CRON_SECRET="${{ secrets.CRON_SECRET_PROD }}" \
             --project-ref "$SUPABASE_PROJECT_REF"
       - name: Deploy Edge Functions (production)
+        id: edge
         run: |
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
@@ -323,6 +421,7 @@ jobs:
 
       # Last, deliberately — see the ordering note at the migration step.
       - name: Deploy frontend to Vercel (production)
+        id: frontend
         run: |
           set -o pipefail
           npm i -g vercel@latest
@@ -336,6 +435,7 @@ jobs:
             --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
             --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
+            --build-env VITE_MIGRATION_TARGET="$MIGRATION_TARGET" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
             --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
             --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_PROD }}" \
@@ -354,3 +454,45 @@ jobs:
             done
             exit "$vercel_status"
           fi
+          deploy_url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' "$vercel_log" | tail -n 1 || true)"
+          echo "FRONTEND_URL=${deploy_url}" >> "$GITHUB_ENV"
+      # IC 2026-09-25 P9: evidence that the LIVE frontend is this commit and
+      # expects this migration target (compatibility with the DB just verified).
+      - name: Verify deployed frontend version (production)
+        id: frontend_verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="${FRONTEND_URL:-}"
+          [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
+          body="$(curl -fsS --max-time 20 "${url}/version.json" || true)"
+          if [[ -z "$body" ]]; then
+            echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
+            exit 0
+          fi
+          echo "$body"
+          commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit)})')"
+          target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget)})')"
+          if [[ "$commit" != "$GITHUB_SHA" || "$target" != "$MIGRATION_TARGET" ]]; then
+            echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}."
+            exit 1
+          fi
+          echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+      - name: Release manifest (production)
+        if: always()
+        shell: bash
+        env:
+          ENV_LABEL: production
+          OUT_MIGRATE: ${{ steps.migrate.outcome }}
+          OUT_VERIFY: ${{ steps.verify_migration.outcome }}
+          OUT_EDGE: ${{ steps.edge.outcome }}
+          OUT_FRONTEND: ${{ steps.frontend.outcome }}
+          OUT_FRONTEND_VERIFY: ${{ steps.frontend_verify.outcome }}
+        run: node scripts/ci/release-manifest.mjs
+      - name: Upload release manifest (production)
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-manifest-production
+          path: artifacts/release/release-manifest.json
+          if-no-files-found: warn

@@ -4,6 +4,8 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { VitePWA } from 'vite-plugin-pwa';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
+import { FINANCIAL_REST_PATH_SOURCE } from './src/lib/swApiCachePolicy';
+import { latestMigrationVersion } from './scripts/ci/migration-target.mjs';
 
 export default defineConfig(({ mode }) => {
   // Supabase host for the PWA API-caching rules below. Derived from the same
@@ -25,7 +27,30 @@ export default defineConfig(({ mode }) => {
   const supabaseUrlPattern = (pathPrefix: string) =>
     new RegExp(`^https://${supabaseHost.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${pathPrefix}`);
 
+  // IC 2026-09-25 P9: release identity. /version.json records which frontend
+  // commit is live and which DB migration it expects, so a mixed-version
+  // window (new backend, old frontend — as on 2026-09-24) is detectable.
+  const appVersion = process.env.VITE_APP_VERSION || `local-${new Date().toISOString()}`;
+  const migrationTarget = process.env.VITE_MIGRATION_TARGET || latestMigrationVersion();
+  const versionManifest: PluginOption = {
+    name: 'ledgr-version-manifest',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({
+          commit: appVersion,
+          migrationTarget,
+          builtAt: new Date().toISOString(),
+          mode,
+        }, null, 2),
+      });
+    },
+  };
+
   const plugins: PluginOption[] = [
+    versionManifest,
     react(),
     tailwindcss(),
     VitePWA({
@@ -99,7 +124,15 @@ export default defineConfig(({ mode }) => {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         runtimeCaching: [
+          // IC 2026-09-25 P8: financial REST reads are NEVER served from (or
+          // stored in) the SW cache — first match wins, so this must precede
+          // the generic /rest/v1/ rule. See src/lib/swApiCachePolicy.ts.
           {
+            urlPattern: supabaseUrlPattern(`/rest/v1/${FINANCIAL_REST_PATH_SOURCE}`),
+            handler: 'NetworkOnly',
+          },
+          {
+            // Non-financial reference data only (products, contacts, …).
             urlPattern: supabaseUrlPattern('/rest/v1/'),
             handler: 'NetworkFirst',
             method: 'GET',
@@ -149,9 +182,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins,
     define: {
-      'import.meta.env.VITE_APP_VERSION': JSON.stringify(
-        process.env.VITE_APP_VERSION || `local-${new Date().toISOString()}`,
-      ),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(appVersion),
+      'import.meta.env.VITE_MIGRATION_TARGET': JSON.stringify(migrationTarget),
     },
     resolve: {
       alias: {

@@ -365,6 +365,10 @@ test(meta('R08.SALE.BRANCH-SUBSTITUTION', 'DEC-03 at posting: an assigned-scope 
     // Same caller with their OWN branch and an own open shift on an A2 till: passes.
     await c.query('reset role');
     const termA2 = String((await c.query('insert into public.pos_terminals(business_id,name,branch_id) values($1,$2,$3) returning id', [orgs.A.business, 'R13 Till A2', orgs.A.branch2])).rows[0].id);
+    // Owner decision 2026-09-26: POS deducts from BRANCH stock (no warehouse fallback), so A2 needs its
+    // own location holding the item (rolled back with this probe). Access semantics under test are unchanged.
+    const locA2 = String((await c.query('insert into public.inventory_locations(business_id,name,is_default,branch_id) values($1,$2,false,$3) returning id', [orgs.A.business, 'R13 stock A2', orgs.A.branch2])).rows[0].id);
+    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',current_date,10,900,'manual','r13-a2-seed')", [orgs.A.business, orgs.A.product, locA2]);
     await c.query('set local role authenticated');
     const opened = await openShift(c, { key: 'r13-r08-bsub-1', terminal: termA2 });
     const okPayload = asA1();

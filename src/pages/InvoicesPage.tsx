@@ -15,10 +15,10 @@ import {
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
+import { InvoiceApprovalPanel } from '@/components/invoice/InvoiceApprovalPanel';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
-import { createInvoiceSettlementEntry } from '@/services/journalService';
 import { resolveTransactionRate } from '@/lib/currency';
 import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
 import { generateInvoiceDocument, generateDeliveryNoteDocument, generateReceiptDocument } from '@/lib/documents/documentGenerator';
@@ -136,6 +136,10 @@ function RecordPaymentModal({
   });
 
   const [bankAccountId, setBankAccountId] = useState('');
+  // IC 2026-09-25 P6: one idempotency key per payment dialog. A double-submit
+  // or a retry after a lost response replays the committed payment instead of
+  // recording it twice (record_invoice_payment de-duplicates by this key).
+  const [paymentKey] = useState(() => crypto.randomUUID());
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -159,7 +163,11 @@ function RecordPaymentModal({
         userId: currentUser?.id ?? null,
       });
 
-      const { payment } = await repos.invoice.recordPayment({
+      // Atomic: payment + amount_paid + status + settlement journal in ONE
+      // server transaction (record_invoice_payment). No separate settlement
+      // call — a failure there used to leave a committed payment behind an
+      // error message, inviting a duplicate retry.
+      await repos.invoice.recordPayment({
         business_id: businessId,
         invoice_id: invoice.id,
         payment_date: form.payment_date,
@@ -177,16 +185,7 @@ function RecordPaymentModal({
         bank_account_id: bankAccountId || null,
         notes: form.notes || null,
         created_by: currentUser?.id ?? null,
-      } as InsertDto<'invoice_payments'>);
-
-      await createInvoiceSettlementEntry(
-        businessId,
-        invoice,
-        payment,
-        functionalCurrency,
-        invoice.branch_id ?? null,
-        invoice.department_id ?? null,
-      );
+      } as InsertDto<'invoice_payments'>, paymentKey);
     },
     onSuccess: () => {
       setAlert({ type: 'success', message: 'Payment recorded successfully.' });
@@ -415,6 +414,8 @@ function InvoiceDetail({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { logoUrl, businessName, tradingName, business: businessData } = useBrandTheme();
+  const approvalBusiness = useAppStore((s) => s.currentBusiness);
+  const approvalUser = useAppStore((s) => s.currentUser);
 
   const { data: withLines, isLoading } = useQuery({
     queryKey: ['invoice', 'lines', invoice.id],
@@ -600,6 +601,15 @@ function InvoiceDetail({
 
   return (
     <div>
+      <div className="mb-4">
+        <InvoiceApprovalPanel
+          invoiceId={invoice.id}
+          status={invoice.status}
+          submittedBy={(invoice as { submitted_by?: string | null }).submitted_by}
+          currentUserId={approvalUser?.id}
+          role={approvalBusiness?.role}
+        />
+      </div>
       {/* Back button + header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
