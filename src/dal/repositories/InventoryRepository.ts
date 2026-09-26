@@ -38,6 +38,14 @@ export interface DuplicateWarehouseReceiptCandidate {
   notes: string | null;
 }
 
+export interface SaleStockCogsResult {
+  idempotent: boolean;
+  cogs_entry_id: string | null;
+  cogs_missing?: boolean;
+  no_location?: boolean;
+  cost_lines: { product_id: string; quantity: number; unit_cost: number }[];
+}
+
 export class InventoryRepository extends BaseRepository<'inventory_balances'> {
   constructor(client: SupabaseClient<Database>) {
     super(client, 'inventory_balances');
@@ -276,6 +284,28 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
    * releasing them twice double counts both stock and cost of sales — hence
    * this cheap existence check before the release, not a re-insert.
    */
+  /**
+   * HARDENING 2026-09-26: release stock AND post the sale's COGS in ONE
+   * server transaction (`record_sale_stock_and_cogs`). Idempotent per
+   * invoice; refuses draft/void/credit-note; any failure throws and nothing
+   * partial persists.
+   */
+  async recordSaleStockAndCogs(
+    invoiceId: string,
+    lines: { productId: string; quantity: number }[],
+  ): Promise<SaleStockCogsResult> {
+    const { data, error } = await (this.client as unknown as {
+      rpc: (fn: 'record_sale_stock_and_cogs', args: { p_invoice_id: string; p_lines: { product_id: string; quantity: number }[] }) =>
+        Promise<{ data: SaleStockCogsResult | null; error: { code?: string; message?: string } | null }>;
+    }).rpc('record_sale_stock_and_cogs', {
+      p_invoice_id: invoiceId,
+      p_lines: lines.map((l) => ({ product_id: l.productId, quantity: Number(l.quantity) })),
+    });
+    if (error) throw toRepositoryError('stock_movements', error);
+    if (!data) throw toRepositoryError('stock_movements', { message: 'Stock release returned no result; stock and cost of sale were not confirmed.' });
+    return data;
+  }
+
   async hasMovementsForSource(
     businessId: string,
     sourceType: string,

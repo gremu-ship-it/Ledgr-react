@@ -877,6 +877,10 @@ export const demoClient = {
         return Promise.resolve(recordPaymentDemo(tables, 'expense', args as { p_payment?: DemoRow; p_client_key?: string }));
       case 'create_invoice_with_lines':
         return Promise.resolve(createInvoiceWithLinesDemo(tables, args as { p_invoice?: DemoRow; p_lines?: DemoRow[]; p_client_key?: string | null }));
+      case 'record_sale_stock_and_cogs':
+        // HARDENING 2026-09-26: demo mode keeps no perpetual-inventory ledger;
+        // acknowledge the atomic command without side effects.
+        return Promise.resolve(ok({ idempotent: false, cogs_entry_id: null, cogs_missing: false, cost_lines: [] }));
       case 'pos_stock_availability':
         return Promise.resolve(posStockAvailabilityDemo(tables, args as { p_business_id?: string; p_branch_id?: string | null }));
       case 'next_journal_entry_number':

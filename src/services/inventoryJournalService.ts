@@ -440,115 +440,59 @@ export async function postCogsForSale(
 
     return entry.id;
   } catch (err) {
-    log.error(
-      `Failed to post COGS for invoice ${invoice.invoice_number}. ` +
-      'The sale is recorded; inventory and cost of sales will be out of step until reconciled ' +
-      '(Warehouse → Ledger reconciliation).',
-      err as Error,
-    );
-    return null;
+    // HARDENING 2026-09-26: never swallow a COGS failure.
+    log.error(`Failed to post COGS for invoice ${invoice.invoice_number}.`, err as Error);
+    throw new Error(`COGS posting failed for invoice ${invoice.invoice_number}: ${(err as Error).message}`, { cause: err });
   }
 }
 
 /**
- * Records the stock movements for a sale AND posts the matching COGS entry.
+ * Records the stock movements for a sale AND posts the matching COGS entry —
+ * ATOMICALLY, on the server (HARDENING 2026-09-26).
  *
- * Shared by the desktop income page, the mobile quick-sale sheet and the
- * offline sync engine so all three value stock identically. Keeping this in
- * one place is what stops the three paths drifting apart — the previous
- * per-page copies were already subtly different from each other.
+ * Shared by the desktop income page, the mobile quick-sale sheet, the offline
+ * sync engine and the POS legacy fallback. It used to write the movements
+ * from the client and then post COGS in a second round trip that swallowed
+ * failures, so stock could leave the shelf with no cost of sales. It now
+ * calls `record_sale_stock_and_cogs`, which (in one transaction) reads the
+ * weighted-average cost before the movement, writes the movements at the
+ * same location a POS sale uses, and posts the keyed COGS entry
+ * (`invoice:<id>:cogs`). Idempotent per invoice.
  *
- * The weighted-average cost is read BEFORE the movement is written, because
- * the DB trigger recalculates `average_cost` as soon as the movement lands.
- * Reading it afterwards would value the sale at the post-sale average.
- *
- * Never throws: a sale that has already been recorded must not be rolled
- * back because stock accounting failed.
+ * THROWS on failure — the caller must surface it. Nothing partial persists,
+ * so a retry is safe. `branchId`/`departmentId`/`createdBy` are accepted for
+ * call-site compatibility; the server uses the invoice's own branch and the
+ * authenticated caller.
  */
 export async function deductStockAndPostCogs(
   businessId: string,
   invoice: Pick<Row<'invoices'>, 'id' | 'invoice_number' | 'issue_date'>,
   saleLines: { productId: string; quantity: number }[],
-  branchId: string | null,
-  departmentId: string | null,
-  createdBy: string | null,
+  _branchId: string | null,
+  _departmentId: string | null,
+  _createdBy: string | null,
 ): Promise<{ costLines: SaleCostLine[]; cogsEntryId: string | null }> {
+  void _branchId; void _departmentId; void _createdBy; // server-authoritative
   const linesWithProducts = saleLines.filter((l) => l.productId && Number(l.quantity) > 0);
   if (linesWithProducts.length === 0) return { costLines: [], cogsEntryId: null };
 
   try {
-    const locations = await repos.inventory.findLocations(businessId);
-    let targetLocation = branchId ? locations.find((l) => l.branch_id === branchId) : null;
-    if (!targetLocation) {
-      targetLocation = locations.find((l) => l.is_default) ?? locations[0] ?? null;
+    const result = await repos.inventory.recordSaleStockAndCogs(invoice.id, linesWithProducts);
+    if (result.no_location) {
+      log.warn(`No stock location for business ${businessId} — stock not adjusted for invoice ${invoice.invoice_number}.`);
     }
-    if (!targetLocation) {
-      log.warn(
-        `No stock location for business ${businessId} — stock not adjusted for invoice ${invoice.invoice_number}.`,
-      );
-      return { costLines: [], cogsEntryId: null };
+    if (result.cogs_missing) {
+      // Legacy partial posting from before this fix: stock moved, COGS never
+      // posted. Reported, not repaired (historical repair not authorised).
+      log.error(`Invoice ${invoice.invoice_number} released stock earlier without a COGS entry (legacy). Flag for reconciliation.`);
     }
-
-    const costLines: SaleCostLine[] = [];
-    const movements = [];
-    // PERF: one targeted query for all product rows and all stock balances in
-    // parallel. This used to be two sequential round trips PER sale line
-    // (product row, then its balance), one line at a time.
-    const productIds = [...new Set(linesWithProducts.map((l) => l.productId))];
-    const [products, balances] = await Promise.all([
-      loadProducts(businessId, productIds),
-      Promise.all(
-        linesWithProducts.map((l) => repos.inventory.findBalance(businessId, l.productId, targetLocation.id)),
-      ),
-    ]);
-    const productById = new Map(products.map((p) => [p.id, p]));
-
-    for (const [i, line] of linesWithProducts.entries()) {
-      const product = productById.get(line.productId);
-
-      if (!product || !product.track_inventory) {
-        continue;
-      }
-
-      const balance = balances[i];
-      const unitCost = balance ? Number(balance.average_cost) : 0;
-      costLines.push({ productId: line.productId, quantity: line.quantity, unitCost });
-      movements.push({
-        business_id: businessId,
-        product_id: line.productId,
-        location_id: targetLocation.id,
-        movement_type: 'sale' as const,
-        movement_date: invoice.issue_date,
-        quantity: -line.quantity,
-        unit_cost: unitCost,
-        source_type: 'invoice',
-        source_id: invoice.id,
-        reference: invoice.invoice_number,
-        created_by: createdBy,
-        // Deterministic key: `recordMovements` skips keys it has already
-        // recorded, so a replayed sale (queue retry, lost response) cannot
-        // deduct the same stock twice. Indexed by position in the sale's line
-        // list, which the payload fixes, so a replay rebuilds identical keys.
-        //
-        // Derived rather than spelled `<invoiceId>:mv:<i>`: `client_key` is a
-        // uuid column, and Postgres rejects a compound string (22P02), which
-        // would have stopped the whole batch from being inserted.
-        client_key: deriveClientKey(invoice.id, i),
-      });
-    }
-
-    await repos.inventory.recordMovements(movements);
-
-    const cogsEntryId = await postCogsForSale(
-      businessId, invoice, costLines, branchId, departmentId,
-    );
-    return { costLines, cogsEntryId };
+    return {
+      costLines: result.cost_lines.map((l) => ({ productId: l.product_id, quantity: Number(l.quantity), unitCost: Number(l.unit_cost) })),
+      cogsEntryId: result.cogs_entry_id,
+    };
   } catch (err) {
-    log.error(
-      `Stock deduction failed for invoice ${invoice.invoice_number}.`,
-      err as Error,
-    );
-    throw new Error(`Stock deduction failed for invoice ${invoice.invoice_number}: ${(err as Error).message}`, { cause: err });
+    log.error(`Stock and cost of sale failed for invoice ${invoice.invoice_number}.`, err as Error);
+    throw new Error(`Stock and cost of sale failed for invoice ${invoice.invoice_number}: ${(err as Error).message}`, { cause: err });
   }
 }
 

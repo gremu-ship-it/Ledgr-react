@@ -12,15 +12,11 @@
  * idempotent payments (incl. concurrency) · P7 atomic invoice create
  * (incl. concurrency) · P9 deploy skew guard.
  *
- * HARNESS NOTE (declared, not hidden): the migration chain never declares
- * table-level INSERT on public.invoices / public.invoice_lines for
- * `authenticated` — production relies on Supabase platform default
- * privileges for that (the pre-existing client createWithLines path does the
- * same direct inserts). create_invoice_with_lines is SECURITY INVOKER, so to
- * exercise it here this suite's disposable database emulates exactly that
- * platform default (INSERT only, these two tables only). RLS policies —
- * unchanged by this package — remain the authority and are asserted by
- * IC.INV.RLS-PRESERVED.
+ * GRANTS NOTE: table-level INSERT on invoices/invoice_lines for
+ * `authenticated` was historically an undeclared Supabase platform default.
+ * Migration 20261011000005 declares it, so this suite no longer emulates
+ * anything — the replayed chain alone provides it (HARD.GRANTS.DECLARED).
+ * RLS remains the authority (IC.INV.RLS-PRESERVED).
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
@@ -54,7 +50,6 @@ beforeAll(async () => {
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
   try {
     orgs = await seedFixture(db.client);
-    await db.client.query('grant insert on public.invoices, public.invoice_lines to authenticated'); // platform-default emulation (see header)
   } catch (e) { seedError = safeError(e); }
 }, 600000);
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -578,4 +573,129 @@ test(meta('IC.DEPLOY.SKEW-GUARD', 'Deploy pipeline: frontend deploy failure fail
   expect(skew.migrationTarget).toBe(newest);
   const good = run({ OUT_MIGRATE: 'success', OUT_VERIFY: 'success', OUT_EDGE: 'success', OUT_FRONTEND: 'success', OUT_FRONTEND_VERIFY: 'success' });
   expect(good).toMatchObject({ mixedVersion: false, verdict: 'RELEASED' });
+});
+
+// ════════════════════════ HARDENING 2026-09-26 ═════════════════════════════
+const MH = 'supabase/migrations/20261011000005_hardening_stock_cogs_backfill_grants.sql';
+const stockCogs = (c: C, invoiceId: string, lines: Array<{ product_id: string; quantity: number }>) =>
+  c.query('select public.record_sale_stock_and_cogs($1::uuid,$2::jsonb) r', [invoiceId, JSON.stringify(lines)]).then((r) => r.rows[0].r as Record<string, any>);
+const movementsFor = async (c: C, id: string) =>
+  (await c.query("select count(*)::int n from public.stock_movements where source_type='invoice' and source_id::text=$1", [id])).rows[0].n as number;
+const cogsFor = async (c: C, id: string) =>
+  (await c.query('select count(*)::int n from public.journal_entries where posting_key=$1', [`invoice:${id}:cogs`])).rows[0].n as number;
+const productLine = (org: string, qty = 2) => invoiceLine(1, 1000, { product_id: orgs[org].product, quantity: qty, unit_price: 500 });
+
+test(meta('HARD.STOCK.ATOMIC-SUCCESS-AND-REPLAY', 'record_sale_stock_and_cogs releases stock (100→98) at the sale location AND posts one balanced keyed COGS entry (2×900) in one transaction; a replay is idempotent (no second movement, no second COGS)', MH), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    const inv = (await createInvoice(c, 'A', key(701), {}, [productLine('A')])).invoice;
+    const r = await stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 2 }]);
+    expect(r.idempotent).toBe(false);
+    expect(r.cogs_entry_id).toBeTruthy();
+    const again = await stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 2 }]);
+    expect(again).toMatchObject({ idempotent: true, cogs_entry_id: r.cogs_entry_id, cogs_missing: false });
+    await su(c);
+    expect(await onHand(c)).toBe(98);
+    expect(await movementsFor(c, inv.id)).toBe(1);
+    expect(await cogsFor(c, inv.id)).toBe(1);
+    const t = (await c.query('select sum(case when is_debit then amount_base else 0 end)::numeric d, sum(case when not is_debit then amount_base else 0 end)::numeric k from public.journal_lines where journal_entry_id=$1', [r.cogs_entry_id])).rows[0];
+    expect(Number(t.d)).toBe(1800); expect(Number(t.k)).toBe(1800);
+  });
+});
+
+test(meta('HARD.STOCK.COGS-FAILURE-ROLLS-BACK', 'If COGS cannot post (5100 unavailable) the command raises P0001 and releases NO stock (balance 100, no movement, no journal) — the previous client path moved stock and silently skipped COGS', MH), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    const inv = (await createInvoice(c, 'A', key(711), {}, [productLine('A')])).invoice;
+    await su(c); await c.query("update public.accounts set is_active=false where business_id=$1 and code='5100'", [orgs.A.business]);
+    await as(c, identities.A_owner.id);
+    const e = await failsWith(c, () => stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 2 }]), ['P0001']);
+    expect(e.message).toMatch(/COGS posting failed/);
+    await su(c);
+    expect(await onHand(c)).toBe(100);
+    expect(await movementsFor(c, inv.id)).toBe(0);
+    expect(await cogsFor(c, inv.id)).toBe(0);
+  });
+});
+
+test(meta('HARD.STOCK.REFUSES-NON-SALES', 'Draft, void and credit-note invoices never release stock (23514); oversell still rejected by chk_inventory_balances_on_hand_nonneg (23514); balance unchanged', MH), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    for (const [n, st] of [[721, 'draft'], [722, 'void'], [723, 'credit_note']] as const) {
+      const inv = (await createInvoice(c, 'A', key(n), {}, [productLine('A')])).invoice;
+      await su(c); await c.query('update public.invoices set status=$2 where id=$1', [inv.id, st]);
+      await as(c, identities.A_owner.id);
+      await failsWith(c, () => stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 2 }]), ['23514']);
+    }
+    const big = (await createInvoice(c, 'A', key(724), {}, [productLine('A', 101)])).invoice;
+    await failsWith(c, () => stockCogs(c, big.id, [{ product_id: orgs.A.product, quantity: 101 }]), ['23514', 'P0001']);
+    await su(c); expect(await onHand(c)).toBe(100);
+  });
+});
+
+test(meta('HARD.STOCK.ISOLATION', 'Owner of B, viewer of A and anon are denied (42501); a B product on an A invoice is denied (42501); nothing moves', MH), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    const inv = (await createInvoice(c, 'A', key(731), {}, [productLine('A')])).invoice;
+    await failsWith(c, () => stockCogs(c, inv.id, [{ product_id: orgs.B.product, quantity: 1 }]), ['42501']);
+    await as(c, identities.B_owner.id); await failsWith(c, () => stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 1 }]), ['42501']);
+    await as(c, identities.A_viewer.id); await failsWith(c, () => stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 1 }]), ['42501']);
+    await as(c, null, 'anon'); await failsWith(c, () => stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 1 }]), ['42501']);
+    await su(c);
+    expect(await movementsFor(c, inv.id)).toBe(0);
+    expect(await onHand(c)).toBe(100);
+    expect(Number((await c.query('select quantity_on_hand from public.inventory_balances where business_id=$1 and product_id=$2', [orgs.B.business, orgs.B.product])).rows[0].quantity_on_hand)).toBe(100);
+  });
+});
+
+test(meta('HARD.STOCK.LEGACY-PARTIAL-REPORTED-NOT-REPAIRED', 'An invoice that already moved stock without COGS (legacy client partial) is reported cogs_missing=true; the command writes NO movement and NO journal (historical repair not authorised)', MH), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    const inv = (await createInvoice(c, 'A', key(741), {}, [productLine('A')])).invoice;
+    await su(c);
+    await c.query(`insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id,reference)
+      values($1,$2,$3,'sale',$4,-2,900,'invoice',$5,'legacy partial')`, [orgs.A.business, orgs.A.product, orgs.A.location, DAY, inv.id]);
+    await as(c, identities.A_owner.id);
+    const r = await stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 2 }]);
+    expect(r).toMatchObject({ idempotent: true, cogs_missing: true, cogs_entry_id: null });
+    await su(c);
+    expect(await movementsFor(c, inv.id)).toBe(1);
+    expect(await cogsFor(c, inv.id)).toBe(0);
+    expect(await onHand(c)).toBe(98);
+  });
+});
+
+test(meta('HARD.BACKFILL.STATUS-AND-LOCATION', 'Backfill logic (service_role only): of four un-moved invoices (draft, void, credit_note, sent) ONLY the sent one gets a sale movement, at the _ledgr_stock_location location; a void expense receives no purchase movement. Run inside a rolled-back transaction — no persistent effect', MH), async () => {
+  ready();
+  await db.asRole('service_role', null, async (c: C) => {
+    await su(c);
+    const ids: Record<string, string> = {};
+    for (const st of ['draft', 'void', 'credit_note', 'sent']) {
+      ids[st] = (await c.query(`insert into public.invoices(business_id,contact_id,branch_id,invoice_number,invoice_type,status,issue_date,due_date,currency,exchange_rate,subtotal,taxable_amount,discount_amount,discount_percent,vat_amount,wht_amount,total_amount,amount_paid)
+        values($1,$2,$3,$4,'invoice',$5,$6,$6,'MWK',1,500,500,0,0,0,0,500,0) returning id`, [orgs.A.business, orgs.A.customer, orgs.A.branch, `HB-${st}`, st, DAY])).rows[0].id;
+      await c.query(`insert into public.invoice_lines(invoice_id,business_id,line_number,description,quantity,unit_price,discount_percent,discount_amount,tax_code,tax_rate,tax_amount,line_total,product_id)
+        values($1,$2,1,'HB',1,500,0,0,'none',0,0,500,$3)`, [ids[st], orgs.A.business, orgs.A.product]);
+    }
+    const exp = (await c.query(`insert into public.expenses(business_id,expense_number,expense_type,status,expense_date,currency,exchange_rate,subtotal,vat_amount,wht_amount,total_amount,amount_paid,branch_id)
+      values($1,'HB-VOID-EXP','bill','void',$2,'MWK',1,500,0,0,500,0,$3) returning id`, [orgs.A.business, DAY, orgs.A.branch])).rows[0].id as string;
+    await c.query(`insert into public.expense_lines(expense_id,business_id,line_number,description,quantity,unit_price,tax_code,tax_rate,tax_amount,line_total,product_id)
+      values($1,$2,1,'HB',5,100,'none',0,0,500,$3)`, [exp, orgs.A.business, orgs.A.product]);
+    await as(c, null, 'service_role');
+    await c.query('select * from public.backfill_and_recalculate_inventory($1)', [orgs.A.business]);
+    await su(c);
+    for (const st of ['draft', 'void', 'credit_note']) expect(await movementsFor(c, ids[st])).toBe(0);
+    const sent = (await c.query("select location_id from public.stock_movements where source_type='invoice' and source_id::text=$1", [ids.sent])).rows;
+    expect(sent).toEqual([{ location_id: orgs.A.location }]);
+    expect((await c.query("select count(*)::int n from public.stock_movements where source_type='expense' and source_id::text=$1", [exp])).rows[0].n).toBe(0);
+  });
+});
+
+test(meta('HARD.INDEX-AND-GRANTS', 'idx_stock_movements_business_source exists on (business_id, source_type, source_id); INSERT on invoices/invoice_lines is declared for authenticated by the migration chain (no harness emulation); backfill remains non-executable by authenticated', MH), async () => {
+  ready();
+  const idx = (await db.client.query("select indexdef from pg_indexes where indexname='idx_stock_movements_business_source'")).rows;
+  expect(idx).toHaveLength(1);
+  expect(idx[0].indexdef).toMatch(/\(business_id, source_type, source_id\)/);
+  const g = (await db.client.query(`select has_table_privilege('authenticated','public.invoices','insert') i, has_table_privilege('authenticated','public.invoice_lines','insert') l,
+    has_table_privilege('anon','public.invoices','insert') a, has_function_privilege('authenticated','public.backfill_and_recalculate_inventory(uuid)','execute') b`)).rows[0];
+  expect(g).toEqual({ i: true, l: true, a: false, b: false });
 });
