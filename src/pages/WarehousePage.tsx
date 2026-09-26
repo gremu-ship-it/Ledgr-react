@@ -8,10 +8,8 @@ import { repos } from '@/lib/repositories';
 import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
-import { deriveClientKey } from '@/lib/clientKeys';
 import { newSaveClientKey } from '@/services/quickSaveService';
 import {
-  postWarehouseReceipt,
   reconcileInventoryToLedger,
   postInventoryReconciliationAdjustment,
   repairDuplicateWarehouseReceiptAnomalies,
@@ -596,53 +594,21 @@ export function WarehousePage() {
       if (!locationId) throw new Error('Please select a location to receive stock into.');
       const movementDate = new Date().toISOString().slice(0, 10);
       const receiptReference = `GRN-${receiptKey.slice(0, 8).toUpperCase()}`;
-      const movements = lines.map((l, index) => ({
-        business_id:   businessId!,
-        product_id:    l.productId,
-        location_id:   locationId,
-        movement_type: 'purchase' as const,
-        movement_date: movementDate,
-        quantity:      l.quantity,
-        unit_cost:     l.unitCost,
-        notes:         notes || null,
-        source_type:   'stock_receipt',
-        source_id:     receiptKey,
-        reference:     receiptReference,
-        created_by:    currentUser?.id ?? null,
-        client_key:    deriveClientKey(receiptKey, index),
-      }));
-      await repos.inventory.recordMovements(movements);
-
-      // If this is a retry after the first request committed but the response
-      // was lost, `recordMovements` will skip the existing keyed rows. Build
-      // the GL entry from the rows that actually exist for this receipt key,
-      // not from whatever the user may have edited in the still-open modal.
-      const receiptMovements = await repos.inventory.findMovementsForSource(
-        businessId!,
-        'stock_receipt',
-        receiptKey,
-      );
-
-      const receiptDate = receiptMovements[0]?.movement_date ?? movementDate;
-
-      // PERPETUAL INVENTORY: a receipt with no supplier invoice still has to
-      // hit the ledger, or the subledger walks away from the balance sheet.
-      // DR Inventory / CR Goods Received Not Invoiced (2114) — the liability
-      // clears when the supplier's expense is eventually recorded.
-      await postWarehouseReceipt(
-        businessId!,
-        receiptMovements.map((m) => ({
-          productId: m.product_id,
-          quantity:  Number(m.quantity),
-          unitCost:  Number(m.unit_cost),
-        })),
-        receiptDate,
-        notes || receiptReference,
-        null,
-        null,
-        receiptKey,
-      );
-
+      // H-3 (2026-09-26): movements + DR Inventory / CR GRNI 2114 in ONE
+      // server transaction. A retry with the same receiptKey returns the
+      // committed receipt instead of recording it twice; a journal failure
+      // now fails the whole receipt instead of being swallowed.
+      await repos.inventory.recordInventoryJournalMovement({
+        businessId: businessId!,
+        kind: 'receipt',
+        clientKey: receiptKey,
+        locationId,
+        movementDate,
+        reference: receiptReference,
+        notes: notes || null,
+        lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitCost: l.unitCost })),
+      });
+      const receiptMovements = await repos.inventory.findMovementsForSource(businessId!, 'stock_receipt', receiptKey);
       return receiptMovements;
     },
     onSuccess: () => {

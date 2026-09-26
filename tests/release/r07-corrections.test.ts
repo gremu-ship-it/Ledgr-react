@@ -83,14 +83,23 @@ test(meta('R07.APPROVAL.SERVER-STATE', 'Minimal authoritative approval state exi
   expect(fns.filter((f: string) => /pin/i.test(f))).toEqual([]);
 });
 
-test(meta('R07.VOID.NO-STATUS-GUARD', 'The invoices table has no status-transition guard trigger (existing triggers only sync amount_due / updated_at): a void is executable by raw DML wherever permissions allow UPDATE', 'supabase/migrations (chain-wide trigger scan)'), async () => {
+// SUPERSEDED IN PLACE by POST-CONTAINMENT HARDENING H-4 (2026-09-26), per
+// this suite's precedent (absence proof → presence record, same identity).
+// Original expectation (pre-H-4, verbatim): "The invoices table has no
+// status-transition guard trigger (existing triggers only sync amount_due /
+// updated_at): a void is executable by raw DML wherever permissions allow
+// UPDATE". Migration 20261012000000 adds the direct-write guard; the
+// behavioural proof is H04.INVOICE.POSTED-DIRECT-EDIT-DENIED (ic-containment).
+test(meta('R07.VOID.NO-STATUS-GUARD', 'SUPERSEDED by H-4 (20261012000000): exactly one invoices trigger now references void — trg_invoices_zz_direct_write_guard, which refuses a direct (authenticated/anon) status→void/credit_note or edit of a posted invoice; void remains reachable only through the R07 SECURITY DEFINER commands. No other invoices trigger references void', 'supabase/migrations (chain-wide trigger scan) + supabase/migrations/20261012000000_post_containment_hardening.sql'), async () => {
   ready();
   const trg = (await db.client.query("select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='invoices' and not t.tgisinternal order by 1")).rows.map((r: { tgname: string }) => r.tgname);
   expect(trg.length).toBeGreaterThan(0); // table is not trigger-free (inventory truth)
+  const referencingVoid: string[] = [];
   for (const name of trg) {
     const def = (await db.client.query('select pg_get_functiondef(t.tgfoid) d from pg_trigger t join pg_class c on c.oid=t.tgrelid where c.relname=$1 and t.tgname=$2', ['invoices', name])).rows[0].d as string;
-    expect(/void/i.test(def)).toBe(false);
+    if (/void/i.test(def)) referencingVoid.push(name);
   }
+  expect(referencingVoid).toEqual(['trg_invoices_zz_direct_write_guard']);
 });
 
 test(meta('R07.AUDIT.SAME-TENANT-FABRICATED-ACCEPTED', 'Boundary fact: log_manual_audit_event accepts caller-fabricated event content (e.g., a forged approver string) for the caller own business; only the ACTOR is server-derived', 'supabase/migrations/20260815000000_phase8b_reconstruct_rpcs.sql'), async () => {

@@ -302,7 +302,11 @@ test(meta('IC.POS.CONSTRAINTS-INTACT', 'chk_inventory_balances_on_hand_nonneg is
   expect(con).toEqual([{ convalidated: true }]);
   await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
     const f = saleFixture(orgs.A, 402) as any;
-    f.lines[0].quantity = 101; f.lines[0].line_total = f.invoice.total_amount;
+    // H-2: payload made arithmetically consistent (101 × 1500) so it reaches the oversell check.
+    const t = 101 * 1500;
+    f.lines[0].quantity = 101; f.lines[0].line_total = t;
+    Object.assign(f.invoice, { original_amount: t, functional_amount: t, subtotal: t, taxable_amount: t, total_amount: t });
+    f.cash_sales = t; f.payments[0].amount = t; f.payments[0].functional_amount = t;
     await failsWith(c, () => c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(f)]), ['23514', 'P0001']);
     await su(c); expect(await onHand(c)).toBe(100);
   });
@@ -698,4 +702,335 @@ test(meta('HARD.INDEX-AND-GRANTS', 'idx_stock_movements_business_source exists o
   const g = (await db.client.query(`select has_table_privilege('authenticated','public.invoices','insert') i, has_table_privilege('authenticated','public.invoice_lines','insert') l,
     has_table_privilege('anon','public.invoices','insert') a, has_function_privilege('authenticated','public.backfill_and_recalculate_inventory(uuid)','execute') b`)).rows[0];
   expect(g).toEqual({ i: true, l: true, a: false, b: false });
+});
+
+// ════════════════════════ POST-CONTAINMENT HARDENING 2026-09-26 (H01–H06) ═══════════════
+const MP = 'supabase/migrations/20261012000000_post_containment_hardening.sql';
+const MB = 'supabase/migrations/20261011000005_hardening_stock_cogs_backfill_grants.sql';
+const hmeta = (id: string, expected: string, source: string) => ({ id, expected, remediation: 'HARDENING-2026-09-26', source, layer: LAYER });
+const insertLegacyInvoice = async (c: C, tag: string, status: string, qty = 1) => {
+  const id = (await c.query(`insert into public.invoices(business_id,contact_id,branch_id,invoice_number,invoice_type,status,issue_date,due_date,currency,exchange_rate,subtotal,taxable_amount,discount_amount,discount_percent,vat_amount,wht_amount,total_amount,amount_paid)
+    values($1,$2,$3,$4,'invoice',$5,$6,$6,'MWK',1,500,500,0,0,0,0,500,0) returning id`, [orgs.A.business, orgs.A.customer, orgs.A.branch, tag, status, DAY])).rows[0].id as string;
+  await c.query(`insert into public.invoice_lines(invoice_id,business_id,line_number,description,quantity,unit_price,discount_percent,discount_amount,tax_code,tax_rate,tax_amount,line_total,product_id)
+    values($1,$2,1,'H01',$3,500,0,0,'none',0,0,500,$4)`, [id, orgs.A.business, qty, orgs.A.product]);
+  return id;
+};
+
+// ── H-1 backfill status filtering ──
+test(hmeta('H01.BACKFILL.NON-SALES-NO-MOVEMENT', 'Backfill (service_role, rolled-back tx) writes NO sale movement for draft, void or credit_note invoices, nor for an invoice_type=credit_note document; credit-note stock stays with the explicit R07 return_in architecture', MB), async () => {
+  ready();
+  await db.asRole('service_role', null, async (c: C) => {
+    await su(c);
+    const ids = [await insertLegacyInvoice(c, 'H01-draft', 'draft'), await insertLegacyInvoice(c, 'H01-void', 'void'), await insertLegacyInvoice(c, 'H01-cn', 'credit_note')];
+    const cnType = await insertLegacyInvoice(c, 'H01-cn-type', 'sent');
+    await c.query("update public.invoices set invoice_type='credit_note' where id=$1", [cnType]);
+    const before = await onHand(c);
+    await as(c, null, 'service_role');
+    await c.query('select * from public.backfill_and_recalculate_inventory($1)', [orgs.A.business]);
+    await su(c);
+    for (const id of [...ids, cnType]) expect(await movementsFor(c, id)).toBe(0);
+    expect((await c.query("select count(*)::int n from public.stock_movements where source_type='invoice' and movement_type='sale' and source_id::text = any($1)", [[...ids, cnType]])).rows[0].n).toBe(0);
+    expect(await onHand(c)).toBe(before);
+  });
+});
+
+test(hmeta('H01.BACKFILL.VALID-STATUSES-BACKFILL', 'Legitimate sales still backfill: sent, paid, partially_paid and overdue invoices each receive exactly one sale movement (−qty) at the resolved location; a paid expense still receives its purchase movement', MB), async () => {
+  ready();
+  await db.asRole('service_role', null, async (c: C) => {
+    await su(c);
+    const ids: Record<string, string> = {};
+    for (const st of ['sent', 'paid', 'partially_paid', 'overdue']) ids[st] = await insertLegacyInvoice(c, `H01V-${st}`, st, 2);
+    const exp = (await c.query(`insert into public.expenses(business_id,expense_number,expense_type,status,expense_date,currency,exchange_rate,subtotal,vat_amount,wht_amount,total_amount,amount_paid,branch_id)
+      values($1,'H01V-EXP','bill','paid',$2,'MWK',1,500,0,0,500,500,$3) returning id`, [orgs.A.business, DAY, orgs.A.branch])).rows[0].id as string;
+    await c.query(`insert into public.expense_lines(expense_id,business_id,line_number,description,quantity,unit_price,tax_code,tax_rate,tax_amount,line_total,product_id)
+      values($1,$2,1,'H01V',5,100,'none',0,0,500,$3)`, [exp, orgs.A.business, orgs.A.product]);
+    await as(c, null, 'service_role');
+    await c.query('select * from public.backfill_and_recalculate_inventory($1)', [orgs.A.business]);
+    await su(c);
+    for (const st of Object.keys(ids)) {
+      const rows = (await c.query("select movement_type::text t, quantity::numeric q, location_id from public.stock_movements where source_type='invoice' and source_id::text=$1", [ids[st]])).rows;
+      expect(rows.map((r) => ({ t: r.t, q: Number(r.q), l: r.location_id }))).toEqual([{ t: 'sale', q: -2, l: orgs.A.location }]);
+    }
+    expect((await c.query("select count(*)::int n from public.stock_movements where source_type='expense' and source_id::text=$1", [exp])).rows[0].n).toBe(1);
+  });
+});
+
+// ── H-2 server-authoritative POS arithmetic ──
+const posSale = (c: C, p: unknown) => c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(p)]).then((r) => r.rows[0].r as Record<string, any>);
+const invoicesByKey = async (c: C, k: string) => (await c.query('select count(*)::int n from public.invoices where client_key::text=$1', [k])).rows[0].n as number;
+/** Consistent discounted sale: 2 × 1500 gross 3000, line discount 100, order discount 150 → total 2750. */
+const discountedSale = (n: number) => {
+  const s = saleFixture(orgs.A, n) as any;
+  Object.assign(s.lines[0], { quantity: 2, unit_price: 1500, discount_amount: 100, line_total: 2900 });
+  Object.assign(s.invoice, { discount_amount: 250, discount_percent: 8, total_amount: 2750, subtotal: 2750, taxable_amount: 2750, original_amount: 2750, functional_amount: 2750, vat_amount: 0 });
+  s.cash_sales = 2750; s.payments[0].amount = 2750; s.payments[0].functional_amount = 2750;
+  return s;
+};
+
+test(hmeta('H02.POS.LEGIT-SALES-POST', 'Consistent sales post unchanged: the standard fixture (1×1500), a discounted sale (line + order discount, total 2750) and a VAT-registered sale (VAT-inclusive 17.5%, vat = round2(total − total/1.175)) all succeed; replay of the same client_key stays idempotent', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
+    const a = await posSale(c, saleFixture(orgs.A, 801));
+    expect(a.id ?? a.invoice_id ?? a).toBeTruthy();
+    await posSale(c, discountedSale(802));
+    await su(c); await c.query('update public.businesses set vat_registered=true where id=$1', [orgs.A.business]);
+    await as(c, identities.A_cashier.id);
+    const v = saleFixture(orgs.A, 803) as any;
+    const vat = Math.round((1500 - 1500 / 1.175) * 100) / 100;
+    Object.assign(v.invoice, { vat_amount: vat, subtotal: Math.round((1500 - vat) * 100) / 100, taxable_amount: Math.round((1500 - vat) * 100) / 100 });
+    await posSale(c, v);
+    await posSale(c, saleFixture(orgs.A, 801));  // idempotent replay
+    await su(c);
+    await c.query('update public.businesses set vat_registered=false where id=$1', [orgs.A.business]);
+    for (const n of [801, 802, 803]) expect(await invoicesByKey(c, key(n))).toBe(1);
+  });
+});
+
+test(hmeta('H02.POS.TAMPERED-AMOUNTS-REJECTED', 'Browser-tampered amounts are refused 22023 with nothing written (no invoice, stock unchanged): inflated line_total, understated total vs lines, fake discount without line/order basis, discount > gross, negative price, zero quantity, VAT claimed on a non-registered business, VAT omitted on a registered business, subtotal+VAT ≠ total', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
+    const before = (await (async () => { await su(c); const v = await onHand(c); await as(c, identities.A_cashier.id); return v; })());
+    const cases: Array<[number, (s: any) => void]> = [
+      [811, (s) => { s.lines[0].line_total = 1; }],
+      [812, (s) => { s.lines[0].unit_price = 3000; }],
+      [813, (s) => { Object.assign(s.invoice, { total_amount: 1000, subtotal: 1000, taxable_amount: 1000 }); s.cash_sales = 1000; s.payments[0].amount = 1000; }],
+      [814, (s) => { s.lines[0].discount_amount = 2000; s.lines[0].line_total = 0; }],
+      [815, (s) => { s.lines[0].unit_price = -1500; }],
+      [816, (s) => { s.lines[0].quantity = 0; }],
+      [817, (s) => { Object.assign(s.invoice, { vat_amount: 223.4, subtotal: 1276.6, taxable_amount: 1276.6 }); }],
+      [818, (s) => { s.invoice.subtotal = 1400; }],
+      [819, (s) => { s.invoice.discount_amount = 500; }],
+    ];
+    for (const [n, mutate] of cases) {
+      const s = saleFixture(orgs.A, n) as any; mutate(s);
+      await failsWith(c, () => posSale(c, s), ['22023']);
+    }
+    await su(c); await c.query('update public.businesses set vat_registered=true where id=$1', [orgs.A.business]);
+    await as(c, identities.A_cashier.id);
+    await failsWith(c, () => posSale(c, saleFixture(orgs.A, 820)), ['22023']);  // registered, VAT omitted
+    await su(c); await c.query('update public.businesses set vat_registered=false where id=$1', [orgs.A.business]);
+    for (let n = 811; n <= 820; n++) expect(await invoicesByKey(c, key(n))).toBe(0);
+    expect(await onHand(c)).toBe(before);
+  });
+});
+
+test(hmeta('H02.POS.PRICING-POLICY', 'DECISION REQUIRED — SERVER POS PRICING POLICY: catalogue-price authority (products.sale_price vs offline/stale-cache prices) and server enforcement of pos_settings discount caps (manager approval is local-only today) need an owner decision before they can be enforced', MP), async () => {
+  throw new Blocked('DECISION REQUIRED — SERVER POS PRICING POLICY: (1) must a POS unit price equal the current products.sale_price, and how are offline sales priced from a stale cache after a price change? (2) must the server enforce pos_settings max discount % per role, and what server-verifiable artefact proves an over-cap manager approval? Arithmetic consistency (H02.POS.*) is enforced; these policy checks are not invented.');
+});
+
+// ── H-3 atomic inventory journal command ──
+const invMove = (c: C, p: Record<string, unknown>) =>
+  c.query('select public.record_inventory_journal_movement($1::jsonb) r', [JSON.stringify({ business_id: orgs.A.business, location_id: orgs.A.location, movement_date: DAY, ...p })]).then((r) => r.rows[0].r as Record<string, any>);
+const K = (tag: string) => key(Number(({'h03-rcpt-1': 870, 'h03-adj-out': 871, 'h03-adj-in': 872, 'h03-jfail': 873, 'h03-sfail': 874, 'h03-retry': 875, 'h03-retry-fix': 876, 'h03-iso-1': 877, 'h03-iso-2': 878, 'h03-iso-3': 879, 'h03-iso-4': 880, 'h03-iso-5': 881} as Record<string, number>)[tag]));
+const lineOf = (qty: number, cost = 900, org = 'A') => [{ product_id: orgs[org].product, quantity: qty, unit_cost: cost }];
+const movesFor = async (c: C, source: string, k: string) =>
+  (await c.query('select count(*)::int n from public.stock_movements where business_id=$1 and source_type=$2 and source_id=$3', [orgs.A.business, source, k])).rows[0].n as number;
+const entryFor = async (c: C, pk: string) =>
+  (await c.query(`select e.id, sum(case when l.is_debit then l.amount_base else 0 end)::numeric d, sum(case when not l.is_debit then l.amount_base else 0 end)::numeric k,
+     array_agg(a.code || ':' || case when l.is_debit then 'D' else 'C' end order by a.code) codes
+     from public.journal_entries e join public.journal_lines l on l.journal_entry_id=e.id join public.accounts a on a.id=l.account_id
+     where e.business_id=$1 and e.posting_key=$2 group by e.id`, [orgs.A.business, pk])).rows;
+
+test(hmeta('H03.INVJ.SUCCESS', 'Receipt of 5 @ 900: +5 on hand via the R06 trigger and ONE keyed entry DR 1141 / CR 2114 4500 in the same transaction; adjustment_out of 2 @ 900: −2 and DR 5180 / CR 1141 1800; adjustment_in of 1: DR 1141 / CR 5180', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    const r = await invMove(c, { kind: 'receipt', client_key: K('h03-rcpt-1'), reference: 'GRN H03', lines: lineOf(5) });
+    expect(r).toMatchObject({ idempotent: false });
+    expect(r.movement_ids).toHaveLength(1);
+    const o = await invMove(c, { kind: 'adjustment', movement_type: 'adjustment_out', client_key: K('h03-adj-out'), lines: lineOf(2) });
+    const i = await invMove(c, { kind: 'adjustment', movement_type: 'adjustment_in', client_key: K('h03-adj-in'), lines: lineOf(1) });
+    await su(c);
+    expect(await onHand(c)).toBe(104);
+    const rc = await entryFor(c, `stock_receipt:${K('h03-rcpt-1')}:grni`);
+    expect(rc).toHaveLength(1); expect(rc[0].id).toBe(r.journal_entry_id);
+    expect([Number(rc[0].d), Number(rc[0].k)]).toEqual([4500, 4500]); expect(rc[0].codes).toEqual(['1141:D', '2114:C']);
+    const oe = await entryFor(c, `stock_adjustment:${K('h03-adj-out')}`);
+    expect([Number(oe[0].d), oe[0].codes]).toEqual([1800, ['1141:C', '5180:D']]); expect(oe[0].id).toBe(o.journal_entry_id);
+    const ie = await entryFor(c, `stock_adjustment:${K('h03-adj-in')}`);
+    expect([Number(ie[0].d), ie[0].codes]).toEqual([900, ['1141:D', '5180:C']]); expect(ie[0].id).toBe(i.journal_entry_id);
+  });
+});
+
+test(hmeta('H03.INVJ.JOURNAL-FAILURE-ROLLS-BACK', 'If the journal cannot post (2114 GRNI inactive) the command raises and NOTHING persists: no movement, balance unchanged, no journal — the old client path kept the movement and swallowed the journal error', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await su(c); const before = await onHand(c);
+    await c.query("update public.accounts set is_active=false where business_id=$1 and code='2114'", [orgs.A.business]);
+    await as(c, identities.A_owner.id);
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-jfail'), lines: lineOf(5) }), ['P0001']);
+    await su(c);
+    expect(await movesFor(c, 'stock_receipt', K('h03-jfail'))).toBe(0);
+    expect(await onHand(c)).toBe(before);
+    expect(await entryFor(c, `stock_receipt:${K('h03-jfail')}:grni`)).toHaveLength(0);
+  });
+});
+
+test(hmeta('H03.INVJ.STOCK-FAILURE-ROLLS-BACK', 'If the stock write fails (adjustment_out beyond on-hand → chk_inventory_balances_on_hand_nonneg 23514) no movement, no balance change and no journal persist; R06 constraint not bypassed', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await su(c); const before = await onHand(c); await as(c, identities.A_owner.id);
+    await failsWith(c, () => invMove(c, { kind: 'adjustment', movement_type: 'adjustment_out', client_key: K('h03-sfail'), lines: lineOf(before + 1) }), ['23514', 'P0001']);
+    await su(c);
+    expect(await movesFor(c, 'stock_adjustment', K('h03-sfail'))).toBe(0);
+    expect(await onHand(c)).toBe(before);
+    expect(await entryFor(c, `stock_adjustment:${K('h03-sfail')}`)).toHaveLength(0);
+  });
+});
+
+test(hmeta('H03.INVJ.RETRY-IDEMPOTENT', 'A retry with the same client_key returns idempotent=true with the same movement and journal ids (one movement, one entry, balance moved once); reusing the key for a different quantity is refused 22023; a failed attempt can be retried to success after the cause is fixed', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await su(c); const before = await onHand(c); await as(c, identities.A_owner.id);
+    const first = await invMove(c, { kind: 'receipt', client_key: K('h03-retry'), lines: lineOf(3) });
+    const again = await invMove(c, { kind: 'receipt', client_key: K('h03-retry'), lines: lineOf(3) });
+    expect(again).toEqual({ idempotent: true, movement_ids: first.movement_ids, journal_entry_id: first.journal_entry_id });
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-retry'), lines: lineOf(4) }), ['22023']);
+    await su(c); await c.query("update public.accounts set is_active=false where business_id=$1 and code='5180'", [orgs.A.business]);
+    await as(c, identities.A_owner.id);
+    await failsWith(c, () => invMove(c, { kind: 'adjustment', movement_type: 'adjustment_in', client_key: K('h03-retry-fix'), lines: lineOf(1) }), ['P0001']);
+    await su(c); await c.query("update public.accounts set is_active=true where business_id=$1 and code='5180'", [orgs.A.business]);
+    await as(c, identities.A_owner.id);
+    const fixed = await invMove(c, { kind: 'adjustment', movement_type: 'adjustment_in', client_key: K('h03-retry-fix'), lines: lineOf(1) });
+    expect(fixed.idempotent).toBe(false);
+    await su(c);
+    expect(await movesFor(c, 'stock_receipt', K('h03-retry'))).toBe(1);
+    expect(await entryFor(c, `stock_receipt:${K('h03-retry')}:grni`)).toHaveLength(1);
+    expect(await onHand(c)).toBe(before + 4);
+  });
+});
+
+test(hmeta('H03.INVJ.ISOLATION', 'Unauthorised callers are denied 42501 with nothing written: viewer of A, owner of B, anon; tenant mismatch (B product or B location on an A command) denied 42501', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_viewer.id, async (c: C) => {
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-iso-1'), lines: lineOf(1) }), ['42501']);
+    await as(c, identities.B_owner.id);
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-iso-2'), lines: lineOf(1) }), ['42501']);
+    await as(c, identities.A_owner.id);
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-iso-3'), lines: lineOf(1, 900, 'B') }), ['42501']);
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-iso-4'), location_id: orgs.B.location, lines: lineOf(1) }), ['42501']);
+    await as(c, null, 'anon');
+    await failsWith(c, () => invMove(c, { kind: 'receipt', client_key: K('h03-iso-5'), lines: lineOf(1) }), ['42501']);
+    await su(c);
+    expect((await c.query("select count(*)::int n from public.stock_movements where source_id::text = any($1)", [[1, 2, 3, 4, 5].map((i) => K(`h03-iso-${i}`))])).rows[0].n).toBe(0);
+  });
+});
+
+// ── H-4 invoice direct-edit authority ──
+/** Superuser: move rows out of the current transaction's created_at (ends the same-tx create exemption) and return to the owner identity. Rolled back with the probe. */
+/** Emulate the Supabase platform-default table grants (UPDATE/DELETE for authenticated) that the bare migration replay lacks, inside the rolled-back probe, so denials below come from the H-4 trigger rather than a missing privilege. */
+const platformGrants = async (c: C) => {
+  await su(c);
+  await c.query('grant update, delete on public.invoices, public.invoice_lines to authenticated');
+  await as(c, identities.A_owner.id);
+};
+const backdate = async (c: C, ...ids: string[]) => {
+  await su(c);
+  await c.query("update public.invoices set created_at = now() - interval '1 hour' where id = any($1::uuid[])", [ids]);
+  await as(c, identities.A_owner.id);
+};
+test(hmeta('H04.INVOICE.POSTED-DIRECT-EDIT-DENIED', 'Direct API writes (role authenticated, even the owner) cannot alter a posted invoice: total/status→paid/void, invoice_lines insert/update/delete, re-pointing journal_entry_id, deleting the invoice — all 42501 and the invoice is unchanged', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await platformGrants(c);
+    const inv = (await createInvoice(c, 'A', key(851))).invoice;
+    const other = (await createInvoice(c, 'A', key(852))).invoice;
+    await backdate(c, inv.id);
+    await as(c, identities.A_owner.id);
+    for (const sql of ["update public.invoices set total_amount=1 where id=$1", "update public.invoices set status='paid' where id=$1",
+      "update public.invoices set status='void' where id=$1", "update public.invoices set notes='x', subtotal=5 where id=$1",
+      "update public.invoice_lines set line_total=1 where invoice_id=$1", "delete from public.invoice_lines where invoice_id=$1",
+      "delete from public.invoices where id=$1"]) {
+      const e = await failsWith(c, () => c.query(sql, [inv.id]), ['42501']);
+      expect(e.message).toMatch(/\(H-4\)/);
+    }
+    await failsWith(c, () => c.query(`insert into public.invoice_lines(invoice_id,business_id,line_number,description,quantity,unit_price,discount_percent,discount_amount,tax_code,tax_rate,tax_amount,line_total)
+      values($1,$2,9,'H04',1,1,0,0,'none',0,0,1)`, [inv.id, orgs.A.business]), ['42501']);
+    // legitimate link once (journalService), then cannot be re-pointed
+    const je = (await pay(c, other.id, 100, key(853))).journal_entry_id;
+    expect(je).toBeTruthy();
+    if (je) {
+      await c.query('update public.invoices set journal_entry_id=$2 where id=$1', [inv.id, je]);
+      await failsWith(c, () => c.query('update public.invoices set journal_entry_id=null where id=$1', [inv.id]), ['42501']);
+    }
+    await su(c);
+    const s = (await c.query('select status::text s, total_amount::numeric t, (select count(*)::int from public.invoice_lines where invoice_id=$1) n from public.invoices where id=$1', [inv.id])).rows[0];
+    expect({ s: s.s, t: Number(s.t), n: s.n }).toEqual({ s: 'sent', t: 1000, n: 2 });
+    expect(other.id).toBeTruthy();
+  });
+});
+
+test(hmeta('H04.INVOICE.LEGIT-WORKFLOWS-PRESERVED', 'Legitimate workflows still work: atomic create (same transaction), payment via record_invoice_payment (status → partially_paid), draft header/lines editable and draft → sent (a draft cannot jump to paid directly); SECURITY DEFINER commands unaffected', MP), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await platformGrants(c);
+    const inv = (await createInvoice(c, 'A', key(861))).invoice;
+    const d = (await createInvoice(c, 'A', key(862), { status: 'draft' })).invoice;
+    await backdate(c, inv.id, d.id);
+    const p = await pay(c, inv.id, 400, key(863));
+    expect(p.invoice.status).toBe('partially_paid');
+    await c.query("update public.invoices set notes='edited draft', total_amount=1000 where id=$1", [d.id]);
+    await c.query("update public.invoice_lines set description='edited' where invoice_id=$1 and line_number=1", [d.id]);
+    await c.query("update public.invoices set status='sent' where id=$1", [d.id]);
+    const d2 = (await createInvoice(c, 'A', key(864), { status: 'draft' })).invoice;
+    await backdate(c, d2.id);
+    await failsWith(c, () => c.query("update public.invoices set status='paid' where id=$1", [d2.id]), ['42501']);
+    await c.query("update public.invoice_lines set description='draft line edit' where invoice_id=$1", [d2.id]);
+    await su(c);
+    expect((await c.query('select status::text s from public.invoices where id=$1', [d.id])).rows[0].s).toBe('sent');
+    expect((await c.query("select count(*)::int n from public.invoice_lines where invoice_id=$1 and description='draft line edit'", [d2.id])).rows[0].n).toBe(2);
+  });
+});
+
+test(hmeta('H04.INVOICE.PERIOD-AND-APPROVAL-POLICY', 'DECISION REQUIRED — INVOICE EDIT POLICY: no financial-period lock and no invoice approval mechanism exists in the schema, so neither is enforced on invoice edits; role authority remains can_write_sales_data (RLS)', MP), async () => {
+  throw new Blocked('DECISION REQUIRED — INVOICE EDIT POLICY: (1) which financial periods are closed, and should edits/backdated invoices in them be refused? (2) do invoices require approval before posting, and who approves? No period-lock or invoice-approval mechanism exists to enforce; none was invented.');
+});
+
+// ── H-5 explicit invoice INSERT grant ──
+test(hmeta('H05.GRANT.AUTHORIZATION', 'With the explicit least-privilege grant (INSERT only; no anon): an authenticated writer can create an invoice; a viewer is denied by RLS (42501); a B owner cannot insert into A (42501); anon has no privilege (42501); lines for an A invoice cannot be inserted by B (42501); grant does not include UPDATE/DELETE beyond existing policies', MP), async () => {
+  ready();
+  const cols = `business_id,contact_id,branch_id,invoice_number,invoice_type,status,issue_date,due_date,currency,exchange_rate,subtotal,taxable_amount,discount_amount,discount_percent,vat_amount,wht_amount,total_amount,amount_paid`;
+  const ins = (c: C, org: string, n: string) => c.query(`insert into public.invoices(${cols}) values($1,$2,$3,$4,'invoice','draft',$5,$5,'MWK',1,1,1,0,0,0,0,1,0) returning id`,
+    [orgs[org].business, orgs[org].customer, orgs[org].branch, n, DAY]);
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    const id = (await ins(c, 'A', 'H05-OK')).rows[0].id as string;
+    expect(id).toBeTruthy();
+    await as(c, identities.A_viewer.id); await failsWith(c, () => ins(c, 'A', 'H05-V'), ['42501']);
+    await as(c, identities.B_owner.id); await failsWith(c, () => ins(c, 'A', 'H05-X'), ['42501']);
+    await failsWith(c, () => c.query(`insert into public.invoice_lines(invoice_id,business_id,line_number,description,quantity,unit_price,discount_percent,discount_amount,tax_code,tax_rate,tax_amount,line_total)
+      values($1,$2,1,'H05',1,1,0,0,'none',0,0,1)`, [id, orgs.A.business]), ['42501']);
+    await failsWith(c, () => c.query(`insert into public.invoice_lines(invoice_id,business_id,line_number,description,quantity,unit_price,discount_percent,discount_amount,tax_code,tax_rate,tax_amount,line_total)
+      values($1,$2,1,'H05',1,1,0,0,'none',0,0,1)`, [id, orgs.B.business]), ['42501']);
+    await as(c, null, 'anon'); await failsWith(c, () => ins(c, 'A', 'H05-ANON'), ['42501']);
+  });
+  const g = (await db.client.query(`select has_table_privilege('anon','public.invoices','insert') a, has_table_privilege('anon','public.invoice_lines','insert') al,
+    has_table_privilege('authenticated','public.invoices','insert') i, has_table_privilege('authenticated','public.invoice_lines','insert') l`)).rows[0];
+  expect(g).toEqual({ a: false, al: false, i: true, l: true });
+  const rls = (await db.client.query("select relname, relrowsecurity from pg_class where relname in ('invoices','invoice_lines') and relnamespace='public'::regnamespace order by relname")).rows;
+  expect(rls.map((r: Record<string, any>) => r.relrowsecurity)).toEqual([true, true]);
+});
+
+// ── H-6 stock-movement index evidence ──
+test(hmeta('H06.INDEX.EXPLAIN-EVIDENCE', 'Query: the per-document idempotency probe used by record_sale_stock_and_cogs / backfill (business_id = $1 AND source_type = $2 AND source_id = $3). On 20 000 synthetic movements (rolled back) the plan WITHOUT idx_stock_movements_business_source is a scan over the business rows; WITH it an Index (Only) Scan on that index with lower estimated cost', MB), async () => {
+  ready();
+  await db.asRole('service_role', null, async (c: C) => {
+    await su(c);
+    await c.query('set local statement_timeout = 0');
+    await c.query('set local session_replication_role = replica');  // synthetic rows only; skip per-row triggers, rolled back
+    await c.query(`insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id,reference)
+      select $1,$2,$3,'adjustment_in',$4,1,1,'h06_synthetic', gen_random_uuid(), 'H06' from generate_series(1,20000) g`, [orgs.A.business, orgs.A.product, orgs.A.location, DAY]);
+    await c.query('analyze public.stock_movements');
+    await c.query('set local session_replication_role = origin');
+    const q = `explain (format json) select 1 from public.stock_movements where business_id='${orgs.A.business}' and source_type='invoice' and source_id='${key(869)}'`;
+    const plan = async () => (await c.query(q)).rows[0]['QUERY PLAN'][0].Plan as Record<string, any>;
+    const flat = (p: Record<string, any>): string[] => [`${p['Node Type']}:${p['Index Name'] ?? ''}`, ...((p.Plans ?? []) as Record<string, any>[]).flatMap(flat)];
+    const after = await plan();
+    await c.query('savepoint h06'); await c.query('drop index public.idx_stock_movements_business_source');
+    const before = await plan();
+    await c.query('rollback to savepoint h06');
+    expect(flat(after).some((n) => n.includes('idx_stock_movements_business_source'))).toBe(true);
+    expect(flat(before).some((n) => n.includes('idx_stock_movements_business_source'))).toBe(false);
+    expect(after['Total Cost']).toBeLessThan(before['Total Cost']);
+    const { appendFileSync } = await import('node:fs');
+    try { appendFileSync(join(process.cwd(), '.cache', 'h06-explain.json'), JSON.stringify({ before: flat(before), beforeCost: before['Total Cost'], after: flat(after), afterCost: after['Total Cost'] }) + '\n'); } catch { /* evidence side-file optional */ }
+  });
 });

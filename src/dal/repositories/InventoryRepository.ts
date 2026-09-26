@@ -306,6 +306,36 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
     return data;
   }
 
+  /**
+   * POST-CONTAINMENT HARDENING H-3 (2026-09-26): record a stock receipt or a
+   * manual stock adjustment AND its journal (GRNI / inventory adjustment) in
+   * ONE server transaction (`record_inventory_journal_movement`). Idempotent
+   * per clientKey; any failure throws and nothing partial persists — the
+   * previous client sequence could keep the movement and silently skip the
+   * journal.
+   */
+  async recordInventoryJournalMovement(input: InventoryJournalMovementInput): Promise<InventoryJournalMovementResult> {
+    const { data, error } = await (this.client as unknown as {
+      rpc: (fn: 'record_inventory_journal_movement', args: { p_payload: Record<string, unknown> }) =>
+        Promise<{ data: InventoryJournalMovementResult | null; error: { code?: string; message?: string } | null }>;
+    }).rpc('record_inventory_journal_movement', {
+      p_payload: {
+        business_id: input.businessId,
+        kind: input.kind,
+        client_key: input.clientKey,
+        location_id: input.locationId,
+        movement_date: input.movementDate,
+        movement_type: input.movementType ?? null,
+        reference: input.reference ?? null,
+        notes: input.notes ?? null,
+        lines: input.lines.map((l) => ({ product_id: l.productId, quantity: Math.abs(Number(l.quantity)), unit_cost: Number(l.unitCost) || 0 })),
+      },
+    });
+    if (error) throw toRepositoryError('stock_movements', error);
+    if (!data) throw toRepositoryError('stock_movements', { message: 'Stock movement returned no result; stock and journal were not confirmed.' });
+    return data;
+  }
+
   async hasMovementsForSource(
     businessId: string,
     sourceType: string,
@@ -608,4 +638,24 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       balancesUpdated: Number(row?.balances_updated ?? 0),
     };
   }
+}
+
+export interface InventoryJournalMovementInput {
+  businessId: string;
+  kind: 'receipt' | 'adjustment';
+  /** Stable per logical movement (retry-safe); a UUID. */
+  clientKey: string;
+  locationId: string;
+  movementDate: string;
+  movementType?: 'adjustment_in' | 'adjustment_out' | 'purchase' | 'opening_balance';
+  reference?: string | null;
+  notes?: string | null;
+  /** Quantities are positive; direction comes from movementType. */
+  lines: { productId: string; quantity: number; unitCost: number }[];
+}
+
+export interface InventoryJournalMovementResult {
+  idempotent: boolean;
+  movement_ids: string[];
+  journal_entry_id: string | null;
 }

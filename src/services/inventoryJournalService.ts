@@ -514,6 +514,10 @@ export async function deductStockAndPostCogs(
  * When present it becomes the journal `posting_key`, making a retry or rapid
  * double submit resume the existing GRNI entry instead of posting the receipt
  * twice.
+ *
+ * @deprecated H-3 (2026-09-26): no longer called by the app. Receipts and
+ * manual adjustments go through repos.inventory.recordInventoryJournalMovement
+ * (one server transaction). Kept only for existing tests/tools; do not add callers.
  */
 export async function postWarehouseReceipt(
   businessId: string,
@@ -760,6 +764,10 @@ export async function repairDuplicateWarehouseReceiptAnomalies(
  * by definition. Where the movement represents a genuine purchase the user
  * should record it as an expense instead, which routes through
  * resolveExpenseLineAccountId and credits cash or creditors properly.
+ *
+ * @deprecated H-3 (2026-09-26): no longer called by the app. Receipts and
+ * manual adjustments go through repos.inventory.recordInventoryJournalMovement
+ * (one server transaction). Kept only for existing tests/tools; do not add callers.
  */
 export async function postStockMovementAdjustment(
   businessId: string,
