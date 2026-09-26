@@ -245,7 +245,14 @@ begin
             group by business_id, object_ref order by business_id, object_ref loop
     select * into v_inv from public.invoices where id = r.object_ref::uuid;
     v_entry := public._ledgr_post_cogs(v_inv.business_id, v_inv.id, v_inv.invoice_number,
-      coalesce(v_inv.issue_date, current_date), v_inv.branch_id, v_inv.department_id, r.cost_lines);
+      -- The sale date if its period is open, else today: corrections never post
+      -- into a closed period (20261014000000 period lock; IAS 8 current-period
+      -- correction of an immaterial prior-period error).
+      case when v_inv.issue_date is not null and not exists (
+             select 1 from public.accounting_periods ap where ap.business_id = v_inv.business_id and ap.is_closed
+                and v_inv.issue_date between ap.period_start and ap.period_end)
+           then v_inv.issue_date else current_date end,
+      v_inv.branch_id, v_inv.department_id, r.cost_lines);
     if v_entry is not null then
       update public.journal_entries set posting_key = 'invoice:' || v_inv.id::text || ':cogs' where id = v_entry;
     end if;

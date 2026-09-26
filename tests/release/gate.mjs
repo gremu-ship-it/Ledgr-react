@@ -27,4 +27,5 @@ export const suites = {
   'r06-concurrent-2c.test.ts': 'r06-concurrent-2c.json',
   'ic-containment.test.ts': 'ic-containment.json',
   'od-owner-decisions.test.ts': 'od-owner-decisions.json',
+  'pl-period-approval.test.ts': 'pl-period-approval.json',
 };

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
+import type { Database, Row, InsertDto } from '../types/database';
 import type { Json } from '../types/database.generated';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import { BaseRepository } from './BaseRepository';
@@ -124,17 +124,17 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
   }
 
   /**
-   * Lock a period. The DB trigger fn_check_no_drafts_before_closing will
-   * reject this if draft entries still exist in range, and auto-stamps
-   * closed_by/closed_at.
-   *
-   * IMPORTANT: this method does NOT check the acting user's role. Callers
-   * (UI layer) must verify membership.role is 'owner' or 'admin' before
-   * invoking this.
+   * Close (lock) a period through the server command `close_accounting_period`
+   * (owner decision 2026-09-26, migration 20261014000000). The server checks
+   * the role (owner / admin / accountant), refuses a period that has not ended
+   * or still has draft journal entries, logs the close, and from then on
+   * refuses any write dated inside the period. A direct `is_closed` update is
+   * rejected by the database.
    */
-  async lock(periodId: string, userId: string, userEmail?: string | null): Promise<Row<'accounting_periods'>> {
+  async lock(periodId: string, userId: string, userEmail?: string | null, reason?: string): Promise<Row<'accounting_periods'>> {
     const before = await this.findById(periodId);
-    const updated = await this.update(periodId, { is_closed: true } as UpdateDto<'accounting_periods'>);
+    await this.callPeriodCommand('close_accounting_period', { p_period_id: periodId, p_reason: reason ?? null });
+    const updated = await this.findById(periodId);
 
     await this.writeAuditLog({
       business_id: updated.business_id,
@@ -151,9 +151,11 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
     return updated;
   }
 
-  async unlock(periodId: string, userId: string, userEmail?: string | null): Promise<Row<'accounting_periods'>> {
+  /** Reopen a closed period (`reopen_accounting_period`): OWNER only, with a written reason (≥ 10 characters). */
+  async unlock(periodId: string, userId: string, userEmail?: string | null, reason = ''): Promise<Row<'accounting_periods'>> {
     const before = await this.findById(periodId);
-    const updated = await this.update(periodId, { is_closed: false } as UpdateDto<'accounting_periods'>);
+    await this.callPeriodCommand('reopen_accounting_period', { p_period_id: periodId, p_reason: reason });
+    const updated = await this.findById(periodId);
 
     await this.writeAuditLog({
       business_id: updated.business_id,
@@ -164,10 +166,16 @@ export class PeriodRepository extends BaseRepository<'accounting_periods'> {
       resource_id: updated.id,
       resource_ref: updated.name,
       old_values: { is_closed: before.is_closed },
-      new_values: { is_closed: updated.is_closed },
+      new_values: { is_closed: updated.is_closed, reason },
     });
 
     return updated;
+  }
+
+  private async callPeriodCommand(fn: 'close_accounting_period' | 'reopen_accounting_period', args: Record<string, unknown>): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- new RPCs (20261014000000) are not in the generated types yet
+    const { error } = await (this.client.rpc as any)(fn, args);
+    if (error) throw new ValidationError('accounting_periods', (error as { message?: string }).message || 'The period command failed.');
   }
 
   private async writeAuditLog(entry: AuditLogEntry): Promise<void> {

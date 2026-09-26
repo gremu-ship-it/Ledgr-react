@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
+import { InvoiceApprovalPanel } from '@/components/invoice/InvoiceApprovalPanel';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -413,6 +414,8 @@ function InvoiceDetail({
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { logoUrl, businessName, tradingName, business: businessData } = useBrandTheme();
+  const approvalBusiness = useAppStore((s) => s.currentBusiness);
+  const approvalUser = useAppStore((s) => s.currentUser);
 
   const { data: withLines, isLoading } = useQuery({
     queryKey: ['invoice', 'lines', invoice.id],
@@ -598,6 +601,15 @@ function InvoiceDetail({
 
   return (
     <div>
+      <div className="mb-4">
+        <InvoiceApprovalPanel
+          invoiceId={invoice.id}
+          status={invoice.status}
+          submittedBy={(invoice as { submitted_by?: string | null }).submitted_by}
+          currentUserId={approvalUser?.id}
+          role={approvalBusiness?.role}
+        />
+      </div>
       {/* Back button + header */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">

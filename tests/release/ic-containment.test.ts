@@ -1001,8 +1001,27 @@ test(hmeta('H04.INVOICE.LEGIT-WORKFLOWS-PRESERVED', 'Legitimate workflows still 
   });
 });
 
-test(hmeta('H04.INVOICE.PERIOD-AND-APPROVAL-POLICY', 'DECISION REQUIRED — INVOICE EDIT POLICY: no financial-period lock and no invoice approval mechanism exists in the schema, so neither is enforced on invoice edits; role authority remains can_write_sales_data (RLS)', MP), async () => {
-  throw new Blocked('DECISION REQUIRED — INVOICE EDIT POLICY: (1) which financial periods are closed, and should edits/backdated invoices in them be refused? (2) do invoices require approval before posting, and who approves? No period-lock or invoice-approval mechanism exists to enforce; none was invented.');
+test(hmeta('H04.INVOICE.PERIOD-AND-APPROVAL-POLICY', 'Owner decision 2026-09-26 — INVOICE EDIT POLICY now enforced: after the accountant closes the September accounting period (existing accounting_periods, now enforced), even the owner cannot edit/delete or backdate an invoice into that period (22023 period-closed); an invoice created by a policy role (branch_manager) cannot be issued without a second-person approval (22023 invoice-approval-required). Full matrix: PL.PERIOD.* / PL.APPROVAL.*', `${MP} + supabase/migrations/20261014000000_period_lock_and_invoice_approval.sql`), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await platformGrants(c);
+    const d = (await createInvoice(c, 'A', key(866), { status: 'draft' })).invoice;
+    await su(c);
+    const pid = String((await c.query("insert into public.accounting_periods(business_id,name,period_start,period_end,is_closed) values($1,'H04 Sep','2026-09-01',$2,false) returning id", [orgs.A.business, DAY])).rows[0].id);
+    await as(c, identities.A_accountant.id);
+    await c.query('select public.close_accounting_period($1,$2)', [pid, 'H04 month-end']);
+    await as(c, identities.A_owner.id);
+    const e1 = await failsWith(c, () => c.query('update public.invoices set total_amount=1 where id=$1', [d.id]), ['22023']);
+    expect(e1.message).toMatch(/period-closed/);
+    const e2 = await failsWith(c, () => createInvoice(c, 'A', key(867)), ['22023']);
+    expect(e2.message).toMatch(/period-closed/);
+    await c.query('select public.reopen_accounting_period($1,$2)', [pid, 'H04 probe: reopen for approval check']);
+    await as(c, identities.A_admin.id);
+    await c.query('select public.set_invoice_approval_policy($1,true,null,$2)', [orgs.A.business, ['branch_manager']]);
+    await as(c, identities.A_branch_manager.id);
+    const e3 = await failsWith(c, () => createInvoice(c, 'A', key(868)), ['22023']);
+    expect(e3.message).toMatch(/invoice-approval-required/);
+  });
 });
 
 // ── H-5 explicit invoice INSERT grant ──

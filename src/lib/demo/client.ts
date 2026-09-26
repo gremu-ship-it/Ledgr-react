@@ -884,6 +884,17 @@ export const demoClient = {
         return Promise.resolve(ok({ idempotent: false, cogs_entry_id: null, cogs_missing: false, cost_lines: [] }));
       case 'pos_stock_availability':
         return Promise.resolve(posStockAvailabilityDemo(tables, args as { p_business_id?: string; p_branch_id?: string | null }));
+      case 'close_accounting_period':
+      case 'reopen_accounting_period': {
+        // Owner decision 2026-09-26: period status changes only through these commands.
+        const closing = name === 'close_accounting_period';
+        const period = (tables.accounting_periods ?? []).find((p) => p.id === args.p_period_id);
+        if (!period) return Promise.resolve(fail('Period not found.', '42501', 403));
+        period.is_closed = closing;
+        period.closed_at = closing ? new Date().toISOString() : null;
+        markDemoStateChanged();
+        return Promise.resolve(ok({ period_id: period.id, is_closed: closing, draft_invoices_in_period: 0 }));
+      }
       case 'next_journal_entry_number':
         return Promise.resolve(ok(nextJournalEntryNumber(tables)));
       case 'save_quick_sale':
