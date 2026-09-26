@@ -6,9 +6,10 @@ import type { PosStockStatus } from '@/types/pos';
  *
  *  - error    → red banner + Retry; items show "Stock ?" and stay sellable
  *               (the server's R06 check still rejects a real shortfall).
- *  - fallback → amber note naming the location the sale will deduct from
- *               (the warehouse-vs-branch selling policy is an OWNER DECISION;
- *               this only reports today's server behaviour).
+ *  - branch location missing → red note: owner decision 2026-09-26, POS sells
+ *               from BRANCH stock only, so tracked items are refused until the
+ *               shop has a location (no warehouse fallback).
+ *  - fallback → amber note (only for a till with no branch at all).
  */
 export function PosStockStatusBanner({ status, onRetry }: { status: PosStockStatus; onRetry: () => void }) {
   if (status.state === 'error') {
@@ -25,6 +26,14 @@ export function PosStockStatusBanner({ status, onRetry }: { status: PosStockStat
         >
           Retry
         </button>
+      </div>
+    );
+  }
+  if (status.state === 'ok' && status.branchLocationMissing) {
+    return (
+      <div role="alert" className="border-b border-red-200 bg-red-50 px-4 py-2 text-xs text-red-800">
+        <strong>This shop has no stock location.</strong> Stock items cannot be sold here until a location is set up for
+        this branch and stock is transferred to it — sales never take stock from the warehouse. Services can still be sold.
       </div>
     );
   }

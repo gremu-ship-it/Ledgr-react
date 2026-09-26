@@ -44,8 +44,25 @@ interface PosCartProps {
   onProceedToPayment?: () => void;
   onCheckout?: () => void;
   onSetNotes?: (notes: string) => void;
-  onRequestManagerApproval?: (actionDescription: string, onApproved: (approvalToken?: string) => void) => void;
+  /**
+   * Over-cap discounts and cashier price changes need a SUPERVISOR: the third
+   * argument makes the approval a server-minted override token that
+   * post_pos_sale consumes (owner decision 2026-09-26).
+   */
+  onRequestManagerApproval?: (
+    actionDescription: string,
+    onApproved: (approvalToken?: string) => void,
+    serverRequest?: PosOverrideServerRequest,
+  ) => void;
+  /** True for till supervisors: they may set a line price directly (the server verifies the role). */
+  canOverridePriceDirectly?: boolean;
+  /** Apply a new unit price to a line, with the authorising token when the operator is not a supervisor. */
+  onOverrideLinePrice?: (productId: string, unitPrice: number, token?: string | null) => void;
 }
+
+export type PosOverrideServerRequest =
+  | { kind: 'discount'; percent: number }
+  | { kind: 'price'; productId: string; unitPrice: number };
 
 export function PosCart({
   items,
@@ -74,7 +91,11 @@ export function PosCart({
   onProceedToPayment,
   onCheckout,
   onRequestManagerApproval,
+  canOverridePriceDirectly = false,
+  onOverrideLinePrice,
 }: PosCartProps) {
+  const [editingPriceItem, setEditingPriceItem] = useState<PosCartItem | null>(null);
+  const [linePriceValue, setLinePriceValue] = useState<number>(0);
   // Modal / Dropdown states
   const [isCustomerSelectorOpen, setIsCustomerSelectorOpen] = useState(false);
   const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
@@ -123,6 +144,7 @@ export function PosCart({
           }
           setEditingDiscountItem(null);
         },
+        { kind: 'discount', percent: discountVal },
       );
     } else {
       if (onUpdateLineDiscount) {
@@ -132,6 +154,28 @@ export function PosCart({
       }
       setEditingDiscountItem(null);
     }
+  };
+
+  const handleApplyLinePriceSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPriceItem || !onOverrideLinePrice) return;
+    const pId = editingPriceItem.product_id || editingPriceItem.productId || '';
+    const newPrice = Math.round((Number(linePriceValue) || 0) * 100) / 100;
+    if (newPrice < 0) return;
+    if (canOverridePriceDirectly) {
+      onOverrideLinePrice(pId, newPrice, null);
+      setEditingPriceItem(null);
+      return;
+    }
+    if (!onRequestManagerApproval) return;
+    onRequestManagerApproval(
+      `Sell ${editingPriceItem.name} at ${formatMwkDetailed(newPrice)} instead of the catalogue price`,
+      (token) => {
+        onOverrideLinePrice(pId, newPrice, token ?? null);
+        setEditingPriceItem(null);
+      },
+      { kind: 'price', productId: pId, unitPrice: newPrice },
+    );
   };
 
   const handleApplyOrderDiscountSubmit = (e: React.FormEvent) => {
@@ -149,6 +193,7 @@ export function PosCart({
           }
           setIsOrderDiscountOpen(false);
         },
+        { kind: 'discount', percent: discountVal },
       );
     } else {
       if (onUpdateOrderDiscount) {
@@ -359,6 +404,19 @@ export function PosCart({
                 <div className="text-right shrink-0">
                   <p className="text-xs font-black text-gray-900">{formatMwkDetailed(lineTot)}</p>
                   <div className="flex items-center justify-end gap-1 mt-1">
+                    {onOverrideLinePrice && pId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingPriceItem(item);
+                          setLinePriceValue(price);
+                        }}
+                        className="text-[10px] font-bold text-gray-500 hover:underline"
+                        title={canOverridePriceDirectly ? 'Change price' : 'Change price (needs a supervisor)'}
+                      >
+                        Price
+                      </button>
+                    )}
                     {canApplyLineDiscount && (
                       <button
                         type="button"
@@ -432,6 +490,44 @@ export function PosCart({
       </div>
 
       {/* ── Line Discount Modal ── */}
+      {editingPriceItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-xs rounded-3xl bg-white p-5 shadow-2xl space-y-3">
+            <h3 className="font-black text-sm text-gray-900">Change price: {editingPriceItem.name}</h3>
+            <form onSubmit={handleApplyLinePriceSubmit} className="space-y-3">
+              <div>
+                <label htmlFor="pos-line-price" className="block text-xs font-bold uppercase text-gray-600 mb-1">
+                  Unit price (MWK)
+                </label>
+                <input
+                  id="pos-line-price"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  autoFocus
+                  value={linePriceValue}
+                  onChange={(e) => setLinePriceValue(Number(e.target.value))}
+                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm font-black focus:border-brand-500 focus:outline-none"
+                />
+              </div>
+              {!canOverridePriceDirectly && (
+                <p className="text-[11px] text-gray-500">
+                  Only a supervisor can change a price. A supervisor must authorise this request before the sale can be recorded.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setEditingPriceItem(null)} className="flex-1 rounded-xl border border-gray-200 py-2 text-xs font-bold text-gray-600">
+                  Cancel
+                </button>
+                <button type="submit" className="flex-1 rounded-xl bg-brand-600 py-2 text-xs font-black text-white">
+                  {canOverridePriceDirectly ? 'Apply' : 'Request approval'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {editingDiscountItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-xs rounded-3xl bg-white p-5 shadow-2xl space-y-3">

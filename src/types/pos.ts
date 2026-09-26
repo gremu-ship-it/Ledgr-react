@@ -263,6 +263,8 @@ export interface PosCartItem {
   barcode?: string | null;
   category?: string | null;
   quantity: number;
+  /** Server token authorising a non-catalogue price for this line (cashier path). */
+  priceOverrideToken?: string | null;
   unit_price: number;
   unitPrice?: number;
   unit_cost?: number;
@@ -416,6 +418,8 @@ export interface PosSalePayload {
     approverName: string;
     reason: string;
   } | null;
+  /** Server token authorising an over-cap discount (request_pos_price_override, kind 'discount'). */
+  discountOverrideToken?: string | null;
   clientKey?: string;
 }
 
@@ -548,10 +552,12 @@ export interface PosStockAvailability {
   location: { id: string; name: string; branch_id: string | null } | null;
   /** True when the sale deducts from a fallback (default/first) location, not the branch's own. */
   is_fallback: boolean;
+  /** Owner decision 2026-09-26: the branch has no stock location of its own, so tracked items cannot be sold there. */
+  branch_location_missing?: boolean;
   balances: { product_id: string; quantity_on_hand: number }[];
 }
 
 export type PosStockStatus =
   | { state: 'loading' }
-  | { state: 'ok'; locationName: string | null; isFallback: boolean; noLocation: boolean }
+  | { state: 'ok'; locationName: string | null; isFallback: boolean; noLocation: boolean; branchLocationMissing?: boolean }
   | { state: 'error'; message: string };

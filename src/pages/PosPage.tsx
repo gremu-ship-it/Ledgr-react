@@ -11,8 +11,10 @@ import {
   removeProductFromCart,
   clearCart,
   applyItemDiscount,
+  applyItemPriceOverride,
 } from '@/services/posService';
 import { requestPosApproval, type PosCorrectionAction } from '@/services/posCorrectionRpc';
+import { requestPosPriceOverride, isPosSupervisorRole } from '@/services/posPriceOverrideRpc';
 import { repos } from '@/lib/repositories';
 import { weightedAverageCost } from '@/services/inventoryValuation';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -39,7 +41,7 @@ import type {
 import { PosHeader } from '@/components/pos/PosHeader';
 import { PosProductCatalog } from '@/components/pos/PosProductCatalog';
 import { PosStockStatusBanner } from '@/components/pos/PosStockStatusBanner';
-import { PosCart } from '@/components/pos/PosCart';
+import { PosCart, type PosOverrideServerRequest } from '@/components/pos/PosCart';
 import { PosPaymentModal } from '@/components/pos/PosPaymentModal';
 import { PosReceiptModal } from '@/components/pos/PosReceiptModal';
 import { PosShiftModal } from '@/components/pos/PosShiftModal';
@@ -115,7 +117,11 @@ export function PosPage() {
   const [isCashMovementModalOpen, setIsCashMovementModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
-  const [approvalServerContext, setApprovalServerContext] = useState<{ action: PosCorrectionAction; documentId: string } | null>(null);
+  const [approvalServerContext, setApprovalServerContext] = useState<
+    { action: PosCorrectionAction; documentId: string } | PosOverrideServerRequest | null
+  >(null);
+  // Owner decision 2026-09-26: server token for an over-cap discount, sent with the sale.
+  const [discountOverrideToken, setDiscountOverrideToken] = useState<string | null>(null);
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [isZReportModalOpen, setIsZReportModalOpen] = useState(false);
   // R08.4/5: the Z-report number is minted by the signed close, never client-side.
@@ -162,6 +168,11 @@ export function PosPage() {
     setCartItems(clearCart());
     setSelectedCustomer(null);
     setOrderDiscount(undefined);
+    setDiscountOverrideToken(null);
+  }, []);
+
+  const handleOverrideLinePrice = useCallback((productId: string, unitPrice: number, token?: string | null) => {
+    setCartItems((prev) => applyItemPriceOverride(prev, productId, unitPrice, token));
   }, []);
 
   const handleUpdateLineDiscount = useCallback((productId: string, discount?: PosDiscount) => {
@@ -321,6 +332,7 @@ export function PosPage() {
                 locationName: availability.value.location?.name ?? null,
                 isFallback: availability.value.is_fallback,
                 noLocation: availability.value.location == null,
+                branchLocationMissing: availability.value.branch_location_missing === true,
               }
             : { state: 'error', message: availability.message },
         );
@@ -416,10 +428,14 @@ export function PosPage() {
   const handleRequestManagerApproval = useCallback((
     actionDescription: string,
     onApproved: (approvalToken?: string) => void,
-    serverContext?: { action: PosCorrectionAction; documentId: string },
+    serverContext?: { action: PosCorrectionAction; documentId: string } | PosOverrideServerRequest,
   ) => {
     setApprovalActionDescription(actionDescription);
-    setPendingApprovalCallback(() => onApproved);
+    const isDiscount = !!serverContext && 'kind' in serverContext && serverContext.kind === 'discount';
+    setPendingApprovalCallback(() => (token?: string) => {
+      if (isDiscount) setDiscountOverrideToken(token ?? null);
+      onApproved(token);
+    });
     setApprovalServerContext(serverContext ?? null);
     setIsApprovalModalOpen(true);
   }, []);
@@ -465,6 +481,7 @@ export function PosPage() {
         // make the receipt disagree with the document.
         totals: cartTotals,
         orderDiscount,
+        discountOverrideToken,
         payments: paymentData.payments,
         totalPaid: paymentData.totalPaid,
         changeGiven: paymentData.changeGiven,
@@ -697,7 +714,9 @@ export function PosPage() {
               orderDiscount={orderDiscount}
               selectedCustomer={selectedCustomer}
               customers={customers}
-              maxCashierDiscountPercent={permissions.maxCashierDiscountPercent}
+              maxCashierDiscountPercent={permissions.maxDiscountPercent > 0 ? permissions.maxDiscountPercent : permissions.maxCashierDiscountPercent}
+              canOverridePriceDirectly={isPosSupervisorRole(permissions.role)}
+              onOverrideLinePrice={handleOverrideLinePrice}
               canApplyLineDiscount={permissions.canApplyLineDiscount}
               canApplyOrderDiscount={permissions.canApplyOrderDiscount}
               notes={cartNotes}
@@ -800,7 +819,12 @@ export function PosPage() {
         }}
         actionDescription={approvalActionDescription}
         onRequestServerApproval={approvalServerContext
-          ? () => requestPosApproval(businessId, approvalServerContext.action, approvalServerContext.documentId, approvalActionDescription).then((a) => a.token)
+          ? () => ('kind' in approvalServerContext
+            ? requestPosPriceOverride(businessId, approvalServerContext.kind === 'price'
+              ? { kind: 'price', productId: approvalServerContext.productId, unitPrice: approvalServerContext.unitPrice, reason: approvalActionDescription }
+              : { kind: 'discount', maxDiscountPercent: approvalServerContext.percent, reason: approvalActionDescription })
+            : requestPosApproval(businessId, approvalServerContext.action, approvalServerContext.documentId, approvalActionDescription)
+          ).then((a) => a.token)
           : undefined}
         onApprove={handleManagerApproved}
       />

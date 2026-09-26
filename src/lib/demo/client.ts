@@ -833,16 +833,17 @@ function posStockAvailabilityDemo(
   args: { p_business_id?: string; p_branch_id?: string | null },
 ): DemoRpcResponse {
   const locations = (tables.inventory_locations ?? []).filter((l) => l.business_id === args.p_business_id);
-  const location =
-    (args.p_branch_id ? locations.find((l) => l.branch_id === args.p_branch_id) : undefined)
-    ?? locations.find((l) => l.is_default)
-    ?? locations[0]
-    ?? null;
+  // Owner decision 2026-09-26 (mirrors 20261013000000): a branch sells from its
+  // OWN location only; the default/first fallback applies to branch-less tills.
+  const location = args.p_branch_id
+    ? locations.find((l) => l.branch_id === args.p_branch_id) ?? null
+    : locations.find((l) => l.is_default) ?? locations[0] ?? null;
   return ok({
     business_id: args.p_business_id,
     branch_id: args.p_branch_id ?? null,
     location: location ? { id: location.id, name: location.name, branch_id: location.branch_id ?? null } : null,
-    is_fallback: !!location && (args.p_branch_id == null || location.branch_id !== args.p_branch_id),
+    is_fallback: !!location && args.p_branch_id == null && location.branch_id != null,
+    branch_location_missing: !!args.p_branch_id && !location,
     balances: location
       ? (tables.inventory_balances ?? [])
           .filter((b) => b.location_id === location.id)

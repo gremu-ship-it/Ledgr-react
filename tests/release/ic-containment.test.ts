@@ -271,12 +271,16 @@ test(meta('IC.POS.DISPLAY-EQUALS-DEDUCTION', 'The POS display location for the c
   });
 });
 
-test(meta('IC.POS.FALLBACK-FLAGGED', 'A branch with no own location resolves to the business default location and is flagged is_fallback=true (display honest about warehouse selling; policy itself = OWNER DECISION)', M.pos), async () => {
+test(meta('IC.POS.FALLBACK-FLAGGED', 'Owner decision 2026-09-26 (POS deducts from BRANCH stock): a branch with no own location no longer falls back to the business default/warehouse — availability reports branch_location_missing=true, location=null, is_fallback=false (the sale itself is refused: OD.BRANCH.* records)', `${M.pos} + supabase/migrations/20261013000000_owner_decisions_price_override_branch_stock.sql`), async () => {
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
     const r = await avail(c, orgs.A.business, orgs.A.branch2);
-    expect(r.location.id).toBe(orgs.A.location);
-    expect(r.is_fallback).toBe(true);
+    expect(r.location).toBeNull();
+    expect(r.branch_location_missing).toBe(true);
+    expect(r.is_fallback).toBe(false);
+    const own = await avail(c, orgs.A.business, orgs.A.branch);
+    expect(own.location.id).toBe(orgs.A.location);
+    expect(own.branch_location_missing).toBe(false);
   });
 });
 
@@ -814,8 +818,24 @@ test(hmeta('H02.POS.TAMPERED-AMOUNTS-REJECTED', 'Browser-tampered amounts are re
   });
 });
 
-test(hmeta('H02.POS.PRICING-POLICY', 'DECISION REQUIRED — SERVER POS PRICING POLICY: catalogue-price authority (products.sale_price vs offline/stale-cache prices) and server enforcement of pos_settings discount caps (manager approval is local-only today) need an owner decision before they can be enforced', MP), async () => {
-  throw new Blocked('DECISION REQUIRED — SERVER POS PRICING POLICY: (1) must a POS unit price equal the current products.sale_price, and how are offline sales priced from a stale cache after a price change? (2) must the server enforce pos_settings max discount % per role, and what server-verifiable artefact proves an over-cap manager approval? Arithmetic consistency (H02.POS.*) is enforced; these policy checks are not invented.');
+test(hmeta('H02.POS.PRICING-POLICY', 'Owner decision 2026-09-26 — SERVER POS PRICING POLICY now enforced: a cashier line priced away from products.sale_price is refused 22023 price-override-required and an over-cap discount 22023 discount-override-required (nothing written); the catalogue price posts; supervisors override directly or authorise a single-use server token (full matrix: OD.PRICE.*)', `${MP} + supabase/migrations/20261013000000_owner_decisions_price_override_branch_stock.sql`), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
+    const stale = saleFixture(orgs.A, 830) as any;
+    Object.assign(stale.lines[0], { unit_price: 1200, line_total: 1200 });
+    Object.assign(stale.invoice, { total_amount: 1200, subtotal: 1200, taxable_amount: 1200, original_amount: 1200, functional_amount: 1200 });
+    stale.cash_sales = 1200; stale.payments[0].amount = 1200; stale.payments[0].functional_amount = 1200;
+    const e = await failsWith(c, () => posSale(c, stale), ['22023']);
+    expect(e.message).toMatch(/price-override-required/);
+    const d = saleFixture(orgs.A, 831) as any;
+    Object.assign(d.invoice, { discount_amount: 450, discount_percent: 30, total_amount: 1050, subtotal: 1050, taxable_amount: 1050, original_amount: 1050, functional_amount: 1050 });
+    d.cash_sales = 1050; d.payments[0].amount = 1050; d.payments[0].functional_amount = 1050;
+    const e2 = await failsWith(c, () => posSale(c, d), ['22023']);
+    expect(e2.message).toMatch(/discount-override-required/);
+    await su(c);
+    expect(await invoicesByKey(c, key(830))).toBe(0);
+    expect(await invoicesByKey(c, key(831))).toBe(0);
+  });
 });
 
 // ── H-3 atomic inventory journal command ──
