@@ -21,7 +21,14 @@ done
 [[ -n "$out" ]] || { echo "::error::Could not read the remote migration history; refusing to deploy the frontend."; exit 1; }
 
 # Rows look like: "   <local> | <remote> | <time>". Remote column = field 2.
-remote_versions="$(printf '%s\n' "$out" | awk -F'|' 'NF>=2 { gsub(/ /,"",$2); if ($2 ~ /^[0-9]{14}$/) print $2 }' | sort)"
+# Newer CLIs (seen on v2.109, 2026-09-27) draw the table with box characters
+# ("│") instead of "|"; normalise both before parsing.
+norm="$(printf '%s\n' "$out" | sed 's/│/|/g; s/┃/|/g')"
+remote_versions="$(printf '%s\n' "$norm" | awk -F'|' 'NF>=2 { gsub(/[[:space:]]/,"",$2); if ($2 ~ /^[0-9]+$/ && length($2) == 14) print $2 }' | sort)"
+if [[ -z "$remote_versions" ]]; then
+  echo "Could not parse any remote version from 'supabase migration list'. Raw output follows:" >&2
+  printf '%s\n' "$out" | head -n 60 >&2
+fi
 remote_head="$(printf '%s\n' "$remote_versions" | tail -n 1)"
 [[ -n "${GITHUB_ENV:-}" ]] && echo "MIGRATION_REMOTE_HEAD=${remote_head:-none}" >> "$GITHUB_ENV"
 
