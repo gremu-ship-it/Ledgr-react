@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError, ValidationError } from '../errors/RepositoryError';
+import { toRepositoryError } from '../errors/RepositoryError';
 
 export interface ExpenseWithLines {
   expense: Row<'expenses'>;
@@ -192,70 +192,28 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
   }
 
   /**
-   * Record a payment against an expense and update `amount_paid`.
+   * Record a payment against an expense ATOMICALLY (IC 2026-09-25 P6).
    *
-   * FIX [#6 Concurrency risk]:
-   * The previous pattern read `amount_paid`, added the new payment in
-   * TypeScript, then wrote back. Two concurrent payments would both read
-   * the same stale `amount_paid` and one update would be lost.
-   *
-   * Fixed using a raw SQL increment via Supabase's `.rpc()` pattern:
-   * UPDATE expenses SET amount_paid = amount_paid + $payment WHERE id = $id
-   * This is atomic at the DB level and avoids the race condition.
-   *
-   * Note: if your Supabase project does not have the `increment_expense_paid`
-   * RPC, fall back to the commented read-then-write below and add the RPC
-   * as soon as possible.
+   * One call to `record_expense_payment`: authorisation, expense lock,
+   * validation (amount > 0, not void, no overpayment), payment insert,
+   * amount_paid and the keyed settlement journal commit or roll back
+   * together. A retry with the same key returns the committed payment.
    */
   async recordPayment(
     payment: InsertDto<'expense_payments'>,
     clientKey?: string,
-  ): Promise<{ payment: Row<'expense_payments'>; expense: Row<'expenses'> }> {
-    // Idempotency: a retried offline sync must not insert a duplicate payment
-    // and re-increment amount_paid.
-    if (clientKey) {
-      const existing = await this.findPaymentByClientKey(payment.business_id, clientKey);
-      if (existing) {
-        const expense = await this.findById(payment.expense_id);
-        return { payment: existing, expense };
-      }
+  ): Promise<{ payment: Row<'expense_payments'>; expense: Row<'expenses'>; journalEntryId?: string | null; idempotent?: boolean }> {
+    const key = clientKey ?? crypto.randomUUID();
+    const { data, error } = await (this.client as unknown as {
+      rpc: (fn: 'record_expense_payment', args: { p_payment: InsertDto<'expense_payments'>; p_client_key: string }) =>
+        Promise<{ data: { payment: Row<'expense_payments'>; expense: Row<'expenses'>; journal_entry_id: string | null; idempotent: boolean } | null; error: { code?: string; message?: string } | null }>;
+    }).rpc('record_expense_payment', { p_payment: payment, p_client_key: key });
+
+    if (error) throw toRepositoryError('expense_payments', error);
+    if (!data?.payment || !data.expense) {
+      throw toRepositoryError('expense_payments', { message: 'Payment command returned no result; the payment was not confirmed.' });
     }
-
-    // FIX [C-03 void/credit-note payment control]: enforce at the repository
-    // layer. The DB trigger (20260813000002) is the backstop; this check gives
-    // a clear error before the insert round-trip.
-    const expense = await this.findById(payment.expense_id);
-    if (expense.status === 'void') {
-      throw new ValidationError(
-        'expense_payments',
-        `Cannot record a payment against a void expense (${payment.expense_id}).`,
-      );
-    }
-
-    const paymentRow: InsertDto<'expense_payments'> = clientKey
-      ? ({ ...payment, client_key: clientKey } as InsertDto<'expense_payments'>)
-      : payment;
-
-    const { data: paymentData, error: paymentError } = await this.client
-      .from('expense_payments')
-      .insert(paymentRow as never)
-      .select('*')
-      .single();
-
-    if (paymentError) throw toRepositoryError('expense_payments', paymentError);
-
-    // Atomic increment — avoids the read-then-write race condition.
-    // SQL equivalent: UPDATE expenses SET amount_paid = amount_paid + payment.amount WHERE id = ...
-    const { error: updateError } = await this.client.rpc('increment_amount_paid', {
-      p_table:  'expenses',
-      p_id:     payment.expense_id,
-      p_amount: payment.amount,
-    });
-
-    if (updateError) throw toRepositoryError('expenses', updateError);
-
-    const updatedExpense = await this.findById(payment.expense_id);
-    return { payment: paymentData, expense: updatedExpense };
+    return { payment: data.payment, expense: data.expense, journalEntryId: data.journal_entry_id, idempotent: data.idempotent };
   }
 
   /**
@@ -275,19 +233,6 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
       .maybeSingle();
     if (error) throw toRepositoryError('expenses', error);
     return (data as Row<'expenses'> | null) ?? null;
-  }
-
-  /** Idempotency lookup: find a payment previously recorded under a client_key. */
-  private async findPaymentByClientKey(businessId: string, clientKey: string): Promise<Row<'expense_payments'> | null> {
-    const { data, error } = await this.client
-      .from('expense_payments')
-      .select('*')
-      .eq('business_id', businessId)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- client_key added by migration 20260813000003, not yet in generated types
-      .eq('client_key' as any, clientKey)
-      .maybeSingle();
-    if (error) throw toRepositoryError('expense_payments', error);
-    return (data as Row<'expense_payments'> | null) ?? null;
   }
 
   /**

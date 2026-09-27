@@ -229,7 +229,10 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
               await deductStockAndPostCogs(businessId, created, [{ productId: selectedProduct.id, quantity: 1 }], branchId || null, departmentId || null, null);
             }
           } catch (err) {
-            log.warn('Journal entry failed', { error: err });
+            // HARDENING 2026-09-26: never report success when the ledger or
+            // stock posting failed. The invoice itself is saved; say so.
+            log.error('Journal / stock posting failed', { error: err });
+            throw new Error(`Invoice ${created.invoice_number} was saved, but its accounting or stock posting failed: ${(err as Error).message}. Please contact support before retrying.`, { cause: err });
           }
         }
         return { offline: false };

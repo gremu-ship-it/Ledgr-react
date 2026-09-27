@@ -109,8 +109,13 @@ export function buildPosSaleRpcPayload(
     },
     // The invoice as the till built it: the RPC reserves its own number, so a
     // placeholder from an offline sale is expected and ignored.
-    invoice: payload.invoice,
-    lines: payload.lines,
+    invoice: payload.overrides?.discountToken
+      ? { ...payload.invoice, discount_override_token: payload.overrides.discountToken }
+      : payload.invoice,
+    lines: payload.lines.map((line, index) => {
+      const token = payload.overrides?.lineTokens[index];
+      return token ? { ...line, price_override_token: token } : line;
+    }),
     // Per-tender keys must stay identical to the legacy path's
     // (deriveClientKey(clientKey, index)) so that whichever path commits
     // first, the other recognises the rows instead of duplicating them.

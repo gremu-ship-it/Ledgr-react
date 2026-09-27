@@ -5,14 +5,12 @@
 # Supabase project over the Management API (same SUPABASE_ACCESS_TOKEN the
 # deploy workflow already uses — no database password needed).
 #
-# TRIGGERS
-#   * push to main when this workflow or the SQL file changes → runs the
-#     FULL repair (DRY_RUN=0). The SQL is double-guarded (exact business +
-#     product + pure double-count signature + optimistic re-check) and
-#     idempotent, so an auto-run is safe; a no-op re-run just logs
-#     "REPAIR no-op".
-#   * workflow_dispatch → dry_run input (default true) for a read-only
-#     diagnosis first, or dry_run=false to force the repair.
+# TRIGGERS (INCIDENT CONTAINMENT 2026-09-25)
+#   * NO automatic trigger. The former push-to-main auto-run (DRY_RUN=0) was
+#     removed: production data repair requires owner approval.
+#   * workflow_dispatch only, from main, by the repository owner, with the
+#     confirmation phrase, while vars.LEDGR_REPAIR_WORKFLOW_ENABLED == 'true'.
+#     dry_run defaults to true.
 #
 # SAFETY
 #   * Production isolation: hard-fails if SUPABASE_PROJECT_REF_PROD equals
@@ -28,20 +26,19 @@
 #   check-run annotation (`::notice …`), readable via the GitHub API.
 #
 # USAGE
-#   Auto: merge a change to scripts/repair-eagle-nova-double-count.sql.
-#   Manual: Actions → "Repair Eagle Nova chicken-manure double-count"
+#   Manual only: Actions → "Repair Eagle Nova chicken-manure double-count"
 #           → Run workflow → dry_run=true|false.
 # ============================================================================
 name: Repair Eagle Nova chicken-manure double-count
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - scripts/repair-eagle-nova-double-count.sql
-      - scripts/diagnose-eagle-nova-chicken-manure.sql
-      - scripts/database/run-support-sql-via-api.sh
-      - .github/workflows/repair-eagle-nova-double-count.yml
+  # INCIDENT CONTAINMENT 2026-09-25 (P1): the push-to-main auto-run trigger was
+  # REMOVED. This workflow can no longer run as a side effect of a merge, a
+  # PR, a test or any automated context. It runs only on an explicit manual
+  # dispatch from main by the repository owner, typing the confirmation phrase,
+  # AND only while the owner-controlled repository variable
+  # LEDGR_REPAIR_WORKFLOW_ENABLED is 'true' (unset = disabled).
+  # Scripts, past runs and migrations are intentionally preserved as evidence.
   workflow_dispatch:
     inputs:
       dry_run:
@@ -52,9 +49,9 @@ on:
         options:
           - "true"
           - "false"
-      ref:
-        description: Branch/ref containing this workflow + SQL
-        required: false
+      confirm:
+        description: "Type exactly: I AM THE OWNER AND APPROVE A PRODUCTION DATA REPAIR"
+        required: true
         default: ""
 
 permissions:
@@ -70,21 +67,28 @@ jobs:
   repair:
     name: Repair chicken-manure double-count (production)
     runs-on: ubuntu-latest
+    # Owner-approval gate (all must hold; any failure = job skipped, no SQL).
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner &&
+      vars.LEDGR_REPAIR_WORKFLOW_ENABLED == 'true' &&
+      inputs.confirm == 'I AM THE OWNER AND APPROVE A PRODUCTION DATA REPAIR'
     environment: Production
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
       PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
       STAGING_SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
-      # push → full repair; dispatch → honour the dry_run input (default true)
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || '0' }}
+      # Fail-safe: anything other than an explicit dry_run=false is a dry run.
+      DRY_RUN: ${{ inputs.dry_run == 'false' && '0' || '1' }}
       SQL_FILE: scripts/diagnose-eagle-nova-chicken-manure.sql
       OUT_DIR: artifacts/support-sql
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: refs/heads/main   # never SQL from an arbitrary/PR branch
           fetch-depth: 0
 
       - name: Verify environment isolation + credentials

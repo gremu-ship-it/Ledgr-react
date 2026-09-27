@@ -365,6 +365,10 @@ test(meta('R08.SALE.BRANCH-SUBSTITUTION', 'DEC-03 at posting: an assigned-scope 
     // Same caller with their OWN branch and an own open shift on an A2 till: passes.
     await c.query('reset role');
     const termA2 = String((await c.query('insert into public.pos_terminals(business_id,name,branch_id) values($1,$2,$3) returning id', [orgs.A.business, 'R13 Till A2', orgs.A.branch2])).rows[0].id);
+    // Owner decision 2026-09-26: POS deducts from BRANCH stock (no warehouse fallback), so A2 needs its
+    // own location holding the item (rolled back with this probe). Access semantics under test are unchanged.
+    const locA2 = String((await c.query('insert into public.inventory_locations(business_id,name,is_default,branch_id) values($1,$2,false,$3) returning id', [orgs.A.business, 'R13 stock A2', orgs.A.branch2])).rows[0].id);
+    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',current_date,10,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, locA2]);
     await c.query('set local role authenticated');
     const opened = await openShift(c, { key: 'r13-r08-bsub-1', terminal: termA2 });
     const okPayload = asA1();
@@ -610,7 +614,7 @@ test(meta('R08.REFUND.DRAWER-EFFECT', 'R07 refund reconciles into R08 drawer rep
         from public.pos_corrections c
         join public.journal_entries je on je.business_id = c.business_id
           and je.posting_key = 'refund:' || c.command_key || ':settlement'
-          and je.source_type = 'invoice' and je.source_id = c.document_id::text
+          and je.source_type = 'invoice' and je.source_id::text = c.document_id::text
         join public.journal_lines jl on jl.journal_entry_id = je.id and not jl.is_debit
        where c.business_id=$1 and c.command_type='refund_sale' and c.document_id=$2
        group by c.command_key order by k`, [orgs.A.business, sale1.id])).rows;

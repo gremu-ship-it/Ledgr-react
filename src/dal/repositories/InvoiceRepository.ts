@@ -1,9 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, InsertDto, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
-import { toRepositoryError, ValidationError } from '../errors/RepositoryError';
+import { toRepositoryError } from '../errors/RepositoryError';
 import { triggerWebhook } from '@/services/webhook/webhook-triggers';
-import { paymentStatusFromAmounts } from '@/lib/paymentStatus';
 
 export interface InvoiceWithLines {
   invoice: Row<'invoices'>;
@@ -117,127 +116,76 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
   }
 
   /**
-   * Create an invoice and its lines in one repository call. If line insertion
-   * fails, the invoice header is removed to avoid an orphaned invoice.
+   * Create an invoice and its lines ATOMICALLY (IC 2026-09-25 P7).
    *
-   * Emits the public-api webhook event `invoice.created` after the invoice and
-   * lines are persisted successfully.
+   * One call to `create_invoice_with_lines` (SECURITY INVOKER — the caller's
+   * own RLS applies to every insert). Header, lines and — when the payload
+   * carries no real number — the invoice-number reservation commit or roll
+   * back together, so a failed line insert can no longer leave an orphan
+   * header (the old compensating DELETE was blocked by admin-only delete RLS).
+   * A replay under the same `clientKey` returns the committed invoice.
+   *
+   * Emits the public-api webhook event `invoice.created` only when this call
+   * created the invoice (not on replay).
    */
   async createWithLines(
     invoice: InsertDto<'invoices'>,
     lines: Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>[],
     clientKey?: string,
   ): Promise<InvoiceWithLines> {
-    // Idempotency for offline sync retries: if this client_key was already
-    // committed on a prior attempt, return the existing invoice instead of
-    // inserting a duplicate. Backed by a unique (business_id, client_key)
-    // index (20260813000003).
-    if (clientKey) {
-      const existing = await this.findByClientKey(invoice.business_id, clientKey);
-      if (existing) {
-        const { data: existingLines } = await this.client
-          .from('invoice_lines')
-          .select('*')
-          .eq('invoice_id', existing.id)
-          .eq('business_id', existing.business_id)
-          .order('line_number', { ascending: true });
-        return { invoice: existing, lines: existingLines ?? [] };
-      }
+    const { data, error } = await (this.client as unknown as {
+      rpc: (fn: 'create_invoice_with_lines', args: {
+        p_invoice: InsertDto<'invoices'>;
+        p_lines: Omit<InsertDto<'invoice_lines'>, 'invoice_id' | 'business_id'>[];
+        p_client_key: string | null;
+      }) => Promise<{ data: { invoice: Row<'invoices'>; lines: Row<'invoice_lines'>[]; idempotent: boolean } | null; error: { code?: string; message?: string } | null }>;
+    }).rpc('create_invoice_with_lines', {
+      p_invoice: invoice,
+      p_lines: lines,
+      p_client_key: clientKey ?? null,
+    });
+
+    if (error) throw toRepositoryError('invoices', error);
+    if (!data?.invoice) {
+      throw toRepositoryError('invoices', { message: 'Invoice creation returned no result; nothing was confirmed as saved.' });
     }
 
-    const header: InsertDto<'invoices'> = clientKey
-      ? ({ ...invoice, client_key: clientKey } as InsertDto<'invoices'>)
-      : invoice;
-
-    const createdInvoice = await this.create(header);
-
-    const lineRows: InsertDto<'invoice_lines'>[] = lines.map((line) => ({
-      ...line,
-      invoice_id: createdInvoice.id,
-      business_id: createdInvoice.business_id,
-    }));
-
-    const { data, error } = await this.client
-      .from('invoice_lines')
-      .insert(lineRows as never)
-      .select('*');
-
-    if (error) {
-      await this.client.from('invoices').delete().eq('id', createdInvoice.id);
-      throw toRepositoryError('invoice_lines', error);
-    }
-
-    const result = { invoice: createdInvoice, lines: data ?? [] };
-    await triggerWebhook(createdInvoice.business_id, 'invoice.created', result);
+    const result = { invoice: data.invoice, lines: data.lines ?? [] };
+    if (!data.idempotent) await triggerWebhook(result.invoice.business_id, 'invoice.created', result);
     return result;
   }
 
   /**
-   * Record a payment against an invoice, update amount_paid/status, and emit
-   * `invoice.paid` when the invoice becomes fully paid.
+   * Record a payment against an invoice ATOMICALLY (IC 2026-09-25 P6).
+   *
+   * One call to `record_invoice_payment`: authorisation, invoice lock,
+   * validation (amount > 0, not void/credit_note, no overpayment), payment
+   * insert, amount_paid, status and the keyed settlement journal commit or
+   * roll back together. A retry with the same key returns the committed
+   * payment (idempotent) instead of re-recording or silently skipping the
+   * amount_paid update. Callers without an offline key get a fresh one per
+   * call; UI flows should pass a key that is stable across double-submits.
    */
   async recordPayment(
     payment: InsertDto<'invoice_payments'>,
     clientKey?: string,
-  ): Promise<{ payment: Row<'invoice_payments'>; invoice: Row<'invoices'> }> {
-    // Idempotency: a retried offline sync must not insert a duplicate payment
-    // and re-increment amount_paid.
-    if (clientKey) {
-      const existing = await this.findPaymentByClientKey(payment.business_id, clientKey);
-      if (existing) {
-        const invoice = await this.findById(payment.invoice_id);
-        return { payment: existing, invoice };
-      }
+  ): Promise<{ payment: Row<'invoice_payments'>; invoice: Row<'invoices'>; journalEntryId?: string | null; idempotent?: boolean }> {
+    const key = clientKey ?? crypto.randomUUID();
+    const { data, error } = await (this.client as unknown as {
+      rpc: (fn: 'record_invoice_payment', args: { p_payment: InsertDto<'invoice_payments'>; p_client_key: string }) =>
+        Promise<{ data: { payment: Row<'invoice_payments'>; invoice: Row<'invoices'>; journal_entry_id: string | null; idempotent: boolean } | null; error: { code?: string; message?: string } | null }>;
+    }).rpc('record_invoice_payment', { p_payment: payment, p_client_key: key });
+
+    if (error) throw toRepositoryError('invoice_payments', error);
+    if (!data?.payment || !data.invoice) {
+      throw toRepositoryError('invoice_payments', { message: 'Payment command returned no result; the payment was not confirmed.' });
     }
 
-    // FIX [C-03 void/credit-note payment control]: enforce at the repository
-    // layer (not just the UI). The DB trigger (20260813000002) is the backstop;
-    // this check gives a clear error before the insert round-trip.
-    const invoice = await this.findById(payment.invoice_id);
-    if (invoice.status === 'void' || invoice.status === 'credit_note') {
-      throw new ValidationError(
-        'invoice_payments',
-        `Cannot record a payment against a ${invoice.status} invoice (${payment.invoice_id}).`,
-      );
+    if (!data.idempotent && data.invoice.status === 'paid') {
+      await triggerWebhook(data.invoice.business_id, 'invoice.paid', data.invoice);
     }
 
-    const paymentRow: InsertDto<'invoice_payments'> = clientKey
-      ? ({ ...payment, client_key: clientKey } as InsertDto<'invoice_payments'>)
-      : payment;
-
-    const { data: paymentData, error: paymentError } = await this.client
-      .from('invoice_payments')
-      .insert(paymentRow as never)
-      .select('*')
-      .single();
-
-    if (paymentError) throw toRepositoryError('invoice_payments', paymentError);
-
-    // Atomic increment — avoids the read-then-write race condition.
-    const { error: incrementError } = await this.client.rpc('increment_amount_paid', {
-      p_table: 'invoices',
-      p_id: payment.invoice_id,
-      p_amount: payment.amount,
-    });
-
-    if (incrementError) throw toRepositoryError('invoices', incrementError);
-
-    let updatedInvoice = await this.findById(payment.invoice_id);
-
-    const nextStatus = paymentStatusFromAmounts(
-      Number(updatedInvoice.total_amount),
-      Number(updatedInvoice.amount_paid),
-    );
-
-    if (updatedInvoice.status !== nextStatus && updatedInvoice.status !== 'void' && updatedInvoice.status !== 'credit_note') {
-      updatedInvoice = await this.update(updatedInvoice.id, { status: nextStatus });
-    }
-
-    if (updatedInvoice.status === 'paid') {
-      await triggerWebhook(updatedInvoice.business_id, 'invoice.paid', updatedInvoice);
-    }
-
-    return { payment: paymentData, invoice: updatedInvoice };
+    return { payment: data.payment, invoice: data.invoice, journalEntryId: data.journal_entry_id, idempotent: data.idempotent };
   }
 
   /**
@@ -258,19 +206,6 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
       .maybeSingle();
     if (error) throw toRepositoryError('invoices', error);
     return (data as Row<'invoices'> | null) ?? null;
-  }
-
-  /** Idempotency lookup: find a payment previously recorded under a client_key. */
-  private async findPaymentByClientKey(businessId: string, clientKey: string): Promise<Row<'invoice_payments'> | null> {
-    const { data, error } = await this.client
-      .from('invoice_payments')
-      .select('*')
-      .eq('business_id', businessId)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- client_key added by migration 20260813000003, not yet in generated types
-      .eq('client_key' as any, clientKey)
-      .maybeSingle();
-    if (error) throw toRepositoryError('invoice_payments', error);
-    return (data as Row<'invoice_payments'> | null) ?? null;
   }
 
   /** Fetch all payments recorded against an invoice. */

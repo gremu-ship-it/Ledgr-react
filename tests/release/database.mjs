@@ -52,10 +52,21 @@ export async function createDatabaseFixture() {
     await client.query(await readFile(join(root, 'tests/release/bootstrap.sql'), 'utf8'));
     await client.query('set search_path = public, extensions');
     const migrations = [];
+    let liveShapeApplied = false;
     for (const name of (await readdir(join(root, 'supabase/migrations'))).filter(n => n.endsWith('.sql')).sort()) {
       const source = await readFile(join(root, 'supabase/migrations', name), 'utf8');
       // Explicitly excluded platform extension installation, NOT a clean Supabase replay.
       // No other SQL edits and no changes to product migrations on disk.
+      // LEDGR_R13_LIVE_UUID_SHAPE=1: reproduce the live column shape documented in
+      // 20260911000002 (source_id / created_by are uuid on production — owner-confirmed 2026-09-27 incl. invoices.created_by — text in
+      // the repository schema) before the first unreleased migration, so SQL is
+      // checked against BOTH shapes. Local-only; no product migration is edited.
+      if (process.env.LEDGR_R13_LIVE_UUID_SHAPE === '1' && name >= '20261011000000' && !liveShapeApplied) {
+        liveShapeApplied = true;
+        for (const [t, c] of [['stock_movements', 'source_id'], ['stock_movements', 'created_by'], ['journal_entries', 'source_id'], ['journal_entries', 'created_by'], ['invoices', 'created_by'], ['invoice_payments', 'created_by'], ['accounting_periods', 'closed_by']]) {
+          await client.query(`alter table public.${t} alter column ${c} type uuid using nullif(${c}, '')::uuid`);
+        }
+      }
       const sql = source.replace(/create extension if not exists (pg_cron|pg_net)\s*;/gi, '-- R13 platform stub: extension installation excluded');
       try { await client.query(sql); }
       catch (e) { throw new Error(`Migration ${name} SQLSTATE ${e.code ?? 'unknown'} (payload suppressed)`); }

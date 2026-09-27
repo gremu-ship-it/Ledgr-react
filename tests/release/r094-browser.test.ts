@@ -248,6 +248,43 @@ test(meta('R094.BROWSER.SW-API-CACHE-FLUSH', 'A real SW-intercepted fetch to the
   );
 });
 
+test(meta('IC.CACHE.BROWSER-FINANCIAL-NETWORK-ONLY', 'Incident containment P8 (additive record): in a REAL browser with the PRODUCTION service worker in control, financial REST reads (invoices, invoice_payments, expenses, journal_entries, inventory_balances, rpc) reach the network on every request and are NEVER written to the workbox runtime API cache, while a non-financial read (products) still is — so a stale financial response can never be served from the SW'), async () => {
+  const ctx = await browser.newContext({ serviceWorkers: 'allow' });
+  const harness = await newHarnessPage(ctx);
+  const appPage = await ctx.newPage();
+  await appPage.goto(stub.origin + '/', { waitUntil: 'load' });
+  await appPage.reload({ waitUntil: 'load' });
+  const swReady = await waitSwStableControl(appPage);
+  const tables = ['invoices', 'invoice_payments', 'expenses', 'journal_entries', 'inventory_balances'];
+  const beforeCalls = (await stubCalls()).length;
+  const res = await go('financial vs control reads through the SW', ev(harness, async (tbls: string[]) => {
+    const api = (window as any).r094;
+    for (let i = 0; i < 40 && !navigator.serviceWorker.controller; i++) await new Promise((r) => setTimeout(r, 250));
+    const statuses: number[] = [];
+    for (let round = 0; round < 2; round++) {
+      for (const t of tbls) statuses.push((await fetch(`https://r094.invalid/rest/v1/${t}?select=id&icround=${round}`)).status);
+    }
+    statuses.push((await fetch('https://r094.invalid/rest/v1/products?select=id&iccontrol=1')).status);
+    let urls: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      urls = (await (await caches.open(api.WORKBOX_API_CACHE_NAME)).keys()).map((k: Request) => k.url);
+      if (urls.some((u) => u.includes('iccontrol=1'))) break;
+      await new Promise((x) => setTimeout(x, 150));
+    }
+    return { statuses, urls, controlled: !!navigator.serviceWorker.controller };
+  }, tables));
+  const calls = (await stubCalls()).slice(beforeCalls);
+  await ctx.close();
+  const financialCached = res.urls.filter((u: string) => tables.some((t) => u.includes(`/rest/v1/${t}?`)));
+  const networkHits = tables.map((t) => calls.filter((c: any) => c.fn === `GET ${t}`).length);
+  must(
+    swReady.ok === true && res.controlled === true && res.statuses.every((s: number) => s === 200)
+      && financialCached.length === 0 && networkHits.every((n) => n === 2)
+      && res.urls.some((u: string) => u.includes('products?select=id&iccontrol=1')),
+    `financial-cache evidence shortfall: swStable=${swReady.ok} controlled=${res.controlled} statuses=[${res.statuses}] financialCached=[${financialCached}] networkHitsPerTable=[${networkHits}] cacheUrls=[${res.urls}]`,
+  );
+});
+
 test(meta('R094.BROWSER.PERSIST-RESTART', 'A queued sale with full provenance (originUser/branch/device/terminal/shift, payloadVersion, payloadHash) and the legacy POS localStorage key survive a REAL browser-process restart (profile-on-disk relaunch); payload integrity re-verifies after restart'), async () => {
   const profile = mkdtempSync(join(tmpdir(), 'r094-profile-restart-'));
   let ctx = await launchPersistent(profile);

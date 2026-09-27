@@ -745,6 +745,113 @@ function readAsDataUrl(file: unknown): Promise<string | null> {
   return Promise.resolve(null);
 }
 
+// ── IC 2026-09-25: demo emulation of the containment commands ───────────────
+// record_invoice_payment / record_expense_payment (P6), create_invoice_with_lines
+// (P7) and pos_stock_availability (P4). Same contracts as the SQL functions:
+// replay by client key, validation, one location for POS stock.
+
+function recordPaymentDemo(
+  tables: DemoTables,
+  kind: 'invoice' | 'expense',
+  args: { p_payment?: DemoRow; p_client_key?: string },
+): DemoRpcResponse {
+  const payment = (args.p_payment ?? {}) as DemoRow;
+  const docTable = kind === 'invoice' ? 'invoices' : 'expenses';
+  const payTable = kind === 'invoice' ? 'invoice_payments' : 'expense_payments';
+  const docKey = kind === 'invoice' ? 'invoice_id' : 'expense_id';
+  const doc = (tables[docTable] ?? []).find((r) => r.id === payment[docKey]);
+  if (!doc) return fail(`${kind} not found`, '42501', 403);
+  const existing = (tables[payTable] ?? []).find(
+    (r) => r.business_id === doc.business_id && r.client_key === args.p_client_key,
+  );
+  if (existing) return ok({ payment: existing, [kind]: doc, journal_entry_id: null, idempotent: true });
+  const amount = Number(payment.amount ?? 0);
+  if (!(amount > 0)) return fail('Enter a valid payment amount.', '23514');
+  if (doc.status === 'void' || doc.status === 'credit_note') {
+    return fail(`Cannot record a payment against a ${String(doc.status)} ${kind}.`, '23514');
+  }
+  if (amount > Number(doc.total_amount ?? 0) - Number(doc.amount_paid ?? 0) + 0.01) {
+    return fail('Payment exceeds the outstanding balance.', '23514');
+  }
+  const nowIso = new Date().toISOString();
+  const row: DemoRow = {
+    ...payment,
+    id: demoUuid(payTable, `${String(args.p_client_key)}-${nowIso}`),
+    business_id: doc.business_id,
+    [docKey]: doc.id,
+    client_key: args.p_client_key ?? null,
+    created_at: nowIso,
+  };
+  (tables[payTable] ??= []).push(row);
+  const inc = incrementAmountPaid(tables, { p_table: docTable, p_id: String(doc.id), p_amount: amount });
+  if (inc.error) return inc;
+  return ok({ payment: row, [kind]: inc.data, journal_entry_id: null, idempotent: false });
+}
+
+function createInvoiceWithLinesDemo(
+  tables: DemoTables,
+  args: { p_invoice?: DemoRow; p_lines?: DemoRow[]; p_client_key?: string | null },
+): DemoRpcResponse {
+  const header = { ...((args.p_invoice ?? {}) as DemoRow) };
+  const businessId = String(header.business_id ?? DEMO_BUSINESS_ID);
+  if (args.p_client_key) {
+    const existing = (tables.invoices ?? []).find(
+      (r) => r.business_id === businessId && r.client_key === args.p_client_key,
+    );
+    if (existing) {
+      const lines = (tables.invoice_lines ?? []).filter((l) => l.invoice_id === existing.id);
+      return ok({ invoice: existing, lines, idempotent: true });
+    }
+  }
+  const number = String(header.invoice_number ?? '');
+  if (!number || number.startsWith('INV-OFFLINE-')) header.invoice_number = nextDocumentNumber(tables, 'invoice');
+  const nowIso = new Date().toISOString();
+  const invoice: DemoRow = {
+    id: demoUuid('invoice', `rpc-${nowIso}`),
+    amount_paid: 0,
+    deleted_at: null,
+    created_at: nowIso,
+    updated_at: nowIso,
+    ...header,
+    business_id: businessId,
+    client_key: args.p_client_key ?? null,
+  };
+  (tables.invoices ??= []).push(invoice);
+  const lines = (args.p_lines ?? []).map((l, i) => ({
+    id: demoUuid('invoice_line', `rpc-${nowIso}-${i}`),
+    ...l,
+    invoice_id: invoice.id,
+    business_id: businessId,
+  }));
+  (tables.invoice_lines ??= []).push(...lines);
+  markDemoStateChanged();
+  return ok({ invoice, lines, idempotent: false });
+}
+
+function posStockAvailabilityDemo(
+  tables: DemoTables,
+  args: { p_business_id?: string; p_branch_id?: string | null },
+): DemoRpcResponse {
+  const locations = (tables.inventory_locations ?? []).filter((l) => l.business_id === args.p_business_id);
+  // Owner decision 2026-09-26 (mirrors 20261013000000): a branch sells from its
+  // OWN location only; the default/first fallback applies to branch-less tills.
+  const location = args.p_branch_id
+    ? locations.find((l) => l.branch_id === args.p_branch_id) ?? null
+    : locations.find((l) => l.is_default) ?? locations[0] ?? null;
+  return ok({
+    business_id: args.p_business_id,
+    branch_id: args.p_branch_id ?? null,
+    location: location ? { id: location.id, name: location.name, branch_id: location.branch_id ?? null } : null,
+    is_fallback: !!location && args.p_branch_id == null && location.branch_id != null,
+    branch_location_missing: !!args.p_branch_id && !location,
+    balances: location
+      ? (tables.inventory_balances ?? [])
+          .filter((b) => b.location_id === location.id)
+          .map((b) => ({ product_id: b.product_id, quantity_on_hand: Number(b.quantity_on_hand ?? 0) }))
+      : [],
+  });
+}
+
 // ── The client ───────────────────────────────────────────────────────────────
 
 export const demoAuth = new DemoAuth();
@@ -765,6 +872,29 @@ export const demoClient = {
         return Promise.resolve(
           ok(nextDocumentNumber(tables, (args.p_kind as 'invoice' | 'expense' | 'payroll') ?? 'invoice')),
         );
+      case 'record_invoice_payment':
+        return Promise.resolve(recordPaymentDemo(tables, 'invoice', args as { p_payment?: DemoRow; p_client_key?: string }));
+      case 'record_expense_payment':
+        return Promise.resolve(recordPaymentDemo(tables, 'expense', args as { p_payment?: DemoRow; p_client_key?: string }));
+      case 'create_invoice_with_lines':
+        return Promise.resolve(createInvoiceWithLinesDemo(tables, args as { p_invoice?: DemoRow; p_lines?: DemoRow[]; p_client_key?: string | null }));
+      case 'record_sale_stock_and_cogs':
+        // HARDENING 2026-09-26: demo mode keeps no perpetual-inventory ledger;
+        // acknowledge the atomic command without side effects.
+        return Promise.resolve(ok({ idempotent: false, cogs_entry_id: null, cogs_missing: false, cost_lines: [] }));
+      case 'pos_stock_availability':
+        return Promise.resolve(posStockAvailabilityDemo(tables, args as { p_business_id?: string; p_branch_id?: string | null }));
+      case 'close_accounting_period':
+      case 'reopen_accounting_period': {
+        // Owner decision 2026-09-26: period status changes only through these commands.
+        const closing = name === 'close_accounting_period';
+        const period = (tables.accounting_periods ?? []).find((p) => p.id === args.p_period_id);
+        if (!period) return Promise.resolve(fail('Period not found.', '42501', 403));
+        period.is_closed = closing;
+        period.closed_at = closing ? new Date().toISOString() : null;
+        markDemoStateChanged();
+        return Promise.resolve(ok({ period_id: period.id, is_closed: closing, draft_invoices_in_period: 0 }));
+      }
       case 'next_journal_entry_number':
         return Promise.resolve(ok(nextJournalEntryNumber(tables)));
       case 'save_quick_sale':
@@ -776,7 +906,8 @@ export const demoClient = {
       case 'list_all_businesses':
         return Promise.resolve(ok(tables.businesses ?? []));
       case 'backfill_and_recalculate_inventory':
-        return Promise.resolve(ok({ updated: (tables.inventory_balances ?? []).length }));
+        // IC 2026-09-25 P2: contained server-side (EXECUTE revoked) — mirror it.
+        return Promise.resolve(fail('permission denied for function backfill_and_recalculate_inventory', '42501', 403));
       case 'invite_member':
       case 'accept_invitation':
       case 'add_partner_admin':

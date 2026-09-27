@@ -155,10 +155,10 @@ async function syncItem(item: QueueItem): Promise<string> {
       }
 
       let nextInvoice = baseInvoice;
-      if (nextInvoice.invoice_number && nextInvoice.invoice_number.startsWith('INV-OFFLINE-')) {
-        const realNumber = await repos.business.reserveNextInvoiceNumber(item.businessId);
-        nextInvoice = { ...nextInvoice, invoice_number: realNumber };
-      }
+      // IC 2026-09-25 P7: an offline placeholder number (INV-OFFLINE-…) is
+      // replaced INSIDE create_invoice_with_lines' transaction, so a failed
+      // save no longer burns a reserved number and a retry cannot orphan one.
+      // The placeholder is sent as-is; the RPC reserves the real number.
       if (!nextInvoice.contact_id || nextInvoice.contact_id === 'offline_walk_in_customer') {
         const walkIn = await repos.contact.findDefaultSaleContact(item.businessId);
         if (walkIn) {
@@ -326,6 +326,11 @@ async function syncItem(item: QueueItem): Promise<string> {
 
     case 'invoice_payment': {
       const { payment } = item.payload as InvoicePaymentQueuePayload;
+      // IC 2026-09-25 P6: recordPayment is now one atomic server command that
+      // already posted the settlement under the same posting key. The keyed
+      // call below is kept only so queue items committed by the OLD
+      // multi-request flow still complete; for new payments it resumes the
+      // existing entry (postKeyedEntry) and posts nothing.
       const result = await repos.invoice.recordPayment(payment, item.clientKey);
       await retryNonCritical(async () => {
         await createInvoiceSettlementEntry(
@@ -342,6 +347,8 @@ async function syncItem(item: QueueItem): Promise<string> {
 
     case 'expense_payment': {
       const { payment } = item.payload as ExpensePaymentQueuePayload;
+      // IC 2026-09-25 P6: see invoice_payment above (atomic command; keyed
+      // settlement call is a no-op resume for new payments).
       const result = await repos.expense.recordPayment(payment, item.clientKey);
       await retryNonCritical(async () => {
         await createExpenseSettlementEntry(

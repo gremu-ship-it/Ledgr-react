@@ -25,4 +25,7 @@ export const suites = {
   'r094-sw-update.test.ts': 'r094-sw-update.json',
   'r094-revalidation-investigation.test.ts': 'r094-revalidation-investigation.json',
   'r06-concurrent-2c.test.ts': 'r06-concurrent-2c.json',
+  'ic-containment.test.ts': 'ic-containment.json',
+  'od-owner-decisions.test.ts': 'od-owner-decisions.json',
+  'pl-period-approval.test.ts': 'pl-period-approval.json',
 };

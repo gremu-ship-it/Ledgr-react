@@ -84,6 +84,13 @@ export interface PosSaleQueuePayload {
   total: number;
   itemCount: number;
   notes?: string;
+  /**
+   * Supervisor override tokens (owner decision 2026-09-26, migration
+   * 20261013000000). Sent only to `post_pos_sale`, which consumes them; never
+   * written to invoice columns. An offline sale whose price/discount needed an
+   * override and has none is refused on sync (22023) — by design.
+   */
+  overrides?: { discountToken: string | null; lineTokens: (string | null)[] };
 }
 
 /** Discriminated union mapping each operation type to its exact payload shape. */

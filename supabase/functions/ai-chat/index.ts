@@ -30,6 +30,11 @@ import { corsHeadersForRequest, preflightResponse } from '../_shared/cors.ts';
 // ── Environment ─────────────────────────────────────────────────────────────
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+// INCIDENT CONTAINMENT 2026-09-25 (P3): the financial data context is read with
+// the CALLER's JWT (anon key + user Authorization header), never service_role.
+// Supabase injects SUPABASE_ANON_KEY into every Edge Function; if it is absent
+// the handler fails closed (no context, no provider call).
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const AI_PROVIDER = (Deno.env.get('AI_PROVIDER') || 'groq').toLowerCase();
 const AI_API_KEY = Deno.env.get('AI_API_KEY')
   || (AI_PROVIDER === 'anthropic' ? Deno.env.get('ANTHROPIC_API_KEY') : undefined);
@@ -160,16 +165,27 @@ async function resolveBusiness(
 }
 
 // ── Data context (same source as src/lib/ai/context.ts) ─────────────────────
-// P5-E: optional branch filter, server-authorized via ai_context(p_business_id, p_branch_id)
-// The RPC validates can_access_branch() and filters branch-sensitive metrics at the SQL layer.
-async function buildDataContext(businessId: string, branchId: string | null): Promise<Json | null> {
-  const { data, error } = await admin.rpc('ai_context', { p_business_id: businessId, p_branch_id: branchId });
+// INCIDENT CONTAINMENT 2026-09-25 (P3). Previously this called ai_context with
+// the service-role client: that RPC path has no auth.uid(), so it skipped the
+// membership / reports-role / can_access_branch / DEC-03 checks and honoured a
+// caller-supplied branch id (or returned org-wide data when it was omitted).
+// It is now invoked with a client bound to the caller's own JWT, so the RPC's
+// authenticated path is the single authority:
+//   • membership + reports-role gate (42501 otherwise);
+//   • requested branch must belong to the business AND pass can_access_branch;
+//   • omitted branch → assigned-scope roles are confined to their assigned
+//     branch (DEC-03; NULL assignment fails closed), org-wide roles keep
+//     org-wide scope.
+// Denials carry SQLSTATE 42501 in error.code and are re-thrown so the handler
+// returns 403 with no business data.
+type RpcClient = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { code?: string; message: string } | null }> };
+export class AiContextDenied extends Error {}
+async function buildDataContext(userClient: RpcClient, businessId: string, branchId: string | null): Promise<Json | null> {
+  const { data, error } = await userClient.rpc('ai_context', { p_business_id: businessId, p_branch_id: branchId });
   if (error) {
-    console.error('[ai-chat] ai_context failed:', error.message);
-    // Surface authorization failures (42501) so the client can degrade appropriately;
-    // other errors return null as before.
-    if (error.message.includes('42501') || error.message.includes('permission denied')) {
-      throw new Error(error.message);
+    console.error('[ai-chat] ai_context failed:', error.code ?? '', error.message);
+    if (error.code === '42501' || error.code === '22023' || error.message.includes('42501') || error.message.includes('permission denied')) {
+      throw new AiContextDenied(error.message);
     }
     return null;
   }
@@ -539,11 +555,11 @@ serve(async (req: Request): Promise<Response> => {
       return json(req, { error: 'Your role cannot access business financial insights.' }, 403);
     }
 
-    // 4c. Optional branch filter (P5-E) — read-only, never authority.
-    //     The client may suggest a branch via `context.branchId` or `context.data.company.branch_id`,
-    //     but the server passes it to `ai_context(business_id, branch_id)` which enforces
-    //     `can_access_branch()` and filters at the SQL layer. A forged or cross-business
-    //     branchId results in 42501/22023 from the RPC, surfaced as 403 here.
+    // 4c. Optional branch filter (P5-E) — a HINT only, never authority.
+    //     The value is passed to ai_context() under the caller's own JWT
+    //     (P3 containment); the RPC validates tenancy + can_access_branch and
+    //     applies the DEC-03 fallback when it is omitted. A forged,
+    //     inaccessible or cross-business id is denied (42501) → 403 here.
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const rawBranch =
       typeof (clientContext.branchId as unknown) === 'string' ? (clientContext.branchId as string)
@@ -553,19 +569,24 @@ serve(async (req: Request): Promise<Response> => {
         : null;
     const branchId = rawBranch && UUID_RE.test(rawBranch) ? rawBranch : null;
 
-    // 5. Rebuild the data context from the database — never from the client.
+    // 5. Rebuild the data context from the database — never from the client —
+    //    with the caller's JWT, never service_role (P3 containment).
+    if (!ANON_KEY) {
+      console.error('[ai-chat] SUPABASE_ANON_KEY missing; refusing to build context');
+      return json(req, { error: 'Could not load business data for this conversation.' }, 500);
+    }
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      auth: { persistSession: false },
+      global: { headers: { Authorization: authHeader } },
+    }) as unknown as RpcClient;
     let data: Json | null;
     try {
-      data = await buildDataContext(business.id, branchId);
+      data = await buildDataContext(userClient, business.id, branchId);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('42501') || msg.includes('permission denied') || msg.includes('does not belong') || msg.includes('Access denied')) {
-        return json(req, { error: 'You do not have access to this branch.' }, 403);
+      if (e instanceof AiContextDenied) {
+        return json(req, { error: 'You do not have access to this branch or business data.' }, 403);
       }
-      if (msg.includes('22023') || msg.includes('does not belong to business')) {
-        return json(req, { error: 'Branch does not belong to this business.' }, 400);
-      }
-      console.error('[ai-chat] ai_context branch error:', msg);
+      console.error('[ai-chat] ai_context error:', e instanceof Error ? e.message : String(e));
       return json(req, { error: 'Could not load business data for this conversation.' }, 502);
     }
     if (!data) {

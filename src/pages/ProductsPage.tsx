@@ -9,7 +9,6 @@ import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row, InsertDto } from '@/dal/types/database';
-import { postStockMovementAdjustment } from '@/services/inventoryJournalService';
 import { weightedAverageCost } from '@/services/inventoryValuation';
 import { newSaveClientKey } from '@/services/quickSaveService';
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -735,35 +734,21 @@ function MovementsTab({ businessId }: { businessId: string }) {
       if (submitLock.current) throw new Error('This movement is already being recorded');
       submitLock.current = true;
 
-      // adjustment_out removes stock, so the movement quantity must be
-      // negative — the DB trigger adds this quantity to on-hand.
-      const signedQty = form.movement_type === 'adjustment_out' ? -qty : qty;
-
       try {
-        await repos.inventory.recordMovement({
-          business_id: businessId,
-          product_id: form.product_id,
-          location_id: form.location_id,
-          movement_type: form.movement_type,
-          movement_date: form.movement_date,
-          quantity: signedQty,
-          unit_cost: unitCost,
+        // H-3 (2026-09-26): the movement (sign applied server-side for
+        // adjustment_out) and its inventory-adjustment journal commit in ONE
+        // server transaction, idempotent per movementKey. Journal failures
+        // are no longer swallowed after the stock has already moved.
+        await repos.inventory.recordInventoryJournalMovement({
+          businessId,
+          kind: 'adjustment',
+          clientKey: movementKey.current,
+          locationId: form.location_id,
+          movementDate: form.movement_date,
+          movementType: form.movement_type,
           reference: form.reference || null,
           notes: form.notes || null,
-          created_by: null,
-        } as InsertDto<'stock_movements'>, movementKey.current);
-
-        // PERPETUAL INVENTORY: mirror the movement into the general ledger so
-        // the stock actually shows under Current Assets. Opening balances in
-        // particular were the most common way to end up with stock on hand
-        // and nothing on the balance sheet.
-        await postStockMovementAdjustment(businessId, {
-          productId:    form.product_id,
-          quantity:     qty,
-          unitCost,
-          movementType: form.movement_type,
-          movementDate: form.movement_date,
-          reference:    form.reference || null,
+          lines: [{ productId: form.product_id, quantity: qty, unitCost }],
         });
       } finally {
         submitLock.current = false;

@@ -9,12 +9,14 @@ import { webcrypto } from 'node:crypto';
 import * as zod from 'zod';
 const root = fileURLToPath(new URL('../../supabase/functions/', import.meta.url));
 /** @param {string} name
- * @param {{client?: object, env?: Record<string,string|undefined>, provider?: (url: string, init: object) => Promise<Response>}} options */
-export function loadEdge(name, { client, env = {}, provider } = {}) {
+ * @param {{client?: object, env?: Record<string,string|undefined>, provider?: (url: string, init: object) => Promise<Response>, createClient?: (url: string, key: string, options?: any) => object}} options
+ * `createClient` (optional, IC 2026-09-25): per-call client factory so a test can attribute calls to the
+ * service-role vs caller-JWT client. Default keeps the historical single shared mock client. */
+export function loadEdge(name, { client, env = {}, provider, createClient } = {}) {
   if (!/^[a-z-]+$/.test(name)) throw new Error('Invalid handler name');
   let handler;
   const effects = { network: 0, mail: 0 };
-  const values = { SUPABASE_URL: 'https://r13.invalid', SUPABASE_SERVICE_ROLE_KEY: 'r13-synthetic-server-key',
+  const values = { SUPABASE_URL: 'https://r13.invalid', SUPABASE_SERVICE_ROLE_KEY: 'r13-synthetic-server-key', SUPABASE_ANON_KEY: 'r13-synthetic-anon-key',
     APP_URL: 'https://r13.invalid', CRON_SECRET: 'r13-synthetic-cron', INVOICE_CRON_SECRET: 'r13-synthetic-invoice-cron',
     PAYCHANGU_SECRET_KEY: 'r13-synthetic-payment', PAYCHANGU_WEBHOOK_SECRET: 'r13-synthetic-webhook',
     AI_API_KEY: 'r13-synthetic-ai', ...env };
@@ -34,7 +36,7 @@ export function loadEdge(name, { client, env = {}, provider } = {}) {
     const module = { exports: {} }; cache.set(path,module);
     const require = specifier => {
       if (/^https:\/\/deno.land\/std@[^/]+\/http\/server.ts$/.test(specifier)) return { serve: register };
-      if (['npm:@supabase/supabase-js@2','https://esm.sh/@supabase/supabase-js@2'].includes(specifier)) return { createClient: () => client };
+      if (['npm:@supabase/supabase-js@2','https://esm.sh/@supabase/supabase-js@2'].includes(specifier)) return { createClient: createClient ?? (() => client) };
       if (specifier === 'npm:zod@4.4.3') return zod;
       if (specifier === 'npm:@sentry/deno@8') return { init() {}, setUser() {}, captureException() {} };
       if (specifier === 'npm:nodemailer@6.9.14') return { createTransport: () => ({ sendMail: () => { effects.mail++; throw new Error('R13 email disabled'); } }) };

@@ -35,3 +35,6 @@ dev-dist/
 
 # R13 disposable test evidence (sanitized; retained by CI separately)
 .cache/
+
+# IC 2026-09-25 P9: release manifest written by scripts/ci/release-manifest.mjs (uploaded as a CI artifact)
+artifacts/release/

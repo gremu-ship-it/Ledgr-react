@@ -54,7 +54,14 @@ function ready() {
 }
 type C = { query: (sql: string, values?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }> };
 
-test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is now server-bound: exactly the canonical R07 commands exist (request/authorize/consume/preflight/void/refund) and nothing else correction-shaped; raw approval "permissions" remain client-free', 'supabase/migrations/20260928000002_r07_correction_commands.sql'), async () => {
+// SUPERSEDED IN PLACE by OWNER DECISION 2026-09-26 (invoice edit policy,
+// migration 20261014000000), per this suite's precedent. Original expectation
+// (verbatim): "The correction surface is now server-bound: exactly the
+// canonical R07 commands exist (request/authorize/consume/preflight/void/
+// refund) and nothing else correction-shaped; raw approval "permissions"
+// remain client-free". The owner-decided invoice approval adds an EXACTLY
+// enumerated set; any other approval/correction-shaped function still fails.
+test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is server-bound: exactly the canonical R07 commands exist (request/authorize/consume/preflight/void/refund) plus the exactly-enumerated owner-decided invoice approval set (approve_invoice, set_invoice_approval_policy and their private guards; 20261014000000) and nothing else correction/approval-shaped; raw approval "permissions" remain client-free', 'supabase/migrations/20260928000002_r07_correction_commands.sql + supabase/migrations/20261014000000_period_lock_and_invoice_approval.sql'), async () => {
   ready();
   // Supersedes the pre-remediation absence record (R07.APPROVAL.NO-SERVER-COMMAND):
   // implementing the mandated contract makes the old "nothing exists" truth false.
@@ -64,7 +71,8 @@ test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is now 
     expect(hits).toContain(expected);
   }
   // No foreign or duplicated correction-shaped entrypoints beyond the canonical six.
-  expect(hits.sort()).toEqual(['_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval','refund_pos_sale_command','request_pos_approval','void_pos_sale_command']);
+  const invoiceApproval = ['_ledgr_invoice_approval_guard','_ledgr_invoice_line_revokes_approval','_ledgr_invoice_needs_approval','_ledgr_revoke_invoice_approval','approve_invoice','set_invoice_approval_policy'];
+  expect(hits.sort()).toEqual(['_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval','refund_pos_sale_command','request_pos_approval','void_pos_sale_command', ...invoiceApproval].sort());
 });
 
 test(meta('R07.APPROVAL.SERVER-STATE', 'Minimal authoritative approval state exists server-side: pos_approvals (org/document/action/requester/approver/expiry/single-use) + pos_corrections ledger; financial documents remain untouched by approval columns; authorization never takes a PIN', 'supabase/migrations/20260928000002_r07_correction_commands.sql'), async () => {
@@ -83,14 +91,23 @@ test(meta('R07.APPROVAL.SERVER-STATE', 'Minimal authoritative approval state exi
   expect(fns.filter((f: string) => /pin/i.test(f))).toEqual([]);
 });
 
-test(meta('R07.VOID.NO-STATUS-GUARD', 'The invoices table has no status-transition guard trigger (existing triggers only sync amount_due / updated_at): a void is executable by raw DML wherever permissions allow UPDATE', 'supabase/migrations (chain-wide trigger scan)'), async () => {
+// SUPERSEDED IN PLACE by POST-CONTAINMENT HARDENING H-4 (2026-09-26), per
+// this suite's precedent (absence proof → presence record, same identity).
+// Original expectation (pre-H-4, verbatim): "The invoices table has no
+// status-transition guard trigger (existing triggers only sync amount_due /
+// updated_at): a void is executable by raw DML wherever permissions allow
+// UPDATE". Migration 20261012000000 adds the direct-write guard; the
+// behavioural proof is H04.INVOICE.POSTED-DIRECT-EDIT-DENIED (ic-containment).
+test(meta('R07.VOID.NO-STATUS-GUARD', 'SUPERSEDED by H-4 (20261012000000): exactly one invoices trigger now references void — trg_invoices_zz_direct_write_guard, which refuses a direct (authenticated/anon) status→void/credit_note or edit of a posted invoice; void remains reachable only through the R07 SECURITY DEFINER commands. No other invoices trigger references void', 'supabase/migrations (chain-wide trigger scan) + supabase/migrations/20261012000000_post_containment_hardening.sql'), async () => {
   ready();
   const trg = (await db.client.query("select tgname from pg_trigger t join pg_class c on c.oid=t.tgrelid join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname='invoices' and not t.tgisinternal order by 1")).rows.map((r: { tgname: string }) => r.tgname);
   expect(trg.length).toBeGreaterThan(0); // table is not trigger-free (inventory truth)
+  const referencingVoid: string[] = [];
   for (const name of trg) {
     const def = (await db.client.query('select pg_get_functiondef(t.tgfoid) d from pg_trigger t join pg_class c on c.oid=t.tgrelid where c.relname=$1 and t.tgname=$2', ['invoices', name])).rows[0].d as string;
-    expect(/void/i.test(def)).toBe(false);
+    if (/void/i.test(def)) referencingVoid.push(name);
   }
+  expect(referencingVoid).toEqual(['trg_invoices_zz_direct_write_guard']);
 });
 
 test(meta('R07.AUDIT.SAME-TENANT-FABRICATED-ACCEPTED', 'Boundary fact: log_manual_audit_event accepts caller-fabricated event content (e.g., a forged approver string) for the caller own business; only the ACTOR is server-derived', 'supabase/migrations/20260815000000_phase8b_reconstruct_rpcs.sql'), async () => {

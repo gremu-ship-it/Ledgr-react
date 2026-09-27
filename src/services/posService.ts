@@ -191,6 +191,29 @@ export function applyItemDiscount(currentItems: PosCartItem[], productId: string
   });
 }
 
+/**
+ * Sets a non-catalogue unit price on one line (owner decision 2026-09-26).
+ * A supervisor passes no token (the server accepts their own authority); a
+ * cashier must pass the supervisor-authorised override token, which the server
+ * consumes. The line total is recomputed with the line's existing discount.
+ */
+export function applyItemPriceOverride(
+  currentItems: PosCartItem[],
+  productId: string,
+  unitPrice: number,
+  token?: string | null,
+): PosCartItem[] {
+  const repriced = currentItems.map((it) => (it.product_id || it.productId) !== productId ? it : {
+    ...it,
+    unit_price: unitPrice,
+    unitPrice,
+    selling_price: unitPrice,
+    priceOverrideToken: token ?? null,
+  });
+  const item = repriced.find((it) => (it.product_id || it.productId) === productId);
+  return item ? applyItemDiscount(repriced, productId, item.discount) : repriced;
+}
+
 export function applyOrderDiscount(_currentItems: PosCartItem[], discount?: PosDiscount): PosDiscount | undefined {
   return discount;
 }
@@ -436,7 +459,7 @@ export function buildPosSaleQueuePayload(
       ? `${sale.notes} (Receipt: ${sale.receiptNumber})`
       : `POS Sale Receipt ${sale.receiptNumber}`,
     payment_reference: sale.receiptNumber,
-    created_by: sale.cashierName,
+    created_by: sale.cashierId ?? null,  // user id (uuid column on live DB); the server records auth.uid() anyway
     branch_id: branchId,
     client_key: sale.clientKey,
   } as InsertDto<'invoices'>;
@@ -473,7 +496,7 @@ export function buildPosSaleQueuePayload(
       notes: `POS Payment: ${p.payment_method} for ${sale.receiptNumber}`,
       currency: 'MWK',
       exchange_rate: 1,
-      created_by: sale.cashierName,
+      created_by: sale.cashierId ?? null,  // user id (uuid column on live DB); the server records auth.uid() anyway
     }));
 
   const cashSales = round2(
@@ -502,6 +525,10 @@ export function buildPosSaleQueuePayload(
     total: totals.net_payable,
     itemCount: totals.item_count,
     notes: sale.notes,
+    overrides: {
+      discountToken: payload.discountOverrideToken ?? null,
+      lineTokens: payload.items.map((item) => item.priceOverrideToken ?? null),
+    },
   };
 }
 

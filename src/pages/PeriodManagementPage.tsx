@@ -26,6 +26,10 @@ export function PeriodManagementPage() {
   const businessId = currentBusiness?.business?.id;
   const role = currentBusiness?.role;
   const canManage = role === 'owner' || role === 'admin';
+  // Owner decision 2026-09-26 (server-enforced, 20261014000000): the accountant
+  // may also close a period; only the owner may reopen one, with a reason.
+  const canClose = canManage || role === 'accountant';
+  const canReopen = role === 'owner';
 
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +71,8 @@ export function PeriodManagementPage() {
   });
 
   const unlockMutation = useMutation({
-    mutationFn: (periodId: string) =>
-      repos.period.unlock(periodId, currentUser!.id, currentUser?.email),
+    mutationFn: ({ periodId, reason }: { periodId: string; reason: string }) =>
+      repos.period.unlock(periodId, currentUser!.id, currentUser?.email, reason),
     onSuccess: () => {
       setError(null);
       queryClient.invalidateQueries({ queryKey: ['accounting_periods', businessId] });
@@ -97,16 +101,21 @@ export function PeriodManagementPage() {
 
   function handleLock(period: Row<'accounting_periods'>) {
     if (!window.confirm(
-      `Lock "${period.name}"? No new journal entries can be posted to this period once locked. Draft entries in range must be posted or removed first.`,
+      `Close "${period.name}"? Nothing dated in this period can then be added, changed or deleted — journals, invoices, payments, expenses or stock movements. Corrections go into an open period. Draft journal entries in range must be posted or removed first. Only the owner can reopen it.`,
     )) return;
     lockMutation.mutate(period.id);
   }
 
   function handleUnlock(period: Row<'accounting_periods'>) {
-    if (!window.confirm(
-      `Unlock "${period.name}"? This will allow journal entries to be posted to this period again.`,
-    )) return;
-    unlockMutation.mutate(period.id);
+    const reason = window.prompt(
+      `Reopen "${period.name}"? This allows changes to a closed period and is recorded in the audit log. Give the reason (at least 10 characters):`,
+    );
+    if (reason == null) return;
+    if (reason.trim().length < 10) {
+      setError('Reopening a closed period needs a written reason of at least 10 characters.');
+      return;
+    }
+    unlockMutation.mutate({ periodId: period.id, reason: reason.trim() });
   }
 
   if (!businessId) {
@@ -143,11 +152,11 @@ export function PeriodManagementPage() {
         </div>
       )}
 
-      {!canManage && (
+      {!canClose && (
         <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
           <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
           <p className="text-sm text-amber-700">
-            Only business owners and admins can create, lock, or unlock periods. You can view period status below.
+            Owners and admins create periods; the owner, an admin or the accountant can close one; only the owner can reopen a closed period. You can view period status below.
           </p>
         </div>
       )}
@@ -185,7 +194,7 @@ export function PeriodManagementPage() {
                   <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Debits</th>
                   <th scope="col" className="hidden sm:table-cell px-4 py-3 text-right">Credits</th>
                   <th scope="col" className="px-4 py-3 text-left">Status</th>
-                  {canManage && <th scope="col" className="px-4 py-3 text-right">Action</th>}
+                  {canClose && <th scope="col" className="px-4 py-3 text-right">Action</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -217,10 +226,10 @@ export function PeriodManagementPage() {
                           </span>
                         )}
                       </td>
-                      {canManage && (
+                      {canClose && (
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-2">
-                            {!period.is_closed && (
+                            {!period.is_closed && canManage && (
                               <button
                                 onClick={() => fxRevaluationMutation.mutate(period)}
                                 disabled={isPending || fxRevaluationMutation.isPending}
@@ -230,7 +239,9 @@ export function PeriodManagementPage() {
                                 FX Revalue
                               </button>
                             )}
-                            {period.is_closed ? (
+                            {period.is_closed && !canReopen ? (
+                              <span className="text-xs text-gray-400">Closed — owner can reopen</span>
+                            ) : period.is_closed ? (
                               <button
                                 onClick={() => handleUnlock(period)}
                                 disabled={isPending || fxRevaluationMutation.isPending}
