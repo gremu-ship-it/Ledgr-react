@@ -838,10 +838,43 @@ test(hmeta('H02.POS.PRICING-POLICY', 'Owner decision 2026-09-26 — SERVER POS P
   });
 });
 
+test(hmeta('H02.POS.POSTED-ENTRY-IMMUTABLE', 'Under the same production-shaped posted-journal immutability guard (2026-09-27 defect class), a POS sale of a tracked product still posts its sale, settlement and keyed COGS entries — the keyed posting path never UPDATEs a posted entry — and record_sale_stock_and_cogs still posts the keyed COGS entry for a non-POS invoice; every entry carries its posting_key from the INSERT', `${MP} + supabase/migrations/20261015000000_posted_journal_posting_key_inline.sql`), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
+    await su(c);
+    await c.query(`create or replace function public._r13_guard_pos_journal() returns trigger language plpgsql as $g$
+      begin
+        if old.status = 'posted' and new.status = 'posted' then
+          raise exception 'Cannot modify posted journal entry %. Create a reversal instead.', old.entry_number using errcode = 'P0001';
+        end if;
+        return new;
+      end;
+    $g$`);
+    await c.query('create trigger trg_r13_pos_journal_immutable before update on public.journal_entries for each row execute function public._r13_guard_pos_journal()');
+    await as(c, identities.A_cashier.id);
+    const s = await posSale(c, saleFixture(orgs.A, 840));
+    expect(s.journal_entry_id).toBeTruthy();
+    expect(s.cogs_entry_id).toBeTruthy();
+    await as(c, identities.A_owner.id);
+    const inv = (await createInvoice(c, 'A', key(742), {}, [productLine('A')])).invoice;
+    const r2 = await stockCogs(c, inv.id, [{ product_id: orgs.A.product, quantity: 2 }]);
+    expect(r2.cogs_entry_id).toBeTruthy();
+    await su(c);
+    expect(await cogsFor(c, inv.id)).toBe(1);
+    const keys = (await c.query(`select array_agg(posting_key order by posting_key) k from public.journal_entries
+      where business_id=$1 and (posting_key like 'invoice:' || $2 || ':%' or posting_key = 'invoice:' || $3 || ':cogs')`,
+      [orgs.A.business, s.id, inv.id])).rows[0].k as string[];
+    expect(keys).toContain(`invoice:${s.id}:sale`);
+    expect(keys).toContain(`invoice:${s.id}:cogs`);
+    expect(keys).toContain(`invoice:${inv.id}:cogs`);
+    expect(keys.some((k) => k.startsWith(`invoice:${s.id}:settlement:`))).toBe(true);
+  });
+});
+
 // ── H-3 atomic inventory journal command ──
 const invMove = (c: C, p: Record<string, unknown>) =>
   c.query('select public.record_inventory_journal_movement($1::jsonb) r', [JSON.stringify({ business_id: orgs.A.business, location_id: orgs.A.location, movement_date: DAY, ...p })]).then((r) => r.rows[0].r as Record<string, any>);
-const K = (tag: string) => key(Number(({'h03-rcpt-1': 870, 'h03-adj-out': 871, 'h03-adj-in': 872, 'h03-jfail': 873, 'h03-sfail': 874, 'h03-retry': 875, 'h03-retry-fix': 876, 'h03-iso-1': 877, 'h03-iso-2': 878, 'h03-iso-3': 879, 'h03-iso-4': 880, 'h03-iso-5': 881} as Record<string, number>)[tag]));
+const K = (tag: string) => key(Number(({'h03-rcpt-1': 870, 'h03-adj-out': 871, 'h03-adj-in': 872, 'h03-jfail': 873, 'h03-sfail': 874, 'h03-retry': 875, 'h03-retry-fix': 876, 'h03-iso-1': 877, 'h03-iso-2': 878, 'h03-iso-3': 879, 'h03-iso-4': 880, 'h03-iso-5': 881, 'h03-immut': 882} as Record<string, number>)[tag]));
 const lineOf = (qty: number, cost = 900, org = 'A') => [{ product_id: orgs[org].product, quantity: qty, unit_cost: cost }];
 const movesFor = async (c: C, source: string, k: string) =>
   (await c.query('select count(*)::int n from public.stock_movements where business_id=$1 and source_type=$2 and source_id=$3', [orgs.A.business, source, k])).rows[0].n as number;
@@ -915,6 +948,35 @@ test(hmeta('H03.INVJ.RETRY-IDEMPOTENT', 'A retry with the same client_key return
     await su(c);
     expect(await movesFor(c, 'stock_receipt', K('h03-retry'))).toBe(1);
     expect(await entryFor(c, `stock_receipt:${K('h03-retry')}:grni`)).toHaveLength(1);
+    expect(await onHand(c)).toBe(before + 4);
+  });
+});
+
+test(hmeta('H03.INVJ.POSTED-ENTRY-IMMUTABLE', 'A production-shaped posted-journal immutability guard (out-of-band trigger raising "Cannot modify posted journal entry %. Create a reversal instead." on any UPDATE that leaves a posted entry posted — the 2026-09-27 warehouse receipt failure) does not block a receipt: the GRNI entry is created with its posting_key in the INSERT, no posted row is UPDATEd, stock moves, the entry is keyed and balanced, and the same-key retry stays idempotent', `${MP} + supabase/migrations/20261015000000_posted_journal_posting_key_inline.sql`), async () => {
+  ready();
+  await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
+    await su(c); const before = await onHand(c);
+    await c.query(`create or replace function public._r13_guard_posted_journal() returns trigger language plpgsql as $g$
+      begin
+        if old.status = 'posted' and new.status = 'posted' then
+          raise exception 'Cannot modify posted journal entry %. Create a reversal instead.', old.entry_number using errcode = 'P0001';
+        end if;
+        return new;
+      end;
+    $g$`);
+    await c.query('create trigger trg_r13_posted_journal_immutable before update on public.journal_entries for each row execute function public._r13_guard_posted_journal()');
+    await as(c, identities.A_owner.id);
+    const r = await invMove(c, { kind: 'receipt', client_key: K('h03-immut'), lines: lineOf(4) });
+    expect(r).toMatchObject({ idempotent: false });
+    expect(r.journal_entry_id).toBeTruthy();
+    const again = await invMove(c, { kind: 'receipt', client_key: K('h03-immut'), lines: lineOf(4) });
+    expect(again).toEqual({ idempotent: true, movement_ids: r.movement_ids, journal_entry_id: r.journal_entry_id });
+    await su(c);
+    expect(await movesFor(c, 'stock_receipt', K('h03-immut'))).toBe(1);
+    const rc = await entryFor(c, `stock_receipt:${K('h03-immut')}:grni`);
+    expect(rc).toHaveLength(1);
+    expect(rc[0].id).toBe(r.journal_entry_id);
+    expect([Number(rc[0].d), Number(rc[0].k)]).toEqual([3600, 3600]);
     expect(await onHand(c)).toBe(before + 4);
   });
 });
