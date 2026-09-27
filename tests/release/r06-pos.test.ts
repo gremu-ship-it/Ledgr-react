@@ -69,7 +69,7 @@ const balanceOf = async (c: C, org = 'A') =>
 
 const insertMovement = (c: C, org: string, qty: number, unitCost: number | null, type: string, sourceId: string) =>
   c.query(`insert into public.stock_movements(business_id, product_id, location_id, movement_type, movement_date, quantity, unit_cost, source_type, source_id, reference)
-    values($1,$2,$3,$4,$5,$6,$7,'r13-probe',$8,'R06 invariant probe')`,
+    values($1,$2,$3,$4,$5,$6,$7,'r13-probe',md5($8::text)::uuid,'R06 invariant probe')`,
     [orgs[org].business, orgs[org].product, orgs[org].location, type, DAY, qty, unitCost, sourceId]);
 
 test(meta('R06.POS.BALANCE-PROPAGATION', 'A sale movement reduces on_hand exactly (100→98); an inbound movement increases it (98→101); the mechanism propagates movements rather than trusting movement-insertion alone', M_TRIG), async () => {

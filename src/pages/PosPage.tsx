@@ -390,7 +390,8 @@ export function PosPage() {
               invoice_number: inv.invoice_number,
               created_at: inv.created_at || inv.issue_date,
               customer_name: (inv as { contact?: { name?: string } }).contact?.name || 'Walk-in',
-              cashier_name: inv.created_by || 'Cashier',
+              // created_by is a user id (uuid) since 2026-09-27; older rows may hold a name.
+              cashier_name: inv.created_by && !/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(inv.created_by) ? inv.created_by : 'Cashier',
               // `subtotal` is stored net of discount (app-wide convention),
               // so the pre-discount figure is subtotal + discount.
               gross_amount: (Number(inv.subtotal) || 0) + (Number(inv.discount_amount) || 0),

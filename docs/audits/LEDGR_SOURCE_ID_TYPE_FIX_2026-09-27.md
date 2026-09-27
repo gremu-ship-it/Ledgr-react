@@ -34,3 +34,19 @@
 2. On that project, run this read-only query and share the result:
    `select table_name, column_name, data_type from information_schema.columns where table_schema='public' and table_name in ('stock_movements','journal_entries','invoices') and column_name in ('source_id','created_by');`
 3. Don't paste migrations into the SQL editor. Apply them through the reviewed merge/deploy path, then run the size workflow. That keeps the evidence chain intact.
+
+## 5. Update: the owner confirmed the column types (2026-09-27)
+The owner's `information_schema` output shows these are all **uuid**: `invoices.created_by`, `journal_entries.source_id`, `journal_entries.created_by`, `stock_movements.source_id` and `stock_movements.created_by`. The project it came from has not been stated yet.
+
+Fixed (unreleased code only):
+- `post_pos_sale` now records `created_by` as the signed-in user (`auth.uid()`). With no signed-in user, it takes the payload value only if it is a well-formed uuid, via the new `_ledgr_try_uuid`. The till client used to send the cashier's **display name** there, which a uuid column cannot store.
+- The client (`posService`) now sends `cashierId` as `created_by`. Receipt reprints show "Cashier" rather than a raw uuid.
+- The stock backfill functions cast `created_by` to uuid.
+- The harness's uuid mode now also covers `invoices.created_by` and `invoice_payments.created_by`. The R06 fixture labels now map to fixed uuids (`md5(label)::uuid`).
+
+**Found, NOT fixed. This code is already in production (f671656).** On a database shaped like this, these fail with `uuid = text` or text→uuid errors:
+- `close_pos_shift_command` (20260930000003);
+- `refund_pos_sale_command` and `void_pos_sale_command` (20260928000002), which compare text with uuid, write `auth.uid()::text`, and write composite `<invoice>:<key>` keys into `source_id`;
+- `save_quick_sale` and `save_quick_expense` as rewritten by 20261007000000.
+
+If this is the live production database, closing shifts, refunds, voids and quick-save would be failing today. Before rewriting the R07/R08 commands, the owner must confirm which project this is and whether those features work (see the chat for the read-only queries). The R07/R08 behaviour itself will not change; only the types need correcting.

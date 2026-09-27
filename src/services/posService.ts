@@ -459,7 +459,7 @@ export function buildPosSaleQueuePayload(
       ? `${sale.notes} (Receipt: ${sale.receiptNumber})`
       : `POS Sale Receipt ${sale.receiptNumber}`,
     payment_reference: sale.receiptNumber,
-    created_by: sale.cashierName,
+    created_by: sale.cashierId ?? null,  // user id (uuid column on live DB); the server records auth.uid() anyway
     branch_id: branchId,
     client_key: sale.clientKey,
   } as InsertDto<'invoices'>;
@@ -496,7 +496,7 @@ export function buildPosSaleQueuePayload(
       notes: `POS Payment: ${p.payment_method} for ${sale.receiptNumber}`,
       currency: 'MWK',
       exchange_rate: 1,
-      created_by: sale.cashierName,
+      created_by: sale.cashierId ?? null,  // user id (uuid column on live DB); the server records auth.uid() anyway
     }));
 
   const cashSales = round2(

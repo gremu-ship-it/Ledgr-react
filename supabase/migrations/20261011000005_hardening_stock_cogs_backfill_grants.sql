@@ -248,7 +248,7 @@ begin
         'expense' as source_type,
         e.id as source_id,
         e.expense_number as reference,
-        e.created_by
+        nullif(e.created_by::text, '')::uuid as created_by
       from public.expenses e
       join public.expense_lines el on el.expense_id = e.id
       join public.products p on p.id = el.product_id
@@ -414,7 +414,7 @@ begin
         'invoice' as source_type,
         i.id as source_id,
         i.invoice_number as reference,
-        i.created_by
+        nullif(i.created_by::text, '')::uuid as created_by
       from public.invoices i
       join public.invoice_lines il on il.invoice_id = i.id
       join public.products p on p.id = il.product_id

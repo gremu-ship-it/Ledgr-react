@@ -84,6 +84,15 @@ revoke all on function public._ledgr_assert_pos_sale_amounts(uuid, jsonb, jsonb)
 -- definition); the ONLY change is the `perform _ledgr_assert_pos_sale_amounts`
 -- call marked "H-2" after step 3b. Idempotent replays (which return before
 -- step 3) are unaffected.
+-- 2026-09-27: the live DB stores created_by as uuid; till clients historically
+-- sent the cashier's display NAME there. Record the authenticated actor; accept a
+-- payload value only if it is a well-formed uuid (never raise on a name).
+create or replace function public._ledgr_try_uuid(p text)
+returns uuid language sql immutable set search_path = public as $$
+  select case when p ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then p::uuid end
+$$;
+revoke all on function public._ledgr_try_uuid(text) from public, anon;
+
 create or replace function public.post_pos_sale(p_payload jsonb)
 returns jsonb
 language plpgsql
@@ -371,7 +380,7 @@ begin
       coalesce(v_invoice->>'notes', v_invoice->>'description'),
       v_branch_resolved,
       (v_invoice->>'department_id')::uuid,
-      v_invoice->>'created_by',
+      coalesce(auth.uid(), public._ledgr_try_uuid(v_invoice->>'created_by')),  -- actor, uuid on live DB (2026-09-27)
       v_client_key,
       v_shift,
       v_incoming_hash
@@ -465,7 +474,7 @@ begin
       coalesce(v_payment->>'payment_method', 'cash')::public.payment_method,
       v_tender,
       v_payment->>'reference',
-      coalesce(v_payment->>'created_by', v_invoice->>'created_by'),
+      coalesce(auth.uid(), public._ledgr_try_uuid(coalesce(v_payment->>'created_by', v_invoice->>'created_by'))),
       v_payment_key
     )
     on conflict (business_id, client_key) do nothing;
