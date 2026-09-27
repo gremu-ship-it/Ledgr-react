@@ -196,7 +196,10 @@ test(meta('POS.VOID','Authorized void has exactly-once reversal effects','R07','
     await c.query('reset role');
     const inv = (await c.query('select status from public.invoices where id=$1',[posted.id])).rows[0];
     expect(inv.status).toBe('void');
-    const total = (await c.query("select count(*)::int n from public.journal_entries where business_id=$1 and source_type='invoice' and source_id=$2",[orgs.A.business,posted.id])).rows[0].n;
+    const total = (await c.query("select count(*)::int n from public.journal_entries where business_id=$1 and ((source_type='invoice' and source_id=$2) or posting_key='invoice:'||$2||':cogs')",[orgs.A.business,posted.id])).rows[0].n;
+    // ^ the COGS original is posted with source_type='inventory_cogs' (key
+    // invoice:<id>:cogs); since 20261016000000 (retail FIX E) the void mirrors
+    // it too, so it must be counted among the originals being reversed.
     const mirrored = (await c.query("select count(*)::int n from public.journal_entries where business_id=$1 and posting_key like 'void:%'", [orgs.A.business])).rows[0].n;
     expect(mirrored).toBe(v1.journal_entries.length);
     expect(total).toBe(v1.journal_entries.length * 2);
@@ -275,7 +278,9 @@ test(meta('FINANCE.REVERSAL','Approved immutable correction/reversal preserves h
     expect(caught && caught.code).toBe('22023');
     // Privileged observer of effects only.
     await c.query('reset role');
-    const originals = (await c.query("select count(*)::int n from public.journal_entries where business_id=$1 and source_type='invoice' and source_id=$2 and posting_key not like 'void:%'",[orgs.A.business, posted.id])).rows[0].n;
+    const originals = (await c.query("select count(*)::int n from public.journal_entries where business_id=$1 and ((source_type='invoice' and source_id=$2 and posting_key not like 'void:%') or posting_key='invoice:'||$2||':cogs')",[orgs.A.business, posted.id])).rows[0].n;
+    // ^ includes the COGS original (source_type='inventory_cogs', key
+    // invoice:<id>:cogs) which the void mirrors since 20261016000000 (FIX E).
     const reversals = (await c.query("select count(*)::int n from public.journal_entries where business_id=$1 and source_type='invoice' and source_id=$2 and posting_key like 'void:%'",[orgs.A.business, posted.id])).rows[0].n;
     expect(originals).toBeGreaterThan(0);
     expect(reversals).toBe(originals);
