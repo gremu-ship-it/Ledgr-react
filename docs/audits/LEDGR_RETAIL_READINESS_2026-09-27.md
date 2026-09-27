@@ -221,6 +221,14 @@ Files, functions, tables and guards, in execution order. All links read from sou
 > - **Historical production rows are NOT corrected by the migration** (it only fixes future sales). Diagnostics and proposed one-off corrections are in §17 item 3.
 > - **Staging** (`bkxzgkurcqvccsdjmqzg`) has **not** received the script.
 
+> ### POST-REPORT UPDATE 3 — 2026-09-27 evening (PR #190 merged; staging deployed)
+>
+> - **PR #190 merged to `main`** at 17:59:50Z — merge commit `46dfcc3`. Repository and production fixes are now the same code.
+> - **PR checks all green before merge**, including the **isolated R13 release evidence** job (the 822-record release gate ran in CI on the PR) and CI typecheck/lint/test/build on main.
+> - **Staging deployed successfully** (Deploy run `36338983680`): the pipeline applied `20261016000000` to the staging database and its "Verify DB reached migration target (staging)" step passed — staging now carries the migration **and** its `schema_migrations` row.
+> - **Production deploy correctly SKIPPED by that run**: per `deploy.yml`, the production job runs only on a `v*` tag or a manual dispatch, behind the `Production` environment approval gate (the 2026-09-27 morning production deploy was itself a manual dispatch). Action required from the owner — GitHub → Actions → **Deploy** → Run workflow (`main`, environment: **production**) → approve the gate. The agent's token cannot dispatch workflows (403).
+> - **State after this update:** production database carries the five fixes (applied manually, update 1) but not yet the `schema_migrations` row for `20261016000000`; production frontend is still `4d9aa63` (functionally fine — the fixes are backend `SECURITY DEFINER` replacements, no frontend change is required). The §14 **Deployment gate stays NOT MET** until the production dispatch above completes; the §18.10 verdict is unchanged.
+
 Production data (session evidence, 2026-09-27): Eagle Nova Horizon 319 invoices (last 2026-09-23 10:06 UTC), Eagle Nurseries 90 (09-23 09:37); **no shift ever closed**; no void/refund movements in 30 days; no closed periods; "Head Office" −2 units. Because the deployed client posts invoice status `'sent'` and the deployed server stores it verbatim, every fully-paid till sale made on production is expected to sit at `status='sent'` — the §16 P0-1 report/close derivation therefore shows zero sales there too. That expectation was code-derived (verified); the production rows themselves were re-queried on 2026-09-27 (owner, production SQL editor) — see the addendum below.
 
 > ### POST-REPORT UPDATE 2 — 2026-09-27 (production diagnostics: all clean)
