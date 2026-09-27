@@ -233,3 +233,25 @@ inventory) is the substitute.
      ```
      Keys with a large positive `difference` and an old `last_ledger_movement_at`
      are pre-ledger opening stock; leave them alone.
+7. **Posted-journal immutability vs keyed postings (2026-09-27).** A customer
+   Receive Stock failed with `Database error in stock_movements: Cannot modify
+   posted journal entry JNL-20260927-000403. Create a reversal instead.`
+   Production enforces posted-entry immutability with an out-of-band guard
+   (the same rule `JournalRepository.post` documents; GAP-2 in
+   `docs/audits/LEDGR_DECISION_ARCHITECTURE_GATE_2026-09-22.md`), but the
+   migration-chain keyed posters violated it: `_ledgr_post_entry_keyed`
+   (20260923000000) and the COGS callers
+   (`_ledgr_complete_pos_sale`, `record_sale_stock_and_cogs`,
+   `ledgr_repair.apply_2026_09`) INSERTed entries already `status='posted'`
+   and then UPDATEd the row to stamp `journal_entries.posting_key`. The guard
+   rejected the UPDATE, so the receipt's single server transaction (H-3)
+   rolled back entirely — no partial state was left, no data repair was
+   needed; every retry just burned a fresh JNL number from the sequence.
+   `20261015000000_posted_journal_posting_key_inline.sql` fixes the defect
+   class: `posting_key` is now written with the INSERT that creates the entry
+   (12-arg `_ledgr_post_entry` / 8-arg `_ledgr_post_cogs` overloads; the
+   historical shapes delegate with a null key), so no posting path UPDATEs a
+   posted journal entry any more. Release evidence:
+   `H03.INVJ.POSTED-ENTRY-IMMUTABLE` and `H02.POS.POSTED-ENTRY-IMMUTABLE`
+   replay a production-shaped immutability guard and prove receipts, POS
+   sales and invoice COGS still post.
