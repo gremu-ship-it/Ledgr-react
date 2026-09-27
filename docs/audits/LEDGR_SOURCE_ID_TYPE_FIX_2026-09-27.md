@@ -73,3 +73,14 @@ Five functions are re-issued from their latest definitions, with type-only edits
 - `save_quick_expense`
 
 R07 correction keys move from `source_id` (`<invoice>:<key>`, which cannot be stored in a uuid column) to `notes` (`correction key K`). One test query in r08 was made type-agnostic. The till, correction and shift suites pass in both shapes (146 in each).
+
+## 8. Business-scoped results (owner, 2026-09-27)
+- **Branches without a stock location:** "Lilongwe Branch" (2 invoices ever, last 2026-09-01) and "Blantyre Branch" (0 invoices), both in the **Ledgr Technologies** business. No trading customer is affected, so this is **not a deploy blocker**. A location can be added in the app at any time.
+- **Last invoice created, per business:**
+  - Eagle Nova Horizon Holdings: 319 invoices, last on **2026-09-23 10:06 UTC**;
+  - Eagle Nurseries: 90 invoices, last on **2026-09-23 09:37 UTC**;
+  - Demo company Ltd: 2026-09-11;
+  - Ledgr Technologies: 2026-09-01;
+  - 8 other businesses have no invoices.
+- Both trading businesses stopped recording invoices within 30 minutes of each other, on the morning of 23 Sep. Before that they recorded invoices on most days.
+- **Hypothesis, NOT established:** production's `_ledgr_complete_pos_sale` writes `p_invoice_id::text` into the uuid `stock_movements.source_id`. If till sales started reaching that path around 23 Sep, every till sale containing a stock item would fail (42804) and roll back, invoice included. Test it against the Postgres logs and with staff before acting on it. Timing alone is not treated as proof of cause.
