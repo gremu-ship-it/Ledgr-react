@@ -221,7 +221,20 @@ Files, functions, tables and guards, in execution order. All links read from sou
 > - **Historical production rows are NOT corrected by the migration** (it only fixes future sales). Diagnostics and proposed one-off corrections are in §17 item 3.
 > - **Staging** (`bkxzgkurcqvccsdjmqzg`) has **not** received the script.
 
-Production data (session evidence, 2026-09-27): Eagle Nova Horizon 319 invoices (last 2026-09-23 10:06 UTC), Eagle Nurseries 90 (09-23 09:37); **no shift ever closed**; no void/refund movements in 30 days; no closed periods; "Head Office" −2 units. Because the deployed client posts invoice status `'sent'` and the deployed server stores it verbatim, every fully-paid till sale made on production is expected to sit at `status='sent'` — the §16 P0-1 report/close derivation therefore shows zero sales there too. That expectation is code-derived (verified); the production rows themselves were not re-queried in this session.
+Production data (session evidence, 2026-09-27): Eagle Nova Horizon 319 invoices (last 2026-09-23 10:06 UTC), Eagle Nurseries 90 (09-23 09:37); **no shift ever closed**; no void/refund movements in 30 days; no closed periods; "Head Office" −2 units. Because the deployed client posts invoice status `'sent'` and the deployed server stores it verbatim, every fully-paid till sale made on production is expected to sit at `status='sent'` — the §16 P0-1 report/close derivation therefore shows zero sales there too. That expectation was code-derived (verified); the production rows themselves were re-queried on 2026-09-27 (owner, production SQL editor) — see the addendum below.
+
+> ### POST-REPORT UPDATE 2 — 2026-09-27 (production diagnostics: all clean)
+>
+> The four historical-data diagnostics were run on production (`hsuhuvuxfuufrlejsatw`) after the fixes were applied:
+>
+> | Check | Result | Meaning |
+> |---|---|---|
+> | (a) fully-paid invoices still `'sent'` | **0** | No status residue to correct — §16 P0-1 fix covers all future sales; nothing historical to repair |
+> | (b) non-cash tenders booked to 1110 | **0** | No tender misclassification ever occurred — the accountant conversation is closed |
+> | (c) open shifts | **0** | **No shift was ever opened either** — the POS till has never been used in production. All historical invoices came from the back-office invoicing flow, which transitions status correctly via `record_invoice_payment`. No stale-shift demo blocker; the first real shift open → sale → close will be genuine first use |
+> | (d) invoice stock movements with null or dangling `source_id` | **0 / 0** | §5 hypothesis fully closed with production evidence — historical stock/COGS linkage pristine |
+>
+> Combined finding: **the five fixed defects lived on a code path production never walked** (the till). Nothing to correct, no owner data decision outstanding. The fixes are therefore not remediation of damaged production data — they are the removal of blockers that would have hit on first real retail use (P0-1 would have zeroed every Z-report, P0-3 would have crashed the first no-shift sale, P1-4 would have blocked the first walk-in on a new business).
 
 ---
 
@@ -252,7 +265,7 @@ Production data (session evidence, 2026-09-27): Eagle Nova Horizon 319 invoices 
 - Default revenue account for till sales of goods is **4112 Service Revenue** (pre-existing, identical in the legacy client path and the RPC; chart-semantics choice, not a divergence — changing it is an accounting decision).
 - Named-but-not-selected customer (typed name, no selection) bills the Walk-in Customer — unreachable from the UI for credit sales (modal requires selection), cosmetic for cash.
 - R08.6/R08.7 documented as "not started" yet pass (documentation drift only).
-- Historical production rows (pre-uuid-fix era) may hold null `source_id` on till-sale stock movements — **UNKNOWN**, needs a production query before trusting historical COGS (§5).
+- ~~Historical production rows (pre-uuid-fix era) may hold null `source_id` on till-sale stock movements~~ — **RESOLVED 2026-09-27**: production checks returned 0 null and 0 dangling `source_id` links (§5, §13 addendum 2).
 - "Head Office" −2 units and missing stock locations on Ledgr Technologies branches (production data hygiene; demo businesses must seed a location per selling branch).
 - No browser-runtime (service worker / offline cut-over) automated evidence (R13 BLOCKED records; unchanged).
 
