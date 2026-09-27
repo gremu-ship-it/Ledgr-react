@@ -63,7 +63,7 @@ export async function createDatabaseFixture() {
       // checked against BOTH shapes. Local-only; no product migration is edited.
       if (process.env.LEDGR_R13_LIVE_UUID_SHAPE === '1' && name >= '20261011000000' && !liveShapeApplied) {
         liveShapeApplied = true;
-        for (const [t, c] of [['stock_movements', 'source_id'], ['stock_movements', 'created_by'], ['journal_entries', 'source_id'], ['journal_entries', 'created_by'], ['invoices', 'created_by'], ['invoice_payments', 'created_by']]) {
+        for (const [t, c] of [['stock_movements', 'source_id'], ['stock_movements', 'created_by'], ['journal_entries', 'source_id'], ['journal_entries', 'created_by'], ['invoices', 'created_by'], ['invoice_payments', 'created_by'], ['accounting_periods', 'closed_by']]) {
           await client.query(`alter table public.${t} alter column ${c} type uuid using nullif(${c}, '')::uuid`);
         }
       }

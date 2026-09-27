@@ -113,7 +113,7 @@ begin
   select count(*) into v_draft_invoices from public.invoices
    where business_id = v_p.business_id and status::text = 'draft' and issue_date between v_p.period_start and v_p.period_end;
   perform set_config('ledgr.period_command', p_period_id::text, true);
-  update public.accounting_periods set is_closed = true, closed_at = now(), closed_by = v_user::text, updated_at = now()
+  update public.accounting_periods set is_closed = true, closed_at = now(), closed_by = v_user, updated_at = now()  -- uuid value fits a uuid or text column (live shape)
    where id = p_period_id;
   perform set_config('ledgr.period_command', '', true);
   insert into public.accounting_period_events (business_id, period_id, action, reason, actor)
