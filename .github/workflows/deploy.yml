@@ -245,7 +245,7 @@ jobs:
           url="${FRONTEND_URL:-}"
           [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
           body="$(curl -fsS --max-time 20 "${url}/version.json" || true)"
-          if [[ -z "$body" ]]; then
+          if [[ -z "$body" ]] || ! printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
             echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
             exit 0
           fi
@@ -466,7 +466,7 @@ jobs:
           url="${FRONTEND_URL:-}"
           [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
           body="$(curl -fsS --max-time 20 "${url}/version.json" || true)"
-          if [[ -z "$body" ]]; then
+          if [[ -z "$body" ]] || ! printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
             echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
             exit 0
           fi
