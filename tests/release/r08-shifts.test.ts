@@ -614,7 +614,7 @@ test(meta('R08.REFUND.DRAWER-EFFECT', 'R07 refund reconciles into R08 drawer rep
         from public.pos_corrections c
         join public.journal_entries je on je.business_id = c.business_id
           and je.posting_key = 'refund:' || c.command_key || ':settlement'
-          and je.source_type = 'invoice' and je.source_id = c.document_id::text
+          and je.source_type = 'invoice' and je.source_id::text = c.document_id::text
         join public.journal_lines jl on jl.journal_entry_id = je.id and not jl.is_debit
        where c.business_id=$1 and c.command_type='refund_sale' and c.document_id=$2
        group by c.command_key order by k`, [orgs.A.business, sale1.id])).rows;

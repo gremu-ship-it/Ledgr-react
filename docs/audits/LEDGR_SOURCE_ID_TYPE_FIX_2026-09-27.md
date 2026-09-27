@@ -50,3 +50,26 @@ Fixed (unreleased code only):
 - `save_quick_sale` and `save_quick_expense` as rewritten by 20261007000000.
 
 If this is the live production database, closing shifts, refunds, voids and quick-save would be failing today. Before rewriting the R07/R08 commands, the owner must confirm which project this is and whether those features work (see the chat for the read-only queries). The R07/R08 behaviour itself will not change; only the types need correcting.
+
+## 6. Production diagnostics (owner, 2026-09-27, project hsuhuvuxfuufrlejsatw, read-only)
+- **Production runs the repository's function bodies.** `pg_get_functiondef` shows `_ledgr_complete_pos_sale`, `refund_pos_sale_command`, `void_pos_sale_command` and `save_quick_sale` with the same text-typed `source_id`/`created_by` writes as the repo. `accounting_periods.closed_by` is uuid.
+- **On a uuid-shaped database those functions cannot complete** (42883/42804). The data is consistent with that, but that is not proof of cause:
+  - `pos_shifts`: no shift has ever been closed (`max(closed_at)` is null);
+  - no `pos_void` or `pos_refund` stock movements in 30 days.
+- **Invoices and stock movements (last 14 days):**
+  - 50 invoices, dated 13–22 Sep; 48 of them have stock movements;
+  - **no invoice dated after 22 Sep**; the last `invoice` stock movement is 2026-09-23 10:06 UTC.
+
+  Whether that means no trading or saves failing is **unknown**; it needs confirmation from staff and the Supabase API/Postgres logs. The deploy of f671656 was 2026-09-25, after this gap began, so it is not assumed to be the cause.
+- **No periods are closed.** The period lock changes nothing on deploy.
+- **Stock locations:** about 25 locations across several businesses, including several "Main Warehouse" defaults. A branch-level "Head Office" location shows −2 units. Branches named "Lilongwe Branch" and "Blantyre Branch" exist both **with** locations (with 25 and 18,008 units) and **without** them. Presumably these are same-named branches in different businesses; a business-scoped check is pending.
+
+## 7. Fix: `20261014000001_live_uuid_shape_pos_commands.sql`
+Five functions are re-issued from their latest definitions, with type-only edits (see the migration header):
+- `void_pos_sale_command`
+- `refund_pos_sale_command`
+- `close_pos_shift_command`
+- `get_pos_shift_report`
+- `save_quick_expense`
+
+R07 correction keys move from `source_id` (`<invoice>:<key>`, which cannot be stored in a uuid column) to `notes` (`correction key K`). One test query in r08 was made type-agnostic. The till, correction and shift suites pass in both shapes (146 in each).
