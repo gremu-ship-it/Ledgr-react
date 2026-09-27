@@ -124,7 +124,7 @@ begin
     ) values (
       v_inv.business_id, v_product.id, v_location, 'sale',
       coalesce(v_inv.issue_date, current_date), -v_line.quantity, v_unit_cost,
-      'invoice', v_inv.id::text, v_inv.invoice_number, v_inv.created_by
+      'invoice', v_inv.id, v_inv.invoice_number, v_inv.created_by
     );
     v_cost_lines := v_cost_lines || jsonb_build_array(jsonb_build_object(
       'product_id', v_product.id, 'quantity', v_line.quantity, 'unit_cost', v_unit_cost));

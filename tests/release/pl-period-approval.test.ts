@@ -125,7 +125,7 @@ test(meta('PL.PERIOD.CLOSED-WRITES-REFUSED', 'With books closed through the fixt
       business_id: orgs.A.business, location_id: orgs.A.location, movement_date: DAY, movement_type: 'adjustment_in', client_key: key(1404),
       lines: [{ product_id: orgs.A.product, quantity: 1, unit_cost: 900 }] })]), ['22023'], /period-closed/);
     await su(c);
-    await failsWith(c, () => c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',$4,1,900,'manual','pl')", [orgs.A.business, orgs.A.product, orgs.A.location, DAY]), ['22023'], /period-closed/);
+    await failsWith(c, () => c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',$4,1,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, orgs.A.location, DAY]), ['22023'], /period-closed/);
     await failsWith(c, () => c.query('delete from public.invoices where id=$1', [old.id]), ['22023'], /period-closed/);
     await as(c, identities.A_owner.id);
     const today = await TODAY(c);

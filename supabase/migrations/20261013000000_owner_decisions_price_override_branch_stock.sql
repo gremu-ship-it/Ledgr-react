@@ -243,7 +243,7 @@ begin
   --    already moved stock?" — movements carry no client key.
   select exists (
     select 1 from public.stock_movements
-     where business_id = p_business_id and source_type = 'invoice' and source_id = p_invoice_id::text
+     where business_id = p_business_id and source_type = 'invoice' and source_id::text = p_invoice_id::text
   ) into v_moved;
 
   if not v_moved then
@@ -294,7 +294,7 @@ begin
           p_business_id, v_product.id, v_location, 'sale',
           coalesce(v_inv.issue_date, current_date),
           -v_line.quantity, v_unit_cost,
-          'invoice', p_invoice_id::text, v_inv.invoice_number, v_inv.created_by
+          'invoice', p_invoice_id, v_inv.invoice_number, v_inv.created_by
         );
 
         v_cost_lines := v_cost_lines || jsonb_build_array(jsonb_build_object(

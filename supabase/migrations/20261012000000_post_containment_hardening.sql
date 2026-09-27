@@ -605,7 +605,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(v_business::text || '|' || v_source_type || '|' || v_key::text, 0));
   select count(*), coalesce(sum(abs(quantity)), 0) into v_existing_n, v_existing_q
     from public.stock_movements
-   where business_id = v_business and source_type = v_source_type and source_id = v_key::text;
+   where business_id = v_business and source_type = v_source_type and source_id::text = v_key::text;
   if v_existing_n > 0 then
     select coalesce(sum(abs((l->>'quantity')::numeric)), 0) into v_in_q from jsonb_array_elements(v_lines) l;
     if v_existing_n <> jsonb_array_length(v_lines) or abs(v_existing_q - v_in_q) > 0.0001 then
@@ -613,7 +613,7 @@ begin
     end if;
     select id into v_entry from public.journal_entries where business_id = v_business and posting_key = v_posting_key;
     select array_agg(id order by created_at, id) into v_ids from public.stock_movements
-     where business_id = v_business and source_type = v_source_type and source_id = v_key::text;
+     where business_id = v_business and source_type = v_source_type and source_id::text = v_key::text;
     return jsonb_build_object('idempotent', true, 'movement_ids', to_jsonb(v_ids), 'journal_entry_id', v_entry);
   end if;
 
@@ -634,7 +634,7 @@ begin
       quantity, unit_cost, source_type, source_id, reference, notes, created_by
     ) values (
       v_business, v_product.id, v_location, v_type::public.stock_movement_type, v_date,
-      case when v_out then -v_qty else v_qty end, v_cost, v_source_type, v_key::text,
+      case when v_out then -v_qty else v_qty end, v_cost, v_source_type, v_key,
       v_reference, v_notes, auth.uid()
     ) returning id into v_id;
     v_ids := v_ids || v_id;

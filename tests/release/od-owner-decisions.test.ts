@@ -203,7 +203,7 @@ test(meta('OD.BRANCH.DEDUCTS-BRANCH-NOT-WAREHOUSE', 'With a business DEFAULT war
     await su(c);
     await c.query('update public.inventory_locations set is_default=false where id=$1', [orgs.A.location]);
     const wh = String((await c.query('insert into public.inventory_locations(business_id,name,is_default,branch_id) values($1,$2,true,null) returning id', [orgs.A.business, 'OD warehouse'])).rows[0].id);
-    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',current_date,40,900,'manual','od-wh-seed')", [orgs.A.business, orgs.A.product, wh]);
+    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',current_date,40,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, wh]);
     const a1 = await qtyAt(c, orgs.A.location);
     await as(c, identities.A_cashier.id);
     const av = (await c.query('select public.pos_stock_availability($1,$2) r', [orgs.A.business, orgs.A.branch])).rows[0].r;

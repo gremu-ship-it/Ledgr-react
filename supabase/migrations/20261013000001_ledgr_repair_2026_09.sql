@@ -97,7 +97,7 @@ as $$
       from inv i
       join public.stock_movements sm
         on sm.business_id = i.business_id
-       and (sm.source_id = i.id::text or sm.source_id like i.id::text || ':%')
+       and (sm.source_id::text = i.id::text or sm.source_id::text like i.id::text || ':%')
   ),
   d1_candidates as (
     select i.id, i.business_id, i.invoice_number, i.status::text st,
@@ -106,7 +106,7 @@ as $$
      where (i.status::text in ('draft', 'void', 'credit_note') or coalesce(i.invoice_type, '') = 'credit_note')
        and not exists (select 1 from public.stock_movements r
                         where r.business_id = i.business_id and r.source_type = 'repair_2026_09'
-                          and r.source_id = i.id::text)
+                          and r.source_id::text = i.id::text)
   ),
   d1 as (
     select 'D1_INVALID_SALE_MOVEMENT'::text category, c.business_id, c.id::text object_ref, s.product_id,
@@ -136,7 +136,7 @@ as $$
        and coalesce(i.invoice_type, '') <> 'credit_note'
        and not exists (select 1 from public.journal_entries e
                         where e.business_id = i.business_id
-                          and ((e.source_type = 'inventory_cogs' and e.source_id = i.id::text)
+                          and ((e.source_type = 'inventory_cogs' and e.source_id::text = i.id::text)
                                or e.posting_key = 'invoice:' || i.id::text || ':cogs'))
   ),
   d2 as (
@@ -228,7 +228,7 @@ begin
     insert into public.stock_movements (business_id, product_id, location_id, movement_type, movement_date,
         quantity, unit_cost, source_type, source_id, reference, notes)
     values (r.business_id, r.product_id, r.location_id, 'adjustment_in', current_date,
-        r.quantity, coalesce((r.detail->>'unit_cost')::numeric, 0), 'repair_2026_09', r.object_ref,
+        r.quantity, coalesce((r.detail->>'unit_cost')::numeric, 0), 'repair_2026_09', r.object_ref::uuid,
         'Repair 2026-09: reverse invalid sale release on ' || coalesce(r.detail->>'invoice_status', '') || ' invoice ' || coalesce(r.detail->>'invoice_number', r.object_ref),
         'evidence ' || btrim(p_evidence_ref) || ' · run ' || v_run);
     insert into ledgr_repair.repair_log (run_id, business_id, category, object_ref, detail)

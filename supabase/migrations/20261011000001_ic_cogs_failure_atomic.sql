@@ -223,7 +223,7 @@ begin
   --    already moved stock?" — movements carry no client key.
   select exists (
     select 1 from public.stock_movements
-     where business_id = p_business_id and source_type = 'invoice' and source_id = p_invoice_id::text
+     where business_id = p_business_id and source_type = 'invoice' and source_id::text = p_invoice_id::text
   ) into v_moved;
 
   if not v_moved then
@@ -266,7 +266,7 @@ begin
           p_business_id, v_product.id, v_location, 'sale',
           coalesce(v_inv.issue_date, current_date),
           -v_line.quantity, v_unit_cost,
-          'invoice', p_invoice_id::text, v_inv.invoice_number, v_inv.created_by
+          'invoice', p_invoice_id, v_inv.invoice_number, v_inv.created_by
         );
 
         v_cost_lines := v_cost_lines || jsonb_build_array(jsonb_build_object(
@@ -378,7 +378,7 @@ begin
         select * into v_product from public.products where id = (v_stock_line->>'product_id')::uuid and business_id = v_business_id and track_inventory = true; continue when not found;
         select * into v_balance from public.inventory_balances where business_id = v_business_id and product_id = v_product.id and location_id = v_location limit 1; v_unit_cost := coalesce(v_balance.average_cost, 0);
         insert into public.stock_movements (business_id, product_id, location_id, movement_type, movement_date, quantity, unit_cost, source_type, source_id, reference, created_by)
-        values (v_business_id, v_product.id, v_location, 'sale', (v_invoice->>'issue_date')::date, -(v_stock_line->>'quantity')::numeric, v_unit_cost, 'invoice', v_invoice_id::text, v_number, v_invoice->>'created_by');
+        values (v_business_id, v_product.id, v_location, 'sale', (v_invoice->>'issue_date')::date, -(v_stock_line->>'quantity')::numeric, v_unit_cost, 'invoice', v_invoice_id, v_number, nullif(v_invoice->>'created_by', '')::uuid);
         v_cost_lines := v_cost_lines || jsonb_build_array(jsonb_build_object('product_id', v_product.id, 'quantity', (v_stock_line->>'quantity')::numeric, 'unit_cost', v_unit_cost));
       end loop;
       begin v_cogs_entry := public._ledgr_post_cogs(v_business_id, v_invoice_id, v_number, (v_invoice->>'issue_date')::date, v_branch_id, (v_invoice->>'department_id')::uuid, v_cost_lines); exception when others then /* IC 2026-09-25 P5: never swallow COGS failure — roll back the whole save */ raise exception 'COGS posting failed for sale %: %. The sale was not recorded; fix the cause and retry.', v_number, sqlerrm using errcode = 'P0001'; end;
