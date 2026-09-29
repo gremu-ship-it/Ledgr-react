@@ -1,25 +1,29 @@
 #!/usr/bin/env node
-/**
- * Phase 10 A-01 — build-time guard for required VITE_* environment variables.
- *
- * Runs automatically before `npm run build` (npm prebuild hook), so it
- * guards BOTH the GitHub Actions build step and the Vercel-side build
- * triggered by `vercel deploy`.
- *
- * WHY: src/lib/supabase.ts previously threw at module scope when
- * VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY were absent — a missing secret
- * produced a fully blank production page for all users on 2026-08-16
- * (audit finding A-01). With this guard the build FAILS LOUDLY at deploy
- * time instead of shipping a broken bundle.
- *
- * Runtime defense-in-depth: src/lib/supabase.ts now also falls back to a
- * placeholder client and shows <ConfigError /> instead of a white screen if
- * the guard is bypassed (e.g. a Vercel preview without env).
- *
- * NOTE: `npm run dev` is intentionally unaffected (prebuild only runs for
- * `npm run build`). CI uses placeholder values (see .github/workflows/ci.yml).
- */
+import { loadEnv } from 'vite';
+
 const REQUIRED = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY'];
+
+function getMode() {
+  // Prefer explicit MODE from CI / scripts
+  if (process.env.MODE) return process.env.MODE;
+
+  // If someone runs the script manually with --mode staging
+  const i = process.argv.indexOf('--mode');
+  if (i !== -1 && process.argv[i + 1]) return process.argv[i + 1];
+
+  // Default (matches vite build default)
+  return 'production';
+}
+
+const mode = getMode();
+
+// Load .env, .env.local, .env.[mode], .env.[mode].local (Vite rules)
+const viteEnv = loadEnv(mode, process.cwd(), 'VITE_');
+
+// Do NOT override real injected env (GitHub Actions / Vercel dashboard)
+for (const [k, v] of Object.entries(viteEnv)) {
+  if (!process.env[k] || !String(process.env[k]).trim()) process.env[k] = v;
+}
 
 // Allow builds that explicitly set SKIP_ENV_CHECK (emergency, not for prod)
 if (process.env.SKIP_ENV_CHECK === '1' || process.env.SKIP_ENV_CHECK === 'true') {
@@ -31,7 +35,7 @@ if (process.env.SKIP_ENV_CHECK === '1' || process.env.SKIP_ENV_CHECK === 'true')
 const missing = REQUIRED.filter((k) => !process.env[k] || !String(process.env[k]).trim());
 
 if (missing.length === 0) {
-  console.log(`[check-env] OK — ${REQUIRED.length} required VITE_* variables present.`);
+  console.log(`[check-env] OK — ${REQUIRED.length} required VITE_* variables present (mode=${mode}).`);
   process.exit(0);
 }
 
