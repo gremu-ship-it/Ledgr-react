@@ -183,9 +183,14 @@ secrets are read at request time).
 ## What still requires manual attention
 
 - **No recurring/tokenized billing yet.** Each checkout is a one-time
-  charge for one billing period (monthly or annual). `plan_expires_at` is
-  set accordingly, and the daily `expire-subscriptions` cron job downgrades
-  the business back to Free once it passes. Owners need to proactively
+  charge for one billing period: monthly = the same day of the next calendar
+  month, annual = the same date next year (`computeTermEnd`, mirrored in
+  `src/lib/billing/plans.ts`). `plan_expires_at` is set accordingly, and
+  entitlements fall back to Free the moment it passes — `effectivePlanTier()`
+  on the client and `public.effective_plan_tier()` inside the authoritative
+  quota assert both resolve through it. The nightly `expire-subscriptions-daily`
+  pg_cron job (plain SQL since migration 20261017000000, no URL or secret
+  involved) then tidies the row itself. Owners need to proactively
   re-checkout to renew — consider adding a reminder email/notification a
   few days before `plan_expires_at` as a follow-up.
 - **Refunds/disputes** are not automated — handle via the PayChangu
@@ -223,9 +228,21 @@ Deploy + schedule it the same way as `expire-subscriptions`:
 supabase functions deploy send-renewal-reminders --no-verify-jwt
 ```
 
-Then apply `supabase/migrations/20260726000005_schedule_send_renewal_reminders.sql`,
-filling in the same `<PROJECT_REF>` / `<CRON_SECRET>` placeholders as the
-`expire-subscriptions` schedule.
+Its schedule DOES go over HTTP (the function sends email), so it carries the
+`<PROJECT_REF>` / `<CRON_SECRET>` placeholders that `supabase db push` applies
+verbatim. `scripts/ci/apply-cron-jobs.sh` — run automatically by
+`.github/workflows/deploy.yml` for staging and production — substitutes the real
+values and then fails the deploy if any job in `cron.job` still contains a
+placeholder. Applying it by hand to a project CI does not manage:
+
+```bash
+SUPABASE_PROJECT_REF=xxxx SUPABASE_ACCESS_TOKEN=... CRON_SECRET=... \
+  bash scripts/ci/apply-cron-jobs.sh
+```
+
+Until 2026-10-01 this substitution never ran anywhere: every environment had cron
+jobs posting to `https://<PROJECT_REF>.supabase.co/...`, so renewal reminders were
+never sent and (before the sweep moved into SQL) subscriptions never expired.
 
 ## Manually granting a plan (cash / bank transfer payments)
 

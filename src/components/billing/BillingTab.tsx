@@ -17,7 +17,7 @@ import { useDemoMode } from '@/hooks/useDemoMode';
 import { DemoNotice } from '@/components/demo/DemoNotice';
 
 export function BillingTab() {
-  const { usage, plan, planTier } = useUsage();
+  const { usage, plan, planTier, storedPlanTier, planExpiresAt, isPlanLapsed } = useUsage();
   const isDemo = useDemoMode();
   const { canManageBilling } = usePermissions();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
@@ -155,6 +155,26 @@ export function BillingTab() {
           <button onClick={dismissPaymentReturn} className="text-amber-600 hover:text-amber-800">
             <X className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {/* Paid term has run out — entitlements are already back on Free even
+          if the stored plan_tier hasn't been rewritten by the nightly
+          expire-subscriptions job yet. Say so plainly instead of silently
+          showing "Free". */}
+      {isPlanLapsed && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+          <div>
+            <div className="font-semibold">
+              Your {PLANS[storedPlanTier].name} subscription ended
+              {planExpiresAt ? ` on ${new Date(planExpiresAt).toLocaleDateString()}` : ''}.
+            </div>
+            <p className="mt-1">
+              You're on Free limits until you renew. Nothing has been deleted — choose a plan below to pick up
+              where you left off.
+            </p>
+          </div>
         </div>
       )}
 
