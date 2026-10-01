@@ -76,6 +76,34 @@ function computeAmount(tier: PlanTier, cycle: BillingCycle): number {
   return Math.round(annualBeforeDiscount * (1 - discount / 100));
 }
 
+/**
+ * End of the paid term that starts now.
+ *
+ * Calendar arithmetic, not a fixed day count. This used to be
+ * `(cycle === 'annual' ? 365 : 31) * 24 * 60 * 60 * 1000`, which meant a
+ * monthly plan bought on 1 Sep expired on 2 Oct ("it's a new month and my
+ * subscription hasn't ended"), 31 Jan expired on 3 Mar, and annual terms
+ * fell a day short whenever they spanned 29 Feb.
+ *
+ * Mirrors `computeTermEnd` in src/lib/billing/plans.ts — keep both in sync.
+ */
+function computeTermEnd(from: Date, cycle: BillingCycle): Date {
+  const end = new Date(from.getTime());
+  const day = end.getUTCDate();
+
+  if (cycle === 'annual') {
+    end.setUTCFullYear(end.getUTCFullYear() + 1);
+    if (end.getUTCDate() !== day) end.setUTCDate(0); // 29 Feb → 28 Feb next year
+    return end;
+  }
+
+  end.setUTCDate(1);
+  end.setUTCMonth(end.getUTCMonth() + 1);
+  const lastDayOfTargetMonth = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 0)).getUTCDate();
+  end.setUTCDate(Math.min(day, lastDayOfTargetMonth));
+  return end;
+}
+
 function normalizeAppUrl(raw: string | undefined | null): string | null {
   const trimmed = raw?.trim();
   if (!trimmed) return null;
@@ -163,8 +191,7 @@ serve(async (req) => {
 
     const amount = computeAmount(targetTier, billingCycle);
     const txRef = `LEDGR-${businessId.slice(0, 8)}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
-    const periodMs = (billingCycle === 'annual' ? 365 : 31) * 24 * 60 * 60 * 1000;
-    const planExpiresAt = new Date(Date.now() + periodMs).toISOString();
+    const planExpiresAt = computeTermEnd(new Date(), billingCycle).toISOString();
 
     // Create the pending payment row BEFORE calling out to PayChangu so
     // the webhook (which can arrive within seconds) always has a row to

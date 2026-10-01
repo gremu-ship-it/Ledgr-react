@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
-import { getPlan, normalizePlanTier, type PlanTier } from './plans';
+import { effectivePlanTier, getPlan, type PlanTier } from './plans';
 import { createLogger } from '@/lib/logger';
 import { UsageLimitError } from './quotaContract';
 
@@ -176,7 +176,7 @@ export class UsageService {
    */
   async assertWithinTransactionLimit(businessId: string): Promise<void> {
     const [business, used] = await Promise.all([
-      supabase.from('businesses').select('plan_tier').eq('id', businessId).maybeSingle(),
+      supabase.from('businesses').select('plan_tier, plan_expires_at').eq('id', businessId).maybeSingle(),
       this.getCurrentMonthTransactionCount(businessId),
     ]);
 
@@ -185,7 +185,10 @@ export class UsageService {
       return;
     }
 
-    const plan = getPlan(normalizePlanTier(business.data.plan_tier));
+    // Effective tier, not the stored one: an expired paid plan falls back
+    // to Free limits immediately rather than waiting for the nightly
+    // expire-subscriptions job to rewrite the row.
+    const plan = getPlan(effectivePlanTier(business.data.plan_tier, business.data.plan_expires_at));
     if (plan.transactionLimit === null) return;
 
     if (used >= plan.transactionLimit) {

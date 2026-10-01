@@ -1,5 +1,5 @@
 -- ─────────────────────────────────────────────────────────────────────────
--- Ensure the three pg_cron jobs point at the real Edge Function URLs.
+-- Ensure the HTTP-dispatched pg_cron jobs point at the real Edge Function URLs.
 -- ─────────────────────────────────────────────────────────────────────────
 -- Deployed by .github/workflows/deploy.yml AFTER `supabase db push`, and run
 -- on every deploy (not just the first). The schedule migrations
@@ -12,28 +12,20 @@
 -- cron.schedule() is idempotent by job name — the third arg replaces the
 -- schedule for an existing job, so running this every deploy is safe.
 --
--- The workflow substitutes <PROJECT_REF> and <CRON_SECRET> before execution:
---   sed -e "s|<PROJECT_REF>|...|g" -e "s|<CRON_SECRET>|...|g" \
---       scripts/cron-jobs.sql > /tmp/cron-jobs.sql
---   supabase db query --linked --file /tmp/cron-jobs.sql
+-- Applied by scripts/ci/apply-cron-jobs.sh (invoked from deploy.yml after
+-- `supabase db push`), which substitutes <PROJECT_REF>/<CRON_SECRET> and runs
+-- the result through the Supabase Management API SQL endpoint, then asserts
+-- that no job command still contains a placeholder.
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
-select cron.schedule(
-  'expire-subscriptions-daily',
-  '0 1 * * *', -- 01:00 UTC every day
-  $$
-  select net.http_post(
-    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/expire-subscriptions',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'x-cron-secret', '<CRON_SECRET>'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-);
+-- NOTE: 'expire-subscriptions-daily' is deliberately NOT scheduled here any
+-- more. Migration 20261017000000 runs the expiry sweep as plain SQL inside
+-- pg_cron (no URL, no secret, nothing to substitute), because the HTTP
+-- version of this job sat broken on an unsubstituted <PROJECT_REF> URL and
+-- silently stopped expiring subscriptions. Do not re-add an HTTP variant
+-- under the same job name — it would replace the working SQL one.
 
 select cron.schedule(
   'send-renewal-reminders-daily',

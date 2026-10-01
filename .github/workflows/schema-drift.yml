@@ -1,0 +1,75 @@
+name: Schema Drift Check
+
+# ---------------------------------------------------------------------------
+# Weekly (and on-demand) proof that a live Supabase project matches this
+# repository: every migration applied, no pg_cron job sitting on an
+# unsubstituted <PROJECT_REF>/<CRON_SECRET> placeholder, no object declared by
+# a migration missing from the database.
+#
+# Why it exists
+# -------------
+# The only schema evidence in the repo was artifacts/database/capture/ — a
+# frozen 2026-08-15 snapshot. Reasoning about "what is actually deployed" from
+# a stale artefact produced wrong conclusions twice during the 2026-10-01
+# subscription-expiry investigation. The three cron jobs it showed posting to
+# 'https://<PROJECT_REF>.supabase.co/...' were real and had been broken for
+# months precisely because nothing ever checked.
+#
+# Read-only: the script issues SELECTs through the Management API SQL endpoint
+# and writes nothing. It reuses the same SUPABASE_ACCESS_TOKEN and project-ref
+# variables deploy.yml already uses.
+# ---------------------------------------------------------------------------
+
+on:
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to check
+        required: true
+        default: production
+        type: choice
+        options:
+          - staging
+          - production
+          - both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: schema-drift-${{ github.event.inputs.environment || 'both' }}
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: ${{ (github.event.inputs.environment == 'staging' && fromJSON('["staging"]'))
+          || (github.event.inputs.environment == 'production' && fromJSON('["production"]'))
+          || fromJSON('["staging","production"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve project ref
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.environment }}" == "staging" ]]; then
+            echo "SUPABASE_PROJECT_REF=${{ vars.SUPABASE_PROJECT_REF_STAGING }}" >> "$GITHUB_ENV"
+          else
+            echo "SUPABASE_PROJECT_REF=${{ vars.SUPABASE_PROJECT_REF_PROD }}" >> "$GITHUB_ENV"
+          fi
+      - name: Compare live schema against supabase/migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${SUPABASE_PROJECT_REF:-}" || {
+            echo "::warning::No project ref configured for ${{ matrix.environment }}; skipping."
+            exit 0
+          }
+          python3 scripts/database/compare-capture-to-migrations.py --source live \
+            | tee "$GITHUB_STEP_SUMMARY"

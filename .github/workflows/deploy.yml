@@ -190,6 +190,15 @@ jobs:
               supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             fi
           done
+      # The schedule migrations ship literal <PROJECT_REF>/<CRON_SECRET>
+      # placeholders that `db push` applies verbatim, so the HTTP-dispatched
+      # cron jobs silently posted to a non-resolving host (renewal reminders
+      # and partner invoices never ran). This substitutes the real values and
+      # fails the deploy if any job is still holding a placeholder.
+      - name: Reschedule pg_cron jobs with real URLs (staging)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET_STAGING }}
+        run: bash scripts/ci/apply-cron-jobs.sh
       - name: Deploy Express gateway to Railway (if configured)
         if: env.RAILWAY_TOKEN != ''
         env:
@@ -411,6 +420,12 @@ jobs:
               exit 1
             fi
           done
+      # See the staging note: without this the cron jobs keep posting to
+      # 'https://<PROJECT_REF>.supabase.co/...' and never fire.
+      - name: Reschedule pg_cron jobs with real URLs (production)
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET_PROD }}
+        run: bash scripts/ci/apply-cron-jobs.sh
       - name: Deploy Express gateway to Railway (if configured)
         if: env.RAILWAY_TOKEN != ''
         env:

@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { usageService, type UsageStats } from '@/lib/billing/UsageService';
-import { getPlan, normalizePlanTier, type PlanTier } from '@/lib/billing/plans';
+import { effectivePlanTier, isPlanExpired, normalizePlanTier, type PlanTier, getPlan } from '@/lib/billing/plans';
 
 export function useUsage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
@@ -20,9 +20,18 @@ export function useUsage() {
     staleTime: 1000 * 60, // 1 minute
   });
 
-  const planTier: PlanTier = normalizePlanTier(
-    business?.plan_tier ?? currentBusiness?.business?.plan_tier,
-  );
+  // Entitlements follow the *effective* tier: a paid plan whose
+  // plan_expires_at has passed is Free here, even though the row still says
+  // otherwise until the nightly expire-subscriptions job rewrites it.
+  const source = (business ?? currentBusiness?.business) as
+    | { plan_tier?: string | null; plan_expires_at?: string | null }
+    | undefined;
+  const planExpiresAt = source?.plan_expires_at ?? null;
+  const storedPlanTier: PlanTier = normalizePlanTier(source?.plan_tier);
+  const planTier: PlanTier = effectivePlanTier(source?.plan_tier, planExpiresAt);
+  // True while the row still claims a paid tier whose term has run out —
+  // used by the Billing tab to explain the drop back to Free.
+  const isPlanLapsed = storedPlanTier !== 'free' && isPlanExpired(planExpiresAt);
 
   const { data: usage, isLoading } = useQuery({
     queryKey: ['usage', businessId, planTier],
@@ -44,6 +53,9 @@ export function useUsage() {
     } as UsageStats,
     plan,
     planTier,
+    storedPlanTier,
+    planExpiresAt,
+    isPlanLapsed,
     isLoading,
   };
 }
