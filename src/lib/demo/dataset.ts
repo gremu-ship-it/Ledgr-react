@@ -1258,8 +1258,16 @@ function seedExpenses(
   const stockBills: { spec: ExpenseSpec; date: Date }[] = [];
   for (const [period, cost] of stockCostByMonth) {
     const [year, month] = period.split('-').map(Number);
-    const date = new Date(year, month - 1, 6);
-    if (date > anchor) continue;
+    // Deliveries land on the 6th. When the demo is viewed on the 1st-5th that
+    // date is still in the future, so the bill is clamped back to the anchor
+    // (same policy as monthDay()) rather than dropped. Dropping it is what the
+    // code used to do, and it left the month's COGS recognised with no
+    // replenishment behind it: Trading Stock (1141) read -6,126,972 instead of
+    // +1,396,752 for the first five days of EVERY month — an impossible
+    // negative inventory on the demo balance sheet, and a unit-test failure
+    // that blocked CI five days a month.
+    const scheduled = new Date(year, month - 1, 6);
+    const date = scheduled > anchor ? new Date(anchor) : scheduled;
     // This month's delivery is still in creditors — the AP balance a visitor
     // expects to see on the balance sheet and in the bills list.
     const isCurrentMonth = year === anchor.getFullYear() && month === anchor.getMonth() + 1;
