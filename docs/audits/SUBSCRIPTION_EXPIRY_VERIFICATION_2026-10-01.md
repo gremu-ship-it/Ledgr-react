@@ -95,9 +95,15 @@ stay on indefinitely after the paid term lapses.
   free grace after expiry. Acceptable, but worth stating as intended behaviour.
 - `grant-manual-subscription` uses the same fixed `duration_days * 86 400 000` arithmetic —
   consistent with defect 2, intentional there since admins pick an explicit day count.
-- `subscription_payments.billing_cycle` has a CHECK of `('monthly','annual')`, but
-  `grant-manual-subscription` inserts `'custom'` — manual grants will fail on a database where
-  that constraint is still in force.
+- **Manual grants (platform-admin, cash/bank/mobile money).** The migration-defined CHECK on
+  `subscription_payments.billing_cycle` is `('monthly','annual')`, but
+  `grant-manual-subscription` inserts `'custom'`. The captured database had already been
+  hand-patched to allow `'custom'` (`CHECK (billing_cycle = ANY (ARRAY['monthly','annual','custom']))`),
+  so grants work *there* — but any environment rebuilt from migrations rejects every manual
+  grant. The same capture also shows `businesses.plan_tier` and
+  `subscription_payments.target_plan_tier` still limited to `growth/pro/enterprise`, i.e.
+  migration `20260919000000` (Starter) had not been applied: Starter grants and Starter
+  checkouts fail there with a raw constraint violation.
 
 ---
 
@@ -137,11 +143,22 @@ immediately, regardless of what the row says:
 A `NULL` expiry still means "no end date" (comped/lifetime), and an unparseable date fails
 open — nobody is locked out by a bad timestamp.
 
-### 5. Back-fill and the `custom` billing cycle
-The same migration downgrades every business already past `plan_expires_at` (the rows the dead
-cron should have handled), and widens the `subscription_payments.billing_cycle` CHECK to accept
-`'custom'`, which `grant-manual-subscription` has always inserted for offline/cash grants —
-until now every manual grant failed at that insert.
+### 5. Manual grants, and the back-fill
+Manual grants are otherwise untouched: `grant-manual-subscription` still checks
+`is_platform_admin`, still records a `subscription_payments` row and still activates through the
+same idempotent `apply_subscription_payment()` as a gateway payment, and a grant's
+`plan_expires_at` (today + `duration_days`) is honoured by the new expiry logic exactly like a
+PayChangu term. What the migration adds is that the constraints now accept everything that
+endpoint writes, on every environment:
+
+- `billing_cycle` accepts `'custom'` (hand-patched on the captured database, missing from
+  migrations, so absent on anything rebuilt from them)
+- `businesses.plan_tier` and `subscription_payments.target_plan_tier` accept `'starter'` —
+  re-asserted idempotently because the capture showed an environment where migration
+  `20260919000000` had never landed, which breaks Starter grants and Starter checkouts alike
+
+The migration also downgrades every business already past `plan_expires_at` — the rows the dead
+cron should have handled.
 
 ## Tests
 

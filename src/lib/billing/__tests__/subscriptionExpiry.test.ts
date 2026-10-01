@@ -110,3 +110,33 @@ describe('expiry is enforced without depending on the nightly job', () => {
     expect(script).toContain("command like '%<PROJECT_REF>%'");
   });
 });
+
+describe('manual (offline) grants keep working', () => {
+  const migration = () => source('supabase/migrations/20261017000000_subscription_expiry_enforcement.sql');
+
+  it('accepts every value grant-manual-subscription writes', () => {
+    const fn = source('supabase/functions/grant-manual-subscription/index.ts');
+    expect(fn).toContain("billing_cycle: 'custom'");
+    expect(fn).toContain("v === 'starter'");
+
+    const sql = migration();
+    expect(sql).toContain("check (billing_cycle in ('monthly', 'annual', 'custom'))");
+    expect(sql).toContain("check (target_plan_tier in ('starter', 'growth', 'pro', 'enterprise'))");
+    expect(sql).toContain("check (plan_tier in ('free', 'starter', 'growth', 'pro', 'enterprise'))");
+  });
+
+  it('still activates through the shared idempotent payment path', () => {
+    const fn = source('supabase/functions/grant-manual-subscription/index.ts');
+    expect(fn).toContain('is_platform_admin');
+    expect(fn).toContain("admin.rpc('apply_subscription_payment'");
+    // Duration stays an explicit day count chosen by the admin — calendar
+    // terms apply to self-serve checkout only.
+    expect(fn).toContain('durationDays * 24 * 60 * 60 * 1000');
+  });
+
+  it('leaves an in-date grant fully entitled', () => {
+    const now = new Date('2026-10-01T06:00:00Z');
+    const grantedUntil = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    expect(effectivePlanTier('enterprise', grantedUntil, now)).toBe('enterprise');
+  });
+});
