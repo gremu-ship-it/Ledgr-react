@@ -91,6 +91,11 @@ describe('expiry is enforced without depending on the nightly job', () => {
     expect(sql).toContain("set plan_tier = 'free'");
   });
 
+  it('deactivates any cron job left holding a deploy-time placeholder', () => {
+    const sql = source('supabase/migrations/20261017000000_subscription_expiry_enforcement.sql');
+    expect(sql).toContain('update cron.job set active = false');
+  });
+
   it('runs the nightly expiry sweep as in-database SQL, with no URL to go stale', () => {
     const sql = source('supabase/migrations/20261017000000_subscription_expiry_enforcement.sql');
     expect(sql).toContain("cron.schedule(\n    'expire-subscriptions-daily'");
@@ -112,20 +117,20 @@ describe('expiry is enforced without depending on the nightly job', () => {
 });
 
 describe('manual (offline) grants keep working', () => {
-  const migration = () => source('supabase/migrations/20261017000000_subscription_expiry_enforcement.sql');
-
-  it('accepts every value grant-manual-subscription writes', () => {
+  it('writes only values the CHECK constraints already allow', () => {
     const fn = source('supabase/functions/grant-manual-subscription/index.ts');
     expect(fn).toContain("billing_cycle: 'custom'");
     expect(fn).toContain("v === 'starter'");
 
-    const sql = migration();
-    expect(sql).toContain("check (billing_cycle in ('monthly', 'annual', 'custom'))");
-    expect(sql).toContain("check (target_plan_tier in ('starter', 'growth', 'pro', 'enterprise'))");
-    expect(sql).toContain("check (plan_tier in ('free', 'starter', 'growth', 'pro', 'enterprise'))");
+    // 'custom' comes from 20260726000004, 'starter' from 20260919000000.
+    expect(source('supabase/migrations/20260726000004_platform_admin_and_reminders.sql'))
+      .toContain("check (billing_cycle in ('monthly', 'annual', 'custom'))");
+    const starter = source('supabase/migrations/20260919000000_add_starter_plan.sql');
+    expect(starter).toContain("check (target_plan_tier in ('starter', 'growth', 'pro', 'enterprise'))");
+    expect(starter).toContain("check (plan_tier in ('free', 'starter', 'growth', 'pro', 'enterprise'))");
   });
 
-  it('still activates through the shared idempotent payment path', () => {
+  it('is untouched by this change beyond expiry resolution', () => {
     const fn = source('supabase/functions/grant-manual-subscription/index.ts');
     expect(fn).toContain('is_platform_admin');
     expect(fn).toContain("admin.rpc('apply_subscription_payment'");

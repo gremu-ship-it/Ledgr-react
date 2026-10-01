@@ -117,33 +117,35 @@ begin
 end;
 $$;
 
--- ── 3. Manual grants: constraints must accept everything they write ─────────
--- grant-manual-subscription (platform-admin activation for cash/bank/mobile
--- money paid outside PayChangu) writes target_plan_tier + billing_cycle
--- 'custom', then activates through apply_subscription_payment() exactly like a
--- gateway payment. Both CHECKs below are re-asserted idempotently because the
--- live capture of 2026-08-15 showed a database where `starter` had not yet
--- reached either constraint — on such an environment every Starter grant (and
--- every Starter checkout) fails with a constraint violation rather than a
--- readable error.
-alter table public.businesses drop constraint if exists businesses_plan_tier_check;
-alter table public.businesses add constraint businesses_plan_tier_check
-  check (plan_tier in ('free', 'starter', 'growth', 'pro', 'enterprise'));
+-- ── 3. Deactivate any cron job still holding a deploy-time placeholder ─────
+-- The schedule migrations (20260726000003 / 20260726000005 / 20260727000006)
+-- are applied verbatim by `supabase db push`, so a freshly replayed database
+-- ends up with jobs posting to 'https://<PROJECT_REF>.supabase.co/...'. pg_net
+-- swallows the DNS failure, so cron.job shows active = true while the job does
+-- nothing — which is precisely how the dead expiry sweep went unnoticed.
+--
+-- Mark such jobs inactive so "active" means "working". scripts/ci/apply-cron-jobs.sh
+-- re-creates them (active) with real values on every deploy; the expiry sweep
+-- scheduled in section 5 below needs no URL at all.
+do $$
+declare
+  v_job record;
+begin
+  if to_regclass('cron.job') is null then
+    raise notice 'pg_cron not installed here — nothing to deactivate.';
+    return;
+  end if;
 
-alter table public.subscription_payments
-  drop constraint if exists subscription_payments_target_plan_tier_check;
-alter table public.subscription_payments
-  add constraint subscription_payments_target_plan_tier_check
-  check (target_plan_tier in ('starter', 'growth', 'pro', 'enterprise'));
-
--- grant-manual-subscription inserts billing_cycle = 'custom' (an admin picks
--- an explicit duration in days), which the original CHECK rejected — every
--- offline/cash grant failed at the insert.
-alter table public.subscription_payments
-  drop constraint if exists subscription_payments_billing_cycle_check;
-alter table public.subscription_payments
-  add constraint subscription_payments_billing_cycle_check
-  check (billing_cycle in ('monthly', 'annual', 'custom'));
+  for v_job in
+    select jobid, jobname from cron.job
+     where command like '%<PROJECT_REF>%' or command like '%<CRON_SECRET>%'
+  loop
+    update cron.job set active = false where jobid = v_job.jobid;
+    raise warning 'Cron job % (%) still contains a deploy-time placeholder and has been deactivated — run scripts/ci/apply-cron-jobs.sh to schedule it properly.',
+      v_job.jobname, v_job.jobid;
+  end loop;
+end;
+$$;
 
 -- ── 4. Back-fill plans that lapsed while the cron was dead ──────────────────
 -- Same write the expire-subscriptions function performs. Runs as the migration

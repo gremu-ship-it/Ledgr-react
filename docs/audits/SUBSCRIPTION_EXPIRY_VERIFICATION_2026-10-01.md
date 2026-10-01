@@ -36,8 +36,10 @@ $ grep -rn "cron" .github/workflows/deploy.yml
 180:  # (invoice-open, accept-invite-link), or are cron/webhook entry points.
 ```
 
-The captured live database inventory confirms the job is still broken in the deployed project
-(`artifacts/database/capture/cron_jobs.json`, captured 2026-09-29):
+The captured database inventory shows all three jobs frozen on the placeholder
+(`artifacts/database/capture/cron_jobs.json` — captured **2026-08-15**, the file's commit date of
+2026-09-29 is not the capture date). Nothing in the repository rewrites those jobs after that
+point, so they stay broken until something substitutes the values:
 
 ```json
 {"jobid":1,"schedule":"0 1 * * *",
@@ -95,15 +97,12 @@ stay on indefinitely after the paid term lapses.
   free grace after expiry. Acceptable, but worth stating as intended behaviour.
 - `grant-manual-subscription` uses the same fixed `duration_days * 86 400 000` arithmetic —
   consistent with defect 2, intentional there since admins pick an explicit day count.
-- **Manual grants (platform-admin, cash/bank/mobile money).** The migration-defined CHECK on
-  `subscription_payments.billing_cycle` is `('monthly','annual')`, but
-  `grant-manual-subscription` inserts `'custom'`. The captured database had already been
-  hand-patched to allow `'custom'` (`CHECK (billing_cycle = ANY (ARRAY['monthly','annual','custom']))`),
-  so grants work *there* — but any environment rebuilt from migrations rejects every manual
-  grant. The same capture also shows `businesses.plan_tier` and
-  `subscription_payments.target_plan_tier` still limited to `growth/pro/enterprise`, i.e.
-  migration `20260919000000` (Starter) had not been applied: Starter grants and Starter
-  checkouts fail there with a raw constraint violation.
+- **Manual grants are fine.** Checked on request. `grant-manual-subscription` writes
+  `billing_cycle = 'custom'` and that value is allowed by migration `20260726000004`;
+  `'starter'` is allowed by `20260919000000`. The platform-admin gate, the
+  `subscription_payments` audit row and activation through the shared idempotent
+  `apply_subscription_payment()` are all unchanged, and a grant's term
+  (today + `duration_days`) is honoured by the new expiry logic like any other.
 
 ---
 
@@ -185,3 +184,68 @@ select id, plan_tier, plan_expires_at from public.businesses
 Commercial note: customers who were over-served while the cron was dead are downgraded by the
 back-fill the moment this ships. Consider a heads-up email — the in-app banner explains the
 change but will be the first they hear of it otherwise.
+
+
+---
+
+## Correction (2026-10-01, after the first fix was pushed)
+
+Two claims in the first version of this report were wrong. Both came from reading
+`artifacts/database/capture/` as if it described the current database. It does not: it is a
+frozen **2026-08-15** snapshot, and 61 of the repository's 122 migrations are newer than it.
+
+| Claimed | Actually |
+|---|---|
+| `subscription_payments.billing_cycle` was hand-patched to allow `'custom'`, so manual grants fail on any DB rebuilt from migrations | Migration **`20260726000004`** adds `'custom'`. Manual grants were never broken. |
+| Migration `20260919000000` (Starter) "had not been applied" to that project | The capture simply **predates** it by five weeks. No evidence either way. |
+
+The constraint re-assertions added on the strength of those claims have been removed from
+migration `20261017000000` — they were redundant. Nothing else in the fix depended on them,
+and the cron-placeholder finding (cause 1) stands: those schedule migrations predate the
+capture, and no code path in the repository rewrites the jobs afterwards.
+
+### Full drift check, done properly
+
+`scripts/database/compare-capture-to-migrations.py` (new) compares a database against
+`supabase/migrations`, in two modes:
+
+- `--source capture` (default, offline) — restricted to the 55 migrations that genuinely
+  predate the snapshot, excluding the same-day Phase 8B batch (`20260815000000`–`0003`), whose
+  version labels sort *before* the 19:26 capture but which was applied *after* it. Without that
+  exclusion the tool invents ~45 phantom gaps. Informational only; never exits non-zero.
+- `--source live` — queries the project through the Management API SQL endpoint and compares
+  `supabase_migrations.schema_migrations` against the checkout. The only mode that can prove
+  anything.
+
+Result against the capture, with the cutoff applied correctly:
+
+```
+tables:    0 missing of 59 declared
+functions: 0 missing of 35 declared
+triggers:  0 missing of 11 declared
+indexes:   0 missing of 31 declared
+```
+
+**No schema drift as of 2026-08-15.** The only genuine defect in the snapshot is the one
+already fixed: three pg_cron jobs `active = true` while posting to
+`https://<PROJECT_REF>.supabase.co/...`.
+
+The "30 tables with RLS enabled and no policy" the first pass of the tool reported is also a
+snapshot artefact: Phase 8B creates those policies inside `DO $$ … execute format(…) $$`
+blocks, invisible to text matching and applied after the capture.
+
+### What was fixed as a result
+
+1. **`scripts/database/compare-capture-to-migrations.py`** — drift detection that understands
+   both traps (authoring-time version labels, dynamically created objects).
+2. **`.github/workflows/schema-drift.yml`** — runs the live check weekly against staging and
+   production and fails on real drift or a placeholder cron job. Read-only; reuses the existing
+   `SUPABASE_ACCESS_TOKEN` and project-ref variables.
+3. **`artifacts/database/README.md`** — states the capture date, the migration gap and both
+   traps at the top of the directory, so the artefact is not mistaken for current state again.
+4. **Migration `20261017000000`** now also **deactivates any pg_cron job still holding a
+   placeholder**, so `active = true` means "actually fires". `apply-cron-jobs.sh` re-creates
+   them properly on the next deploy.
+
+To get a definitive answer about production right now, run the Schema Drift Check workflow from
+the Actions tab (or the `--source live` command above with a project ref and access token).
