@@ -117,35 +117,13 @@ begin
 end;
 $$;
 
--- ── 3. Deactivate any cron job still holding a deploy-time placeholder ─────
--- The schedule migrations (20260726000003 / 20260726000005 / 20260727000006)
--- are applied verbatim by `supabase db push`, so a freshly replayed database
--- ends up with jobs posting to 'https://<PROJECT_REF>.supabase.co/...'. pg_net
--- swallows the DNS failure, so cron.job shows active = true while the job does
--- nothing — which is precisely how the dead expiry sweep went unnoticed.
---
--- Mark such jobs inactive so "active" means "working". scripts/ci/apply-cron-jobs.sh
--- re-creates them (active) with real values on every deploy; the expiry sweep
--- scheduled in section 5 below needs no URL at all.
-do $$
-declare
-  v_job record;
-begin
-  if to_regclass('cron.job') is null then
-    raise notice 'pg_cron not installed here — nothing to deactivate.';
-    return;
-  end if;
-
-  for v_job in
-    select jobid, jobname from cron.job
-     where command like '%<PROJECT_REF>%' or command like '%<CRON_SECRET>%'
-  loop
-    update cron.job set active = false where jobid = v_job.jobid;
-    raise warning 'Cron job % (%) still contains a deploy-time placeholder and has been deactivated — run scripts/ci/apply-cron-jobs.sh to schedule it properly.',
-      v_job.jobname, v_job.jobid;
-  end loop;
-end;
-$$;
+-- ── 3. Cron metadata access ──────────────────────────────────────────────────
+-- Do not read or update cron.job here. Supabase's migration/database role is
+-- deliberately not granted access to that pg_cron metadata table (even though
+-- cron.schedule/cron.unschedule are exposed as security-definer functions), so
+-- touching it makes `supabase db push` fail with SQLSTATE 42501. HTTP cron jobs
+-- are repaired by scripts/ci/apply-cron-jobs.sh, which runs through the
+-- Management API with the required privileges.
 
 -- ── 4. Back-fill plans that lapsed while the cron was dead ──────────────────
 -- Same write the expire-subscriptions function performs. Runs as the migration
@@ -189,8 +167,9 @@ begin
     return;
   end if;
 
-  perform cron.unschedule('expire-subscriptions-daily')
-    where exists (select 1 from cron.job where jobname = 'expire-subscriptions-daily');
+  -- The function is security-definer; unlike cron.job, it is callable by
+  -- the migration role. It returns false when the named job is absent.
+  perform cron.unschedule('expire-subscriptions-daily');
 
   perform cron.schedule(
     'expire-subscriptions-daily',
