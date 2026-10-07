@@ -48,8 +48,26 @@ migrations. Replay order is therefore:
 - Never edit an applied migration. Add a new one.
 - `supabase db reset` must succeed with **zero manual object creation**; if it
   fails, fix the migration source, not the database.
-- After any schema change, regenerate types:
-  `npx supabase gen types typescript --project-id <ref> > src/dal/types/database.generated.ts`
+- After any schema change, regenerate types **from staging** — the project
+  built from these migrations (`SUPABASE_PROJECT_REF_STAGING`, currently
+  `bkxzgkurcqvccsdjmqzg`):
+
+  ```bash
+  npx supabase gen types typescript \
+    --project-id "$SUPABASE_PROJECT_REF_STAGING" \
+    > src/dal/types/database.generated.ts
+  ```
+
+  **Never generate from production** (`hsuhuvuxfuufrlejsatw`). Production is
+  the *legacy* project (`schema-drift-reconciliation.md` §2): it still carries
+  table shapes, and out-of-band objects, that these migrations do not express.
+  Generating from it reintroduces them — on 2026-10-07 that is exactly what
+  happened, and `npm run typecheck` failed with five errors on `api_keys`,
+  `webhooks` and `webhook_deliveries` (see §9.8). Where production and the
+  migrations disagree, the migrations are the contract: repair the database,
+  not the generated types. Re-run `npm run typecheck` after every
+  regeneration; a failure means the source was wrong or an environment is
+  drifted.
 
 ## 3. Replaying migrations without Docker
 
@@ -151,6 +169,13 @@ npm run typecheck
 npm run lint
 npm run test
 npm run build
+```
+
+Standalone database harnesses (embedded Postgres, not part of `npm test`):
+
+```bash
+node tests/database/posting_integrity_migrations.test.js     # posting integrity + quota guard
+node tests/database/public_api_table_convergence.test.js     # legacy public-API tables + repair (§9.8)
 ```
 
 `npm run db:validate` / `npm run db:validate:strict` are referenced by the Phase
@@ -255,3 +280,36 @@ inventory) is the substitute.
    `H03.INVJ.POSTED-ENTRY-IMMUTABLE` and `H02.POS.POSTED-ENTRY-IMMUTABLE`
    replay a production-shaped immutability guard and prove receipts, POS
    sales and invoice COGS still post.
+
+8. **Legacy public-API tables on production (2026-10-07).** `api_keys`,
+   `webhooks` and `webhook_deliveries` pre-date
+   `20260727000001_public_api_webhooks.sql` on production, so that migration's
+   `create table if not exists` was a no-op there and the columns/defaults it
+   declares never arrived. Staging (built from the migrations) is correct,
+   which is why the drift only appears when types are generated from
+   production: `npm run typecheck` then reported `webhooks.secret` as required
+   on insert, `webhooks.last_triggered_at` and `webhook_deliveries.attempt` as
+   non-existent, and `api_keys.created_at` as nullable. The consequences were
+   runtime, not cosmetic:
+   * the browser's `registerWebhook()` insert omits the signing secret on
+     purpose (it must never be client-known), so without the database default
+     it fails with 23502;
+   * `webhook-dispatcher`'s delivery-log insert needs `attempt`, so delivery
+     history is empty and `retry-failed-webhooks` (`.gte('attempt', 3)`) has
+     nothing to retry;
+   * the dispatcher's `last_triggered_at` update (and the same update in
+     `supabase/functions/api`) fails, so "last delivery" is never recorded;
+   * `api_keys` rows could exist with no creation timestamp.
+   `20261018000000_repair_legacy_public_api_tables.sql` converges all three
+   tables to the migration-declared shape (additive, idempotent, back-fills
+   before every NOT NULL). Verify before/after with
+   `scripts/diagnose-public-api-table-drift.sql` (per-column verdict, full
+   column inventory, RLS/policy/grant check).
+   `tests/database/public_api_table_convergence.test.js` reproduces the
+   production shapes, replays the whole migration set on top of them, and
+   asserts the result is column-for-column identical to a clean replay — so a
+   repair that misses a column fails there instead of on the next regeneration.
+   Residual: only the columns the generated types exposed are confirmed; the
+   diagnostic script's §2 prints the full column inventory of the three tables
+   in case production carries extra legacy columns the migrations never
+   declared.

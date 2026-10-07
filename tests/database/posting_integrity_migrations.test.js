@@ -184,7 +184,45 @@ async function main() {
   const EXT = extensionDir();
   assert(fs.existsSync(EXT), `Postgres extension dir not found (looked in ${EXT})`);
   fs.writeFileSync(path.join(EXT, 'pg_cron.control'), "comment='stub'\ndefault_version='1.0'\nrelocatable=true\n");
-  fs.writeFileSync(path.join(EXT, 'pg_cron--1.0.sql'), "create schema if not exists cron;\ncreate table if not exists cron.job (jobid bigint primary key, schedule text, command text, active boolean default true);\ncreate sequence if not exists cron.jobid_seq;\ncreate or replace function cron.schedule(name text, schedule text, command text) returns bigint language plpgsql as $$ declare v bigint; begin insert into cron.job values (nextval('cron.jobid_seq'), schedule, command, true) returning jobid into v; return v; end $$;\n");
+  // The stub carries `jobname` + `unschedule` because real pg_cron does, and
+  // 20261017000000_subscription_expiry_enforcement.sql resolves jobs by name
+  // (`select jobid, jobname from cron.job`, `cron.unschedule(<name>)`).
+  fs.writeFileSync(
+    path.join(EXT, 'pg_cron--1.0.sql'),
+    `create schema if not exists cron;
+create sequence if not exists cron.jobid_seq;
+create table if not exists cron.job (
+  jobid bigint primary key default nextval('cron.jobid_seq'),
+  jobname text,
+  schedule text,
+  command text,
+  active boolean default true
+);
+create unique index if not exists cron_job_jobname_uidx on cron.job (jobname) where jobname is not null;
+create or replace function cron.schedule(p_jobname text, p_schedule text, p_command text) returns bigint language plpgsql as $$
+declare v bigint;
+begin
+  select jobid into v from cron.job where jobname = p_jobname;
+  if v is null then
+    insert into cron.job (jobname, schedule, command, active)
+    values (p_jobname, p_schedule, p_command, true) returning jobid into v;
+  else
+    update cron.job set schedule = p_schedule, command = p_command, active = true where jobid = v;
+  end if;
+  return v;
+end $$;
+create or replace function cron.unschedule(p_jobname text) returns boolean language plpgsql as $$
+begin
+  delete from cron.job where jobname = p_jobname;
+  return true;
+end $$;
+create or replace function cron.unschedule(p_jobid bigint) returns boolean language plpgsql as $$
+begin
+  delete from cron.job where jobid = p_jobid;
+  return true;
+end $$;
+`,
+  );
   fs.writeFileSync(path.join(EXT, 'pg_net.control'), "comment='stub'\ndefault_version='1.0'\nrelocatable=true\n");
   fs.writeFileSync(path.join(EXT, 'pg_net--1.0.sql'), "create schema if not exists net;\ncreate type net.http_response as (status integer, message text, body text);\ncreate or replace function net.http_post(url text, headers jsonb default '{}', body jsonb default '{}', timeout_milliseconds integer default 5000) returns net.http_response language sql stable as $$ select null::integer, null::text, null::text $$;\n");
   await c.query(`CREATE EXTENSION pg_cron; CREATE EXTENSION pg_net; CREATE SCHEMA IF NOT EXISTS extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pg_trgm;
