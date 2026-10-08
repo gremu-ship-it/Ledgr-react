@@ -87,14 +87,17 @@ select
   c.relforcerowsecurity                                    as rls_forced,
   count(p.policyname)                                      as policy_count,
   coalesce(string_agg(distinct p.policyname, ', '), '(none)') as policies,
-  coalesce(array_to_string(c.relacl, ' | '), '(default)')  as grants
+  coalesce(c.relacl::text, '(default)')                    as grants
 from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 left join pg_policies p
   on p.schemaname = 'public' and p.tablename = c.relname
 where n.nspname = 'public'
   and c.relname in ('api_keys', 'webhooks', 'webhook_deliveries')
-group by c.relname, c.relrowsecurity, c.relforcerowsecurity, c.relacl
+-- relacl is aclitem[], which has neither a btree nor a hash opclass — it has to
+-- be cast to text before it can appear in GROUP BY (or the query fails with
+-- "could not implement GROUP BY").
+group by c.relname, c.relrowsecurity, c.relforcerowsecurity, c.relacl::text
 order by c.relname;
 
 
