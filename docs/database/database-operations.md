@@ -343,3 +343,22 @@ inventory) is the substitute.
    and any environment that already recorded the version keeps its own applied
    state — `db push` skips recorded versions and only fresh replays see the
    revised text.
+
+10. **Extension functions must be schema-qualified in migrations (2026-10-08).**
+   pgcrypto lives in the **`extensions`** schema on hosted Supabase projects.
+   The Supabase SQL editor has `extensions` on its search_path; a
+   `supabase db push` session does **not**. An unqualified
+   `gen_random_bytes(32)` therefore works when a migration is pasted into the
+   editor and aborts the same file under `db push`:
+   `function gen_random_bytes(integer) does not exist` (SQLSTATE 42883). The
+   batch is rejected as one implicit transaction, so nothing in the file is
+   applied and nothing is recorded — the migration simply reverts to pending.
+   `20260815000000_phase8b_reconstruct_rpcs.sql` uses the correct form
+   (`extensions.gen_random_bytes(32)`);
+   `20261018000000_repair_legacy_public_api_tables.sql` resolves the schema
+   from `pg_extension.extnamespace` at apply time instead of assuming it, so it
+   also works where pgcrypto sits in `public`.
+   **Rule: never call an extension function unqualified in a migration — use
+   the schema-qualified name or resolve the schema at apply time.** Note the
+   SQL editor is not a faithful proxy for `db push`: anything that only works
+   there, works nowhere else.

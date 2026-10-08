@@ -46,6 +46,15 @@
 -- tag deploy for production). To confirm convergence afterwards, run
 -- scripts/diagnose-public-api-table-drift.sql — it flags each column that is
 -- still missing on a database.
+--
+-- 2026-10-08 revision: the secret back-fill / default originally called
+-- `gen_random_bytes` unqualified. A `supabase db push` session does not have
+-- `extensions` on its search_path, so the first production push aborted with
+-- `function gen_random_bytes(integer) does not exist` (SQLSTATE 42883) and the
+-- whole file rolled back (one multi-statement batch = one implicit
+-- transaction). The schema is now resolved from pg_extension at apply time.
+-- Re-applying is safe: every statement is guarded and the migration is a no-op
+-- on a database that already has the declared shape.
 -- ============================================================================
 
 create extension if not exists pgcrypto;
@@ -86,12 +95,37 @@ alter table public.webhooks
 -- delivery is only meaningful if the recipient's copy came from the database
 -- and never from the browser. Back-fill any secret-less row with a fresh one
 -- before the default + NOT NULL are (re-)asserted.
-update public.webhooks
-   set secret = encode(gen_random_bytes(32), 'hex')
- where secret is null;
+--
+-- gen_random_bytes lives in whichever schema pgcrypto was installed into —
+-- `extensions` on hosted Supabase projects, `public` where the extension was
+-- created without an explicit schema. A `supabase db push` session does NOT
+-- have `extensions` on its search_path (the Supabase SQL editor does), so an
+-- unqualified call fails there with 42883 — which is how the first production
+-- push of this migration aborted on 2026-10-08. The schema is therefore
+-- resolved at apply time and the statements are built with execute/format.
+do $$
+declare
+  v_pgcrypto_schema text;
+begin
+  select n.nspname into v_pgcrypto_schema
+    from pg_extension e
+    join pg_namespace n on n.oid = e.extnamespace
+   where e.extname = 'pgcrypto';
 
-alter table public.webhooks
-  alter column secret set default encode(gen_random_bytes(32), 'hex');
+  if v_pgcrypto_schema is null then
+    raise exception 'pgcrypto is not installed, so webhook signing secrets cannot be generated. Run `create extension pgcrypto;` and re-apply this migration.'
+      using errcode = '42883';
+  end if;
+
+  execute format(
+    'update public.webhooks set secret = encode(%I.gen_random_bytes(32), ''hex'') where secret is null',
+    v_pgcrypto_schema);
+
+  execute format(
+    'alter table public.webhooks alter column secret set default encode(%I.gen_random_bytes(32), ''hex'')',
+    v_pgcrypto_schema);
+end;
+$$;
 
 alter table public.webhooks
   alter column secret set not null;

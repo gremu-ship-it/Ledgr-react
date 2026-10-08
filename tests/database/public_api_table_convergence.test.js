@@ -375,9 +375,21 @@ async function main() {
     });
 
     // ── 2. Apply the repair (twice: the deploy can retry) ──────────────────
-    await check('the repair applies cleanly and is idempotent', async () => {
-      await applyMigration(legacy.c, REPAIR_MIGRATION);
-      await applyMigration(legacy.c, REPAIR_MIGRATION);
+    // The repair is applied with `extensions` deliberately OFF the search_path:
+    // a `supabase db push` session does not have it (the Supabase SQL editor
+    // does), which is how production failed on 2026-10-08 with
+    // 'function gen_random_bytes(integer) does not exist' (SQLSTATE 42883) —
+    // pgcrypto lives in the `extensions` schema on hosted projects. Anything
+    // the repair calls out to an extension must therefore be schema-qualified
+    // or resolved at apply time.
+    await check('the repair applies cleanly and is idempotent (without extensions on search_path)', async () => {
+      await legacy.c.query(`set search_path = "$user", public`);
+      try {
+        await applyMigration(legacy.c, REPAIR_MIGRATION);
+        await applyMigration(legacy.c, REPAIR_MIGRATION);
+      } finally {
+        await legacy.c.query(`set search_path = "$user", public, extensions`);
+      }
     });
 
     for (const [table, name, dataType, isNullable, hasDefault] of EXPECTED) {
