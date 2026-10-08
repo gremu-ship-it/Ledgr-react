@@ -21,6 +21,13 @@
 --
 -- ADDITIVE + IDEMPOTENT: create-or-replace functions, constraint re-created,
 -- back-fill is a no-op on a healthy database.
+--
+-- 2026-10-08 revision: section 3 originally ran a bare `update cron.job`, which
+-- the role `supabase db push` connects as may not perform (hosted production
+-- aborted the push with SQLSTATE 42501, which also blocked recording the
+-- migration target the deploy gate checks). It now falls back to pg_cron's
+-- SECURITY DEFINER `cron.alter_job`. See docs/database/database-operations.md
+-- §9.9 and tests/database/cron_placeholder_sweep.test.js.
 -- ============================================================================
 
 -- ── 1. effective_plan_tier ──────────────────────────────────────────────────
@@ -127,6 +134,16 @@ $$;
 -- Mark such jobs inactive so "active" means "working". scripts/ci/apply-cron-jobs.sh
 -- re-creates them (active) with real values on every deploy; the expiry sweep
 -- scheduled in section 5 below needs no URL at all.
+--
+-- 2026-10-08: the direct UPDATE below is the only statement in the whole
+-- migration set that writes pg_cron's table, and on hosted projects the role
+-- `db push` connects as owns neither the extension nor its tables — production
+-- failed the entire push with 'permission denied for table job' (SQLSTATE
+-- 42501). The update is therefore attempted first and, when it is refused,
+-- the deactivation goes through pg_cron's own SECURITY DEFINER entry point
+-- (cron.alter_job). Note the semantics are deliberately unchanged: the job is
+-- *deactivated*, never deleted, so it stays visible in cron.job for an
+-- operator and a later apply-cron-jobs.sh overwrites it with real values.
 do $$
 declare
   v_job record;
@@ -140,9 +157,25 @@ begin
     select jobid, jobname from cron.job
      where command like '%<PROJECT_REF>%' or command like '%<CRON_SECRET>%'
   loop
-    update cron.job set active = false where jobid = v_job.jobid;
-    raise warning 'Cron job % (%) still contains a deploy-time placeholder and has been deactivated — run scripts/ci/apply-cron-jobs.sh to schedule it properly.',
-      v_job.jobname, v_job.jobid;
+    begin
+      update cron.job set active = false where jobid = v_job.jobid;
+      raise warning 'Cron job % (%) still contains a deploy-time placeholder and has been deactivated — run scripts/ci/apply-cron-jobs.sh to schedule it properly.',
+        v_job.jobname, v_job.jobid;
+    exception
+      when insufficient_privilege then
+        begin
+          -- Positional arguments with explicit NULLs: NULL means "leave this
+          -- field alone" in pg_cron, and positional keeps the call working on
+          -- every pg_cron version that has alter_job (added in 1.5).
+          perform cron.alter_job(v_job.jobid, null, null, null, null, false);
+          raise warning 'Cron job % (%) still contains a deploy-time placeholder and has been deactivated via cron.alter_job (the migration role cannot write cron.job) — run scripts/ci/apply-cron-jobs.sh to schedule it properly.',
+            v_job.jobname, v_job.jobid;
+        exception
+          when others then
+            raise warning 'Cron job % (%) still contains a deploy-time placeholder and could not be deactivated (%) — run scripts/ci/apply-cron-jobs.sh to schedule it properly.',
+              v_job.jobname, v_job.jobid, sqlerrm;
+        end;
+    end;
   end loop;
 end;
 $$;

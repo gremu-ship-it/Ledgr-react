@@ -176,6 +176,7 @@ Standalone database harnesses (embedded Postgres, not part of `npm test`):
 ```bash
 node tests/database/posting_integrity_migrations.test.js     # posting integrity + quota guard
 node tests/database/public_api_table_convergence.test.js     # legacy public-API tables + repair (§9.8)
+node tests/database/cron_placeholder_sweep.test.js           # pg_cron privilege contract (§9.9)
 ```
 
 `npm run db:validate` / `npm run db:validate:strict` are referenced by the Phase
@@ -313,3 +314,32 @@ inventory) is the substitute.
    diagnostic script's §2 prints the full column inventory of the three tables
    in case production carries extra legacy columns the migrations never
    declared.
+
+9. **pg_cron tables are not writable by the deploy role (2026-10-08).** A
+   hosted `supabase db push` connects as a role that owns neither the pg_cron
+   extension nor its tables. `cron.schedule` / `cron.unschedule` /
+   `cron.alter_job` are `SECURITY DEFINER`, so they work; a raw
+   `update cron.job …` does not:
+   `20261017000000_subscription_expiry_enforcement.sql` §3 was the only
+   statement in the whole migration set that wrote the table directly, and the
+   production push aborted with `permission denied for table job`
+   (SQLSTATE 42501). Because the push aborted, the migration was never recorded
+   in `supabase_migrations.schema_migrations` — which also keeps
+   `scripts/ci/verify-migration-target.sh` (and therefore the frontend deploy
+   gate) closed, so this class of failure presents as *two* problems, not one.
+   §3 now attempts the UPDATE and falls back to `cron.alter_job(…, active =>
+   false)`; it deactivates, never deletes, so the job stays visible for an
+   operator and the next `apply-cron-jobs.sh` overwrites it with real values.
+   `tests/database/cron_placeholder_sweep.test.js` replays the migration set and
+   re-runs §3 as a role holding only `SELECT` on `cron.job`, asserting the block
+   completes and the job is deactivated rather than removed.
+   **Rule for future migrations: never write `cron.job` (or any pg_cron table)
+   directly — use the `cron.*` functions.**
+
+   Note on process: this migration was **edited after it was merged**, which the
+   §2 rule otherwise forbids. It is safe here because the change is confined to
+   a best-effort deactivation guard, the edit is what makes the migration
+   applicable at all (it could not run on hosted production in its merged form),
+   and any environment that already recorded the version keeps its own applied
+   state — `db push` skips recorded versions and only fresh replays see the
+   revised text.
