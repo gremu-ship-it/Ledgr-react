@@ -34,6 +34,29 @@ create function cron.schedule(name text, schedule text, command text) returns bi
  insert into cron.job(jobname,schedule,command) values(name,schedule,command)
  on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command returning jobid into v;
  return v; end $$;
+-- Remaining pg_cron entry points, faithful to pg_cron 1.5+ semantics (NULL in
+-- alter_job means "leave this field unchanged"; unschedule reports whether a
+-- job was deleted). Migrations must reach the scheduler only through these
+-- functions — a bare `update cron.job` is refused for the hosted `db push`
+-- role (docs/database/database-operations.md §9.9).
+create function cron.unschedule(job_name text) returns boolean language plpgsql as $$
+ begin
+ delete from cron.job where jobname = job_name;
+ return found; end $$;
+create function cron.unschedule(job_id bigint) returns boolean language plpgsql as $$
+ begin
+ delete from cron.job where jobid = job_id;
+ return found; end $$;
+create function cron.alter_job(job_id bigint, schedule text default null, command text default null,
+ database text default null, username text default null, active boolean default null) returns void language plpgsql as $$
+ begin
+ update cron.job
+ set schedule = coalesce(schedule, schedule),
+ command = coalesce(command, command),
+ active = coalesce(active, active)
+ where jobid = job_id;
+ if not found then
+ raise exception 'could not find valid entry for job %', job_id using errcode = '42704'; end if; end $$;
 create schema net;
 create function net.http_post(url text, headers jsonb default '{}', body jsonb default '{}', timeout_milliseconds integer default 5000)
  returns bigint language plpgsql as $$ begin raise exception 'R13 platform network disabled'; end $$;

@@ -68,6 +68,8 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_STAGING }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_STAGING }}
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN_STAGING }}
+      # Org capability kill switch; default OFF until the gated rollout opts in.
+      VITE_FEATURE_CAPABILITY_ORG_LAYER: ${{ vars.VITE_FEATURE_CAPABILITY_ORG_LAYER_STAGING || 'false' }}
 
       # Sentry source-map upload (frontend)
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
@@ -222,6 +224,7 @@ jobs:
             --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
             --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
             --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+            --build-env VITE_FEATURE_CAPABILITY_ORG_LAYER="$VITE_FEATURE_CAPABILITY_ORG_LAYER" \
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
             --build-env VITE_MIGRATION_TARGET="$MIGRATION_TARGET" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
@@ -304,6 +307,8 @@ jobs:
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_PROD }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_PROD }}
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN_PROD }}
+      # Org capability kill switch; default OFF until the gated rollout opts in.
+      VITE_FEATURE_CAPABILITY_ORG_LAYER: ${{ vars.VITE_FEATURE_CAPABILITY_ORG_LAYER_PROD || 'false' }}
 
       SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
@@ -449,6 +454,7 @@ jobs:
             --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
             --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
             --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
+            --build-env VITE_FEATURE_CAPABILITY_ORG_LAYER="$VITE_FEATURE_CAPABILITY_ORG_LAYER" \
             --build-env VITE_APP_VERSION="${{ github.sha }}" \
             --build-env VITE_MIGRATION_TARGET="$MIGRATION_TARGET" \
             --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
