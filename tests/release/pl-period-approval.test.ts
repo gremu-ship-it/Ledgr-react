@@ -6,7 +6,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, key, saleFixture } from './fixtures';
+import { seedFixture, identities, PAST, key, saleFixture } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('pl-period-approval');
@@ -49,10 +49,10 @@ const TODAY = async (c: C) => String((await c.query("select to_char(current_date
 
 const header = (over: Record<string, unknown> = {}) => ({
   business_id: orgs.A.business, contact_id: orgs.A.customer, branch_id: orgs.A.branch,
-  invoice_type: 'invoice', status: 'sent', issue_date: DAY, due_date: DAY,
+  invoice_type: 'invoice', status: 'sent', issue_date: PAST, due_date: PAST,
   currency: 'MWK', original_currency: 'MWK', exchange_rate: 1, functional_currency: 'MWK',
   subtotal: 1000, taxable_amount: 1000, discount_amount: 0, discount_percent: 0, vat_amount: 0, wht_amount: 0,
-  total_amount: 1000, original_amount: 1000, functional_amount: 1000, amount_paid: 0, rate_date: DAY, rate_is_stale: false, ...over,
+  total_amount: 1000, original_amount: 1000, functional_amount: 1000, amount_paid: 0, rate_date: PAST, rate_is_stale: false, ...over,
 });
 const line = (n: number) => ({ line_number: n, description: `PL line ${n}`, quantity: 1, unit_price: 500,
   discount_percent: 0, discount_amount: 0, tax_code: 'none', tax_rate: 0, tax_amount: 0, line_total: 500 });
@@ -60,7 +60,7 @@ const createInvoice = async (c: C, k: string, over: Record<string, unknown> = {}
   (await c.query('select public.create_invoice_with_lines($1::jsonb,$2::jsonb,$3::uuid) r',
     [JSON.stringify(header(over)), JSON.stringify([line(1), line(2)]), k])).rows[0].r.invoice as Record<string, any>;
 /** September 1 → fixture day as an accounting period (created open, as superuser, in the probe transaction). */
-const period = async (c: C, start = '2026-09-01', end = DAY) => {
+const period = async (c: C, start = '2026-09-01', end = PAST) => {
   await c.query('reset role');
   return String((await c.query('insert into public.accounting_periods(business_id,name,period_start,period_end,is_closed) values($1,$2,$3,$4,false) returning id',
     [orgs.A.business, `PL ${start}..${end}`, start, end])).rows[0].id);
@@ -94,7 +94,7 @@ test(meta('PL.PERIOD.CLOSE-AUTHORITY', 'Closing an accounting_periods row is a s
     await as(c, identities.A_accountant.id);
     await failsWith(c, () => closeP(c, current), ['22023'], /after it has ended/);
     await su(c);
-    await c.query("insert into public.journal_entries(business_id,entry_number,entry_date,description,status,currency,exchange_rate) values($1,'PL-DRAFT-1',$2,'draft probe','draft','MWK',1)", [orgs.A.business, DAY]);
+    await c.query("insert into public.journal_entries(business_id,entry_number,entry_date,description,status,currency,exchange_rate) values($1,'PL-DRAFT-1',$2,'draft probe','draft','MWK',1)", [orgs.A.business, PAST]);
     await as(c, identities.A_accountant.id);
     await failsWith(c, () => closeP(c, pid), ['22023'], /draft journal/);
     await su(c); await c.query("delete from public.journal_entries where entry_number='PL-DRAFT-1' and business_id=$1", [orgs.A.business]);
@@ -116,16 +116,16 @@ test(meta('PL.PERIOD.CLOSED-WRITES-REFUSED', 'With books closed through the fixt
     await grants(c, identities.A_owner.id);
     const old = await createInvoice(c, key(1401));
     const oldDraft = await createInvoice(c, key(1402), { status: 'draft' });
-    await close(c, DAY);
+    await close(c, PAST);
     await failsWith(c, () => createInvoice(c, key(1403)), ['22023'], /period-closed/);
     await failsWith(c, () => c.query('update public.invoices set total_amount=1 where id=$1', [oldDraft.id]), ['22023', '42501']);
     await failsWith(c, () => c.query("update public.invoice_lines set description='x' where invoice_id=$1", [oldDraft.id]), ['22023'], /period-closed/);
     await failsWith(c, () => c.query('delete from public.invoices where id=$1', [oldDraft.id]), ['22023'], /period-closed/);
     await failsWith(c, () => c.query('select public.record_inventory_journal_movement($1::jsonb)', [JSON.stringify({
-      business_id: orgs.A.business, location_id: orgs.A.location, movement_date: DAY, movement_type: 'adjustment_in', client_key: key(1404),
+      business_id: orgs.A.business, location_id: orgs.A.location, movement_date: PAST, movement_type: 'adjustment_in', client_key: key(1404),
       lines: [{ product_id: orgs.A.product, quantity: 1, unit_cost: 900 }] })]), ['22023'], /period-closed/);
     await su(c);
-    await failsWith(c, () => c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',$4,1,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, orgs.A.location, DAY]), ['22023'], /period-closed/);
+    await failsWith(c, () => c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',$4,1,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, orgs.A.location, PAST]), ['22023'], /period-closed/);
     await failsWith(c, () => c.query('delete from public.invoices where id=$1', [old.id]), ['22023'], /period-closed/);
     await as(c, identities.A_owner.id);
     const today = await TODAY(c);
@@ -138,8 +138,8 @@ test(meta('PL.PERIOD.SETTLEMENT-ALLOWED', 'A payment received TODAY on an invoic
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
     const inv = await createInvoice(c, key(1411));
-    await close(c, DAY);
-    await failsWith(c, () => pay(c, inv.id, 100, key(1412), DAY), ['22023'], /period-closed/);
+    await close(c, PAST);
+    await failsWith(c, () => pay(c, inv.id, 100, key(1412), PAST), ['22023'], /period-closed/);
     const p = await pay(c, inv.id, 400, key(1413), await TODAY(c));
     expect(p.invoice.status).toBe('partially_paid');
     expect(Number(p.invoice.amount_paid)).toBe(400);
@@ -149,7 +149,7 @@ test(meta('PL.PERIOD.SETTLEMENT-ALLOWED', 'A payment received TODAY on an invoic
 test(meta('PL.PERIOD.REOPEN-OWNER-ONLY', 'Reopening needs the OWNER (accountant/admin → 42501) and a written reason ≥ 10 chars (22023); reopening an open period is refused 22023; after reopening the period accepts writes again; close and reopen are both in accounting_period_events'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
-    const pid = await close(c, DAY);
+    const pid = await close(c, PAST);
     for (const who of ['A_accountant', 'A_admin']) { await as(c, identities[who].id); await failsWith(c, () => reopenP(c, pid, 'Correcting a posting error'), ['42501']); }
     await as(c, identities.A_owner.id);
     await failsWith(c, () => reopenP(c, pid, 'oops'), ['22023'], /written reason/);
@@ -164,7 +164,7 @@ test(meta('PL.PERIOD.REOPEN-OWNER-ONLY', 'Reopening needs the OWNER (accountant/
 test(meta('PL.PERIOD.NO-DIRECT-WRITES', 'A period status can only change through the commands: a direct UPDATE of accounting_periods.is_closed is refused 42501 even for the superuser/service path; a closed period cannot be deleted or have its dates moved (22023); a row inserted as closed is stored open; accounting_period_events / invoice_approval_policies / invoice_approvals cannot be written by authenticated callers (42501)'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
-    const pid = await close(c, DAY);
+    const pid = await close(c, PAST);
     await su(c);
     await failsWith(c, () => c.query('update public.accounting_periods set is_closed=false where id=$1', [pid]), ['42501']);
     await failsWith(c, () => c.query("update public.accounting_periods set period_end='2026-09-10' where id=$1", [pid]), ['22023']);
@@ -256,10 +256,10 @@ test(meta('PL.PERIOD.REVERSAL-MARK-ALLOWED', 'A journal entry in the closed peri
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
     const r = (await c.query('select public.record_inventory_journal_movement($1::jsonb) r', [JSON.stringify({
-      business_id: orgs.A.business, location_id: orgs.A.location, movement_date: DAY, movement_type: 'adjustment_in', client_key: key(1471),
+      business_id: orgs.A.business, location_id: orgs.A.location, movement_date: PAST, movement_type: 'adjustment_in', client_key: key(1471),
       lines: [{ product_id: orgs.A.product, quantity: 1, unit_cost: 900 }] })])).rows[0].r;
     const entry = String(r.journal_entry_id);
-    await close(c, DAY);
+    await close(c, PAST);
     await su(c);
     await failsWith(c, () => c.query("update public.journal_entries set description='tamper' where id=$1", [entry]), ['22023'], /period-closed/);
     await failsWith(c, () => c.query('update public.journal_lines set amount=1, amount_base=1 where journal_entry_id=$1', [entry]), ['22023'], /period-closed/);

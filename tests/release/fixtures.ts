@@ -1,5 +1,24 @@
 /** Synthetic fixture contract shared by DB/Edge/offline tests. Never customer data. */
-export const DAY = '2026-09-21';
+/**
+ * Fixture dates, derived at module load from the local system date — the same
+ * clock the embedded PostgreSQL in tests/release/database.mjs reads, so the
+ * server's `current_date` agrees on any machine. The previous hardcoded
+ * '2026-09-21' rolled over on 2026-10-01 and turned the five R10.QUOTA / R09.3
+ * records into known FAILs (gate §11.4; fixed as Step 4 of the 2026-10-08
+ * readiness report).
+ *
+ * - `DAY` — fixture "today": seeded rows land in the server's metered month.
+ *   `_ledgr_assert_usage_limit` meters `date_trunc('month', current_date)`
+ *   (migrations 20261001000000 / 20261006000000).
+ * - `PAST` — fixture "last business day": always strictly before the server's
+ *   `current_date`, for suites that close accounting periods ending on the
+ *   fixture day (`close_accounting_period` refuses periods with
+ *   `period_end >= current_date`, migration 20261014000000).
+ */
+const now = new Date();
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const DAY = iso(now);
+export const PAST = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
 export const roles = ['owner', 'admin', 'accountant', 'viewer', 'cashier', 'stock_clerk', 'branch_manager'] as const;
 export const identities = Object.fromEntries(['A', 'B'].flatMap((org, orgIndex) =>
   roles.map((role, i) => [`${org}_${role}`, {
