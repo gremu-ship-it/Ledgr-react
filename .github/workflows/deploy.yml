@@ -334,11 +334,13 @@ jobs:
             fi
             echo "${label} verified at the expected commit and migration target."
           }
-          if ! check_frontend_version "Prebuilt Vercel deployment" "$deployment_url"; then
-            exit 1
-          fi
-          if ! check_frontend_version "Live ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
-            echo "::error::The prebuilt deployment is correct but the stable live URL is not serving it; check the Vercel production alias/domain."
+          # The immutable deployment URL can be access-protected by Vercel and
+          # return an auth page to plain curl. The exact prebuilt artifact was
+          # already validated before migration; verify the public canonical URL
+          # users actually visit, which is the release acceptance criterion.
+          echo "::notice::Prebuilt Vercel deployment: ${deployment_url}; checking the canonical ${SUPABASE_ENV_LABEL} URL."
+          if ! check_frontend_version "Canonical ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
+            echo "::error::The prebuilt artifact was validated before migration, but the canonical live URL is not serving it; check the Vercel production alias/domain."
             exit 1
           fi
       - name: Release manifest (staging)
@@ -631,11 +633,13 @@ jobs:
             fi
             echo "${label} verified at the expected commit and migration target."
           }
-          if ! check_frontend_version "Prebuilt Vercel deployment" "$deployment_url"; then
-            exit 1
-          fi
-          if ! check_frontend_version "Live ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
-            echo "::error::The prebuilt deployment is correct but the stable live URL is not serving it; check the Vercel production alias/domain."
+          # The immutable deployment URL can be access-protected by Vercel and
+          # return an auth page to plain curl. The exact prebuilt artifact was
+          # already validated before migration; verify the public canonical URL
+          # users actually visit, which is the release acceptance criterion.
+          echo "::notice::Prebuilt Vercel deployment: ${deployment_url}; checking the canonical ${SUPABASE_ENV_LABEL} URL."
+          if ! check_frontend_version "Canonical ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
+            echo "::error::The prebuilt artifact was validated before migration, but the canonical live URL is not serving it; check the Vercel production alias/domain."
             exit 1
           fi
       - name: Release manifest (production)
