@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Point the HTTP-dispatched pg_cron jobs at the real Edge Function URLs, and
-# prove afterwards that no scheduled job is still holding a placeholder.
+# prove afterwards that no active scheduled job is holding a placeholder.
 #
 # Why this exists
 # ---------------
@@ -87,16 +87,19 @@ while :; do
   attempt=$((attempt + 1))
 done
 
-# --- Verify: no scheduled job may still contain a placeholder ---------------
-# This is the check whose absence let the breakage live in production for
-# months. It is read-only and cheap.
+# --- Verify: no active job may still contain a placeholder -----------------
+# A migration deliberately deactivates legacy placeholder jobs until an
+# operator explicitly enables them. They remain visible in cron.job (with
+# active=false) for audit and must not block deployment. Only active jobs can
+# fire, so those are the ones that must never retain placeholders.
 verify_file="$(mktemp)"
 trap 'rm -f "${sql_file}" "${verify_file}"' EXIT
 cat > "${verify_file}" <<'SQL'
 select jobname, schedule, active
   from cron.job
- where command like '%<PROJECT_REF>%'
-    or command like '%<CRON_SECRET>%';
+ where active is true
+   and (command like '%<PROJECT_REF>%'
+     or command like '%<CRON_SECRET>%');
 SQL
 
 verify_response="$(run_sql "${verify_file}" || true)"
@@ -108,13 +111,13 @@ if [[ "${verify_status}" != 2* ]]; then
   exit 0
 fi
 
-# Empty result set = no placeholders left.
+# Empty result set = no active jobs left with placeholders.
 if printf '%s' "${verify_body}" | grep -q 'jobname'; then
-  echo "::error::Cron jobs on ${label} still contain unsubstituted placeholders — they will never fire:"
+  echo "::error::Active cron jobs on ${label} still contain unsubstituted placeholders — they will never fire:"
   printf '%s\n' "${verify_body}" | head -n 5 | while IFS= read -r line; do
     echo "::error::  ${line:0:400}"
   done
   exit 1
 fi
 
-echo "Verified: no pg_cron job on ${label} contains an unsubstituted placeholder."
+echo "Verified: no active pg_cron job on ${label} contains an unsubstituted placeholder."

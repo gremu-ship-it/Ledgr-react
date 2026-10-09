@@ -11,6 +11,11 @@
 // root of a large vulnerable transitive tree (tar, ajv, undici,
 // path-to-regexp, ...), and this handler only needs a sliver of its surface.
 
+// Vercel can typecheck API routes in an isolated project that does not inherit
+// the root app tsconfig's Node globals. Keep this tiny declaration local so
+// the health endpoint remains independent of @vercel/node.
+declare const process: { env: { VERCEL_ENV?: string } };
+
 interface VercelRequest {
   method?: string;
   url?: string;
