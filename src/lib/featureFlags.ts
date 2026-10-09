@@ -17,6 +17,16 @@ const DEFAULTS: Record<string, boolean> = {
   ai_agent: true,
   /** Experimental features gated behind a flag. */
   experimental: false,
+  /**
+   * Organisation capability layer (multibusiness architecture, frozen spec
+   * 2026-09-27). Off until the gated architecture rollout explicitly opts in.
+   * Set VITE_FEATURE_CAPABILITY_ORG_LAYER=false and redeploy to fall back to
+   * pre-architecture behaviour (subscription ∧ partner ∧ role). This is a
+   * build-time kill switch, not a remote/runtime toggle. See
+   * src/lib/capabilities/resolve.ts and
+   * docs/runbooks/FALLBACK_ROLLBACK_2026-10-09.md.
+   */
+  capability_org_layer: false,
 };
 
 function envName(flag: string): string {

@@ -6,11 +6,13 @@ programme's three documents (merged in PR #198) against the repository and
 against Rev 1, records what changed, and withdraws the Rev 1 recommendations
 that the frozen design supersedes.
 
-**Revision 2.1 · 2026-10-09** — status update only, no re-survey: Step 4
+**Revision 2.2 · 2026-10-09** — status updates, no re-survey: Step 4
 (fixture dates) is **done** and the release harness is fully green again
-(822 PASS / 0 FAIL / 56 BLOCKED, §6); the gate §5.3 checklist counts are
-**corrected** (two gate errors found and cross-footed, §4); a gate-A
-verification script now automates the Step 1 checklist diff (§7).
+(822 PASS / 0 FAIL / 56 BLOCKED, §6); two gate §5.3 checklist counts are
+**corrected** (§4); a gate-A checklist script automates Step 1 (§7); the
+owner's fallback recommendation is captured in a rollback runbook with a
+dormant, build-time organisation-capability kill switch (default off; no
+product behaviour changed; §6–7).
 
 **Question asked:** can different users have a different Ledgr "platform"
 depending on their type of organisation (NGO, retail, manufacturer, …), and
@@ -39,11 +41,15 @@ re-verified independently (§4 lists what was found wrong, in either direction).
    **type** + **operating models** on `businesses`, an **organisation
    capability layer** composed with subscription ∧ partner ∧ role, and a
    bounded NGO foundation (§2).
-2. **No architecture code has been written.** The programme's STOP condition
-   was honoured: no migrations, RLS, RPCs, org fields or NGO tables exist yet
+2. **No multibusiness product behaviour has been implemented.** The STOP
+   condition was honoured: no migrations, RLS, RPCs, org fields, capability
+   provider/nav/onboarding, or NGO tables exist yet
    (`LEDGR_PRE_IMPLEMENTATION_ARCHITECTURE_GATE_FOLLOWUP_2026-10-06.md` §5;
    re-verified here — no `organisation_type`/`operating_models`/
-   `capability_overrides` anywhere in `supabase/migrations/`).
+   `capability_overrides` anywhere in `supabase/migrations/`). This follow-up
+   adds only dormant fallback plumbing — a pure resolver, an off-by-default
+   build-time flag, CI env wiring and a runbook. The resolver has no app callers;
+   current user-visible behaviour is unchanged. This does not clear Steps 1–3.
 3. **Implementation is gated**, not blocked by design questions: exact type
    regeneration (was ENVIRONMENT-BLOCKED — now cleared on the owner's machine,
    §6), a live POS baseline read, test-fixture maintenance, and owner product
@@ -168,7 +174,8 @@ the repair pinned by `tests/database/public_api_table_convergence.test.js`.
 | **Live POS tenant baseline** (Strategy A evidence) | LIVE-EVIDENCE-BLOCKED | **Still needs one read-only query set** (canonical signals: `pos_shifts` ∪ `pos_terminals` ∪ `invoices.pos_shift_id` ∪ journal evidence; **not** `pos_settings`, **not** `audit_log.event_type='pos_sale'`, per gate G-3). Worth knowing: the repo already documents production POS evidence — the 2026-09-27 retail audit (§13 update 2) reports **no shift was ever opened** in production, with the till path never used; formalising that with the canonical signal set should be a five-minute read, not an open question |
 | **Strategy-A safety check** | LIVE-EVIDENCE-BLOCKED | Follows the baseline read |
 | **Frozen-decision contradiction scan** | CLEARED | Unchanged; Rev 1's independent survey surfaced no contradiction either |
-| **Regression stack** | green except **5 FAILs** proven to be fixture month-rollover staleness (`DAY='2026-09-21'`) | **Closed 2026-10-09 (Step 4 done).** `DAY` now derives from the system date at module load, and a new `PAST` (yesterday) serves the period-lock suites that must close periods ending strictly before `current_date` (`tests/release/fixtures.ts:2`; `pl-period-approval.test.ts` and the H04 record in `ic-containment.test.ts` moved to `PAST`). Full harness re-run on this branch: **822 PASS / 0 FAIL / 56 BLOCKED** (56 = the gate's 54 + 2 LEGACY records for this branch's new `tests/database/` suites); `npm test` 941/941, `typecheck` and `test:release:types` clean. One harness repair was needed first: the release-harness pg_cron stub lacked `cron.unschedule`/`cron.alter_job`, so `20261017000000` aborted the entire replay (SQLSTATE 42883, 621 records BLOCKED) — `tests/release/bootstrap.sql` now provides pg_cron 1.5+-faithful stubs (ops doc §9.9) |
+| **Regression stack** | green except **5 FAILs** proven to be fixture month-rollover staleness (`DAY='2026-09-21'`) | **Closed 2026-10-09 (Step 4 done).** `DAY` now derives from the system date at module load, and a new `PAST` (yesterday) serves the period-lock suites that must close periods ending strictly before `current_date` (`tests/release/fixtures.ts:2`; `pl-period-approval.test.ts` and the H04 record in `ic-containment.test.ts` moved to `PAST`). Full harness re-run on this branch: **822 PASS / 0 FAIL / 56 BLOCKED** (56 = the gate's 54 + 2 LEGACY records for this branch's new `tests/database/` suites); `npm test` 947/947 (including 6 fallback-resolver tests), `typecheck` and `test:release:types` clean. One harness repair was needed first: the release-harness pg_cron stub lacked `cron.unschedule`/`cron.alter_job`, so `20261017000000` aborted the entire replay (SQLSTATE 42883, 621 records BLOCKED) — `tests/release/bootstrap.sql` now provides pg_cron 1.5+-faithful stubs (ops doc §9.9) |
+| **Fallback / performance rollback** | Not specified by the gate | **Prepared 2026-10-09, dormant:** `capability_org_layer` defaults off; `resolveCapability()` restores subscription ∧ partner ∧ role when disabled and has no app callers yet. Deploy workflow accepts per-environment Actions variables (both default false); runbook covers Vercel frontend rollback, additive-DB recovery, performance checks and guardrails. Existing SLOs are draft and not wired to alerts, so performance baseline/alert wiring is a pre-production acceptance item. See `docs/runbooks/FALLBACK_ROLLBACK_2026-10-09.md` |
 | **Owner product confirmations** | OWNER-DECISION-REQUIRED (frozen doc §K) | Unchanged — 9 items, e.g. NGO label, GOVERNMENT posture, `npo` template name, pin mechanism |
 | **Incident/DB workstream (separate)** | — | `20261017000000` **applied + recorded** on production (2026-10-08); `20261018000000` **pending** (PR #197, with its own test harness). Deploy gate target is now `20261018000000` |
 
@@ -214,6 +221,19 @@ done:
   harnesses in `tests/database/` (`public_api_table_convergence`,
   `cron_placeholder_sweep`) and documented per `database-operations.md`
   §9.8–9.10.
+- **Owner fallback recommendation (2026-10-09):** accepted. A build-time
+  `VITE_FEATURE_CAPABILITY_ORG_LAYER` kill switch (default off), pure four-layer
+  resolver with unit tests, staging/production GitHub Actions variable wiring,
+  and `docs/runbooks/FALLBACK_ROLLBACK_2026-10-09.md` are prepared. It is
+  **dormant** until the capability provider/UI uses it. It does not bypass
+  subscription/partner/role, RLS, posting, or tenant isolation; when off it
+  skips organisation-only checks and must also skip organisation-only fetches.
+  This is not a remote instant toggle: flag changes need a new build/deploy.
+  The runbook calls for retaining the last known-good frontend deployment and
+  keeping migrations additive; a Vercel frontend rollback never rolls back DB
+  state. Because `docs/ops/SLOs.md` says dashboards/alerts are not wired yet,
+  measured staging baselines and operational alerts are required before the
+  production capability layer is opted in.
 
 ---
 
@@ -241,6 +261,7 @@ done:
 | One-time onboarding choice or switchable setting | Answered by design: defaults derive from the profile, overrides are explicit and sparse — i.e. switchable with admin control. §K.6 (pin mechanism) remains |
 | May partners override a tenant's vertical preset? | Answered: partner is an AND layer — it can only narrow. §K.3 (pricing placement of `projects`/`grants` capabilities) remains |
 | Plan feature or type feature? | Answered: both — Hybrid Option C composes them |
+| What is the fallback if the capability change harms performance or behaviour? | **Recommendation accepted**: organisation-layer kill switch + last-known-good frontend rollback; additive migrations stay applied. Detailed procedure and limits in `docs/runbooks/FALLBACK_ROLLBACK_2026-10-09.md` |
 
 ## Appendix — evidence index
 
@@ -255,4 +276,5 @@ done:
 | Plan capabilities / POS ungated | `src/lib/billing/plans.ts`; `src/App.tsx:242`; `src/components/layout/navConfig.ts:52` |
 | 18-param RPC, no defaults | `supabase/migrations/20260815000000_phase8b_reconstruct_rpcs.sql` |
 | Types/views/tables drift re-verification (incl. the §4 count corrections), fixture-date fix, gate-A checklist script | `src/dal/types/database.generated.ts`; `artifacts/database/gate-2026-10-06-migration-replay-catalog.json`; `tests/release/fixtures.ts`; `scripts/ci/verify-regenerated-types.mjs` |
+| Fallback/rollback contract and dormant kill switch | `docs/runbooks/FALLBACK_ROLLBACK_2026-10-09.md`; `src/lib/capabilities/resolve.ts`; `src/lib/featureFlags.ts`; `.github/workflows/deploy.yml` |
 | Production DB drift repair (separate workstream) | PR #197; `supabase/migrations/20261018000000_repair_legacy_public_api_tables.sql`; `docs/database/database-operations.md` §9.8–9.10 |
