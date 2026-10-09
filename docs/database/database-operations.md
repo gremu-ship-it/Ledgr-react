@@ -69,6 +69,21 @@ migrations. Replay order is therefore:
   regeneration; a failure means the source was wrong or an environment is
   drifted.
 
+  Then verify the regenerated file against the pre-implementation gate's
+  schema truth before committing it:
+
+  ```bash
+  node scripts/ci/verify-regenerated-types.mjs src/dal/types/database.generated.ts
+  ```
+
+  The script requires the file to surface the full migration chain (79
+  tables, 21 views, 131 application functions, 16 enums with their catalog
+  labels, and the 9 column-drift columns on their 5 tables — the gate §5.3
+  checklist, with the gate's own "88 functions / 9 enums" counts corrected to
+  90 / 0; see the script header) and prints the file's SHA-256 for the record.
+  It is deliberately not wired into CI: the tracked file is stale until the
+  regeneration chore PR lands.
+
 ## 3. Replaying migrations without Docker
 
 The sandbox that produced the Phase 8A.1 baseline had no Docker, so a
@@ -335,6 +350,14 @@ inventory) is the substitute.
    completes and the job is deactivated rather than removed.
    **Rule for future migrations: never write `cron.job` (or any pg_cron table)
    directly — use the `cron.*` functions.**
+
+   The release harness's pg_cron stub (`tests/release/bootstrap.sql`) mirrors
+   the same contract: it provides `cron.schedule` / `cron.unschedule` /
+   `cron.alter_job` with pg_cron 1.5+ semantics so the migration set replays
+   without the extension installed. Keep the stub faithful to the real
+   extension — when `20261017000000` first called `cron.unschedule`, the stub
+   did not provide it and the entire release replay aborted (SQLSTATE 42883),
+   blocking 621 database-backed records in `npm run test:release`.
 
    Note on process: this migration was **edited after it was merged**, which the
    §2 rule otherwise forbids. It is safe here because the change is confined to
