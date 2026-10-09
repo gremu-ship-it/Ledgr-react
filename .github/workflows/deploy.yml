@@ -97,6 +97,7 @@ jobs:
       - name: Record migration target
         run: echo "MIGRATION_TARGET=$(node scripts/ci/migration-target.mjs)" >> "$GITHUB_ENV"
       - name: Build frontend
+        id: build
         run: npm run build
       - name: Deploy Supabase backend (staging)
         uses: supabase/setup-cli@v3
@@ -209,9 +210,17 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment staging
 
-      # Last, deliberately — see the ordering note at the migration step.
+      # Backend compatibility-critical steps must succeed before this deploy,
+      # but independent maintenance (pg_cron / optional Railway) must not strand
+      # users on the previous frontend after the DB and functions have shipped.
       - name: Deploy frontend to Vercel (staging)
         id: frontend
+        if: >-
+          ${{ always() && !cancelled() &&
+              steps.build.outcome == 'success' &&
+              steps.migrate.outcome == 'success' &&
+              steps.verify_migration.outcome == 'success' &&
+              steps.edge.outcome == 'success' }}
         run: |
           set -o pipefail
           npm i -g vercel@latest
@@ -251,6 +260,7 @@ jobs:
       # expects this migration target (compatibility with the DB just verified).
       - name: Verify deployed frontend version (staging)
         id: frontend_verify
+        if: ${{ always() && !cancelled() && steps.frontend.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -334,6 +344,7 @@ jobs:
       - name: Record migration target
         run: echo "MIGRATION_TARGET=$(node scripts/ci/migration-target.mjs)" >> "$GITHUB_ENV"
       - name: Build frontend
+        id: build
         run: npm run build
       - name: Deploy Supabase backend (production)
         uses: supabase/setup-cli@v3
@@ -439,9 +450,17 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment production
 
-      # Last, deliberately — see the ordering note at the migration step.
+      # Backend compatibility-critical steps must succeed before this deploy,
+      # but independent maintenance (pg_cron / optional Railway) must not strand
+      # users on the previous frontend after the DB and functions have shipped.
       - name: Deploy frontend to Vercel (production)
         id: frontend
+        if: >-
+          ${{ always() && !cancelled() &&
+              steps.build.outcome == 'success' &&
+              steps.migrate.outcome == 'success' &&
+              steps.verify_migration.outcome == 'success' &&
+              steps.edge.outcome == 'success' }}
         run: |
           set -o pipefail
           npm i -g vercel@latest
@@ -481,6 +500,7 @@ jobs:
       # expects this migration target (compatibility with the DB just verified).
       - name: Verify deployed frontend version (production)
         id: frontend_verify
+        if: ${{ always() && !cancelled() && steps.frontend.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
