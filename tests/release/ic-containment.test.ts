@@ -562,6 +562,9 @@ const ROOT = join(__dirname, '..', '..');
 test(meta('IC.DEPLOY.SKEW-GUARD', 'Deploy pipeline: frontend deploy or live-version verification failure fails the release, migration target = newest migration file, and the release manifest flags mixed-version state', '.github/workflows/deploy.yml + scripts/ci/release-manifest.mjs + scripts/ci/migration-target.mjs', 'static workflow parse + real script execution (no network)'), async () => {
   const wf = readFileSync(join(ROOT, '.github/workflows/deploy.yml'), 'utf8');
   expect(wf).not.toMatch(/continue-on-error:\s*true/);
+  expect(wf.match(/vercel build --prod/g)).toHaveLength(2);
+  expect(wf.split('\n').filter((line) => line.trimEnd().endsWith('vercel deploy --prebuilt \\'))).toHaveLength(2);
+  expect(wf.match(/version_file="\.vercel\/output\/static\/version\.json"/g)).toHaveLength(2);
   const newest = readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => /^\d{14}_.*\.sql$/.test(f)).sort().pop()!.slice(0, 14);
   const target = execFileSync(process.execPath, [join(ROOT, 'scripts/ci/migration-target.mjs')], { encoding: 'utf8', cwd: ROOT }).trim();
   expect(target).toBe(newest);
