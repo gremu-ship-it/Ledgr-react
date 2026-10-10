@@ -302,6 +302,25 @@ jobs:
             exit 1
           fi
           echo "Prebuilt Vercel deployment created: ${deploy_url}"
+          # Move the project's stable production aliases to this exact deploy;
+          # a successful deployment response alone did not update STAGING_URL.
+          promotion_log="$(mktemp)"
+          if ! vercel promote "$deploy_url" \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
+            >"$promotion_log" 2>&1; then
+            echo "::error::Could not promote the newly created Vercel deployment to the project's production aliases."
+            tail -n 10 "$promotion_log" | while IFS= read -r line; do
+              line="${line//$VERCEL_TOKEN/***}"
+              line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+              line="${line//::/: :}"
+              [[ -z "$line" ]] || echo "::error::${line:0:400}"
+            done
+            exit 1
+          fi
+          cat "$promotion_log"
+          echo "Vercel deployment explicitly promoted to production aliases."
           echo "VERCEL_DEPLOYMENT_URL=${deploy_url}" >> "$GITHUB_ENV"
           echo "FRONTEND_URL=${FRONTEND_LIVE_URL%/}" >> "$GITHUB_ENV"
       # IC 2026-09-25 P9: evidence that the LIVE frontend is this commit and
@@ -601,6 +620,25 @@ jobs:
             exit 1
           fi
           echo "Prebuilt Vercel deployment created: ${deploy_url}"
+          # Move the project's stable production aliases to this exact deploy;
+          # a successful deployment response alone did not update STAGING_URL.
+          promotion_log="$(mktemp)"
+          if ! vercel promote "$deploy_url" \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
+            >"$promotion_log" 2>&1; then
+            echo "::error::Could not promote the newly created Vercel deployment to the project's production aliases."
+            tail -n 10 "$promotion_log" | while IFS= read -r line; do
+              line="${line//$VERCEL_TOKEN/***}"
+              line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+              line="${line//::/: :}"
+              [[ -z "$line" ]] || echo "::error::${line:0:400}"
+            done
+            exit 1
+          fi
+          cat "$promotion_log"
+          echo "Vercel deployment explicitly promoted to production aliases."
           echo "VERCEL_DEPLOYMENT_URL=${deploy_url}" >> "$GITHUB_ENV"
           echo "FRONTEND_URL=${FRONTEND_LIVE_URL%/}" >> "$GITHUB_ENV"
       # IC 2026-09-25 P9: evidence that the LIVE frontend is this commit and

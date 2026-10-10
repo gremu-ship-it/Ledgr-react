@@ -564,6 +564,7 @@ test(meta('IC.DEPLOY.SKEW-GUARD', 'Deploy pipeline: frontend deploy or live-vers
   expect(wf).not.toMatch(/continue-on-error:\s*true/);
   expect(wf.match(/vercel build --prod/g)).toHaveLength(2);
   expect(wf.split('\n').filter((line) => line.trimEnd().endsWith('vercel deploy --prebuilt \\'))).toHaveLength(2);
+  expect(wf.match(/vercel promote "\$deploy_url"/g)).toHaveLength(2);
   expect(wf.match(/version_file="\.vercel\/output\/static\/version\.json"/g)).toHaveLength(2);
   expect(wf.match(/check_frontend_version "Canonical \$\{SUPABASE_ENV_LABEL\} URL"/g)).toHaveLength(2);
   const newest = readdirSync(join(ROOT, 'supabase/migrations')).filter((f) => /^\d{14}_.*\.sql$/.test(f)).sort().pop()!.slice(0, 14);
