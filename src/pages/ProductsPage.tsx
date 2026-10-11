@@ -14,6 +14,7 @@ import { newSaveClientKey } from '@/services/quickSaveService';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useCapability } from '@/hooks/useCapability';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
 import { EmptyState, InventoryEmptyState } from '@/components/ui/EmptyState';
@@ -96,6 +97,7 @@ function ProductModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const servicesEnabled = useCapability('services', '/products');
   const [form, setForm] = useState<ProductForm>(
     existing ? {
       name: existing.name ?? '',
@@ -207,7 +209,11 @@ function ProductModal({
               <select value={form.product_type} onChange={(e) => set('product_type', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
                 <option value="product">Physical Product</option>
-                <option value="service">Service</option>
+                {(servicesEnabled || form.product_type === 'service') && (
+                  <option value="service" disabled={!servicesEnabled}>
+                    {servicesEnabled ? 'Service' : 'Service (not enabled)'}
+                  </option>
+                )}
               </select>
             </div>
 

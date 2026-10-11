@@ -27,6 +27,7 @@ import {
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
 import { hasCapability, PLAN_TIER_ORDER, PLANS } from '@/lib/billing/plans';
 import type { PartnerFeatureKey } from '@/types/partners';
+import type { OrganisationCapability } from '@/lib/capabilities/profile';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 export interface NavItemConfig {
@@ -36,6 +37,7 @@ export interface NavItemConfig {
   requiresCapability?: PlanCapability;
   minPlan?: PlanTier;
   partnerFeature?: PartnerFeatureKey;
+  requiresOrgCapability?: OrganisationCapability;
 }
 
 export interface NavSectionConfig {
@@ -49,7 +51,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.overview',
     items: [
       { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag },
+      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag, requiresOrgCapability: 'pos' },
     ],
   },
   {
@@ -64,9 +66,9 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.inventory',
     items: [
-      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory' },
-      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory' },
-      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory' },
+      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
     ],
   },
   {
@@ -115,12 +117,14 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
 export function visibleSectionsFor(
   isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
   role?: string | null,
+  isOrgCapabilityEnabled?: (capability: OrganisationCapability) => boolean,
 ): NavSectionConfig[] {
   return NAV_SECTIONS
     .map((section) => ({
       ...section,
       items: section.items.filter((i) => {
         if (i.partnerFeature && !isFeatureEnabled(i.partnerFeature)) return false;
+        if (i.requiresOrgCapability && isOrgCapabilityEnabled && !isOrgCapabilityEnabled(i.requiresOrgCapability)) return false;
         if (role && !isPathAllowedForRole(role, i.path)) return false;
         return true;
       }),
@@ -131,7 +135,7 @@ export function visibleSectionsFor(
 export const GATED_PATHS: Set<string> = new Set(
   NAV_SECTIONS.flatMap((s) =>
     s.items
-      .filter((i) => i.minPlan || i.requiresCapability)
+      .filter((i) => i.minPlan || i.requiresCapability || i.requiresOrgCapability)
       .map((i) => i.path)
   ),
 );

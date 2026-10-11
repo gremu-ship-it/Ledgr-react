@@ -18,7 +18,6 @@ import {
   Settings,
   Lock,
   LogOut,
-  ShoppingBag,
   Warehouse,
   ArrowLeftRight,
   type LucideIcon,
@@ -37,6 +36,7 @@ import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/
 import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { pushUpgradeRequired } from '@/lib/notifications';
 
 const BOTTOM_NAV_ITEMS = [
@@ -45,17 +45,6 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.sections.inventory', path: '/products', icon: Package },
   { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
 ];
-
-/**
- * Prepended for roles whose home is the till (cashier, POS manager) so the
- * primary workspace is one tap away — previously the mobile bar had no POS
- * entry at all and till staff had to open the drawer to get back to /pos.
- */
-const POS_NAV_ITEM = {
-  labelKey: 'navigation.items.pos',
-  path: '/pos',
-  icon: ShoppingBag,
-};
 
 /**
  * Four primary tabs plus the FAB and the More button is what fits the
@@ -105,6 +94,7 @@ export function BottomNav() {
   const { planTier } = useUsage();
 
   const { isFeatureEnabled } = usePartner();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const { canWrite } = usePermissions();
   const role = currentBusiness?.role || null;
 
@@ -116,15 +106,27 @@ export function BottomNav() {
 
   // Till-centric roles get the POS tab first — it is their home route.
   const homeIsPos = Boolean(role) && getHomePathForRole(role) === '/pos';
-  const primaryItems = homeIsPos ? [POS_NAV_ITEM, ...BOTTOM_NAV_ITEMS] : BOTTOM_NAV_ITEMS;
+  const posNavItem = navItemForPath('/pos');
+  const primaryItems = homeIsPos && posNavItem
+    ? [posNavItem, ...BOTTOM_NAV_ITEMS]
+    : BOTTOM_NAV_ITEMS;
 
   const bottomItems = primaryItems
-    .filter((i) => i.path !== '/products' || isFeatureEnabled('inventory'))
+    .filter((i) => {
+      const navItem = navItemForPath(i.path);
+      if (navItem?.partnerFeature && !isFeatureEnabled(navItem.partnerFeature)) return false;
+      return !navItem?.requiresOrgCapability
+        || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
+    })
     .filter((i) => allowedForRole(i.path))
     .slice(0, MAX_PRIMARY_TABS);
-  const moreItems = ALL_MORE_MENU_ITEMS.filter(
-    (i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature),
-  ).filter((i) => allowedForRole(i.path));
+  const moreItems = ALL_MORE_MENU_ITEMS
+    .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
+    .filter((i) => {
+      const navItem = navItemForPath(i.path);
+      return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
+    })
+    .filter((i) => allowedForRole(i.path));
 
   // The FAB writes, so an action needs both gates:
   //   canWrite             — a viewer or auditor may open /income and /expenses
@@ -140,7 +142,7 @@ export function BottomNav() {
   const canCreateInvoice = canQuickAdd('/income');
   const canRecordIncome = canQuickAdd('/income');
   const canRecordExpense = canQuickAdd('/expenses');
-  const canRecordStock = canQuickAdd('/warehouse');
+  const canRecordStock = canQuickAdd('/warehouse') && isOrgCapabilityEnabled('inventory');
   const hasFabActions = canCreateInvoice || canRecordIncome || canRecordExpense || canRecordStock;
 
   // Dynamic balanced split for FAB centering

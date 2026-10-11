@@ -1,11 +1,37 @@
 // Phase 8B.1 — replay all migrations + functional tests of reconstructed RPCs.
-const EP = require('embedded-postgres').default;
-const { Client } = require('pg');
-const fs = require('fs');
-const path = require('path');
+import EPkg from 'embedded-postgres';
+import { Client } from 'pg';
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const EP = EPkg.default ?? EPkg;
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+const requireFromHere = createRequire(import.meta.url);
+
+function extensionDir() {
+  const roots = [];
+  try {
+    const entry = requireFromHere.resolve('embedded-postgres');
+    const marker = `${path.sep}embedded-postgres${path.sep}`;
+    const at = entry.lastIndexOf(marker);
+    const packageRoot = at === -1 ? path.dirname(entry) : entry.slice(0, at + marker.length - 1);
+    roots.push(
+      path.join(packageRoot, 'node_modules/@embedded-postgres/linux-x64/native'),
+      path.join(packageRoot, '../@embedded-postgres/linux-x64/native'),
+    );
+  } catch {
+    /* fall through to the repository's installed package */
+  }
+  roots.push(path.join(REPO_ROOT, 'node_modules/@embedded-postgres/linux-x64/native'));
+  const native = roots.find((dir) => fs.existsSync(path.join(dir, 'bin/postgres')));
+  if (!native) throw new Error(`Could not find bundled PostgreSQL in ${roots.join(', ')}`);
+  return path.join(native, 'share/postgresql/extension');
+}
 
 const PORT = 54329;
-const MIG_DIR = '/home/user/Ledgr-react/supabase/migrations';
+const MIG_DIR = path.join(REPO_ROOT, 'supabase/migrations');
 
 async function main() {
   const PG = new EP({ databaseDir: '/tmp/pgtest/data', user: 'postgres', password: 'postgres', port: PORT, persistent: true });
@@ -34,9 +60,49 @@ async function main() {
     CREATE OR REPLACE FUNCTION storage.foldername(name text) RETURNS text[] LANGUAGE sql IMMUTABLE AS $$ select string_to_array(name, '/') $$;
     GRANT ALL ON storage.objects TO anon, authenticated, service_role;
     GRANT USAGE ON SCHEMA storage TO anon, authenticated, service_role;`);
-  const EXT = '/tmp/pgtest/node_modules/@embedded-postgres/linux-x64/native/share/postgresql/extension';
+  const EXT = extensionDir();
   fs.writeFileSync(path.join(EXT, 'pg_cron.control'), "comment='stub'\ndefault_version='1.0'\nrelocatable=true\n");
-  fs.writeFileSync(path.join(EXT, 'pg_cron--1.0.sql'), "create schema if not exists cron;\ncreate table if not exists cron.job (jobid bigint primary key, schedule text, command text, active boolean default true);\ncreate sequence if not exists cron.jobid_seq;\ncreate or replace function cron.schedule(name text, schedule text, command text) returns bigint language plpgsql as $$ declare v bigint; begin insert into cron.job values (nextval('cron.jobid_seq'), schedule, command, true) returning jobid into v; return v; end $$;\n");
+  fs.writeFileSync(path.join(EXT, 'pg_cron--1.0.sql'), `
+    create schema if not exists cron;
+    create sequence if not exists cron.jobid_seq;
+    create table if not exists cron.job (
+      jobid bigint primary key,
+      jobname text unique,
+      schedule text,
+      command text,
+      active boolean default true
+    );
+    create or replace function cron.schedule(p_jobname text, p_schedule text, p_command text)
+    returns bigint language plpgsql as $$
+    declare v_jobid bigint;
+    begin
+      insert into cron.job (jobid, jobname, schedule, command, active)
+      values (nextval('cron.jobid_seq'), p_jobname, p_schedule, p_command, true)
+      on conflict (jobname) do update
+        set schedule = excluded.schedule, command = excluded.command, active = true
+      returning jobid into v_jobid;
+      return v_jobid;
+    end $$;
+    create or replace function cron.alter_job(
+      p_jobid bigint, p_schedule text default null, p_command text default null,
+      p_database text default null, p_username text default null, p_active boolean default null
+    ) returns void language plpgsql as $$
+    begin
+      update cron.job
+         set schedule = coalesce(p_schedule, schedule),
+             command = coalesce(p_command, command),
+             active = coalesce(p_active, active)
+       where jobid = p_jobid;
+    end $$;
+    create or replace function cron.unschedule(p_jobname text)
+    returns boolean language plpgsql as $$
+    declare v_deleted integer;
+    begin
+      delete from cron.job where jobname = p_jobname;
+      get diagnostics v_deleted = row_count;
+      return v_deleted > 0;
+    end $$;
+  `);
   fs.writeFileSync(path.join(EXT, 'pg_net.control'), "comment='stub'\ndefault_version='1.0'\nrelocatable=true\n");
   fs.writeFileSync(path.join(EXT, 'pg_net--1.0.sql'), "create schema if not exists net;\ncreate type net.http_response as (status integer, message text, body text);\ncreate or replace function net.http_post(url text, headers jsonb default '{}', body jsonb default '{}', timeout_milliseconds integer default 5000) returns net.http_response language sql stable as $$ select null::integer, null::text, null::text $$;\n");
   await c.query(`CREATE EXTENSION pg_cron; CREATE EXTENSION pg_net; CREATE SCHEMA IF NOT EXISTS extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -46,9 +112,27 @@ async function main() {
   // existing migrations (e.g. 20260727000001 gen_random_bytes) resolve.
   await c.query('set search_path = "$user", public, extensions');
 
-  // replay
+  // replay. Before the additive capability migration, create one real legacy
+  // tenant using the 18-argument RPC so the migration's Strategy-A pin is
+  // exercised against a pre-existing row rather than inferred from an empty DB.
+  const BUSINESS_PROFILE_MIGRATION = '20261019000000_business_profile_capabilities.sql';
   const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
+  let preArchitectureBusinessId = null;
   for (const f of files) {
+    if (f === BUSINESS_PROFILE_MIGRATION) {
+      const legacyOwner = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+      await c.query(
+        'insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)',
+        [legacyOwner, 'legacy@example.com', JSON.stringify({ full_name: 'Legacy Owner' })],
+      );
+      await c.query("select set_config('request.jwt.claim.sub', $1, false)", [legacyOwner]);
+      await c.query("select set_config('request.jwt.claim.role', 'authenticated', false)");
+      const legacy = await c.query(`select public.create_business_with_owner(
+        'Legacy Pre-Phase Co', 'Legacy', null, null, null, false,
+        'MWK', '07-01', 'Africa/Blantyre', null, 'Blantyre', 'Malawi',
+        null, 'legacy@example.com', null, 'INV', 'EXP', 'PAY') as id`);
+      preArchitectureBusinessId = legacy.rows[0].id;
+    }
     try { await c.query(fs.readFileSync(path.join(MIG_DIR, f), 'utf8')); }
     catch (e) { console.log('REPLAY FAIL', f, '::', e.message.split('\n')[0]); process.exit(1); }
   }
@@ -80,6 +164,51 @@ async function main() {
     const biz = (await c.query('select * from public.businesses where id=$1', [bizA])).rows[0];
     if (biz && biz.plan_tier === 'free' && biz.coa_template === 'gaap' && biz.invoice_next_number === 1) ok('business row defaults (free/gaap/counters=1)');
     else fail('business row defaults', JSON.stringify(biz));
+
+    if (biz.organisation_type === 'FOR_PROFIT'
+      && Array.isArray(biz.operating_models) && biz.operating_models.length === 0
+      && JSON.stringify(biz.capability_overrides) === '{}') {
+      ok('legacy 18-argument RPC call uses appended profile defaults');
+    } else fail('legacy RPC profile defaults', JSON.stringify({
+      organisation_type: biz.organisation_type,
+      operating_models: biz.operating_models,
+      capability_overrides: biz.capability_overrides,
+    }));
+
+    const pinnedLegacy = (await c.query(
+      'select organisation_type, operating_models, capability_overrides from public.businesses where id=$1',
+      [preArchitectureBusinessId],
+    )).rows[0];
+    const pinned = pinnedLegacy?.capability_overrides ?? {};
+    if (pinnedLegacy?.organisation_type === 'FOR_PROFIT'
+      && Array.isArray(pinnedLegacy.operating_models) && pinnedLegacy.operating_models.length === 0
+      && pinned.sales === true && pinned.pos === true
+      && pinned.inventory === true && pinned.services === true) {
+      ok('A/B/H Strategy-A pin preserves a pre-existing tenant with no inferred model');
+    } else fail('pre-existing business capability pin', JSON.stringify(pinnedLegacy));
+
+    const rpcContract = (await c.query(`
+      select p.pronargs, p.pronargdefaults, p.proargnames,
+             has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute,
+             has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
+             core.oid as core_oid,
+             has_function_privilege('authenticated', core.oid, 'EXECUTE') as core_authenticated_execute,
+             has_function_privilege('anon', core.oid, 'EXECUTE') as core_anon_execute
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        left join pg_proc core
+          on core.pronamespace = n.oid
+         and core.proname = '_ledgr_create_business_with_owner_core'
+       where n.nspname = 'public' and p.proname = 'create_business_with_owner'
+    `)).rows;
+    const contract = rpcContract[0];
+    if (rpcContract.length === 1 && contract.pronargs === 20 && contract.pronargdefaults === 2
+      && contract.proargnames.slice(-2).join(',') === 'p_organisation_type,p_operating_models'
+      && contract.core_oid !== null
+      && contract.authenticated_execute && !contract.anon_execute
+      && !contract.core_authenticated_execute && !contract.core_anon_execute) {
+      ok('business creation RPC exposes one 20-argument signature with two defaults and scoped grants');
+    } else fail('business creation RPC signature/grants', JSON.stringify(rpcContract));
 
     const owner = (await c.query(`select * from public.business_users where business_id=$1 and user_id=$2`, [bizA, uidA])).rows[0];
     if (owner && owner.role === 'owner' && owner.is_active) ok('owner membership created');
@@ -168,11 +297,31 @@ async function main() {
     } catch (e) { ok('verify_audit_chain denied for non-member'); }
 
     // ── 6. second business for user A (idempotent re-invite path) ────────────
-    const r9 = await a(`select public.create_business_with_owner('Second Biz', null, null, null, null, false, 'MWK', '01-01', 'UTC', null, 'Lilongwe', 'Malawi', null, null, null, 'B2', 'B2', 'B2') as biz_id`);
+    const r9 = await a(`select public.create_business_with_owner(
+      'Second Biz', null, null, null, null, false, 'MWK', '01-01', 'UTC',
+      null, 'Lilongwe', 'Malawi', null, null, null, 'B2', 'B2', 'B2',
+      'NON_PROFIT', ARRAY['SERVICE_SALES','GRANT_FUNDED']::text[]) as biz_id`);
     const bizB2 = r9.rows[0].biz_id;
     const n2 = (await c.query('select count(*)::int n from public.accounts where business_id=$1', [bizB2])).rows[0].n;
     if (bizB2 && n2 === 166) ok(`second business created + COA (${n2} accounts)`);
     else fail('second business', bizB2);
+    const explicitProfile = (await c.query(
+      'select organisation_type, operating_models, capability_overrides from public.businesses where id=$1',
+      [bizB2],
+    )).rows[0];
+    if (explicitProfile?.organisation_type === 'NON_PROFIT'
+      && explicitProfile.operating_models.join(',') === 'SERVICE_SALES,GRANT_FUNDED'
+      && JSON.stringify(explicitProfile.capability_overrides) === '{}') {
+      ok('onboarding RPC persists selected organisation type/models with sparse overrides');
+    } else fail('explicit business profile RPC args', JSON.stringify(explicitProfile));
+
+    try {
+      await a(`select public.create_business_with_owner(
+        'Invalid Model Co', null, null, null, null, false, 'MWK', '01-01', 'UTC',
+        null, 'Lilongwe', 'Malawi', null, null, null, 'INV', 'EXP', 'PAY',
+        'FOR_PROFIT', ARRAY['MIXED']::text[])`);
+      fail('RPC rejects unsupported operating model', 'no error');
+    } catch (e) { ok('RPC rejects unsupported operating model'); }
 
     console.log('\n8B.1 RPC FUNCTIONAL TESTS COMPLETE');
   } catch (e) {

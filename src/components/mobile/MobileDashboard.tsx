@@ -41,6 +41,7 @@ import { MobileOnboardingChecklist } from '@/components/OnboardingChecklist';
 import { isItemLocked, visibleSectionsFor } from '@/components/layout/navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import { useUsage } from '@/hooks/useUsage';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 
 // ── Stat Card ────────────────────────────────────────────────────────────
 
@@ -154,12 +155,14 @@ export function MobileDashboard() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { isFeatureEnabled } = usePartner();
   const { planTier } = useUsage();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
+  const inventoryCapabilityEnabled = isOrgCapabilityEnabled('inventory');
   const currentUser = useAppStore((s) => s.currentUser);
   const orientationLock = useAppStore((s) => s.orientationLock);
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
-  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role)
+  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled)
     .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
   const [showExpense, setShowExpense] = useState(false);
@@ -191,7 +194,7 @@ export function MobileDashboard() {
   const lowStock = useQuery({
     queryKey: ['reorder_alerts', businessId],
     queryFn: () => repos.inventory.findReorderAlerts(businessId!),
-    enabled: Boolean(businessId),
+    enabled: Boolean(businessId) && inventoryCapabilityEnabled,
     staleTime: 1000 * 60 * 5,
   });
 
@@ -382,56 +385,62 @@ export function MobileDashboard() {
           <div className="mb-3 rounded-2xl bg-brand-50 p-3">
             <p className="mb-2 text-xs font-medium text-brand-900">Choose up to four. Remove an action and add it again to move it to the end.</p>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(mobileActions) as MobileActionId[]).map((id) => {
-                const selected = quickActionIds.includes(id);
-                return <button key={id} type="button" onClick={() => setQuickActionIds((ids) => selected ? ids.filter((item) => item !== id) : ids.length < 4 ? [...ids, id] : ids)} className={clsx('rounded-full px-3 py-1.5 text-xs font-semibold', selected ? 'bg-brand-700 text-white' : 'bg-white text-gray-700')} aria-pressed={selected}>{mobileActions[id].label}</button>;
-              })}
+              {(Object.keys(mobileActions) as MobileActionId[])
+                .filter((id) => id !== 'stock' || inventoryCapabilityEnabled)
+                .map((id) => {
+                  const selected = quickActionIds.includes(id);
+                  return <button key={id} type="button" onClick={() => setQuickActionIds((ids) => selected ? ids.filter((item) => item !== id) : ids.length < 4 ? [...ids, id] : ids)} className={clsx('rounded-full px-3 py-1.5 text-xs font-semibold', selected ? 'bg-brand-700 text-white' : 'bg-white text-gray-700')} aria-pressed={selected}>{mobileActions[id].label}</button>;
+                })}
             </div>
           </div>
         )}
         <div className="grid grid-cols-4 gap-2">
-          {quickActionIds.map((id) => <QuickActionButton key={id} {...mobileActions[id]} onClick={mobileActions[id].run} />)}
+          {quickActionIds
+            .filter((id) => id !== 'stock' || inventoryCapabilityEnabled)
+            .map((id) => <QuickActionButton key={id} {...mobileActions[id]} onClick={mobileActions[id].run} />)}
         </div>
       </section>
 
       {/* Inventory */}
-      <div className="grid grid-cols-1 gap-3">
-        <button onClick={() => navigate('/warehouse')} className="w-full rounded-2xl border border-white bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm active:scale-[0.98] touch-manipulation">
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
-              <div>
-                <span className="text-xs font-black uppercase tracking-widest text-gray-900">Inventory</span>
-                <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Stock Management</p>
+      {inventoryCapabilityEnabled && (
+        <div className="grid grid-cols-1 gap-3">
+          <button onClick={() => navigate('/warehouse')} className="w-full rounded-2xl border border-white bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm active:scale-[0.98] touch-manipulation">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
+                <div>
+                  <span className="text-xs font-black uppercase tracking-widest text-gray-900">Inventory</span>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Stock Management</p>
+                </div>
               </div>
+              <ChevronRight className="h-5 w-5 text-gray-300" />
             </div>
-            <ChevronRight className="h-5 w-5 text-gray-300" />
-          </div>
 
-          {lowStock.isLoading ? (
-            <div className="h-12 animate-pulse rounded-xl bg-gray-100/50" />
-          ) : lowStock.data && lowStock.data.length > 0 ? (
-            <div className="rounded-xl bg-amber-50/80 p-3 ring-1 ring-amber-100">
-              <div className="mb-2 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                <p className="text-[11px] font-bold text-amber-800 uppercase">{lowStock.data.length} low stock alerts</p>
+            {lowStock.isLoading ? (
+              <div className="h-12 animate-pulse rounded-xl bg-gray-100/50" />
+            ) : lowStock.data && lowStock.data.length > 0 ? (
+              <div className="rounded-xl bg-amber-50/80 p-3 ring-1 ring-amber-100">
+                <div className="mb-2 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <p className="text-[11px] font-bold text-amber-800 uppercase">{lowStock.data.length} low stock alerts</p>
+                </div>
+                <div className="space-y-1.5">
+                  {lowStock.data.slice(0, 2).map((alert) => (
+                    <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between">
+                      <span className="truncate text-xs font-medium text-gray-700 max-w-[60%]">{alert.product_name}</span>
+                      <span className="shrink-0 text-xs font-black text-gray-900">{Number(alert.quantity_available)} left</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                {lowStock.data.slice(0, 2).map((alert) => (
-                  <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between">
-                    <span className="truncate text-xs font-medium text-gray-700 max-w-[60%]">{alert.product_name}</span>
-                    <span className="shrink-0 text-xs font-black text-gray-900">{Number(alert.quantity_available)} left</span>
-                  </div>
-                ))}
+            ) : (
+              <div className="rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
+                <p className="text-[11px] font-bold text-brand-700 uppercase text-center">Stock levels OK</p>
               </div>
-            </div>
-          ) : (
-            <div className="rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
-              <p className="text-[11px] font-bold text-brand-700 uppercase text-center">Stock levels OK</p>
-            </div>
-          )}
-        </button>
-      </div>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* All desktop workspaces stay reachable on mobile without crowding the home screen. */}
       <section className="px-1" aria-labelledby="mobile-workspaces">

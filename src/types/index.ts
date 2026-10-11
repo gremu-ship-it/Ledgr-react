@@ -1,6 +1,11 @@
 export type Theme = 'light' | 'dark';
 
 import type { SupportedLanguage } from '@/i18n/types';
+import type {
+  CapabilityOverrides,
+  OperatingModel,
+  OrganisationType,
+} from '@/lib/capabilities/profile';
 
 export interface UserProfile {
   full_name?: string | null;
@@ -21,6 +26,10 @@ export interface Business {
   name: string;
   base_currency?: string | null;
   plan_tier?: string | null;
+  /** New profile columns are optional in the app type to hydrate old cached rows safely. */
+  organisation_type?: OrganisationType | null;
+  operating_models?: OperatingModel[] | null;
+  capability_overrides?: CapabilityOverrides | null;
 }
 
 

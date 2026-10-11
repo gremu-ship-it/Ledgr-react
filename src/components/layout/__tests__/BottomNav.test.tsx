@@ -17,13 +17,14 @@ const state = vi.hoisted(() => ({
   role: 'owner' as string | null,
   hasBusiness: true,
   inventoryEnabled: true,
+  organisationProfile: null as Record<string, unknown> | null,
 }));
 
 vi.mock('@/store/useAppStore', () => ({
   useAppStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       currentBusiness: state.hasBusiness
-        ? { business: { id: 'biz-1' }, role: state.role }
+        ? { business: { id: 'biz-1', ...(state.organisationProfile ?? {}) }, role: state.role }
         : null,
       theme: 'light',
       toggleTheme: () => {},
@@ -75,9 +76,11 @@ function renderNav() {
 
 afterEach(() => {
   cleanup();
+  vi.unstubAllEnvs();
   state.role = 'owner';
   state.hasBusiness = true;
   state.inventoryEnabled = true;
+  state.organisationProfile = null;
 });
 
 describe('mobile bottom navigation', () => {
@@ -98,6 +101,22 @@ describe('mobile bottom navigation', () => {
     expect(paths).not.toContain('/dashboard');
     expect(paths).not.toContain('/products');
     expect(paths).not.toContain('/reports');
+  });
+
+  it('hides POS and stock tabs for a service-only profile when the org layer is enabled', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'cashier';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['SERVICE_SALES'],
+      capability_overrides: {},
+    };
+    renderNav();
+    const paths = tabPaths();
+
+    expect(paths).toContain('/income');
+    expect(paths).not.toContain('/pos');
+    expect(paths).not.toContain('/products');
   });
 
   it('leads a POS manager with the till, then its supervised pages', () => {

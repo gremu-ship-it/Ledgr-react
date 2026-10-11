@@ -11,6 +11,7 @@ import type { InsertDto, Row } from '@/dal/types/database';
 import { enqueue, generateOfflineNumber, isOfflineError } from '@/offline/queueApi';
 import { invalidateAfterIncome } from '@/lib/queryInvalidation';
 import { useAutoSaveDraft } from '@/hooks/useAutoSaveDraft';
+import { useCapability } from '@/hooks/useCapability';
 
 const log = createLogger('QuickIncomeMobile');
 
@@ -76,6 +77,10 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
   });
+  const servicesEnabled = useCapability('services');
+  const selectableProducts = servicesEnabled
+    ? products
+    : products.filter((product) => product.product_type !== 'service');
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
@@ -156,11 +161,11 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
 
   const filteredProducts = useMemo(() => {
     const q = productSearchQuery.toLowerCase();
-    if (!q) return products.slice(0, 30);
-    return products
+    if (!q) return selectableProducts.slice(0, 30);
+    return selectableProducts
       .filter((p) => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)) || (p.description && p.description.toLowerCase().includes(q)))
       .slice(0, 30);
-  }, [products, productSearchQuery]);
+  }, [selectableProducts, productSearchQuery]);
 
   const mutation = useMutation({
     mutationFn: async () => {

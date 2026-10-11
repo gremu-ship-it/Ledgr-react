@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { usePosPermissions } from '@/hooks/usePosPermissions';
+import { useCapability } from '@/hooks/useCapability';
 import {
   calculateCartTotals,
   createSale,
@@ -56,6 +57,7 @@ export function PosPage() {
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const permissions = usePosPermissions();
+  const servicesEnabled = useCapability('services', '/pos');
 
   // Empty rather than a fabricated 'biz-default': a queued offline sale is
   // filed under this id, and inventing one puts the sale in a tenant that does
@@ -337,8 +339,11 @@ export function PosPage() {
             : { state: 'error', message: availability.message },
         );
 
-        if (prods && prods.length > 0) {
-          const mapped: PosProduct[] = prods.map((p) => {
+        const saleableProducts = servicesEnabled
+          ? prods
+          : prods.filter((product) => product.product_type !== 'service');
+        if (saleableProducts.length > 0) {
+          const mapped: PosProduct[] = saleableProducts.map((p) => {
             const rows = costRowsHere.filter((b) => b.product_id === p.id);
             const onHand = onHandByProduct.get(p.id) ?? 0;
             const avgCost = weightedAverageCost(rows);
@@ -364,6 +369,9 @@ export function PosPage() {
           const rawCats = mapped.map((p) => p.category || 'General');
           const cats = Array.from(new Set(rawCats)).filter((c): c is string => typeof c === 'string');
           setCategories(cats);
+        } else {
+          setProducts([]);
+          setCategories([]);
         }
 
         if (custs && custs.length > 0) {
@@ -419,7 +427,7 @@ export function PosPage() {
     return () => {
       ignore = true;
     };
-  }, [businessId, currentUserId, branchId, dataVersion]);
+  }, [businessId, currentUserId, branchId, dataVersion, servicesEnabled]);
 
   // Approval interceptor (R07): financial corrections route through a
   // server-minted approval (workflows call with a document context); the

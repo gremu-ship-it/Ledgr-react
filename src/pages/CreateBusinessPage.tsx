@@ -12,11 +12,19 @@ import { usePartner } from '@/partner/PartnerContext';
 import { usePartnerTheme } from '@/partner/usePartnerTheme';
 import { PartnerClientRepository } from '@/dal/repositories/PartnerClientRepository';
 import { handleError } from '@/lib/errorHandler';
+import type { Business, BusinessMembership } from '@/types';
+import {
+  OPERATING_MODELS,
+  type OperatingModel,
+  type OrganisationType,
+} from '@/lib/capabilities/profile';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface BusinessForm {
-  // Step 1 — Basic info
+  // Step 1 — Business profile & basic info
+  organisation_type: OrganisationType;
+  operating_models: OperatingModel[];
   name: string;
   trading_name: string;
   registration_number: string;
@@ -44,7 +52,34 @@ interface BusinessForm {
   accepts_terms: boolean;
 }
 
+type BusinessFormSetter = (key: keyof BusinessForm, value: BusinessForm[keyof BusinessForm]) => void;
+
+interface CreateBusinessWithOwnerArgs {
+  p_name: string;
+  p_trading_name: string | null;
+  p_registration_number: string | null;
+  p_tpin: string | null;
+  p_vat_number: string | null;
+  p_vat_registered: boolean;
+  p_base_currency: string;
+  p_financial_year_start: string;
+  p_timezone: string;
+  p_address_line1: string | null;
+  p_city: string;
+  p_country: string;
+  p_phone: string | null;
+  p_email: string | null;
+  p_brand_color: string;
+  p_invoice_prefix: string;
+  p_expense_prefix: string;
+  p_payroll_prefix: string;
+  p_organisation_type: OrganisationType;
+  p_operating_models: OperatingModel[];
+}
+
 const DEFAULTS: BusinessForm = {
+  organisation_type: 'FOR_PROFIT',
+  operating_models: [],
   name: '',
   trading_name: '',
   registration_number: '',
@@ -101,6 +136,22 @@ const BRAND_COLORS = [
   '#D97706', '#059669', '#0891B2', '#4F46E5',
 ];
 
+const ORGANISATION_TYPE_OPTIONS: { value: OrganisationType; label: string }[] = [
+  { value: 'FOR_PROFIT', label: 'For-profit business' },
+  { value: 'NON_PROFIT', label: 'Non-profit / NGO' },
+  { value: 'GOVERNMENT', label: 'Government' },
+  { value: 'OTHER', label: 'Other' },
+];
+
+const OPERATING_MODEL_LABELS: Record<OperatingModel, string> = {
+  RETAIL: 'Retail',
+  WHOLESALE: 'Wholesale / distribution',
+  PRODUCT_SALES: 'Product sales',
+  SERVICE_SALES: 'Service sales',
+  PROJECT_BASED: 'Project-based work',
+  GRANT_FUNDED: 'Grant-funded',
+};
+
 // ── Field component ───────────────────────────────────────────────────────────
 
 function Field({
@@ -153,7 +204,7 @@ function TextInput({
 
 // ── Step components ───────────────────────────────────────────────────────────
 
-function Step1({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+function Step1({ form, set }: { form: BusinessForm; set: BusinessFormSetter }) {
   return (
     <div className="space-y-4">
       <Field label="Business name" required hint="Your registered legal business name">
@@ -217,11 +268,52 @@ function Step1({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
           </div>
         )}
       </div>
+
+      <section className="rounded-xl border border-brand-100 bg-brand-50/30 p-4" aria-labelledby="organisation-profile-heading">
+        <div className="mb-3">
+          <h2 id="organisation-profile-heading" className="text-sm font-semibold text-gray-800">Organisation profile</h2>
+          <p className="mt-1 text-xs text-gray-500">This helps Ledgr tailor the workspace. You can select more than one operating model.</p>
+        </div>
+
+        <Field label="Organisation type">
+          <select
+            value={form.organisation_type}
+            onChange={(e) => set('organisation_type', e.target.value as OrganisationType)}
+            className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            {ORGANISATION_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </Field>
+
+        <fieldset className="mt-4">
+          <legend className="mb-2 text-sm font-medium text-gray-700">Operating models</legend>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {OPERATING_MODELS.map((model) => (
+              <label key={model} className="flex cursor-pointer items-center gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.operating_models.includes(model)}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                      ? [...new Set([...form.operating_models, model])]
+                      : form.operating_models.filter((selected) => selected !== model);
+                    set('operating_models', next);
+                  }}
+                  className="h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                />
+                {OPERATING_MODEL_LABELS[model]}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      </section>
     </div>
   );
 }
 
-function Step2({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+function Step2({ form, set }: { form: BusinessForm; set: BusinessFormSetter }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -277,7 +369,7 @@ function Step2({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
   );
 }
 
-function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+function Step3({ form, set }: { form: BusinessForm; set: BusinessFormSetter }) {
   return (
     <div className="space-y-4">
       <Field label="Base currency" hint="Primary currency for all financial records">
@@ -331,7 +423,7 @@ function Step3({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm,
   );
 }
 
-function Step4({ form, set }: { form: BusinessForm; set: (k: keyof BusinessForm, v: string | boolean) => void }) {
+function Step4({ form, set }: { form: BusinessForm; set: BusinessFormSetter }) {
   return (
     <div className="space-y-5">
       <Field label="Brand colour" hint="Used across invoices, reports, and the business switcher">
@@ -434,8 +526,8 @@ export function CreateBusinessPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function set(key: keyof BusinessForm, value: string | boolean) {
-    setForm((f) => ({ ...f, [key]: value }));
+  function set(key: keyof BusinessForm, value: BusinessForm[keyof BusinessForm]) {
+    setForm((f) => ({ ...f, [key]: value } as BusinessForm));
   }
 
   function validateStep(): boolean {
@@ -472,10 +564,16 @@ export function CreateBusinessPage() {
     setError(null);
     setLoading(true);
 
-    // `create_business_with_owner` RPC isn't in the generated Database['public']['Functions']
-    // (it returns a string id and the args are positional). Verified at runtime.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC signature not in generated types
-    const { data: businessId, error: rpcError } = await (supabase as any).rpc(
+    // The staging-generated Database.Functions type has not been regenerated
+    // against this new migration in the sandbox. Keep the RPC adapter narrow
+    // and explicit rather than inventing generated database types.
+    const typedSupabase = supabase as unknown as {
+      rpc: (
+        functionName: 'create_business_with_owner',
+        args: CreateBusinessWithOwnerArgs,
+      ) => Promise<{ data: string | null; error: { message: string } | null }>;
+    };
+    const { data: businessId, error: rpcError } = await typedSupabase.rpc(
       'create_business_with_owner',
       {
         p_name: form.name.trim(),
@@ -496,12 +594,19 @@ export function CreateBusinessPage() {
         p_invoice_prefix: form.invoice_prefix || 'INV',
         p_expense_prefix: form.expense_prefix || 'EXP',
         p_payroll_prefix: form.payroll_prefix || 'PAY',
+        p_organisation_type: form.organisation_type,
+        p_operating_models: form.operating_models,
       },
     );
 
     if (rpcError) {
       setLoading(false);
       setError(rpcError.message);
+      return;
+    }
+    if (!businessId) {
+      setLoading(false);
+      setError('The business was not created. Please try again.');
       return;
     }
 
@@ -560,9 +665,12 @@ export function CreateBusinessPage() {
           .map((row) => {
             const business = Array.isArray(row.business) ? row.business[0] : row.business;
             if (!business || !('id' in business) || !('name' in business)) return null;
-            return { business: business as { id: string; name: string; base_currency?: string | null }, role: row.role };
+            return {
+              business: business as unknown as Business,
+              role: row.role,
+            } satisfies BusinessMembership;
           })
-          .filter((m): m is NonNullable<typeof m> => m !== null);
+          .filter((m): m is BusinessMembership => m !== null);
 
         setBusinesses(mapped);
 
