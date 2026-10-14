@@ -131,6 +131,62 @@ describe('RegisterPage sign-up', () => {
     expect(await screen.findByText('auth.checkInbox')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'auth.resendConfirmation' })).toBeTruthy();
   });
+
+  it('normalises the email so sign-up, resend and sign-in use the same address', async () => {
+    mocks.signUp.mockResolvedValue({ data: { user: {}, session: null }, error: null });
+    renderRegister();
+
+    fillRegisterForm(' Owner@Example.mw ');
+
+    await waitFor(() => expect(mocks.signUp).toHaveBeenCalledTimes(1));
+    expect(mocks.signUp.mock.calls[0][0].email).toBe('owner@example.mw');
+  });
+
+  it('does not promise an email when the address is already registered (identities: [])', async () => {
+    // GoTrue's anti-enumeration answer to a duplicate sign-up: a fake success
+    // with an obfuscated user and NO email sent. The user must be told to
+    // sign in, not to wait for a link that is never coming.
+    mocks.signUp.mockResolvedValue({ data: { user: { identities: [] }, session: null }, error: null });
+    renderRegister();
+
+    fillRegisterForm('owner@example.mw');
+
+    expect(await screen.findByText('auth.accountAlreadyExists')).toBeTruthy();
+    expect(screen.queryByText('auth.confirmationEmailSent')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'auth.resendConfirmation' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'auth.signIn' })).toBeTruthy();
+  });
+
+  it('does not promise an email when sign-up returns user_already_exists', async () => {
+    mocks.signUp.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: 'User already registered', code: 'user_already_exists', status: 422 },
+    });
+    renderRegister();
+
+    fillRegisterForm('owner@example.mw');
+
+    expect(await screen.findByText('auth.accountAlreadyExists')).toBeTruthy();
+    expect(screen.queryByText('auth.confirmationEmailSent')).toBeNull();
+  });
+
+  it('keeps the resend path available when the confirmation email was throttled', async () => {
+    // The account is created but the built-in mailer dropped the email
+    // (429 over_email_send_rate_limit): the owner currently in the inbox
+    // has nothing. They must still reach check-inbox + resend, with the
+    // delay explained — not a raw GoTrue error on the form.
+    mocks.signUp.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: 'email rate limit exceeded', code: 'over_email_send_rate_limit', status: 429 },
+    });
+    renderRegister();
+
+    fillRegisterForm('owner@example.mw');
+
+    expect(await screen.findByText('auth.confirmationEmailSent')).toBeTruthy();
+    expect(screen.getByText('auth.signUpRateLimited')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'auth.resendConfirmation' })).toBeTruthy();
+  });
 });
 
 describe('ResendConfirmationButton', () => {
@@ -191,6 +247,20 @@ describe('ResendConfirmationButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'auth.resendConfirmation' }));
 
     expect(await screen.findByText('Signups not allowed for this instance')).toBeTruthy();
+  });
+
+  it('does not burn the cooldown when a resend fails for a non-rate-limit reason', async () => {
+    mocks.resend.mockResolvedValue({
+      data: null,
+      error: { message: 'Signups not allowed for this instance', code: 'signup_disabled', status: 422 },
+    });
+    await reachCheckInbox();
+
+    fireEvent.click(screen.getByRole('button', { name: 'auth.resendConfirmation' }));
+
+    expect(await screen.findByText('Signups not allowed for this instance')).toBeTruthy();
+    const retry = screen.getByRole('button', { name: 'auth.resendConfirmation' });
+    expect((retry as HTMLButtonElement).disabled).toBe(false);
   });
 });
 

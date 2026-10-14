@@ -177,6 +177,8 @@
     "resendConfirmationIn": "Tuma tena baada ya {{seconds}}s",
     "resendConfirmationSent": "Kiungo kipya cha uthibitisho kimetumwa kwa {{email}}.",
     "resendRateLimited": "Barua pepe nyingi zimeombwa. Tafadhali subiri dakika chache kisha ujaribu tena.",
+    "accountAlreadyExists": "Akaunti yenye {{email}} tayari ipo, kwa hivyo hakuna barua pepe mpya ya uthibitisho iliyotumwa. Ingia badala yake — au weka upya nenosiri lako ikiwa umelisahau.",
+    "signUpRateLimited": "Akaunti yako imefunguliwa, lakini barua pepe za uthibitisho zimezuiwa kwa muda, kwa hivyo hii inaweza kuwa haijafika bado. Subiri dakika chache, angalia folda ya spam, kisha tuma tena hapa chini.",
     "checkSpamFolder": "Huioni? Angalia folda ya spam au junk.",
     "fullName": "Jina kamili",
     "passwordPlaceholder": "Angalau herufi 8",

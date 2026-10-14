@@ -180,6 +180,8 @@
     "resendConfirmationIn": "Resend in {{seconds}}s",
     "resendConfirmationSent": "A new confirmation link has been sent to {{email}}.",
     "resendRateLimited": "Too many emails have been requested. Please wait a few minutes and try again.",
+    "accountAlreadyExists": "An account with {{email}} already exists, so no new confirmation email was sent. Sign in instead — or reset your password if you have forgotten it.",
+    "signUpRateLimited": "Your account was created, but confirmation emails are temporarily rate-limited, so this one may not have arrived yet. Wait a few minutes, check your spam folder, then resend below.",
     "checkSpamFolder": "Can’t see it? Check your spam or junk folder.",
     "fullName": "Full name",
     "passwordPlaceholder": "At least 8 characters",
