@@ -9,6 +9,7 @@ import {
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { nextEntryNumber } from '@/services/journalService';
 import { csvCell } from '@/services/dataBackupService';
@@ -2211,7 +2212,8 @@ export function PayrollPage() {
           <h1 className="text-2xl font-semibold text-gray-900">Payroll</h1>
           <p className="mt-1 text-sm text-gray-500">Manage payroll, cost center allocation, and employees for {currentBusiness.business.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <ImportTemplateMenu entityTypes={['employees']} />
           {tab === 'employees' && canEditEmployees && (
             <>
               <button

@@ -7,6 +7,7 @@ import { VAT_STANDARD_RATE, VAT_STANDARD_RATE_PERCENT } from '@/lib/vat';
 import { useAppStore } from '@/store/useAppStore';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
@@ -1310,6 +1311,7 @@ export function IncomePage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ImportTemplateMenu entityTypes={['invoices']} />
           <button onClick={() => setTab('quick')}
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Zap className="h-4 w-4 text-brand-500" />Quick Entry
