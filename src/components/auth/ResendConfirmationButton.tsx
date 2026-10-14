@@ -43,17 +43,22 @@ export function ResendConfirmationButton({ email, emailRedirectTo }: ResendConfi
       options: { emailRedirectTo },
     });
     setSending(false);
-    setCooldown(RESEND_COOLDOWN_SECONDS);
 
     if (error) {
       const code = (error as { code?: string }).code;
+      const rateLimited = Boolean(code && RATE_LIMIT_CODES.has(code));
+      // Only burn the cooldown when an email actually went out, or when the
+      // server itself asked us to back off. Any other failure (network,
+      // misconfiguration) must leave the button usable so the user can retry
+      // straight away instead of staring at a 60s lockout.
+      if (rateLimited) setCooldown(RESEND_COOLDOWN_SECONDS);
       setStatus({
         type: 'error',
-        message:
-          code && RATE_LIMIT_CODES.has(code) ? t('auth.resendRateLimited') : error.message,
+        message: rateLimited ? t('auth.resendRateLimited') : error.message,
       });
       return;
     }
+    setCooldown(RESEND_COOLDOWN_SECONDS);
     setStatus({ type: 'success', message: t('auth.resendConfirmationSent', { email }) });
   }
 

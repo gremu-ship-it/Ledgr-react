@@ -177,6 +177,8 @@
     "resendConfirmationIn": "Reenviar em {{seconds}}s",
     "resendConfirmationSent": "Foi enviada uma nova ligação de confirmação para {{email}}.",
     "resendRateLimited": "Foram pedidos demasiados e-mails. Aguarde alguns minutos e tente novamente.",
+    "accountAlreadyExists": "Já existe uma conta com {{email}}, pelo que não foi enviado um novo e-mail de confirmação. Inicie sessão — ou reponha a palavra-passe se a esqueceu.",
+    "signUpRateLimited": "A sua conta foi criada, mas os e-mails de confirmação estão temporariamente limitados, pelo que este poderá ainda não ter chegado. Aguarde alguns minutos, verifique a pasta de spam e reenvie abaixo.",
     "checkSpamFolder": "Não o vê? Verifique a pasta de spam ou lixo eletrónico.",
     "fullName": "Nome completo",
     "passwordPlaceholder": "Pelo menos 8 caracteres",

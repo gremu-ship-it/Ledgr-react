@@ -170,11 +170,33 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# NOTE: this file only drives `supabase start` (local). The hosted projects'
+# Site URL / Redirect URLs live in the Supabase dashboard and MUST list every
+# deployed origin below, or GoTrue silently ignores the app's
+# `emailRedirectTo` (…/create-business) and the confirmation link in a new
+# business owner's inbox points at the wrong place — see "Auth email
+# (signup confirmation)" in DEPLOYMENT.md. Keep the two in sync.
+site_url = "http://127.0.0.1:5173"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+# `/**` globs cover /create-business, /reset-password, /accept-invitation and
+# invite returnTo paths. The deployed origins are listed so this file doubles
+# as the checklist for the hosted dashboard allow-list.
+additional_redirect_urls = [
+  "http://127.0.0.1:5173",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173/**",
+  "http://localhost:5173/**",
+  "http://127.0.0.1:3000",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000/**",
+  "http://localhost:3000/**",
+  "https://ledgr-react.vercel.app/**",
+  "https://ledgr-react-prod.vercel.app/**",
+  "https://app.ledgr.app/**",
+  "https://staging.ledgr.app/**",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -210,7 +232,13 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# WARNING: with Supabase's built-in mailer (no custom SMTP) the hosted cap is a
+# handful of emails/hour regardless of this value — after the first one or two
+# new businesses sign up, further confirmation emails are dropped/throttled
+# (over_email_send_rate_limit) and owners report "no confirmation link".
+# Custom SMTP (below / DEPLOYMENT.md) is REQUIRED for real signups; this
+# higher value only takes effect once SMTP is on.
+email_sent = 30
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -237,7 +265,13 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+# MUST stay true: RegisterPage's whole flow (no session until the owner clicks
+# the emailed link, then lands on /create-business) assumes it. With `false`
+# GoTrue sends NO confirmation email at all and returns a session immediately,
+# so any environment configured from this file never delivers the link a new
+# business is waiting for. Hosted equivalent: dashboard → Authentication →
+# Sign In / Providers → "Confirm email" ON (see DEPLOYMENT.md).
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -247,15 +281,22 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
+# Use a production-ready SMTP server — REQUIRED on hosted projects.
+# Without this, Auth mail goes through Supabase's built-in mailer, which is
+# rate-limited to a few emails/hour for testing only: the first new business
+# gets its confirmation link, later ones get nothing. Hosted setup is done in
+# the dashboard (Authentication → Emails → SMTP settings) — this block is the
+# local/self-hosted equivalent and the record of the intended values. Reuse
+# the SendGrid key already provisioned for invoice email (SENDGRID_API_KEY);
+# verify the sender in SendGrid first or every confirmation bounces.
 # [auth.email.smtp]
 # enabled = true
 # host = "smtp.sendgrid.net"
 # port = 587
 # user = "apikey"
 # pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# admin_email = "support@ledgr.app"
+# sender_name = "Ledgr"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]
