@@ -97,6 +97,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding'],
     features: [
       'Everything in Pro',
+      'Unlimited transactions',
       'Custom branding',
       'Multi-user roles & permissions',
       'Dedicated account manager',

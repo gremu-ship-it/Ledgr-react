@@ -82,6 +82,7 @@ export const PLANS: Plan[] = [
     transactionLimit: null,
     features: [
       'Everything in Pro',
+      'Unlimited transactions',
       'Custom onboarding',
       'Dedicated support',
     ],
