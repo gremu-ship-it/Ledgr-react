@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Point the HTTP-dispatched pg_cron jobs at the real Edge Function URLs, and
-# prove afterwards that no scheduled job is still holding a placeholder.
+# prove afterwards that no ACTIVE scheduled job is still holding a placeholder
+# (inactive, parked ones are reported as warnings — see the verify section).
 #
 # Why this exists
 # ---------------
@@ -87,16 +88,31 @@ while :; do
   attempt=$((attempt + 1))
 done
 
-# --- Verify: no scheduled job may still contain a placeholder ---------------
+# --- Verify: no ACTIVE job may still contain a placeholder ------------------
 # This is the check whose absence let the breakage live in production for
-# months. It is read-only and cheap.
+# months: an active job posting to 'https://<PROJECT_REF>.supabase.co/...'
+# looks healthy in cron.job while doing nothing. It is read-only and cheap.
+#
+# Only ACTIVE placeholder jobs fail the deploy. An inactive one cannot fire,
+# so it is not silently broken, just visibly parked. Migration 20261017000000
+# §3 deliberately deactivates every placeholder job so that "active" means
+# "working". The jobs cron-jobs.sql owns are re-created above with real values
+# and come back active. A job it does NOT own stays parked: today that is
+# 'retry-failed-webhooks-daily' (20260820000000), whose redispatch cannot yet
+# authenticate to webhook-dispatcher. Parked jobs are reported as a warning
+# on every deploy instead.
+#
+# Failing on parked jobs too stopped the deploy AFTER the database had
+# migrated and skipped the frontend, leaving staging mixed-version
+# (2026-10-09, 2026-10-14).
 verify_file="$(mktemp)"
 trap 'rm -f "${sql_file}" "${verify_file}"' EXIT
 cat > "${verify_file}" <<'SQL'
 select jobname, schedule, active
   from cron.job
  where command like '%<PROJECT_REF>%'
-    or command like '%<CRON_SECRET>%';
+    or command like '%<CRON_SECRET>%'
+ order by jobname;
 SQL
 
 verify_response="$(run_sql "${verify_file}" || true)"
@@ -108,13 +124,59 @@ if [[ "${verify_status}" != 2* ]]; then
   exit 0
 fi
 
-# Empty result set = no placeholders left.
-if printf '%s' "${verify_body}" | grep -q 'jobname'; then
-  echo "::error::Cron jobs on ${label} still contain unsubstituted placeholders — they will never fire:"
-  printf '%s\n' "${verify_body}" | head -n 5 | while IFS= read -r line; do
-    echo "::error::  ${line:0:400}"
-  done
+# The endpoint returns the result set as a JSON array of row objects. Print
+# one "<state>\t<jobname>\t<schedule>" line per row, where state is "parked"
+# only for an explicit active = false. Anything else counts as active: a
+# missing or unexpected value must never let a live placeholder job through.
+# Exit 3 if the body is not the expected shape.
+classify_rows='
+import json, sys
+try:
+    rows = json.load(sys.stdin)
+except ValueError:
+    sys.exit(3)
+if not isinstance(rows, list) or not all(isinstance(r, dict) and "jobname" in r for r in rows):
+    sys.exit(3)
+for r in rows:
+    parked = r.get("active") in (False, "f", "false")
+    fields = ("parked" if parked else "active", r.get("jobname"), r.get("schedule"))
+    # Never emit an empty field: tab is IFS whitespace, so the reader below
+    # would collapse it and shift the columns.
+    print("\t".join(" ".join(str(f).split()) or "-" for f in fields))
+'
+
+if ! classified="$(printf '%s' "${verify_body}" | python3 -c "${classify_rows}")"; then
+  # Unexpected response shape: fall back to the original, conservative rule
+  # (any listed job fails the deploy), since active and parked can't be told apart.
+  if printf '%s' "${verify_body}" | grep -q 'jobname'; then
+    echo "::error::Cron jobs on ${label} still contain unsubstituted placeholders (could not tell active from parked jobs in the response):"
+    printf '%s\n' "${verify_body}" | head -n 5 | while IFS= read -r line; do
+      echo "::error::  ${line:0:400}"
+    done
+    exit 1
+  fi
+  echo "::warning::Could not parse the cron job verification result for ${label}; the apply step itself succeeded."
+  exit 0
+fi
+
+active_jobs=0
+while IFS=$'\t' read -r state jobname schedule; do
+  [[ -z "${state}" ]] && continue
+  jobname="${jobname//::/: :}"
+  schedule="${schedule//::/: :}"
+  if [[ "${state}" == "parked" ]]; then
+    echo "::warning::pg_cron job '${jobname:0:200}' (${schedule:0:100}) on ${label} still holds a deploy-time placeholder but is INACTIVE, so it never runs. scripts/cron-jobs.sql does not manage it. Add it there with real values once it should run."
+  else
+    if ((active_jobs == 0)); then
+      echo "::error::Active cron jobs on ${label} still contain unsubstituted placeholders — they will never fire:"
+    fi
+    echo "::error::  ${jobname:0:200} (${schedule:0:100})"
+    active_jobs=$((active_jobs + 1))
+  fi
+done <<< "${classified}"
+
+if ((active_jobs > 0)); then
   exit 1
 fi
 
-echo "Verified: no pg_cron job on ${label} contains an unsubstituted placeholder."
+echo "Verified: no active pg_cron job on ${label} contains an unsubstituted placeholder."

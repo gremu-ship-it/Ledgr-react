@@ -9,7 +9,7 @@ no code changes. Record the date + result in the ops log.
 - [ ] **Read replicas**: off (not needed at current scale — leave off).
 - [ ] **Log retention**: Settings → Logging → retention ≥ 7 days.
 - [ ] **Edge function logs**: spot-check `webhook-dispatcher`, `api`, `ai-chat`, `process-invoice-automation` for recurring errors in the last 7 days.
-- [ ] **Cron jobs**: Database → Cron → the 4 jobs (expire-subscriptions, send-renewal-reminders, generate-partner-invoices, retry-failed-webhooks) all present and last-run OK.
+- [ ] **Cron jobs**: Database → Cron → `expire-subscriptions-daily` (plain SQL since 20261017000000), `send-renewal-reminders-daily` and `generate-partner-invoices-monthly` are present, **active**, last-run OK, and their commands contain no `<PROJECT_REF>`/`<CRON_SECRET>`. `retry-failed-webhooks-daily` is expected to be **inactive** (parked: its redispatch cannot yet authenticate to `webhook-dispatcher`). Each deploy prints a warning for it, which is not a failure.
 
 ## Vercel (projects `ledgr-react` production, `ledgr-react-prod` staging)
 - [ ] **WAF**: Security → WAF → enabled + managed rules on.

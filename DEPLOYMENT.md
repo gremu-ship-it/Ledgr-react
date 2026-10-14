@@ -305,6 +305,39 @@ files sharing a version prefix, and reports the colliding files by name instead
 of retrying; `src/lib/__tests__/migrationInvariants.test.ts` fails the fast CI
 suite for the same reason.
 
+#### `MIXED-VERSION STATE` in the release manifest
+
+The database migrated (and/or the Edge Functions shipped), but the live
+frontend was not updated to, or not confirmed at, the same commit. **Do not
+roll back migrations.** They are additive, so the previous client keeps
+working. Fix the stage the error names under `Failed stage(s)` and re-run the
+workflow (`workflow_dispatch` → the same environment). A re-run is safe:
+`db push` is a no-op once the target is reached, and the function deploy and
+cron rescheduling are idempotent.
+
+`frontend: skipped` means an earlier step failed, not that Vercel did. The
+frontend deploy is gated only on what the new client depends on: build,
+migration, migration-target check, Edge Functions. The pg_cron reschedule
+and the optional Railway gateway still fail the job, but no longer skip the
+frontend. They used to, which is how staging was left mixed-version on
+2026-10-09 and 2026-10-14: the reschedule check failed on
+`retry-failed-webhooks-daily`, a job migration `20261017000000` had
+deliberately deactivated because it still holds a `<PROJECT_REF>`
+placeholder.
+
+That check (`scripts/ci/apply-cron-jobs.sh`) now fails only on **active**
+jobs that still hold a placeholder, since those look healthy while doing
+nothing. Inactive (parked) jobs are reported as a `::warning::` on every
+deploy.
+
+`frontendVersionCheck` (`scripts/ci/verify-frontend-version.sh`) reads
+`/version.json` from the environment URL (`STAGING_URL` / `PRODUCTION_URL`;
+without one, the alias printed by the Vercel CLI) and re-reads for up to
+about five minutes. Vercel can keep serving the previous deployment for a
+short while after `vercel deploy --prod` returns. If it fails, the new
+deployment never reached the URL users visit: check the Vercel project's
+production domains.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to
