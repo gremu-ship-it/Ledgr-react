@@ -587,6 +587,13 @@ class DemoAuth {
     });
   }
 
+  resend() {
+    return Promise.resolve({
+      data: { user: null, session: null },
+      error: { message: DEMO_MODE_NOTICE, code: 'demo_not_supported', status: 400 },
+    });
+  }
+
   updateUser() {
     return Promise.resolve({
       data: { user: demoUser() },

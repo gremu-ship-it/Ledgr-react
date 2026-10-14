@@ -14,6 +14,7 @@ import {
   SubmitButton,
   measureStrength,
 } from '@/components/auth/AuthUI';
+import { ResendConfirmationButton } from '@/components/auth/ResendConfirmationButton';
 
 export function RegisterPage() {
   const { t } = useTranslation();
@@ -35,6 +36,12 @@ export function RegisterPage() {
       return null;
     }
   }, [returnToParam]);
+
+  // Where the confirmation link should land once the email is confirmed. The
+  // same destination the user would reach after an immediate sign-up (no
+  // confirmation needed). Supabase only honours URLs on its redirect allow-list
+  // and otherwise falls back to the project Site URL.
+  const confirmRedirectTo = `${window.location.origin}${safeReturnTo || '/create-business'}`;
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -65,7 +72,10 @@ export function RegisterPage() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: { full_name: fullName },
+        emailRedirectTo: confirmRedirectTo,
+      },
     });
     setLoading(false);
 
@@ -91,6 +101,8 @@ export function RegisterPage() {
           <p className="text-sm text-gray-500">
             {t('auth.confirmationEmailSent', { email })}
           </p>
+          <p className="text-xs text-gray-600">{t('auth.checkSpamFolder')}</p>
+          <ResendConfirmationButton email={email} emailRedirectTo={confirmRedirectTo} />
           {safeReturnTo && (
             <p className="text-xs text-gray-600">{t('auth.confirmInviteAfterEmail')}</p>
           )}
