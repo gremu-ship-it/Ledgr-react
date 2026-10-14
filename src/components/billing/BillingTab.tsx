@@ -197,11 +197,11 @@ export function BillingTab() {
             </div>
           </div>
 
-          <div className="text-sm text-gray-600">
-            {usage.isUnlimited
-              ? 'Unlimited transactions'
-              : `${usage.currentMonth} of ${usage.limit} transactions used this month`}
-          </div>
+          {!usage.isUnlimited && (
+            <div className="text-sm text-gray-600">
+              {usage.currentMonth} of {usage.limit} transactions used this month
+            </div>
+          )}
         </div>
       </div>
 
@@ -312,11 +312,11 @@ export function BillingTab() {
                   <span className="text-sm font-normal text-gray-500">/mo</span>
                 </div>
 
-                <div className="text-xs text-gray-500 mb-4">
-                  {p.transactionLimit === null
-                    ? 'Unlimited transactions'
-                    : `${p.transactionLimit.toLocaleString()} transactions/month`}
-                </div>
+                {p.transactionLimit !== null && (
+                  <div className="text-xs text-gray-500 mb-4">
+                    {p.transactionLimit.toLocaleString()} transactions/month
+                  </div>
+                )}
 
                 <ul className="space-y-1.5 text-sm flex-1 mb-4">
                   {p.features.map((feature, i) => (
@@ -364,7 +364,7 @@ export function BillingTab() {
           {usage.currentMonth} <span className="text-xl font-normal text-gray-500">transactions</span>
         </div>
         <p className="text-sm text-gray-500 mt-1">
-          {usage.isUnlimited ? 'Unlimited plan' : `${usage.remaining} remaining`}
+          {usage.isUnlimited ? 'Current month activity' : `${usage.remaining} remaining`}
         </p>
       </div>
 

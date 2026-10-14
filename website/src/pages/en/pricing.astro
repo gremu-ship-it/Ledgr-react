@@ -14,7 +14,7 @@ const d = dict(locale).pricing;
 
 const comparison: { feature: string; tiers: (string | boolean)[] }[] = [
   { feature: 'Monthly price (MWK)', tiers: PLANS.map((p) => p.priceMWK === 0 ? 'Free' : `MK ${p.priceMWK.toLocaleString('en-MW')}`) },
-  { feature: 'Transactions / month', tiers: PLANS.map((p) => p.transactionLimit === null ? 'Unlimited' : p.transactionLimit.toLocaleString('en-MW')) },
+  { feature: 'Transactions / month', tiers: PLANS.map((p) => p.tier === 'enterprise' ? '—' : p.transactionLimit!.toLocaleString('en-MW')) },
   { feature: 'Finance: income, expenses, invoices & payroll', tiers: PLANS.map(() => true) },
   { feature: 'Basic dashboard', tiers: PLANS.map(() => true) },
   { feature: 'Inventory', tiers: PLANS.map((p) => p.tier !== 'free') },
