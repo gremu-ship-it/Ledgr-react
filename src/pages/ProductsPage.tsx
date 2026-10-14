@@ -8,6 +8,7 @@ import {
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { weightedAverageCost } from '@/services/inventoryValuation';
 import { newSaveClientKey } from '@/services/quickSaveService';
@@ -937,11 +938,12 @@ export function ProductsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Products & Inventory</h1>
           <p className="mt-1 text-sm text-gray-500">Manage products, stock levels, and movements for {currentBusiness.business.name}</p>
         </div>
+        <ImportTemplateMenu entityTypes={['products', 'inventory_opening']} />
       </div>
 
       {/* Tabs */}

@@ -13,6 +13,7 @@ import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { generateDeliveryNoteDocument } from '@/lib/documents/documentGenerator';
 import { businessRowToBranding, type BusinessBranding } from '@/lib/documents/types';
 import { DocumentDownloadButton } from '@/components/documents/DocumentDownloadButton';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 // ── Status config ─────────────────────────────────────────────────────────────
 
@@ -722,7 +723,7 @@ export function TransfersPage() {
           createMutation.mutate({ fromLocationId: from, toLocationId: to, lines, notes })
         }
         isLoading={createMutation.isPending}
-        errorMessage={createMutation.isError ? (createMutation.error as Error).message : null}
+        errorMessage={createMutation.isError ? getErrorMessage(createMutation.error) : null}
       />
 
       {selectedDetail && (
@@ -738,9 +739,9 @@ export function TransfersPage() {
           onReceive={(quantities) => receiveMutation.mutate({ transferId: selectedDetail.transfer.id, quantities })}
           isMutating={isMutating}
           errorMessage={
-            approveMutation.isError ? (approveMutation.error as Error).message
-            : dispatchMutation.isError ? (dispatchMutation.error as Error).message
-            : receiveMutation.isError ? (receiveMutation.error as Error).message
+            approveMutation.isError ? getErrorMessage(approveMutation.error)
+            : dispatchMutation.isError ? getErrorMessage(dispatchMutation.error)
+            : receiveMutation.isError ? getErrorMessage(receiveMutation.error)
             : null
           }
         />

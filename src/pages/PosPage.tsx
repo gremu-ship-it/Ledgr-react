@@ -20,6 +20,7 @@ import { weightedAverageCost } from '@/services/inventoryValuation';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { VAT_STANDARD_RATE } from '@/lib/vat';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import type {
@@ -506,7 +507,7 @@ export function PosPage() {
       }
       setDataVersion((v) => v + 1);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = getErrorMessage(err);
       console.error('Sale completion error:', err);
       alert(`Sale failed: ${message}`);
     } finally {

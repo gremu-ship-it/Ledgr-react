@@ -17,6 +17,7 @@ import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { InvoiceApprovalPanel } from '@/components/invoice/InvoiceApprovalPanel';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { resolveTransactionRate } from '@/lib/currency';
@@ -1255,11 +1256,14 @@ export function InvoicesPage() {
   return (
     <div>
       {!selectedInvoice && (
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900">Invoices</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage invoices for {currentBusiness.business.name}
-          </p>
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">Invoices</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage invoices for {currentBusiness.business.name}
+            </p>
+          </div>
+          <ImportTemplateMenu entityTypes={['invoices']} />
         </div>
       )}
 

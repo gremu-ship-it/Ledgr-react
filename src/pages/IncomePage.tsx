@@ -5,7 +5,9 @@ import { Plus, FileText, Zap, Trash2, AlertCircle, CheckCircle, Eye, CreditCard,
 import { formatMwkDetailed } from '@/lib/formatters';
 import { VAT_STANDARD_RATE, VAT_STANDARD_RATE_PERCENT } from '@/lib/vat';
 import { useAppStore } from '@/store/useAppStore';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { AddContactModal } from '@/components/AddContactModal';
 import { createInvoiceJournalEntry, createInvoiceReceivableEntry } from '@/services/journalService';
@@ -456,7 +458,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
           }
           log.error('Quick-sale RPC failed (nothing was saved)', { error: rpcErr });
           throw new Error(
-            `${(rpcErr as Error)?.message ?? 'The income could not be saved.'} ` +
+            `${getErrorMessage(rpcErr) || 'The income could not be saved.'} ` +
             `Nothing was saved — it is safe to try again.`,
             { cause: rpcErr },
           );
@@ -487,7 +489,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             );
           } catch (err) {
             log.error('Journal entry failed', { error: err });
-            throw new Error(`Accounting journal entry failed: ${(err as Error).message}`, { cause: err });
+            throw new Error(`Accounting journal entry failed: ${getErrorMessage(err)}`, { cause: err });
           }
 
           // Releases stock and posts DR Cost of Sales / CR Inventory in the
@@ -526,7 +528,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
       invalidateAfterIncome(queryClient, { touchedInventory: result.touchedInventory });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => setAlert({ type: 'error', message: getErrorMessage(err) }),
   });
 
   function set(field: keyof QuickEntryForm, value: string) {
@@ -858,7 +860,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           // HARDENING 2026-09-26: a missing revenue journal is not
           // "non-critical" — the invoice would be off the ledger silently.
           log.error('Journal entry failed', { error: err });
-          throw new Error(`Invoice ${created.invoice_number} was saved, but its journal entry failed: ${(err as Error).message}. Please contact support before retrying.`, { cause: err });
+          throw new Error(`Invoice ${created.invoice_number} was saved, but its journal entry failed: ${getErrorMessage(err)}. Please contact support before retrying.`, { cause: err });
         }
 
         // Reduce stock for every line that has a product selected, and post
@@ -883,7 +885,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       setTimeout(() => { setAlert(null); onSuccess(); }, 1500);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => setAlert({ type: 'error', message: getErrorMessage(err) }),
   });
 
   return (
@@ -1309,6 +1311,7 @@ export function IncomePage() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ImportTemplateMenu entityTypes={['invoices']} />
           <button onClick={() => setTab('quick')}
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Zap className="h-4 w-4 text-brand-500" />Quick Entry

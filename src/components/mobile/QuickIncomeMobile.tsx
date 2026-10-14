@@ -4,6 +4,7 @@ import { CheckCircle, ChevronRight, ArrowLeft, Search, Package, Tag, Building2, 
 import { MwkNumberPad } from './MwkNumberPad';
 import { BottomSheet } from './BottomSheet';
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { repos } from '@/lib/repositories';
 import { createInvoiceJournalEntry } from '@/services/journalService';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
@@ -232,7 +233,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
             // HARDENING 2026-09-26: never report success when the ledger or
             // stock posting failed. The invoice itself is saved; say so.
             log.error('Journal / stock posting failed', { error: err });
-            throw new Error(`Invoice ${created.invoice_number} was saved, but its accounting or stock posting failed: ${(err as Error).message}. Please contact support before retrying.`, { cause: err });
+            throw new Error(`Invoice ${created.invoice_number} was saved, but its accounting or stock posting failed: ${getErrorMessage(err)}. Please contact support before retrying.`, { cause: err });
           }
         }
         return { offline: false };
@@ -479,7 +480,7 @@ export function QuickIncomeMobile({ businessId, open, onClose }: QuickIncomeMobi
           >
             {mutation.isPending ? 'Saving…' : 'Record Income ✓'}
           </button>
-          {mutation.isError && <p className="text-center text-sm text-red-600">{(mutation.error as Error).message}</p>}
+          {mutation.isError && <p className="text-center text-sm text-red-600">{getErrorMessage(mutation.error)}</p>}
         </div>
       )}
     </BottomSheet>
