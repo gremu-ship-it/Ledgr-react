@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { createLogger } from '@/lib/logger';
 import { phoneLoginEmail } from '@/lib/phone';
 import { AuthShell } from '@/components/auth/AuthShell';
+import { ResendConfirmationButton } from '@/components/auth/ResendConfirmationButton';
 import { usePartner } from '@/partner/PartnerContext';
 import {
   FormField,
@@ -95,10 +96,14 @@ export function LoginPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set when sign-in failed because the address has not confirmed its email, so
+  // the user can request a fresh confirmation link for that same address.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
 
   async function handleCredentials(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setUnverifiedEmail(null);
 
     const loginEmail =
       loginMode === 'phone' ? phoneLoginEmail(phone) : email.trim().toLowerCase();
@@ -119,6 +124,9 @@ export function LoginPage() {
       const kind = classifySignInError(signInError);
       if (kind === 'unverified') {
         setError(t('auth.emailNotVerified'));
+        // Phone-login accounts use a synthetic address with no inbox, so there is
+        // nothing to resend to.
+        if (loginMode === 'email') setUnverifiedEmail(loginEmail);
       } else if (kind === 'credential') {
         setError(t('auth.incorrectCredentials'));
       } else {
@@ -251,6 +259,12 @@ export function LoginPage() {
           />
         )}
         {error && <AuthAlert type="error" message={error} />}
+        {unverifiedEmail && (
+          <ResendConfirmationButton
+            email={unverifiedEmail}
+            emailRedirectTo={`${window.location.origin}${from}`}
+          />
+        )}
 
         <div className="flex justify-end">
           <button
