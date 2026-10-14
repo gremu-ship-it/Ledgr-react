@@ -97,6 +97,7 @@ jobs:
       - name: Record migration target
         run: echo "MIGRATION_TARGET=$(node scripts/ci/migration-target.mjs)" >> "$GITHUB_ENV"
       - name: Build frontend
+        id: build
         run: npm run build
       - name: Deploy Supabase backend (staging)
         uses: supabase/setup-cli@v3
@@ -195,9 +196,12 @@ jobs:
       # The schedule migrations ship literal <PROJECT_REF>/<CRON_SECRET>
       # placeholders that `db push` applies verbatim, so the HTTP-dispatched
       # cron jobs silently posted to a non-resolving host (renewal reminders
-      # and partner invoices never ran). This substitutes the real values and
-      # fails the deploy if any job is still holding a placeholder.
+      # and partner invoices never ran). This substitutes the real values,
+      # re-enables the jobs, and fails the run if any job still holds a
+      # placeholder or a job scripts/cron-jobs.sql schedules is inactive. A
+      # failure here does NOT hold back the frontend (see the gate below).
       - name: Reschedule pg_cron jobs with real URLs (staging)
+        id: cron
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET_STAGING }}
         run: bash scripts/ci/apply-cron-jobs.sh
@@ -209,9 +213,23 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment staging
 
-      # Last, deliberately — see the ordering note at the migration step.
+      # Last, deliberately — see the ordering note at the migration step. Gated
+      # on exactly what the new client depends on (its build, the migration
+      # and its verified target, the edge functions) instead of "every earlier
+      # step succeeded": once the irreversible migration has run, a failure in
+      # independent post-migration maintenance (the pg_cron reschedule, the
+      # optional Railway gateway) must not strand users on the previous
+      # frontend. On 2026-10-14 a pg_cron verification failure had skipped this
+      # step on every staging deploy since 2026-10-09 (MIXED-VERSION). Those
+      # steps still fail the run, and the release manifest records cronJobs.
       - name: Deploy frontend to Vercel (staging)
         id: frontend
+        if: >-
+          ${{ always() && !cancelled() &&
+              steps.build.outcome == 'success' &&
+              steps.migrate.outcome == 'success' &&
+              steps.verify_migration.outcome == 'success' &&
+              steps.edge.outcome == 'success' }}
         run: |
           set -o pipefail
           npm i -g vercel@latest
@@ -251,24 +269,44 @@ jobs:
       # expects this migration target (compatibility with the DB just verified).
       - name: Verify deployed frontend version (staging)
         id: frontend_verify
+        if: ${{ always() && !cancelled() && steps.frontend.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           url="${FRONTEND_URL:-}"
           [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
-          body="$(curl -fsS --max-time 20 "${url}/version.json" || true)"
-          if [[ -z "$body" ]] || ! printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
-            echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
-            exit 0
-          fi
-          echo "$body"
-          commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit)})')"
-          target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget)})')"
-          if [[ "$commit" != "$GITHUB_SHA" || "$target" != "$MIGRATION_TARGET" ]]; then
-            echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}."
-            exit 1
-          fi
-          echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+          # The URL taken from the CLI log can be the project's production
+          # alias, which may keep serving the PREVIOUS deployment for a short
+          # while after `vercel deploy --prod` returns (2026-10-09: this check
+          # read the prior commit off the staging alias, which moved later).
+          # Poll until it serves this commit, within a bounded window.
+          is_json() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; }
+          field() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j[process.argv[1]] ?? "")})' "$2"; }
+          attempts=18
+          commit=""; target=""
+          for ((i = 1; i <= attempts; i++)); do
+            body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
+            if [[ -n "$body" ]] && is_json "$body"; then
+              commit="$(field "$body" commit)"
+              target="$(field "$body" migrationTarget)"
+              if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
+                echo "$body"
+                echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+                exit 0
+              fi
+            elif (( i == 1 )); then
+              echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
+              exit 0
+            else
+              commit="(unreadable)"; target="(unreadable)"
+            fi
+            if (( i < attempts )); then
+              echo "Attempt ${i}/${attempts}: ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
+              sleep 10
+            fi
+          done
+          echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
+          exit 1
       - name: Release manifest (staging)
         if: always()
         shell: bash
@@ -279,6 +317,7 @@ jobs:
           OUT_EDGE: ${{ steps.edge.outcome }}
           OUT_FRONTEND: ${{ steps.frontend.outcome }}
           OUT_FRONTEND_VERIFY: ${{ steps.frontend_verify.outcome }}
+          OUT_CRON: ${{ steps.cron.outcome }}
         run: node scripts/ci/release-manifest.mjs
       - name: Upload release manifest (staging)
         if: always()
@@ -334,6 +373,7 @@ jobs:
       - name: Record migration target
         run: echo "MIGRATION_TARGET=$(node scripts/ci/migration-target.mjs)" >> "$GITHUB_ENV"
       - name: Build frontend
+        id: build
         run: npm run build
       - name: Deploy Supabase backend (production)
         uses: supabase/setup-cli@v3
@@ -428,6 +468,7 @@ jobs:
       # See the staging note: without this the cron jobs keep posting to
       # 'https://<PROJECT_REF>.supabase.co/...' and never fire.
       - name: Reschedule pg_cron jobs with real URLs (production)
+        id: cron
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET_PROD }}
         run: bash scripts/ci/apply-cron-jobs.sh
@@ -439,9 +480,23 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment production
 
-      # Last, deliberately — see the ordering note at the migration step.
+      # Last, deliberately — see the ordering note at the migration step. Gated
+      # on exactly what the new client depends on (its build, the migration
+      # and its verified target, the edge functions) instead of "every earlier
+      # step succeeded": once the irreversible migration has run, a failure in
+      # independent post-migration maintenance (the pg_cron reschedule, the
+      # optional Railway gateway) must not strand users on the previous
+      # frontend. On 2026-10-14 a pg_cron verification failure had skipped this
+      # step on every staging deploy since 2026-10-09 (MIXED-VERSION). Those
+      # steps still fail the run, and the release manifest records cronJobs.
       - name: Deploy frontend to Vercel (production)
         id: frontend
+        if: >-
+          ${{ always() && !cancelled() &&
+              steps.build.outcome == 'success' &&
+              steps.migrate.outcome == 'success' &&
+              steps.verify_migration.outcome == 'success' &&
+              steps.edge.outcome == 'success' }}
         run: |
           set -o pipefail
           npm i -g vercel@latest
@@ -481,24 +536,44 @@ jobs:
       # expects this migration target (compatibility with the DB just verified).
       - name: Verify deployed frontend version (production)
         id: frontend_verify
+        if: ${{ always() && !cancelled() && steps.frontend.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
           url="${FRONTEND_URL:-}"
           [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
-          body="$(curl -fsS --max-time 20 "${url}/version.json" || true)"
-          if [[ -z "$body" ]] || ! printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
-            echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
-            exit 0
-          fi
-          echo "$body"
-          commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit)})')"
-          target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget)})')"
-          if [[ "$commit" != "$GITHUB_SHA" || "$target" != "$MIGRATION_TARGET" ]]; then
-            echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}."
-            exit 1
-          fi
-          echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+          # The URL taken from the CLI log can be the project's production
+          # alias, which may keep serving the PREVIOUS deployment for a short
+          # while after `vercel deploy --prod` returns (2026-10-09: this check
+          # read the prior commit off the staging alias, which moved later).
+          # Poll until it serves this commit, within a bounded window.
+          is_json() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; }
+          field() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j[process.argv[1]] ?? "")})' "$2"; }
+          attempts=18
+          commit=""; target=""
+          for ((i = 1; i <= attempts; i++)); do
+            body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
+            if [[ -n "$body" ]] && is_json "$body"; then
+              commit="$(field "$body" commit)"
+              target="$(field "$body" migrationTarget)"
+              if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
+                echo "$body"
+                echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+                exit 0
+              fi
+            elif (( i == 1 )); then
+              echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
+              exit 0
+            else
+              commit="(unreadable)"; target="(unreadable)"
+            fi
+            if (( i < attempts )); then
+              echo "Attempt ${i}/${attempts}: ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
+              sleep 10
+            fi
+          done
+          echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
+          exit 1
       - name: Release manifest (production)
         if: always()
         shell: bash
@@ -509,6 +584,7 @@ jobs:
           OUT_EDGE: ${{ steps.edge.outcome }}
           OUT_FRONTEND: ${{ steps.frontend.outcome }}
           OUT_FRONTEND_VERIFY: ${{ steps.frontend_verify.outcome }}
+          OUT_CRON: ${{ steps.cron.outcome }}
         run: node scripts/ci/release-manifest.mjs
       - name: Upload release manifest (production)
         if: always()

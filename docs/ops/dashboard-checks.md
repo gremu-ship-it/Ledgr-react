@@ -9,7 +9,7 @@ no code changes. Record the date + result in the ops log.
 - [ ] **Read replicas**: off (not needed at current scale — leave off).
 - [ ] **Log retention**: Settings → Logging → retention ≥ 7 days.
 - [ ] **Edge function logs**: spot-check `webhook-dispatcher`, `api`, `ai-chat`, `process-invoice-automation` for recurring errors in the last 7 days.
-- [ ] **Cron jobs**: Database → Cron → the 4 jobs (expire-subscriptions, send-renewal-reminders, generate-partner-invoices, retry-failed-webhooks) all present and last-run OK.
+- [ ] **Cron jobs**: Database → Cron → the 4 jobs (expire-subscriptions, send-renewal-reminders, generate-partner-invoices, retry-failed-webhooks) all present, **active**, and last-run OK. An inactive job never fires even with a correct URL (2026-10-14: deactivated jobs stayed inactive after their URLs were fixed); each deploy re-enables the HTTP ones via `scripts/cron-jobs.sql`.
 
 ## Vercel (projects `ledgr-react` production, `ledgr-react-prod` staging)
 - [ ] **WAF**: Security → WAF → enabled + managed rules on.

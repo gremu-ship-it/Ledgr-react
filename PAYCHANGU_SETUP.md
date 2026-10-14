@@ -149,13 +149,14 @@ supabase db push
 This creates `subscription_payments`, adds `plan_tier` / `plan_expires_at`
 to `businesses`, and installs the escalation-guard trigger.
 
-**Important:** the three cron-schedule migrations
-(`20260726...0003`, `20260726...0005`, `20260727...0006`) ship with
-`<PROJECT_REF>` and `<CRON_SECRET>` placeholders, because SQL migrations
-can't read env/secrets at apply time. If the jobs were applied with the
-literal placeholders, they point at a non-resolving URL and never fire —
-see `scripts/cron-jobs.sql`, which re-creates all three jobs with the real
-URLs and is idempotent (safe to run on every deploy).
+**Important:** the HTTP cron-schedule migrations (`20260726...0005`,
+`20260727...0006`, `20260820000000`) ship with `<PROJECT_REF>` and
+`<CRON_SECRET>` placeholders, because SQL migrations can't read env/secrets at
+apply time. (`20260726...0003`'s expiry job was replaced by an in-database SQL
+sweep in `20261017000000`.) If the jobs were applied with the literal
+placeholders, they point at a non-resolving URL and never fire — see
+`scripts/cron-jobs.sql`, which reschedules those jobs with the real URLs,
+re-enables them, and is idempotent (safe to run on every deploy).
 
 To create/repair them, replace `<PROJECT_REF>` and `<CRON_SECRET>` with your
 project ref and the same `CRON_SECRET` value set in step 2, then run:
@@ -167,10 +168,10 @@ sed -e "s|<PROJECT_REF>|<your-project-ref>|g" \
 supabase db query --linked --file /tmp/cron-jobs.sql
 ```
 
-(Equivalently, paste the substituted SQL into the Supabase SQL editor.) A
-matching `deploy.yml` change that fills the placeholders before `db push`
-and runs this script on every deploy is provided separately — apply it via
-a commit with `workflows` permission so CI does this automatically.
+(Equivalently, paste the substituted SQL into the Supabase SQL editor.) CI
+does this automatically on every staging/production deploy via
+`scripts/ci/apply-cron-jobs.sh`, which also verifies the result (see below);
+prefer running that script over the raw SQL.
 
 ### 6. Go live
 
@@ -232,8 +233,10 @@ Its schedule DOES go over HTTP (the function sends email), so it carries the
 `<PROJECT_REF>` / `<CRON_SECRET>` placeholders that `supabase db push` applies
 verbatim. `scripts/ci/apply-cron-jobs.sh` — run automatically by
 `.github/workflows/deploy.yml` for staging and production — substitutes the real
-values and then fails the deploy if any job in `cron.job` still contains a
-placeholder. Applying it by hand to a project CI does not manage:
+values, re-enables the jobs, and then fails the run if any job in `cron.job`
+still contains a placeholder or any job it schedules is inactive (a failure
+there no longer holds back the frontend deploy). Applying it by hand to a
+project CI does not manage:
 
 ```bash
 SUPABASE_PROJECT_REF=xxxx SUPABASE_ACCESS_TOKEN=... CRON_SECRET=... \
