@@ -16,6 +16,8 @@ import {
   ValidationError,
   UnauthorizedError,
   DatabaseError,
+  INSUFFICIENT_STOCK_MESSAGE,
+  isInsufficientStockError,
 } from '@/dal/errors/RepositoryError';
 import { isChunkLoadError } from './chunkRecovery';
 
@@ -320,6 +322,13 @@ export async function withRetry<T>(
  * Extract a user-friendly message from any error type.
  */
 export function getErrorMessage(error: unknown): string {
+  // Some RPC paths throw the raw PostgREST object instead of going through the
+  // repository adapter. Apply the same concise stock message there too, so a
+  // database constraint can never leak into a cashier-facing alert.
+  if (isInsufficientStockError(error)) {
+    return INSUFFICIENT_STOCK_MESSAGE;
+  }
+
   if (error instanceof RepositoryError) {
     return error.message;
   }

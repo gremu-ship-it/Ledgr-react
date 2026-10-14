@@ -88,6 +88,27 @@ describe('getErrorMessage', () => {
     expect(message).toContain('not found');
   });
 
+  it('should hide the inventory constraint from raw stock RPC errors', () => {
+    const err = {
+      code: '23514',
+      message:
+        'new row for relation "inventory_balances" violates check constraint "chk_inventory_balances_on_hand_nonneg"',
+      details: 'Failing row contains (…, -90.0000, 0.0000, …)',
+    };
+    const message = getErrorMessage(err);
+    expect(message).toBe('Not enough stock is available for this sale or transfer.');
+    expect(message).not.toContain('inventory_balances');
+  });
+
+  it('should hide the inventory constraint through an Error cause chain', () => {
+    const cause = {
+      code: '23514',
+      message: 'violates check constraint "chk_inventory_balances_on_hand_nonneg"',
+    };
+    const err = new Error(`Stock and cost of sale failed: ${cause.message}`, { cause });
+    expect(getErrorMessage(err)).toBe('Not enough stock is available for this sale or transfer.');
+  });
+
   it('should handle network errors gracefully', () => {
     const err = new Error('Failed to fetch');
     const message = getErrorMessage(err);
