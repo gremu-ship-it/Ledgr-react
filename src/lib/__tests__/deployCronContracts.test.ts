@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /**
  * 2026-10-14 staging MIXED-VERSION — contracts for the fix.
@@ -20,6 +20,7 @@ import { join } from 'node:path';
  * pull request.
  */
 const read = (p: string) => readFileSync(p, 'utf8');
+const REPO_ROOT = resolve('.');
 const wf = read('.github/workflows/deploy.yml');
 const cronSql = read('scripts/cron-jobs.sql');
 const applyScript = read('scripts/ci/apply-cron-jobs.sh');
@@ -38,7 +39,10 @@ const cronSqlJobs = [...uncommented(cronSql).matchAll(/cron\.schedule\(\s*'([^']
 function placeholderJobsLeftByMigrations(): Map<string, string> {
   const jobs = new Map<string, { command: string; file: string }>();
   const files = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort();
-  const schedule = /cron\.schedule\(\s*'([^']+)'\s*,\s*'[^']*'\s*,(?:\s|--[^\n]*)*\$(\w*)\$([\s\S]*?)\$\2\$/g;
+  // Between the schedule literal and the dollar-quoted command: whitespace and
+  // whole `-- ...` comment lines (each consumed through its newline, so the
+  // repetition is unambiguous — no catastrophic backtracking).
+  const schedule = /cron\.schedule\(\s*'([^']+)'\s*,\s*'[^']*'\s*,(?:\s|--[^\n]*\n)*\$(\w*)\$([\s\S]*?)\$\2\$/g;
   const unschedule = /cron\.unschedule\(\s*'([^']+)'\s*\)/g;
   for (const file of files) {
     const sql = read(join('supabase/migrations', file));
@@ -90,7 +94,7 @@ function runBlock(stepText: string): string {
 }
 
 const ifOf = (stepText: string) => {
-  const m = /\n {8}if: (?:>-\n((?: {10}.*\n?)+)|(.*))/.exec(stepText);
+  const m = /\n {8}if: (?:>-\n((?: {10}[^\n]*\n)+)|([^\n]*))/.exec(stepText);
   return (m?.[1] ?? m?.[2] ?? '').replace(/\s+/g, ' ').trim();
 };
 
@@ -183,21 +187,27 @@ describe('deploy.yml: post-migration maintenance cannot strand the frontend', ()
 
 // ── scripts/ci/release-manifest.mjs ─────────────────────────────────────────
 type RunResult = { code: number | null; out: string };
-function run(cmd: string, args: string[], env: Record<string, string>, cwd?: string): Promise<RunResult> {
+function collect(child: ChildProcess): Promise<RunResult> {
   return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd, env: { PATH: process.env.PATH ?? '', ...env } });
     let out = '';
-    child.stdout.on('data', (d) => (out += d));
-    child.stderr.on('data', (d) => (out += d));
+    child.stdout?.on('data', (d) => (out += d));
+    child.stderr?.on('data', (d) => (out += d));
     child.on('close', (code) => resolve({ code, out }));
   });
 }
+const childEnv = (env: Record<string, string>) => ({ PATH: process.env.PATH ?? '', ...env });
+/** Runs a repo script with node (no shell involved). */
+const runNodeScript = (repoPath: string, env: Record<string, string>, cwd: string) =>
+  collect(spawn(process.execPath, [join(REPO_ROOT, repoPath)], { cwd, env: childEnv(env) }));
+/** Runs a bash script given as text (the run: block taken from deploy.yml). */
+const runBashScript = (script: string, env: Record<string, string>) =>
+  collect(spawn('bash', ['-c', script], { env: childEnv(env) }));
 
 describe('release manifest', () => {
   const manifest = async (stages: Record<string, string>) => {
     const dir = mkdtempSync(join(tmpdir(), 'ledgr-manifest-'));
     try {
-      const res = await run(process.execPath, [join(process.cwd(), 'scripts/ci/release-manifest.mjs')], {
+      const res = await runNodeScript('scripts/ci/release-manifest.mjs', {
         ENV_LABEL: 'staging', GITHUB_SHA: 'bac5694', MIGRATION_TARGET: '20261018000000', MIGRATION_REMOTE_HEAD: '20261018000000', ...stages,
       }, dir);
       return { ...res, json: JSON.parse(read(join(dir, 'artifacts/release/release-manifest.json'))) };
@@ -259,7 +269,7 @@ describe('frontend version check tolerates a lagging production alias', () => {
   const check = (responses: Array<[number, string]>, url = base) => {
     script = responses;
     hits = 0;
-    return run('bash', ['-c', block()], { FRONTEND_URL: url, GITHUB_SHA: SHA, MIGRATION_TARGET: TARGET, GITHUB_RUN_ID: '1' });
+    return runBashScript(block(), { FRONTEND_URL: url, GITHUB_SHA: SHA, MIGRATION_TARGET: TARGET, GITHUB_RUN_ID: '1' });
   };
 
   it('waits while the alias still serves the previous build, then passes', async () => {
