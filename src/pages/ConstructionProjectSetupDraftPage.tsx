@@ -1,6 +1,12 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Business } from '@/types';
+import { MaterialReceiptPreparationSection } from '@/components/construction/MaterialReceiptPreparationSection';
 import { useAppStore } from '@/store/useAppStore';
+import type {
+  LocalMaterialReceiptPreparation,
+  MaterialReceiptPreparationFields,
+  MaterialReceiptPreparationStatus,
+} from '@/lib/construction/materialReceiptPreparation';
 import {
   CONSTRUCTION_WORKSPACE_STATUSES,
   CONSTRUCTION_WORKSPACE_STATUS_LABELS,
@@ -83,6 +89,7 @@ export const ConstructionProjectWorkspacePage = ConstructionProjectSetupDraftPag
 
 function ConstructionWorkspace({ business }: { business: Business | null }) {
   const [drafts, setDrafts] = useState<LocalConstructionProjectDraft[]>([]);
+  const [receiptPreparations, setReceiptPreparations] = useState<LocalMaterialReceiptPreparation[]>([]);
   const [view, setView] = useState<WorkspaceView>({ mode: 'list' });
   const [fields, setFields] = useState<ConstructionWorkspaceDraftFields>(() => emptyDraftFields(business?.base_currency));
   const [errors, setErrors] = useState<ConstructionWorkspaceDraftErrors>({});
@@ -92,6 +99,7 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
   const [submitting, setSubmitting] = useState(false);
   const submissionLock = useRef(false);
   const nextLocalId = useRef(1);
+  const nextReceiptLocalId = useRef(1);
 
   const currentDraft = view.mode === 'detail' || view.mode === 'form'
     ? drafts.find((draft) => draft.localId === view.draftId)
@@ -222,10 +230,58 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
 
   function discardDraft(draft: LocalConstructionProjectDraft) {
     setDrafts((current) => current.filter((item) => item.localId !== draft.localId));
+    setReceiptPreparations((current) => current.filter((preparation) => preparation.projectLocalId !== draft.localId));
     submissionLock.current = false;
     setSubmitting(false);
     setFeedback('Local draft discarded. No Ledgr project record was changed.');
     setView({ mode: 'list' });
+  }
+
+  function saveReceiptPreparation(
+    project: LocalConstructionProjectDraft,
+    values: MaterialReceiptPreparationFields,
+    localId: number | undefined,
+    status: MaterialReceiptPreparationStatus,
+  ): number | null {
+    if (!business || project.businessId !== business.id) return null;
+    if (!drafts.some((draft) => draft.localId === project.localId && draft.businessId === business.id)) return null;
+
+    const now = new Date().toISOString();
+    if (localId !== undefined) {
+      const existing = receiptPreparations.find((preparation) =>
+        preparation.localId === localId
+          && preparation.projectLocalId === project.localId
+          && preparation.businessId === business.id,
+      );
+      if (!existing) return null;
+
+      setReceiptPreparations((current) => current.map((preparation) => preparation.localId === localId
+        ? { ...preparation, ...values, status, updatedAt: now }
+        : preparation));
+      return localId;
+    }
+
+    const createdLocalId = nextReceiptLocalId.current;
+    nextReceiptLocalId.current += 1;
+    const created: LocalMaterialReceiptPreparation = {
+      ...values,
+      localId: createdLocalId,
+      projectLocalId: project.localId,
+      businessId: business.id,
+      status,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setReceiptPreparations((current) => [created, ...current]);
+    return createdLocalId;
+  }
+
+  function discardReceiptPreparation(project: LocalConstructionProjectDraft, localId: number) {
+    setReceiptPreparations((current) => current.filter((preparation) => !(
+      preparation.localId === localId
+        && preparation.projectLocalId === project.localId
+        && preparation.businessId === project.businessId
+    )));
   }
 
   return (
@@ -253,8 +309,8 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
       <section aria-label="Workspace persistence status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
         <h2 className="font-semibold text-amber-950">Local drafts only — not connected to saved projects</h2>
         <p className="mt-1 text-sm leading-6 text-amber-900">
-          No saved project records are loaded or changed here. Drafts exist only in this page's memory, are not sent to an API,
-          and are not stored in browser storage or shared across users/devices. They clear when you leave or refresh this page,
+          No saved project records are loaded or changed here. Project briefs and material receipt preparations exist only in this page's memory,
+          are not sent to an API, and are not stored in browser storage or shared across users/devices. They clear when you leave or refresh this page,
           sign out, or switch businesses. No sample project data is shown as real business data.
         </p>
         <p className="mt-2 text-sm leading-6 text-amber-900">
@@ -574,9 +630,13 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
       {view.mode === 'detail' && currentDraft && (
         <ConstructionProjectDetails
           draft={currentDraft}
+          receiptPreparations={receiptPreparations}
           onBack={returnToList}
           onEdit={() => editDraft(currentDraft)}
           onDiscard={() => discardDraft(currentDraft)}
+          onSaveReceiptPreparation={(values, localId, status) =>
+            saveReceiptPreparation(currentDraft, values, localId, status)}
+          onDiscardReceiptPreparation={(localId) => discardReceiptPreparation(currentDraft, localId)}
         />
       )}
       {view.mode === 'detail' && !currentDraft && (
@@ -658,14 +718,24 @@ function StatusBadge({ status }: { status: ConstructionWorkspaceStatus }) {
 
 function ConstructionProjectDetails({
   draft,
+  receiptPreparations,
   onBack,
   onEdit,
   onDiscard,
+  onSaveReceiptPreparation,
+  onDiscardReceiptPreparation,
 }: {
   draft: LocalConstructionProjectDraft;
+  receiptPreparations: LocalMaterialReceiptPreparation[];
   onBack: () => void;
   onEdit: () => void;
   onDiscard: () => void;
+  onSaveReceiptPreparation: (
+    fields: MaterialReceiptPreparationFields,
+    localId: number | undefined,
+    status: MaterialReceiptPreparationStatus,
+  ) => number | null;
+  onDiscardReceiptPreparation: (localId: number) => void;
 }) {
   return (
     <section className="space-y-4" aria-labelledby="construction-project-details-title">
@@ -703,6 +773,18 @@ function ConstructionProjectDetails({
           </button>
         </div>
       </div>
+
+      <MaterialReceiptPreparationSection
+        projectLocalId={draft.localId}
+        businessId={draft.businessId}
+        projectName={draft.projectName}
+        projectCode={draft.projectCode}
+        siteName={draft.siteName}
+        siteLocation={draft.siteLocation}
+        preparations={receiptPreparations}
+        onSave={onSaveReceiptPreparation}
+        onDiscard={onDiscardReceiptPreparation}
+      />
     </section>
   );
 }
