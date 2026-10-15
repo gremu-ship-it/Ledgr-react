@@ -55,6 +55,10 @@ const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPag
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
+const ConstructionProjectSetupDraftPage = lazyPage(
+  () => import('@/pages/ConstructionProjectSetupDraftPage'),
+  'ConstructionProjectSetupDraftPage',
+);
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
@@ -238,6 +242,11 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
+                {/* Local draft only; no repository call, backend request, or project authorization path. */}
+                <Route
+                  path="/projects-funding-sources/construction-draft"
+                  element={<ConstructionProjectSetupDraftPage />}
+                />
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
