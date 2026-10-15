@@ -37,6 +37,8 @@ export interface NavItemConfig {
   requiresCapability?: PlanCapability;
   minPlan?: PlanTier;
   partnerFeature?: PartnerFeatureKey;
+  /** For authenticated, memory-only routes that expose no role-protected server data. */
+  allowAllAuthenticatedRoles?: boolean;
   requiresOrgCapability?: OrganisationCapability;
 }
 
@@ -94,6 +96,17 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    labelKey: 'navigation.sections.construction',
+    items: [
+      {
+        labelKey: 'navigation.items.constructionWorkspace',
+        path: '/construction',
+        icon: Building2,
+        allowAllAuthenticatedRoles: true,
+      },
+    ],
+  },
+  {
     labelKey: 'navigation.sections.ai',
     items: [
       { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
@@ -125,7 +138,7 @@ export function visibleSectionsFor(
       items: section.items.filter((i) => {
         if (i.partnerFeature && !isFeatureEnabled(i.partnerFeature)) return false;
         if (i.requiresOrgCapability && isOrgCapabilityEnabled && !isOrgCapabilityEnabled(i.requiresOrgCapability)) return false;
-        if (role && !isPathAllowedForRole(role, i.path)) return false;
+        if (role && !i.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, i.path)) return false;
         return true;
       }),
     }))

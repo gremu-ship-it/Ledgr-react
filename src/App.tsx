@@ -247,6 +247,7 @@ function App() {
                   path="/projects-funding-sources/construction-draft"
                   element={<ConstructionProjectSetupDraftPage />}
                 />
+                <Route path="/construction" element={<ConstructionProjectSetupDraftPage />} />
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
