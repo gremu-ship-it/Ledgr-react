@@ -1,12 +1,18 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Business } from '@/types';
 import { MaterialReceiptPreparationSection } from '@/components/construction/MaterialReceiptPreparationSection';
+import { MaterialTransferPreparationSection } from '@/components/construction/MaterialTransferPreparationSection';
 import { useAppStore } from '@/store/useAppStore';
 import type {
   LocalMaterialReceiptPreparation,
   MaterialReceiptPreparationFields,
   MaterialReceiptPreparationStatus,
 } from '@/lib/construction/materialReceiptPreparation';
+import type {
+  LocalMaterialTransferPreparation,
+  MaterialTransferPreparationFields,
+  MaterialTransferPreparationStage,
+} from '@/lib/construction/materialTransferPreparation';
 import {
   CONSTRUCTION_WORKSPACE_STATUSES,
   CONSTRUCTION_WORKSPACE_STATUS_LABELS,
@@ -90,6 +96,7 @@ export const ConstructionProjectWorkspacePage = ConstructionProjectSetupDraftPag
 function ConstructionWorkspace({ business }: { business: Business | null }) {
   const [drafts, setDrafts] = useState<LocalConstructionProjectDraft[]>([]);
   const [receiptPreparations, setReceiptPreparations] = useState<LocalMaterialReceiptPreparation[]>([]);
+  const [transferPreparations, setTransferPreparations] = useState<LocalMaterialTransferPreparation[]>([]);
   const [view, setView] = useState<WorkspaceView>({ mode: 'list' });
   const [fields, setFields] = useState<ConstructionWorkspaceDraftFields>(() => emptyDraftFields(business?.base_currency));
   const [errors, setErrors] = useState<ConstructionWorkspaceDraftErrors>({});
@@ -100,6 +107,7 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
   const submissionLock = useRef(false);
   const nextLocalId = useRef(1);
   const nextReceiptLocalId = useRef(1);
+  const nextTransferLocalId = useRef(1);
 
   const currentDraft = view.mode === 'detail' || view.mode === 'form'
     ? drafts.find((draft) => draft.localId === view.draftId)
@@ -231,6 +239,7 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
   function discardDraft(draft: LocalConstructionProjectDraft) {
     setDrafts((current) => current.filter((item) => item.localId !== draft.localId));
     setReceiptPreparations((current) => current.filter((preparation) => preparation.projectLocalId !== draft.localId));
+    setTransferPreparations((current) => current.filter((preparation) => preparation.projectLocalId !== draft.localId));
     submissionLock.current = false;
     setSubmitting(false);
     setFeedback('Local draft discarded. No Ledgr project record was changed.');
@@ -284,6 +293,55 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
     )));
   }
 
+  function saveTransferPreparation(
+    project: LocalConstructionProjectDraft,
+    values: MaterialTransferPreparationFields,
+    localId: number | undefined,
+    stage: MaterialTransferPreparationStage,
+  ): number | null {
+    if (!business || project.businessId !== business.id) return null;
+    if (!drafts.some((draft) => draft.localId === project.localId && draft.businessId === business.id)) return null;
+
+    const now = new Date().toISOString();
+    if (localId !== undefined) {
+      const existing = transferPreparations.find((preparation) =>
+        preparation.localId === localId
+          && preparation.projectLocalId === project.localId
+          && preparation.businessId === business.id,
+      );
+      if (!existing) return null;
+
+      setTransferPreparations((current) => current.map((preparation) => preparation.localId === localId
+        && preparation.projectLocalId === project.localId
+        && preparation.businessId === business.id
+        ? { ...preparation, ...values, stage, updatedAt: now }
+        : preparation));
+      return localId;
+    }
+
+    const createdLocalId = nextTransferLocalId.current;
+    nextTransferLocalId.current += 1;
+    const created: LocalMaterialTransferPreparation = {
+      ...values,
+      localId: createdLocalId,
+      projectLocalId: project.localId,
+      businessId: business.id,
+      stage,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setTransferPreparations((current) => [created, ...current]);
+    return createdLocalId;
+  }
+
+  function discardTransferPreparation(project: LocalConstructionProjectDraft, localId: number) {
+    setTransferPreparations((current) => current.filter((preparation) => !(
+      preparation.localId === localId
+        && preparation.projectLocalId === project.localId
+        && preparation.businessId === project.businessId
+    )));
+  }
+
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 md:px-8" data-module="construction-project-workspace">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -309,7 +367,7 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
       <section aria-label="Workspace persistence status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
         <h2 className="font-semibold text-amber-950">Local drafts only — not connected to saved projects</h2>
         <p className="mt-1 text-sm leading-6 text-amber-900">
-          No saved project records are loaded or changed here. Project briefs and material receipt preparations exist only in this page's memory,
+          No saved project records are loaded or changed here. Project briefs, material receipt preparations, and store-to-site transfer notes exist only in this page's memory,
           are not sent to an API, and are not stored in browser storage or shared across users/devices. They clear when you leave or refresh this page,
           sign out, or switch businesses. No sample project data is shown as real business data.
         </p>
@@ -631,12 +689,16 @@ function ConstructionWorkspace({ business }: { business: Business | null }) {
         <ConstructionProjectDetails
           draft={currentDraft}
           receiptPreparations={receiptPreparations}
+          transferPreparations={transferPreparations}
           onBack={returnToList}
           onEdit={() => editDraft(currentDraft)}
           onDiscard={() => discardDraft(currentDraft)}
           onSaveReceiptPreparation={(values, localId, status) =>
             saveReceiptPreparation(currentDraft, values, localId, status)}
           onDiscardReceiptPreparation={(localId) => discardReceiptPreparation(currentDraft, localId)}
+          onSaveTransferPreparation={(values, localId, stage) =>
+            saveTransferPreparation(currentDraft, values, localId, stage)}
+          onDiscardTransferPreparation={(localId) => discardTransferPreparation(currentDraft, localId)}
         />
       )}
       {view.mode === 'detail' && !currentDraft && (
@@ -719,14 +781,18 @@ function StatusBadge({ status }: { status: ConstructionWorkspaceStatus }) {
 function ConstructionProjectDetails({
   draft,
   receiptPreparations,
+  transferPreparations,
   onBack,
   onEdit,
   onDiscard,
   onSaveReceiptPreparation,
   onDiscardReceiptPreparation,
+  onSaveTransferPreparation,
+  onDiscardTransferPreparation,
 }: {
   draft: LocalConstructionProjectDraft;
   receiptPreparations: LocalMaterialReceiptPreparation[];
+  transferPreparations: LocalMaterialTransferPreparation[];
   onBack: () => void;
   onEdit: () => void;
   onDiscard: () => void;
@@ -736,6 +802,12 @@ function ConstructionProjectDetails({
     status: MaterialReceiptPreparationStatus,
   ) => number | null;
   onDiscardReceiptPreparation: (localId: number) => void;
+  onSaveTransferPreparation: (
+    fields: MaterialTransferPreparationFields,
+    localId: number | undefined,
+    stage: MaterialTransferPreparationStage,
+  ) => number | null;
+  onDiscardTransferPreparation: (localId: number) => void;
 }) {
   return (
     <section className="space-y-4" aria-labelledby="construction-project-details-title">
@@ -784,6 +856,17 @@ function ConstructionProjectDetails({
         preparations={receiptPreparations}
         onSave={onSaveReceiptPreparation}
         onDiscard={onDiscardReceiptPreparation}
+      />
+      <MaterialTransferPreparationSection
+        projectLocalId={draft.localId}
+        businessId={draft.businessId}
+        projectName={draft.projectName}
+        projectCode={draft.projectCode}
+        siteName={draft.siteName}
+        siteLocation={draft.siteLocation}
+        preparations={transferPreparations}
+        onSave={onSaveTransferPreparation}
+        onDiscard={onDiscardTransferPreparation}
       />
     </section>
   );

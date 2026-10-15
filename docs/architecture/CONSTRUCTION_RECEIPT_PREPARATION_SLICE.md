@@ -23,7 +23,7 @@ The workflow is held only in React component memory. It makes no API, repository
 
 The current generic receipt operation is a stock-and-journal command, so this local preparation flow does not call it while the accounting treatment is unresolved. The existing client-side stock transfer sequence performs multiple writes and is not reused as a construction transaction boundary. A persistent receipt or store-to-site transfer is therefore **not verified or enabled** by this slice.
 
-The next construction workflow is store-to-site transfer preparation/dispatch. Before its posting path can be enabled, the same approved site/location scope and a server-atomic dispatch/receipt command are required, including in-transit, partial receipt, exception, idempotency, and concurrency behavior.
+The store-to-site transfer preparation/dispatch workflow is now implemented as a separate local-only slice; see [`CONSTRUCTION_TRANSFER_PREPARATION_SLICE.md`](CONSTRUCTION_TRANSFER_PREPARATION_SLICE.md). It does not use the client-side transfer sequence or move stock. Any persistent or posting path still requires approved business/site/location scope and a server-atomic, retry-safe dispatch/receipt command, including in-transit, partial receipt, exception, idempotency, and concurrency behavior.
 
 ## Verification boundary
 
