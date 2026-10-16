@@ -181,7 +181,8 @@ was touched. Nothing was applied to a deployed database.
 
 ## 9. Commit and deployment status
 
-Committed locally as **`<filled by commit>`** on `arena/2faa03b4-ledgr-react` — migration, new suite, the
-`CP.SCOPE.TENANT-BRANCH-FORGERY` adaptation, the `gate.mjs` key, the three corrected documents, the Phase-1
-report and this report. **Not pushed** (Task 5 requires separate authorisation to push), **not deployed**, no
+Committed locally on `arena/2faa03b4-ledgr-react` as **`545e3e1`** (parent `8866d97`, 9 files,
++1613/−26) — migration, new suite, the `CP.SCOPE.TENANT-BRANCH-FORGERY` adaptation, the `gate.mjs` key, the
+three corrected documents, the Phase-1 report and this report. This line is finalised by the follow-up docs
+commit that carries it, because a commit cannot contain its own hash. **Not pushed** (Task 5 requires separate authorisation to push), **not deployed**, no
 database object created anywhere outside the local replay.
