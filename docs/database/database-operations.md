@@ -145,7 +145,7 @@ pg_restore --clean --if-exists -d fresh_db ledgr-$(date +%F).dump
 
 ## 6. Cron jobs and secrets (environment configuration)
 
-Four `pg_cron` jobs are declared in migrations. Three call an Edge Function
+Five `pg_cron` jobs are declared in migrations. Four call an Edge Function
 over HTTP and ship with `<PROJECT_REF>` / `<CRON_SECRET>` placeholders; the
 expiry sweep has run as plain SQL since 20261017000000:
 
@@ -155,9 +155,11 @@ expiry sweep has run as plain SQL since 20261017000000:
 | `send-renewal-reminders-daily` | `0 8 * * *` | 20260726000005 | `send-renewal-reminders` (HTTP) |
 | `generate-partner-invoices-monthly` | `0 2 1 * *` | 20260727000006 | `generate-partner-invoices` (HTTP) |
 | `retry-failed-webhooks-daily` | `0 6 * * *` | 20260820000000 | `retry-failed-webhooks` (HTTP) |
+| `finalize-account-deletions-daily` | `0 3 * * *` | 20261019000000 (the job had existed on production, undeclared, since before that) | `finalize-account-deletions` (HTTP) |
 
 `supabase db push` applies the placeholders verbatim, and 20261017000000 §3
-deactivates any job still holding one. Every deploy then runs
+deactivates any job still holding one (20261019000000 §2 repeats the guard for
+jobs a later migration schedules). Every deploy then runs
 `scripts/ci/apply-cron-jobs.sh` (deploy.yml, after the edge functions): it
 applies `scripts/cron-jobs.sql` with the environment's project ref and
 `CRON_SECRET` substituted, and fails the run unless no job anywhere still holds
@@ -165,13 +167,21 @@ a placeholder **and** every job `cron-jobs.sql` schedules is active. (Since
 2026-10-14 a failure there no longer holds back the frontend deploy; the
 release manifest reports it as `cronJobs`.)
 
-Two rules follow from the 2026-10-14 staging incident:
+Three rules follow from the 2026-10-14 staging and 2026-10-16 production incidents:
 
 - **A migration that schedules an HTTP job with a placeholder needs a matching
   `cron.schedule()` in `scripts/cron-jobs.sql`**, plus the job name in its
   re-enable list. `retry-failed-webhooks-daily` was missing, so the check failed
   on every staging deploy from 2026-10-09 to 2026-10-14, and the frontend deploy
   behind it was skipped (MIXED-VERSION).
+- **A job that exists only in the database is not declared anywhere, and
+  nothing substitutes it.** `finalize-account-deletions-daily` was created
+  out-of-band on production (the function header pointed at a
+  `schedule_finalize_deletions.sql` that no branch ever contained), so it held
+  unsubstituted placeholders and failed the production placeholder check on
+  every deploy from 2026-10-16 while looking active in `cron.job`. 20261019000000
+  adopts it under the same name and schedule; declare jobs in migrations, never
+  by hand in the SQL editor.
 - **`cron.schedule()` never re-enables a job.** It upserts on
   `(jobname, username)` and rewrites only schedule/command/database, so a job §3
   deactivated stays inactive after its URL is fixed — the placeholder check

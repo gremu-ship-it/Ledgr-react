@@ -7,8 +7,8 @@
 # Why this exists
 # ---------------
 # The schedule migrations (20260726000003 / 20260726000005 / 20260727000006 /
-# 20260820000000) are applied verbatim by `supabase db push`, placeholders and
-# all, so every environment ended up with cron jobs posting to
+# 20260820000000 / 20261019000000) are applied verbatim by `supabase db push`,
+# placeholders and all, so every environment ended up with cron jobs posting to
 # 'https://<PROJECT_REF>.supabase.co/functions/v1/...'. pg_net swallows the
 # DNS failure, so the jobs looked healthy in cron.job while doing nothing:
 # subscriptions were never expired and renewal reminders were never sent
