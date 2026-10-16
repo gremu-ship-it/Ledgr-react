@@ -29,4 +29,5 @@ export const suites = {
   'od-owner-decisions.test.ts': 'od-owner-decisions.json',
   'pl-period-approval.test.ts': 'pl-period-approval.json',
   'construction-procurement.test.ts': 'construction-procurement.json',
+  'tax-configurations.test.ts': 'tax-configurations.json',
 };

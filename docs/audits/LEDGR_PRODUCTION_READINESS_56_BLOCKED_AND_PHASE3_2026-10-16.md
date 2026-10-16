@@ -338,11 +338,37 @@ reuses the same `client_key`. (6) jsdom tests cover the gate, the validation, th
 the retry key; a release-suite row is added only if the UI reaches a path the DB rows do not already
 cover. (7) No new stock or journal behaviour is introduced — these commands do not move stock.
 
-### 3.2 Dated VAT-rate schedule (small, removes a standing manual dependency)
+### 3.2 Dated VAT-rate schedule — **DELIVERED 2026-10-16** (item closed; one criterion deferred)
 
-**What.** A rate-by-date schedule so that a document dated before 1 January 2026 defaults to 16.5% and a
-later document to 17.5%, with the evidence for each effective date recorded. `tax_configurations` is the
-natural home (it is referenced but not yet defined in the tax module).
+Implemented in `20261022000000_effective_dated_tax_configurations.sql`, `src/lib/tax/taxConfiguration.ts`,
+`src/dal/repositories/TaxRepository.ts` and `src/pages/TaxPage.tsx`; see
+[`../architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md`](../architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md)
+§5 item 7 for the design and `tests/release/tax-configurations.test.ts`, `src/lib/tax/__tests__/` and
+`src/pages/__tests__/TaxPage.test.tsx` for the evidence. **Correction to the scoping below:**
+`tax_configurations` **is** defined — in `20250101000000_base_schema.sql` (extended by
+`20260708000000_tax_compliance_module.sql`) — and already carries `business_id`, `effective_from`,
+`effective_to` and the evidence column `mra_reference`, so no new table or column was needed.
+
+**Acceptance criteria (as scoped below) — disposition.** (1) *A document dated in each era resolves to the
+rate evidenced for that date* — **met for a business's stored schedule**: 31 December 2025 → 16.5% only when
+that business recorded a 16.5% period; 1 January 2026 → the stored 17.5% period, or the evidenced supported
+rate when none is stored. (2) *A date before the earliest recorded rate returns "no rate recorded" and
+cannot be posted or priced as if it had one* — **met in the resolver, deferred on the document pages**: for
+`vat_standard` the resolver answers `unsupported` before 1 January 2026 whenever the business has stored
+nothing (16.5% is never inferred), but `IncomePage`/`ExpensesPage`/`QuickExpenseMobile` still price **new**
+documents from the `VAT_STANDARD_RATE` constant (equal to the supported default), so the posting path is not
+yet wired to the resolver. That wiring is a separate change on the money path. (3) *No historical cost basis
+changes* — **met**: no cost-path code was touched, and the construction cost records
+(`CP.COST.IAS2-DERIVATION`, `CP.RECEIPT.*`) re-ran unchanged in the same release run. (4) *The schedule
+carries its evidence reference per row* — **met and enforced**: `tax_configurations_evidence_chk` refuses a
+non-zero rate with no reference, and the screen flags grandfathered rows that have none. (5) *Boundary tests
+and the unknown-date refusal* — **met**: 31 Dec 2025 / 1 Jan 2026 / 2 Jan 2026 in the database suite, the
+same boundaries in the resolver suite, plus the pre-2026 refusal. (6) *The matrix document's §4 VAT note is
+superseded by a pointer to the schedule* — **met**. Nothing in this change touches Groups A–C; the deployed
+application of the migration and the deployed `authenticated` grant remain open (group B).
+
+**What was scoped.** A rate-by-date schedule so that a document dated before 1 January 2026 defaults to
+16.5% and a later document to 17.5%, with the evidence for each effective date recorded.
 
 **User value.** Today the cost path is safe but manual: it uses **the tax amount actually recorded on the
 bill**, and the owner resolved the standard rate to 17.5% effective 1 January 2026 (the 31 December 2025
@@ -426,7 +452,7 @@ commitment:
 | Order | Item | Why now | Gate before starting |
 | --- | --- | --- | --- |
 | 1 | §3.1 exception screens — **delivered 2026-10-16** | Small, no new server behaviour, closes two real dead ends | Done; reviewed and pushed |
-| 2 | §3.2 dated VAT-rate schedule | Small, removes a standing manual dependency, but must not restate history | Owner's instruction to implement the schedule + table decision |
+| 2 | §3.2 dated VAT-rate schedule — **delivered 2026-10-16** | Closed the standing manual dependency with constraints plus a resolver; no new table, column, command or permission | Done; document-page wiring and the deployed migration remain open |
 | 3 | Group F consolidation + re-scoring of §9 rows | Cheap, reduces the checklist honestly, no environment needed | Engineering decision on port-vs-retire, no assertion loss |
 | 4 | §3.3 official Supabase verification (Groups A→B→C) | The real gate for deployment; Group A is lowest risk (disposable project), Group B highest (grants) | Owner approval of an isolated environment per group; branch-scope decision for `BRANCH.*` |
 | 5 | Group D contracts | Needed before any offline construction work; POS/payments-adjacent | Product + security decision on identity and conflict rules |

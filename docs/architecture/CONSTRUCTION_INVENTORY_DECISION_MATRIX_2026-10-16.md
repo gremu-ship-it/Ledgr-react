@@ -111,6 +111,12 @@ payable/receivable accounts `NULL`).
 | C | Receipt → direct AP | Dr Inventory; Cr Accounts payable at receipt, bill matching only clears quantities | Requires the bill to stop posting its own expense journal; AP control impact |
 | D | Issue → project/contract cost | Dr Project material cost (by `project_ref`); Cr Inventory at pool cost | Approved project-cost account mapping and a project cost ledger; the quantity/value derecognition itself is already implemented |
 
+**VAT note (superseded by the schedule).** The input-VAT treatment above does not depend on a rate: it uses
+the tax **actually recorded** on the supplier line. The dated evidence for a *rate* now lives in
+`public.tax_configurations` (per business, `effective_from`/`effective_to`/`mra_reference`), constrained by
+`20261022000000_effective_dated_tax_configurations.sql` and resolved by `src/lib/tax/taxConfiguration.ts` —
+see §5 item 7. Nothing in the cost path reads it, and nothing here restates a posted document.
+
 ## 5. Owner decisions — approved 2026-10-16, with dispositions
 
 1. **VAT effective date — RESOLVED to 1 January 2026.** Evidence: the **Value Added Tax (Amendment) Act
@@ -119,8 +125,9 @@ payable/receivable accounts `NULL`).
    the 2025/26 Mid-Year Budget Review measure. A minority secondary source states 31 December 2025; it is
    **not** relied on. `src/lib/vat.ts` already assumed January 2026 and now records this resolution and
    the outlier. Nothing is restated: receipt cost uses the tax amount **actually recorded** on the
-   supplier bill line, so the disputed day cannot misstate inventory either way. Residual gap: the rate
-   is a single constant, so a future statutory change still needs the dated-rate schedule below.
+   supplier bill line, so the disputed day cannot misstate inventory either way. Residual gap: the dated
+   schedule this required is **delivered** (item 7); what remains is the document pages still reading the
+   single constant for **new** documents, and applying the migration to a deployed environment.
 2. **Base-currency / FX policy — IMPLEMENTED** as the IAS 21 transaction-date rule (see §4): bill
    currency must equal the purchase-order currency, the recorded transaction-date rate is applied once
    and frozen, and the pool is never restated. Remaining owner choice: whether the rate must be the
@@ -145,11 +152,47 @@ payable/receivable accounts `NULL`).
    their age, outstanding supplier claims for rejected/quarantined/disputed material, and bills blocked
    by a legacy `source_type='expense'` movement. Backfilling historical spend is still **not** performed
    by any command; the report is the input to that decision.
-7. **New item surfaced while implementing the above — single-constant VAT rate.** The rate is a constant,
-   not a dated schedule; a statutory change mid-period requires a rate-by-date table (the repo's
-   `tax_configurations` is per business and holds `mra_reference` + `effective_from`, so that is the
-   natural home, but it needs a rate-by-date design from the tax owner). Until then the receipt-cost path
-   is unaffected because it never recomputes tax.
+7. **Dated VAT-rate schedule — DELIVERED 2026-10-16** (`20261022000000_effective_dated_tax_configurations.sql`,
+   `src/lib/tax/taxConfiguration.ts`, `src/pages/TaxPage.tsx`, `tests/release/tax-configurations.test.ts`).
+   The design question this item raised — "a rate-by-date design from the tax owner" — turned out to need
+   no new object: `tax_configurations` is defined in the base schema and already carries `business_id`,
+   `effective_from`, `effective_to` and the evidence column `mra_reference` (`'VAT Act 2026'` in the demo
+   seed, `'Pension Act 2011'` in `20260708000000`). Three things were missing, and only they were added:
+   * **One rate per day.** `tax_configurations_no_overlap` (GiST exclusion, `btree_gist`) makes a business's
+     periods of one tax code half-open and disjoint: 31 December 2025 is the last day of a period ending
+     then, and a successor starts the next day. An open-ended period covers everything after its start, so
+     it is closed before its successor is added. Overlaps could always be stored; until now the reader
+     (`findByCode` → `maybeSingle`) turned them into a lost rate rather than an error.
+   * **Evidence.** `tax_configurations_evidence_chk` requires any configuration with a non-zero rate
+     (`rate`, `employer_rate` or `employee_rate`) to record the reference it relies on. Zero-rated, exempt
+     and `none` rows are not asked for one.
+   * **Well-formed periods and percentages.** `tax_configurations_period_chk` (an end after its start) and
+     `tax_configurations_rate_chk` (0–100, the stored convention) — the same bounds the screen already used.
+   All three checks are added `NOT VALID`: rows written earlier are grandfathered and must comply the next
+   time they are edited. The non-overlap constraint is deliberately **not** grandfathered — an overlap *is*
+   the ambiguity — so the migration first names every conflicting group and refuses rather than choosing
+   which row is authoritative. No table, column, function, RPC, permission or business rule was added, no
+   business row is seeded, and the migration asserts the deployed policy set and anon denial for the table.
+   * **Resolution contract** (`resolveTaxRate`): a date resolves to the business's own period when exactly
+     one covers it (`configured`), to the evidenced standard rate when none does and the date is on/after
+     1 January 2026 (`supported_default`: 17.5%, with its reference), to `unsupported` for a date the product
+     cannot evidence, and to `ambiguous` if two periods cover it. **16.5% is never inferred** — the start of
+     the 16.5% period is not evidenced anywhere in this repository, so the product reports "no rate
+     recorded for this date" instead of applying it; a business that needs it records its own period with
+     its own reference (which then resolves as `configured`). Rates are stored as percentages, so the result
+     carries `ratePercent` and `rateFraction` explicitly.
+   * **Screen:** the tax-configuration table shows the **whole** schedule (the previous "active as of today"
+     query hid future and closed periods) with coverage and an evidence flag; a business with no recorded
+     rate for today is offered the evidenced 17.5% prefilled with that reference (one deliberate click writes
+     it through RLS); a business whose stored rate disagrees with the evidenced rate is told so and its row
+     is **never rewritten**; every refusal is shown with the server's own wording, and a write that changed
+     no row — which row level security makes silent — is reported as a refusal, not as success.
+   * **Still open:** (i) the document pages (`IncomePage`, `ExpensesPage`, `QuickExpenseMobile`) still price
+     **new** documents from the single `VAT_STANDARD_RATE` constant, which equals the supported default, so
+     behaviour is unchanged today; wiring them to the resolver is a separate change because it sits on the
+     money path and needs its own regression evidence. (ii) The migration itself, and the deployed
+     `authenticated` DML grant on this table (the repository neither grants nor revokes it — that is
+     deployment readiness, group B).
 8. **Deployment/verification:** official Supabase (Auth/PostgREST + deployed RLS/permissions) and
    production verification are still required before any claim beyond the local layer.
 
