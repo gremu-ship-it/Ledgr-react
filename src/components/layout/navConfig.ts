@@ -99,9 +99,17 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.construction',
     items: [
       {
+        // The workspace is inventory-backed end to end (receipts post into stock
+        // pools, material issues draw the pool weighted-average cost), so it is
+        // gated exactly like Products / Warehouse / Transfers rather than left
+        // open to every plan. Server-side construction capability grants and
+        // business membership still gate every command independently.
         labelKey: 'navigation.items.constructionWorkspace',
         path: '/construction',
         icon: Building2,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
         allowAllAuthenticatedRoles: true,
       },
     ],

@@ -19,11 +19,13 @@ import {
  */
 
 const mocks = vi.hoisted(() => {
-  const rpc = vi.fn(
-    async (_fn: string, _args: Record<string, unknown>): Promise<{ data: unknown; error: unknown }> => ({ data: {}, error: null }),
+  // The argument tuple is declared on the mock itself so `mock.calls` is typed
+  // as [fn, args] and the assertions below cannot drift from the adapter.
+  const rpc = vi.fn<(fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>>(
+    async () => ({ data: {}, error: null }),
   );
-  const from = vi.fn((_table: string) => {
-    throw new Error('direct table access is not allowed on this path');
+  const from = vi.fn<(table: string) => never>((table: string) => {
+    throw new Error(`direct table access is not allowed on this path (${table})`);
   });
   return { rpc, from };
 });
