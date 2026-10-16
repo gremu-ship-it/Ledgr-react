@@ -345,28 +345,36 @@ jobs:
           deployment_url="${VERCEL_DEPLOYMENT_URL:-}"
           [[ -n "$deployment_url" ]] || { echo "::error::Vercel did not return a deployment URL; cannot verify the built frontend."; exit 1; }
           [[ -n "$live_url" ]] || { echo "::error::No live frontend URL is configured; refusing to report an unverified release."; exit 1; }
-          deployment_url="${deployment_url%/}"
           live_url="${live_url%/}"
           check_frontend_version() {
             local label="$1" url="$2" body commit target
-            body="$(curl -fsSL --max-time 30 --retry 5 --retry-delay 2 --retry-all-errors -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}" || true)"
-            if [[ -z "$body" ]] || ! printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
-              echo "::error::${label} ${url}/version.json is unavailable or invalid."
-              return 1
-            fi
-            commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit ?? "")})')"
-            target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget ?? "")})')"
-            echo "${label}: commit=${commit} migrationTarget=${target}"
-            if [[ "$commit" != "$GITHUB_SHA" || "$target" != "$MIGRATION_TARGET" ]]; then
-              echo "::error::${label} reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}."
-              return 1
-            fi
-            echo "${label} verified at the expected commit and migration target."
+            local attempts=18 i
+            commit="(unreadable)"; target="(unreadable)"
+            for ((i = 1; i <= attempts; i++)); do
+              body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
+              if [[ -n "$body" ]] && printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
+                commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit ?? "")})')"
+                target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget ?? "")})')"
+                if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
+                  echo "${label}: commit=${commit} migrationTarget=${target}"
+                  echo "$body"
+                  echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+                  return 0
+                fi
+              else
+                commit="(unreadable)"; target="(unreadable)"
+              fi
+              if (( i < attempts )); then
+                echo "Attempt ${i}/${attempts}: ${label} ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
+                sleep 10
+              fi
+            done
+            echo "::error::${label} ${url} reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
+            return 1
           }
-          # The immutable deployment URL can be access-protected by Vercel and
-          # return an auth page to plain curl. The exact prebuilt artifact was
-          # already validated before migration; verify the public canonical URL
-          # users actually visit, which is the release acceptance criterion.
+          # The immutable deployment URL can be access-protected by Vercel; its
+          # exact artifact was validated before migration. Poll the canonical
+          # URL users visit until it serves that commit and migration target.
           echo "::notice::Prebuilt Vercel deployment: ${deployment_url}; checking the canonical ${SUPABASE_ENV_LABEL} URL."
           if ! check_frontend_version "Canonical ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
             echo "::error::The prebuilt artifact was validated before migration, but the canonical live URL is not serving it; check the Vercel production alias/domain."
@@ -672,28 +680,36 @@ jobs:
           deployment_url="${VERCEL_DEPLOYMENT_URL:-}"
           [[ -n "$deployment_url" ]] || { echo "::error::Vercel did not return a deployment URL; cannot verify the built frontend."; exit 1; }
           [[ -n "$live_url" ]] || { echo "::error::No live frontend URL is configured; refusing to report an unverified release."; exit 1; }
-          deployment_url="${deployment_url%/}"
           live_url="${live_url%/}"
           check_frontend_version() {
             local label="$1" url="$2" body commit target
-            body="$(curl -fsSL --max-time 30 --retry 5 --retry-delay 2 --retry-all-errors -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}" || true)"
-            if [[ -z "$body" ]] || ! printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
-              echo "::error::${label} ${url}/version.json is unavailable or invalid."
-              return 1
-            fi
-            commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit ?? "")})')"
-            target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget ?? "")})')"
-            echo "${label}: commit=${commit} migrationTarget=${target}"
-            if [[ "$commit" != "$GITHUB_SHA" || "$target" != "$MIGRATION_TARGET" ]]; then
-              echo "::error::${label} reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}."
-              return 1
-            fi
-            echo "${label} verified at the expected commit and migration target."
+            local attempts=18 i
+            commit="(unreadable)"; target="(unreadable)"
+            for ((i = 1; i <= attempts; i++)); do
+              body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
+              if [[ -n "$body" ]] && printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
+                commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit ?? "")})')"
+                target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget ?? "")})')"
+                if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
+                  echo "${label}: commit=${commit} migrationTarget=${target}"
+                  echo "$body"
+                  echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+                  return 0
+                fi
+              else
+                commit="(unreadable)"; target="(unreadable)"
+              fi
+              if (( i < attempts )); then
+                echo "Attempt ${i}/${attempts}: ${label} ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
+                sleep 10
+              fi
+            done
+            echo "::error::${label} ${url} reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
+            return 1
           }
-          # The immutable deployment URL can be access-protected by Vercel and
-          # return an auth page to plain curl. The exact prebuilt artifact was
-          # already validated before migration; verify the public canonical URL
-          # users actually visit, which is the release acceptance criterion.
+          # The immutable deployment URL can be access-protected by Vercel; its
+          # exact artifact was validated before migration. Poll the canonical
+          # URL users visit until it serves that commit and migration target.
           echo "::notice::Prebuilt Vercel deployment: ${deployment_url}; checking the canonical ${SUPABASE_ENV_LABEL} URL."
           if ! check_frontend_version "Canonical ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
             echo "::error::The prebuilt artifact was validated before migration, but the canonical live URL is not serving it; check the Vercel production alias/domain."

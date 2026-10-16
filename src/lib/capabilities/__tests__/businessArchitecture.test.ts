@@ -67,7 +67,7 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
 
   it('J — leaves RLS policy definitions untouched by the organisation layer', () => {
     const migration = readFileSync(fileURLToPath(new URL(
-      '../../../../supabase/migrations/20261019000000_business_profile_capabilities.sql',
+      '../../../../supabase/migrations/20261019000001_business_profile_capabilities.sql',
       import.meta.url,
     )), 'utf8');
     expect(migration).not.toMatch(/\b(?:CREATE|ALTER|DROP)\s+POLICY\b/i);

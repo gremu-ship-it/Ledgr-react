@@ -115,7 +115,7 @@ async function main() {
   // replay. Before the additive capability migration, create one real legacy
   // tenant using the 18-argument RPC so the migration's Strategy-A pin is
   // exercised against a pre-existing row rather than inferred from an empty DB.
-  const BUSINESS_PROFILE_MIGRATION = '20261019000000_business_profile_capabilities.sql';
+  const BUSINESS_PROFILE_MIGRATION = '20261019000001_business_profile_capabilities.sql';
   const files = fs.readdirSync(MIG_DIR).filter((f) => f.endsWith('.sql')).sort();
   let preArchitectureBusinessId = null;
   for (const f of files) {
