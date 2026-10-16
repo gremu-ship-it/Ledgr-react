@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Deployment workflow regression tests
+        run: node --test tests/ci/*.test.mjs
+
       - name: Unit tests
         run: npm run test
 

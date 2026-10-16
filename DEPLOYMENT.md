@@ -171,6 +171,26 @@ account that can no longer see the projects. Fix:
    `deploy.yml`'s *Link & migrate …* step, so refresh it whenever Supabase
    credentials have been rotated.
 
+#### Edge Function bundling: `toomanyrequests: Data limit exceeded`
+
+If *Deploy Edge Functions* fails while pulling
+`public.ecr.aws/supabase/edge-runtime` with Docker exit 125, the failure is an
+image-registry quota/rate limit, not an error in `accept-invite-link` or a
+migration failure. Both deployment jobs use `supabase functions deploy --use-api`
+to bundle server-side, avoiding the runner's Docker image pull. Keep
+`--no-verify-jwt` and the explicit project ref: this changes bundling only, not
+function authentication or the deployment target.
+
+If migrations already succeeded and the release manifest reports
+**MIXED-VERSION — FRONTEND NOT UPDATED**, do **not** roll back or repair migration
+history. Merge the workflow fix, then run **Deploy → Run workflow** from the
+updated `main`, choosing `staging` (or the affected environment). Re-running an
+old failed run uses its old workflow and will not pick up this fix. Already
+recorded migrations are skipped; functions are redeployed before the frontend.
+Confirm the new release manifest reports `RELEASED` and the frontend version
+check succeeds. Do not bypass the Edge Function failure gate to force a frontend
+deploy.
+
 #### Paused ("INACTIVE") Supabase projects block deploys and backups
 
 When the token is valid, verify each project CI targets is actually running.
