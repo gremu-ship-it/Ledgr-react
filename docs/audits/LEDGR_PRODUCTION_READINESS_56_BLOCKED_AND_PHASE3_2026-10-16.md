@@ -1,4 +1,4 @@
-# Ledgr — production-readiness plan for the 56 BLOCKED release checks, and Phase 3 proposal (2026-10-16)
+# Ledgr — production-readiness plan for the 56 BLOCKED release checks (57 after the trunk merge), and Phase 3 proposal (2026-10-16)
 
 **Status:** planning and documentation only. **No production or shared database was accessed, no
 migration applied, no deployed permission changed, and nothing was deployed.** ADR `INV-CM-001` remains
@@ -9,10 +9,22 @@ proposed, not accepted. GL posting remains disabled by construction.
 | Field | Value |
 | --- | --- |
 | Command | `npm run test:release` |
-| Result | `{"PASS": 839, "FAIL": 0, "BLOCKED": 56, "NOT APPLICABLE": 0}` |
-| Evidence | `.cache/r13/ledgr-r13-UeGK4c/evidence.json` (895 rows; sanitized, `environment: "local"`, `productionVerified: false`) |
-| Commit | `32192949712455eb35fa3c1dbc70dc745dee0667` |
-| Layer | 126 migrations replayed into embedded PostgreSQL 17.10.0-beta.17; real PG roles/RLS; **synthetic** Auth/Storage; migration-only public grants; pg_cron/pg_net disabled; harness `tests/release/bootstrap.sql` + `tests/release/database.mjs` |
+| Result (pre-trunk-merge — the requested 56) | `{"PASS": 839, "FAIL": 0, "BLOCKED": 56, "NOT APPLICABLE": 0}` — `.cache/r13/ledgr-r13-UeGK4c/` (895 rows) |
+| Result (post-trunk-merge — current head) | `{"PASS": 839, "FAIL": 0, "BLOCKED": 57, "NOT APPLICABLE": 0}` — `.cache/r13/ledgr-r13-nk7CnD/` (896 rows) |
+| Evidence properties | sanitized; `environment: "local"`; `productionVerified: false` |
+| Commit (pre-merge run) | `32192949712455eb35fa3c1dbc70dc745dee0667` |
+| Layer | 127 migrations replayed into embedded PostgreSQL 17.10.0-beta.17; real PG roles/RLS; **synthetic** Auth/Storage; migration-only public grants; pg_cron/pg_net disabled; harness `tests/release/bootstrap.sql` + `tests/release/database.mjs` |
+
+### The 56 → 57 delta, and why this document still enumerates 56
+
+The trunk merged after this checklist was commissioned, adding `tests/database/cron_jobs_apply.test.js`.
+The isolated harness does not execute legacy `tests/database/*` suites, so that file registers one new
+BLOCKED row, `LEGACY.cron_jobs_apply.test.js`. A row-by-row comparison of the two evidence files shows
+**exactly one new row, no removed rows, and no status change on any of the 895 shared rows** — PASS stays
+839. So the requested 56 remain the 56, unchanged and correctly grouped below; the 57th belongs to the
+same dependency as the others in Group F (the legacy replay contract, nothing else), which is therefore 17
+rows on the current head. The count to quote going forward is **57**, and the goal of this plan is to drive
+both numbers to zero — by evidence, or by an explicit recorded re-score.
 
 ---
 
@@ -21,7 +33,8 @@ proposed, not accepted. GL posting remains disabled by construction.
 A BLOCKED row is not a failure and not a pass. Each row's setup calls `ready()`, which throws `Blocked`
 with the exact missing dependency when the precondition for a faithful test is absent. The harness then
 records that reason **instead of inventing a result**. `FAIL: 0` means no probe contradicted a product
-claim; `BLOCKED: 56` means 56 specific claims are **unproven**, and this document is the plan to prove or
+claim; `BLOCKED: 56` means 56 specific claims are **unproven** (57 on the current head — see the delta
+above), and this document is the plan to prove or
 re-score them.
 
 Three things follow, and they are the reason this plan exists rather than a "known issues" list:
@@ -31,12 +44,12 @@ Three things follow, and they are the reason this plan exists rather than a "kno
    `request.jwt.claim.*`. They do **not** prove GoTrue behaviour, PostgREST request handling, deployed
    grant profiles, Storage policies or Edge runtime behaviour. Every row already carries
    `productionVerificationRequired: true`.
-2. **Not all 56 are environment gaps.** Some need a *decision*, one is superseded by newer evidence, and
+2. **Not all of them are environment gaps.** Some need a *decision*, one is superseded by newer evidence, and
    one group needs a harness-contract choice. Only ~half need a Supabase environment at all — which is
    why this plan groups by dependency rather than by checklist order.
 3. **The construction feature adds no row to these 56.** All 56 exactly match the pre-construction run
    (`.cache/r13/ledgr-r13-P8oJsc/`, 834/0/56/0). Construction adds a *new* verification class that these
-   56 do not cover — deployed authorisation of the 21 `public.*_construction_*` commands — described in §5.3.
+   56 do not cover — deployed authorisation of the 21 `public.*_construction_*` commands — described in §11.3.
 
 ## 2. Dependency summary
 
@@ -47,7 +60,7 @@ Three things follow, and they are the reason this plan exists rather than a "kno
 | C. Wire-reachable real backend for browser evidence | 2 | Disposable Supabase stack addressable over HTTP | No (disposable stack) | Platform owner |
 | D. Offline client-identity and conflict contracts | 4 | Two approved contracts, then implementation and browser workers | No (client code) | Product + security owners |
 | E. Product/approval decisions, no environment gap | 3 | Decisions; two need approved server commands | Yes, once approved | Product/accounting owners |
-| F. Legacy standalone suites | 16 | A replay/bootstrap contract or formal retirement mapping | No | Engineering owner |
+| F. Legacy standalone suites | 16 requested, **17** on the current head (the trunk merge added one) | A replay/bootstrap contract or formal retirement mapping | No | Engineering owner |
 
 Nothing below is authorised by being written down. Each group's "risk" line states what could change
 production data or permissions if it were done carelessly.
@@ -221,7 +234,7 @@ three become command/implementation work once approved.
 what customers paid for or what staff may see. Both are approval-gated; neither is a "just add a grant"
 change.
 
-## 8. Group F — Legacy standalone suites — 16 rows
+## 8. Group F — Legacy standalone suites — 16 requested rows, 17 on the current head
 
 - `LEGACY.backfill_reconcile_inventory.test.js` — tests/database/backfill_reconcile_inventory.test.js
 - `LEGACY.cron_placeholder_sweep.test.js` — tests/database/cron_placeholder_sweep.test.js
@@ -239,9 +252,10 @@ change.
 - `LEGACY.storage_reconstruction.test.js` — tests/database/storage_reconstruction.test.js
 - `LEGACY.view_reconstruction.test.js` — tests/database/view_reconstruction.test.js
 - `LEGACY.workflow_accounting.test.js` — tests/database/workflow_accounting.test.js
+- `LEGACY.cron_jobs_apply.test.js` — tests/database/cron_jobs_apply.test.js *(added by the trunk merge; same dependency as the rest of this group)*
 
 **Exact verification required.** A decision about the `tests/database/*.test.js` suites, which are present
-in the repository (16 files) but "not executed" because they expect a fixed/shared bootstrap, broad
+in the repository (17 files on the current head) but "not executed" because they expect a fixed/shared bootstrap, broad
 grants, or shared cleanup that the isolated harness deliberately does not provide. Three honest options
 per suite: (a) port the suite onto the release harness's disposable fixture (adopting its bootstrap,
 never broadening grants to make it run); (b) run it against its own disposable environment with a
@@ -418,11 +432,14 @@ as deployed verification.
 
 ## 13. Verification of this document
 
-This plan was produced by reading the current evidence artifact rather than a prior summary: the 56 ids
-in Groups A–F are enumerated directly from the run recording
+This plan was produced by reading the current evidence artifact rather than a prior summary: the blocked
+ids in Groups A–F are enumerated directly from a run recording
 `{"PASS": 839, "FAIL": 0, "BLOCKED": 56, "NOT APPLICABLE": 0}` at commit
-`32192949712455eb35fa3c1dbc70dc745dee0667`, and the six groups partition those 56 ids exactly, with no
-row counted twice and none unassigned. The stale-blocker observations in §9 were checked against the
+`32192949712455eb35fa3c1dbc70dc745dee0667` (`.cache/r13/ledgr-r13-UeGK4c/`), and the six groups partition
+those 56 ids exactly, with no row counted twice and none unassigned. After the trunk merge the same command
+records `{"PASS": 839, "FAIL": 0, "BLOCKED": 57, "NOT APPLICABLE": 0}` (`.cache/r13/ledgr-r13-nk7CnD/`);
+the single added id, `LEGACY.cron_jobs_apply.test.js`, is listed in Group F, so the partition is still
+exact at 57. The stale-blocker observations in §9 were checked against the
 current evidence file (for example, `R06.POS.STOCK.CONCURRENT-2C` and `-2C-SEAL` are PASS rows in the
 same run), and the "no browser runner" reason in `OFFLINE.BROWSER` was checked against the R09.4 records
 in the same file. No production or shared environment was contacted to write it.
