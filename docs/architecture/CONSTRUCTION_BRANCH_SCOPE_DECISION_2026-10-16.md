@@ -79,8 +79,9 @@ Consequences of the correction:
   carry reason strings that the measured census no longer supports (e.g. `journal_entries` and
   `stock_movements` **are** branch-scoped now; `stock_movements` goes through `can_access_location`).
 - The genuinely open question is therefore narrower and belongs to **construction**: 18 of the 37
-  org-wide tables are the construction read surface, and `contacts` / `products` / `tax_configurations`
-  remain org-wide reference data.
+  org-wide tables are the construction read surface (the 19th construction table, the static capability
+  catalogue, is readable by `using (true)`), and `contacts` / `products` / `tax_configurations` remain
+  org-wide reference data.
 - Correcting those reason strings is part of acceptance criterion §14.1 (d) and must land **with** the
   decision, in one reviewed commit. It was deliberately **not** done by this brief.
 
@@ -90,25 +91,36 @@ Exact table list first, because it is what the decision has to name. Of the 19 c
 
 - **4 carry a non-null `branch_id`** with an FK to `branches(id)`: `construction_procurement_sites`,
   `construction_purchase_orders`, `construction_goods_receipt_notes`, `construction_material_issues`.
-- **11 inherit a non-null branch** through a **not-null** FK chain to one of those:
+- **10 inherit a non-null branch** through a **not-null** FK chain to one of those:
   `construction_purchase_order_lines`, `_purchase_order_events`, `_delivery_notes`, `_delivery_note_lines`
   (→ PO), `_goods_receipt_lines`, `_goods_receipt_holds`, `_receipt_inspections`,
-  `_receipt_line_reclassifications`, `_receipt_bill_allocations`, `_receipt_cost_bases` (→ GRN),
-  `_supplier_invoice_references` (→ `expenses.branch_id`).
+  `_receipt_line_reclassifications`, `_receipt_bill_allocations`, `_receipt_cost_bases` (→ GRN).
+- **1 is conditional, not unconditional:** `construction_supplier_invoice_references` inherits
+  `expenses.branch_id`, which is **nullable**. It is the one construction table whose branch can be
+  absent, so it needs a stated rule rather than a plain predicate: the referenced bill must belong to the
+  same business; a bill with a branch follows `can_access_branch`; a bill with **no** branch is
+  business-level and stays readable by any active member of that business.
 - **4 have no branch dimension at all** and cannot be branch-scoped without inventing semantics:
   `construction_procurement_capabilities`, `construction_procurement_grants`,
   `construction_product_uom_conversions`, `construction_receipt_posting_policies`.
 
+So the approved split is **14 unconditional + 1 conditional + 4 branchless = 19**, not 15 + 4: an earlier
+draft of this brief counted `_supplier_invoice_references` among the unconditional tables, which would have
+given it the plain predicate and silently hidden every reference whose parent bill has no branch.
+
 **A useful consequence:** the NULL-branch-**row** contract that §14.1 cites as the obstacle to reshaping
 (core rows may have `branch_id = null`; `can_access_location(null)` is `false` by design) **does not arise
-for construction documents** — every one of the 15 is reachable from a `not null` branch key. That removes
-the main stated objection to option B *for this family*.
+for construction documents** — all 14 unconditionally branch-linked tables are reachable from a `not null`
+branch key. That removes the main stated objection to option B *for this family*. The obstacle does still
+arise, once, for the 15th branch-linked table: `construction_supplier_invoice_references` hangs off
+`expenses.branch_id`, which is nullable, which is exactly why that table is classified **conditional** in §3
+and carries a stated rule instead of a plain predicate.
 
 ### Option A — keep the current scope (status quo)
 
 | | |
 | --- | --- |
-| **Changing** | Nothing. 18 construction tables keep `is_business_member(business_id)`; the 4 dimension-less tables likewise. |
+| **Changing** | Nothing. The 18 construction tables whose policy is `is_business_member(business_id)` keep it, including the 14 unconditionally branch-linked ones and the conditional supplier-reference table; the 4 dimension-less tables likewise. |
 | **Security** | An A1-only member reads every branch's construction documents: POs, lines, delivery notes, GRNs, holds, inspections, reclassifications, bill allocations, cost bases, supplier invoice references, sites, material issues — including supplier names, quantities and prices. Measured, §1. Capability grants still gate every *command*. |
 | **UX** | No cross-branch surprises; construction list/report screens keep working business-wide. The defect it leaves is that the UI offers actions the server refuses: an A1 user can open an A2 purchase order and every action button on it fails with `You do not have access to that branch.` |
 | **Migration** | None. Zero regression surface. |
@@ -119,26 +131,27 @@ the main stated objection to option B *for this family*.
 
 | | |
 | --- | --- |
-| **Changing** | One RLS migration replacing the 18 `_member_read` policies with `is_business_member(business_id) and can_access_branch(business_id, <branch>)`, using the existing `security definer` predicates; `can_access_location` where the row's location is the natural key (`construction_goods_receipt_notes`, `construction_material_issues`). |
+| **Changing** | One RLS migration replacing the `<table>_member_read` policies with `is_business_member(business_id) and can_access_branch(business_id, <branch>)` on the 14 unconditionally branch-linked tables, using the existing `security definer` predicates — plus the stated parent-bill rule for the conditional supplier-reference table. `can_access_location` was considered where a row's location is the natural key and rejected: the branch is the FK that commands already enforce. |
 | **Security** | Read surface matches command surface: an A1-only user sees A1 construction documents only; owner/admin/manager/accountant/auditor (DEC-03 org-wide roles) keep the full view. Closes the measured escape path. No NULL-row contract needed for construction (above). Must be reviewed as a security change; direct-DML probes must be re-run because the append-only triggers key on `ledgr.construction_command` and do not by themselves constrain reads. |
 | **UX** | An A1-only user's construction screens become branch-local. Cross-branch construction reporting/aggregation requires an explicitly all-branch role, or a deliberate aggregate surface. This is the item the product owner must accept. |
 | **Migration** | One migration, mechanical: the P5-D reshape is the working precedent (`20261007000000`, 23 tables). Residual risk is the read RPCs (`_open_items`, `_project_material_cost`, `_capabilities_for`) which would still span branches unless separately decided. |
-| **Tests** | Re-run the 17 `CP.*` rows and add read-boundary rows for the 15 tables; update the eight `BRANCH.*` expectations in the same commit (§14.1 (d)); re-run the invoices-style control to prove denial is detectable. Highest test cost of the three, but the only option that makes `BRANCH.*` provable rather than waived. |
+| **Tests** | Re-run the 17 `CP.*` rows and add read-boundary rows for the 14 unconditional tables plus the conditional one (NULL parent, allowed branch, denied branch, cross-business); update the eight `BRANCH.*` expectations in the same commit (§14.1 (d)); re-run the invoices-style control to prove denial is detectable. Highest test cost of the three, but the only option that makes `BRANCH.*` provable rather than waived. |
 | **Verdict** | Most faithful to the row text; largest blast radius, because it changes what every construction screen shows. |
 
 ### Option C — hybrid, decided table by table
 
 | | |
 | --- | --- |
-| **Changing** | B's scope on the 15 branch-derivable tables, with the 4 dimension-less tables **explicitly recorded as deliberately org-wide** in the decision text. Optionally add the branch predicate to the three read RPCs, decided at the same time. |
+| **Changing** | B's scope on the 14 unconditionally branch-linked tables, the stated parent-bill rule on the 1 conditional table, and the 4 dimension-less tables **explicitly recorded as deliberately org-wide** in the decision text. Add the branch predicate to the two aggregating read RPCs, decided at the same time. |
 | **Security** | Same as B for documents. The 4 exclusions are forced by the schema, not chosen: a capability grant, a UOM conversion and a posting policy are properties of the business, and hiding them per-branch would break master-data administration without protecting anything (the RPCs already require business membership and owner/admin for grants). |
 | **UX** | Same as B for documents; master-data and setup screens stay business-wide, which is what makes them usable. |
 | **Migration** | B's migration, plus a documented exclusion list. |
 | **Tests** | B's tests, plus an explicit assertion that the 4 excluded tables remain readable business-wide (so a future reader cannot mistake the exclusion for an oversight). |
 | **Verdict** | B's intent with the ambiguity removed. The "table by table" discipline is what §14.1 (b) demands anyway. |
 
-**Recommendation: option C** — branch-scope the 15 branch-derivable construction tables, record the 4
-dimension-less tables as deliberately org-wide, and decide the three read RPCs in the same decision.
+**Recommendation: option C** — branch-scope the 14 unconditionally branch-linked construction tables, give
+the conditional supplier-reference table its stated parent-bill rule, record the 4 dimension-less tables as
+deliberately org-wide, and decide the read RPCs in the same decision.
 Reasons: (i) the command surface already refuses A2, so the current read scope is the inconsistency, not
 the baseline; (ii) `can_access_branch` is already the authoritative predicate and the `not null` branch
 keys remove the obstacle §14.1 cites for the core family; (iii) it is the only option under which the eight
@@ -149,7 +162,7 @@ mechanics. This is a **recommendation only** — no policy was changed.
 
 | # | Decision | Owner (role) |
 | --- | --- | --- |
-| **D-1** | Choose A, B or C. If C/B: approve the migration that replaces the 18 construction `_member_read` policies with branch-scoped equivalents, and record the exact 15/4 table split as shown in §3. If A: approve the written statement that cross-branch construction reads are intended, and re-scope the eight `BRANCH.*` rows accordingly. | **Product owner** decides; **security owner** confirms the RLS consequence; **engineering owner** implements and updates the row expectations in the same commit |
+| **D-1** | Choose A, B or C. If C/B: approve the migration that replaces the 18 construction `_member_read` policies with branch-scoped equivalents, and record the exact 14 + 1 + 4 table split as shown in §3. If A: approve the written statement that cross-branch construction reads are intended, and re-scope the eight `BRANCH.*` rows accordingly. | **Product owner** decides; **security owner** confirms the RLS consequence; **engineering owner** implements and updates the row expectations in the same commit |
 | **D-2** | Whether the three read RPCs (`construction_procurement_open_items`, `construction_project_material_cost`, `construction_procurement_capabilities_for`) gain a branch filter, and which role may see cross-branch construction aggregation. | **Product owner** + **security owner** |
 | **D-3** | Whether `construction_procurement_capabilities` staying readable by *any* signed-in caller (`using (true)`) is intended in the deployed profile. | **Security owner** |
 | **D-4** | Approval to correct the stale `BRANCH.*` reason strings to the measured 23/37 census (§2). Documentation-only, but it belongs in the same commit as D-1 per §14.1 (d). | **Engineering owner** |
@@ -239,7 +252,7 @@ project down, or record why it is retained.
 | 5 | **Capability denial** deployed: no grant / wrong grant / role name alone / `anon` → 42501 | §15.1, §6 row 1 |
 | 6 | **Four-eyes**: a PO's creator cannot authorise their own PO by any path | §15.1 |
 | 7 | **Branch boundary on commands**: create-PO against a foreign-branch site; authorise an A2 PO from A1 | §1 |
-| 8 | **Branch boundary on reads** — table by table, per the approved D-1 option: for each of the 15 (or 18) tables, the A1-only user's visible-row count against a ground-truthed A2 row | new, decision-dependent |
+| 8 | **Branch boundary on reads** — table by table, per the approved D-1 option: for each of the 14 unconditional tables and, on the separate rule, the 1 conditional table, the A1-only user's visible-row count against a ground-truthed A2 row; the 4 branchless tables asserted to stay readable | new, decision-dependent |
 | 9 | **Business boundary**: cross-tenant identifiers refused on commands and invisible on reads | §15.1 |
 | 10 | **Replay safety**: same `client_key` → same document, no duplicate; two concurrent connections | §15.1 |
 | 11 | `construction_procurement_capabilities` readable by any signed-in caller — recorded as intended or not (D-3) | §3, D-3 |

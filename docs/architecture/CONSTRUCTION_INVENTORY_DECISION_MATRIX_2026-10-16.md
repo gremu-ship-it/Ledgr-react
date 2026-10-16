@@ -528,13 +528,18 @@ section states exactly which tables that covers, because the decision has to nam
 | Group | Count | Tables | Branch source |
 | --- | --- | --- | --- |
 | Carries `branch_id` **NOT NULL** (FK → `branches`) | 4 | `construction_procurement_sites`, `construction_purchase_orders`, `construction_goods_receipt_notes`, `construction_material_issues` | the row itself |
-| Inherits a **NOT NULL** branch through a not-null FK chain | 11 | `_purchase_order_lines`, `_purchase_order_events`, `_delivery_notes`, `_delivery_note_lines` (→ PO); `_goods_receipt_lines`, `_goods_receipt_holds`, `_receipt_inspections`, `_receipt_line_reclassifications`, `_receipt_bill_allocations`, `_receipt_cost_bases` (→ GRN); `_supplier_invoice_references` (→ `expenses.branch_id`) | parent row |
+| Inherits a **NOT NULL** branch through a not-null FK chain | 10 | `_purchase_order_lines`, `_purchase_order_events`, `_delivery_notes`, `_delivery_note_lines` (→ PO); `_goods_receipt_lines`, `_goods_receipt_holds`, `_receipt_inspections`, `_receipt_line_reclassifications`, `_receipt_bill_allocations`, `_receipt_cost_bases` (→ GRN) | parent row |
+| **Conditional** — inherits a **nullable** branch | 1 | `_supplier_invoice_references` | `expenses.branch_id` (nullable): a parent bill with a branch follows `can_access_branch`; a parent bill with no branch is business-level. Needs a stated rule, not a plain predicate |
 | No branch dimension | 4 | `construction_procurement_capabilities`, `construction_procurement_grants`, `construction_product_uom_conversions`, `construction_receipt_posting_policies` | none — business-level by nature |
 
 **Consequence for the decision.** The NULL-branch-**row** contract that blocks the core-family reshape
-(§14.1) does not apply here: no construction document row can be branch-ambiguous. Option C in the brief is
-therefore the disciplined form of option B — 15 tables get the branch predicate, and the 4 dimension-less
-tables are recorded as deliberately org-wide rather than silently skipped.
+(§14.1) does not apply to the 14 unconditional tables: none of their rows can be branch-ambiguous. It does
+apply to exactly one table — `_supplier_invoice_references`, whose parent `expenses.branch_id` is nullable —
+and that is why it is classified separately as **conditional** rather than counted with the 14. Option C in
+the brief is therefore the disciplined form of option B — the 14 unconditional tables get the branch
+predicate, the 1 conditional table gets the stated parent-bill rule, and the 4 dimension-less tables are
+recorded as deliberately org-wide rather than silently skipped. The split is **14 + 1 + 4**, not 15 + 4: an
+earlier draft of this table listed `_supplier_invoice_references` among the unconditional rows.
 
 #### Measured behaviour of the read surface (local isolated, RLS applied)
 

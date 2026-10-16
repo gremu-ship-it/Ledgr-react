@@ -414,8 +414,13 @@ test(meta('CP.SCOPE.TENANT-BRANCH-FORGERY', 'Business, branch, project and site 
     await as(c, identities.A_owner.id);
     await authorizePo(c, po2.id);
     // ... and a branch-scoped receiver cannot receive it either.
-    await as(c, identities.A_stock_clerk.id);
+    // The line id is read as the organisation-wide owner: once branch scope is
+    // enforced a branch-scoped clerk can no longer select it (asserted below), so
+    // the receipt denial is probed with an id the caller is already not entitled to.
+    await as(c, identities.A_owner.id);
     const [line2] = await poLines(c, po2.id);
+    await as(c, identities.A_stock_clerk.id);
+    expect(await count(c, 'select count(*)::int n from public.construction_purchase_order_lines where id=$1', [line2.id])).toBe(0);
     await failsWith(c, () => recordGrn(c, grnPayload({ po_id: po2.id, lines: [{ po_line_id: line2.id, quantity_received: 1, quantity_accepted: 1 }] })), ['42501'], /access to that branch|access to that inventory location/);
 
     // The database guard refuses an out-of-band receipt row whose site, branch or

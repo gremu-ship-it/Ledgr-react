@@ -654,16 +654,22 @@ purchase order, its line, the A2 goods-receipt note and the A2 site — while `c
 returns **false**, the same user is refused by every A2 command (`42501 — You do not have access to that
 branch.`), and the control probe on `invoices` @A2 correctly returns 0 rows against a ground-truthed 1.
 The method therefore distinguishes a real denial from a missing grant or a broken run, which §5.4 of the
-brief makes mandatory for Group B.
+brief makes mandatory for Group B. (The escape path measured here was closed by the approved Stage-A
+migration; the measurement is retained as the before-state that justified it.)
 
 ### 16.3 Consequence for Groups B and the eight `BRANCH.*` rows
 
 The eight rows stay **BLOCKED**. Under option A they cannot be verified at all, only waived in writing;
-under B or C they become provable, because all 15 branch-derivable construction tables are reachable from a
-`not null` branch key (4 carry `branch_id not null`; 11 inherit it through a not-null FK chain) — so the
-NULL-branch-**row** contract §14.1 cites as the obstacle to reshaping does not arise for construction
-documents, and that obstacle no longer justifies leaving these rows unanswered. No option was chosen: the
-decision is item D-1 of the brief and no answer exists in this repository.
+under B or C they become provable, because 14 of the 15 branch-linked construction tables are reachable from
+a `not null` branch key (4 carry `branch_id not null`; 10 inherit it through a not-null FK chain) — so the
+NULL-branch-**row** contract §14.1 cites as the obstacle to reshaping does not arise for those 14 tables,
+and that obstacle no longer justifies leaving these rows unanswered. The 15th branch-linked table,
+`construction_supplier_invoice_references`, is **conditional**: it inherits `expenses.branch_id`, which is
+nullable, so it needs the stated parent-bill rule rather than a plain predicate, and it was classified
+separately in §3 of the brief. The split is therefore **14 unconditional + 1 conditional + 4 branchless**,
+not 15 + 4; an earlier draft of §16.2/§16.3 carried the 15 + 4 count and is corrected here. Decision item
+D-1 was subsequently answered (option C) and implemented in `20261023000000_construction_branch_scope.sql`;
+this section is a record of the measurement, not of the later change.
 
 **Nothing was changed by this section except this text:** no migration, policy, grant, schema, command, UI
 or harness expectation, and no database object. The measurement used a throwaway release-suite probe, run
