@@ -148,7 +148,12 @@ begin
     insert into cron.job (jobname, schedule, command, active)
     values (p_jobname, p_schedule, p_command, true) returning jobid into v;
   else
-    update cron.job set schedule = p_schedule, command = p_command, active = true where jobid = v;
+    -- Like pg_cron (ON CONFLICT ... DO UPDATE SET schedule, command,
+    -- database): rescheduling NEVER touches active. This stub used to set
+    -- active = true here, which hid that a job §3 deactivated stays inactive
+    -- after scripts/cron-jobs.sql fixes its URL (2026-10-14; see
+    -- tests/database/cron_jobs_apply.test.js).
+    update cron.job set schedule = p_schedule, command = p_command where jobid = v;
   end if;
   return v;
 end $$;
@@ -288,6 +293,10 @@ async function main() {
       (await c.query(`select active from cron.job where jobname = $1`, [name])).rows[0]?.active;
 
     // ── 1. A placeholder job, exactly as the schedule migrations leave it ────
+    // The replay already ran §3, so the job exists but is inactive, and
+    // rescheduling does not re-activate it (pg_cron semantics). Start from a
+    // freshly scheduled job, as on an environment that predates §3.
+    await c.query(`select cron.unschedule('send-renewal-reminders-daily')`);
     await c.query(`select cron.schedule('send-renewal-reminders-daily', '0 8 * * *', $1)`, [
       PLACEHOLDER_COMMAND,
     ]);
@@ -342,6 +351,7 @@ async function main() {
 
     // ── 3. The privileged path still works (fresh/local databases) ──────────
     await check('with UPDATE permitted, section 3 deactivates the job directly', async () => {
+      await c.query(`select cron.unschedule('retry-failed-webhooks-daily')`); // see step 1
       await c.query(`select cron.schedule('retry-failed-webhooks-daily', '0 6 * * *', $1)`, [
         PLACEHOLDER_COMMAND,
       ]);

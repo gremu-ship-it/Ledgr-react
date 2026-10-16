@@ -5,16 +5,10 @@ import { Link } from 'react-router';
 export function UsageMeter() {
   const { usage, plan } = useUsage();
 
-  if (usage.isUnlimited) {
-    return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm">
-        <div className="flex items-center gap-2 text-emerald-700">
-          <TrendingUp className="h-4 w-4" />
-          <span className="font-medium">Enterprise Plan — Unlimited transactions</span>
-        </div>
-      </div>
-    );
-  }
+  // Enterprise has no customer-facing transaction meter. The unlimited
+  // entitlement remains enforced by the plan catalogue and server guard, but
+  // a quota widget is not useful when there is no quota to approach.
+  if (usage.isUnlimited) return null;
 
   const isNearLimit = usage.percentUsed >= 80;
   const isOverLimit = usage.percentUsed >= 100;

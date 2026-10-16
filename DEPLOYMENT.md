@@ -171,6 +171,26 @@ account that can no longer see the projects. Fix:
    `deploy.yml`'s *Link & migrate …* step, so refresh it whenever Supabase
    credentials have been rotated.
 
+#### Edge Function bundling: `toomanyrequests: Data limit exceeded`
+
+If *Deploy Edge Functions* fails while pulling
+`public.ecr.aws/supabase/edge-runtime` with Docker exit 125, the failure is an
+image-registry quota/rate limit, not an error in `accept-invite-link` or a
+migration failure. Both deployment jobs use `supabase functions deploy --use-api`
+to bundle server-side, avoiding the runner's Docker image pull. Keep
+`--no-verify-jwt` and the explicit project ref: this changes bundling only, not
+function authentication or the deployment target.
+
+If migrations already succeeded and the release manifest reports
+**MIXED-VERSION — FRONTEND NOT UPDATED**, do **not** roll back or repair migration
+history. Merge the workflow fix, then run **Deploy → Run workflow** from the
+updated `main`, choosing `staging` (or the affected environment). Re-running an
+old failed run uses its old workflow and will not pick up this fix. Already
+recorded migrations are skipped; functions are redeployed before the frontend.
+Confirm the new release manifest reports `RELEASED` and the frontend version
+check succeeds. Do not bypass the Edge Function failure gate to force a frontend
+deploy.
+
 #### Paused ("INACTIVE") Supabase projects block deploys and backups
 
 When the token is valid, verify each project CI targets is actually running.
@@ -355,6 +375,42 @@ The public API rate-limit table is `public.api_usage` (`supabase/migrations/2025
 The Edge Function fixes a prior bug (it now uses the correct `api_key` text
 column) and enforces **100 req/min per API key** and **10 req/min per client IP**
 unauthenticated.
+
+### Auth email (signup confirmation) — required for every project
+
+A new business owner registers at `/register`; Supabase Auth must email them a
+confirmation link that lands on `/create-business`. **`supabase/config.toml`
+does not configure the hosted projects** — the settings below live in the
+dashboard and must be verified on **both** staging and production, or owners
+report "no confirmation link" while signup appears to succeed. Triage order
+for that report:
+
+1. **Confirm email is ON** — Authentication → Sign In / Providers → Email →
+   *Confirm email*. Off means no email is ever sent (the local mirror of this
+   is `[auth.email] enable_confirmations` in `supabase/config.toml`).
+2. **Custom SMTP is configured** — Authentication → Emails → SMTP Settings.
+   Without it, mail goes through Supabase's built-in mailer, which is
+   rate-limited to a few emails/hour for testing: the first business gets its
+   link, later ones are silently throttled (`over_email_send_rate_limit` in
+   Authentication → Logs). Configure SendGrid (`smtp.sendgrid.net:587`, user
+   `apikey`, password = the existing `SENDGRID_API_KEY`), sender
+   `support@ledgr.app` / "Ledgr", and **verify that sender/domain in SendGrid**
+   or the mail bounces. Then raise Authentication → Rate Limits → email
+   sending rate now that SMTP is on.
+3. **Site URL + Redirect URLs allow the app origin** — Authentication → URL
+   Configuration. Site URL = the environment's app origin
+   (`https://ledgr-react.vercel.app` prod, staging equivalent). Redirect URLs
+   must include `<origin>/**` for every deployed origin — the app passes
+   `emailRedirectTo=<origin>/create-business` (and invite/password-reset
+   equivalents); a non-allow-listed URL is silently replaced with the Site
+   URL, so the link lands somewhere useless. The canonical list is
+   `additional_redirect_urls` in `supabase/config.toml` — copy it into the
+   dashboard.
+4. **Verify end-to-end**: register with a fresh inbox, confirm the email
+   arrives from the Ledgr sender, and that the link lands signed-in on
+   `/create-business`. Already-registered addresses intentionally receive no
+   new email — the app now detects that case (`identities: []`) and directs
+   the owner to sign in / reset their password instead.
 
 ## 7. Sentry (anonymised)
 

@@ -179,9 +179,14 @@ export function DataImportPage() {
   // Check if this is a new business onboarding flow
   const urlParams = new URLSearchParams(window.location.search);
   const isNewBusiness = urlParams.get('new') === 'true';
+  const requestedEntity = urlParams.get('entity');
+  const initialEntity: ImportEntityType | null =
+    requestedEntity && Object.prototype.hasOwnProperty.call(IMPORT_TEMPLATES, requestedEntity)
+      ? requestedEntity as ImportEntityType
+      : null;
 
-  const [selectedEntity, setSelectedEntity] = useState<ImportEntityType | null>(null);
-  const [step, setStep] = useState<ImportStep>('select');
+  const [selectedEntity, setSelectedEntity] = useState<ImportEntityType | null>(initialEntity);
+  const [step, setStep] = useState<ImportStep>(initialEntity ? 'upload' : 'select');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [isParsing, setIsParsing] = useState(false);

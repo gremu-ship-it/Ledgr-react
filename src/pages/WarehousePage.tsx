@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import type { Row } from '@/dal/types/database';
@@ -647,24 +648,27 @@ export function WarehousePage() {
 
   return (
     <div className={isMobile ? 'pb-4' : undefined}>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>
             Warehouse
           </h1>
           {!isMobile && <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>}
         </div>
-        <button
-          onClick={() => {
-            receiveClientKeyRef.current = newSaveClientKey();
-            receiveSubmittingRef.current = false;
-            setReceiveError(null);
-            setReceiveOpen(true);
-          }}
-          className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-        >
-          <Plus size={16} /> {isMobile ? 'Receive' : 'Receive Stock'}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <ImportTemplateMenu entityTypes={['inventory_opening']} />
+          <button
+            onClick={() => {
+              receiveClientKeyRef.current = newSaveClientKey();
+              receiveSubmittingRef.current = false;
+              setReceiveError(null);
+              setReceiveOpen(true);
+            }}
+            className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+          >
+            <Plus size={16} /> {isMobile ? 'Receive' : 'Receive Stock'}
+          </button>
+        </div>
       </div>
 
       <StockSyncPanel businessId={businessId} />

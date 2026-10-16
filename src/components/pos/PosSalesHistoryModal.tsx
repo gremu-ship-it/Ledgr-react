@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getErrorMessage } from '@/lib/errorHandler';
 import {
   X,
   Search,
@@ -94,7 +95,7 @@ export function PosSalesHistoryModal({
         alert('Return processed successfully.');
         setSelectedSale(null);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = getErrorMessage(err);
         alert(`Failed to process return: ${message}`);
       } finally {
         setIsProcessing(false);
@@ -124,7 +125,7 @@ export function PosSalesHistoryModal({
         alert('Sale voided successfully.');
         setSelectedSale(null);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Unknown error';
+        const message = getErrorMessage(err);
         alert(`Failed to void sale: ${message}`);
       } finally {
         setIsProcessing(false);
