@@ -198,6 +198,124 @@ enumeration: `R05.FINANCE.NONEG-LINES` now also expects `chk_cgrl_nonneg`, and
 `R07.APPROVAL.SERVER-COMMAND-SURFACE` now also enumerates `approve_construction_receipt_posting_policy`.
 Both were FAIL before the update and PASS after; nothing else in those audits changed.
 
-Unit layer (`npx vitest run`): 1021/1022 pass. The single failure,
-`src/lib/billing/__tests__/plans.test.ts` (nav-plan locking), is pre-existing and unrelated — it touches
-`src/components/layout/navConfig.ts` and `src/lib/billing/plans.ts`, neither of which this work changes.
+Unit layer at the time of §6: 1021/1022. The single failure,
+`src/lib/billing/__tests__/plans.test.ts` (nav-plan locking), was reported as pre-existing and unrelated.
+**That attribution was wrong and is corrected in §7.4**: the failing expectation was the `/construction`
+nav item added by this work, which carried no plan gate in a branch cut before the trunk recorded its own
+decision that Construction is not plan-gated. The suite is now 1058/1058; see §7.4 for the resolution and
+for the documentation follow-up left on the trunk.
+
+## 7. Phase 2 — workspace integration (2026-10-16)
+
+**Status of this section:** the workspace is implemented and green in the local and CI-isolated layers.
+Nothing is deployed. `INV-CM-001` remains proposed, not accepted. All evidence below is
+**local / isolated-PostgreSQL (R13 harness) or CI-isolated**; none of it is official Supabase
+Auth/PostgREST, deployed-policy or production evidence.
+
+### 7.1 Screens and the commands behind them
+
+Every action below is a `public.*_construction_*` command called through
+`src/dal/repositories/ConstructionProcurementRepository.ts`. React performs no stock, cost, scope or
+identity arithmetic, and never writes a table directly. Actor identity, branch/location scope, capability
+grants, four-eyes authorisation, quantity caps, cost derivation and the period lock are all decided
+server-side.
+
+| Screen (`src/components/construction/…`) | Commands it can invoke | Reads it uses |
+| --- | --- | --- |
+| `ConstructionOverviewSection` | — (read-only) | `construction_procurement_open_items` |
+| `ConstructionPurchaseOrdersSection` | `create_construction_purchase_order`, `authorize_construction_purchase_order`, `cancel_construction_purchase_order` | purchase orders, lines, events, sites |
+| `ConstructionDeliveryNoteForm` | `record_construction_delivery_note` | order lines passed in by the list |
+| `ConstructionGoodsReceiptForm` | `record_construction_goods_receipt` | order lines passed in by the list |
+| `ConstructionReceiptsSection` | `record_construction_receipt_inspection`, `reclassify_construction_receipt_line`, `release_construction_receipt_hold`, `record_construction_receipt_cost_basis`, `post_construction_receipt_movement` | GRNs, lines, holds, inspections, reclassifications, allocations, cost bases, policy |
+| `ConstructionBillMatchingSection` | `register_construction_supplier_invoice_reference`, `match_construction_bill_line_to_receipt` | supplier bill lines, registered references, receipt lines, allocations |
+| `ConstructionMaterialIssuesSection` | `issue_construction_materials_to_project` | sites, material issues, project material cost, policy, site store balances |
+| `ConstructionSetupSection` | `register_construction_procurement_site`, `register_construction_product_uom_conversion`, `approve_construction_receipt_posting_policy` | sites, UOM conversions, policy |
+
+The delivery note and the goods receipt are presented as different things because they *are* different
+things: a delivery note is the supplier's paper and has no stock effect, while a GRN records the
+classification that a later, policy-gated posting consumes. Every receipt line is labelled with its stage
+(delivery note → GRN with hold status → accepted awaiting cost basis → costed/prepared → posted stock
+movement → and, outside this scope entirely, a financial journal entry), and the workspace repeats that
+stock movements never write a journal entry here.
+
+### 7.2 What is deliberately still unavailable in the UI
+
+These are all server refusals surfaced as explained states, never bypassed and never worked around in the
+client:
+
+| Cannot be done | Token the server returns | Where the UI explains it |
+| --- | --- | --- |
+| Return accepted stock to the pool | `accepted-release-unsupported` | receipt review, hold release |
+| Release rejected stock onward | `rejected-release-unsupported` | receipt review |
+| Accept a write-down of accepted stock | `accepted-release-unsupported` (deliberate: no approved IAS 2 §28 basis) | receipt review |
+| Post any journal for a stock movement | `receipt-gl-posting-not-approved`, `issue-gl-posting-not-approved` | overview, receipt review, material issue |
+| Post a movement while the policy is off | `receipt-posting-not-approved`, `issue-posting-not-approved` | receipt review, material issue |
+| Cost a receipt line in a converted bill UOM | `cost-basis-uom-unsupported` | bill matching |
+| Infer a discount, a tax rate or a rate date | `cost-basis-discount-inconsistent`, `cost-basis-tax-missing`, `bill-fx-inconsistent`, … | bill matching |
+
+Supplier credit notes, manufacturing WIP, automatic project-cost journal posting, progress billing and
+revenue recognition remain out of scope and absent.
+
+Two documented override commands are implemented and type-checked in the adapter but have **no screen
+yet**, which is an honest gap rather than a workaround: `record_construction_delivery_note_exception`
+(the late/duplicate delivery-note path) and `register_construction_supplier_invoice_reference_exception`
+(the supersede-a-mistaken-reference path). Both need a reason and an evidence reference plus the id of the
+document they correct, so each deserves its own reviewed control rather than a field squeezed into the
+existing forms. `findDeliveryNoteLines`, `findReceiptLinesForBusiness`, `findHoldsForBusiness` and
+`findCostBasesForBusiness` are likewise read-side helpers with no caller on these screens yet. Nothing
+else in the 21-command surface is unreachable: an audit of the adapter's 43 methods against the screens
+finds exactly these six without a UI caller.
+
+### 7.3 Verification actually performed for this change set
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Adapter contract (command names, `p_*` argument names, forbidden payload keys, error typing, read scope) | `npx vitest run src/dal/repositories/__tests__/ConstructionProcurementRepository.test.ts` | 8/8 PASS |
+| Pure view logic (idempotency key, refusal table, six receipt stages, open-item summary, gates, formatters) | `npx vitest run src/lib/construction/__tests__/constructionWorkspaceView.test.ts` | 19/19 PASS |
+| Workspace integration in jsdom (capability gate, replay-key reuse on retry, unbalanced classification refused before sending, server refusal rendering, server-supplied cost, empty states) | `npx vitest run src/pages/construction/__tests__/ConstructionWorkspacePage.test.tsx` | 9/9 PASS |
+| Whole unit layer | `npx vitest run` | 117 files, 1058/1058 PASS |
+| Repo-wide lint | `npm run lint` | 0 errors, 4 pre-existing warnings (`artifacts/*`, `src/offline/queueApi.ts`) |
+| Type-check (app and release harness) | `npx tsc -b`, `npx tsc -p tests/release/tsconfig.json` | both clean |
+| Release evidence, re-run after the UI work | `npm run test:release` | `{"PASS":839,"FAIL":0,"BLOCKED":56,"NOT APPLICABLE":0}` (`.cache/r13/ledgr-r13-8AEXoz/`), BLOCKED id set unchanged from §6 |
+| Whitespace / conflict markers | `git diff --check` | clean |
+| Production build | `npm run build` (placeholder Supabase env, as CI does) | built |
+| CI on the pull request (merge with trunk, run 38854371587) | `Typecheck, lint, test & build`, `Isolated release evidence (R13)` | both PASS |
+
+The jsdom suites use a recording repository double. They prove which command the UI calls, with which
+payload, and that a retry reuses the same client key; they **cannot** prove authorisation, RLS or stock
+behaviour. Those remain the R13 harness's job, and the harness in turn remains local-only.
+
+Three real defects were found by these tests and fixed rather than papered over: `GatedButton` defaulted to
+`type="button"`, so the material-issue and setup forms never submitted; the hint text sat inside the
+`<label>`, so every hinted field's accessible name included its hint; and the create-order selects and
+currency field had no explicit label.
+
+### 7.4 Plan gating, the corrected attribution, and the follow-up left on the trunk
+
+The `/construction` nav item is deliberately **not** plan-gated, matching the decision already recorded on
+the development trunk, which explicitly lists `construction` among the sections available on Free. What a
+person may actually do there is decided server-side by exact-business membership plus the construction
+capability grants in this migration; the workspace shows ungranted controls as disabled with their reason
+instead of hiding the module. Gating the nav item on the Inventory plan capability was considered and
+rejected: it would have invented a commercial rule that nothing enforces server-side.
+
+Consequently this branch adopted the trunk's `plans.test.ts` expectation **verbatim** so the pull request
+merges without conflict. Follow-up for the trunk once this merges — the comment beside that expectation
+("Construction is a browser-local draft workspace only; it has no protected server data or posting path")
+is now stale: `/construction` renders a server-backed workspace that reads member-scoped data and runs
+authorised commands. The local draft still exists, unchanged and unrouted by the nav, at
+`/projects-funding-sources/construction-draft`, and
+`docs/architecture/CONSTRUCTION_RECEIPT_PREPARATION_SLICE.md` /
+`CONSTRUCTION_TRANSFER_PREPARATION_SLICE.md` remain accurate for that draft.
+
+### 7.5 What still requires official verification
+
+1. **Deployed authorisation.** The 21 commands' capability checks, four-eyes rule, branch/location scope
+   and membership checks are proven only against embedded PostgreSQL with synthetic JWT claims. Official
+   Supabase Auth/PostgREST, the deployed RLS/ACL grants and Storage evidence remain untested
+   (the 56 pre-existing `BLOCKED` rows).
+2. **Accounting and security approval.** `INV-CM-001` is still proposed. GL posting stays structurally
+   disabled, and the refusals in §5b are deliberate, not gaps to close without an approved basis.
+3. **A dated VAT-rate schedule.** The owner resolved the standard rate to 17.5% effective 1 January 2026;
+   the cost path uses the tax amount actually recorded on the bill, so no historical document is restated.
+   A rate-by-date schedule (`tax_configurations` being the natural home) is still outstanding.
