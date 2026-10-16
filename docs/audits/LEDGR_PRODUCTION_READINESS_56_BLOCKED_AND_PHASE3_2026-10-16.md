@@ -425,7 +425,7 @@ commitment:
 
 | Order | Item | Why now | Gate before starting |
 | --- | --- | --- | --- |
-| 1 | §3.1 exception screens | Small, no new server behaviour, closes two real dead ends, current code already types the commands | None beyond normal review |
+| 1 | §3.1 exception screens — **delivered 2026-10-16** | Small, no new server behaviour, closes two real dead ends | Done; reviewed and pushed |
 | 2 | §3.2 dated VAT-rate schedule | Small, removes a standing manual dependency, but must not restate history | Owner's instruction to implement the schedule + table decision |
 | 3 | Group F consolidation + re-scoring of §9 rows | Cheap, reduces the checklist honestly, no environment needed | Engineering decision on port-vs-retire, no assertion loss |
 | 4 | §3.3 official Supabase verification (Groups A→B→C) | The real gate for deployment; Group A is lowest risk (disposable project), Group B highest (grants) | Owner approval of an isolated environment per group; branch-scope decision for `BRANCH.*` |
@@ -450,3 +450,69 @@ exact at 57. The stale-blocker observations in §9 were checked against the
 current evidence file (for example, `R06.POS.STOCK.CONCURRENT-2C` and `-2C-SEAL` are PASS rows in the
 same run), and the "no browser runner" reason in `OFFLINE.BROWSER` was checked against the R09.4 records
 in the same file. No production or shared environment was contacted to write it.
+
+---
+
+## 14. Execution brief for Groups A, B and C
+
+The three groups that need a real environment, written as a brief for whoever runs them. **Nothing here is
+authorised by being written down.** Each group runs in its own disposable environment, with its own
+recorded approval, and is torn down afterwards; no shared or production database is contacted at any point,
+and no deployed permission is changed without the approval named below.
+
+| | Group A — official Auth + Edge | Group B — deployed RLS/ACL | Group C — wire-reachable backend |
+| --- | --- | --- | --- |
+| **Rows** | 19 | 12 (8 of them gated on the branch-scope decision, §14.1) | 2 |
+| **Owner (role to be named)** | Security/platform owner approves and owns the run | Security owner approves; product owner co-signs any scope change | Platform owner |
+| **Prerequisites** | A dedicated disposable Supabase project (or approved preview branch) with its own URL and keys; permission to create and delete test users; the current Edge handlers deployable to it; a written statement of the approved recovery/OTP contract, including whether the single-owner OTP capability is authorised at all | Read-only capture of the deployed ACL profile (migration list plus a `pg_class` / `pg_proc` / `pg_policy` / storage-policy catalog dump) from an owner-supplied snapshot or a read-only session; the migrations at the commit under test applied to the isolated environment; the §14.1 decision recorded for the eight `BRANCH.*` rows | A disposable Supabase stack reachable over HTTP for browser traffic (Docker locally, an ephemeral hosted project, or an approved preview branch), plus the existing headless Chromium runner (`tests/browser/`, `playwright-core`) |
+| **Acceptance criteria** | Real GoTrue refusals observed for expired, revoked and logged-out sessions; invalid credentials refused without leaking the failing factor; every `R02.PROVIDER-TOKEN.*` case (missing, malformed, invalid, expired, consumed, replayed, substituted, identity-changed) refused against the real service; a valid proof changes only its own subject; the three OTP rows behave as recorded or are explicitly re-scoped. Every result carries the project ref and the commit, and teardown is evidenced | Each probe re-run in an environment carrying the **deployed** grant profile, with a recorded diff between migration-only ACLs and the deployed ACLs; `PRIV.MEMBERSHIP`, `PRIV.PROFILE` and both storage rows show the stated refusal; the eight `BRANCH.*` rows are either decision-backed and passing, or re-scored in the same commit as the decision — never quietly marked pass | Browser-driven traffic against the real backend shows DB-side actor-versus-origin revalidation, DB-side `client_key` idempotency and snapshot-versus-server raster; results tagged with environment and commit; the `…INVESTIGATION` limitation row updated to the environment actually used |
+| **Stop conditions** | Any use of production keys, real phone numbers or real e-mail addresses; any grant of `auth.admin` capability to a tenant administrator | Any application of a grant or policy change to a shared or production project; any `BRANCH.*` result presented as verification before §14.1 is decided | Any setup where the browser can only reach a stub — an HTTP-shaped mock must never be reported as a pass, which the row itself forbids |
+| **Evidence label to use** | *isolated deployed Supabase* — never "production" | *isolated deployed Supabase with captured ACL profile* | *browser against isolated real backend* |
+
+For the construction feature specifically, the same approval covers a **new** row set that does not exist in
+the 57: deployed authorisation of the 21 `public.*_construction_*` commands — capability denial, four-eyes
+purchase-order authorisation, cross-branch refusal, cross-business refusal and replay safety — added to
+`tests/release/construction-procurement.test.ts` and run against the isolated project rather than
+hand-tested. That work belongs with Groups A/B above and is not part of the exception-screen change.
+
+### 14.1 The unresolved branch-scope decision (gates 8 of the 12 Group B rows)
+
+**The question, stated exactly.** Two families of tables differ by design today. The till family
+(`pos_shifts`, `pos_cash_movements`, `pos_shift_closes`, `pos_shift_late_adjustments`) is branch-scoped:
+its SELECT policies use `can_access_branch`, proven by `R08.SHIFT.BRANCH-SCOPED-READ`. Core tables
+(invoices, contacts, `journal_entries`, products, inventory …) keep org-wide `is_business_member` SELECT
+policies from `20260728000008`. The eight `BRANCH.*` rows assert that an A1-assigned user cannot reach A2
+data while an explicitly all-branch role retains access. Under the current design that assertion holds only
+for the till family, so the rows are **not a missing grant** — they are an unanswered product question:
+*should a user assigned to one branch be able to read another branch's invoices, contacts, journal,
+products and stock?*
+
+**Owner.** Product owner decides the policy; the security owner confirms the RLS consequence; the
+engineering owner implements it and updates the expectations in the same commit.
+
+**Three options, with what each costs.**
+
+1. **Keep org-wide member reads (status quo).** No migration. The eight rows are re-scoped to the till
+   family and the limitation is written down instead of implied. Cheapest, but it leaves `BRANCH.*` as a
+   claim nobody makes.
+2. **Extend branch scoping to the core tables.** Requires a migration plus RLS changes on the tables the
+   decision names, and a product impact analysis: an A1-only user would lose cross-branch reads in reports,
+   dashboards, exports and every list screen. Most faithful to the row text, highest regression risk, and
+   the migration must be reviewed as a security change.
+3. **Hybrid, table by table.** Branch-scope the sensitive set (invoices, `journal_entries`, contacts) and
+   keep shared reference data (products, tax codes) org-wide. Needs an explicit table list in the decision,
+   so "which tables" is never inferred later from a diff.
+
+**Acceptance criteria for the decision itself.** A recorded decision naming (a) the chosen option, (b) the
+exact table list affected, (c) the migration that implements it or a statement that none is needed, (d) the
+updated expectations for the eight rows in the same commit, and (e) the product impact on cross-branch
+reporting, accepted by the product owner. Until that exists those eight rows stay BLOCKED, and no
+verification result should be presented as covering them.
+
+### 14.2 What must not be conflated
+
+No result from Groups A–C, and no run of the isolated harness, verifies the exception screens delivered
+under Phase 3 item 1 or the construction command surface. Those screens are covered by the focused suites
+in `src/pages/construction/__tests__/` plus the server-side rows already in
+`tests/release/construction-procurement.test.ts`; deployed behaviour of the same commands still requires
+Groups A/B and the construction row set described above.
