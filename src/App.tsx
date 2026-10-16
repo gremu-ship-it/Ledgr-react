@@ -55,6 +55,10 @@ const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPag
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
+const ConstructionWorkspacePage = lazyPage(
+  () => import('@/pages/construction/ConstructionWorkspacePage'),
+  'ConstructionWorkspacePage',
+);
 const ConstructionProjectSetupDraftPage = lazyPage(
   () => import('@/pages/ConstructionProjectSetupDraftPage'),
   'ConstructionProjectSetupDraftPage',
@@ -247,7 +251,12 @@ function App() {
                   path="/projects-funding-sources/construction-draft"
                   element={<ConstructionProjectSetupDraftPage />}
                 />
-                <Route path="/construction" element={<ConstructionProjectSetupDraftPage />} />
+                {/*
+                  The Construction workspace is the real, command-backed workspace.
+                  The local-only project draft keeps its own path so that work is
+                  preserved and unchanged.
+                */}
+                <Route path="/construction/*" element={<ConstructionWorkspacePage />} />
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={

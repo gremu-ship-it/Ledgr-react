@@ -21,8 +21,15 @@ import { TransferRepository } from '@/dal/repositories/TransferRepository';
 import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PosRepository } from '@/dal/repositories/PosRepository';
+import { constructionProcurementRepository } from '@/dal/repositories/ConstructionProcurementRepository';
 
 export const repos = {
+  /**
+   * Construction procurement: a typed adapter over the construction command
+   * layer (migration 20261021000000). Reads are member-scoped SELECTs; every
+   * write goes through a construction command that authorizes internally.
+   */
+  construction: constructionProcurementRepository,
   business:   new BusinessRepository(supabase),
   journal:    new JournalRepository(supabase),
   invoice:    new InvoiceRepository(supabase),
