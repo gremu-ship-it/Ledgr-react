@@ -559,3 +559,60 @@ under Phase 3 item 1 or the construction command surface. Those screens are cove
 in `src/pages/construction/__tests__/` plus the server-side rows already in
 `tests/release/construction-procurement.test.ts`; deployed behaviour of the same commands still requires
 Groups A/B and the construction row set described above.
+
+## 15. Construction procurement — deployed-authorisation status (2026-10-16)
+
+Filed with §14.2 by the construction gap assessment recorded in
+[`../architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md`](../architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md)
+§7.6–7.8. It answers one question the earlier sections left implicit: **which deployed-authorisation check
+exists for the construction commands, and what exactly is still unproven.**
+
+### 15.1 What is proven, and where
+
+| Check the brief asks for | Row | Layer | Status |
+| --- | --- | --- | --- |
+| Capability denial (no grant / wrong grant / role name alone / anon) | `CP.CAPABILITY.EXPLICIT-GRANTS` | local isolated | PASS |
+| Four-eyes (creator cannot authorize their own PO, by any path) | `CP.PO.AUTHORIZES-PROCUREMENT-ONLY` | local isolated | PASS |
+| Cross-business and cross-branch boundaries, forged identifiers | `CP.SCOPE.TENANT-BRANCH-FORGERY` | local isolated | PASS |
+| Replay safety and concurrency | `CP.IDEMPOTENCY.CONCURRENT-GRN`, `CP.MATCH.CONCURRENT-ALLOCATION`, `CP.ROLLBACK.ATOMIC-COMMANDS` | local isolated | PASS |
+
+These are real PostgreSQL 17 (embedded) results with synthetic JWT claims, full synthetic migration replay
+and every probe rolled back: [`tests/release/construction-procurement.test.ts`](../../tests/release/construction-procurement.test.ts),
+`environment: "local"`, `productionVerified: false`. **They are not deployed-Supabase evidence.**
+
+### 15.2 What is *not* proven, and why
+
+The construction command surface's deployed authorisation is **BLOCKED**, and it is blocked on the same
+two things as the rest of Group B — it is not a construction-specific defect:
+
+1. **The deployed ACL profile is not derivable from this repository.** The harness reports
+   `databaseProfile: "migration-only public grants"`. Whether `authenticated` may execute the 23 construction
+   commands, and what the deployed `pg_policy` set looks like for the twelve new tables, depends on the
+   project's default privileges and on deploy-time grants. The migrations cannot answer it, and they must
+   not be made to assert it (§3.2 does exactly this for `tax_configurations`, deliberately asserting only
+   RLS, the deployed policies and `anon = 0`).
+2. **The branch-scope decision** (§14.1) is unresolved, and it is what makes the construction surface more
+   than an ACL capture. The construction commands call `can_access_branch`, so they are in the
+   *branch-scoped family* by design, while the read policies on the twelve construction tables are
+   organisation-wide member reads. That asymmetry is deliberate and is what `CP.SCOPE…` exercises — but
+   whether an A1-only user should be able to read A2's construction purchase orders is the same unanswered
+   product question, and it must be answered before those rows can be either verified or changed.
+
+### 15.3 Acceptance criteria the workstream must add for construction
+
+When Group B is commissioned, the construction surface adds these: (i) the 23 commands' EXECUTE grants and
+the twelve new tables' DML grants are captured in the deployed-ACL diff; (ii) `CP.CAPABILITY.EXPLICIT-GRANTS`
+and `CP.SCOPE.TENANT-BRANCH-FORGERY` are re-run against the deployed profile with real Supabase Auth tokens,
+so the capability check and the branch check are exercised through PostgREST rather than a synthetic claim;
+(iii) the construction tables appear in the Group B read matrix, with the branch-scope decision recorded and
+the row expectations updated in the same commit. Until then, every construction row above stays
+**local isolated** evidence, and §14.2 continues to apply unchanged.
+
+### 15.4 One defect may hide behind this boundary
+
+The gap assessment found and fixed one UI defect (the dead bill-matching control — matrix §7.7). Its root
+cause is worth recording here: `GatedButton` defaults to `type="button"`, so a control that was *meant* to
+submit a form is silently inert, and only a test that actually clicks it can catch that. Four such sites
+were fixed earlier; a fifth survived in an untested form. The guard now in place is a focused suite per
+screen that clicks the primary action and asserts the command call — which is exactly the class of check
+that a deployed environment cannot provide.

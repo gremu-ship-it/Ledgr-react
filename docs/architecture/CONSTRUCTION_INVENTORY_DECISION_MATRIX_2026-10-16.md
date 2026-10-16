@@ -370,14 +370,148 @@ The local draft still exists, unchanged, at `/projects-funding-sources/construct
 1. **Deployed authorisation.** The 21 commands' capability checks, four-eyes rule, branch/location scope
    and membership checks are proven only against embedded PostgreSQL with synthetic JWT claims. Official
    Supabase Auth/PostgREST, the deployed RLS/ACL grants and Storage evidence remain untested
-   (the 56 pre-existing `BLOCKED` rows).
+   (the 57 pre-existing `BLOCKED` rows — see §7.6 for which construction requirement each one gates).
 2. **Accounting and security approval.** `INV-CM-001` is still proposed. GL posting stays structurally
    disabled, and the refusals in §5b are deliberate, not gaps to close without an approved basis.
-3. **A dated VAT-rate schedule.** The owner resolved the standard rate to 17.5% effective 1 January 2026;
-   the cost path uses the tax amount actually recorded on the bill, so no historical document is restated.
-   A rate-by-date schedule (`tax_configurations` being the natural home) is still outstanding.
+3. **A dated VAT-rate schedule — delivered 2026-10-16,** after this section was written. The schedule now
+   lives in `tax_configurations` constrained by `20261022000000_effective_dated_tax_configurations.sql` and
+   resolved by `src/lib/tax/taxConfiguration.ts` (see §5 item 7); the cost path still uses the tax amount
+   actually recorded on the bill, so no historical document is restated. What remains open is the deployed
+   migration and the document pages that still read the single constant for **new** documents.
 
 The 56 `BLOCKED` release rows are grouped by their actual dependency — with the verification, environment,
 evidence and production-risk for each group, and a prioritised Phase 3 proposal — in
 [`../audits/LEDGR_PRODUCTION_READINESS_56_BLOCKED_AND_PHASE3_2026-10-16.md`](../audits/LEDGR_PRODUCTION_READINESS_56_BLOCKED_AND_PHASE3_2026-10-16.md).
 None of the 56 is caused by this feature, and none of them is unblocked by any evidence above.
+
+## 7.6 Gap assessment — construction procurement & inventory readiness (2026-10-16)
+
+An evidence-based review of the requirements in the current construction brief, run against the code, the
+migrations, the release harness and the existing focused suites. **No requirement was re-implemented and
+no audit was repeated** — each row names the evidence that already exists, or says plainly that it does
+not exist yet. `PASS — local` means tests, or the R13 harness against real PostgreSQL 17 (embedded) with
+synthetic JWT claims; it never means a deployed environment. There is **no** `PASS — deployed isolated
+environment` row in this document, because no deployed environment was contacted (§7.5 item 1).
+
+### A. Procurement and purchase orders
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| PO creation, detail, status transitions | PASS — local | `CP.PO.AUTHORIZES-PROCUREMENT-ONLY`, `CP.ROLLBACK.ATOMIC-COMMANDS` (an invalid second line persists no order and no first line); UI replay-key case in `ConstructionWorkspacePage.test.tsx` |
+| Four-eyes enforced **server-side** | PASS — local | `authorize_construction_purchase_order` re-derives the actor from `auth.uid()` and refuses `v_po.created_by = v_actor` under a row lock (22023 "different person", asserted at `construction-procurement.test.ts:493`). The screen additionally blocks the creator with the reason ("You raised this purchase order…"), which is a courtesy, not the control |
+| Cancellation and invalid transitions | PASS — local | A written reason is mandatory; replay of an already-cancelled PO returns `idempotent: true`; a PO with a goods receipt cannot be cancelled (22023); authorizing a *cancelled* PO is refused (22023) |
+| Supplier / business ownership validation | PASS — local | `CP.SCOPE.TENANT-BRANCH-FORGERY`: another tenant's supplier, site, product or business is refused, and the caller cannot supply branch/location at all |
+| Outstanding and blocked items visible and actionable | PASS — local | `construction_procurement_open_items` (`CP.CUTOVER.OPEN-ITEMS`) is read-only and member-scoped, and the overview renders it with empty/loading states |
+| Duplicate submissions and retries | PASS — local | Every mutating command takes `p_client_key`; a per-business transaction advisory lock is taken **before** the replay check (`CP.IDEMPOTENCY.CONCURRENT-GRN`); a replayed key with a *different* payload returns the original document (`CP.ROLLBACK.ATOMIC-COMMANDS`); the screens rotate the key only on success |
+
+### B. Delivery notes and goods received
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Delivery-note recording and duplicate exception | PASS — local | `CP.EVIDENCE.DELIVERY-NOTE-ONLY` (evidence only: `stock_effect`/`journal_effect` `none`); the exception command names the recorded note |
+| Exception identifies the original note, requires reason and evidence | PASS — local | Server: exception must name a recorded note of the **same supplier** with the same normalized reference, plus reason + evidence. Screen: only that supplier's recorded notes are offered, the reused number is taken **from** the named note, and the form refuses to submit without both (jsdom, `ConstructionExceptionFlows.test.tsx`) |
+| GRN classifies accepted / rejected / quarantined / disputed | PASS — local | `CP.GRN.CLASSIFICATION-AND-HOLDS`: an unclassified remainder is refused (`receipt-classification-incomplete`), and every non-accepted quantity needs an evidenced hold covering it exactly |
+| Inspection, reclassification and holds follow authorised transitions | PASS — local | `CP.INSPECT.QUALITY-RELEASE`: a release must cite a **PASSED** inspection of that line and needs the inspection capability, the exception authority, a reason and evidence |
+| Rejected / quarantined / disputed never silently become available stock | PASS — local | Same row: rejected material can never be released (it is the supplier's); a release made after posting is a **delta**, not a second movement; a release on a posted quantity is not stranded |
+| Over-receipts, wrong suppliers, mismatched POs, cross-business | PASS — local | `CP.GRN…` (over-receipt needs the exception capability *and* reason *and* evidence — no built-in tolerance) and `CP.SCOPE.TENANT-BRANCH-FORGERY` |
+| Partial and multiple deliveries against one PO | PASS — local | A second GRN against the same line is supported, and over-receipt is computed on the **accumulated** `received_base` across all receipts for that line |
+
+### C. Supplier bills and receipt costs
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Supplier-bill reference registration and duplicate-reference exceptions | PASS — local | `CP.BILL.REFERENCE-REGISTRY`; the duplicate path needs the exception capability and names the active conflicting registration for the same business, supplier and normalized reference |
+| Bill-to-supplier, business and reference matching | PASS — local | `CP.MATCH.NO-DOUBLE-POST`: exact product, PO supplier, PO currency and a registered reference are all required |
+| Refusal paths for already-registered references | PASS — local | 22023 `supplier-invoice-reference-duplicate`; a bill cannot be its own exception; matching an unregistered bill is refused (`supplier-reference-not-registered`) |
+| Receipt-cost preparation uses supported evidence and the established costing rules | PASS — local | `CP.COST.IAS2-DERIVATION` (purchase price net of the stated trade discount, plus non-recoverable tax), `CP.COST.IAS21-TRANSACTION-DATE-RATE` (the rate recorded for the transaction date), `CP.POSTING.POLICY-GATED` |
+| Unsupported tax, discount, FX, date or conversion assumptions are not inferred | PASS — local | The refusals are explicit: `cost-basis-tax-{missing,inconsistent,unsupported}`, `cost-basis-discount-{invalid,inconsistent}`, `bill-fx-inconsistent`, `bill-uom-inconsistent`, `cost-basis-uom-unsupported`, `cost-basis-currency-unsupported` |
+| Supplier-return and accepted-stock write-down restrictions intact | PASS — local | `CP.INSPECT.QUALITY-RELEASE` asserts `rejected-release-unsupported` and `accepted-release-unsupported`; `INV-CM-001` remains **proposed** and GL posting is structurally disabled (`chk_crpp_gl check (gl_posting_enabled = false)`) |
+
+### D. Inventory and project materials
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Stock derived from authoritative server records, not client balances | PASS — local | The adapter only reads (`SELECT`/`select`-RPC) and every mutation is a command; no screen computes a balance. `CP.ISSUE.PROJECT-COST` posts through the single shared writer at the pool weighted-average cost |
+| Material issues associated with the correct project and business | PASS — local | Branch, site, location and `project_ref` are **derived** from the authorized purchase order; the caller cannot supply them (`CP.SCOPE…`) |
+| Unit-of-measure conversions and their evidence respected | PASS — local | `CP.UOM.EXPLICIT-CONVERSION-ONLY`: an exact base-unit match or an explicit, evidenced, product-specific conversion; **no chaining**; the factor must be positive |
+| Holds and inspection outcomes affect availability correctly | PASS — local | `CP.INSPECT.QUALITY-RELEASE` (an accepted quantity can never be released *back out* — that would be an unapproved write-down) |
+| Reclassification authorised, traceable, no duplicated quantities | PASS — local | Same row — reclassification keeps the movement totals consistent after posting |
+| Inventory and project views reflect persisted server results after refresh | PASS — local | Every screen reads through the adapter and invalidates on success; the only local-only surface is the separate draft route (§7.4), which is clearly labelled |
+| Repeated commands and lost-response retries do not duplicate movements | PASS — local | `CP.IDEMPOTENCY.CONCURRENT-GRN` (two sessions, one key → exactly one receipt), `CP.MATCH.CONCURRENT-ALLOCATION` (serialize on the receipt-line row lock), `CP.MATCH.NO-DOUBLE-POST` |
+
+### E. Business setup and usability
+
+| Requirement | Status | Evidence |
+| --- | --- | --- |
+| Sites, units of measure, conversion rules and policy configuration | PASS — local | `register_construction_procurement_site` is an idempotent upsert per business + `site_code`; `CP.UOM.EXPLICIT-CONVERSION-ONLY`; `CP.POSTING.POLICY-GATED` |
+| Business and supplier selection stay correct across a business switch | **PASS — local (newly verified)** | New this change set: `ConstructionBusinessScope.test.tsx` — after switching business the previous business's purchase order is no longer displayed, the `?po=` deep link **re-reads** for the business now selected (it is not a way to keep reading the other business's records), and the workspace header names the business the action would be recorded against. This requirement had **no** test before |
+| Empty, loading, success, refusal and error states understandable | PASS — local | `LoadingBlock` / `EmptyState` / `ErrorBanner` / `FailureBanner` / `SuccessBanner` on every section, with existing jsdom cases for the empty overview, the ungranted-capability workspace and a database refusal |
+| A blocked record says what action is required | PASS — local | `GatedButton` carries the reason as its `title` and `aria-disabled`, and blocked panels name the next step (for example an unmatched receipt line: "Cost cannot be claimed until a bill line is matched to this receipt line (Bill matching screen)") |
+| Evidence, reasons, status and record references visible | PASS — local | Holds, inspections, reclassifications and cost bases each render their reason, evidence reference and the record they cite (the cost-basis line shows the rate, discount and non-recoverable tax used) |
+| Buttons and forms never report success when a command fails or a row is not affected | **FAIL → FIXED** | See §7.7 |
+
+### 7.7 The defect found and fixed by this assessment
+
+**The supplier-bill matching screen could not be used at all.** In
+`src/components/construction/ConstructionBillMatchingSection.tsx` the primary control — *"Match bill line
+to the receipt"* — was a `GatedButton` with **no `onClick` and no `type="submit"`**, inside the `<form>`
+whose `onSubmit` does the work. `GatedButton` defaults to `type="button"`, so the button rendered enabled,
+was focusable, displayed *"Matching…"* while pending, and **did nothing when pressed**: no command, no
+error, no feedback. The command `match_construction_bill_line_to_receipt` was unreachable from the UI, so
+the entire "match a supplier bill line to a receipt line" workflow — the step that cost preparation
+depends on — was dead.
+
+This is the same defect class §7.3 recorded as fixed earlier ("`GatedButton` defaulted to `type="button"`,
+so the material-issue and setup forms never submitted"). That fix covered the four sites then known; this
+form was not one of them, because **no test clicked it** — `matchBillLineToReceipt` was mocked in
+`ConstructionExceptionFlows.test.tsx` and never asserted.
+
+**Two further faults in the same form, found while fixing it:**
+
+1. **The target receipt line was implicit.** The form let the operator choose the *receipt* but the handler
+   hardcoded `acceptedLines[0]`, and a paragraph told them so ("The first accepted receipt line is used
+   when you submit"). A receipt may carry several accepted lines, so on a multi-line receipt the operator
+   could not match any line but the first — and, worse, the recorded match would have targeted line 1 even
+   when they meant line 2. A match recorded against the wrong receipt line is wrong data: it is the
+   receipt line that caps the matched quantity and carries the cost basis. The form now offers an explicit
+   **Receipt line** chooser naming the product and the accepted base quantity. When a receipt has exactly
+   one accepted line it is selected automatically, so the common case is still a single click; the screen
+   no longer guesses when there is a genuine choice. The paragraph that described the old behaviour was
+   replaced rather than left contradicting the screen.
+2. **The form had no accessible name**, unlike every other form in the module (`Record delivery note`,
+   `Record duplicate supplier reference exception`, …), so it could not be addressed by assistive
+   technology or by role.
+
+**Proof the fix is load-bearing.** With the fix in place the new suite passes 6/6. Temporarily removing
+only `type="submit"` (everything else unchanged) makes the first case fail with *"expected "vi.fn()" to be
+called 1 times, but got 0 times"* — the click genuinely never reached the command before. The control is
+restored and the suite is green.
+
+**What was deliberately *not* changed.** No command, migration, table, permission or business rule was
+touched: the server contract was already correct and already evidenced. The cost-basis form's
+`claimable[0]` was reviewed for the same "implicit target" fault and left alone — that panel is scoped to a
+single receipt line and shows every allocation on it, and each allocation is eventually claimed in full at
+its own price, so no wrong amount is recorded; it is a forced order, not a wrong target. Fixing it would be
+a redesign of a working screen with no defect to close. The `check (gl_posting_enabled = false)` constraint,
+the refusal tokens, the append-only triggers and the four-eyes rule are all unchanged.
+
+### 7.8 Verification of this change set
+
+| Check | Command | Result |
+| --- | --- | --- |
+| New bill-matching screen suite | `npx vitest run src/pages/construction/__tests__/ConstructionBillMatching.test.tsx` | 6/6 PASS (submit reaches the command; the chosen line is the target; a refusal is shown with its documented explanation and no success banner; the control is disabled with a reason; a single-line receipt needs no choice; a receipt with nothing accepted says so) |
+| New business-scoping suite | `npx vitest run src/pages/construction/__tests__/ConstructionBusinessScope.test.tsx` | 3/3 PASS |
+| All construction-focused suites | `npx vitest run src/pages/construction src/lib/construction src/components/construction src/dal/repositories/__tests__/ConstructionProcurementRepository.test.ts src/lib/__tests__/constructionWorkspaceNavigation.test.ts` | 9 files, 100/100 PASS |
+| Whole unit layer | `npx vitest run` | 124 files, 1150/1150 PASS |
+| Type-check (app and release harness) | `npx tsc -b`, `npx tsc -p tests/release/tsconfig.json` | both clean |
+| Repo-wide lint | `npx eslint .` | 0 errors, the same 4 pre-existing warnings |
+| Whitespace / conflict markers | `git diff --check` | clean |
+| Production build | `npm run build` (placeholder Supabase env) | built (2.30 s, PWA 117 precache entries) |
+| Release evidence | `npm run test:release` | `{"PASS":846,"FAIL":0,"BLOCKED":57,"NOT APPLICABLE":0}` (`.cache/r13/ledgr-r13-mEL94b/`), all 17 `CP.*` rows PASS — unchanged from the pre-change run |
+
+**A caution recorded from this run.** A release run started while a 124-worker `vitest run` was still
+executing reported `829 PASS / 75 BLOCKED`: 17 **browser-driven** rows (`R094.BROWSER.*`,
+`IC.CACHE.BROWSER-FINANCIAL-NETWORK-ONLY`) flipped to `BLOCKED` under CPU contention and a
+`HARNESS.EXECUTION` row appeared. Re-run alone on an idle machine, the same tree returns the baseline
+`846 / 0 / 57` with every `CP.*` row PASS. The harness is resource-sensitive; **run it on its own and read
+the counts from a clean run** before treating a `BLOCKED` as a finding.

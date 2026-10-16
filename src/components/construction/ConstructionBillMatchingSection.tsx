@@ -532,6 +532,7 @@ function MatchForm({
 }) {
   const queryClient = useQueryClient();
   const [grnId, setGrnId] = useState('');
+  const [receiptLineId, setReceiptLineId] = useState('');
   const [billId, setBillId] = useState('');
   const [billLineId, setBillLineId] = useState('');
   const [billUom, setBillUom] = useState('');
@@ -553,6 +554,15 @@ function MatchForm({
   });
 
   const acceptedLines = (receiptLinesQuery.data ?? []).filter((line) => toNumber(line.accepted_base) > 0);
+  /**
+   * Which receipt line the match targets. A receipt can carry several accepted
+   * lines, and only the operator knows which one a bill line corresponds to, so
+   * the screen shows the choice instead of picking one behind their back. With
+   * exactly one accepted line there is no decision to make, so it is selected —
+   * the common case stays a single click.
+   */
+  const selectedReceiptLine =
+    acceptedLines.length === 1 ? acceptedLines[0] : acceptedLines.find((line) => line.id === receiptLineId) ?? null;
 
   const gate = gateForCapability(
     capabilities,
@@ -597,7 +607,7 @@ function MatchForm({
     },
   });
 
-  const ready = Boolean(receipt && selectedBill && selectedBillLine && billUom && billQuantity && receiptQuantity);
+  const ready = Boolean(receipt && selectedReceiptLine && selectedBill && selectedBillLine && billUom && billQuantity && receiptQuantity);
   const currencyMismatch = receipt && selectedBill ? selectedBill.currency !== (bills.find((bill) => bill.id === billId)?.currency ?? '') : false;
 
   return (
@@ -606,15 +616,25 @@ function MatchForm({
       description="Split allocations across partial receipts and combined allocations to several bill lines are both supported. The server caps the matched quantity at the remaining bill-line quantity and the remaining accepted receipt quantity."
     >
       <form
+        aria-label="Match a supplier bill line to a receipt line"
         className="grid grid-cols-1 gap-4 sm:grid-cols-3"
         onSubmit={(event) => {
           event.preventDefault();
-          const line = acceptedLines[0];
-          if (line) mutation.mutate({ grnLineId: line.id });
+          if (selectedReceiptLine) mutation.mutate({ grnLineId: selectedReceiptLine.id });
         }}
       >
         <Field label="Goods receipt" required>
-          <select aria-label="Goods receipt" value={grnId} onChange={(event) => setGrnId(event.target.value)} className={FIELD_CLASS}>
+          <select
+            aria-label="Goods receipt"
+            value={grnId}
+            onChange={(event) => {
+              setGrnId(event.target.value);
+              // The lines below belong to the previous receipt; the target is
+              // re-chosen rather than carried across.
+              setReceiptLineId('');
+            }}
+            className={FIELD_CLASS}
+          >
             <option value="">Select a receipt…</option>
             {receipts.map((entry) => (
               <option key={entry.id} value={entry.id}>
@@ -640,6 +660,30 @@ function MatchForm({
               <option key={line.id} value={line.id}>
                 {line.line_number} · {line.description} · {formatQuantity(line.quantity)} @ {formatMoney(line.unit_price, selectedBill?.currency)}
                 {line.tax_code !== 'none' ? ` · ${line.tax_code}` : ''}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field
+          label="Receipt line"
+          required
+          hint="Which accepted line of the receipt this bill line corresponds to. The server caps the matched quantity at what that line still has available."
+        >
+          <select
+            aria-label="Receipt line"
+            value={selectedReceiptLine?.id ?? ''}
+            onChange={(event) => setReceiptLineId(event.target.value)}
+            className={FIELD_CLASS}
+            disabled={!grnId || acceptedLines.length === 0}
+          >
+            <option value="">Select a receipt line…</option>
+            {acceptedLines.map((line) => (
+              <option key={line.id} value={line.id}>
+                Line {line.line_number} · {productsById.get(line.product_id)?.name ?? line.product_id} ·{' '}
+                {/* `accepted_base` is the product base unit, which is not necessarily
+                    the unit the line was recorded in — label it as what it is. */}
+                {formatQuantity(line.accepted_base)} base units accepted
               </option>
             ))}
           </select>
@@ -681,19 +725,28 @@ function MatchForm({
 
         <div className="sm:col-span-3">
           <div className="flex flex-wrap items-center gap-3">
-            <GatedButton allowed={gate.allowed && ready && acceptedLines.length > 0} reason={gate.allowed ? 'Choose a receipt, a bill line, the bill unit and both quantities. The receipt must have an accepted quantity.' : gate.reason}>
+            <GatedButton
+              type="submit"
+              allowed={gate.allowed && ready}
+              reason={
+                gate.allowed
+                  ? !grnId
+                    ? 'Choose a receipt, the receipt line, a bill line, the bill unit and both quantities.'
+                    : acceptedLines.length === 0
+                      ? 'This receipt has no accepted quantity to match. Record the receipt, and accept the material on it, first.'
+                      : 'Choose the receipt line, a bill line, the bill unit and both quantities.'
+                  : gate.reason
+              }
+            >
               <>
                 <Link2 className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Matching…' : 'Match bill line to the receipt'}
               </>
             </GatedButton>
             {receipt ? (
               <span className="text-xs text-gray-600">
-                Accepted quantities on {receipt.grn_number}:{' '}
                 {acceptedLines.length === 0
-                  ? 'none yet — a receipt with nothing accepted cannot be matched'
-                  : acceptedLines
-                      .map((line) => `line ${line.line_number}: ${formatQuantity(line.accepted_base)} base units`)
-                      .join(' · ')}
+                  ? `${receipt.grn_number} has nothing accepted yet — a receipt with nothing accepted cannot be matched`
+                  : `${receipt.grn_number} has ${acceptedLines.length} accepted ${acceptedLines.length === 1 ? 'line' : 'lines'} to choose from.`}
               </span>
             ) : null}
           </div>
@@ -709,8 +762,9 @@ function MatchForm({
             </div>
           ) : null}
           <p className="mt-3 text-xs text-gray-500">
-            The first accepted receipt line is used when you submit. Use the Receipts screen to see per-line allocations, and re-open this form to
-            allocate additional bill lines to other receipt lines.
+            The match is recorded against the receipt line you choose. One bill line can be matched against several receipt lines (and the other way
+            round) by submitting again with a different line — the server caps each match at what that line still has available, so nothing is
+            over-allocated. Per-line matches are listed on the Receipts screen.
           </p>
         </div>
       </form>
