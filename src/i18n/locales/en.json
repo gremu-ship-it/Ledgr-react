@@ -80,6 +80,7 @@
       "inventory": "Inventory",
       "accounting": "Accounting",
       "organisation": "Organisation",
+      "construction": "Construction",
       "support": "Help",
       "admin": "Admin"
     },
@@ -106,6 +107,7 @@
       "contacts": "Contacts",
       "branches": "Branches",
       "departments": "Departments",
+      "constructionWorkspace": "Construction workspace",
       "settings": "Settings",
       "support": "Support",
       "businesses": "Businesses",

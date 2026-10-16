@@ -14,6 +14,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
   attemptChunkRecovery,
@@ -54,6 +55,10 @@ const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPag
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
+const ConstructionProjectSetupDraftPage = lazyPage(
+  () => import('@/pages/ConstructionProjectSetupDraftPage'),
+  'ConstructionProjectSetupDraftPage',
+);
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
@@ -237,9 +242,19 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
+                {/* Local draft only; no repository call, backend request, or project authorization path. */}
+                <Route
+                  path="/projects-funding-sources/construction-draft"
+                  element={<ConstructionProjectSetupDraftPage />}
+                />
+                <Route path="/construction" element={<ConstructionProjectSetupDraftPage />} />
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/pos" element={<PosPage />} />
+                  <Route path="/pos" element={
+                    <CapabilityGate capability="pos">
+                      <PosPage />
+                    </CapabilityGate>
+                  } />
 
                   {/* Finance */}
                   <Route path="/income" element={<IncomePage />} />
@@ -254,22 +269,30 @@ function App() {
                   {/* Inventory */}
                   <Route path="/products" element={
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Products">
-                      <ProductsPage />
+                      <CapabilityGate capability="inventory">
+                        <ProductsPage />
+                      </CapabilityGate>
                     </PartnerPlanGate>
                   } />
                   <Route path="/inventory" element={
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Inventory">
-                      <InventoryPage />
+                      <CapabilityGate capability="inventory" rolePath="/inventory">
+                        <InventoryPage />
+                      </CapabilityGate>
                     </PartnerPlanGate>
                   } />
                   <Route path="/warehouse" element={
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Warehouses">
-                      <WarehousePage />
+                      <CapabilityGate capability="inventory" rolePath="/warehouse">
+                        <WarehousePage />
+                      </CapabilityGate>
                     </PartnerPlanGate>
                   } />
                   <Route path="/transfers" element={
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Stock transfers">
-                      <TransfersPage />
+                      <CapabilityGate capability="inventory" rolePath="/transfers">
+                        <TransfersPage />
+                      </CapabilityGate>
                     </PartnerPlanGate>
                   } />
 

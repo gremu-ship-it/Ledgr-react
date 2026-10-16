@@ -63,6 +63,7 @@ jobs:
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_STAGING }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      FRONTEND_LIVE_URL: ${{ vars.STAGING_URL }}
 
       # Frontend build-time env (staging Supabase project)
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_STAGING }}
@@ -141,13 +142,56 @@ jobs:
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}" || { echo "::error::VERCEL_TOKEN is not configured; refusing to migrate the database without a deployable frontend."; exit 1; }
           test -n "${VERCEL_PROJECT_ID:-}" || { echo "::error::Vercel project id for staging is not configured; refusing to migrate."; exit 1; }
-          test -n "${VERCEL_ORG_ID:-}" || echo "::warning::VERCEL_ORG_ID is empty."
+          test -n "${VERCEL_ORG_ID:-}" || { echo "::error::VERCEL_ORG_ID is not configured; refusing to migrate."; exit 1; }
+          test -n "${FRONTEND_LIVE_URL:-}" || { echo "::error::STAGING_URL is not configured; refusing to migrate without a verifiable live frontend URL."; exit 1; }
+          [[ "$FRONTEND_LIVE_URL" == https://* ]] || { echo "::error::STAGING_URL must be an https URL."; exit 1; }
           npm i -g vercel@latest >/dev/null 2>&1
           if ! vercel whoami --token "$VERCEL_TOKEN" >/dev/null 2>&1; then
             echo "::error::Vercel token rejected (vercel whoami failed); refusing to migrate the database."
             exit 1
           fi
-          echo "Vercel credentials valid; project ${VERCEL_PROJECT_ID}."
+          # Link the exact staging project before the irreversible DB step.
+          # Without .vercel/project.json the CLI can deploy to an unintended
+          # default project, while still returning exit code 0.
+          if ! vercel link --yes --project "$VERCEL_PROJECT_ID" --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"; then
+            echo "::error::Could not link the configured staging Vercel project; refusing to migrate."
+            exit 1
+          fi
+          # Pull this project's production settings now, so the later local
+          # Build Output API artifact is generated for the exact linked project.
+          if ! vercel pull --yes --environment=production --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"; then
+            echo "::error::Could not pull staging Vercel project settings; refusing to migrate."
+            exit 1
+          fi
+          # Build and validate the exact release artifact before touching the DB.
+          export VITE_APP_VERSION="$GITHUB_SHA"
+          export VITE_MIGRATION_TARGET="$MIGRATION_TARGET"
+          vercel_build_log="$(mktemp)"
+          set +e
+          vercel build --prod --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" 2>&1 | tee "$vercel_build_log"
+          vercel_build_status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$vercel_build_status" -ne 0 ]]; then
+            echo "::error::Vercel staging build failed before database migration (exit ${vercel_build_status})."
+            tail -n 8 "$vercel_build_log" | while IFS= read -r line; do
+              line="${line//$VERCEL_TOKEN/***}"
+              line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+              [[ -z "$line" ]] || echo "::error::${line//::/: :}"
+            done
+            exit "$vercel_build_status"
+          fi
+          version_file=".vercel/output/static/version.json"
+          [[ -s "$version_file" ]] || { echo "::error::Vercel build did not produce ${version_file}; refusing to migrate."; exit 1; }
+          if ! version_values="$(node -e 'const fs=require("node:fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.log(v.commit ?? "", v.migrationTarget ?? "")' "$version_file")"; then
+            echo "::error::Vercel build produced invalid version.json; refusing to migrate."
+            exit 1
+          fi
+          read -r built_commit built_target <<< "$version_values"
+          if [[ "$built_commit" != "$GITHUB_SHA" || "$built_target" != "$MIGRATION_TARGET" ]]; then
+            echo "::error::Vercel build artifact has commit=${built_commit} migrationTarget=${built_target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}. Refusing to migrate."
+            exit 1
+          fi
+          echo "Vercel credentials valid; linked staging project ${VERCEL_PROJECT_ID}; prebuilt artifact verified."
       - name: Link & migrate staging database
         id: migrate
         shell: bash
@@ -183,20 +227,23 @@ jobs:
           # (invoice-open, accept-invite-link), or are cron/webhook entry points.
           # Deploying all with --no-verify-jwt is the safest default and matches
           # the current Supabase recommendation for custom-auth functions.
-          # Bundle server-side: local Docker bundling pulls edge-runtime from
-          # public ECR, which can fail with toomanyrequests / Data limit exceeded.
+          NO_VERIFY_FUNCTIONS="api invoice-open initiate-subscription-payment verify-subscription-payment grant-manual-subscription paychangu-webhook expire-subscriptions send-renewal-reminders generate-vat-returns generate-partner-invoices finalize-account-deletions retry-failed-webhooks process-invoice-automation ai-chat support-agent suggest-bank-matches accept-invite-link create-invite-link invite-team-member list-team-members create-api-key cancel-account-deletion request-account-deletion export-my-data send-invoice webhook-dispatcher"
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
-            supabase functions deploy "$fn" --use-api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+            if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
+              supabase functions deploy "$fn" --use-api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+            else
+              supabase functions deploy "$fn" --use-api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+            fi
           done
       # The schedule migrations ship literal <PROJECT_REF>/<CRON_SECRET>
       # placeholders that `db push` applies verbatim, so the HTTP-dispatched
       # cron jobs silently posted to a non-resolving host (renewal reminders
       # and partner invoices never ran). This substitutes the real values,
-      # re-enables the jobs, and fails the run if any job still holds a
-      # placeholder or a job scripts/cron-jobs.sql schedules is inactive. A
-      # failure here does NOT hold back the frontend (see the gate below).
+      # re-enables the jobs, and verifies placeholders plus active status. A
+      # failure is recorded and fails the workflow but does not strand the
+      # frontend after the backend has shipped.
       - name: Reschedule pg_cron jobs with real URLs (staging)
         id: cron
         env:
@@ -210,15 +257,9 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment staging
 
-      # Last, deliberately — see the ordering note at the migration step. Gated
-      # on exactly what the new client depends on (its build, the migration
-      # and its verified target, the edge functions) instead of "every earlier
-      # step succeeded": once the irreversible migration has run, a failure in
-      # independent post-migration maintenance (the pg_cron reschedule, the
-      # optional Railway gateway) must not strand users on the previous
-      # frontend. On 2026-10-14 a pg_cron verification failure had skipped this
-      # step on every staging deploy since 2026-10-09 (MIXED-VERSION). Those
-      # steps still fail the run, and the release manifest records cronJobs.
+      # Backend compatibility-critical steps must succeed before this deploy,
+      # but independent maintenance (pg_cron / optional Railway) must not strand
+      # users on the previous frontend after the DB and functions have shipped.
       - name: Deploy frontend to Vercel (staging)
         id: frontend
         if: >-
@@ -228,40 +269,70 @@ jobs:
               steps.verify_migration.outcome == 'success' &&
               steps.edge.outcome == 'success' }}
         run: |
-          set -o pipefail
-          npm i -g vercel@latest
-          vercel_log="$(mktemp)"
+          set -euo pipefail
+          deploy_stdout="$(mktemp)"
+          deploy_stderr="$(mktemp)"
           set +e
-          vercel deploy \
+          vercel deploy --prebuilt \
             --prod \
             --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
             --yes \
-            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
-            --build-env VITE_FEATURE_CAPABILITY_ORG_LAYER="$VITE_FEATURE_CAPABILITY_ORG_LAYER" \
-            --build-env VITE_APP_VERSION="${{ github.sha }}" \
-            --build-env VITE_MIGRATION_TARGET="$MIGRATION_TARGET" \
-            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
-            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
-            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_STAGING }}" \
-            2>&1 | tee "$vercel_log"
-          vercel_status=${PIPESTATUS[0]}
+            --json \
+            --force \
+            >"$deploy_stdout" 2>"$deploy_stderr"
+          deploy_status=$?
           set -e
-          if [[ "$vercel_status" -ne 0 ]]; then
-            echo "::error::vercel deploy (staging) failed (exit ${vercel_status})"
-            tail -n 8 "$vercel_log" | while IFS= read -r line; do
-              line="${line//$'\r'/}"
+          if [[ -s "$deploy_stderr" ]]; then
+            cat "$deploy_stderr"
+          fi
+          if [[ "$deploy_status" -ne 0 ]]; then
+            echo "::error::vercel deploy --prebuilt (staging) failed (exit ${deploy_status})"
+            cat "$deploy_stdout" "$deploy_stderr" | tail -n 12 | while IFS= read -r line; do
               line="${line//$VERCEL_TOKEN/***}"
               line="${line//$VITE_SUPABASE_ANON_KEY/***}"
               line="${line//::/: :}"
-              [[ -z "$line" ]] && continue
-              echo "::error::${line:0:400}"
+              [[ -z "$line" ]] || echo "::error::${line:0:400}"
             done
-            exit "$vercel_status"
+            exit "$deploy_status"
           fi
-          deploy_url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' "$vercel_log" | tail -n 1 || true)"
-          echo "FRONTEND_URL=${deploy_url}" >> "$GITHUB_ENV"
+          # JSON output exposes the immutable deployment URL separately from
+          # Vercel's production alias, independent of CLI terminal formatting.
+          deploy_url="$(node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const u=r.deployment?.url??r.url;if(typeof u!=="string"||!u)process.exit(1);console.log(/^https?:\/\//.test(u)?u:`https://${u}`)' "$deploy_stdout" 2>/dev/null || true)"
+          if [[ -z "$deploy_url" || "$deploy_url" != https://* ]]; then
+            echo "::error::Vercel deploy succeeded but JSON did not contain a valid deployment URL."
+            cat "$deploy_stdout"
+            exit 1
+          fi
+          echo "Prebuilt Vercel deployment created: ${deploy_url}"
+          # Move the project's stable production aliases to this exact deploy;
+          # a successful deployment response alone did not update STAGING_URL.
+          promotion_log="$(mktemp)"
+          if ! vercel promote "$deploy_url" \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
+            >"$promotion_log" 2>&1; then
+            if grep -Fq 'already the current production deployment' "$promotion_log"; then
+              # Vercel reports this idempotent state as HTTP 409. The following
+              # canonical URL check is authoritative for the user-facing alias.
+              echo "::notice::Vercel already marks this deployment current; verifying the canonical URL."
+            else
+              echo "::error::Could not promote the newly created Vercel deployment to the project's production aliases."
+              tail -n 10 "$promotion_log" | while IFS= read -r line; do
+                line="${line//$VERCEL_TOKEN/***}"
+                line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+                line="${line//::/: :}"
+                [[ -z "$line" ]] || echo "::error::${line:0:400}"
+              done
+              exit 1
+            fi
+          else
+            cat "$promotion_log"
+            echo "Vercel deployment explicitly promoted to production aliases."
+          fi
+          echo "VERCEL_DEPLOYMENT_URL=${deploy_url}" >> "$GITHUB_ENV"
+          echo "FRONTEND_URL=${FRONTEND_LIVE_URL%/}" >> "$GITHUB_ENV"
       # IC 2026-09-25 P9: evidence that the LIVE frontend is this commit and
       # expects this migration target (compatibility with the DB just verified).
       - name: Verify deployed frontend version (staging)
@@ -270,40 +341,45 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url="${FRONTEND_URL:-}"
-          [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
-          # The URL taken from the CLI log can be the project's production
-          # alias, which may keep serving the PREVIOUS deployment for a short
-          # while after `vercel deploy --prod` returns (2026-10-09: this check
-          # read the prior commit off the staging alias, which moved later).
-          # Poll until it serves this commit, within a bounded window.
-          is_json() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; }
-          field() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j[process.argv[1]] ?? "")})' "$2"; }
-          attempts=18
-          commit=""; target=""
-          for ((i = 1; i <= attempts; i++)); do
-            body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
-            if [[ -n "$body" ]] && is_json "$body"; then
-              commit="$(field "$body" commit)"
-              target="$(field "$body" migrationTarget)"
-              if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
-                echo "$body"
-                echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
-                exit 0
+          live_url="${FRONTEND_URL:-}"
+          deployment_url="${VERCEL_DEPLOYMENT_URL:-}"
+          [[ -n "$deployment_url" ]] || { echo "::error::Vercel did not return a deployment URL; cannot verify the built frontend."; exit 1; }
+          [[ -n "$live_url" ]] || { echo "::error::No live frontend URL is configured; refusing to report an unverified release."; exit 1; }
+          live_url="${live_url%/}"
+          check_frontend_version() {
+            local label="$1" url="$2" body commit target
+            local attempts=18 i
+            commit="(unreadable)"; target="(unreadable)"
+            for ((i = 1; i <= attempts; i++)); do
+              body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
+              if [[ -n "$body" ]] && printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
+                commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit ?? "")})')"
+                target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget ?? "")})')"
+                if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
+                  echo "${label}: commit=${commit} migrationTarget=${target}"
+                  echo "$body"
+                  echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+                  return 0
+                fi
+              else
+                commit="(unreadable)"; target="(unreadable)"
               fi
-            elif (( i == 1 )); then
-              echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
-              exit 0
-            else
-              commit="(unreadable)"; target="(unreadable)"
-            fi
-            if (( i < attempts )); then
-              echo "Attempt ${i}/${attempts}: ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
-              sleep 10
-            fi
-          done
-          echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
-          exit 1
+              if (( i < attempts )); then
+                echo "Attempt ${i}/${attempts}: ${label} ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
+                sleep 10
+              fi
+            done
+            echo "::error::${label} ${url} reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
+            return 1
+          }
+          # The immutable deployment URL can be access-protected by Vercel; its
+          # exact artifact was validated before migration. Poll the canonical
+          # URL users visit until it serves that commit and migration target.
+          echo "::notice::Prebuilt Vercel deployment: ${deployment_url}; checking the canonical ${SUPABASE_ENV_LABEL} URL."
+          if ! check_frontend_version "Canonical ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
+            echo "::error::The prebuilt artifact was validated before migration, but the canonical live URL is not serving it; check the Vercel production alias/domain."
+            exit 1
+          fi
       - name: Release manifest (staging)
         if: always()
         shell: bash
@@ -339,6 +415,7 @@ jobs:
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      FRONTEND_LIVE_URL: ${{ vars.PRODUCTION_URL }}
 
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_PROD }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_PROD }}
@@ -414,13 +491,51 @@ jobs:
           set -euo pipefail
           test -n "${VERCEL_TOKEN:-}" || { echo "::error::VERCEL_TOKEN is not configured; refusing to migrate the database without a deployable frontend."; exit 1; }
           test -n "${VERCEL_PROJECT_ID:-}" || { echo "::error::Vercel project id for production is not configured; refusing to migrate."; exit 1; }
-          test -n "${VERCEL_ORG_ID:-}" || echo "::warning::VERCEL_ORG_ID is empty."
+          test -n "${VERCEL_ORG_ID:-}" || { echo "::error::VERCEL_ORG_ID is not configured; refusing to migrate."; exit 1; }
+          test -n "${FRONTEND_LIVE_URL:-}" || { echo "::error::PRODUCTION_URL is not configured; refusing to migrate without a verifiable live frontend URL."; exit 1; }
+          [[ "$FRONTEND_LIVE_URL" == https://* ]] || { echo "::error::PRODUCTION_URL must be an https URL."; exit 1; }
           npm i -g vercel@latest >/dev/null 2>&1
           if ! vercel whoami --token "$VERCEL_TOKEN" >/dev/null 2>&1; then
             echo "::error::Vercel token rejected (vercel whoami failed); refusing to migrate the database."
             exit 1
           fi
-          echo "Vercel credentials valid; project ${VERCEL_PROJECT_ID}."
+          # Link the exact production project before the irreversible DB step.
+          if ! vercel link --yes --project "$VERCEL_PROJECT_ID" --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"; then
+            echo "::error::Could not link the configured production Vercel project; refusing to migrate."
+            exit 1
+          fi
+          if ! vercel pull --yes --environment=production --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"; then
+            echo "::error::Could not pull production Vercel project settings; refusing to migrate."
+            exit 1
+          fi
+          export VITE_APP_VERSION="$GITHUB_SHA"
+          export VITE_MIGRATION_TARGET="$MIGRATION_TARGET"
+          vercel_build_log="$(mktemp)"
+          set +e
+          vercel build --prod --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN" 2>&1 | tee "$vercel_build_log"
+          vercel_build_status=${PIPESTATUS[0]}
+          set -e
+          if [[ "$vercel_build_status" -ne 0 ]]; then
+            echo "::error::Vercel production build failed before database migration (exit ${vercel_build_status})."
+            tail -n 8 "$vercel_build_log" | while IFS= read -r line; do
+              line="${line//$VERCEL_TOKEN/***}"
+              line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+              [[ -z "$line" ]] || echo "::error::${line//::/: :}"
+            done
+            exit "$vercel_build_status"
+          fi
+          version_file=".vercel/output/static/version.json"
+          [[ -s "$version_file" ]] || { echo "::error::Vercel build did not produce ${version_file}; refusing to migrate."; exit 1; }
+          if ! version_values="$(node -e 'const fs=require("node:fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.log(v.commit ?? "", v.migrationTarget ?? "")' "$version_file")"; then
+            echo "::error::Vercel build produced invalid version.json; refusing to migrate."
+            exit 1
+          fi
+          read -r built_commit built_target <<< "$version_values"
+          if [[ "$built_commit" != "$GITHUB_SHA" || "$built_target" != "$MIGRATION_TARGET" ]]; then
+            echo "::error::Vercel build artifact has commit=${built_commit} migrationTarget=${built_target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET}. Refusing to migrate."
+            exit 1
+          fi
+          echo "Vercel credentials valid; linked production project ${VERCEL_PROJECT_ID}; prebuilt artifact verified."
       - name: Link & migrate production database
         id: migrate
         shell: bash
@@ -454,7 +569,6 @@ jobs:
       - name: Deploy Edge Functions (production)
         id: edge
         run: |
-          # Use server-side bundling here too; do not depend on public ECR pulls.
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
@@ -478,15 +592,9 @@ jobs:
           npm i -g @railway/cli
           railway up --service ledgr-gateway --environment production
 
-      # Last, deliberately — see the ordering note at the migration step. Gated
-      # on exactly what the new client depends on (its build, the migration
-      # and its verified target, the edge functions) instead of "every earlier
-      # step succeeded": once the irreversible migration has run, a failure in
-      # independent post-migration maintenance (the pg_cron reschedule, the
-      # optional Railway gateway) must not strand users on the previous
-      # frontend. On 2026-10-14 a pg_cron verification failure had skipped this
-      # step on every staging deploy since 2026-10-09 (MIXED-VERSION). Those
-      # steps still fail the run, and the release manifest records cronJobs.
+      # Backend compatibility-critical steps must succeed before this deploy,
+      # but independent maintenance (pg_cron / optional Railway) must not strand
+      # users on the previous frontend after the DB and functions have shipped.
       - name: Deploy frontend to Vercel (production)
         id: frontend
         if: >-
@@ -496,40 +604,70 @@ jobs:
               steps.verify_migration.outcome == 'success' &&
               steps.edge.outcome == 'success' }}
         run: |
-          set -o pipefail
-          npm i -g vercel@latest
-          vercel_log="$(mktemp)"
+          set -euo pipefail
+          deploy_stdout="$(mktemp)"
+          deploy_stderr="$(mktemp)"
           set +e
-          vercel deploy \
+          vercel deploy --prebuilt \
             --prod \
             --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
             --yes \
-            --build-env VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
-            --build-env VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
-            --build-env VITE_SENTRY_DSN="$VITE_SENTRY_DSN" \
-            --build-env VITE_FEATURE_CAPABILITY_ORG_LAYER="$VITE_FEATURE_CAPABILITY_ORG_LAYER" \
-            --build-env VITE_APP_VERSION="${{ github.sha }}" \
-            --build-env VITE_MIGRATION_TARGET="$MIGRATION_TARGET" \
-            --build-env SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}" \
-            --build-env SENTRY_ORG="${{ vars.SENTRY_ORG }}" \
-            --build-env SENTRY_PROJECT="${{ vars.SENTRY_PROJECT_PROD }}" \
-            2>&1 | tee "$vercel_log"
-          vercel_status=${PIPESTATUS[0]}
+            --json \
+            --force \
+            >"$deploy_stdout" 2>"$deploy_stderr"
+          deploy_status=$?
           set -e
-          if [[ "$vercel_status" -ne 0 ]]; then
-            echo "::error::vercel deploy --prod failed (exit ${vercel_status})"
-            tail -n 8 "$vercel_log" | while IFS= read -r line; do
-              line="${line//$'\r'/}"
+          if [[ -s "$deploy_stderr" ]]; then
+            cat "$deploy_stderr"
+          fi
+          if [[ "$deploy_status" -ne 0 ]]; then
+            echo "::error::vercel deploy --prebuilt (production) failed (exit ${deploy_status})"
+            cat "$deploy_stdout" "$deploy_stderr" | tail -n 12 | while IFS= read -r line; do
               line="${line//$VERCEL_TOKEN/***}"
               line="${line//$VITE_SUPABASE_ANON_KEY/***}"
               line="${line//::/: :}"
-              [[ -z "$line" ]] && continue
-              echo "::error::${line:0:400}"
+              [[ -z "$line" ]] || echo "::error::${line:0:400}"
             done
-            exit "$vercel_status"
+            exit "$deploy_status"
           fi
-          deploy_url="$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' "$vercel_log" | tail -n 1 || true)"
-          echo "FRONTEND_URL=${deploy_url}" >> "$GITHUB_ENV"
+          # JSON output exposes the immutable deployment URL separately from
+          # Vercel's production alias, independent of CLI terminal formatting.
+          deploy_url="$(node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));const u=r.deployment?.url??r.url;if(typeof u!=="string"||!u)process.exit(1);console.log(/^https?:\/\//.test(u)?u:`https://${u}`)' "$deploy_stdout" 2>/dev/null || true)"
+          if [[ -z "$deploy_url" || "$deploy_url" != https://* ]]; then
+            echo "::error::Vercel deploy succeeded but JSON did not contain a valid deployment URL."
+            cat "$deploy_stdout"
+            exit 1
+          fi
+          echo "Prebuilt Vercel deployment created: ${deploy_url}"
+          # Move the project's stable production aliases to this exact deploy;
+          # a successful deployment response alone did not update STAGING_URL.
+          promotion_log="$(mktemp)"
+          if ! vercel promote "$deploy_url" \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_ORG_ID" \
+            >"$promotion_log" 2>&1; then
+            if grep -Fq 'already the current production deployment' "$promotion_log"; then
+              # Vercel reports this idempotent state as HTTP 409. The following
+              # canonical URL check is authoritative for the user-facing alias.
+              echo "::notice::Vercel already marks this deployment current; verifying the canonical URL."
+            else
+              echo "::error::Could not promote the newly created Vercel deployment to the project's production aliases."
+              tail -n 10 "$promotion_log" | while IFS= read -r line; do
+                line="${line//$VERCEL_TOKEN/***}"
+                line="${line//$VITE_SUPABASE_ANON_KEY/***}"
+                line="${line//::/: :}"
+                [[ -z "$line" ]] || echo "::error::${line:0:400}"
+              done
+              exit 1
+            fi
+          else
+            cat "$promotion_log"
+            echo "Vercel deployment explicitly promoted to production aliases."
+          fi
+          echo "VERCEL_DEPLOYMENT_URL=${deploy_url}" >> "$GITHUB_ENV"
+          echo "FRONTEND_URL=${FRONTEND_LIVE_URL%/}" >> "$GITHUB_ENV"
       # IC 2026-09-25 P9: evidence that the LIVE frontend is this commit and
       # expects this migration target (compatibility with the DB just verified).
       - name: Verify deployed frontend version (production)
@@ -538,40 +676,45 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          url="${FRONTEND_URL:-}"
-          [[ -n "$url" ]] || { echo "::warning::No deployment URL captured; version check skipped."; exit 0; }
-          # The URL taken from the CLI log can be the project's production
-          # alias, which may keep serving the PREVIOUS deployment for a short
-          # while after `vercel deploy --prod` returns (2026-10-09: this check
-          # read the prior commit off the staging alias, which moved later).
-          # Poll until it serves this commit, within a bounded window.
-          is_json() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; }
-          field() { printf '%s' "$1" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j[process.argv[1]] ?? "")})' "$2"; }
-          attempts=18
-          commit=""; target=""
-          for ((i = 1; i <= attempts; i++)); do
-            body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
-            if [[ -n "$body" ]] && is_json "$body"; then
-              commit="$(field "$body" commit)"
-              target="$(field "$body" migrationTarget)"
-              if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
-                echo "$body"
-                echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
-                exit 0
+          live_url="${FRONTEND_URL:-}"
+          deployment_url="${VERCEL_DEPLOYMENT_URL:-}"
+          [[ -n "$deployment_url" ]] || { echo "::error::Vercel did not return a deployment URL; cannot verify the built frontend."; exit 1; }
+          [[ -n "$live_url" ]] || { echo "::error::No live frontend URL is configured; refusing to report an unverified release."; exit 1; }
+          live_url="${live_url%/}"
+          check_frontend_version() {
+            local label="$1" url="$2" body commit target
+            local attempts=18 i
+            commit="(unreadable)"; target="(unreadable)"
+            for ((i = 1; i <= attempts; i++)); do
+              body="$(curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "${url}/version.json?release_check=${GITHUB_RUN_ID}-${i}" || true)"
+              if [[ -n "$body" ]] && printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{JSON.parse(d)}catch{process.exit(1)}})'; then
+                commit="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.commit ?? "")})')"
+                target="$(printf '%s' "$body" | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);console.log(j.migrationTarget ?? "")})')"
+                if [[ "$commit" == "$GITHUB_SHA" && "$target" == "$MIGRATION_TARGET" ]]; then
+                  echo "${label}: commit=${commit} migrationTarget=${target}"
+                  echo "$body"
+                  echo "Frontend ${commit} live; expects migration ${target} (verified on DB)."
+                  return 0
+                fi
+              else
+                commit="(unreadable)"; target="(unreadable)"
               fi
-            elif (( i == 1 )); then
-              echo "::warning::${url}/version.json not readable (deployment protection?). Check manually."
-              exit 0
-            else
-              commit="(unreadable)"; target="(unreadable)"
-            fi
-            if (( i < attempts )); then
-              echo "Attempt ${i}/${attempts}: ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
-              sleep 10
-            fi
-          done
-          echo "::error::Deployed frontend reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
-          exit 1
+              if (( i < attempts )); then
+                echo "Attempt ${i}/${attempts}: ${label} ${url} serves commit=${commit} migrationTarget=${target}; waiting for ${GITHUB_SHA} ..."
+                sleep 10
+              fi
+            done
+            echo "::error::${label} ${url} reports commit=${commit} migrationTarget=${target}; expected ${GITHUB_SHA} / ${MIGRATION_TARGET} (after ${attempts} attempts, ~3 min)."
+            return 1
+          }
+          # The immutable deployment URL can be access-protected by Vercel; its
+          # exact artifact was validated before migration. Poll the canonical
+          # URL users visit until it serves that commit and migration target.
+          echo "::notice::Prebuilt Vercel deployment: ${deployment_url}; checking the canonical ${SUPABASE_ENV_LABEL} URL."
+          if ! check_frontend_version "Canonical ${SUPABASE_ENV_LABEL} URL" "$live_url"; then
+            echo "::error::The prebuilt artifact was validated before migration, but the canonical live URL is not serving it; check the Vercel production alias/domain."
+            exit 1
+          fi
       - name: Release manifest (production)
         if: always()
         shell: bash

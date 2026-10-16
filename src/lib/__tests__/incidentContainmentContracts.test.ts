@@ -88,6 +88,6 @@ describe('P9 deploy safeguards', () => {
     });
   }
   it('passes the migration target into the frontend build', () => {
-    expect((wf.match(/--build-env VITE_MIGRATION_TARGET="\$MIGRATION_TARGET"/g) ?? []).length).toBe(2);
+    expect((wf.match(/export VITE_MIGRATION_TARGET="\$MIGRATION_TARGET"/g) ?? []).length).toBe(2);
   });
 });

@@ -9,6 +9,7 @@ import { isItemLocked, planRequiredForItem, visibleSectionsFor } from './navConf
 import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { pushUpgradeRequired } from '@/lib/notifications';
 
 export function Sidebar() {
@@ -24,8 +25,9 @@ export function Sidebar() {
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
   const { isFeatureEnabled } = usePartner();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const isPlatformAdmin = useIsPlatformAdmin();
-  const visibleSections = visibleSectionsFor(isFeatureEnabled, role);
+  const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled);
 
   const [isResizing, setIsResizing] = useState(false);
   const startX = useRef(0);

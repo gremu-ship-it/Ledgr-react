@@ -37,7 +37,8 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
+      // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
+      const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
         expect(isItemLocked(item, 'free'), item.path).toBe(!available);
       }

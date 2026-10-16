@@ -27,6 +27,7 @@ import { createLogger } from '@/lib/logger';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
+import { useCapability } from '@/hooks/useCapability';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useInfiniteKeysetList } from '@/hooks/useInfiniteKeysetList';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
@@ -301,6 +302,10 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
   const { data: branches = [] } = useBranches(businessId);
   const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] } = useAllProducts(businessId);
+  const servicesEnabled = useCapability('services');
+  const selectableProducts = servicesEnabled
+    ? products
+    : products.filter((product) => product.product_type !== 'service');
 
   const [form, setForm] = useState<QuickEntryForm>({
     issue_date: today(), description: '', amount: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '', payment_method: 'cash',
@@ -597,7 +602,7 @@ function QuickEntryTab({ businessId, onSuccess }: { businessId: string; onSucces
             <ProductSelect
               value={form.product_id}
               onChange={(v) => set('product_id', v)}
-              products={products}
+              products={selectableProducts}
             />
           </div>
 
@@ -689,6 +694,10 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const { data: branches = [] } = useBranches(businessId);
   const { data: departments = [] } = useDepartments(businessId);
   const { data: products = [] } = useAllProducts(businessId);
+  const servicesEnabled = useCapability('services');
+  const selectableProducts = servicesEnabled
+    ? products
+    : products.filter((product) => product.product_type !== 'service');
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -1033,7 +1042,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
                         <ProductSelect
                           value={line.product_id}
                           onChange={(v) => setLine(idx, 'product_id', v)}
-                          products={products}
+                          products={selectableProducts}
                           placeholder="Select…"
                           className="w-full rounded bg-transparent px-1 py-0.5 text-sm focus:outline-none focus:ring-1 focus:ring-brand-500"
                         />

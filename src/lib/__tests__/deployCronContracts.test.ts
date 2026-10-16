@@ -247,11 +247,12 @@ describe('release manifest', () => {
 });
 
 // ── the version check itself (the run: block from deploy.yml) ───────────────
-describe('frontend version check tolerates a lagging production alias', () => {
+describe('canonical frontend version check verifies the promoted prebuilt release', () => {
   const SHA = 'bac56946509dad1cc02ff4525518b1ab1defbf0b';
   const TARGET = '20261018000000';
   const OLD = JSON.stringify({ commit: '5845842aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', migrationTarget: TARGET });
   const NEW = JSON.stringify({ commit: SHA, migrationTarget: TARGET });
+  const DEPLOYMENT_URL = 'https://ledgr-prebuilt.vercel.app';
   // `sleep 10` between attempts is stubbed out so the test runs in seconds.
   const block = () => `sleep() { :; }\n${runBlock(step('staging', 'frontend_verify'))}`;
 
@@ -274,10 +275,17 @@ describe('frontend version check tolerates a lagging production alias', () => {
   const check = (responses: Array<[number, string]>, url = base) => {
     script = responses;
     hits = 0;
-    return runBashScript(block(), { FRONTEND_URL: url, GITHUB_SHA: SHA, MIGRATION_TARGET: TARGET, GITHUB_RUN_ID: '1' });
+    return runBashScript(block(), {
+      FRONTEND_URL: url,
+      VERCEL_DEPLOYMENT_URL: DEPLOYMENT_URL,
+      GITHUB_SHA: SHA,
+      MIGRATION_TARGET: TARGET,
+      SUPABASE_ENV_LABEL: 'staging',
+      GITHUB_RUN_ID: '1',
+    });
   };
 
-  it('waits while the alias still serves the previous build, then passes', async () => {
+  it('waits while the canonical alias serves the previous build, then passes', async () => {
     const r = await check([[200, OLD], [200, OLD], [200, NEW]]);
     expect(r.code, r.out).toBe(0);
     expect(r.out).toContain('Attempt 1/18');
@@ -286,21 +294,22 @@ describe('frontend version check tolerates a lagging production alias', () => {
     expect(hits).toBe(3);
   }, 60_000);
 
-  it('fails, naming both commits, when the alias never moves', async () => {
+  it('fails, naming the stale commit and migration target, when the alias never moves', async () => {
     const r = await check([[200, OLD]]);
     expect(r.code).toBe(1);
-    expect(r.out).toContain(`::error::Deployed frontend reports commit=5845842aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa migrationTarget=${TARGET}; expected ${SHA}`);
+    expect(r.out).toContain(`::error::Canonical staging URL ${base} reports commit=5845842aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa migrationTarget=${TARGET}; expected ${SHA} / ${TARGET} (after 18 attempts, ~3 min).`);
     expect(hits).toBe(18);
   }, 60_000);
 
-  it('keeps the old behaviour for a protected URL (unreadable at once → warning, not a failure)', async () => {
+  it('fails closed when the canonical URL is protected or otherwise unreadable', async () => {
     const r = await check([[401, 'Authentication Required']]);
-    expect(r.code).toBe(0);
-    expect(r.out).toContain('not readable (deployment protection?)');
-    expect(hits).toBe(1);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('Canonical staging URL');
+    expect(r.out).toContain('commit=(unreadable) migrationTarget=(unreadable)');
+    expect(hits).toBe(18);
   }, 60_000);
 
-  it('passes immediately when the new build is already live', async () => {
+  it('passes immediately when the expected build is already live', async () => {
     const r = await check([[200, NEW]]);
     expect(r.code).toBe(0);
     expect(r.out).not.toContain('Attempt');
