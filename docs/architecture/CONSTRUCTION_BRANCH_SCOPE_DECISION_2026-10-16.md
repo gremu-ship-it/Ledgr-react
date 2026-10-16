@@ -292,3 +292,54 @@ release row, gate count or BLOCKED/PASS expectation changed. Its raw output is p
 (The first probe attempt ran as the superuser role and therefore bypassed RLS, reporting every A2 row as
 visible in *all* families; it was discarded, and the corrected run adds the `invoices` control that proves
 the method can detect a real denial.)
+
+---
+
+## 9. Phase 3 assessment — verified post-remediation state (2026-10-16)
+
+Stage A (`545e3e1`) implemented option C. This section records the independent Phase 3 re-verification of the
+read surface at HEAD `92f64fa`, so that the "before" measurement in §1 and in matrix §7.9 cannot be mistaken
+for current behaviour. Full method, per-object inventory and evidence are in
+`docs/audits/LEDGR_CONSTRUCTION_READ_SECURITY_PHASE3_2026-10-16.md`.
+
+**Verified from the replayed catalog, not from migration text:**
+
+- **19/19 construction tables**: RLS enabled, exactly one SELECT policy each, `authenticated = SELECT` only,
+  `anon` = no grant anywhere, and no INSERT/UPDATE/DELETE grant on any of them.
+- **14 branch-predicated** (4 direct `branch_id` + 10 inherited through a NOT NULL FK chain) — every predicate
+  carries `can_access_branch`; the two-hop tables reach the branch through GRN lines → GRNs.
+- **1 conditional** (`construction_supplier_invoice_references`) through
+  `construction_supplier_reference_visible(business_id, expense_id)`.
+- **4 business-level** by design: the global capability catalogue (`code`, `description`; no `business_id`),
+  the grant register (now own-rows-or-`can_admin_business_data`), UOM conversions and the posting policy.
+- **The three read RPCs** (all `SECURITY DEFINER`, `STABLE`, `search_path=public`, signature preserved,
+  `authenticated` + `service_role`): `construction_project_material_cost` applies membership +
+  `can_access_branch` **before** its aggregates; `construction_procurement_open_items` branch-filters all five
+  branch-bearing subqueries and applies the NULL-branch rule to `blocked_bills`; and
+  `construction_procurement_capabilities_for` returns **only the caller's own** live grants (a member with no
+  grants receives an empty array). The three functions therefore answer the §1 question — "may a user assigned
+  only to branch A1 read branch A2's construction purchase orders?" — with **no**.
+- **No alternate read path**: no view or materialised view references a construction table; no non-construction
+  table holds an FK into one; every `_ledgr_construction_*` helper is ungranted to `anon`/`authenticated`;
+  every SECURITY DEFINER function touching construction data pins `search_path`; every FK parent has RLS
+  enabled; the ledgers (`stock_movements`, `inventory_balances`) and `expenses`/`expense_lines` carry no grant
+  for `authenticated`.
+- **Suites re-run at this HEAD**: `construction-branch-scope` **12/12** and `construction-procurement`
+  **17/17**.
+
+**Residual findings (both non-branch, both for the owner):** (R1) `open_items.grants_in_force` reports a
+business-wide count of live capability grants to any member, while the table policy is self-or-admin — keep and
+document it as a business-level control rollup, or scope it to the caller's own grants unless
+`can_admin_business_data`; (R2) a supplier bill with a NULL `expenses.branch_id` is business-readable by the
+approved conditional rule, so construction supplier bills should carry a branch as an operating practice.
+
+**Gates:** (G-1) accept this assessment and record that the remediation is already implemented — **no new
+migration**, since a second branch-scope migration would duplicate `20261023000000_*`; (G-2/G-3) the two
+residual decisions; (G-4) add a multi-branch and an A2-only identity to the local suite; (G-5) deployed
+verification in an **isolated** Supabase environment following §5.4's mandatory method (never production);
+(G-6) move the eight `BRANCH.*` rows off BLOCKED only once G-5 has produced its evidence.
+
+**Nothing was changed by this section** other than documentation: no migration, policy, grant, schema object,
+command, RPC, test expectation or configuration. No database object was created or altered outside the
+ephemeral replay, and no deployed, shared or production database was contacted. `productionVerified` remains
+**false**.

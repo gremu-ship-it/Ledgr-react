@@ -543,6 +543,8 @@ earlier draft of this table listed `_supplier_invoice_references` among the unco
 
 #### Measured behaviour of the read surface (local isolated, RLS applied)
 
+> **Before remediation — this table is the pre-Stage-A measurement, not current state.** Stage A (`545e3e1`, migration `20261023000000_construction_branch_scope.sql`) branch-scoped the read surface; the three read RPCs are no longer unrestricted. See `docs/audits/LEDGR_CONSTRUCTION_READ_SECURITY_PHASE3_2026-10-16.md` §1 and §3 for the verified post-remediation position.
+
 An A1-only `branch_manager` with every procurement capability:
 
 | Probe | Result |
