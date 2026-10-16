@@ -392,6 +392,23 @@ construction cost rows against an unchanged expectation); (4) the schedule carri
 per row; (5) tests cover boundary dates (day before / day of / day after each change) and the
 unknown-date refusal; (6) the matrix document's §4 VAT note is superseded by a pointer to the schedule.
 
+**Deployment prerequisite (group B, added 2026-10-16).** This change is product code plus one migration that
+only *constrains* an existing table; it adds no object and grants nothing. It cannot be evaluated in a
+deployment by itself, so when the group-B workstream is commissioned it must absorb three acceptance
+criteria of its own, in the same change window as the ACL capture:
+(i) `20261022000000_effective_dated_tax_configurations.sql` applies to a database carrying the **deploy-time
+grant set** — its pre-flight refuses (23514) and names every conflicting `(business_id, tax_code)` group if
+legacy rows already overlap, rather than guessing which row is authoritative;
+(ii) a signed-in **owner or administrator** can insert, update and delete a `tax_configurations` row for their
+business, while a viewer with no write policy is refused — the repository never grants this table to
+`authenticated`, so this is a property of the project's default privileges, not of the migration, and the
+migration deliberately does not assert it (it asserts RLS, the five deployed policies and `anon = 0` only);
+(iii) the deployed `authenticated` grant on `public.tax_configurations` is recorded as an ACL diff
+(migration-only vs deployed), and the three `not valid` checks are validated only after the owner has
+reviewed the rows that predate them.
+The 7 `TAXCONFIG.*` release-suite rows are local isolated evidence (`environment: "local"`,
+`productionVerified: false`) and satisfy none of the three.
+
 ### 3.3 Official Supabase verification and deployment readiness (large, owner-gated)
 
 **What.** Execute Groups A–C of this document against isolated, disposable Supabase environments, then
