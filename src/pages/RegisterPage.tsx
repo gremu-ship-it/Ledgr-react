@@ -14,6 +14,7 @@ import {
   SubmitButton,
   measureStrength,
 } from '@/components/auth/AuthUI';
+import { ResendConfirmationButton } from '@/components/auth/ResendConfirmationButton';
 
 export function RegisterPage() {
   const { t } = useTranslation();
@@ -36,6 +37,12 @@ export function RegisterPage() {
     }
   }, [returnToParam]);
 
+  // Where the confirmation link should land once the email is confirmed. The
+  // same destination the user would reach after an immediate sign-up (no
+  // confirmation needed). Supabase only honours URLs on its redirect allow-list
+  // and otherwise falls back to the project Site URL.
+  const confirmRedirectTo = `${window.location.origin}${safeReturnTo || '/create-business'}`;
+
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -43,6 +50,15 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // Set when the address already has an account. Supabase answers such a
+  // sign-up with a fake success (an obfuscated user whose `identities` list
+  // is empty) and sends NO email, so the generic "check your inbox" screen
+  // would promise a link that is never coming.
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  // Set when the account was created but GoTrue throttled the confirmation
+  // email itself (built-in mailer / rate limit). The user exists but has
+  // nothing in their inbox yet — the resend action below is the way out.
+  const [emailThrottled, setEmailThrottled] = useState(false);
 
   function validate(): boolean {
     if (measureStrength(password).score < 2) {
@@ -61,24 +77,83 @@ export function RegisterPage() {
     setError(null);
     if (!validate()) return;
 
+    // Normalise exactly like LoginPage does. Sign-up, resend and sign-in must
+    // all address the same inbox — a stray space or capital in "Owner@…"
+    // otherwise sends the confirmation somewhere the login never looks.
+    const normalizedEmail = email.trim().toLowerCase();
+    setEmail(normalizedEmail);
+
     setLoading(true);
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
+      email: normalizedEmail,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        data: { full_name: fullName },
+        emailRedirectTo: confirmRedirectTo,
+      },
     });
     setLoading(false);
 
     if (signUpError) {
+      const code = (signUpError as { code?: string }).code;
+      const status = (signUpError as { status?: number }).status;
+      if (code === 'user_already_exists' || code === 'email_exists') {
+        // Some project configs answer a duplicate sign-up with a real error
+        // instead of the obfuscated success handled below.
+        setAlreadyRegistered(true);
+        return;
+      }
+      if (code === 'over_email_send_rate_limit' || status === 429) {
+        // The account was created but the confirmation email was throttled
+        // (Supabase's built-in mailer allows only a few emails/hour without
+        // custom SMTP). Still land on "check your inbox" so the resend
+        // action is available once the window passes, and say plainly why
+        // nothing may have arrived yet.
+        setEmailThrottled(true);
+        setSuccess(true);
+        return;
+      }
       setError(signUpError.message);
       return;
     }
 
     if (data.session) {
       navigate(safeReturnTo || '/create-business', { replace: true });
-    } else {
-      setSuccess(true);
+      return;
     }
+
+    // Anti-enumeration fake success: when the address is already registered,
+    // GoTrue returns an obfuscated user with no identities and sends NO
+    // confirmation email. Telling this user to "check your inbox" strands
+    // them — they need sign-in / password reset instead.
+    const identities = (data.user as { identities?: unknown[] } | null)?.identities;
+    if (data.user && Array.isArray(identities) && identities.length === 0) {
+      setAlreadyRegistered(true);
+      return;
+    }
+
+    setSuccess(true);
+  }
+
+  const loginHref = safeReturnTo ? `/login?returnTo=${encodeURIComponent(safeReturnTo)}` : '/login';
+
+  if (alreadyRegistered) {
+    return (
+      <AuthShell title={t('auth.checkInbox')}>
+        <div className="flex flex-col items-center gap-3 py-4 text-center">
+          <AuthAlert type="info" message={t('auth.accountAlreadyExists', { email })} />
+          <Link
+            to={loginHref}
+            className="mt-2 text-sm font-medium text-brand-600 hover:text-brand-700"
+          >
+            {t('auth.signIn')}
+          </Link>
+          <Link to="/forgot-password" className="text-sm font-medium text-brand-600 hover:text-brand-700">
+            {t('auth.forgotPassword')}
+          </Link>
+        </div>
+      </AuthShell>
+    );
   }
 
   if (success) {
@@ -91,6 +166,9 @@ export function RegisterPage() {
           <p className="text-sm text-gray-500">
             {t('auth.confirmationEmailSent', { email })}
           </p>
+          <p className="text-xs text-gray-600">{t('auth.checkSpamFolder')}</p>
+          {emailThrottled && <AuthAlert type="info" message={t('auth.signUpRateLimited')} />}
+          <ResendConfirmationButton email={email} emailRedirectTo={confirmRedirectTo} />
           {safeReturnTo && (
             <p className="text-xs text-gray-600">{t('auth.confirmInviteAfterEmail')}</p>
           )}

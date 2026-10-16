@@ -145,25 +145,59 @@ pg_restore --clean --if-exists -d fresh_db ledgr-$(date +%F).dump
 
 ## 6. Cron jobs and secrets (environment configuration)
 
-Three `pg_cron` jobs are declared in migrations with placeholders:
+Five `pg_cron` jobs are declared in migrations. Four call an Edge Function
+over HTTP and ship with `<PROJECT_REF>` / `<CRON_SECRET>` placeholders; the
+expiry sweep has run as plain SQL since 20261017000000:
 
-| Job | Schedule | Migration | Target edge function |
+| Job | Schedule | Declared in | Runs |
 |---|---|---|---|
-| `expire-subscriptions-daily` | `0 1 * * *` | 20260726000003 | `expire-subscriptions` |
-| `send-renewal-reminders-daily` | `0 8 * * *` | 20260726000005 | `send-renewal-reminders` |
-| `generate-partner-invoices-monthly` | monthly | 20260727000006 | `generate-partner-invoices` |
+| `expire-subscriptions-daily` | `5 0 * * *` | 20260726000003, replaced by 20261017000000 §5 | in-database SQL (no placeholder) |
+| `send-renewal-reminders-daily` | `0 8 * * *` | 20260726000005 | `send-renewal-reminders` (HTTP) |
+| `generate-partner-invoices-monthly` | `0 2 1 * *` | 20260727000006 | `generate-partner-invoices` (HTTP) |
+| `retry-failed-webhooks-daily` | `0 6 * * *` | 20260820000000 | `retry-failed-webhooks` (HTTP) |
+| `finalize-account-deletions-daily` | `0 3 * * *` | 20261019000000 (the job had existed on production, undeclared, since before that) | `finalize-account-deletions` (HTTP) |
 
-The migrations contain `<PROJECT_REF>` and `<CRON_SECRET>` placeholders.
-Deployment substitutes them per environment:
+`supabase db push` applies the placeholders verbatim, and 20261017000000 §3
+deactivates any job still holding one (20261019000000 §2 repeats the guard for
+jobs a later migration schedules). Every deploy then runs
+`scripts/ci/apply-cron-jobs.sh` (deploy.yml, after the edge functions): it
+applies `scripts/cron-jobs.sql` with the environment's project ref and
+`CRON_SECRET` substituted, and fails the run unless no job anywhere still holds
+a placeholder **and** every job `cron-jobs.sql` schedules is active. (Since
+2026-10-14 a failure there no longer holds back the frontend deploy; the
+release manifest reports it as `cronJobs`.)
 
-1. Set the edge-function secret: `supabase secrets set CRON_SECRET=<random> SB_ENV=staging`
-2. Apply the migration with the project ref substituted (the CI `deploy.yml`
-   flow does this via `supabase db push`; the cron job commands reference
-   `https://<PROJECT_REF>.supabase.co/functions/v1/...`).
+Three rules follow from the 2026-10-14 staging and 2026-10-16 production incidents:
+
+- **A migration that schedules an HTTP job with a placeholder needs a matching
+  `cron.schedule()` in `scripts/cron-jobs.sql`**, plus the job name in its
+  re-enable list. `retry-failed-webhooks-daily` was missing, so the check failed
+  on every staging deploy from 2026-10-09 to 2026-10-14, and the frontend deploy
+  behind it was skipped (MIXED-VERSION).
+- **A job that exists only in the database is not declared anywhere, and
+  nothing substitutes it.** `finalize-account-deletions-daily` was created
+  out-of-band on production (the function header pointed at a
+  `schedule_finalize_deletions.sql` that no branch ever contained), so it held
+  unsubstituted placeholders and failed the production placeholder check on
+  every deploy from 2026-10-16 while looking active in `cron.job`. 20261019000000
+  adopts it under the same name and schedule; declare jobs in migrations, never
+  by hand in the SQL editor.
+- **`cron.schedule()` never re-enables a job.** It upserts on
+  `(jobname, username)` and rewrites only schedule/command/database, so a job §3
+  deactivated stays inactive after its URL is fixed — the placeholder check
+  passes and the job never fires. `cron-jobs.sql` re-enables its jobs with
+  `cron.alter_job(jobid, null, null, null, null, true)` and is the source of
+  truth for their active flag: a job paused from the dashboard is re-enabled by
+  the next deploy, so pause one durably in `cron-jobs.sql`.
+
+`tests/database/cron_jobs_apply.test.js` replays every migration and runs the
+real `apply-cron-jobs.sh` against a local stand-in for the Management API, so
+both rules are proven on Postgres; `src/lib/__tests__/deployCronContracts.test.ts`
+checks them statically in CI.
 
 **No real secrets are embedded in migrations.** Recreating a fresh environment
-requires: run migrations → set function secrets → ensure `cron.job` rows point
-at the environment's function URLs (verify with the capture script's
+requires: run migrations → set function secrets (`CRON_SECRET` included) → run
+`scripts/ci/apply-cron-jobs.sh` (verify with the capture script's
 `cron_jobs.txt`).
 
 ## 7. Storage buckets (environment configuration)
@@ -192,6 +226,7 @@ Standalone database harnesses (embedded Postgres, not part of `npm test`):
 node tests/database/posting_integrity_migrations.test.js     # posting integrity + quota guard
 node tests/database/public_api_table_convergence.test.js     # legacy public-API tables + repair (§9.8)
 node tests/database/cron_placeholder_sweep.test.js           # pg_cron privilege contract (§9.9)
+node tests/database/cron_jobs_apply.test.js                  # deploy pg_cron step, end to end (§6)
 ```
 
 `npm run db:validate` / `npm run db:validate:strict` are referenced by the Phase
@@ -357,7 +392,11 @@ inventory) is the substitute.
    without the extension installed. Keep the stub faithful to the real
    extension — when `20261017000000` first called `cron.unschedule`, the stub
    did not provide it and the entire release replay aborted (SQLSTATE 42883),
-   blocking 621 database-backed records in `npm run test:release`.
+   blocking 621 database-backed records in `npm run test:release`. Likewise,
+   the stub in `tests/database/cron_placeholder_sweep.test.js` re-activated an
+   existing job on `cron.schedule`, which pg_cron never does; that is how the
+   jobs §3 deactivated could stay inactive on staging with every test green
+   (2026-10-14, §6). It now leaves `active` alone, like the extension.
 
    Note on process: this migration was **edited after it was merged**, which the
    §2 rule otherwise forbids. It is safe here because the change is confined to

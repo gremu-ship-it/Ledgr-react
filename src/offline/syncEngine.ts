@@ -30,6 +30,7 @@ import { sweepUnverifiableItems, replayViolation, quarantineItem } from './prove
 import { claimLease, releaseLease, verifyLeaseOwnership } from './lease';
 import { getLeaseClaimantId } from './deviceIdentity';
 import { isQuotaDenial, QUOTA_DENIAL_SQLSTATE } from '@/lib/billing/quotaContract';
+import { getErrorMessage } from '@/lib/errorHandler';
 import {
   classifyReplayException,
   exceptionDetails,
@@ -539,7 +540,7 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
 
       progress.completed += 1;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown sync error';
+      const message = getErrorMessage(error);
       // P5-A Q10: same clientKey with materially different payload must be
       // quarantined (clientKey-payload-mismatch), never retried, permanently
       // non-reconcilable, replay-safe (no second posting). Detect server
@@ -619,7 +620,7 @@ export async function syncQueue(onProgress?: SyncProgressListener, options: Sync
         });
         progress.completed += 1;
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown sync error';
+        const message = getErrorMessage(error);
         if (isClientKeyPayloadMismatch(error)) {
           await quarantineItem(
             item.localId!,

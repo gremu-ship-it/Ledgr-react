@@ -14,6 +14,7 @@ import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { announce } from '@/lib/a11y';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { QUEUE_TYPE_LABELS, type QueueItem, type QueueItemStatus } from '@/offline/db';
 import { isStaleSyncClaim, removeQueueItem } from '@/offline/queueApi';
 import { isReconcilable, reconcileQueueItem } from '@/offline/reconciliation';
@@ -58,6 +59,7 @@ function QueueRow({ item, onDiscard, canDiscard, onReconcile, canReconcile, isRe
   const status = STATUS_STYLES[item.status];
   const label = QUEUE_TYPE_LABELS[item.operationType];
   const exceptionBadge = item.exceptionClass ? EXCEPTION_BADGES[item.exceptionClass] : undefined;
+  const visibleLastError = item.lastError ? getErrorMessage(item.lastError) : null;
 
   return (
     <li className="border-b border-gray-100 px-5 py-4 last:border-b-0">
@@ -97,17 +99,17 @@ function QueueRow({ item, onDiscard, canDiscard, onReconcile, canReconcile, isRe
           )}
           {item.status === 'failed' && !item.exceptionClass && (
             <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-2 text-xs leading-5 text-red-800">
-              {item.lastError || 'This change could not be synced. Retry when your connection is stable.'}
+              {visibleLastError || 'This change could not be synced. Retry when your connection is stable.'}
             </p>
           )}
-          {item.status === 'failed' && item.exceptionClass && item.lastError && (
+          {item.status === 'failed' && item.exceptionClass && visibleLastError && (
             <p className="mt-2 text-[11px] leading-4 text-orange-800">
-              {item.lastError}
+              {visibleLastError}
             </p>
           )}
-          {item.status === 'synced' && item.lastError && !item.exceptionClass && (
+          {item.status === 'synced' && visibleLastError && !item.exceptionClass && (
             <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-5 text-amber-900">
-              Synced, but a follow-up step did not post — {item.lastError}
+              Synced, but a follow-up step did not post — {visibleLastError}
             </p>
           )}
           {item.status === 'quarantined' && (

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Lock, Sparkles, Upload, X, Link2, ChevronDown } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import { parseBankStatement, type BankTransaction } from '@/services/bank/statementParser';
 import { useAppStore } from '@/store/useAppStore';
 import { pushBankReconciliationComplete, pushBankStatementImported } from '@/lib/notifications';
@@ -411,17 +412,20 @@ export function BankReconciliation({ businessId }: { businessId: string }) {
             NBS, FDH, Standard Bank, National Bank, Airtel Money and TNM Mpamba
           </p>
         </div>
-        <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-          <Upload size={16} aria-hidden="true" />
-          Import CSV / OFX / MT940
-          <input
-            className="sr-only"
-            type="file"
-            accept=".csv,.ofx,.mt940,.sta"
-            onChange={upload}
-            aria-label="Import bank statement (CSV, OFX, or MT940)"
-          />
-        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <ImportTemplateMenu entityTypes={['bank_transactions']} />
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            <Upload size={16} aria-hidden="true" />
+            Import CSV / OFX / MT940
+            <input
+              className="sr-only"
+              type="file"
+              accept=".csv,.ofx,.mt940,.sta"
+              onChange={upload}
+              aria-label="Import bank statement (CSV, OFX, or MT940)"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">

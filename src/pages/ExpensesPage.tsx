@@ -14,6 +14,7 @@ import { VAT_STANDARD_RATE, VAT_STANDARD_RATE_PERCENT } from '@/lib/vat';
 import { useAppStore } from '@/store/useAppStore';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { repos } from '@/lib/repositories';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { InsertDto, Row } from '@/dal/types/database';
 import { createExpenseJournalEntry, type ExpenseAccountAllocation } from '@/services/journalService';
 import { resolveExpenseLineAccountId } from '@/services/inventoryJournalService';
@@ -1519,6 +1520,7 @@ export function ExpensesPage() {
           <p className="mt-1 text-sm text-gray-500">Track and manage expenses for {currentBusiness.business.name}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ImportTemplateMenu entityTypes={['bills']} />
           <button onClick={() => setTab('quick')}
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
             <Zap className="h-4 w-4 text-brand-500" />Quick Entry

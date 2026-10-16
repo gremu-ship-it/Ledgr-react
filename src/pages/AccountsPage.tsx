@@ -19,6 +19,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { handleError, getErrorMessage } from '@/lib/errorHandler';
 import { supabase } from '@/lib/supabase';
+import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { Row, InsertDto } from '@/dal/types/database';
 import {
   seedChartOfAccounts,
@@ -622,6 +623,7 @@ export function AccountsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <ImportTemplateMenu entityTypes={['chart_of_accounts', 'opening_balances', 'trial_balance']} />
           <button
             onClick={() => setModal({ open: true })}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"

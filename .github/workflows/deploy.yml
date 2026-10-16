@@ -232,17 +232,20 @@ jobs:
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
             if echo "$NO_VERIFY_FUNCTIONS" | grep -qw "$fn"; then
-              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+              supabase functions deploy "$fn" --use-api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             else
-              supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
+              supabase functions deploy "$fn" --use-api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"
             fi
           done
       # The schedule migrations ship literal <PROJECT_REF>/<CRON_SECRET>
       # placeholders that `db push` applies verbatim, so the HTTP-dispatched
       # cron jobs silently posted to a non-resolving host (renewal reminders
-      # and partner invoices never ran). This substitutes the real values and
-      # fails the deploy if any job is still holding a placeholder.
+      # and partner invoices never ran). This substitutes the real values,
+      # re-enables the jobs, and verifies placeholders plus active status. A
+      # failure is recorded and fails the workflow but does not strand the
+      # frontend after the backend has shipped.
       - name: Reschedule pg_cron jobs with real URLs (staging)
+        id: cron
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET_STAGING }}
         run: bash scripts/ci/apply-cron-jobs.sh
@@ -379,6 +382,7 @@ jobs:
           OUT_EDGE: ${{ steps.edge.outcome }}
           OUT_FRONTEND: ${{ steps.frontend.outcome }}
           OUT_FRONTEND_VERIFY: ${{ steps.frontend_verify.outcome }}
+          OUT_CRON: ${{ steps.cron.outcome }}
         run: node scripts/ci/release-manifest.mjs
       - name: Upload release manifest (staging)
         if: always()
@@ -560,7 +564,7 @@ jobs:
           for dir in supabase/functions/[a-z]*/; do
             fn="$(basename "$dir")"
             echo "Deploying function: $fn"
-            if ! supabase functions deploy "$fn" --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"; then
+            if ! supabase functions deploy "$fn" --use-api --no-verify-jwt --project-ref "$SUPABASE_PROJECT_REF"; then
               echo "::error::supabase functions deploy failed for ${fn}"
               exit 1
             fi
@@ -568,6 +572,7 @@ jobs:
       # See the staging note: without this the cron jobs keep posting to
       # 'https://<PROJECT_REF>.supabase.co/...' and never fire.
       - name: Reschedule pg_cron jobs with real URLs (production)
+        id: cron
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET_PROD }}
         run: bash scripts/ci/apply-cron-jobs.sh
@@ -704,6 +709,7 @@ jobs:
           OUT_EDGE: ${{ steps.edge.outcome }}
           OUT_FRONTEND: ${{ steps.frontend.outcome }}
           OUT_FRONTEND_VERIFY: ${{ steps.frontend_verify.outcome }}
+          OUT_CRON: ${{ steps.cron.outcome }}
         run: node scripts/ci/release-manifest.mjs
       - name: Upload release manifest (production)
         if: always()
