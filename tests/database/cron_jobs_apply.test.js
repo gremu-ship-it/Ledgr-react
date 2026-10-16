@@ -30,6 +30,14 @@
 //      cron_placeholder_sweep.test.js re-activated on reschedule, which is why
 //      no test noticed.
 //
+// 2026-10-16: the same check failed every PRODUCTION deploy on
+// 'finalize-account-deletions-daily' — a job that existed on production with
+// unsubstituted placeholders and was declared by no migration at all (created
+// out-of-band, though the function header had always pointed at a
+// 'schedule_finalize_deletions.sql' this repository never contained). It is now
+// declared by 20261019000000 and rescheduled by scripts/cron-jobs.sql, so the
+// replay below covers it like any other managed job.
+//
 // This harness replays the whole migration set on embedded Postgres with a
 // pg_cron stub that is faithful on exactly those points (owner = calling
 // role, upsert keyed on (jobname, username) leaving `active` alone, alter_job
@@ -81,10 +89,13 @@ const PROJECT_REF = 'testprojectref01';
 const CRON_SECRET = 'test-cron-secret-0123456789';
 const ACCESS_TOKEN = 'test-management-api-token';
 
+// Every job scripts/cron-jobs.sql schedules — the list apply-cron-jobs.sh
+// derives from that file and asserts is active. In file order.
 const MANAGED_JOBS = [
   'send-renewal-reminders-daily',
   'generate-partner-invoices-monthly',
   'retry-failed-webhooks-daily',
+  'finalize-account-deletions-daily',
 ];
 
 let pass = 0;
@@ -404,7 +415,7 @@ async function main() {
     const resetToReplay = () =>
       c.query(`truncate cron.job; insert into cron.job select * from public._cron_job_after_replay;`);
 
-    await check('after the replay, 20261017000000 §3 has deactivated every placeholder job (staging, 2026-10-09)', async () => {
+    await check('after the replay, every placeholder job is deactivated (§3 for the pre-20261017 jobs, 20261019000000 §2 for the finalizer) — staging, 2026-10-09', async () => {
       const rows = await jobs();
       for (const name of MANAGED_JOBS) {
         const row = rows.find((r) => r.jobname === name);
@@ -426,7 +437,10 @@ async function main() {
       const row = (await jobs()).find((r) => r.jobname === 'send-renewal-reminders-daily');
       assert(row.command === 'select 1', 'cron.schedule did not update the existing job in place');
       assert(row.active === false, 'cron.schedule re-activated the job — the stub no longer matches pg_cron');
-      assert((await jobs()).length === 4, 'cron.schedule created a duplicate instead of upserting');
+      assert(
+        (await jobs()).length === MANAGED_JOBS.length + 1,
+        `cron.schedule created a duplicate instead of upserting (${(await jobs()).length} jobs)`,
+      );
       await resetToReplay();
     });
 
@@ -543,6 +557,47 @@ async function main() {
       assert(code === 1, `expected exit 1, got ${code}`);
       assert(/CRON_SECRET is not configured for harness/.test(output), output);
       assert(requests.length === 0, `${requests.length} request(s) reached the API`);
+    });
+
+    // ── F. Production drift: a job no migration declares ─────────────────────
+    // The 2026-10-16 production failure was not a missing cron.schedule() for a
+    // migrated job — it was a job that existed ONLY in the database, ACTIVE,
+    // with unsubstituted placeholders, created out-of-band. Nothing in the repo
+    // declared it, so nothing substituted it and every production deploy failed
+    // the placeholder check. This is that row, verbatim.
+    await check('F. an undeclared job holding a placeholder (production, 2026-10-16) is substituted and left active', async () => {
+      await resetToReplay();
+      await c.query(`delete from cron.job where jobname = 'finalize-account-deletions-daily'`);
+      await c.query(
+        `insert into cron.job (jobname, schedule, command, username, active)
+         values ('finalize-account-deletions-daily', '0 3 * * *', $1, '${API_ROLE}', true)`,
+        [
+          `\n  select net.http_post(\n    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/finalize-account-deletions',\n    headers := jsonb_build_object(\n      'Content-Type', 'application/json',\n      'x-cron-secret', '<CRON_SECRET>'\n    ),\n    body := '{}'::jsonb\n  );\n  `,
+        ],
+      );
+      const before = await jobs();
+      assert(
+        before.find((r) => r.jobname === 'finalize-account-deletions-daily')?.active === true,
+        'the drift row was not seeded active, as production had it',
+      );
+
+      const { code, output } = await runScript(staged[staged.length - 1], apiUrl);
+      assert(code === 0, `expected exit 0, got ${code}\n${output}`);
+
+      const rows = await jobs();
+      const row = rows.find((r) => r.jobname === 'finalize-account-deletions-daily');
+      assert(row, 'the drift job disappeared instead of being rescheduled');
+      assert(row.active === true, 'the drift job was left inactive — it would never fire');
+      assert(row.username === API_ROLE, `the drift job changed owner to ${row.username}`);
+      assert(
+        row.command.includes(`https://${PROJECT_REF}.supabase.co/functions/v1/finalize-account-deletions`),
+        `the drift job URL was not substituted: ${row.command}`,
+      );
+      assert(row.command.includes(`'x-cron-secret', '${CRON_SECRET}'`), 'the drift job does not send the cron secret');
+      assert(
+        rows.length === MANAGED_JOBS.length + 1,
+        `the drift job was duplicated instead of upserted (${rows.length} jobs)`,
+      );
     });
   } catch (err) {
     fail('harness', err);

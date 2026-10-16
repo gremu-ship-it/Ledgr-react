@@ -3,8 +3,9 @@
 -- ─────────────────────────────────────────────────────────────────────────
 -- Deployed by .github/workflows/deploy.yml AFTER `supabase db push`, and run
 -- on every deploy (not just the first). The schedule migrations
--- (20260726...0003 / 0005, 20260727...0006, 20260820000000) ship with literal
--- <PROJECT_REF> and <CRON_SECRET> placeholders that db push applies verbatim,
+-- (20260726...0003 / 0005, 20260727...0006, 20260820000000, 20261019000000)
+-- ship with literal <PROJECT_REF> and <CRON_SECRET> placeholders that db push
+-- applies verbatim,
 -- so on an environment where those migrations were pushed before this fix the
 -- jobs exist but point at a non-resolving URL and never fire. Re-running this
 -- script fixes them and keeps them correct going forward.
@@ -27,6 +28,14 @@
 -- (20260820000000), which was missing here until 2026-10-14 and failed every
 -- staging deploy from 2026-10-09 on. tests/database/cron_jobs_apply.test.js
 -- replays every migration and fails if any placeholder job survives this file.
+--
+-- 2026-10-16: same failure on production for
+-- 'finalize-account-deletions-daily'. That one was worse than drift — the job
+-- existed on production with placeholders in it and was NOT declared by any
+-- migration at all (created out-of-band, though the function header had always
+-- pointed at a 'schedule_finalize_deletions.sql' that never existed here), so
+-- nothing could substitute it and every production deploy failed the
+-- placeholder check. 20261019000000 now declares it; this file reschedules it.
 
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
@@ -85,6 +94,24 @@ select cron.schedule(
   $$
 );
 
+-- Daily finalization of account deletions (migration 20261019000000; same
+-- schedule and command as declared there). Previously this job existed only as
+-- an out-of-band production row holding unsubstituted placeholders.
+select cron.schedule(
+  'finalize-account-deletions-daily',
+  '0 3 * * *', -- 03:00 UTC every day
+  $$
+  select net.http_post(
+    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/finalize-account-deletions',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', '<CRON_SECRET>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
 -- ── Re-enable the jobs scheduled above ──────────────────────────────────────
 -- cron.schedule() upserts on (jobname, username) and rewrites only schedule,
 -- command and database — it never touches `active` (pg_cron
@@ -110,5 +137,6 @@ select cron.alter_job(jobid, null, null, null, null, true)
    and jobname in (
      'send-renewal-reminders-daily',
      'generate-partner-invoices-monthly',
-     'retry-failed-webhooks-daily'
+     'retry-failed-webhooks-daily',
+     'finalize-account-deletions-daily'
    );

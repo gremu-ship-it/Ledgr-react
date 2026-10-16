@@ -104,6 +104,11 @@ describe('scripts/cron-jobs.sql covers every placeholder job the migrations leav
     const left = placeholderJobsLeftByMigrations();
     // The 2026-10-14 incident: 20260820000000's job was missing here.
     expect([...left.keys()]).toContain('retry-failed-webhooks-daily');
+    // The 2026-10-16 incident: the finalizer existed on production with
+    // unsubstituted placeholders and was declared by no migration at all, so
+    // nothing substituted it and every production deploy failed the
+    // placeholder check. 20261019000000 declares it; it must stay covered here.
+    expect([...left.keys()]).toContain('finalize-account-deletions-daily');
     for (const [name, file] of left) {
       expect(cronSqlJobs, `${name} (from ${file}) holds a placeholder that nothing substitutes — add a cron.schedule() for it to scripts/cron-jobs.sql, or every deploy fails`).toContain(name);
     }
