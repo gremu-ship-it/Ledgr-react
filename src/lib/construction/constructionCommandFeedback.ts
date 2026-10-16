@@ -4,7 +4,8 @@
  * Pure presentation helpers that turn a database refusal into something a person
  * can act on. They are deliberately DUMB: each entry explains a refusal the
  * database already issues (the token list is exactly the set raised by
- * `20261021000000_construction_procurement_traceability.sql`). Nothing here
+ * `20261021000000_construction_procurement_traceability.sql` and, for usable-material
+ * returns, `20261026000000_construction_return_command.sql`). Nothing here
  * decides whether an operation is allowed, and nothing here restates a rule in a
  * way that could disagree with the server — if the server refuses and there is no
  * entry, the raw server message is shown verbatim.
@@ -205,6 +206,44 @@ export const CONSTRUCTION_REFUSAL_EXPLANATIONS: Record<string, ConstructionRefus
   'insufficient-stock': {
     summary: 'There is not enough stock at the site store for this issue.',
     action: 'Reduce the quantity, or receive more material at that location first.',
+  },
+
+  // ── Usable-material returns (Phase 1 of the returns design) ───────────────
+  'over-return': {
+    summary: 'This return is more than the quantity still returnable on that issue.',
+    action: 'Reduce the quantity to the remaining returnable amount, or return against the correct issue.',
+  },
+  'traceable-to-issue-required': {
+    summary: 'A return must name the material issue it came from.',
+    action: 'Choose the original issue from the list; material that was never issued cannot be returned.',
+  },
+  'return-date-before-issue': {
+    summary: 'The return date is before the date the material was issued.',
+    action: 'Use a return date on or after the issue date.',
+  },
+  'return-condition-invalid': {
+    summary: 'The material condition is missing or is not a recognised value.',
+    action: 'Record the material as usable, or usable with restriction.',
+  },
+  'return-posting-not-approved': {
+    summary: 'Material returns have no approved movement policy for this business.',
+    action: 'Record the receipt-posting policy first; that policy is what enables site-store movements.',
+  },
+  'return-gl-posting-not-approved': {
+    summary: 'Posting journal entries from a material return is not approved.',
+    action: 'None available — general-ledger posting is outside the approved accounting design.',
+  },
+  'derived-field-not-accepted': {
+    summary: 'The request tried to choose a site, location, project, product or cost.',
+    action: 'None available — those values are always taken from the original issue.',
+  },
+  'uom-mismatch': {
+    summary: 'The return unit does not match the unit the material was issued in.',
+    action: 'Express the return quantity in the issue\u2019s own unit of measure.',
+  },
+  'issue-quantity-unknown': {
+    summary: 'The original issue has no usable recorded quantity.',
+    action: 'Record a corrected issue through the material-issue command before returning material.',
   },
 
   // ── Document identity and integrity ──────────────────────────────────────

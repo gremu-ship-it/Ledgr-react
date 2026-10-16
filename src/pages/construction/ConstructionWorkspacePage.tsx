@@ -11,6 +11,7 @@ import { ConstructionPurchaseOrdersSection } from '@/components/construction/Con
 import { ConstructionReceiptsSection } from '@/components/construction/ConstructionReceiptsSection';
 import { ConstructionBillMatchingSection } from '@/components/construction/ConstructionBillMatchingSection';
 import { ConstructionMaterialIssuesSection } from '@/components/construction/ConstructionMaterialIssuesSection';
+import { ConstructionReturnsSection } from '@/components/construction/ConstructionReturnsSection';
 import { ConstructionSetupSection } from '@/components/construction/ConstructionSetupSection';
 import { ErrorBanner, LoadingBlock } from '@/components/construction/constructionUi';
 
@@ -34,6 +35,7 @@ const SECTIONS = [
   { path: '/construction/receipts', label: 'Receipts' },
   { path: '/construction/bill-matching', label: 'Bill matching' },
   { path: '/construction/material-issues', label: 'Material issues' },
+  { path: '/construction/returns', label: 'Returns' },
   { path: '/construction/setup', label: 'Setup' },
 ] as const;
 
@@ -143,6 +145,9 @@ export function ConstructionWorkspacePage() {
         ) : null}
         {activePath === '/construction/material-issues' ? (
           <ConstructionMaterialIssuesSection businessId={businessId} capabilities={capabilities} />
+        ) : null}
+        {activePath === '/construction/returns' ? (
+          <ConstructionReturnsSection businessId={businessId} capabilities={capabilities} />
         ) : null}
         {activePath === '/construction/setup' ? (
           <ConstructionSetupSection businessId={businessId} capabilities={capabilities} />

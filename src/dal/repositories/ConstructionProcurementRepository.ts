@@ -75,6 +75,7 @@ export const CONSTRUCTION_CAPABILITIES = {
   receiptPost: 'procurement.receipt.post',
   policyApprove: 'procurement.policy.approve',
   materialIssue: 'procurement.material.issue',
+  materialReturn: 'procurement.material.return',
 } as const;
 
 export type ConstructionCapability =
@@ -93,6 +94,7 @@ export const CONSTRUCTION_CAPABILITY_LABELS: Record<string, string> = {
   [CONSTRUCTION_CAPABILITIES.receiptPost]: 'Prepare and post receipt cost',
   [CONSTRUCTION_CAPABILITIES.policyApprove]: 'Approve the receipt posting policy',
   [CONSTRUCTION_CAPABILITIES.materialIssue]: 'Issue material to a site',
+  [CONSTRUCTION_CAPABILITIES.materialReturn]: 'Return usable material to the store',
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -440,6 +442,34 @@ export interface ConstructionOpenItems {
   }>;
 }
 
+/** An append-only record of usable material returned from a site to its store. */
+export interface ConstructionMaterialReturn {
+  id: string;
+  business_id: string;
+  source_issue_id: string;
+  site_id: string;
+  branch_id: string;
+  location_id: string;
+  project_ref: string;
+  product_id: string;
+  uom: string;
+  quantity: number | string;
+  quantity_base: number | string;
+  unit_cost_base: number | string;
+  total_cost_base: number | string;
+  currency: string;
+  return_date: string;
+  condition: 'usable' | 'usable_with_restriction';
+  reason: string;
+  evidence_reference: string;
+  received_by: string | null;
+  stock_movement_id: string;
+  created_by: string;
+  created_at: string;
+  notes: string | null;
+  client_key: string;
+}
+
 export interface ConstructionProjectMaterialCostRow {
   project_ref: string;
   issue_count: number;
@@ -561,6 +591,23 @@ export interface BillMatchInput {
   receipt_quantity: number | string;
   exception_reason?: string | null;
   exception_evidence?: string | null;
+}
+
+/**
+ * Return payload. Deliberately small: site, branch, location, project, product,
+ * unit of measure, unit cost and base quantity are all derived from the source
+ * issue by the server, and the command REFUSES a payload that supplies them.
+ */
+export interface MaterialReturnInput {
+  business_id: string;
+  source_issue_id: string;
+  quantity: number | string;
+  return_date: string;
+  condition: 'usable' | 'usable_with_restriction';
+  reason: string;
+  evidence_reference: string;
+  received_by?: string | null;
+  notes?: string | null;
 }
 
 export interface MaterialIssueInput {
@@ -810,6 +857,15 @@ export class ConstructionProcurementRepository {
     );
   }
 
+  /** The append-only return register for this business (branch-scoped by RLS). */
+  async findMaterialReturns(businessId: string): Promise<ConstructionMaterialReturn[]> {
+    return this.rows<ConstructionMaterialReturn>(
+      'construction_material_returns',
+      (b) => b.eq('business_id', businessId).order('created_at', { ascending: false }),
+      'Could not load material returns.',
+    );
+  }
+
   /** Lines of the existing supplier bills for this business (read-only). */
   async findSupplierBillLines(businessId: string): Promise<ConstructionSupplierBillLine[]> {
     return this.rows<ConstructionSupplierBillLine>(
@@ -1015,6 +1071,20 @@ export class ConstructionProcurementRepository {
 
   async postReceiptMovement(grnId: string): Promise<ConstructionCommandResult> {
     return this.call('post_construction_receipt_movement', { p_grn_id: grnId }, 'Could not post the receipt movement.');
+  }
+
+  /**
+   * Return usable material to the store it was issued from. One inbound movement
+   * at the source issue's recorded cost, one append-only register row, no journal.
+   * Replays with the same `clientKey` return the committed row instead of writing
+   * a second one.
+   */
+  async returnMaterialsToStore(input: MaterialReturnInput, clientKey: string): Promise<ConstructionCommandResult> {
+    return this.call(
+      'return_construction_materials_to_store',
+      { p_payload: input, p_client_key: clientKey },
+      'Could not record the material return.',
+    );
   }
 
   async issueMaterialsToProject(input: MaterialIssueInput, clientKey: string): Promise<ConstructionCommandResult> {

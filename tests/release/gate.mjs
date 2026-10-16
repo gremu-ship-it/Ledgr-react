@@ -30,5 +30,6 @@ export const suites = {
   'pl-period-approval.test.ts': 'pl-period-approval.json',
   'construction-procurement.test.ts': 'construction-procurement.json',
   'construction-branch-scope.test.ts': 'construction-branch-scope.json',
+  'construction-returns.test.ts': 'construction-returns.json',
   'tax-configurations.test.ts': 'tax-configurations.json',
 };
