@@ -99,17 +99,17 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.construction',
     items: [
       {
-        // The workspace is inventory-backed end to end (receipts post into stock
-        // pools, material issues draw the pool weighted-average cost), so it is
-        // gated exactly like Products / Warehouse / Transfers rather than left
-        // open to every plan. Server-side construction capability grants and
-        // business membership still gate every command independently.
+        // Deliberately NOT plan-gated, matching the existing decision on the
+        // development trunk: what a person may actually do here is decided
+        // server-side by business membership and the construction capability
+        // grants, and this route is now a server-backed workspace rather than a
+        // browser-local draft. If the product decides to bundle Construction with
+        // the Inventory plan capability, add `requiresCapability: 'inventory'`
+        // (and the matching `partnerFeature`/`requiresOrgCapability`) together
+        // with the plan-matrix expectations that change on the same commit.
         labelKey: 'navigation.items.constructionWorkspace',
         path: '/construction',
         icon: Building2,
-        partnerFeature: 'inventory',
-        requiresCapability: 'inventory',
-        requiresOrgCapability: 'inventory',
         allowAllAuthenticatedRoles: true,
       },
     ],
