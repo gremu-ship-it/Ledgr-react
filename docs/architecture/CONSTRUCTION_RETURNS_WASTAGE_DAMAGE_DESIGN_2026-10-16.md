@@ -4,8 +4,10 @@
 (after Stage A `545e3e1` and Stage B `92f64fa`) · **Status:** **design only — nothing in this document is implemented.** **Gate 0 for the Phase 1 baseline was
 granted on 2026-10-16** by the owner decision recorded in
 `docs/audits/LEDGR_CONSTRUCTION_RETURNS_PHASE1_OWNER_DECISION_2026-10-16.md`, which also answered §8 Q2, Q5, Q6
-and Q7 and directed the corrections applied in §14. Phases 2–4 remain unauthorised, and **Phase 1
-implementation still requires a separate explicit instruction** (§10).
+and Q7 and directed the corrections applied in §14. **Decisions A and B were confirmed on 2026-10-16** (the
+movement label `construction_return_in`, and the approved Phase 1 costing policy — §7.1, §9.1, §14). Phases 2–4
+remain unauthorised, and **Phase 1 implementation still requires a separate explicit instruction** (§10); the
+staged plan is `CONSTRUCTION_RETURNS_PHASE1_IMPLEMENTATION_PLAN_2026-10-16.md`.
 
 > **Supersedes the Stage-B draft of the same file.** That draft was written before a full trace of the ledger,
 > and four of its statements are wrong (§3 lists them with the evidence). Everything still correct in it is
@@ -372,6 +374,30 @@ consumed on a construction project depends on facts this repository cannot deter
   building is built — fail §95(b) and are expensed (see Sources). **This is the single highest-impact open
   question for construction accounting in this repo (§8 Q1).**
 
+### 7.1 Ledgr's approved Phase 1 costing policy (owner decision B, 2026-10-16)
+
+**Approved policy — an internal Ledgr policy, not a statement of what a standard mandates.** Each return
+references its identifiable original construction issue; the returned quantity reduces the project's net material
+cost at the **original issue's recorded unit cost**; the returned material enters the **existing moving
+weighted-average pool**, whose average cost recalculates under the existing inventory valuation mechanism; and
+**no artificial balancing entry and no general-ledger posting** is introduced in Phase 1. The pool-recalculation
+effect must be **tested and documented**, including its impact on subsequent issues to other projects
+(§8 Q2, §9.1, T12, T17).
+
+**What the standards do and do not say, stated precisely:**
+
+- **§25** permits a weighted-average (or FIFO) cost formula for ordinarily interchangeable items — it does not
+  prescribe what happens when previously issued material is returned to the pool. Re-pricing the pool at the
+  original issue cost is a Ledgr policy choice, not an IAS 2 requirement.
+- **§23** requires specific identification for items that are not ordinarily interchangeable and for goods or
+  services **produced and segregated for specific projects**. Whether that reaches material merely held at, or
+  issued to, a construction site is a facts-and-circumstances question this repository cannot settle (§8 Q8).
+- Consequently this design **does not claim** IAS 2 mandates the hybrid treatment. The approved policy stands as
+  the owner's decision, and **accountant confirmation of its suitability for the entity's financial reporting is
+  an external accounting validation** (decision record §7, "External accounting validation"). Such confirmation
+  is a validation of the approved design; if it requires a different treatment, that is a **new owner decision**,
+  not a silent change here.
+
 **What the guidance says that directly answers parts of this design:**
 
 | Question | Guidance (authoritative) | Application (proposal) |
@@ -408,7 +434,7 @@ decision, which presupposes the weighted-average pool.
 | **Q5** | May one person both issue material and accept its return (single capability), or must return be a separate capability token? | Determines whether Phase 1 adds a capability code (a catalogue change) or reuses `procurement.material.issue`. **Answered 2026-10-16 (decision §4):** a dedicated `procurement.material.return` capability. | Owner (controls) |
 | **Q6** | Must `construction_project_material_cost` expose returns separately (a new output column) or only net them off? | The Stage-A precedent preserved the signature; adding a column is a signature change and must be deliberate. **Answered 2026-10-16 (decision §5):** preserve the signature; net returns against issued quantity and cost; `issue_count` unchanged; return detail in the register/workspace. | Product owner |
 | **Q7** | Is a return to a **different site's** store required, or is "back to the store it came from" sufficient? | Cross-site movement needs a construction transfer command that does not exist (§2.4); deciding "not needed" keeps Phase 1 small. **Answered 2026-10-16 (decision §6):** the original issuing site store only; cross-site returns excluded. | Product owner |
-| **Q8** | Does the §23 specific-identification requirement apply to material segregated for a specific project, which would displace the weighted-average pool for site stock? | If yes, the costing model for site stock changes fundamentally — a much larger piece of work than this feature. **Not named by the 2026-10-16 decision**, whose costing basis (§1–2) presupposes that the existing moving weighted-average pool remains the site-stock measurement basis for Phase 1. The accountant should confirm explicitly; a different answer would change Q2's basis rather than add a phase. | Accountant |
+| **Q8** | Does the §23 specific-identification requirement apply to material segregated for a specific project, which would displace the weighted-average pool for site stock? | If yes, the costing model for site stock changes fundamentally — a much larger piece of work than this feature. **Phase 1 basis fixed 2026-10-16 (decision B):** returned material enters the **existing weighted-average pool** (§7.1), so site stock stays on the weighted-average basis for Phase 1. Whether §23 specific identification applies to project-segregated material — and therefore whether this basis is suitable for financial reporting — is **external accounting validation** (accountant confirmation), flagged in decision record §7. A contrary finding would be a **new owner decision**, not a change to this baseline. | Accountant |
 | **Q9** | For a damaged-but-present material awaiting a decision, is a site-level hold required (and if so, must `hold_type` gain a value, or a new hold table be created)? | `'damaged'` is not a permitted hold type and holds hang off receipt lines, not site balances (§3 item 3). | Product owner + accountant |
 | **Q10** | Does the business want per-project **loss reporting** (issued / installed / wasted / damaged / returned) as a required control? | If yes, the registers must be designed to make it reconcilable from the outset rather than retro-fitted. | Owner |
 
@@ -420,15 +446,16 @@ decision, which presupposes the weighted-average pool.
 
 | Event | Proposal | Alternative | Note |
 | --- | --- | --- | --- |
-| 1 — usable return | Reuse **`return_in`** with `source_type = 'construction_return'` | Add `construction_return_in` | Reusing an existing label avoids an enum change. **Justification corrected 2026-10-16 (§14 D4):** the earlier claim that reusing `return_in` would make "every existing report" read site returns as sales returns is **not supported** — `return_in` has exactly one writer (`src/services/posService.ts:1338`, `source_type 'pos_return'`) and no reader or report filters on it. The **recommendation still stands** on ledger semantics, future reporting and the `ProductsPage.tsx:906` display heuristic. The owner decision fixed the effect but did not name the label. |
+| 1 — usable return | Reuse **`return_in`** with `source_type = 'construction_return'` | **Add `construction_return_in` — decided 2026-10-16 (decision A)** | Reusing an existing label avoids an enum change. **Justification corrected 2026-10-16 (§14 D4):** the earlier claim that reusing `return_in` would make "every existing report" read site returns as sales returns is **not supported** — `return_in` has exactly one writer (`src/services/posService.ts:1338`, `source_type 'pos_return'`) and no reader or report filters on it. The **decision fixed the label as `construction_return_in`** after a compatibility check that found no technical incompatibility (enum add is additive; no SQL consumer switches on the label; no test asserts the enum's membership; `ProductsPage.tsx:906` renders it as inbound because the name ends in `in`). |
 | 2 & 3 — wastage / avoidable damage | Add **one** label `wastage_out` and distinguish normal vs abnormal by a **classification column on the register row**, not by a second token | Two labels (`wastage_out`, `damage_out`) | One token keeps the ledger honest: the *stock* event is identical, only the *classification and accounting* differ. Two tokens would encode an accounting judgement in the ledger enum. Requires §8 Q3 first |
 | 4 — damaged, recoverable | (a)/(b) reuse the Event 1 token | — | (c) is **not** a token problem (§9.5) |
 
 **No token may be added before the business rules and the accounting policy for its events are approved.**
 Adding an enum label is a migration (and, per `20261020500000`, must be its own single-statement migration
 because PostgreSQL cannot use a value added in the same transaction). **Phase 1 note (2026-10-16):** the
-return's effect is decided (decision §1–2), so one inbound label is part of the authorised baseline; the
-*label name* was not decided (§14 D4).
+return's effect is decided (decision §1–2) **and the label is now decided: `construction_return_in`** (decision
+A, 2026-10-16). It must still be its own single-statement migration, ordered before the migration that consumes
+it (§9.3, implementation plan Stage 1).
 
 ### 9.2 Which events are stock-only (proposal)
 
@@ -458,9 +485,15 @@ return's effect is decided (decision §1–2), so one inbound label is part of t
 - **Derived base quantity** (decision §3; §14 D2): `quantity_base := quantity × (source_issue.quantity_base /
   source_issue.quantity)`, validated against the source issue's UOM; the current
   `construction_product_uom_conversions` row is never consulted.
-- **Indexes** (§14 D6): the new register needs `(business_id, source_issue_id)` for the cumulative check; the
+- **Indexes** (§14 D6): the new register needs `(business_id, source_issue_id)` for the cumulative check
+  (plus `(business_id, return_date)` and `(business_id, project_ref)` for the register view and netting); the
   project-cost netting reads the issue register, already indexed `(business_id, project_ref)` by
-  `idx_cmi_site_project`. The earlier draft omitted both.
+  `idx_cmi_site_project`. The earlier draft omitted all of these.
+- **Movement label** (decision A): `movement_type = 'construction_return_in'`, added by its own migration
+  **before** this one, with `source_type = 'construction_return'` and `source_id` = the return id. The movement
+  insert also carries the command's `client_key`, which activates the existing
+  `stock_movements_client_key_uidx (business_id, client_key)` as a real second fence — it is inert today because
+  no construction command passes a key (§9.4).
 - No direct DML grant: `revoke all from anon, authenticated`, `grant select` only, plus the existing
   `trg_construction_append_only` with **no** allowed token for the new register (immutable), exactly as
   `construction_material_issues` has none.
@@ -530,6 +563,7 @@ hoc later; it is not proposed for implementation in Phase 1**, where the default
 | T14 | An above-threshold return with no approval writes nothing; with a consumed approval token it writes exactly once and the token cannot be reused | Approval gate and single-use — **deferred** with the approval tier (decision §7); not part of Phase 1 |
 | T15 | After the registered UOM conversion factor for the issued product is changed (deactivate, register a new factor), a return still derives `quantity_base` from the source issue's recorded ratio — the project relief and the inbound movement stay consistent with the original issue | The D2 correction (decision §3) |
 | T16 | A single capability holder can return a high-value quantity with **no** approval token, and no construction path reads or writes `pos_approvals` | The decision §7 boundary cannot creep back in |
+| T17 | After a return re-prices the pool, a **subsequent issue to a different project** is costed at the recalculated average, and that second project's derived cost reflects it | Decision B item 5 (documented downstream effect of pool recalculation) |
 
 ---
 
@@ -542,7 +576,7 @@ implementation instruction.
 
 | Phase | Content | May start only when | Explicitly not included |
 | --- | --- | --- | --- |
-| **1 — Usable return (Event 1)** | One migration adding: the returns register with its constraints, indexes and branch-scoped RLS/privileges; a catalogue insert for `procurement.material.return`; one `SECURITY DEFINER` command with derived scope, the single cumulative bound, a `client_key` fence and an append-only trigger with no token; the `construction_project_material_cost` body change (signature preserved); the workspace UI; tests T1–T8, T10–T12, T15–T16; plus one single-statement enum migration for the return label (§9.1) | **Gate 0 granted 2026-10-16 and Q2, Q5, Q6, Q7 answered** — the remaining prerequisite is a **separate explicit implementation instruction** on the corrected baseline (§14), plus the accountant's confirmation of Q8 | Any wastage/damage record, any approval tier, any GL posting, any NRV handling, any change to `gl_posting_enabled`, any cross-site return |
+| **1 — Usable return (Event 1)** | One migration adding: the returns register with its constraints, indexes and branch-scoped RLS/privileges; a catalogue insert for `procurement.material.return`; one `SECURITY DEFINER` command with derived scope, the single cumulative bound, a `client_key` fence and an append-only trigger with no token; the `construction_project_material_cost` body change (signature preserved); the workspace UI; tests T1–T8, T10–T12, T15–T17; plus one single-statement enum migration for the **decided** label `construction_return_in` (decision A, §9.1). Staged plan: `CONSTRUCTION_RETURNS_PHASE1_IMPLEMENTATION_PLAN_2026-10-16.md` | **Gate 0 granted 2026-10-16; Q2, Q5, Q6, Q7 answered, and the label (A) and costing policy (B) confirmed** — the remaining prerequisite is a **separate explicit implementation instruction** on the corrected baseline (§14) | Any wastage/damage record, any approval tier, any GL posting, any NRV handling, any change to `gl_posting_enabled`, any cross-site return |
 | **2 — Normal wastage (Event 2)** | Loss register + `wastage_out` label + command, scoped to `classification = normal`, staying in project cost | Phase 1 shipped and tested **and** §8 Q3 (normal-loss policy) answered | Abnormal losses, write-downs, GL |
 | **3 — Abnormal wastage / avoidable damage (Event 3)** | Classification + mandatory investigation reference + second-actor approval + exclusion from project cost, **and** the approved journal mapping | §8 Q3 answered **and** the accounting design (accounts, thresholds, approval tier) signed by the owner **and** the accountant — and, if any journal is to be written, a separate approval to lift the GL constraint (which is a `CHECK` change on a live table) | Any journal before that approval |
 | **4 — Damaged, recoverable (Event 4)** | (a)/(b) via Phase 1's machinery; (c) via the NRV policy | §8 Q4 (NRV policy) **and** §8 Q9 (hold mechanism) answered **and** §9.5's write-down representation designed | The quantity-less write-down until its representation exists |
@@ -638,8 +672,9 @@ policy :3144-3171, append-only :3990-4030, holds :1768-1784, PO cancel message :
    **§8 Q10** (per-project loss reporting) and **§8 Q8** (not named by the decision — confirm with the
    accountant).
 6. ~~**Gate 0**~~ — **granted 2026-10-16**. Phase 1 (usable material return only) may be implemented on the
-   corrected baseline **after a separate explicit instruction**; Phases 2–4 remain unauthorised, and the
-   movement-label name was not decided (§14 D4).
+   corrected baseline **after a separate explicit instruction**; Phases 2–4 remain unauthorised.
+7. ~~**Movement label**~~ — **decided 2026-10-16 (decision A): `construction_return_in`**, after a compatibility
+   check that found no conflict (decision record §7). Phases 2–4 labels remain undecided.
 
 ---
 
@@ -670,6 +705,14 @@ returns netted and `issue_count` unchanged; destination = the original issuing s
 accounts), Q4 (NRV policy), **Q8** (IAS 2 §23 specific identification — the decision presupposes the
 weighted-average pool without naming it), Q9 (damage hold), Q10 (per-project loss reporting); the movement
 label's name; and whether the corrected baseline is committed before implementation (decision record §5).
+
+### 14.1 Final decisions confirmed 2026-10-16 (A and B)
+
+| # | Decision | Where applied |
+| --- | --- | --- |
+| **A** | Movement label = **`construction_return_in`** (the POS-oriented `return_in` is not reused); the label must be its own single-statement migration ordered before its consumer | §2.2 note, §9.1, §9.3, §10; evidence table in the decision record §7 |
+| **B** | **Ledgr's approved Phase 1 costing policy:** return at the original issue's recorded unit cost; the returned material enters the existing moving weighted-average pool and the average recalculates; **no balancing entry and no GL posting**; the pool effect must be tested and documented, including downstream issues to other projects | §7.1 (policy + precise statement of what §25/§23 do and do not require), §8 Q2/Q8, §9.3, §9.7 T12/T17 |
+| **External validation** | Accountant confirmation that policy B is suitable for the entity's financial reporting (and whether §23 specific identification reaches site stock) — **flagged as external accounting validation, not resolved here**; a contrary finding is a new owner decision | §7.1, §8 Q8, decision record §7 |
 
 **What this correction pass changed:** documentation only. No code, migration, test, policy, grant, schema object,
 configuration or database state was touched, and nothing was committed, pushed or deployed.

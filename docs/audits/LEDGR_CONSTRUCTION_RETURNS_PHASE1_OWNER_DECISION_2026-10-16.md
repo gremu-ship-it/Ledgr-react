@@ -50,6 +50,11 @@ boundaries below.
 it: if it carries an additional restriction or condition, it must be supplied **before** the implementation
 instruction, and this record must be amended to include it.
 
+**Waiver (owner instruction, 2026-10-16).** The owner directed that the empty item 11 be ignored and that the
+authorised Phase 1 implementation proceed. It is therefore recorded as **waived, not supplied**: it carries no
+requirement, and nothing is inferred for it. If it is later found to have carried a restriction or condition,
+this record must be amended and the Phase 1 implementation revisited before that requirement is relied upon.
+
 ## 2. What the decision closes
 
 | Item | Closes | Recorded position |
@@ -104,7 +109,8 @@ decision item that directs it:
    pool remains the site-stock measurement basis for Phase 1; §23 specific identification is **not named** in
    the decision. It should be confirmed explicitly, because a different answer would change the cost derivation
    behind item 1 rather than merely adding a phase.
-2. **The missing item 11**, if it exists (see the note in §1).
+2. **The missing item 11** — **waived by the owner on 2026-10-16** (§1 waiver note); no longer outstanding, and
+   nothing is inferred for it.
 3. **Movement label** (design §9.1). The decision fixes the *effect* (one inbound at original issue cost) but
    not the label. The design proposes a new `construction_return_in`; reusing `return_in` is the alternative.
    Either choice needs the single-statement enum migration ordered before the command migration; the label must
@@ -128,3 +134,74 @@ repository tests, not deployed verification.
 **Change record.** This record and the §14 corrections were produced as documentation only. **No application
 code, migration, test, policy, grant, schema object, configuration or database state was changed. Nothing was
 committed, pushed or deployed.**
+
+---
+
+## 7. Final decisions confirmed 2026-10-16 (A and B)
+
+Recorded after the decision in §1. Both are **Phase 1 decisions**; nothing here authorises implementation, and
+§4 ("what this decision does not authorise") is unchanged.
+
+### Decision A — Phase 1 stock movement label: `construction_return_in`
+
+The dedicated movement type for usable construction-material returns is **`construction_return_in`**. The
+POS-oriented `return_in` is **not** reused. If a concrete technical incompatibility had been found, the
+instruction was to report it and stop for owner review; the compatibility check below found none, so the
+decision is recorded as taken.
+
+**Compatibility evidence (repository inspection, read-only):**
+
+| Check | Evidence | Result |
+| --- | --- | --- |
+| Enum must accept a new label | `stock_movement_type` is a Postgres enum created in `20250101000000_base_schema.sql:186-199` (10 labels); the additive pattern is `alter type public.stock_movement_type add value if not exists '…'` (`20261020500000_stock_movement_type_construction_issue.sql:26`) | Compatible |
+| Migration ordering constraint | `20261020500000` header: PostgreSQL cannot *use* a value added in the same transaction, so the label must be its own single-statement migration committed before the migration that consumes it; the R13 harness runs each migration file as one `client.query` (`tests/release/database.mjs:56-75`) | A separate file is **required**, not optional |
+| Consumers that switch on the label | No `ORDER BY`/`GROUP BY movement_type` anywhere; `InventoryRepository.ts:437` filters `'purchase'` only; `TransferRepository.ts:120,188` test `transfer_out`/`transfer_in` only; `inventoryJournalService.ts:802-804` is a deny-list inside a function marked *deprecated, no callers*; the live journal path `record_inventory_journal_movement` is gated on its own `kind` parameter, not on the movement type | No consumer misreads the new label |
+| Display heuristic | `ProductsPage.tsx:906` treats a movement as inbound when `movement_type.includes('in')` | `construction_return_in` renders as inbound — correct |
+| Enum-membership assertions in tests | The only `pg_enum` membership assertion in the release suite is for **user roles** (`tests/release/r01-security.test.ts:205`), not `stock_movement_type` | Adding a label breaks no assertion |
+| Existing self-verification blocks | `20261021000000:4262-4266` asserts the `issue_out` label **exists**; it does not assert the label set | Adding a label breaks no verification |
+| Client type declarations | `src/dal/types/database.ts:137-152` says "exact 10 members" and **omits `issue_out`** (already stale); `src/dal/types/database.generated.ts:6478` lists 10 labels without `issue_out` | Both must be updated in the implementation stage — a known, listed task, not a blocker |
+
+### Decision B — approved Phase 1 costing and inventory-valuation policy
+
+Recorded as **Ledgr's approved Phase 1 costing policy**:
+
+1. Each return references its identifiable original construction issue.
+2. The returned quantity reduces the project's net material cost using the **original issue's recorded unit
+   cost**.
+3. The returned material enters the **existing moving weighted-average pool**, and the pool's average cost
+   recalculates under the existing inventory valuation mechanism.
+4. **No artificial balancing entry and no general-ledger posting** in Phase 1.
+5. The pool-recalculation effect must be **tested and documented**, including its impact on subsequent issues
+   to other projects.
+
+**This is a Ledgr policy choice, not a claim about what IAS 2 requires.** IAS 2 §25 permits weighted average (or
+FIFO) as the cost formula for ordinarily interchangeable items and §23 requires specific identification only for
+items not ordinarily interchangeable and for goods/services produced and segregated for specific projects; the
+standard does **not** prescribe the treatment of returning material to a pool at its original issue cost. The
+hybrid above is therefore recorded as an approved internal policy, **not** as an IAS 2 mandate.
+
+**External accounting validation (flagged, not silently resolved).** Suitability of this policy for the
+entity's financial reporting — including whether the project-segregation facts engage §23 for site stock —
+requires **accountant confirmation**. That is external validation of the owner's approved design, not a
+re-design: the design and the repository stay as approved until the accountant responds, and any change the
+accountant requires must come back as a new owner decision.
+
+### What A and B close
+
+| Item | Status |
+| --- | --- |
+| Movement-label choice (decision record §5 item 3; design §9.1) | **Closed — `construction_return_in`**, no reuse of `return_in` |
+| Costing basis and pool re-pricing (§1 item 1–2; design §8 Q2) | **Reaffirmed**, now recorded as the approved Phase 1 policy with the IAS 2 caveat above |
+| Specific identification for site stock (design §8 Q8) | The approved policy places returned material in the **existing weighted-average pool**; accountant confirmation of that basis for financial reporting is the flagged external validation above, not an open design question |
+| Implementation plan | `docs/architecture/CONSTRUCTION_RETURNS_PHASE1_IMPLEMENTATION_PLAN_2026-10-16.md` (staged plan; planning only) |
+
+### Still outstanding (unchanged unless listed above)
+
+1. **The unsupplied item 11** from the original instruction — **waived by the owner on 2026-10-16**
+   (§1 waiver note); no longer outstanding.
+2. **Accountant confirmation** of Decision B's suitability for financial reporting — external validation (above).
+3. **Implementation authorisation** — a separate explicit instruction, per §1 item 10.
+4. **Deployed verification** — a separate authorisation with its own isolated environment and real identities
+   (§6); local suites can never be presented as it.
+5. **The unpushed documentation commit** `4e2076fdea9c1c1720534117e29ffa2532c8ee24` — pushing still requires
+   explicit owner authorisation.
