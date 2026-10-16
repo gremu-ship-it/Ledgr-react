@@ -515,3 +515,48 @@ executing reported `829 PASS / 75 BLOCKED`: 17 **browser-driven** rows (`R094.BR
 `HARNESS.EXECUTION` row appeared. Re-run alone on an idle machine, the same tree returns the baseline
 `846 / 0 / 57` with every `CP.*` row PASS. The harness is resource-sensitive; **run it on its own and read
 the counts from a clean run** before treating a `BLOCKED` as a finding.
+
+### 7.9 Branch scope of the construction read surface (2026-10-16)
+
+Companion to readiness §16 and to the decision brief
+[`CONSTRUCTION_BRANCH_SCOPE_DECISION_2026-10-16.md`](CONSTRUCTION_BRANCH_SCOPE_DECISION_2026-10-16.md).
+The gap assessment (§7.6) recorded that every construction table's read policy is organisational; this
+section states exactly which tables that covers, because the decision has to name them.
+
+#### The 19 construction tables, by whether a branch is derivable
+
+| Group | Count | Tables | Branch source |
+| --- | --- | --- | --- |
+| Carries `branch_id` **NOT NULL** (FK → `branches`) | 4 | `construction_procurement_sites`, `construction_purchase_orders`, `construction_goods_receipt_notes`, `construction_material_issues` | the row itself |
+| Inherits a **NOT NULL** branch through a not-null FK chain | 11 | `_purchase_order_lines`, `_purchase_order_events`, `_delivery_notes`, `_delivery_note_lines` (→ PO); `_goods_receipt_lines`, `_goods_receipt_holds`, `_receipt_inspections`, `_receipt_line_reclassifications`, `_receipt_bill_allocations`, `_receipt_cost_bases` (→ GRN); `_supplier_invoice_references` (→ `expenses.branch_id`) | parent row |
+| No branch dimension | 4 | `construction_procurement_capabilities`, `construction_procurement_grants`, `construction_product_uom_conversions`, `construction_receipt_posting_policies` | none — business-level by nature |
+
+**Consequence for the decision.** The NULL-branch-**row** contract that blocks the core-family reshape
+(§14.1) does not apply here: no construction document row can be branch-ambiguous. Option C in the brief is
+therefore the disciplined form of option B — 15 tables get the branch predicate, and the 4 dimension-less
+tables are recorded as deliberately org-wide rather than silently skipped.
+
+#### Measured behaviour of the read surface (local isolated, RLS applied)
+
+An A1-only `branch_manager` with every procurement capability:
+
+| Probe | Result |
+| --- | --- |
+| `can_access_branch(business, A1)` / `(business, A2)` | `true` / **`false`** |
+| `construction_purchase_orders` @A2 visible | **1** (ground truth 1) |
+| `construction_purchase_order_lines` @A2 visible | **1** |
+| `construction_goods_receipt_notes` @A2 visible | **1** |
+| `construction_procurement_sites` @A2 visible | **1** |
+| Control: `invoices` @A2 visible | **0** (ground truth 1) → denial is detectable |
+| `create_construction_purchase_order` on the A2 site / the A1 site | REFUSED 42501 / ALLOWED |
+| `authorize_construction_purchase_order` on the A2 PO / the A1 PO | REFUSED 42501 / ALLOWED |
+| `construction_procurement_open_items`, `_capabilities_for`, `construction_project_material_cost` | ALLOWED — `security definer`, business-membership gate only, no branch predicate |
+
+So the asymmetry §15.2 of the readiness plan describes is confirmed by measurement, in the direction that
+matters: **the commands enforce the branch; the reads do not**, and an A1-only user sees A2 purchase orders,
+receipt notes and sites that the server refuses to let them act on.
+
+**Nothing was changed by this section:** no migration, policy, grant, schema, command, UI or harness
+expectation, and no database object. The measurement used a throwaway release-suite probe run through the
+R13 harness, deleted afterwards, so no evidence row or gate count moved. The evidence is **local isolated**
+— `productionVerified: false` — and it does not verify any deployed behaviour.

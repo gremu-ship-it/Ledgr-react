@@ -593,15 +593,15 @@ two things as the rest of Group B — it is not a construction-specific defect:
    RLS, the deployed policies and `anon = 0`).
 2. **The branch-scope decision** (§14.1) is unresolved, and it is what makes the construction surface more
    than an ACL capture. The construction commands call `can_access_branch`, so they are in the
-   *branch-scoped family* by design, while the read policies on the twelve construction tables are
-   organisation-wide member reads. That asymmetry is deliberate and is what `CP.SCOPE…` exercises — but
+   *branch-scoped family* by design, while the read policies on the eighteen construction tables carrying a
+   `_member_read` policy are organisation-wide member reads (nineteen tables exist; see §16). That asymmetry is deliberate and is what `CP.SCOPE…` exercises — but
    whether an A1-only user should be able to read A2's construction purchase orders is the same unanswered
    product question, and it must be answered before those rows can be either verified or changed.
 
 ### 15.3 Acceptance criteria the workstream must add for construction
 
 When Group B is commissioned, the construction surface adds these: (i) the 23 commands' EXECUTE grants and
-the twelve new tables' DML grants are captured in the deployed-ACL diff; (ii) `CP.CAPABILITY.EXPLICIT-GRANTS`
+the nineteen construction tables' DML grants are captured in the deployed-ACL diff (corrected by §16; earlier text said twelve); (ii) `CP.CAPABILITY.EXPLICIT-GRANTS`
 and `CP.SCOPE.TENANT-BRANCH-FORGERY` are re-run against the deployed profile with real Supabase Auth tokens,
 so the capability check and the branch check are exercised through PostgREST rather than a synthetic claim;
 (iii) the construction tables appear in the Group B read matrix, with the branch-scope decision recorded and
@@ -616,3 +616,55 @@ submit a form is silently inert, and only a test that actually clicks it can cat
 were fixed earlier; a fifth survived in an untested form. The guard now in place is a focused suite per
 screen that clicks the primary action and asserts the command call — which is exactly the class of check
 that a deployed environment cannot provide.
+
+## 16. Branch scope — measured state, and the decision this repository is waiting on (2026-10-16)
+
+Filed with the decision brief
+[`../architecture/CONSTRUCTION_BRANCH_SCOPE_DECISION_2026-10-16.md`](../architecture/CONSTRUCTION_BRANCH_SCOPE_DECISION_2026-10-16.md),
+which carries the option comparison, the recommendation, the exact table lists and the Group B setup
+checklist. This section records only what changed in the **understanding** of §14.1, so §14.1 is not
+read as current fact.
+
+### 16.1 The premise in §14.1 is out of date
+
+§14.1 says core tables — *"invoices, contacts, `journal_entries`, products, inventory …"* — keep org-wide
+`is_business_member` SELECT policies from `20260728000008`. A **later** migration,
+`20261007000000_p5d_branch_scope_remediation.sql` (2026-10-07), redefined `can_access_branch` and
+re-created the policies with a branch predicate. Measured census of the replayed schema
+(`pg_policies`, 119 SELECT policies over 89 tables):
+
+| Family | Count |
+| --- | --- |
+| Branch-scoped (SELECT uses `can_access_branch` / `can_access_location`) | **23 tables** — accounts, branches, budget_lines, departments, employees, expense_lines, expense_payments, expenses, fixed_assets, inventory_balances, inventory_locations, invoice_lines, invoice_payments, invoices, journal_entries, journal_lines, `pos_*` (4), stock_movements, stock_transfer_lines, stock_transfers |
+| Org-wide `is_business_member` read | **37 tables**, including **all 18 `construction_*` tables** with a `_member_read` policy, plus `products`, `contacts`, `tax_configurations` and other reference data |
+
+`construction_procurement_capabilities` (the nineteenth construction table) is readable `using (true)` by
+any signed-in caller. So `BRANCH.read`, `BRANCH.modify`, `BRANCH.inventory`, `BRANCH.financial` and
+`BRANCH.cross-branch-admin` state a limitation that is no longer accurate for the core family
+(`journal_entries` and `stock_movements` *are* branch-scoped now), and the genuinely open scope question is
+the **construction read surface**. Those reason strings must be corrected in the same commit as the
+decision, per §14.1 (d); they were left untouched by the brief.
+
+### 16.2 The question in §14.1, answered by measurement
+
+*May a user assigned only to Branch A1 read Branch A2's construction purchase orders within the same
+business?* **Yes, today.** With RLS genuinely applied (`set local role authenticated`, synthetic JWT claims,
+probe user = business A `branch_manager` with `business_users.branch_id` = A1), the user sees one A2
+purchase order, its line, the A2 goods-receipt note and the A2 site — while `can_access_branch(business, A2)`
+returns **false**, the same user is refused by every A2 command (`42501 — You do not have access to that
+branch.`), and the control probe on `invoices` @A2 correctly returns 0 rows against a ground-truthed 1.
+The method therefore distinguishes a real denial from a missing grant or a broken run, which §5.4 of the
+brief makes mandatory for Group B.
+
+### 16.3 Consequence for Groups B and the eight `BRANCH.*` rows
+
+The eight rows stay **BLOCKED**. Under option A they cannot be verified at all, only waived in writing;
+under B or C they become provable, because all 15 branch-derivable construction tables are reachable from a
+`not null` branch key (4 carry `branch_id not null`; 11 inherit it through a not-null FK chain) — so the
+NULL-branch-**row** contract §14.1 cites as the obstacle to reshaping does not arise for construction
+documents, and that obstacle no longer justifies leaving these rows unanswered. No option was chosen: the
+decision is item D-1 of the brief and no answer exists in this repository.
+
+**Nothing was changed by this section except this text:** no migration, policy, grant, schema, command, UI
+or harness expectation, and no database object. The measurement used a throwaway release-suite probe, run
+through the R13 harness and deleted afterwards, so no evidence row or gate count moved.
