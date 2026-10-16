@@ -300,13 +300,13 @@ instead of hiding the module. Gating the nav item on the Inventory plan capabili
 rejected: it would have invented a commercial rule that nothing enforces server-side.
 
 Consequently this branch adopted the trunk's `plans.test.ts` expectation **verbatim** so the pull request
-merges without conflict. Follow-up for the trunk once this merges — the comment beside that expectation
-("Construction is a browser-local draft workspace only; it has no protected server data or posting path")
-is now stale: `/construction` renders a server-backed workspace that reads member-scoped data and runs
-authorised commands. The local draft still exists, unchanged and unrouted by the nav, at
-`/projects-funding-sources/construction-draft`, and
-`docs/architecture/CONSTRUCTION_RECEIPT_PREPARATION_SLICE.md` /
-`CONSTRUCTION_TRANSFER_PREPARATION_SLICE.md` remain accurate for that draft.
+merges without conflict. That follow-up is **done** (2026-10-16 closeout, comment-only change): the comment beside the expectation
+no longer describes Construction as a browser-local draft, and it now records that the plan tier does not
+gate the module while membership and capability grants decide what a person may actually do. The
+expectation and assertion themselves were not touched. Both draft-slice documents
+(`CONSTRUCTION_RECEIPT_PREPARATION_SLICE.md`, `CONSTRUCTION_TRANSFER_PREPARATION_SLICE.md`) now open with a
+draft-route-versus-server-backed-workspace section, so neither reads as a description of `/construction/*`.
+The local draft still exists, unchanged, at `/projects-funding-sources/construction-draft`.
 
 ### 7.5 What still requires official verification
 
@@ -319,3 +319,8 @@ authorised commands. The local draft still exists, unchanged and unrouted by the
 3. **A dated VAT-rate schedule.** The owner resolved the standard rate to 17.5% effective 1 January 2026;
    the cost path uses the tax amount actually recorded on the bill, so no historical document is restated.
    A rate-by-date schedule (`tax_configurations` being the natural home) is still outstanding.
+
+The 56 `BLOCKED` release rows are grouped by their actual dependency — with the verification, environment,
+evidence and production-risk for each group, and a prioritised Phase 3 proposal — in
+[`../audits/LEDGR_PRODUCTION_READINESS_56_BLOCKED_AND_PHASE3_2026-10-16.md`](../audits/LEDGR_PRODUCTION_READINESS_56_BLOCKED_AND_PHASE3_2026-10-16.md).
+None of the 56 is caused by this feature, and none of them is unblocked by any evidence above.

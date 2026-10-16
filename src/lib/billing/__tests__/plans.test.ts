@@ -37,7 +37,12 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
+      // Construction is deliberately NOT plan-gated, so it stays available on Free
+      // alongside Overview, Finance and Support. `/construction/*` is a server-backed
+      // workspace (member-scoped reads plus capability-gated commands) and the local
+      // draft lives at `/projects-funding-sources/construction-draft`; what a person
+      // may actually do is decided server-side by business membership and the
+      // construction capability grants, not by the plan tier.
       const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
         expect(isItemLocked(item, 'free'), item.path).toBe(!available);
