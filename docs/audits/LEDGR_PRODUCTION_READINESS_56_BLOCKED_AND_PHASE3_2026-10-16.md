@@ -298,7 +298,14 @@ rows do not would quietly reduce assurance. Porting must not weaken assertions t
 Ordered by value-for-risk. **None of these is started by this document**; items 1–2 are ready to scope
 now, item 3 needs an owner decision, item 4 is deliberately last.
 
-### 3.1 Two missing exception-command screens (small, closes real operational gaps)
+### 3.1 Two missing exception-command screens — **DELIVERED 2026-10-16** (item closed)
+
+Implemented in `ConstructionDeliveryNoteForm` (exception mode, opened from `ConstructionPurchaseOrdersSection`)
+and `ConstructionBillMatchingSection`; see
+[`../architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md`](../architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md)
+§7.2b for what each screen does and does not do. The analysis below is kept as the record of what was
+scoped. Nothing in this change touches Groups A–C, and no stock, valuation or general-ledger side effect
+was added.
 
 **What.** Screens for `record_construction_delivery_note_exception` (a late/duplicate delivery note that
 must be recorded against an already-moved document) and

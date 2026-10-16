@@ -224,10 +224,10 @@ server-side.
 | --- | --- | --- |
 | `ConstructionOverviewSection` | — (read-only) | `construction_procurement_open_items` |
 | `ConstructionPurchaseOrdersSection` | `create_construction_purchase_order`, `authorize_construction_purchase_order`, `cancel_construction_purchase_order` | purchase orders, lines, events, sites |
-| `ConstructionDeliveryNoteForm` | `record_construction_delivery_note` | order lines passed in by the list |
+| `ConstructionDeliveryNoteForm` | `record_construction_delivery_note`, and in exception mode (opened from `ConstructionPurchaseOrdersSection`) `record_construction_delivery_note_exception` | order lines passed in by the list; the supplier's recorded non-exception delivery notes, for naming the duplicate |
 | `ConstructionGoodsReceiptForm` | `record_construction_goods_receipt` | order lines passed in by the list |
 | `ConstructionReceiptsSection` | `record_construction_receipt_inspection`, `reclassify_construction_receipt_line`, `release_construction_receipt_hold`, `record_construction_receipt_cost_basis`, `post_construction_receipt_movement` | GRNs, lines, holds, inspections, reclassifications, allocations, cost bases, policy |
-| `ConstructionBillMatchingSection` | `register_construction_supplier_invoice_reference`, `match_construction_bill_line_to_receipt` | supplier bill lines, registered references, receipt lines, allocations |
+| `ConstructionBillMatchingSection` | `register_construction_supplier_invoice_reference`, `register_construction_supplier_invoice_reference_exception`, `match_construction_bill_line_to_receipt` | supplier bill lines, registered references, receipt lines, allocations |
 | `ConstructionMaterialIssuesSection` | `issue_construction_materials_to_project` | sites, material issues, project material cost, policy, site store balances |
 | `ConstructionSetupSection` | `register_construction_procurement_site`, `register_construction_product_uom_conversion`, `approve_construction_receipt_posting_policy` | sites, UOM conversions, policy |
 
@@ -256,15 +256,29 @@ client:
 Supplier credit notes, manufacturing WIP, automatic project-cost journal posting, progress billing and
 revenue recognition remain out of scope and absent.
 
-Two documented override commands are implemented and type-checked in the adapter but have **no screen
-yet**, which is an honest gap rather than a workaround: `record_construction_delivery_note_exception`
-(the late/duplicate delivery-note path) and `register_construction_supplier_invoice_reference_exception`
-(the supersede-a-mistaken-reference path). Both need a reason and an evidence reference plus the id of the
-document they correct, so each deserves its own reviewed control rather than a field squeezed into the
-existing forms. `findDeliveryNoteLines`, `findReceiptLinesForBusiness`, `findHoldsForBusiness` and
-`findCostBasesForBusiness` are likewise read-side helpers with no caller on these screens yet. Nothing
-else in the 21-command surface is unreachable: an audit of the adapter's 43 methods against the screens
-finds exactly these six without a UI caller.
+### 7.2b The two exception screens (delivered 2026-10-16)
+
+Both documented override commands now have their own reviewed control, each gated on
+`procurement.exception.authorize` and each requiring the corrected document, a written reason and an
+evidence reference:
+
+| Command | Screen | What it does, and what it deliberately does not do |
+| --- | --- | --- |
+| `record_construction_delivery_note_exception` | `ConstructionPurchaseOrdersSection` → "Record duplicate note (exception)" opens `ConstructionDeliveryNoteForm` in exception mode | Records the supplier's second document when they reuse a delivery-note number already recorded for them. The reused number is **taken from the named note and shown read-only**, because the server requires the two references to match; the named note is displayed in full (number, date, recorded by, evidence) before submission, and it is never edited — history is append-only. It is still evidence only: no stock movement, no journal entry, and the screen says so. |
+| `register_construction_supplier_invoice_reference_exception` | `ConstructionBillMatchingSection` → "Duplicate reference? Record an exception" | Records a bill whose supplier invoice reference a different bill has already registered. The candidate list is the **same supplier's** active registrations, and a registration holding a different reference is refused in the screen before the server has to. It does not touch the ordinary register path, and creates no stock movement and no journal entry. |
+
+Two honest notes about these screens. First, the candidate lists are a convenience, not the authority:
+they are filtered from member-scoped reads, and the database independently re-checks same-business,
+same-supplier and same-normalized-reference — the UI mirror of the server's normalisation
+(`normalizeReference`, punctuation deliberately NOT stripped) exists only to point at the right row.
+Second, `register_construction_supplier_invoice_reference_exception` takes **no idempotency key** in the
+existing contract, so a retry after a lost response is reported ("this bill already has a registered
+reference") rather than silently replayed; the screen refreshes the list and says exactly that instead of
+offering a blind retry. The delivery-note exception does take a key and reuses it across retries.
+
+Four read-side helpers still have no caller on these screens: `findDeliveryNoteLines`,
+`findReceiptLinesForBusiness`, `findHoldsForBusiness` and `findCostBasesForBusiness`. Nothing else in the
+21-command surface is unreachable.
 
 ### 7.3 Verification actually performed for this change set
 

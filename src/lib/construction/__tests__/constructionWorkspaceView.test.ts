@@ -16,6 +16,7 @@ import {
   formatMoney,
   formatQuantity,
   toNumber,
+  normalizeReference,
 } from '@/lib/construction/constructionWorkspaceView';
 import {
   CONSTRUCTION_CAPABILITIES,
@@ -282,5 +283,20 @@ describe('formatting and the accounting boundary statement', () => {
   it('states that a stock movement is not a journal entry', () => {
     expect(JOURNAL_BOUNDARY_NOTE).toContain('never write a journal entry');
     expect(JOURNAL_BOUNDARY_NOTE).toContain('not approved');
+  });
+});
+
+describe('normalizeReference (mirrors the server, display only)', () => {
+  it('collapses case and whitespace exactly as the server does, and does not strip punctuation', () => {
+    // The release suite proves the semantics against PostgreSQL:
+    // "INV 001/2026" and "  inv   001/2026 " are the same reference (duplicate),
+    // while the punctuated "INV001/2026" is a different one.
+    expect(normalizeReference('  inv   001/2026 ')).toBe('INV 001/2026');
+    expect(normalizeReference('INV 001/2026')).toBe('INV 001/2026');
+    expect(normalizeReference('INV001/2026')).not.toBe('INV 001/2026');
+    expect(normalizeReference('\tr13\ndn\u00a00042 ')).toBe('R13 DN 0042');
+    expect(normalizeReference(null)).toBe('');
+    expect(normalizeReference(undefined)).toBe('');
+    expect(normalizeReference('   ')).toBe('');
   });
 });

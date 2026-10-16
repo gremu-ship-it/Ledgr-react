@@ -19,6 +19,21 @@ import type {
 } from '@/dal/repositories/ConstructionProcurementRepository';
 
 /** Generates the client replay key used by every mutating command. */
+/**
+ * Mirrors `public._ledgr_construction_normalize_reference`:
+ * `upper(regexp_replace(btrim(coalesce(p_text, '')), '\s+', ' ', 'g'))`.
+ *
+ * Used ONLY to point an operator at the registration that actually conflicts —
+ * "INV 001/2026" and "  inv   001/2026 " are the same reference to the database.
+ * The database recomputes and enforces this for every command, so this is a
+ * presentation aid and never an authority. Note the deliberate non-normalisation:
+ * punctuation is NOT stripped, so `INV001/2026` is a DIFFERENT reference from
+ * `INV 001/2026` — matching the server, which proves exactly that case.
+ */
+export function normalizeReference(text: string | null | undefined): string {
+  return (text ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 export function newIdempotencyKey(): string {
   const cryptoObj = typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
   if (cryptoObj && typeof cryptoObj.randomUUID === 'function') return cryptoObj.randomUUID();

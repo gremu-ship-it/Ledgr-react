@@ -6,6 +6,7 @@ import {
   CONSTRUCTION_CAPABILITIES,
   CONSTRUCTION_CAPABILITY_LABELS,
   type BillMatchInput,
+  type ConstructionSupplierInvoiceReference,
 } from '@/dal/repositories/ConstructionProcurementRepository';
 import { describeConstructionFailure } from '@/lib/construction/constructionCommandFeedback';
 import {
@@ -15,6 +16,7 @@ import {
   gateForCapability,
   matchesSearch,
   newIdempotencyKey,
+  normalizeReference,
   toNumber,
 } from '@/lib/construction/constructionWorkspaceView';
 import {
@@ -157,15 +159,30 @@ export function ConstructionBillMatchingSection({
                         {registration ? (
                           <span className="text-xs text-gray-500">
                             {registration.reference_normalized}
+                            {registration.exception_of ? ' · exception' : ''}
                           </span>
                         ) : (
-                          <RegisterReferenceButton
-                            businessId={businessId}
-                            expenseId={bill.id}
-                            capabilities={capabilities}
-                            hasReference={Boolean(bill.reference)}
-                            onDone={(message) => setNotice(message)}
-                          />
+                          <div className="flex flex-col items-end gap-1">
+                            <RegisterReferenceButton
+                              businessId={businessId}
+                              expenseId={bill.id}
+                              capabilities={capabilities}
+                              hasReference={Boolean(bill.reference)}
+                              onDone={(message) => setNotice(message)}
+                            />
+                            <SupplierReferenceExceptionTrigger
+                              bill={{
+                                id: bill.id,
+                                expense_number: bill.expense_number,
+                                reference: bill.reference,
+                                supplierContactId: bill.contact_id,
+                                supplierName: contactsById.get(bill.contact_id ?? '')?.name ?? '—',
+                              }}
+                              capabilities={capabilities}
+                              registrations={references}
+                              onDone={(message) => setNotice(message)}
+                            />
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -243,6 +260,254 @@ function RegisterReferenceButton({
       </GatedButton>
       {mutation.isError ? <FailureBanner failure={describeConstructionFailure(mutation.error)} /> : null}
     </div>
+  );
+}
+
+/**
+ * The duplicate-reference exception path.
+ *
+ * Registering a reference is refused when the same supplier already has it
+ * registered (`supplier-invoice-reference-duplicate`). The documented next step
+ * is an evidenced exception naming that registration — this is that screen. The
+ * candidates shown are the ACTIVE registrations for the same supplier; the
+ * database re-checks sameness of business, supplier and normalized reference, and
+ * it refuses a bill that is already registered, so nothing here is trusted.
+ *
+ * The command takes no idempotency key. It does not need one for safety — a second
+ * call for the same bill is refused because the bill already has a registration —
+ * but that means a retry after a lost response is reported rather than silently
+ * replayed, and the screen says so instead of offering a blind retry.
+ */
+function SupplierReferenceExceptionTrigger({
+  bill,
+  capabilities,
+  registrations,
+  onDone,
+}: {
+  bill: { id: string; expense_number: string; reference: string | null; supplierContactId: string | null; supplierName: string };
+  capabilities: string[];
+  registrations: ConstructionSupplierInvoiceReference[];
+  onDone: (message: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const gate = gateForCapability(
+    capabilities,
+    CONSTRUCTION_CAPABILITIES.exceptionAuthorize,
+    CONSTRUCTION_CAPABILITY_LABELS[CONSTRUCTION_CAPABILITIES.exceptionAuthorize],
+  );
+
+  if (!open) {
+    return (
+      <GatedButton
+        allowed={gate.allowed}
+        reason={gate.reason}
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-900 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-400"
+      >
+        <>
+          <ShieldAlert className="h-3.5 w-3.5" aria-hidden /> Duplicate reference? Record an exception
+        </>
+      </GatedButton>
+    );
+  }
+
+  return (
+    <SupplierReferenceExceptionPanel
+      bill={bill}
+      capabilities={capabilities}
+      registrations={registrations}
+      onDone={(message) => {
+        setOpen(false);
+        onDone(message);
+      }}
+      onCancel={() => setOpen(false)}
+    />
+  );
+}
+
+function SupplierReferenceExceptionPanel({
+  bill,
+  capabilities,
+  registrations,
+  onDone,
+  onCancel,
+}: {
+  bill: { id: string; expense_number: string; reference: string | null; supplierContactId: string | null; supplierName: string };
+  capabilities: string[];
+  registrations: ConstructionSupplierInvoiceReference[];
+  onDone: (message: string) => void;
+  onCancel: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [conflictId, setConflictId] = useState('');
+  const [reason, setReason] = useState('');
+  const [evidence, setEvidence] = useState('');
+
+  const normalized = normalizeReference(bill.reference);
+  // Only the SAME SUPPLIER's active registrations can be the named conflict; the
+  // server also requires the same business and the same normalized reference, and
+  // recomputes all three itself.
+  const supplierRegistrations = useMemo(
+    () =>
+      registrations.filter(
+        (entry) =>
+          entry.status === 'active' &&
+          entry.reference_normalized &&
+          entry.supplier_contact_id === bill.supplierContactId,
+      ),
+    [registrations, bill.supplierContactId],
+  );
+  const conflict = supplierRegistrations.find((entry) => entry.id === conflictId) ?? null;
+  const matchesReference = conflict ? conflict.reference_normalized === normalized : false;
+
+  const gate = gateForCapability(
+    capabilities,
+    CONSTRUCTION_CAPABILITIES.exceptionAuthorize,
+    CONSTRUCTION_CAPABILITY_LABELS[CONSTRUCTION_CAPABILITIES.exceptionAuthorize],
+  );
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      repos.construction.registerSupplierInvoiceReferenceException({
+        expenseId: bill.id,
+        exceptionOf: conflictId,
+        reason: reason.trim(),
+        evidence: evidence.trim(),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['construction'] });
+      onDone(
+        'Supplier reference registered as an authorized duplicate exception. No stock movement and no journal entry were created.',
+      );
+    },
+    onError: () => {
+      // A refusal here can mean the bill was registered while this screen was
+      // open (including by a retry whose first response was lost). Re-read rather
+      // than leave a stale row, and show the server's own words.
+      queryClient.invalidateQueries({ queryKey: ['construction'] });
+    },
+  });
+
+  const canSubmit =
+    gate.allowed &&
+    conflict !== null &&
+    matchesReference &&
+    reason.trim().length > 0 &&
+    evidence.trim().length > 0;
+
+  return (
+    <form
+      aria-label="Record duplicate supplier reference exception"
+      className="mt-2 w-full space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-left"
+      onSubmit={(event) => {
+        event.preventDefault();
+        mutation.mutate();
+      }}
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-xs font-semibold text-amber-900">Duplicate supplier reference — authorized exception</h4>
+        <StatusPill label="Exception" className="bg-amber-100 text-amber-900" />
+      </div>
+      <p className="text-xs text-amber-900">
+        The supplier reused an invoice reference that is already registered for them. This records the bill as an exception against that
+        registration. The conflicting registration is not edited — registrations are append-only — and this command creates no stock
+        movement and no journal entry.
+      </p>
+
+      <div className="rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-xs text-gray-700">
+        <p className="font-medium text-gray-900">Bill being registered</p>
+        <p>
+          <span className="font-mono">{bill.expense_number}</span> · {bill.supplierName} · reference{' '}
+          <span className="font-mono">{bill.reference ?? '(none)'}</span>
+          {normalized ? <> · normalized <span className="font-mono">{normalized}</span></> : null}
+        </p>
+      </div>
+
+      <Field label="Registered reference this conflicts with" required hint="Only active registrations can be named. The server refuses anything else.">
+        <select
+          aria-label="Registered reference this conflicts with"
+          value={conflictId}
+          onChange={(event) => setConflictId(event.target.value)}
+          className={FIELD_CLASS}
+        >
+          <option value="">Select the conflicting registration…</option>
+          {supplierRegistrations.map((registration) => (
+            <option key={registration.id} value={registration.id}>
+              {registration.reference_normalized}
+              {registration.reference_normalized === normalized ? ' · same reference' : ''} · recorded {registration.recorded_at.slice(0, 10)}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {supplierRegistrations.length === 0 ? (
+        <p className="text-xs text-amber-900">
+          No active registration is visible in this business. An exception must name an existing active registration for the same supplier
+          and the same reference, so there is nothing to record against yet.
+        </p>
+      ) : null}
+
+      {conflict && !matchesReference ? (
+        <p className="text-xs text-amber-900">
+          That registration carries a different reference from this bill. An exception must name the registration that holds the{' '}
+          <strong>same</strong> reference ({normalized || 'this bill has no reference recorded'}), so the server would refuse this choice.
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <Field label="Exception reason" required>
+          <input
+            aria-label="Exception reason"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            className={FIELD_CLASS}
+            placeholder="e.g. supplier reissued the same invoice number"
+          />
+        </Field>
+        <Field label="Exception evidence" required>
+          <input
+            aria-label="Exception evidence"
+            value={evidence}
+            onChange={(event) => setEvidence(event.target.value)}
+            className={FIELD_CLASS}
+            placeholder="e.g. supplier e-mail thread 2026-10-16"
+          />
+        </Field>
+      </div>
+
+      {mutation.isError ? <FailureBanner failure={describeConstructionFailure(mutation.error)} /> : null}
+      {mutation.isError ? (
+        <p className="text-xs text-gray-600">
+          If the server says this bill already has a registered reference, the registration exists — the list above has been refreshed and no
+          duplicate was created. Check the registration column before submitting again.
+        </p>
+      ) : null}
+
+      <div className="flex items-center gap-3">
+        <GatedButton
+          allowed={canSubmit}
+          reason={
+            !gate.allowed
+              ? gate.reason
+              : conflict === null
+                ? 'Select the registered reference this bill conflicts with.'
+                : !matchesReference
+                  ? 'The named registration holds a different reference from this bill.'
+                  : 'A written reason and an evidence reference are required.'
+          }
+          disabled={mutation.isPending}
+          type="submit"
+        >
+          <>
+            <ShieldAlert className="h-4 w-4" aria-hidden />{' '}
+            {mutation.isPending ? 'Recording…' : 'Record exception'}
+          </>
+        </GatedButton>
+        <button type="button" onClick={onCancel} className="text-xs text-gray-600 hover:text-gray-900">
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }
 

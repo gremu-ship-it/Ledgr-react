@@ -98,10 +98,21 @@ export function FailureBanner({ failure }: { failure: ConstructionFailure }) {
     <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" role="alert">
       {failure.explanation ? (
         <p className="font-medium">{failure.explanation.summary}</p>
+      ) : failure.isAuthorityDenial ? (
+        // A 42501 is not a rule about the document — it is about who is asking and
+        // in which business or branch. Saying so is more useful than "refused",
+        // and the server's own wording is still printed below, unaltered.
+        <p className="font-medium">You do not have authority for this action in this business.</p>
       ) : (
         <p className="font-medium">The database refused this operation.</p>
       )}
-      {failure.explanation ? <p className="mt-1 text-xs text-red-800">{failure.explanation.action}</p> : null}
+      {failure.explanation ? (
+        <p className="mt-1 text-xs text-red-800">{failure.explanation.action}</p>
+      ) : failure.isAuthorityDenial ? (
+        <p className="mt-1 text-xs text-red-800">
+          Check the business and branch you are working in, and ask an approver to grant the capability if you should have it.
+        </p>
+      ) : null}
       <p className="mt-1 break-words font-mono text-[11px] leading-4 text-red-700">{failure.message}</p>
       {failure.token || failure.sqlState ? (
         <p className="mt-1 text-[11px] text-red-600">

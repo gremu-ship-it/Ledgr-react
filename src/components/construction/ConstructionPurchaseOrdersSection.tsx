@@ -485,6 +485,7 @@ function PurchaseOrderDetail({
   const currentUser = useAppStore((state) => state.currentUser);
   const [cancelReason, setCancelReason] = useState('');
   const [showDeliveryNote, setShowDeliveryNote] = useState(false);
+  const [showDeliveryNoteException, setShowDeliveryNoteException] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
 
   const detailQuery = useQuery({
@@ -500,12 +501,20 @@ function PurchaseOrderDetail({
         repos.inventory.findAllProducts(businessId),
         repos.contact.findByBusiness(businessId),
       ]);
+      const po = purchaseOrders.find((entry) => entry.id === poId) ?? null;
       return {
-        po: purchaseOrders.find((entry) => entry.id === poId) ?? null,
+        po,
         lines,
         events,
         sites,
         deliveryNotes: deliveryNotes.filter((note) => note.po_id === poId),
+        // Candidates for a duplicate exception: the recorded, non-exception notes
+        // for the SAME SUPPLIER (they may sit on another purchase order — the
+        // server only requires same business, same supplier, same reference). No
+        // extra read: this is a filter over the business-wide list already loaded.
+        supplierRecordedNotes: po
+          ? deliveryNotes.filter((note) => !note.is_exception && note.supplier_contact_id === po.supplier_contact_id)
+          : [],
         receipts: receipts.filter((receipt) => receipt.po_id === poId),
         products,
         contacts,
@@ -545,7 +554,7 @@ function PurchaseOrderDetail({
     );
   }
 
-  const { po, lines, events, sites, deliveryNotes, receipts, products, contacts } = detailQuery.data!;
+  const { po, lines, events, sites, deliveryNotes, supplierRecordedNotes, receipts, products, contacts } = detailQuery.data!;
   if (!po) {
     return <ErrorBanner message="That purchase order is not visible to you in this business." />;
   }
@@ -553,6 +562,11 @@ function PurchaseOrderDetail({
   const site = sites.find((entry) => entry.id === po.site_id);
   const supplier = contacts.find((entry) => entry.id === po.supplier_contact_id);
   const productsById = new Map(products.map((product) => [product.id, product]));
+  const exceptionGate = gateForCapability(
+    capabilities,
+    CONSTRUCTION_CAPABILITIES.exceptionAuthorize,
+    CONSTRUCTION_CAPABILITY_LABELS[CONSTRUCTION_CAPABILITIES.exceptionAuthorize],
+  );
   const authorizeGate = gateForCapability(
     capabilities,
     CONSTRUCTION_CAPABILITIES.poAuthorize,
@@ -665,6 +679,23 @@ function PurchaseOrderDetail({
                 </>
               </GatedButton>
               <GatedButton
+                allowed={exceptionGate.allowed && supplierRecordedNotes.length > 0}
+                reason={
+                  supplierRecordedNotes.length === 0
+                    ? 'No delivery note is recorded for this supplier yet. Record the first note normally — this path only records a duplicate of an existing note.'
+                    : exceptionGate.reason
+                }
+                onClick={() => {
+                  setShowDeliveryNote(false);
+                  setShowDeliveryNoteException((open) => !open);
+                }}
+                className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-400"
+              >
+                <>
+                  <FilePlus2 className="h-4 w-4" aria-hidden /> Record duplicate note (exception)
+                </>
+              </GatedButton>
+              <GatedButton
                 allowed={capabilities.includes(CONSTRUCTION_CAPABILITIES.grnRecord)}
                 reason={gateForCapability(capabilities, CONSTRUCTION_CAPABILITIES.grnRecord, CONSTRUCTION_CAPABILITY_LABELS[CONSTRUCTION_CAPABILITIES.grnRecord]).reason}
                 onClick={() => setShowReceipt((open) => !open)}
@@ -694,6 +725,25 @@ function PurchaseOrderDetail({
               onNotice(`Delivery note ${number} recorded as evidence. No stock or ledger effect.`);
             }}
             onCancel={() => setShowDeliveryNote(false)}
+          />
+        ) : null}
+
+        {showDeliveryNoteException ? (
+          <ConstructionDeliveryNoteForm
+            businessId={businessId}
+            po={po}
+            lines={lines}
+            products={products}
+            existingNotes={deliveryNotes}
+            exception={{ candidates: supplierRecordedNotes }}
+            onRecorded={(number) => {
+              setShowDeliveryNoteException(false);
+              invalidate();
+              onNotice(
+                `Delivery note ${number} recorded as an authorized duplicate exception. The recorded note was not changed; no stock or ledger effect.`,
+              );
+            }}
+            onCancel={() => setShowDeliveryNoteException(false)}
           />
         ) : null}
 
