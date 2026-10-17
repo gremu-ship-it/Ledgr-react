@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 import {
   Building2, ChevronRight, ChevronLeft,
@@ -506,6 +507,7 @@ function Step4({ form, set }: { form: BusinessForm; set: BusinessFormSetter }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function CreateBusinessPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const setBusinesses = useAppStore((s) => s.setBusinesses);
   const setCurrentBusiness = useAppStore((s) => s.setCurrentBusiness);
@@ -648,16 +650,21 @@ export function CreateBusinessPage() {
     let provisionWarningMessage: string | null = null;
     if (form.operating_models.includes('CONSTRUCTION')) {
       if (!currentUser) {
-        provisionWarningMessage = 'Your business was created, but we could not set up the construction workspace because the signed-in owner could not be identified.';
+        provisionWarningMessage = t('construction.accounts.createOwnerWarning');
       } else {
-        const { error: provisionError } = await (supabase as unknown as {
+        const constructionRpc = supabase as unknown as {
           rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
-        }).rpc('provision_construction_defaults', {
+        };
+        const { error: provisionError } = await constructionRpc.rpc('provision_construction_defaults', {
           p_business_id: businessId,
           p_owner_user_id: currentUser.id,
         });
-        if (provisionError) {
-          provisionWarningMessage = `Your business was created, but we could not set up its construction workspace${provisionError.message ? ` (${provisionError.message})` : ''}.`;
+        const { error: coaProvisionError } = await constructionRpc.rpc('provision_construction_coa_accounts', {
+          p_business_id: businessId,
+        });
+        const error = provisionError ?? coaProvisionError;
+        if (error) {
+          provisionWarningMessage = t('construction.accounts.createProvisionWarning');
         }
       }
     }

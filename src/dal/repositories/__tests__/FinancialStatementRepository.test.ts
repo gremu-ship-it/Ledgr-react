@@ -90,6 +90,27 @@ describe('getSOFP — contra-account presentation', () => {
     expect(sofp.currentAssets.lines.find((line) => line.code === '1100')?.amount).toBe(1_500);
   });
 
+  it('classifies Retention Receivable in Current Assets without treating it as trade debtors', async () => {
+    const retention = {
+      id: 'a-retention', code: '1138', name: 'Retention Receivable',
+      account_type: 'asset', account_subtype: 'contra_ar', normal_balance: 'debit',
+      is_group: false, is_system: true, is_bank_account: false, opening_balance: 0,
+    };
+    const client = {
+      from: (table: string) => table === 'accounts'
+        ? tableStub([retention])
+        : table === 'journal_lines'
+          ? tableStub([{ account_id: 'a-retention', is_debit: true, amount_base: 12_500 }])
+          : tableStub([]),
+    } as unknown as SupabaseClient<Database>;
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+    expect(sofp.currentAssets.subtotal).toBe(12_500);
+    expect(sofp.currentAssets.lines).toEqual([
+      expect.objectContaining({ code: '1138', amount: 12_500 }),
+    ]);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(0);
+  });
+
   it('presents Drawings / Dividends as a reduction of equity', async () => {
     const sofp = await makeRepo().getSOFP('biz-1', '2026-06-30');
     expect(sofp.equity.subtotal).toBe(40_000 - 5_000);

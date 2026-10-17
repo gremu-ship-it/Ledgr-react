@@ -39,9 +39,10 @@ export type PrimaryCurrency = 'MWK' | 'ZMW' | 'TZS' | 'MZN' | 'USD' | 'EUR' | 'G
 export type Currency = PrimaryCurrency | 'KES' | 'UGX';
 /** DB: account_type */
 export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
-/** DB: account_subtype — exact 15 members */
+/** DB: account_subtype — exact 16 members */
 export type AccountSubtype =
   | 'current_asset'
+  | 'contra_ar'
   | 'non_current_asset'
   | 'fixed_asset'
   | 'current_liability'

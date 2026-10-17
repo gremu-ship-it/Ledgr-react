@@ -59,6 +59,84 @@ export interface ProjectLocation {
   name: string;
   project_id: string | null;
 }
+export type ProjectValuationStatus = 'draft' | 'submitted' | 'invoiced';
+export interface ProjectValuation {
+  id: string;
+  project_id: string;
+  valuation_number: number;
+  valuation_date: string;
+  period_start: string | null;
+  period_end: string | null;
+  gross_amount: number;
+  retention_amount: number;
+  net_amount: number;
+  previous_cumulative: number;
+  status: ProjectValuationStatus;
+  invoice_id: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+export interface ProjectValuationLine {
+  id: string;
+  valuation_id: string;
+  boq_line_id: string;
+  cumulative_pct: number;
+  cumulative_value: number;
+  previous_cumulative_value: number;
+  period_value: number;
+  notes: string | null;
+}
+export interface ProjectInvoiceReference {
+  id: string;
+  invoice_number: string;
+  status: string;
+}
+export interface ProjectRetentionEntry {
+  id: string;
+  project_id: string;
+  valuation_id: string | null;
+  type: 'withheld' | 'released';
+  amount: number;
+  description: string | null;
+  invoice_id: string | null;
+  created_by: string;
+  created_at: string;
+  invoice?: ProjectInvoiceReference | null;
+}
+export interface ProjectValuationDocument {
+  valuation: ProjectValuation;
+  lines: ProjectValuationLine[];
+  invoice: ProjectInvoiceReference | null;
+  retention_entries: ProjectRetentionEntry[];
+}
+export interface ProjectValuationHistory {
+  valuations: ProjectValuationDocument[];
+  retention_entries: ProjectRetentionEntry[];
+}
+export interface ProjectValuationInput {
+  valuation_date: string;
+  period_start: string | null;
+  period_end: string | null;
+  lines: Array<{
+    boq_line_id: string;
+    cumulative_pct: number;
+    notes?: string | null;
+  }>;
+  notes: string | null;
+}
+export interface ProjectRetentionSummary {
+  total_withheld: number;
+  total_released: number;
+  balance_held: number;
+  retention_pct: number;
+  can_release: boolean;
+}
+export interface ProjectRetentionReleaseResult {
+  retention_entry: ProjectRetentionEntry;
+  invoice: ProjectInvoiceReference;
+}
 interface Result<T> {
   data: T | null;
   error: { message: string } | null;
@@ -210,5 +288,112 @@ export class ProjectRepository {
   }
   async bulkUpsertBoqLines(projectId: string, lines: BoqLineInput[]): Promise<ProjectBoqLine[]> {
     return unwrap<ProjectBoqLine[]>(await client.rpc('bulk_upsert_boq_lines', { p_project_id: projectId, p_lines: lines })) ?? [];
+  }
+
+  private async projectBusinessId(projectId: string): Promise<string> {
+    const project = unwrap<{ business_id: string } | null>(
+      await client.from('projects').select('business_id').eq('id', projectId).maybeSingle(),
+    );
+    if (!project?.business_id) throw new Error('Project not found or not accessible.');
+    return project.business_id;
+  }
+
+  private async valuationProjectId(valuationId: string): Promise<string> {
+    const valuation = unwrap<{ project_id: string } | null>(
+      await client.from('project_valuations').select('project_id').eq('id', valuationId).maybeSingle(),
+    );
+    if (!valuation?.project_id) throw new Error('Valuation not found or not accessible.');
+    return valuation.project_id;
+  }
+
+  /** UI preflight only; every command RPC repeats the grant check server-side. */
+  private async requireProjectCapabilities(projectId: string, required: string[] = []): Promise<void> {
+    const businessId = await this.projectBusinessId(projectId);
+    const capabilities = unwrap<string[]>(
+      await client.rpc('construction_procurement_capabilities_for', { p_business_id: businessId }),
+    ) ?? [];
+    const allowed = required.length === 0
+      ? capabilities.length > 0
+      : required.some((capability) => capabilities.includes(capability));
+    if (!allowed) {
+      throw new Error(required.length
+        ? `Missing construction capability: ${required.join(' or ')}.`
+        : 'Construction procurement access required.');
+    }
+  }
+
+  async createValuation(projectId: string, input: ProjectValuationInput): Promise<ProjectValuationDocument> {
+    await this.requireProjectCapabilities(projectId, [
+      'procurement.po.manage',
+      'procurement.master.manage',
+    ]);
+    return unwrap<ProjectValuationDocument>(await client.rpc('create_valuation', {
+      p_project_id: projectId,
+      p_valuation_date: input.valuation_date,
+      p_period_start: input.period_start,
+      p_period_end: input.period_end,
+      p_lines: input.lines,
+      p_notes: input.notes,
+    }));
+  }
+
+  async updateValuation(valuationId: string, input: ProjectValuationInput): Promise<ProjectValuationDocument> {
+    const projectId = await this.valuationProjectId(valuationId);
+    await this.requireProjectCapabilities(projectId, [
+      'procurement.po.manage',
+      'procurement.master.manage',
+    ]);
+    return unwrap<ProjectValuationDocument>(await client.rpc('update_valuation', {
+      p_valuation_id: valuationId,
+      p_valuation_date: input.valuation_date,
+      p_period_start: input.period_start,
+      p_period_end: input.period_end,
+      p_lines: input.lines,
+      p_notes: input.notes,
+    }));
+  }
+
+  async submitValuation(valuationId: string): Promise<ProjectValuationDocument> {
+    const projectId = await this.valuationProjectId(valuationId);
+    await this.requireProjectCapabilities(projectId, ['procurement.master.manage']);
+    return unwrap<ProjectValuationDocument>(await client.rpc('submit_valuation', {
+      p_valuation_id: valuationId,
+    }));
+  }
+
+  async generateInvoice(valuationId: string): Promise<ProjectValuationDocument> {
+    const projectId = await this.valuationProjectId(valuationId);
+    await this.requireProjectCapabilities(projectId, ['procurement.master.manage']);
+    return unwrap<ProjectValuationDocument>(await client.rpc('generate_invoice_from_valuation', {
+      p_valuation_id: valuationId,
+    }));
+  }
+
+  async releaseRetention(
+    projectId: string,
+    amount: number,
+    description: string,
+  ): Promise<ProjectRetentionReleaseResult> {
+    await this.requireProjectCapabilities(projectId, ['procurement.exception.authorize']);
+    return unwrap<ProjectRetentionReleaseResult>(await client.rpc('release_retention', {
+      p_project_id: projectId,
+      p_amount: amount,
+      p_description: description,
+    }));
+  }
+
+  async getValuationHistory(projectId: string): Promise<ProjectValuationHistory> {
+    await this.requireProjectCapabilities(projectId);
+    return unwrap<ProjectValuationHistory>(await client.rpc('get_valuation_history', {
+      p_project_id: projectId,
+    }));
+  }
+
+  async getRetentionSummary(projectId: string): Promise<ProjectRetentionSummary> {
+    await this.requireProjectCapabilities(projectId);
+    const result = unwrap<ProjectRetentionSummary | ProjectRetentionSummary[]>(
+      await client.rpc('get_retention_summary', { p_project_id: projectId }),
+    );
+    return Array.isArray(result) ? result[0] : result as ProjectRetentionSummary;
   }
 }

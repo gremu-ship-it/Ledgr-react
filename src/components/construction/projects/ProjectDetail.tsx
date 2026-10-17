@@ -21,6 +21,7 @@ import { ConstructionReturnsSection } from '../ConstructionReturnsSection';
 import { ProjectForm, PROJECT_BUTTON } from './ProjectForm';
 import { ProjectStatusBadge } from './ProjectsSection';
 import { ProjectBoqEditor } from './ProjectBoqEditor';
+import { ProjectValuationsPanel } from './ProjectValuationsPanel';
 
 const k = 'construction.projects';
 const TABS = ['overview', 'sites', 'procurement', 'boq', 'valuations'] as const;
@@ -189,7 +190,13 @@ function ProjectDetailContent({
             </div>
           )}
           {tab === 'boq' && <ProjectBoqEditor project={project} canManage={canManage} onNotice={setNotice} />}
-          {tab === 'valuations' && <p>{t(`${k}.valuationsPlaceholder`)}</p>}
+          {tab === 'valuations' && (
+            <ProjectValuationsPanel
+              project={project}
+              capabilities={capabilities}
+              onNotice={setNotice}
+            />
+          )}
         </div>
       </SectionCard>
       {editing && (

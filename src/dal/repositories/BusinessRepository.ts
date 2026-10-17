@@ -168,6 +168,20 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
     if (error) throw toRepositoryError('businesses', error);
   }
 
+  /** Idempotently provisions the Construction-only Retention Receivable account. */
+  async provisionConstructionCoaAccounts(businessId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_construction_coa_accounts',
+        args: { p_business_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_construction_coa_accounts', {
+      p_business_id: businessId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
   async reserveNextInvoiceNumber(businessId: string): Promise<string> {
     return this.reserveDocumentNumber(businessId, 'invoice');
   }
