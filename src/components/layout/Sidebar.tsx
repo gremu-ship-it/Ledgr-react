@@ -5,7 +5,7 @@ import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'luc
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
-import { isItemLocked, planRequiredForItem, visibleSectionsFor } from './navConfig';
+import { isItemLocked, navLabelResolver, planRequiredForItem, visibleSectionsFor } from './navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
@@ -28,6 +28,10 @@ export function Sidebar() {
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const isPlatformAdmin = useIsPlatformAdmin();
   const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier);
+  // `visibleSectionsFor` already rewrote each item's labelKey for a
+  // construction business; the resolver keeps the collapsed-rail tooltip and
+  // the upgrade prompt on the same vocabulary as the link text.
+  const labelKeyFor = navLabelResolver(isOrgCapabilityEnabled);
 
   const [isResizing, setIsResizing] = useState(false);
   const startX = useRef(0);
@@ -133,7 +137,7 @@ export function Sidebar() {
                     const handleClick = (e: React.MouseEvent) => {
                       if (locked) {
                         e.preventDefault();
-                        pushUpgradeRequired(t(item.labelKey), planRequiredForItem(item, section.minPlan)?.name ?? 'a higher plan', businessId);
+                        pushUpgradeRequired(t(labelKeyFor(item.labelKey)), planRequiredForItem(item, section.minPlan)?.name ?? 'a higher plan', businessId);
                         if (window.innerWidth < 1024) setSidebarOpen(false);
                         return;
                       }
@@ -159,7 +163,7 @@ export function Sidebar() {
                               <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                               {sidebarOpen ? (
                                 <span className="flex flex-1 items-center justify-between gap-2 truncate">
-                                  <span className="truncate">{t(item.labelKey)}</span>
+                                  <span className="truncate">{t(labelKeyFor(item.labelKey))}</span>
                                   {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Upgrade required" />}
                                 </span>
                               ) : null}
@@ -172,7 +176,7 @@ export function Sidebar() {
                         </NavLink>
                         {!sidebarOpen && (
                           <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-within:block">
-                            {t(item.labelKey)}
+                            {t(labelKeyFor(item.labelKey))}
                             {locked ? ' (upgrade)' : ''}
                             <div className="absolute right-full top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rotate-45 bg-gray-900" />
                           </div>
