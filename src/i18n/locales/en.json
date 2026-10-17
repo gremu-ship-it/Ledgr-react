@@ -77,10 +77,9 @@
       "ai": "AI",
       "overview": "Overview",
       "finance": "Finance",
-      "inventory": "Inventory",
+      "inventory": "Supply Chain",
       "accounting": "Accounting",
       "organisation": "Organisation",
-      "construction": "Construction",
       "support": "Help",
       "admin": "Admin"
     },
@@ -107,7 +106,7 @@
       "contacts": "Contacts",
       "branches": "Branches",
       "departments": "Departments",
-      "constructionWorkspace": "Construction workspace",
+      "constructionWorkspace": "Construction",
       "settings": "Settings",
       "support": "Support",
       "businesses": "Businesses",
@@ -318,7 +317,10 @@
     "debit": "Debit",
     "credit": "Credit",
     "balance": "Balance",
-    "chartOfAccounts": "Chart of Accounts"
+    "chartOfAccounts": "Chart of Accounts",
+    "accountSubtypes": {
+      "contraAr": "Retention Receivable"
+    }
   },
   "tax": {
     "tax": "Tax",
@@ -617,6 +619,218 @@
       "generic": {
         "title": "Not available in the demo",
         "body": "This feature acts on a live Ledgr account. Create a free account to use it with your own books."
+      }
+    }
+  },
+  "construction": {
+    "accounts": {
+      "ownerRequired": "You must be signed in to set up the Construction workspace.",
+      "provisionError": "The Construction workspace could not be set up.",
+      "settingsProvisionWarning": "Operating models were saved, but Construction setup could not be completed. Save again to retry account setup; if the workspace is still incomplete, remove Construction and add it again.",
+      "createOwnerWarning": "Your business was created, but Construction setup could not be completed because the signed-in owner could not be identified.",
+      "createProvisionWarning": "Your business was created, but Construction setup could not be completed. In Settings, remove Construction from the operating models, save, then add it again to retry."
+    },
+    "projects": {
+      "title": "Projects",
+      "new": "New Project",
+      "edit": "Edit Project",
+      "save": "Save project",
+      "cancel": "Cancel",
+      "close": "Close",
+      "loading": "Loading projects…",
+      "notFound": "Project not found or not accessible.",
+      "empty": "Create your first construction project to start tracking costs and progress.",
+      "allStatuses": "All statuses",
+      "filter": "Filter by status",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}",
+      "back": "Back to projects",
+      "created": "Project created successfully.",
+      "updated": "Project updated successfully.",
+      "transitioned": "Project status updated.",
+      "linked": "Site linked to project.",
+      "unlinked": "Site unlinked from project.",
+      "fields": {
+        "name": "Project name",
+        "client_name": "Client name",
+        "status": "Status",
+        "contract_sum": "Contract sum",
+        "retention_pct": "Retention %",
+        "budget": "Budget",
+        "start_date": "Start date",
+        "end_date": "End date"
+      },
+      "statuses": {
+        "tender": "Tender",
+        "active": "Active",
+        "practical_completion": "Practical completion",
+        "defect_liability": "Defect liability",
+        "closed": "Closed"
+      },
+      "transitions": {
+        "tender": "Activate Project",
+        "active": "Mark Practical Completion",
+        "practical_completion": "Start Defect Liability",
+        "defect_liability": "Close Project"
+      },
+      "confirmTitle": "Confirm status transition",
+      "confirm": "Confirm transition",
+      "confirmText": "Move this project to {{status}}? This cannot be reversed.",
+      "reason": "Reason (optional)",
+      "tabs": {
+        "overview": "Overview",
+        "sites": "Sites",
+        "procurement": "Procurement",
+        "boq": "BOQ",
+        "valuations": "Valuations"
+      },
+      "boqPlaceholder": "Schedule of Values will be available in the next update.",
+      "valuationsPlaceholder": "Progress billing will be available in the next update.",
+      "cost": "Cost to date",
+      "siteCount": "Number of sites",
+      "poValue": "Total PO value",
+      "issuedValue": "Total issued value",
+      "returnedValue": "Total returned value",
+      "costNote": "Cost to date is PO value less returned value. PO values use entered prices; unpriced lines count as zero. Values are not currency-converted and respect your branch access.",
+      "linkedSites": "Linked sites",
+      "availableSites": "Available sites",
+      "link": "Link to project",
+      "unlink": "Unlink",
+      "noSites": "No sites to display.",
+      "unlinkWarning": "This site has active purchase orders or material issues tagged to this project. Unlinking does not remove those tags. Continue?",
+      "validation": {
+        "required": "Project name and client name are required.",
+        "amounts": "Enter valid non-negative amounts with at most two decimal places; retention must be between 0 and 100.",
+        "dates": "End date must be on or after start date."
+      },
+      "manageRequired": "Requires procurement.master.manage.",
+      "error": "The project action could not be completed.",
+      "tagHint": "New records created here are tagged to this project. Existing procurement authorization rules still apply.",
+      "columns": {
+        "name": "Name",
+        "client_name": "Client",
+        "status": "Status",
+        "contract_sum": "Contract Sum",
+        "budget": "Budget",
+        "start_date": "Start Date",
+        "end_date": "End Date"
+      },
+      "boq": {
+        "loading": "Loading BOQ…",
+        "contractSum": "Contract Sum",
+        "boqTotal": "BOQ Total",
+        "variance": "Variance",
+        "status": "Lock status",
+        "locked": "Locked (valuation created)",
+        "editable": "Editable",
+        "lockBanner": "This BOQ is locked because a valuation has been created. To make changes, contact your project administrator.",
+        "empty": "Add your first BOQ line to define the schedule of values for this project.",
+        "addLine": "Add Line",
+        "save": "Save BOQ",
+        "delete": "Delete",
+        "confirmDelete": "Delete this BOQ line?",
+        "saved": "BOQ saved successfully.",
+        "invalidAmounts": "Quantity and rate must be valid non-negative numbers.",
+        "mismatch": "BOQ total ({{total}}) does not match contract sum ({{contract}}). Variance: {{variance}}.",
+        "actions": "Actions",
+        "moveUp": "Move line up",
+        "moveDown": "Move line down",
+        "columns": {
+          "lineNumber": "Line #",
+          "description": "Description",
+          "quantity": "Quantity",
+          "unit": "Unit",
+          "rate": "Rate",
+          "total": "Total"
+        }
+      },
+      "valuations": {
+        "title": "Progress valuations",
+        "description": "Certify cumulative work completed against the project BOQ. Submitted valuations become read-only; invoices remain the financial record.",
+        "loading": "Loading valuations…",
+        "new": "Create valuation",
+        "createTitle": "New valuation draft",
+        "editTitle": "Edit valuation draft",
+        "edit": "Edit draft",
+        "cancel": "Cancel",
+        "saveDraft": "Save draft",
+        "updateDraft": "Update draft",
+        "submit": "Submit valuation",
+        "generateInvoice": "Generate invoice",
+        "createDisabled": "Valuations can be created only while the project is active.",
+        "draftExists": "Submit the existing draft before creating the next valuation.",
+        "boqRequired": "Add BOQ lines before creating a valuation.",
+        "empty": "No progress valuations have been created for this project.",
+        "fields": {
+          "valuationDate": "Valuation date",
+          "periodStart": "Period start",
+          "periodEnd": "Period end",
+          "notes": "Valuation notes / correction reason"
+        },
+        "columns": {
+          "lineNumber": "Line #",
+          "description": "BOQ item",
+          "boqValue": "BOQ value",
+          "previous": "Previous cumulative",
+          "cumulativePct": "Cumulative %",
+          "cumulativeValue": "Cumulative value",
+          "periodValue": "This period",
+          "lineNotes": "Line notes"
+        },
+        "summary": {
+          "gross": "Gross period value",
+          "previous": "Previously certified",
+          "retention": "Retention withheld / released",
+          "net": "Net valuation"
+        },
+        "negativeReason": "Add valuation notes explaining each negative period correction.",
+        "error": "The valuation action could not be completed. Check your access and try again.",
+        "none": "—",
+        "validation": {
+          "dateRequired": "Enter a valuation date.",
+          "dates": "Period end must be on or after period start.",
+          "percentages": "Enter a cumulative percentage from 0 to 100 with at most two decimal places for every BOQ line.",
+          "negativeReason": "A reason is required when any period value is negative."
+        },
+        "reference": "V-{{number}}",
+        "statuses": {
+          "draft": "Draft",
+          "submitted": "Submitted",
+          "invoiced": "Invoiced"
+        },
+        "saved": "Valuation V-{{number}} saved as a draft.",
+        "submittedNotice": "Valuation V-{{number}} submitted.",
+        "invoiceCreated": "Invoice {{invoiceNumber}} created for valuation V-{{number}}.",
+        "invoiceLabel": "Invoice {{invoiceNumber}}",
+        "createdAt": "Created {{date}}",
+        "valuationLines": "Valuation lines",
+        "retention": {
+          "title": "Retention ledger",
+          "totalWithheld": "Total withheld",
+          "totalReleased": "Total released",
+          "balance": "Balance held",
+          "rate": "Retention rate",
+          "entries": "Ledger entries",
+          "date": "Date",
+          "type": "Type",
+          "ledgerDescription": "Description",
+          "invoice": "Invoice",
+          "empty": "No retention entries yet.",
+          "canRelease": "Retention may be released at this project stage.",
+          "cannotRelease": "Manual retention release is available at practical completion or later.",
+          "releaseTitle": "Release retention",
+          "amount": "Release amount",
+          "releaseDescription": "Release description / reason",
+          "release": "Create release invoice",
+          "releasedNotice": "Retention release invoice {{invoiceNumber}} created.",
+          "invalidAmount": "Enter an amount greater than zero and no greater than the balance held.",
+          "descriptionRequired": "Enter a description for the retention release.",
+          "types": {
+            "withheld": "Withheld",
+            "released": "Released"
+          }
+        }
       }
     }
   }

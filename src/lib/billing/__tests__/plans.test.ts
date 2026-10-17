@@ -37,8 +37,10 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
-      const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
+      // Construction moved into the Supply Chain (inventory) section and is now an
+      // Enterprise module (minPlan), so nothing is unlocked on Free except the
+      // Overview, Finance and Support sections.
+      const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
         expect(isItemLocked(item, 'free'), item.path).toBe(!available);
       }
@@ -60,6 +62,19 @@ describe('Starter pricing and access', () => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },
   );
+
+  it('is binary for Construction: Free/Trial locks it, Enterprise unlocks it', () => {
+    const item = navItemForPath('/construction')!;
+    expect(item).toBeDefined();
+    // Construction has no intermediate tiers: Free/Trial is the locked upsell
+    // state and Enterprise is the only unlock.
+    expect(isItemLocked(item, 'free')).toBe(true);
+    expect(hasCapability('free', 'construction')).toBe(false);
+    expect(isItemLocked(item, 'enterprise')).toBe(false);
+    expect(hasCapability('enterprise', 'construction')).toBe(true);
+    expect(planRequiredFor('construction')?.tier).toBe('enterprise');
+    expect(planRequiredForItem(item)?.tier).toBe('enterprise');
+  });
 
   it('recommends the cheapest eligible tier for locked features', () => {
     expect(planRequiredFor('inventory')?.tier).toBe('starter');

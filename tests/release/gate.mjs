@@ -6,6 +6,8 @@ export function evidenceExit(outcomes) {
   return outcomes.some(r => r.status === 'PASS') ? 0 : 2;
 }
 export const suites = {
+  'business-operating-model-audit.test.ts': 'business-operating-model-audit.json',
+  'construction-projects.test.ts': 'construction-projects.json',
   'database.test.ts': 'database.json',
   'edge.test.ts': 'edge-handler-mocked-platform.json',
   'offline.test.ts': 'offline-indexeddb-postgres.json',
@@ -28,4 +30,9 @@ export const suites = {
   'ic-containment.test.ts': 'ic-containment.json',
   'od-owner-decisions.test.ts': 'od-owner-decisions.json',
   'pl-period-approval.test.ts': 'pl-period-approval.json',
+  'construction-procurement.test.ts': 'construction-procurement.json',
+  'construction-branch-scope.test.ts': 'construction-branch-scope.json',
+  'construction-returns.test.ts': 'construction-returns.json',
+  'construction-provisioning.test.ts': 'construction-provisioning.json',
+  'tax-configurations.test.ts': 'tax-configurations.json',
 };

@@ -9,6 +9,7 @@ const CAPABILITY_LABEL: Record<OrganisationCapability, string> = {
   pos: 'Point of Sale',
   inventory: 'Inventory',
   services: 'Services',
+  construction: 'Construction',
 };
 
 interface CapabilityGateProps {

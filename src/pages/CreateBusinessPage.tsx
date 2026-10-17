@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router';
 import {
   Building2, ChevronRight, ChevronLeft,
@@ -15,6 +16,7 @@ import { handleError } from '@/lib/errorHandler';
 import type { Business, BusinessMembership } from '@/types';
 import {
   OPERATING_MODELS,
+  OPERATING_MODEL_LABELS,
   type OperatingModel,
   type OrganisationType,
 } from '@/lib/capabilities/profile';
@@ -142,15 +144,6 @@ const ORGANISATION_TYPE_OPTIONS: { value: OrganisationType; label: string }[] = 
   { value: 'GOVERNMENT', label: 'Government' },
   { value: 'OTHER', label: 'Other' },
 ];
-
-const OPERATING_MODEL_LABELS: Record<OperatingModel, string> = {
-  RETAIL: 'Retail',
-  WHOLESALE: 'Wholesale / distribution',
-  PRODUCT_SALES: 'Product sales',
-  SERVICE_SALES: 'Service sales',
-  PROJECT_BASED: 'Project-based work',
-  GRANT_FUNDED: 'Grant-funded',
-};
 
 // ── Field component ───────────────────────────────────────────────────────────
 
@@ -514,6 +507,7 @@ function Step4({ form, set }: { form: BusinessForm; set: BusinessFormSetter }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function CreateBusinessPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const setBusinesses = useAppStore((s) => s.setBusinesses);
   const setCurrentBusiness = useAppStore((s) => s.setCurrentBusiness);
@@ -525,6 +519,9 @@ export function CreateBusinessPage() {
   const [form, setForm] = useState<BusinessForm>(DEFAULTS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Set only when the business itself was created but the one-time Construction
+  // bootstrap could not run. It renders a non-fatal panel instead of an error.
+  const [provisionWarning, setProvisionWarning] = useState<{ message: string; businessId: string } | null>(null);
 
   function set(key: keyof BusinessForm, value: BusinessForm[keyof BusinessForm]) {
     setForm((f) => ({ ...f, [key]: value } as BusinessForm));
@@ -645,6 +642,33 @@ export function CreateBusinessPage() {
       }
     }
 
+    // Construction bootstrap. Deliberately non-fatal: the business, its terms
+    // acceptance and its partner link are already committed, so a provisioning
+    // failure must not be reported as a failed signup. The warning is rendered
+    // after the membership reload (so the new business is already selected) and
+    // points the owner at Settings → Business profile.
+    let provisionWarningMessage: string | null = null;
+    if (form.operating_models.includes('CONSTRUCTION')) {
+      if (!currentUser) {
+        provisionWarningMessage = t('construction.accounts.createOwnerWarning');
+      } else {
+        const constructionRpc = supabase as unknown as {
+          rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+        };
+        const { error: provisionError } = await constructionRpc.rpc('provision_construction_defaults', {
+          p_business_id: businessId,
+          p_owner_user_id: currentUser.id,
+        });
+        const { error: coaProvisionError } = await constructionRpc.rpc('provision_construction_coa_accounts', {
+          p_business_id: businessId,
+        });
+        const error = provisionError ?? coaProvisionError;
+        if (error) {
+          provisionWarningMessage = t('construction.accounts.createProvisionWarning');
+        }
+      }
+    }
+
     // Reload memberships into the store
     if (currentUser) {
       const { data: memberships } = await supabase
@@ -683,6 +707,12 @@ export function CreateBusinessPage() {
     }
 
     setLoading(false);
+
+    if (provisionWarningMessage) {
+      setProvisionWarning({ message: provisionWarningMessage, businessId });
+      return;
+    }
+
     // For new users, offer data import from previous system
     // Check if user wants to import - redirect to import hub with new business flag
     const params = new URLSearchParams();
@@ -692,6 +722,46 @@ export function CreateBusinessPage() {
   }
 
   const isLastStep = step === 4;
+
+  // The business and its profile are committed; only the automatic Construction
+  // bootstrap is outstanding. Give the owner a route to Settings instead of
+  // leaving them on a signup form that would create a second business.
+  if (provisionWarning) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">
+        <div className="w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-soft">
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">Construction workspace not set up</p>
+              <p className="mt-1">{provisionWarning.message}</p>
+              <p className="mt-2">
+                Your main site, its stock location and the procurement permissions can be retried from{' '}
+                <Link to="/settings?tab=business" className="font-medium underline">
+                  Settings → Business profile
+                </Link>{' '}
+                by saving the same operating models again.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 flex flex-wrap justify-end gap-3">
+            <Link
+              to="/settings?tab=business"
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Open business settings
+            </Link>
+            <Link
+              to={`/import?new=true&business=${encodeURIComponent(provisionWarning.businessId)}`}
+              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+            >
+              Continue to import
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12">

@@ -6414,6 +6414,7 @@ export type Database = {
     Enums: {
       account_subtype:
         | "current_asset"
+        | "contra_ar"
         | "non_current_asset"
         | "fixed_asset"
         | "current_liability"
@@ -6650,6 +6651,7 @@ export const Constants = {
     Enums: {
       account_subtype: [
         "current_asset",
+        "contra_ar",
         "non_current_asset",
         "fixed_asset",
         "current_liability",
