@@ -63,13 +63,13 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it('sells Construction on Enterprise only', () => {
+  it('is binary for Construction: Free/Trial locks it, Enterprise unlocks it', () => {
     const item = navItemForPath('/construction')!;
     expect(item).toBeDefined();
-    for (const tier of ['free', 'starter', 'growth', 'pro'] as const) {
-      expect(isItemLocked(item, tier), tier).toBe(true);
-      expect(hasCapability(tier, 'construction'), tier).toBe(false);
-    }
+    // Construction has no intermediate tiers: Free/Trial is the locked upsell
+    // state and Enterprise is the only unlock.
+    expect(isItemLocked(item, 'free')).toBe(true);
+    expect(hasCapability('free', 'construction')).toBe(false);
     expect(isItemLocked(item, 'enterprise')).toBe(false);
     expect(hasCapability('enterprise', 'construction')).toBe(true);
     expect(planRequiredFor('construction')?.tier).toBe('enterprise');

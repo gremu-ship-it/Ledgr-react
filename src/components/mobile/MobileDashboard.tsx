@@ -162,7 +162,7 @@ export function MobileDashboard() {
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
-  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled)
+  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled, planTier)
     .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
   const [showExpense, setShowExpense] = useState(false);
@@ -468,7 +468,8 @@ export function MobileDashboard() {
               </summary>
               <div className="grid grid-cols-2 gap-2 border-t border-gray-100 p-2">
                 {section.items.map((item) => {
-                  const locked = isItemLocked(item, planTier, section.minPlan);
+                  // Pass 2 of visibleSectionsFor marks plan-locked items.
+                  const locked = item.locked ?? isItemLocked(item, planTier, section.minPlan);
                   const Icon = item.icon;
                   return (
                     <button

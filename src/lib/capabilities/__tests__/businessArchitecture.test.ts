@@ -236,7 +236,9 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
 
   it('retains the pre-architecture navigation when the build-time rollback switch is off', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
-    const paths = visibleSectionsFor(() => true, 'owner')
+    // The switch is off, so the four Phase-1 capabilities are all reachable;
+    // Construction stays profile-gated (a service profile does not select it).
+    const paths = visibleSectionsFor(() => true, 'owner', (capability) => capability !== 'construction')
       .flatMap((section) => section.items.map((item) => item.path));
     expect(resolveBusinessCapability('pos', {
       organisation_type: 'FOR_PROFIT',
