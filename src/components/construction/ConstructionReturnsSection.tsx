@@ -55,9 +55,11 @@ const CONDITIONS = [
 export function ConstructionReturnsSection({
   businessId,
   capabilities,
+  projectId,
 }: {
   businessId: string;
   capabilities: string[];
+  projectId?: string;
 }) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
@@ -71,11 +73,11 @@ export function ConstructionReturnsSection({
   const [clientKey, setClientKey] = useState(() => newIdempotencyKey());
 
   const dataQuery = useQuery({
-    queryKey: ['construction', 'material-returns', businessId],
+    queryKey: ['construction', 'material-returns', businessId, ...(projectId ? [projectId] : [])],
     queryFn: async () => {
       const [issues, returns, productRows] = await Promise.all([
-        repos.construction.findMaterialIssues(businessId),
-        repos.construction.findMaterialReturns(businessId),
+        projectId ? repos.construction.findMaterialIssues(businessId, projectId) : repos.construction.findMaterialIssues(businessId),
+        projectId ? repos.construction.findMaterialReturns(businessId, projectId) : repos.construction.findMaterialReturns(businessId),
         repos.inventory.findAllProducts(businessId),
       ]);
       return { issues, returns, products: productRows };
@@ -102,6 +104,7 @@ export function ConstructionReturnsSection({
           received_by: receivedBy.trim() || null,
         },
         clientKey,
+        ...(projectId ? [projectId] as [string] : []),
       ),
     onSuccess: (result) => {
       setClientKey(newIdempotencyKey());

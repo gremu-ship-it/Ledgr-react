@@ -41,9 +41,11 @@ import {
 export function ConstructionMaterialIssuesSection({
   businessId,
   capabilities,
+  projectId,
 }: {
   businessId: string;
   capabilities: string[];
+  projectId?: string;
 }) {
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
@@ -57,12 +59,12 @@ export function ConstructionMaterialIssuesSection({
   const [clientKey, setClientKey] = useState(() => newIdempotencyKey());
 
   const dataQuery = useQuery({
-    queryKey: ['construction', 'material-issues', businessId],
+    queryKey: ['construction', 'material-issues', businessId, ...(projectId ? [projectId] : [])],
     queryFn: async () => {
       const [sites, products, issues, projectCost, policy] = await Promise.all([
         repos.construction.findSites(businessId),
         repos.inventory.findAllProducts(businessId),
-        repos.construction.findMaterialIssues(businessId),
+        projectId ? repos.construction.findMaterialIssues(businessId, projectId) : repos.construction.findMaterialIssues(businessId),
         repos.construction.findProjectMaterialCost(businessId),
         repos.construction.findPostingPolicy(businessId),
       ]);
@@ -93,6 +95,7 @@ export function ConstructionMaterialIssuesSection({
           evidence_reference: evidence.trim(),
         },
         clientKey,
+        ...(projectId ? [projectId] as [string] : []),
       ),
     onSuccess: (result) => {
       setClientKey(newIdempotencyKey());
@@ -238,7 +241,7 @@ export function ConstructionMaterialIssuesSection({
         </form>
       </SectionCard>
 
-      <SectionCard
+      {!projectId && <SectionCard
         title="Project material cost"
         description="Derived by the server from the append-only issue register, grouped by project reference. There is no stored project-cost balance."
       >
@@ -272,7 +275,7 @@ export function ConstructionMaterialIssuesSection({
             </table>
           </div>
         )}
-      </SectionCard>
+      </SectionCard>}
 
       <SectionCard title="Issued material" description="Append-only history of every issue, with the cost the server applied.">
         {issues.length === 0 ? (

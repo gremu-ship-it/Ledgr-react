@@ -618,5 +618,94 @@
         "body": "This feature acts on a live Ledgr account. Create a free account to use it with your own books."
       }
     }
+  },
+  "construction": {
+    "projects": {
+      "title": "Projects",
+      "new": "New Project",
+      "edit": "Edit Project",
+      "save": "Save project",
+      "cancel": "Cancel",
+      "close": "Close",
+      "loading": "Loading projects…",
+      "notFound": "Project not found or not accessible.",
+      "empty": "Create your first construction project to start tracking costs and progress.",
+      "allStatuses": "All statuses",
+      "filter": "Filter by status",
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}",
+      "back": "Back to projects",
+      "created": "Project created successfully.",
+      "updated": "Project updated successfully.",
+      "transitioned": "Project status updated.",
+      "linked": "Site linked to project.",
+      "unlinked": "Site unlinked from project.",
+      "fields": {
+        "name": "Project name",
+        "client_name": "Client name",
+        "status": "Status",
+        "contract_sum": "Contract sum",
+        "retention_pct": "Retention %",
+        "budget": "Budget",
+        "start_date": "Start date",
+        "end_date": "End date"
+      },
+      "statuses": {
+        "tender": "Tender",
+        "active": "Active",
+        "practical_completion": "Practical completion",
+        "defect_liability": "Defect liability",
+        "closed": "Closed"
+      },
+      "transitions": {
+        "tender": "Activate Project",
+        "active": "Mark Practical Completion",
+        "practical_completion": "Start Defect Liability",
+        "defect_liability": "Close Project"
+      },
+      "confirmTitle": "Confirm status transition",
+      "confirm": "Confirm transition",
+      "confirmText": "Move this project to {{status}}? This cannot be reversed.",
+      "reason": "Reason (optional)",
+      "tabs": {
+        "overview": "Overview",
+        "sites": "Sites",
+        "procurement": "Procurement",
+        "boq": "BOQ",
+        "valuations": "Valuations"
+      },
+      "boqPlaceholder": "Schedule of Values will be available in the next update.",
+      "valuationsPlaceholder": "Progress billing will be available in the next update.",
+      "cost": "Cost to date",
+      "siteCount": "Number of sites",
+      "poValue": "Total PO value",
+      "issuedValue": "Total issued value",
+      "returnedValue": "Total returned value",
+      "costNote": "Cost to date is PO value less returned value. PO values use entered prices; unpriced lines count as zero. Values are not currency-converted and respect your branch access.",
+      "linkedSites": "Linked sites",
+      "availableSites": "Available sites",
+      "link": "Link to project",
+      "unlink": "Unlink",
+      "noSites": "No sites to display.",
+      "unlinkWarning": "This site has active purchase orders or material issues tagged to this project. Unlinking does not remove those tags. Continue?",
+      "validation": {
+        "required": "Project name and client name are required.",
+        "amounts": "Enter valid non-negative amounts with at most two decimal places; retention must be between 0 and 100.",
+        "dates": "End date must be on or after start date."
+      },
+      "manageRequired": "Requires procurement.master.manage.",
+      "error": "The project action could not be completed.",
+      "tagHint": "New records created here are tagged to this project. Existing procurement authorization rules still apply.",
+      "columns": {
+        "name": "Name",
+        "client_name": "Client",
+        "status": "Status",
+        "contract_sum": "Contract Sum",
+        "budget": "Budget",
+        "start_date": "Start Date",
+        "end_date": "End Date"
+      }
+    }
   }
 }
