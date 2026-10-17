@@ -1,8 +1,13 @@
 # Construction returns — Phase 1 owner decision (2026-10-16)
 
-**Status: recorded.** The owner has approved the Phase 1 (usable-material returns) **design baseline, with
-corrections and boundaries**. This record authorises the *design only*: **implementation is not authorised by
-this record** and requires a separate, explicit instruction (decision item 10).
+**Status: recorded — implementation subsequently authorised, committed and pushed; hosted verification
+pending.** The owner approved the Phase 1 (usable-material returns) **design baseline, with corrections and
+boundaries**. This record authorised the *design only*: implementation required a separate, explicit
+instruction (decision item 10), which the owner gave on 2026-10-16. Phase 1 is now implemented and pushed on
+`arena/2faa03b4-ledgr-react` — documentation in `4e2076f` and `b1d3617`, implementation in `26bf4ce`, together
+carried by PR #210. **Hosted staging database verification remains pending until the staging deployment
+pipeline runs:** no migration has been applied to any hosted project, nothing is deployed, and local or CI
+evidence must not be read as hosted verification.
 
 | | |
 | --- | --- |
@@ -103,7 +108,7 @@ decision item that directs it:
   material), **Q9** (damage hold), **Q10** (per-project loss reporting). None of these is approved by
   implication.
 
-## 5. Outstanding before an implementation instruction
+## 5. Outstanding before an implementation instruction (historical; current status per item)
 
 1. **Q8 confirmation (accountant).** The decision's costing basis presumes the existing moving weighted-average
    pool remains the site-stock measurement basis for Phase 1; §23 specific identification is **not named** in
@@ -115,9 +120,9 @@ decision item that directs it:
    not the label. The design proposes a new `construction_return_in`; reusing `return_in` is the alternative.
    Either choice needs the single-statement enum migration ordered before the command migration; the label must
    also read correctly in the `ProductsPage:906` display heuristic (`includes('in')`).
-4. **Baseline commit state.** The corrected baseline currently exists only in the working tree (three modified
-   documentation files plus one untracked audit file). Nothing has been committed or pushed. The implementation
-   instruction should state whether the corrected baseline is to be committed first.
+4. **Baseline commit state — resolved.** The corrected baseline was committed as `4e2076f` and pushed on
+   2026-10-16 ahead of the implementation (`b1d3617`, then the implementation commit `26bf4ce`). Nothing is
+   outstanding here.
 5. **Deployed-verification scope.** Any later hosted verification is a separate authorisation with its own
    environment and identities; local suites can never be presented as it.
 
@@ -133,7 +138,12 @@ repository tests, not deployed verification.
 
 **Change record.** This record and the §14 corrections were produced as documentation only. **No application
 code, migration, test, policy, grant, schema object, configuration or database state was changed. Nothing was
-committed, pushed or deployed.**
+committed, pushed or deployed** *when this record was produced*.
+
+**Update (2026-10-16):** that statement describes this record as produced, not the current state. It was
+subsequently committed (`4e2076f`, then `b1d3617`) and pushed with the implementation (`26bf4ce`) on
+`arena/2faa03b4-ledgr-react` (PR #210). **No database state has been changed in any environment, and no
+staging or production deployment has run.**
 
 ---
 
@@ -193,15 +203,17 @@ accountant requires must come back as a new owner decision.
 | Movement-label choice (decision record §5 item 3; design §9.1) | **Closed — `construction_return_in`**, no reuse of `return_in` |
 | Costing basis and pool re-pricing (§1 item 1–2; design §8 Q2) | **Reaffirmed**, now recorded as the approved Phase 1 policy with the IAS 2 caveat above |
 | Specific identification for site stock (design §8 Q8) | The approved policy places returned material in the **existing weighted-average pool**; accountant confirmation of that basis for financial reporting is the flagged external validation above, not an open design question |
-| Implementation plan | `docs/architecture/CONSTRUCTION_RETURNS_PHASE1_IMPLEMENTATION_PLAN_2026-10-16.md` (staged plan; planning only) |
+| Implementation plan | `docs/architecture/CONSTRUCTION_RETURNS_PHASE1_IMPLEMENTATION_PLAN_2026-10-16.md` (implemented plan; local evidence only — see its status header) |
 
 ### Still outstanding (unchanged unless listed above)
 
 1. **The unsupplied item 11** from the original instruction — **waived by the owner on 2026-10-16**
    (§1 waiver note); no longer outstanding.
 2. **Accountant confirmation** of Decision B's suitability for financial reporting — external validation (above).
-3. **Implementation authorisation** — a separate explicit instruction, per §1 item 10.
+3. **Implementation authorisation** — **granted by the owner on 2026-10-16** (a separate explicit
+   instruction, per §1 item 10). Implemented and committed as `26bf4ce`; no longer outstanding.
 4. **Deployed verification** — a separate authorisation with its own isolated environment and real identities
    (§6); local suites can never be presented as it.
-5. **The unpushed documentation commit** `4e2076fdea9c1c1720534117e29ffa2532c8ee24` — pushing still requires
-   explicit owner authorisation.
+5. **The documentation commit** `4e2076fdea9c1c1720534117e29ffa2532c8ee24` — **now pushed**, after the owner
+   authorised the push on 2026-10-16. The branch head carrying this record and the implementation is `26bf4ce`
+   (PR #210). No longer outstanding.

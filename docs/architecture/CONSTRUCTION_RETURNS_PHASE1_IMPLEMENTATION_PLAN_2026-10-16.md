@@ -1,9 +1,14 @@
-# Construction returns — Phase 1 implementation plan (staged, planning only)
+# Construction returns — Phase 1 implementation plan (implemented; local evidence only)
 
-**Status: plan only. Nothing here is implemented and this document authorises nothing.** Phase 1 may be built
-only after a separate explicit implementation instruction (decision record §1 item 10, §7). The enum label
-(`construction_return_in`, decision A) and the costing policy (decision B) are confirmed; the corrected design
-baseline is `CONSTRUCTION_RETURNS_WASTAGE_DAMAGE_DESIGN_2026-10-16.md` (commit `4e2076f`, unpushed).
+**Status: implemented, committed and pushed — local evidence only.** The implementation instruction was given
+on 2026-10-16 (decision record §1 item 10), and Stages 1–7 are implemented and pushed on
+`arena/2faa03b4-ledgr-react`: documentation in `4e2076f` and `b1d3617`, implementation in `26bf4ce` (PR #210).
+
+**Hosted staging database verification remains pending until the staging deployment pipeline runs.** The
+migrations have **not** been applied to any hosted project, nothing is deployed, and local or CI evidence is
+not hosted verification. The enum label (`construction_return_in`, decision A) and the costing policy
+(decision B) are confirmed; the corrected design baseline is
+`CONSTRUCTION_RETURNS_WASTAGE_DAMAGE_DESIGN_2026-10-16.md` (commit `4e2076f`, now pushed).
 
 **Scope of this plan:** usable-material returns only — the material returns to the store it was issued from, at
 the original issue's recorded unit cost, with the project's net material cost reduced and the weighted-average
@@ -21,11 +26,11 @@ document is a claim about hosted Supabase or production.
 
 | # | Precondition | Status |
 | --- | --- | --- |
-| P1 | Separate explicit implementation instruction from the owner naming this plan | **Outstanding** |
+| P1 | Separate explicit implementation instruction from the owner naming this plan | **Met (2026-10-16)** — the instruction was given and the plan was executed; documentation in `b1d3617`, implementation in `26bf4ce`. |
 | P2 | Accountant confirmation that policy B is suitable for financial reporting (and whether IAS 2 §23 reaches site stock) — external accounting validation | **Outstanding**, flagged in the decision record §7 |
 | P3 | The unsupplied "item 11" from the original owner instruction, if it exists | **Waived by the owner (2026-10-16)** — directed to be ignored so the authorised implementation could proceed; no requirement is inferred from it. The decision record §1 carries the same waiver. If it is later found to have carried a requirement, this plan and the shipped code must be revisited. |
 | P4 | Owner ruling on the three open plan details (below, "Decision points") | **Resolved (2026-10-16)** — PD-1 adopted as implemented (two construction migrations, in addition to the mandatory single-statement enum migration); PD-2 deferred by the owner, with the rationale and the known limitation recorded under "PD-2 — deferred"; PD-3 adopted (new suite plus one `gate.mjs` key). |
-| P5 | Corrected baseline present in the working tree/history | **Met** — commit `4e2076f` (unpushed; pushing needs separate authorisation) |
+| P5 | Corrected baseline present in the working tree/history | **Met** — commit `4e2076f`, now pushed; the branch head is `26bf4ce` (PR #210). |
 
 ## Open plan details (owner ruling requested — do not resolve unilaterally)
 
@@ -114,8 +119,8 @@ deployed environment.
 | | |
 | --- | --- |
 | **Objective** | One inbound movement at the original cost, with the shared R06 writer re-pricing the pool — and no way to post it twice |
-| **Objects** | The movement insert inside Stage 3's command: `movement_type = 'construction_return_in'`, `quantity = +quantity_base`, `unit_cost = issue.unit_cost_base`, `source_type = 'construction_return'`, `source_id = <return id>`, `location_id = issue.location_id`, `movement_date = return_date`, `client_key = p_client_key`, `created_by = actor`; plus **no change** to `_ledgr_apply_stock_movement_balance` / `trg_stock_movement_apply_balance` (`20260928000001:69-170`, `:222`) — the recalculation is the existing behaviour: `avg = (on_hand × avg + qty × unit_cost) / (on_hand + qty)` for any costed inbound. Optionally (PD-2) a **partial** unique index `(business_id, source_type, source_id) where source_type = 'construction_return'` |
-| **Safeguards against double counting** | (a) the register's `unique (business_id, client_key)` + advisory lock; (b) `stock_movements_client_key_uidx` becomes a **live** fence for this path because it is the first *construction* command to pass a `client_key` on a movement (for construction writes today the index is inert, since every existing construction movement insert omits the key — design §9.4); (c) the command asserts the balance delta equals `quantity_base` in its response, and the tests assert **exactly one** movement per return; (d) PD-2's partial index as a database-level guarantee |
+| **Objects** | The movement insert inside Stage 3's command: `movement_type = 'construction_return_in'`, `quantity = +quantity_base`, `unit_cost = issue.unit_cost_base`, `source_type = 'construction_return'`, `source_id = <return id>`, `location_id = issue.location_id`, `movement_date = return_date`, `client_key = p_client_key`, `created_by = actor`; plus **no change** to `_ledgr_apply_stock_movement_balance` / `trg_stock_movement_apply_balance` (`20260928000001:69-170`, `:222`) — the recalculation is the existing behaviour: `avg = (on_hand × avg + qty × unit_cost) / (on_hand + qty)` for any costed inbound. **PD-2's optional partial unique index is not added** — the owner deferred it on 2026-10-16 (see “PD-2 — deferred”) |
+| **Safeguards against double counting** | (a) the register's `unique (business_id, client_key)` + advisory lock; (b) `stock_movements_client_key_uidx` becomes a **live** fence for this path because it is the first *construction* command to pass a `client_key` on a movement (for construction writes today the index is inert, since every existing construction movement insert omits the key — design §9.4); (c) the command asserts the balance delta equals `quantity_base` in its response, and the tests assert **exactly one** movement per return; (d) PD-2's partial index was **deferred** by the owner on 2026-10-16 and is not part of this implementation, so the false-duplicate guarantee rests on (a)–(c) — the known limitation is recorded under “PD-2 — deferred” |
 | **Dependencies** | Stage 1 (label), Stage 3 |
 | **Key tests** | T1 (one movement, correct location/type/cost; `on_hand` rises by exactly `quantity_base`), T12 (pool average equals the value the approved policy produces), **T17** (a subsequent issue to a *different* project is costed at the recalculated average — the documented downstream effect of decision B item 5), T4 (replay ⇒ one movement) |
 | **Completion criteria** | One movement per return under replay and concurrency; the recorded pool average matches the arithmetic the plan documents; no journal entry created; `gl_posting_enabled` untouched |
@@ -150,6 +155,13 @@ deployed environment.
 | **Completion criteria** | Every row above present and passing **locally isolated**; every refusal row asserts **no-write** by before/after counts; the two existing construction suites and `CPB.*` still pass; the gate reports no new BLOCKED row other than the pre-existing 57 |
 
 ## Stage 8 — Local validation, deployment prerequisites, hosted verification
+
+**Current status (2026-10-16): local validation complete, deployment not run.** The isolated release suite
+passes with the new rows (`{PASS 873, FAIL 0, BLOCKED 57}` — the 57 BLOCKED are the pre-existing documented
+set, and all 15 return rows are PASS), the harness typecheck, `tsc -b`, lint and build are clean, and CI on
+PR #210 is green (including the isolated release-evidence job). **Nothing in the deployment-prerequisites or
+hosted-verification rows below has been executed:** no migration has been applied to any hosted project and
+no staging deployment has run.
 
 | | |
 | --- | --- |
