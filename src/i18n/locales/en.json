@@ -705,6 +705,35 @@
         "budget": "Budget",
         "start_date": "Start Date",
         "end_date": "End Date"
+      },
+      "boq": {
+        "loading": "Loading BOQ…",
+        "contractSum": "Contract Sum",
+        "boqTotal": "BOQ Total",
+        "variance": "Variance",
+        "status": "Lock status",
+        "locked": "Locked (valuation created)",
+        "editable": "Editable",
+        "lockBanner": "This BOQ is locked because a valuation has been created. To make changes, contact your project administrator.",
+        "empty": "Add your first BOQ line to define the schedule of values for this project.",
+        "addLine": "Add Line",
+        "save": "Save BOQ",
+        "delete": "Delete",
+        "confirmDelete": "Delete this BOQ line?",
+        "saved": "BOQ saved successfully.",
+        "invalidAmounts": "Quantity and rate must be valid non-negative numbers.",
+        "mismatch": "BOQ total ({{total}}) does not match contract sum ({{contract}}). Variance: {{variance}}.",
+        "actions": "Actions",
+        "moveUp": "Move line up",
+        "moveDown": "Move line down",
+        "columns": {
+          "lineNumber": "Line #",
+          "description": "Description",
+          "quantity": "Quantity",
+          "unit": "Unit",
+          "rate": "Rate",
+          "total": "Total"
+        }
       }
     }
   }
