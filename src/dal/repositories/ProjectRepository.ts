@@ -137,6 +137,82 @@ export interface ProjectRetentionReleaseResult {
   retention_entry: ProjectRetentionEntry;
   invoice: ProjectInvoiceReference;
 }
+export type ProjectDetail = Project & {
+  site_count: number;
+  cost: ProjectCostSummary;
+};
+export interface ProjectPnl {
+  project_name: string;
+  client_name: string;
+  status: ProjectStatus;
+  contract_sum: number;
+  budget: number;
+  retention_pct: number;
+  boq_total: number;
+  total_po_value?: number;
+  total_issued_value?: number;
+  total_returned_value?: number;
+  total_costs: number;
+  total_billed: number;
+  total_retention_withheld: number;
+  total_retention_released: number;
+  retention_balance: number;
+  total_paid: number;
+  cost_variance: number;
+  billing_pct: number;
+  completion_pct: number;
+  profit_margin: number;
+}
+export interface PortfolioSummary {
+  total_projects: number;
+  active_projects: number;
+  total_contract_value: number;
+  total_billed: number;
+  total_paid: number;
+  total_costs: number;
+  total_retention_held: number;
+  outstanding_receivables: number;
+  avg_completion_pct: number;
+  projects_over_budget: number;
+}
+export interface ProjectValuationTrendPoint {
+  valuation_number: number;
+  valuation_date: string;
+  gross_amount: number;
+  retention_amount: number;
+  net_amount: number;
+  cumulative_billed: number;
+}
+export interface RetentionAgingRow {
+  project_id: string;
+  project_name: string;
+  client_name: string;
+  project_status: ProjectStatus;
+  retention_balance: number;
+  oldest_retention_date: string;
+  days_held: number;
+}
+export interface ConstructionDashboardMetrics {
+  active_projects: number;
+  total_contract_value: number;
+  total_billed_this_period: number;
+  total_paid_this_period: number;
+  total_costs_this_period: number;
+  total_retention_held: number;
+  outstanding_receivables: number;
+  projects_over_budget: number;
+  avg_completion_pct: number;
+}
+export interface ProjectCostBreakdownRow {
+  project_id: string;
+  project_name: string;
+  total_po_value: number;
+  total_issued_value: number;
+  total_returned_value: number;
+  net_cost: number;
+  budget: number;
+  variance: number;
+}
 interface Result<T> {
   data: T | null;
   error: { message: string } | null;
@@ -309,6 +385,10 @@ export class ProjectRepository {
   /** UI preflight only; every command RPC repeats the grant check server-side. */
   private async requireProjectCapabilities(projectId: string, required: string[] = []): Promise<void> {
     const businessId = await this.projectBusinessId(projectId);
+    await this.requireBusinessCapabilities(businessId, required);
+  }
+
+  private async requireBusinessCapabilities(businessId: string, required: string[] = []): Promise<void> {
     const capabilities = unwrap<string[]>(
       await client.rpc('construction_procurement_capabilities_for', { p_business_id: businessId }),
     ) ?? [];
@@ -396,4 +476,125 @@ export class ProjectRepository {
     );
     return Array.isArray(result) ? result[0] : result as ProjectRetentionSummary;
   }
+
+  async getProjectPnl(projectId: string): Promise<ProjectPnl> {
+    await this.requireProjectCapabilities(projectId);
+    const result = unwrap<ProjectPnl | ProjectPnl[]>(
+      await client.rpc('get_project_pnl', { p_project_id: projectId }),
+    );
+    const row = Array.isArray(result) ? result[0] : (result as ProjectPnl);
+    if (!row) throw new Error('Project P&L not found.');
+    return {
+      ...row,
+      contract_sum: Number(row.contract_sum ?? 0),
+      budget: Number(row.budget ?? 0),
+      retention_pct: Number(row.retention_pct ?? 0),
+      boq_total: Number(row.boq_total ?? 0),
+      total_po_value: Number(row.total_po_value ?? 0),
+      total_issued_value: Number(row.total_issued_value ?? 0),
+      total_returned_value: Number(row.total_returned_value ?? 0),
+      total_costs: Number(row.total_costs ?? 0),
+      total_billed: Number(row.total_billed ?? 0),
+      total_retention_withheld: Number(row.total_retention_withheld ?? 0),
+      total_retention_released: Number(row.total_retention_released ?? 0),
+      retention_balance: Number(row.retention_balance ?? 0),
+      total_paid: Number(row.total_paid ?? 0),
+      cost_variance: Number(row.cost_variance ?? 0),
+      billing_pct: Number(row.billing_pct ?? 0),
+      completion_pct: Number(row.completion_pct ?? 0),
+      profit_margin: Number(row.profit_margin ?? 0),
+    };
+  }
+
+  async getPortfolioSummary(businessId: string): Promise<PortfolioSummary> {
+    await this.requireBusinessCapabilities(businessId);
+    const result = unwrap<PortfolioSummary | PortfolioSummary[]>(
+      await client.rpc('get_portfolio_summary', { p_business_id: businessId }),
+    );
+    const row = Array.isArray(result) ? result[0] : (result as PortfolioSummary);
+    return {
+      total_projects: Number(row?.total_projects ?? 0),
+      active_projects: Number(row?.active_projects ?? 0),
+      total_contract_value: Number(row?.total_contract_value ?? 0),
+      total_billed: Number(row?.total_billed ?? 0),
+      total_paid: Number(row?.total_paid ?? 0),
+      total_costs: Number(row?.total_costs ?? 0),
+      total_retention_held: Number(row?.total_retention_held ?? 0),
+      outstanding_receivables: Number(row?.outstanding_receivables ?? 0),
+      avg_completion_pct: Number(row?.avg_completion_pct ?? 0),
+      projects_over_budget: Number(row?.projects_over_budget ?? 0),
+    };
+  }
+
+  async getValuationTrend(projectId: string): Promise<ProjectValuationTrendPoint[]> {
+    await this.requireProjectCapabilities(projectId);
+    const result = unwrap<ProjectValuationTrendPoint[]>(
+      await client.rpc('get_project_valuation_trend', { p_project_id: projectId }),
+    );
+    return (result ?? []).map((row) => ({
+      ...row,
+      valuation_number: Number(row.valuation_number ?? 0),
+      gross_amount: Number(row.gross_amount ?? 0),
+      retention_amount: Number(row.retention_amount ?? 0),
+      net_amount: Number(row.net_amount ?? 0),
+      cumulative_billed: Number(row.cumulative_billed ?? 0),
+    }));
+  }
+
+  async getRetentionAging(businessId: string): Promise<RetentionAgingRow[]> {
+    await this.requireBusinessCapabilities(businessId);
+    const result = unwrap<RetentionAgingRow[]>(
+      await client.rpc('get_retention_aging', { p_business_id: businessId }),
+    );
+    return (result ?? []).map((row) => ({
+      ...row,
+      retention_balance: Number(row.retention_balance ?? 0),
+      days_held: Number(row.days_held ?? 0),
+    }));
+  }
+
+  async getDashboardMetrics(
+    businessId: string,
+    months?: number | null,
+  ): Promise<ConstructionDashboardMetrics> {
+    await this.requireBusinessCapabilities(businessId);
+    const args: Record<string, unknown> = { p_business_id: businessId };
+    if (months !== undefined) {
+      args.p_months = months;
+    }
+    const result = unwrap<ConstructionDashboardMetrics | ConstructionDashboardMetrics[]>(
+      await client.rpc('get_dashboard_metrics', args),
+    );
+    const row = Array.isArray(result) ? result[0] : (result as ConstructionDashboardMetrics);
+    return {
+      active_projects: Number(row?.active_projects ?? 0),
+      total_contract_value: Number(row?.total_contract_value ?? 0),
+      total_billed_this_period: Number(row?.total_billed_this_period ?? 0),
+      total_paid_this_period: Number(row?.total_paid_this_period ?? 0),
+      total_costs_this_period: Number(row?.total_costs_this_period ?? 0),
+      total_retention_held: Number(row?.total_retention_held ?? 0),
+      outstanding_receivables: Number(row?.outstanding_receivables ?? 0),
+      projects_over_budget: Number(row?.projects_over_budget ?? 0),
+      avg_completion_pct: Number(row?.avg_completion_pct ?? 0),
+    };
+  }
+
+  async getCostBreakdownByProject(businessId: string): Promise<ProjectCostBreakdownRow[]> {
+    await this.requireBusinessCapabilities(businessId);
+    const result = unwrap<ProjectCostBreakdownRow[]>(
+      await client.rpc('get_cost_breakdown_by_project', { p_business_id: businessId }),
+    );
+    return (result ?? []).map((row) => ({
+      ...row,
+      total_po_value: Number(row.total_po_value ?? 0),
+      total_issued_value: Number(row.total_issued_value ?? 0),
+      total_returned_value: Number(row.total_returned_value ?? 0),
+      net_cost: Number(row.net_cost ?? 0),
+      budget: Number(row.budget ?? 0),
+      variance: Number(row.variance ?? 0),
+    }));
+  }
 }
+
+export class ReportingRepository extends ProjectRepository {}
+
