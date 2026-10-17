@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useState, useRef } from 'react';
@@ -228,6 +229,7 @@ function AppearanceTab() {
 // ── Business Profile Tab ──────────────────────────────────────────────────────
 
 function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -273,12 +275,21 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       let provisionError: Error | null = null;
       if (constructionAdded) {
         try {
-          if (!currentUser?.id) throw new Error('You must be signed in to set up the construction workspace.');
+          if (!currentUser?.id) throw new Error(t('construction.accounts.ownerRequired'));
           await repos.business.provisionConstructionDefaults(business.id, currentUser.id);
         } catch (err) {
           provisionError = err instanceof Error
             ? err
-            : new Error('The construction workspace could not be set up.');
+            : new Error(t('construction.accounts.provisionError'));
+        }
+      }
+      if (saved.includes('CONSTRUCTION')) {
+        try {
+          await repos.business.provisionConstructionCoaAccounts(business.id);
+        } catch (err) {
+          provisionError ??= err instanceof Error
+            ? err
+            : new Error(t('construction.accounts.provisionError'));
         }
       }
       return { saved, provisionError };
@@ -304,10 +315,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       }
       queryClient.invalidateQueries({ queryKey: ['business', business.id] });
       setAlert(provisionError
-        ? {
-            type: 'error',
-            message: `Operating models saved, but the construction workspace could not be set up: ${provisionError.message} Saving the same models again retries it.`,
-          }
+        ? { type: 'error', message: t('construction.accounts.settingsProvisionWarning') }
         : { type: 'success', message: 'Operating models updated.' });
       setTimeout(() => setAlert(null), 6000);
     },

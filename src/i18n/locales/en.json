@@ -317,7 +317,10 @@
     "debit": "Debit",
     "credit": "Credit",
     "balance": "Balance",
-    "chartOfAccounts": "Chart of Accounts"
+    "chartOfAccounts": "Chart of Accounts",
+    "accountSubtypes": {
+      "contraAr": "Retention Receivable"
+    }
   },
   "tax": {
     "tax": "Tax",
@@ -620,6 +623,13 @@
     }
   },
   "construction": {
+    "accounts": {
+      "ownerRequired": "You must be signed in to set up the Construction workspace.",
+      "provisionError": "The Construction workspace could not be set up.",
+      "settingsProvisionWarning": "Operating models were saved, but Construction setup could not be completed. Save again to retry account setup; if the workspace is still incomplete, remove Construction and add it again.",
+      "createOwnerWarning": "Your business was created, but Construction setup could not be completed because the signed-in owner could not be identified.",
+      "createProvisionWarning": "Your business was created, but Construction setup could not be completed. In Settings, remove Construction from the operating models, save, then add it again to retry."
+    },
     "projects": {
       "title": "Projects",
       "new": "New Project",
@@ -733,6 +743,93 @@
           "unit": "Unit",
           "rate": "Rate",
           "total": "Total"
+        }
+      },
+      "valuations": {
+        "title": "Progress valuations",
+        "description": "Certify cumulative work completed against the project BOQ. Submitted valuations become read-only; invoices remain the financial record.",
+        "loading": "Loading valuations…",
+        "new": "Create valuation",
+        "createTitle": "New valuation draft",
+        "editTitle": "Edit valuation draft",
+        "edit": "Edit draft",
+        "cancel": "Cancel",
+        "saveDraft": "Save draft",
+        "updateDraft": "Update draft",
+        "submit": "Submit valuation",
+        "generateInvoice": "Generate invoice",
+        "createDisabled": "Valuations can be created only while the project is active.",
+        "draftExists": "Submit the existing draft before creating the next valuation.",
+        "boqRequired": "Add BOQ lines before creating a valuation.",
+        "empty": "No progress valuations have been created for this project.",
+        "fields": {
+          "valuationDate": "Valuation date",
+          "periodStart": "Period start",
+          "periodEnd": "Period end",
+          "notes": "Valuation notes / correction reason"
+        },
+        "columns": {
+          "lineNumber": "Line #",
+          "description": "BOQ item",
+          "boqValue": "BOQ value",
+          "previous": "Previous cumulative",
+          "cumulativePct": "Cumulative %",
+          "cumulativeValue": "Cumulative value",
+          "periodValue": "This period",
+          "lineNotes": "Line notes"
+        },
+        "summary": {
+          "gross": "Gross period value",
+          "previous": "Previously certified",
+          "retention": "Retention withheld / released",
+          "net": "Net valuation"
+        },
+        "negativeReason": "Add valuation notes explaining each negative period correction.",
+        "error": "The valuation action could not be completed. Check your access and try again.",
+        "none": "—",
+        "validation": {
+          "dateRequired": "Enter a valuation date.",
+          "dates": "Period end must be on or after period start.",
+          "percentages": "Enter a cumulative percentage from 0 to 100 with at most two decimal places for every BOQ line.",
+          "negativeReason": "A reason is required when any period value is negative."
+        },
+        "reference": "V-{{number}}",
+        "statuses": {
+          "draft": "Draft",
+          "submitted": "Submitted",
+          "invoiced": "Invoiced"
+        },
+        "saved": "Valuation V-{{number}} saved as a draft.",
+        "submittedNotice": "Valuation V-{{number}} submitted.",
+        "invoiceCreated": "Invoice {{invoiceNumber}} created for valuation V-{{number}}.",
+        "invoiceLabel": "Invoice {{invoiceNumber}}",
+        "createdAt": "Created {{date}}",
+        "valuationLines": "Valuation lines",
+        "retention": {
+          "title": "Retention ledger",
+          "totalWithheld": "Total withheld",
+          "totalReleased": "Total released",
+          "balance": "Balance held",
+          "rate": "Retention rate",
+          "entries": "Ledger entries",
+          "date": "Date",
+          "type": "Type",
+          "ledgerDescription": "Description",
+          "invoice": "Invoice",
+          "empty": "No retention entries yet.",
+          "canRelease": "Retention may be released at this project stage.",
+          "cannotRelease": "Manual retention release is available at practical completion or later.",
+          "releaseTitle": "Release retention",
+          "amount": "Release amount",
+          "releaseDescription": "Release description / reason",
+          "release": "Create release invoice",
+          "releasedNotice": "Retention release invoice {{invoiceNumber}} created.",
+          "invalidAmount": "Enter an amount greater than zero and no greater than the balance held.",
+          "descriptionRequired": "Enter a description for the retention release.",
+          "types": {
+            "withheld": "Withheld",
+            "released": "Released"
+          }
         }
       }
     }

@@ -127,6 +127,65 @@ describe('ProjectRepository RPC contracts', () => {
     expect(chain.eq).toHaveBeenCalledWith('business_id', 'b1');
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
+  it('checks caller capabilities before creating a valuation and maps cumulative inputs to the RPC', async () => {
+    mocks.from.mockReturnValue(builder({ business_id: 'b1' }));
+    mocks.rpc.mockImplementation((fn: string) => Promise.resolve({
+      data: fn === 'construction_procurement_capabilities_for'
+        ? ['procurement.po.manage']
+        : { valuation: { id: 'v1', status: 'draft' }, lines: [], invoice: null, retention_entries: [] },
+      error: null,
+    }));
+    const input = {
+      valuation_date: '2026-10-17',
+      period_start: '2026-10-01',
+      period_end: '2026-10-17',
+      lines: [{ boq_line_id: 'boq1', cumulative_pct: 35, notes: null }],
+      notes: 'Measurement correction',
+    };
+    await repository.createValuation('p1', input);
+    expect(mocks.rpc).toHaveBeenNthCalledWith(1, 'construction_procurement_capabilities_for', { p_business_id: 'b1' });
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, 'create_valuation', {
+      p_project_id: 'p1',
+      p_valuation_date: input.valuation_date,
+      p_period_start: input.period_start,
+      p_period_end: input.period_end,
+      p_lines: input.lines,
+      p_notes: input.notes,
+    });
+  });
+  it('uses valuation/project lookups for draft update, submit and invoice commands', async () => {
+    mocks.from.mockImplementation((table: string) => builder(
+      table === 'project_valuations' ? { project_id: 'p1' } : { business_id: 'b1' },
+    ));
+    mocks.rpc.mockImplementation((fn: string) => Promise.resolve({
+      data: fn === 'construction_procurement_capabilities_for'
+        ? ['procurement.master.manage']
+        : { valuation: { id: 'v1', status: 'submitted' }, lines: [], invoice: null, retention_entries: [] },
+      error: null,
+    }));
+    const draft = { valuation_date: '2026-10-17', period_start: null, period_end: null, lines: [], notes: null };
+    await repository.updateValuation('v1', draft);
+    expect(mocks.rpc).toHaveBeenLastCalledWith('update_valuation', {
+      p_valuation_id: 'v1', p_valuation_date: draft.valuation_date,
+      p_period_start: null, p_period_end: null, p_lines: [], p_notes: null,
+    });
+    await repository.submitValuation('v1');
+    expect(mocks.rpc).toHaveBeenLastCalledWith('submit_valuation', { p_valuation_id: 'v1' });
+    await repository.generateInvoice('v1');
+    expect(mocks.rpc).toHaveBeenLastCalledWith('generate_invoice_from_valuation', { p_valuation_id: 'v1' });
+  });
+  it('requires the retention-authorize capability before an invoice-backed release', async () => {
+    mocks.from.mockImplementation((table: string) => builder(
+      table === 'project_valuations' ? { project_id: 'p1' } : { business_id: 'b1' },
+    ));
+    mocks.rpc.mockImplementation((fn: string) => Promise.resolve({
+      data: fn === 'construction_procurement_capabilities_for' ? ['procurement.po.manage'] : null,
+      error: null,
+    }));
+    await expect(repository.releaseRetention('p1', 25, 'Practical completion'))
+      .rejects.toThrow('Missing construction capability');
+    expect(mocks.rpc).not.toHaveBeenCalledWith('release_retention', expect.anything());
+  });
 });
 describe('additive procurement project dimension', () => {
   it('uses project wrappers only for tagged writes, retaining the original commands for untagged writes', async () => {
