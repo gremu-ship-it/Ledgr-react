@@ -27,7 +27,7 @@ export function Sidebar() {
   const { isFeatureEnabled } = usePartner();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const isPlatformAdmin = useIsPlatformAdmin();
-  const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled);
+  const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier);
 
   const [isResizing, setIsResizing] = useState(false);
   const startX = useRef(0);
@@ -127,7 +127,9 @@ export function Sidebar() {
                 <ul className={clsx('space-y-1', density === 'compact' && 'space-y-0.5')}>
                   {section.items.map((item) => {
                     const Icon = item.icon;
-                    const locked = isItemLocked(item, planTier, section.minPlan);
+                    // Pass 2 already marked plan-locked items; the fallback keeps
+                    // any caller-constructed item behaving as before.
+                    const locked = item.locked ?? isItemLocked(item, planTier, section.minPlan);
                     const handleClick = (e: React.MouseEvent) => {
                       if (locked) {
                         e.preventDefault();

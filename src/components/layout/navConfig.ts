@@ -40,6 +40,13 @@ export interface NavItemConfig {
   /** For authenticated, memory-only routes that expose no role-protected server data. */
   allowAllAuthenticatedRoles?: boolean;
   requiresOrgCapability?: OrganisationCapability;
+  /**
+   * Set by `visibleSectionsFor`, never by the static configuration. True when
+   * the business has the right type (pass 1 kept the item) but its plan does not
+   * include the module. A locked item is still returned so the caller can render
+   * the existing lock + upgrade prompt; plan state never removes an item.
+   */
+  locked?: boolean;
 }
 
 export interface NavSectionConfig {
@@ -66,11 +73,27 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    // Renamed from "Inventory": the section now carries the materials flow
+    // (products → warehouse → transfers → construction procurement). The label
+    // key is unchanged so no route, translation key or test path moves.
     labelKey: 'navigation.sections.inventory',
     items: [
       { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
       { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
       { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+      {
+        // Construction is an Enterprise module selected through the operating
+        // model profile. `minPlan` is what a Starter/Growth/Free business hits;
+        // `requiresOrgCapability` is what hides it from an Enterprise business
+        // that does not do construction. Deliberately no `partnerFeature`: the
+        // partner inventory flag does not gate construction procurement, and no
+        // `allowAllAuthenticatedRoles`: the role list now applies.
+        labelKey: 'navigation.items.constructionWorkspace',
+        path: '/construction',
+        icon: Building2,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+      },
     ],
   },
   {
@@ -96,17 +119,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
-    labelKey: 'navigation.sections.construction',
-    items: [
-      {
-        labelKey: 'navigation.items.constructionWorkspace',
-        path: '/construction',
-        icon: Building2,
-        allowAllAuthenticatedRoles: true,
-      },
-    ],
-  },
-  {
     labelKey: 'navigation.sections.ai',
     items: [
       { labelKey: 'navigation.items.ledgrAi', path: '/ai', icon: Sparkles, partnerFeature: 'ai_advisor', requiresCapability: 'ai_insights' },
@@ -127,21 +139,57 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
+/**
+ * Build the navigation for one business.
+ *
+ * Two gates, deliberately with different rendering:
+ *
+ *   Pass 1 — business type (`requiresOrgCapability`), plus the partner and role
+ *   reachability gates. These REMOVE the item. A business must never see a
+ *   surface that belongs to a different line of business: no locked icon, no
+ *   placeholder, no trace. A role that cannot open a route gets no link to it.
+ *
+ *   Pass 2 — plan tier (`minPlan` / `requiresCapability`). These KEEP the item
+ *   and mark it `locked`, because the lock and its upgrade prompt are the only
+ *   upsell path (Construction: Free/Trial locked, Enterprise unlocked). A plan
+ *   gate must never remove an item that pass 1 retained.
+ *
+ * A section disappears only when pass 1 leaves it with no items, so a heading
+ * can never outlive its entire contents.
+ *
+ * `isOrgCapabilityEnabled` is required: without a business-type decision there
+ * is nothing to filter on, and silently skipping the type gate is exactly how
+ * a retail business would end up seeing another vertical's modules.
+ */
 export function visibleSectionsFor(
   isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
-  role?: string | null,
-  isOrgCapabilityEnabled?: (capability: OrganisationCapability) => boolean,
+  role: string | null | undefined,
+  isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
+  currentTier?: PlanTier,
 ): NavSectionConfig[] {
   return NAV_SECTIONS
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((i) => {
-        if (i.partnerFeature && !isFeatureEnabled(i.partnerFeature)) return false;
-        if (i.requiresOrgCapability && isOrgCapabilityEnabled && !isOrgCapabilityEnabled(i.requiresOrgCapability)) return false;
-        if (role && !i.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, i.path)) return false;
+    .map((section) => {
+      // Pass 1 — remove. Nothing plan-related is decided here.
+      const reachable = section.items.filter((item) => {
+        if (item.requiresOrgCapability && !isOrgCapabilityEnabled(item.requiresOrgCapability)) return false;
+        if (item.partnerFeature && !isFeatureEnabled(item.partnerFeature)) return false;
+        if (role && !item.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, item.path)) return false;
         return true;
-      }),
-    }))
+      });
+
+      // Pass 2 — keep, mark. `locked` is output-only: the shared NAV_SECTIONS
+      // array is never mutated, and a caller that renders without a tier sees
+      // the unmarked (unlocked) item exactly as before.
+      const items: NavItemConfig[] = currentTier === undefined
+        ? reachable
+        : reachable.map((item) => ({
+          ...item,
+          locked: isItemLocked(item, currentTier, section.minPlan),
+        }));
+
+      return { ...section, items };
+    })
+    // Sections are judged on the pass-1 output; pass 2 only adds a marker.
     .filter((section) => section.items.length > 0);
 }
 
