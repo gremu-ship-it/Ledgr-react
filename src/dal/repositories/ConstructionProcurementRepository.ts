@@ -128,6 +128,7 @@ export interface ConstructionUomConversion {
 export type ConstructionPurchaseOrderStatus = 'draft' | 'authorized' | 'cancelled';
 
 export interface ConstructionPurchaseOrder {
+  project_id?: string | null;
   id: string;
   business_id: string;
   branch_id: string;
@@ -376,6 +377,7 @@ export interface ConstructionSupplierBillLine {
 }
 
 export interface ConstructionMaterialIssue {
+  project_id?: string | null;
   id: string;
   business_id: string;
   site_id: string;
@@ -444,6 +446,7 @@ export interface ConstructionOpenItems {
 
 /** An append-only record of usable material returned from a site to its store. */
 export interface ConstructionMaterialReturn {
+  project_id?: string | null;
   id: string;
   business_id: string;
   source_issue_id: string;
@@ -704,10 +707,10 @@ export class ConstructionProcurementRepository {
     );
   }
 
-  async findPurchaseOrders(businessId: string): Promise<ConstructionPurchaseOrder[]> {
+  async findPurchaseOrders(businessId: string, projectId?: string): Promise<ConstructionPurchaseOrder[]> {
     return this.rows<ConstructionPurchaseOrder>(
       'construction_purchase_orders',
-      (b) => b.eq('business_id', businessId).order('created_at', { ascending: false }),
+      (b) => (projectId ? b.eq('business_id', businessId).eq('project_id', projectId) : b.eq('business_id', businessId)).order('created_at', { ascending: false }),
       'Could not load purchase orders.',
     );
   }
@@ -849,19 +852,19 @@ export class ConstructionProcurementRepository {
     );
   }
 
-  async findMaterialIssues(businessId: string): Promise<ConstructionMaterialIssue[]> {
+  async findMaterialIssues(businessId: string, projectId?: string): Promise<ConstructionMaterialIssue[]> {
     return this.rows<ConstructionMaterialIssue>(
       'construction_material_issues',
-      (b) => b.eq('business_id', businessId).order('issued_at', { ascending: false }),
+      (b) => (projectId ? b.eq('business_id', businessId).eq('project_id', projectId) : b.eq('business_id', businessId)).order('issued_at', { ascending: false }),
       'Could not load material issues.',
     );
   }
 
   /** The append-only return register for this business (branch-scoped by RLS). */
-  async findMaterialReturns(businessId: string): Promise<ConstructionMaterialReturn[]> {
+  async findMaterialReturns(businessId: string, projectId?: string): Promise<ConstructionMaterialReturn[]> {
     return this.rows<ConstructionMaterialReturn>(
       'construction_material_returns',
-      (b) => b.eq('business_id', businessId).order('created_at', { ascending: false }),
+      (b) => (projectId ? b.eq('business_id', businessId).eq('project_id', projectId) : b.eq('business_id', businessId)).order('created_at', { ascending: false }),
       'Could not load material returns.',
     );
   }
@@ -933,10 +936,10 @@ export class ConstructionProcurementRepository {
     );
   }
 
-  async createPurchaseOrder(input: PurchaseOrderInput, clientKey: string): Promise<ConstructionCommandResult> {
+  async createPurchaseOrder(input: PurchaseOrderInput, clientKey: string, projectId?: string): Promise<ConstructionCommandResult> {
     return this.call(
-      'create_construction_purchase_order',
-      { p_payload: input, p_client_key: clientKey },
+      projectId ? 'create_project_purchase_order' : 'create_construction_purchase_order',
+      { p_payload: input, p_client_key: clientKey, ...(projectId ? { p_project_id: projectId } : {}) },
       'Could not create the purchase order.',
     );
   }
@@ -1079,18 +1082,18 @@ export class ConstructionProcurementRepository {
    * Replays with the same `clientKey` return the committed row instead of writing
    * a second one.
    */
-  async returnMaterialsToStore(input: MaterialReturnInput, clientKey: string): Promise<ConstructionCommandResult> {
+  async returnMaterialsToStore(input: MaterialReturnInput, clientKey: string, projectId?: string): Promise<ConstructionCommandResult> {
     return this.call(
-      'return_construction_materials_to_store',
-      { p_payload: input, p_client_key: clientKey },
+      projectId ? 'return_project_materials' : 'return_construction_materials_to_store',
+      { p_payload: input, p_client_key: clientKey, ...(projectId ? { p_project_id: projectId } : {}) },
       'Could not record the material return.',
     );
   }
 
-  async issueMaterialsToProject(input: MaterialIssueInput, clientKey: string): Promise<ConstructionCommandResult> {
+  async issueMaterialsToProject(input: MaterialIssueInput, clientKey: string, projectId?: string): Promise<ConstructionCommandResult> {
     return this.call(
-      'issue_construction_materials_to_project',
-      { p_payload: input, p_client_key: clientKey },
+      projectId ? 'issue_project_materials' : 'issue_construction_materials_to_project',
+      { p_payload: input, p_client_key: clientKey, ...(projectId ? { p_project_id: projectId } : {}) },
       'Could not record the material issue.',
     );
   }

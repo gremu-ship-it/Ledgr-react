@@ -49,9 +49,11 @@ const PO_STATUS_STYLE: Record<string, string> = {
 export function ConstructionPurchaseOrdersSection({
   businessId,
   capabilities,
+  projectId,
 }: {
   businessId: string;
   capabilities: string[];
+  projectId?: string;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedPoId = searchParams.get('po');
@@ -62,10 +64,10 @@ export function ConstructionPurchaseOrdersSection({
   const baseCurrency = currentBusiness?.business?.base_currency ? String(currentBusiness.business.base_currency).toUpperCase() : '';
 
   const listQuery = useQuery({
-    queryKey: ['construction', 'purchase-orders', businessId],
+    queryKey: ['construction', 'purchase-orders', businessId, ...(projectId ? [projectId] : [])],
     queryFn: async () => {
       const [purchaseOrders, sites, contacts, products] = await Promise.all([
-        repos.construction.findPurchaseOrders(businessId),
+        projectId ? repos.construction.findPurchaseOrders(businessId, projectId) : repos.construction.findPurchaseOrders(businessId),
         repos.construction.findSites(businessId),
         repos.contact.findByBusiness(businessId),
         repos.inventory.findAllProducts(businessId),
@@ -146,6 +148,7 @@ export function ConstructionPurchaseOrdersSection({
         {showCreate && sites.length > 0 ? (
           <CreatePurchaseOrderForm
             businessId={businessId}
+            projectId={projectId}
             sites={sites}
             suppliers={suppliers}
             products={products}
@@ -213,6 +216,7 @@ export function ConstructionPurchaseOrdersSection({
         <PurchaseOrderDetail
           businessId={businessId}
           poId={selectedPoId}
+          projectId={projectId}
           capabilities={capabilities}
           onNotice={setNotice}
           onClosed={() => selectPo(null)}
@@ -258,6 +262,7 @@ const EMPTY_LINE: DraftLine = { product_id: '', uom: '', quantity_ordered: '1', 
 
 function CreatePurchaseOrderForm({
   businessId,
+  projectId,
   sites,
   suppliers,
   products,
@@ -265,6 +270,7 @@ function CreatePurchaseOrderForm({
   onCreated,
 }: {
   businessId: string;
+  projectId?: string;
   sites: Array<{ id: string; site_code: string; site_name: string; project_ref: string }>;
   suppliers: Array<{ id: string; name: string }>;
   products: Array<{ id: string; name: string; unit_of_measure?: string | null }>;
@@ -302,7 +308,7 @@ function CreatePurchaseOrderForm({
             line_note: line.line_note.trim() || null,
           })),
       };
-      return repos.construction.createPurchaseOrder(payload, clientKey);
+      return repos.construction.createPurchaseOrder(payload, clientKey, ...(projectId ? [projectId] as [string] : []));
     },
     onSuccess: (result) => {
       setClientKey(newIdempotencyKey());
@@ -310,6 +316,7 @@ function CreatePurchaseOrderForm({
       setNotes('');
       queryClient.invalidateQueries({ queryKey: ['construction', 'purchase-orders'] });
       queryClient.invalidateQueries({ queryKey: ['construction', 'overview'] });
+      queryClient.invalidateQueries({ queryKey: ['construction', 'project'] });
       onCreated(String(result.id), String(result.number ?? ''));
     },
   });
@@ -470,12 +477,14 @@ function CreatePurchaseOrderForm({
 
 function PurchaseOrderDetail({
   businessId,
+  projectId,
   poId,
   capabilities,
   onNotice,
   onClosed,
 }: {
   businessId: string;
+  projectId?: string;
   poId: string;
   capabilities: string[];
   onNotice: (message: string) => void;
@@ -492,7 +501,7 @@ function PurchaseOrderDetail({
     queryKey: ['construction', 'purchase-order', poId],
     queryFn: async () => {
       const [purchaseOrders, lines, events, sites, deliveryNotes, receipts, products, contacts] = await Promise.all([
-        repos.construction.findPurchaseOrders(businessId),
+        projectId ? repos.construction.findPurchaseOrders(businessId, projectId) : repos.construction.findPurchaseOrders(businessId),
         repos.construction.findPurchaseOrderLines(poId),
         repos.construction.findPurchaseOrderEvents(poId),
         repos.construction.findSites(businessId),

@@ -1,4 +1,7 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ProjectsSection } from '@/components/construction/projects/ProjectsSection';
+import { ProjectDetail } from '@/components/construction/projects/ProjectDetail';
 import { Link, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { HardHat, ShieldCheck } from 'lucide-react';
@@ -30,6 +33,7 @@ import { ErrorBanner, LoadingBlock } from '@/components/construction/constructio
  */
 
 const SECTIONS = [
+  { path: '/construction/projects', label: 'construction.projects.title' },
   { path: '/construction', label: 'Overview' },
   { path: '/construction/purchase-orders', label: 'Purchase orders' },
   { path: '/construction/receipts', label: 'Receipts' },
@@ -40,6 +44,7 @@ const SECTIONS = [
 ] as const;
 
 export function ConstructionWorkspacePage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const currentBusiness = useAppStore((state) => state.currentBusiness);
   const businessId = currentBusiness?.business?.id ?? null;
@@ -113,7 +118,7 @@ export function ConstructionWorkspacePage() {
                   : 'border-b-2 border-transparent px-3 py-2 text-sm text-gray-600 hover:border-gray-300 hover:text-gray-900'
               }
             >
-              {section.label}
+              {section.path === '/construction/projects' ? t(section.label) : section.label}
             </Link>
           );
         })}
@@ -133,6 +138,9 @@ export function ConstructionWorkspacePage() {
       ) : null}
 
       <div className="mt-5 space-y-6">
+        {activePath === '/construction/projects' ? (location.pathname === '/construction/projects' ?
+          <ProjectsSection key={businessId} businessId={businessId} capabilities={capabilities} /> :
+          <ProjectDetail key={businessId} businessId={businessId} projectId={location.pathname.split('/')[3]} capabilities={capabilities} />) : null}
         {activePath === '/construction' ? <ConstructionOverviewSection businessId={businessId} capabilities={capabilities} /> : null}
         {activePath === '/construction/purchase-orders' ? (
           <ConstructionPurchaseOrdersSection businessId={businessId} capabilities={capabilities} />
