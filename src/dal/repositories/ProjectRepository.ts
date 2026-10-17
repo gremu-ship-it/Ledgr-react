@@ -24,6 +24,7 @@ export interface Project extends ProjectInput {
   created_by: string;
   created_at: string;
   updated_at: string;
+  boq_locked_at: string | null;
 }
 export interface ProjectCostSummary {
   total_po_value: number;
@@ -31,6 +32,27 @@ export interface ProjectCostSummary {
   total_returned_value: number;
   net_cost: number;
 }
+export interface ProjectBoqLine {
+  id: string;
+  project_id: string;
+  line_number: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  rate: number;
+  total_value: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+export interface ProjectBoqSummary {
+  total_boq_value: number;
+  contract_sum: number;
+  variance: number;
+  line_count: number;
+  is_locked: boolean;
+}
+export type BoqLineInput = Omit<ProjectBoqLine, 'id' | 'project_id' | 'total_value' | 'created_at' | 'updated_at'> & { id: string | null; _deleted?: boolean };
 export interface ProjectLocation {
   id: string;
   business_id: string;
@@ -166,5 +188,27 @@ export class ProjectRepository {
       await client.rpc('get_project_cost_summary', { p_project_id: projectId }),
     );
     return rows[0];
+  }
+  async getBoqLines(projectId: string): Promise<ProjectBoqLine[]> {
+    return unwrap<ProjectBoqLine[]>(await client.from('project_boq_lines').select('*').eq('project_id', projectId).order('sort_order', { ascending: true })) ?? [];
+  }
+  async getBoqSummary(projectId: string): Promise<ProjectBoqSummary> {
+    const rows = unwrap<ProjectBoqSummary[]>(await client.rpc('get_boq_summary', { p_project_id: projectId }));
+    return Array.isArray(rows) ? rows[0] : rows as ProjectBoqSummary;
+  }
+  async createBoqLine(projectId: string, line: Omit<BoqLineInput, 'id' | '_deleted'>): Promise<ProjectBoqLine> {
+    return unwrap<ProjectBoqLine>(await client.rpc('create_boq_line', { p_project_id: projectId, p_line_number: line.line_number, p_description: line.description, p_quantity: line.quantity, p_unit: line.unit, p_rate: line.rate, p_sort_order: line.sort_order }));
+  }
+  async updateBoqLine(lineId: string, line: Omit<BoqLineInput, 'id' | '_deleted'>): Promise<ProjectBoqLine> {
+    return unwrap<ProjectBoqLine>(await client.rpc('update_boq_line', { p_line_id: lineId, p_line_number: line.line_number, p_description: line.description, p_quantity: line.quantity, p_unit: line.unit, p_rate: line.rate, p_sort_order: line.sort_order }));
+  }
+  async deleteBoqLine(lineId: string): Promise<void> {
+    unwrap(await client.rpc('delete_boq_line', { p_line_id: lineId }));
+  }
+  async reorderBoqLines(projectId: string, lineIds: string[]): Promise<ProjectBoqLine[]> {
+    return unwrap<ProjectBoqLine[]>(await client.rpc('reorder_boq_lines', { p_project_id: projectId, p_line_ids: lineIds })) ?? [];
+  }
+  async bulkUpsertBoqLines(projectId: string, lines: BoqLineInput[]): Promise<ProjectBoqLine[]> {
+    return unwrap<ProjectBoqLine[]>(await client.rpc('bulk_upsert_boq_lines', { p_project_id: projectId, p_lines: lines })) ?? [];
   }
 }

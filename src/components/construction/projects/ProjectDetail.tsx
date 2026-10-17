@@ -20,6 +20,7 @@ import { ConstructionMaterialIssuesSection } from '../ConstructionMaterialIssues
 import { ConstructionReturnsSection } from '../ConstructionReturnsSection';
 import { ProjectForm, PROJECT_BUTTON } from './ProjectForm';
 import { ProjectStatusBadge } from './ProjectsSection';
+import { ProjectBoqEditor } from './ProjectBoqEditor';
 
 const k = 'construction.projects';
 const TABS = ['overview', 'sites', 'procurement', 'boq', 'valuations'] as const;
@@ -187,7 +188,7 @@ function ProjectDetailContent({
               />
             </div>
           )}
-          {tab === 'boq' && <p>{t(`${k}.boqPlaceholder`)}</p>}
+          {tab === 'boq' && <ProjectBoqEditor project={project} canManage={canManage} onNotice={setNotice} />}
           {tab === 'valuations' && <p>{t(`${k}.valuationsPlaceholder`)}</p>}
         </div>
       </SectionCard>

@@ -26,6 +26,9 @@ const mock = vi.hoisted(() => ({
     locations: vi.fn(),
     linkSite: vi.fn(),
     unlinkSite: vi.fn(),
+    getBoqLines: vi.fn(),
+    getBoqSummary: vi.fn(),
+    bulkUpsertBoqLines: vi.fn(),
   },
   construction: {
     findPurchaseOrders: vi.fn(),
@@ -68,6 +71,7 @@ const project: Project = {
   created_by: 'u1',
   created_at: '',
   updated_at: '',
+  boq_locked_at: null,
 };
 function detail(status: ProjectStatus = 'tender') {
   return {
@@ -97,6 +101,8 @@ beforeEach(() => {
   void i18n.changeLanguage('en');
   mock.projects.list.mockResolvedValue({ rows: [project], count: 1 });
   mock.projects.getById.mockResolvedValue(detail());
+  mock.projects.getBoqLines.mockResolvedValue([]);
+  mock.projects.getBoqSummary.mockResolvedValue({ total_boq_value: 0, contract_sum: 1000, variance: 1000, line_count: 0, is_locked: false });
   mock.projects.locations.mockResolvedValue([
     { id: 'linked', name: 'Site One', project_id: 'p1' },
     { id: 'available', name: 'Main Store', project_id: null },
@@ -225,7 +231,7 @@ describe('project creation validation', () => {
   });
 });
 describe('project detail', () => {
-  it('loads scoped detail including cost summary, shows metrics and placeholders', async () => {
+  it('loads scoped detail including cost summary and the BOQ editor', async () => {
     mount(
       <ProjectDetail businessId="b1" projectId="p1" capabilities={grants} />,
     );
@@ -234,11 +240,7 @@ describe('project detail', () => {
     expect(screen.getByText('350')).toBeTruthy();
     expect(screen.getByText('Number of sites')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'BOQ' }));
-    expect(
-      screen.getByText(
-        'Schedule of Values will be available in the next update.',
-      ),
-    ).toBeTruthy();
+    expect(await screen.findByText('Add your first BOQ line to define the schedule of values for this project.')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Valuations' }));
     expect(
       screen.getByText(
