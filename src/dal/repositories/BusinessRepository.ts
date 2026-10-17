@@ -122,6 +122,52 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
     return data as string;
   }
 
+  /**
+   * Replace the business operating-model selection.
+   *
+   * Goes through a SECURITY DEFINER RPC rather than a table UPDATE because the
+   * RPC validates the vocabulary, restricts the write to an owner/admin and
+   * writes the audit entry with the old and new selection. The generated
+   * Database types predate migration 20261027000000, so the adapter is typed
+   * explicitly here instead of being cast to `any`.
+   */
+  async updateOperatingModels(
+    businessId: string,
+    operatingModels: readonly string[],
+  ): Promise<string[]> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'update_business_operating_models',
+        args: { p_business_id: string; p_operating_models: string[] },
+      ) => Promise<{ data: string[] | null; error: { message?: string } | null }>;
+    };
+    const { data, error } = await client.rpc('update_business_operating_models', {
+      p_business_id: businessId,
+      p_operating_models: [...operatingModels],
+    });
+    if (error) throw toRepositoryError('businesses', error);
+    return data ?? [];
+  }
+
+  /**
+   * One-time, idempotent Construction bootstrap: "Main Site" branch, its stock
+   * location and the twelve procurement capability grants for the nominated
+   * owner. Safe to call again; a second call inserts nothing.
+   */
+  async provisionConstructionDefaults(businessId: string, ownerUserId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_construction_defaults',
+        args: { p_business_id: string; p_owner_user_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_construction_defaults', {
+      p_business_id: businessId,
+      p_owner_user_id: ownerUserId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
   async reserveNextInvoiceNumber(businessId: string): Promise<string> {
     return this.reserveDocumentNumber(businessId, 'invoice');
   }

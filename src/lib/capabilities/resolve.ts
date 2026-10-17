@@ -19,6 +19,16 @@ export interface CapabilityResolveOptions {
 }
 
 /**
+ * Capabilities introduced after the organisation layer shipped. They have no
+ * pre-Phase-1 behaviour to preserve, so the compatibility kill switch — which
+ * exists to protect the surfaces a business could already reach — does not
+ * apply to them. They resolve from the profile every time, fail closed, and can
+ * therefore never appear for a business whose profile does not select their
+ * operating model (e.g. Construction for an Enterprise retail business).
+ */
+const ALWAYS_PROFILE_GATED: ReadonlySet<string> = new Set(['construction']);
+
+/**
  * Resolve one effective capability. Normally all four frozen layers compose:
  * subscription ∧ partner ∧ organisation ∧ role. Turning off the organisation
  * layer restores the pre-multibusiness result (subscription ∧ partner ∧ role)
@@ -29,6 +39,12 @@ export interface CapabilityResolveOptions {
  * lock existing businesses out of their current POS. Every other explicit
  * `false` still narrows access; a missing non-POS decision stays closed until
  * its code-derived default has been resolved.
+ *
+ * Exception: capabilities listed in ALWAYS_PROFILE_GATED (Construction) ignore
+ * the kill switch entirely. They were introduced after the switch's commitments
+ * were frozen, so there is no legacy surface to preserve; resolving them from
+ * the profile is what keeps an Enterprise retail business from seeing a
+ * Construction workspace that its profile never selected.
  *
  * The resolver is intentionally synchronous and O(1): callers must pass
  * already-loaded values. Do not add a database request or per-row lookup here;
@@ -43,9 +59,11 @@ export function resolveCapability(
   const organisationLayerEnabled = options.organisationLayerEnabled
     ?? isFeatureEnabled('capability_org_layer');
 
-  const organisationAllows = !organisationLayerEnabled
-    || (capability === 'pos' && layers.organisation == null)
-    || layers.organisation === true;
+  const organisationAllows = ALWAYS_PROFILE_GATED.has(capability)
+    ? layers.organisation === true
+    : (!organisationLayerEnabled
+      || (capability === 'pos' && layers.organisation == null)
+      || layers.organisation === true);
 
   return layers.subscription && layers.partner && layers.role && organisationAllows;
 }

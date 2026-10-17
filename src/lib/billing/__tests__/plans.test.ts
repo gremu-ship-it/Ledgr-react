@@ -37,13 +37,10 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      // Construction is deliberately NOT plan-gated, so it stays available on Free
-      // alongside Overview, Finance and Support. `/construction/*` is a server-backed
-      // workspace (member-scoped reads plus capability-gated commands) and the local
-      // draft lives at `/projects-funding-sources/construction-draft`; what a person
-      // may actually do is decided server-side by business membership and the
-      // construction capability grants, not by the plan tier.
-      const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
+      // Construction moved into the Supply Chain (inventory) section and is now an
+      // Enterprise module (minPlan), so nothing is unlocked on Free except the
+      // Overview, Finance and Support sections.
+      const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
         expect(isItemLocked(item, 'free'), item.path).toBe(!available);
       }
@@ -65,6 +62,19 @@ describe('Starter pricing and access', () => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },
   );
+
+  it('sells Construction on Enterprise only', () => {
+    const item = navItemForPath('/construction')!;
+    expect(item).toBeDefined();
+    for (const tier of ['free', 'starter', 'growth', 'pro'] as const) {
+      expect(isItemLocked(item, tier), tier).toBe(true);
+      expect(hasCapability(tier, 'construction'), tier).toBe(false);
+    }
+    expect(isItemLocked(item, 'enterprise')).toBe(false);
+    expect(hasCapability('enterprise', 'construction')).toBe(true);
+    expect(planRequiredFor('construction')?.tier).toBe('enterprise');
+    expect(planRequiredForItem(item)?.tier).toBe('enterprise');
+  });
 
   it('recommends the cheapest eligible tier for locked features', () => {
     expect(planRequiredFor('inventory')?.tier).toBe('starter');

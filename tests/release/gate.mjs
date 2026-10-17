@@ -31,5 +31,6 @@ export const suites = {
   'construction-procurement.test.ts': 'construction-procurement.json',
   'construction-branch-scope.test.ts': 'construction-branch-scope.json',
   'construction-returns.test.ts': 'construction-returns.json',
+  'construction-provisioning.test.ts': 'construction-provisioning.json',
   'tax-configurations.test.ts': 'tax-configurations.json',
 };

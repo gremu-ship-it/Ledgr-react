@@ -256,7 +256,14 @@ function App() {
                   The local-only project draft keeps its own path so that work is
                   preserved and unchanged.
                 */}
-                <Route path="/construction/*" element={<ConstructionWorkspacePage />} />
+                <Route
+                  path="/construction/*"
+                  element={
+                    <CapabilityGate capability="construction">
+                      <ConstructionWorkspacePage />
+                    </CapabilityGate>
+                  }
+                />
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={

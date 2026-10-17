@@ -66,11 +66,27 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    // Renamed from "Inventory": the section now carries the materials flow
+    // (products → warehouse → transfers → construction procurement). The label
+    // key is unchanged so no route, translation key or test path moves.
     labelKey: 'navigation.sections.inventory',
     items: [
       { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
       { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
       { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+      {
+        // Construction is an Enterprise module selected through the operating
+        // model profile. `minPlan` is what a Starter/Growth/Free business hits;
+        // `requiresOrgCapability` is what hides it from an Enterprise business
+        // that does not do construction. Deliberately no `partnerFeature`: the
+        // partner inventory flag does not gate construction procurement, and no
+        // `allowAllAuthenticatedRoles`: the role list now applies.
+        labelKey: 'navigation.items.constructionWorkspace',
+        path: '/construction',
+        icon: Building2,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+      },
     ],
   },
   {
@@ -93,25 +109,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth' },
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth' },
-    ],
-  },
-  {
-    labelKey: 'navigation.sections.construction',
-    items: [
-      {
-        // Deliberately NOT plan-gated, matching the existing decision on the
-        // development trunk: what a person may actually do here is decided
-        // server-side by business membership and the construction capability
-        // grants, and this route is now a server-backed workspace rather than a
-        // browser-local draft. If the product decides to bundle Construction with
-        // the Inventory plan capability, add `requiresCapability: 'inventory'`
-        // (and the matching `partnerFeature`/`requiresOrgCapability`) together
-        // with the plan-matrix expectations that change on the same commit.
-        labelKey: 'navigation.items.constructionWorkspace',
-        path: '/construction',
-        icon: Building2,
-        allowAllAuthenticatedRoles: true,
-      },
     ],
   },
   {
