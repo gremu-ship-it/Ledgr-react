@@ -832,6 +832,179 @@
           }
         }
       }
+    },
+    "dashboard": {
+      "title": "Construction Portfolio Dashboard",
+      "subtitle": "{{business}} · Project health, cash flow, cost variance, and retention exposure",
+      "subtitleDefault": "Project health, cash flow, cost variance, and retention exposure",
+      "loading": "Loading construction dashboard…",
+      "openProjects": "Manage Projects",
+      "openRetentionReport": "Retention Aging Report",
+      "noValuationsPrompt": "Start billing by creating your first valuation.",
+      "dateRange": {
+        "label": "Date range",
+        "3m": "Last 3 months",
+        "6m": "Last 6 months",
+        "12m": "Last 12 months",
+        "all": "All time"
+      },
+      "metrics": {
+        "activeProjects": "Active Projects",
+        "totalContractValue": "Total Contract Value",
+        "billedThisPeriod": "Billed This Period",
+        "outstandingReceivables": "Outstanding Receivables",
+        "totalRetentionHeld": "Total Retention Held",
+        "projectsOverBudget": "Projects Over Budget",
+        "avgCompletion": "Avg. completion: {{pct}}%",
+        "paidThisPeriod": "Paid this period: {{amount}}",
+        "costsThisPeriod": "Costs this period: {{amount}}",
+        "overBudgetAlert": "Action required",
+        "withinBudget": "All projects within budget"
+      },
+      "charts": {
+        "billingProgress": {
+          "title": "Billing Progress",
+          "subtitle": "Cumulative billed across active projects",
+          "xAxis": "Month",
+          "yAxis": "Cumulative Billed",
+          "seriesLabel": "Cumulative Billed",
+          "empty": "No invoiced valuations in the selected period."
+        },
+        "statusBreakdown": {
+          "title": "Project Status Breakdown",
+          "subtitle": "Portfolio distribution by lifecycle stage",
+          "countLabel": "Projects",
+          "empty": "No projects to display."
+        }
+      },
+      "tables": {
+        "costVsBudget": {
+          "title": "Cost vs Budget by Project",
+          "subtitle": "Top 5 projects by net cost",
+          "empty": "No tagged project costs recorded yet.",
+          "columns": {
+            "project": "Project",
+            "budget": "Budget",
+            "actualCost": "Actual Cost",
+            "variance": "Variance"
+          },
+          "legend": {
+            "budget": "Budget",
+            "withinBudget": "Actual (Under Budget)",
+            "overBudget": "Actual (Over Budget)"
+          }
+        },
+        "retentionAging": {
+          "title": "Retention Aging",
+          "subtitle": "Projects with retention balances held",
+          "viewAll": "View full report",
+          "empty": "No retention balances. Retention will appear here once valuations are created.",
+          "columns": {
+            "project": "Project",
+            "client": "Client",
+            "balance": "Balance",
+            "daysHeld": "Days Held",
+            "status": "Status"
+          }
+        }
+      },
+      "recentActivity": {
+        "valuationsTitle": "Recent Valuations",
+        "valuationsEmpty": "No valuations recorded yet.",
+        "invoicesTitle": "Recent Valuation Invoices",
+        "invoicesEmpty": "No valuation invoices generated yet.",
+        "columns": {
+          "project": "Project",
+          "valuation": "Valuation",
+          "invoice": "Invoice",
+          "amount": "Amount",
+          "date": "Date",
+          "status": "Status"
+        }
+      }
+    },
+    "reports": {
+      "pnl": {
+        "title": "Project Profit & Loss",
+        "loading": "Loading project P&L…",
+        "downloadReport": "Download Report",
+        "exportComingSoon": "Report export coming soon.",
+        "sections": {
+          "contractAndBudget": "Contract & Budget",
+          "costs": "Costs",
+          "revenue": "Revenue",
+          "retention": "Retention",
+          "profitability": "Profitability"
+        },
+        "fields": {
+          "contractSum": "Contract Sum",
+          "boqTotal": "BOQ Total",
+          "boqVariance": "BOQ Variance: {{variance}}",
+          "budget": "Budget",
+          "completionPct": "Completion %",
+          "totalPoValue": "Total PO Value",
+          "totalIssued": "Total Material Issued",
+          "totalReturned": "Total Material Returned",
+          "netCost": "Net Cost",
+          "costVariance": "Cost Variance",
+          "totalBilled": "Total Billed",
+          "billingPct": "Billing %",
+          "totalPaid": "Total Paid",
+          "outstanding": "Outstanding",
+          "totalWithheld": "Total Withheld",
+          "totalReleased": "Total Released",
+          "balanceHeld": "Balance Held",
+          "grossMargin": "Gross Margin",
+          "marginPct": "Margin %"
+        },
+        "legend": {
+          "underBudget": "Under budget",
+          "overBudget": "Over budget",
+          "healthyMargin": "Healthy (> 15%)",
+          "moderateMargin": "Moderate (5–15%)",
+          "lowMargin": "Low (< 5%)"
+        },
+        "valuationTrend": {
+          "title": "Valuation Trend",
+          "subtitle": "Cumulative billing progress over the project lifecycle",
+          "xAxis": "Valuation",
+          "yAxis": "Cumulative Billed",
+          "netAmount": "Period Net",
+          "cumulativeBilled": "Cumulative Billed",
+          "empty": "No invoiced valuations yet. Invoiced valuations will appear on the billing trend chart."
+        }
+      },
+      "retentionAging": {
+        "title": "Retention Aging Report",
+        "tabTitle": "Retention Aging",
+        "description": "Track withheld retention balances across all projects, sorted by age.",
+        "loading": "Loading retention aging report…",
+        "filterStatus": "Filter by project status",
+        "allStatuses": "All statuses",
+        "sortByDays": "Sort by days held",
+        "sortDesc": "Oldest first (descending)",
+        "sortAsc": "Newest first (ascending)",
+        "empty": "No retention balances. Retention will appear here once valuations are created.",
+        "summary": {
+          "totalRetentionHeld": "Total Retention Held",
+          "projectsWithRetention": "Projects with Retention",
+          "averageDaysHeld": "Average Days Held",
+          "daysUnit": "{{days}} days"
+        },
+        "columns": {
+          "project": "Project",
+          "client": "Client",
+          "status": "Status",
+          "retentionBalance": "Retention Balance",
+          "oldestEntry": "Oldest Entry",
+          "daysHeld": "Days Held"
+        },
+        "thresholds": {
+          "normal": "0–180 days",
+          "warning": "> 180 days",
+          "critical": "> 365 days"
+        }
+      }
     }
   }
 }

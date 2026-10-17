@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { ProjectRepository } from '@/dal/repositories/ProjectRepository';
+import { ProjectRepository, ReportingRepository } from '@/dal/repositories/ProjectRepository';
 
 import { BusinessRepository } from '@/dal/repositories/BusinessRepository';
 import { JournalRepository } from '@/dal/repositories/JournalRepository';
@@ -26,6 +26,7 @@ import { constructionProcurementRepository } from '@/dal/repositories/Constructi
 
 export const repos = {
   projects: new ProjectRepository(),
+  reporting: new ReportingRepository(),
   /**
    * Construction procurement: a typed adapter over the construction command
    * layer (migration 20261021000000). Reads are member-scoped SELECTs; every

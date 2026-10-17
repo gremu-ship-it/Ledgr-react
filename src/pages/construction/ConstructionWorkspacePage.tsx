@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProjectsSection } from '@/components/construction/projects/ProjectsSection';
 import { ProjectDetail } from '@/components/construction/projects/ProjectDetail';
+import { RetentionAgingReport } from '@/components/construction/reports/RetentionAgingReport';
 import { Link, useLocation } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { HardHat, ShieldCheck } from 'lucide-react';
@@ -34,6 +35,7 @@ import { ErrorBanner, LoadingBlock } from '@/components/construction/constructio
 
 const SECTIONS = [
   { path: '/construction/projects', label: 'construction.projects.title' },
+  { path: '/construction/retention', label: 'construction.reports.retentionAging.tabTitle' },
   { path: '/construction', label: 'Overview' },
   { path: '/construction/purchase-orders', label: 'Purchase orders' },
   { path: '/construction/receipts', label: 'Receipts' },
@@ -118,7 +120,7 @@ export function ConstructionWorkspacePage() {
                   : 'border-b-2 border-transparent px-3 py-2 text-sm text-gray-600 hover:border-gray-300 hover:text-gray-900'
               }
             >
-              {section.path === '/construction/projects' ? t(section.label) : section.label}
+              {section.label.startsWith('construction.') ? t(section.label) : section.label}
             </Link>
           );
         })}
@@ -141,6 +143,9 @@ export function ConstructionWorkspacePage() {
         {activePath === '/construction/projects' ? (location.pathname === '/construction/projects' ?
           <ProjectsSection key={businessId} businessId={businessId} capabilities={capabilities} /> :
           <ProjectDetail key={businessId} businessId={businessId} projectId={location.pathname.split('/')[3]} capabilities={capabilities} />) : null}
+        {activePath === '/construction/retention' ? (
+          <RetentionAgingReport key={businessId} businessId={businessId} capabilities={capabilities} />
+        ) : null}
         {activePath === '/construction' ? <ConstructionOverviewSection businessId={businessId} capabilities={capabilities} /> : null}
         {activePath === '/construction/purchase-orders' ? (
           <ConstructionPurchaseOrdersSection businessId={businessId} capabilities={capabilities} />

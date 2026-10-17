@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn() }));
 vi.mock('@/lib/supabase', () => ({ supabase: mocks }));
-import { ProjectRepository } from '../ProjectRepository';
+import { ProjectRepository, ReportingRepository } from '../ProjectRepository';
 import { ConstructionProcurementRepository } from '../ConstructionProcurementRepository';
 const repository = new ProjectRepository();
 const input = {
@@ -251,5 +251,214 @@ describe('additive procurement project dimension', () => {
       expect(chain.eq).toHaveBeenCalledWith('business_id', 'b1');
       expect(chain.eq).toHaveBeenCalledWith('project_id', 'p1');
     }
+  });
+});
+
+describe('Phase D reporting RPC methods', () => {
+  const repo = new ProjectRepository();
+  const reportingRepo = new ReportingRepository();
+
+  beforeEach(() => {
+    mocks.from.mockReturnValue(builder({ business_id: 'b1' }));
+  });
+
+  it('calls get_project_pnl and normalizes numeric fields', async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({ data: ['procurement.view'], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            project_id: 'p1',
+            project_name: 'Bridge Rehab',
+            client_name: 'Roads Authority',
+            status: 'active',
+            contract_sum: '100000',
+            budget: '80000',
+            retention_pct: '10',
+            boq_total: '95000',
+            total_po_value: '20000',
+            total_issued_value: '35000',
+            total_returned_value: '5000',
+            total_costs: '50000',
+            total_billed: '60000',
+            total_retention_withheld: '6000',
+            total_retention_released: '1000',
+            retention_balance: '5000',
+            total_paid: '45000',
+            cost_variance: '30000',
+            billing_pct: '60',
+            completion_pct: '62.5',
+            profit_margin: '16.67',
+          },
+        ],
+        error: null,
+      });
+    const pnl = await repo.getProjectPnl('p1');
+    expect(mocks.rpc).toHaveBeenCalledWith('get_project_pnl', {
+      p_project_id: 'p1',
+    });
+    expect(pnl).toEqual({
+      project_id: 'p1',
+      project_name: 'Bridge Rehab',
+      client_name: 'Roads Authority',
+      status: 'active',
+      contract_sum: 100000,
+      budget: 80000,
+      retention_pct: 10,
+      boq_total: 95000,
+      total_po_value: 20000,
+      total_issued_value: 35000,
+      total_returned_value: 5000,
+      total_costs: 50000,
+      total_billed: 60000,
+      total_retention_withheld: 6000,
+      total_retention_released: 1000,
+      retention_balance: 5000,
+      total_paid: 45000,
+      cost_variance: 30000,
+      billing_pct: 60,
+      completion_pct: 62.5,
+      profit_margin: 16.67,
+    });
+  });
+
+  it('calls get_portfolio_summary after checking procurement capabilities', async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({ data: ['procurement.view'], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            total_projects: 4,
+            active_projects: 2,
+            total_contract_value: '500000',
+            total_billed: '200000',
+            total_paid: '150000',
+            total_costs: '120000',
+            total_retention_held: '20000',
+            outstanding_receivables: '30000',
+            avg_completion_pct: '45.5',
+            projects_over_budget: 1,
+          },
+        ],
+        error: null,
+      });
+    const summary = await reportingRepo.getPortfolioSummary('b1');
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      'construction_procurement_capabilities_for',
+      { p_business_id: 'b1' },
+    );
+    expect(mocks.rpc).toHaveBeenCalledWith('get_portfolio_summary', {
+      p_business_id: 'b1',
+    });
+    expect(summary.total_projects).toBe(4);
+    expect(summary.total_contract_value).toBe(500000);
+    expect(summary.avg_completion_pct).toBe(45.5);
+  });
+
+  it('calls get_project_valuation_trend and returns ordered trend points', async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({ data: ['procurement.view'], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            valuation_number: 1,
+            valuation_date: '2026-09-01',
+            gross_amount: '10000',
+            retention_amount: '1000',
+            net_amount: '9000',
+            cumulative_billed: '10000',
+          },
+          {
+            valuation_number: 2,
+            valuation_date: '2026-10-01',
+            gross_amount: '15000',
+            retention_amount: '1500',
+            net_amount: '13500',
+            cumulative_billed: '25000',
+          },
+        ],
+        error: null,
+      });
+    const trend = await repo.getValuationTrend('p1');
+    expect(mocks.rpc).toHaveBeenCalledWith('get_project_valuation_trend', {
+      p_project_id: 'p1',
+    });
+    expect(trend).toHaveLength(2);
+    expect(trend[1].cumulative_billed).toBe(25000);
+  });
+
+  it('calls get_retention_aging, get_dashboard_metrics, and get_cost_breakdown_by_project', async () => {
+    mocks.rpc
+      .mockResolvedValueOnce({ data: ['procurement.view'], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            project_id: 'p1',
+            project_name: 'Bridge Rehab',
+            client_name: 'Client A',
+            project_status: 'active',
+            retention_balance: '5000',
+            oldest_retention_date: '2025-09-01',
+            days_held: 411,
+          },
+        ],
+        error: null,
+      });
+    const aging = await repo.getRetentionAging('b1');
+    expect(aging[0].days_held).toBe(411);
+    expect(aging[0].retention_balance).toBe(5000);
+
+    mocks.rpc
+      .mockResolvedValueOnce({ data: ['procurement.view'], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            active_projects: 2,
+            total_contract_value: '250000',
+            total_billed_this_period: '100000',
+            total_paid_this_period: '75000',
+            total_costs_this_period: '60000',
+            total_retention_held: '10000',
+            outstanding_receivables: '15000',
+            projects_over_budget: 0,
+            avg_completion_pct: '50',
+          },
+        ],
+        error: null,
+      });
+    const metrics = await repo.getDashboardMetrics('b1', 6);
+    expect(mocks.rpc).toHaveBeenCalledWith('get_dashboard_metrics', {
+      p_business_id: 'b1',
+      p_months: 6,
+    });
+    expect(metrics.total_billed_this_period).toBe(100000);
+
+    mocks.rpc
+      .mockResolvedValueOnce({ data: ['procurement.view'], error: null })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            project_id: 'p1',
+            project_name: 'Bridge Rehab',
+            total_po_value: '20000',
+            total_issued_value: '35000',
+            total_returned_value: '5000',
+            net_cost: '50000',
+            budget: '80000',
+            variance: '30000',
+          },
+        ],
+        error: null,
+      });
+    const costs = await repo.getCostBreakdownByProject('b1');
+    expect(costs[0].net_cost).toBe(50000);
+    expect(costs[0].variance).toBe(30000);
+  });
+
+  it('rejects business reporting calls when caller has no procurement.* capabilities', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: [], error: null });
+    await expect(repo.getPortfolioSummary('b1')).rejects.toThrow(
+      /Construction procurement access required/,
+    );
   });
 });

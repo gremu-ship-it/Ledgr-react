@@ -22,6 +22,7 @@ import { ProjectForm, PROJECT_BUTTON } from './ProjectForm';
 import { ProjectStatusBadge } from './ProjectsSection';
 import { ProjectBoqEditor } from './ProjectBoqEditor';
 import { ProjectValuationsPanel } from './ProjectValuationsPanel';
+import { ProjectPnlOverview } from './ProjectPnlOverview';
 
 const k = 'construction.projects';
 const TABS = ['overview', 'sites', 'procurement', 'boq', 'valuations'] as const;
@@ -134,32 +135,7 @@ function ProjectDetailContent({
         </div>
         <div role="tabpanel" className="pt-4">
           {tab === 'overview' && (
-            <>
-              <div className="grid gap-4 sm:grid-cols-3">
-                {[
-                  ['fields.contract_sum', project.contract_sum],
-                  ['fields.budget', project.budget],
-                  ['cost', project.cost.net_cost],
-                  ['fields.retention_pct', project.retention_pct],
-                  ['siteCount', project.site_count],
-                  ['poValue', project.cost.total_po_value],
-                  ['issuedValue', project.cost.total_issued_value],
-                  ['returnedValue', project.cost.total_returned_value],
-                ].map(([label, value]) => (
-                  <div className="rounded-xl border p-4" key={label}>
-                    <p className="text-sm text-gray-500">
-                      {t(`${k}.${label}`)}
-                    </p>
-                    <p className="mt-2 text-xl font-semibold">
-                      {Number(value).toLocaleString(undefined, {
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-4 text-xs text-gray-500">{t(`${k}.costNote`)}</p>
-            </>
+            <ProjectPnlOverview project={project} onNotice={setNotice} />
           )}
           {tab === 'sites' && (
             <ProjectSites
