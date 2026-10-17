@@ -103,3 +103,23 @@ A concurrent build with a different Supabase host overwrites that shared artifac
 and invalidates the runtime cache probes. The final counts above come from an
 isolated run, not such a concurrent run. No product behavior or harness assertions
 were altered to obtain these results.
+
+## Follow-up: operating-model save and UUID audit resource IDs
+
+`20261029000000_business_operating_models_audit_resource_id.sql` fixes the Settings
+save failure `column "resource_id" is of type uuid but expression is of type text`.
+The operating-model RPC from `20261027000000` explicitly cast the business ID to
+text for both hashing and insertion. Some deployed schemas use a UUID audit
+resource column, unlike the reconstructed text-column base schema. The insertion
+now supplies the native UUID parameter; PostgreSQL accepts that value for either
+column shape. The hash call retains its required text argument. No audit table,
+history, hashing format, authorization, provisioning or RPC signature is changed.
+This is a forward migration: previously applied migrations are not edited.
+
+The reported SQLSTATE 42804 was reproduced locally with a UUID-shaped audit
+column before the fix. The new release tests exercise successful save, audit hash
+consistency, no-op save and permission denial with **both text and UUID columns**.
+The four new tests and the existing provisioning/project suites pass together
+(47 database tests). Apply this forward migration to the affected environment
+through the normal migration pipeline before retrying the Settings save; a browser
+refresh alone cannot replace the deployed database function.
