@@ -23,7 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -32,7 +32,7 @@ import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
-import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
+import { isItemLocked, navItemForPath, navLabelResolver, planRequiredForItem } from '@/components/layout/navConfig';
 import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
@@ -101,32 +101,49 @@ export function BottomNav() {
   // Role filtering mirrors the desktop sidebar (navConfig.visibleSectionsFor):
   // hide what the role cannot open, instead of rendering a tab that RoleRoute
   // would immediately bounce back to the role's home page. When the role is
-  // not yet known we keep the (plan-filtered) default list.
-  const allowedForRole = (path: string) => !role || isPathAllowedForRole(role, path);
+  // not yet known we keep the (plan-filtered) default list. Memoized because
+  // the item lists below derive from it.
+  const allowedForRole = useCallback(
+    (path: string) => !role || isPathAllowedForRole(role, path),
+    [role],
+  );
 
   // Till-centric roles get the POS tab first — it is their home route.
   const homeIsPos = Boolean(role) && getHomePathForRole(role) === '/pos';
   const posNavItem = navItemForPath('/pos');
-  const primaryItems = homeIsPos && posNavItem
-    ? [posNavItem, ...BOTTOM_NAV_ITEMS]
-    : BOTTOM_NAV_ITEMS;
 
-  const bottomItems = primaryItems
-    .filter((i) => {
-      const navItem = navItemForPath(i.path);
-      if (navItem?.partnerFeature && !isFeatureEnabled(navItem.partnerFeature)) return false;
-      return !navItem?.requiresOrgCapability
-        || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
-    })
-    .filter((i) => allowedForRole(i.path))
-    .slice(0, MAX_PRIMARY_TABS);
-  const moreItems = ALL_MORE_MENU_ITEMS
-    .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
-    .filter((i) => {
-      const navItem = navItemForPath(i.path);
-      return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
-    })
-    .filter((i) => allowedForRole(i.path));
+  // Both lists are derived in a memo so their identity stays stable: the
+  // left/right FAB split below memoizes on `bottomItems`. The bar keeps its own
+  // item lists rather than reading NAV_SECTIONS, so it resolves labels through
+  // the shared construction table — a construction business reads Site Stores /
+  // Material Transfers here exactly as it does in the sidebar.
+  const { bottomItems, moreItems } = useMemo(() => {
+    const navLabelFor = navLabelResolver(isOrgCapabilityEnabled);
+    const primaryItems = (homeIsPos && posNavItem
+      ? [posNavItem, ...BOTTOM_NAV_ITEMS]
+      : BOTTOM_NAV_ITEMS
+    ).map((item) => ({ ...item, labelKey: navLabelFor(item.labelKey) }));
+
+    return {
+      bottomItems: primaryItems
+        .filter((i) => {
+          const navItem = navItemForPath(i.path);
+          if (navItem?.partnerFeature && !isFeatureEnabled(navItem.partnerFeature)) return false;
+          return !navItem?.requiresOrgCapability
+            || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
+        })
+        .filter((i) => allowedForRole(i.path))
+        .slice(0, MAX_PRIMARY_TABS),
+      moreItems: ALL_MORE_MENU_ITEMS
+        .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
+        .filter((i) => {
+          const navItem = navItemForPath(i.path);
+          return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
+        })
+        .filter((i) => allowedForRole(i.path))
+        .map((i) => ({ ...i, labelKey: navLabelFor(i.labelKey) })),
+    };
+  }, [homeIsPos, posNavItem, isFeatureEnabled, isOrgCapabilityEnabled, allowedForRole]);
 
   // The FAB writes, so an action needs both gates:
   //   canWrite             — a viewer or auditor may open /income and /expenses

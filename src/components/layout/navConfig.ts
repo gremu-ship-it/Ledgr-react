@@ -139,6 +139,52 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
+// ── Construction label vocabulary ────────────────────────────────────────────
+
+/**
+ * A construction business buys its materials, stores them on site and moves
+ * them between sites, so the Supply Chain children read in site language
+ * instead of retail language. The routes, icons and gates are identical — only
+ * the label key changes — so this is a vocabulary swap, never a second set of
+ * nav items: `/products` must not appear twice under two names, and a
+ * Construction + Retail business (both capabilities on) keeps one Materials
+ * entry rather than a Materials/Products pair.
+ *
+ * Keyed by the default label key so any surface holding a nav label — the
+ * sidebar, the mobile workspace list, the bottom bar's own More menu — resolves
+ * through one table.
+ */
+export const CONSTRUCTION_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
+  'navigation.items.products': 'navigation.items.materials',
+  'navigation.items.warehouse': 'navigation.items.siteStores',
+  'navigation.items.transfers': 'navigation.items.materialTransfers',
+};
+
+/**
+ * Resolve one nav label key for a business. Non-construction businesses get the
+ * key back untouched, so the default vocabulary can never drift.
+ */
+export function resolveNavLabelKey(
+  labelKey: string,
+  isConstruction: boolean,
+): string {
+  if (!isConstruction) return labelKey;
+  return CONSTRUCTION_LABEL_OVERRIDES[labelKey] ?? labelKey;
+}
+
+/**
+ * Build the label resolver for one business from the same organisation
+ * predicate `visibleSectionsFor` already receives. Navigation surfaces that
+ * hold their own item lists (BottomNav) call this so their labels match the
+ * sidebar's instead of duplicating the override table.
+ */
+export function navLabelResolver(
+  isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
+): (labelKey: string) => string {
+  const isConstruction = isOrgCapabilityEnabled('construction');
+  return (labelKey: string) => resolveNavLabelKey(labelKey, isConstruction);
+}
+
 /**
  * Build the navigation for one business.
  *
@@ -157,6 +203,12 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
  * A section disappears only when pass 1 leaves it with no items, so a heading
  * can never outlive its entire contents.
  *
+ * Pass 3 — vocabulary. A construction business reads the Supply Chain children
+ * as Materials / Site Stores / Material Transfers (see
+ * CONSTRUCTION_LABEL_OVERRIDES). Only `labelKey` is rewritten: paths, icons and
+ * both gates above are untouched, and a business without the construction
+ * capability gets the default keys back unchanged.
+ *
  * `isOrgCapabilityEnabled` is required: without a business-type decision there
  * is nothing to filter on, and silently skipping the type gate is exactly how
  * a retail business would end up seeing another vertical's modules.
@@ -167,6 +219,8 @@ export function visibleSectionsFor(
   isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
   currentTier?: PlanTier,
 ): NavSectionConfig[] {
+  const resolveLabelKey = navLabelResolver(isOrgCapabilityEnabled);
+
   return NAV_SECTIONS
     .map((section) => {
       // Pass 1 — remove. Nothing plan-related is decided here.
@@ -180,16 +234,18 @@ export function visibleSectionsFor(
       // Pass 2 — keep, mark. `locked` is output-only: the shared NAV_SECTIONS
       // array is never mutated, and a caller that renders without a tier sees
       // the unmarked (unlocked) item exactly as before.
-      const items: NavItemConfig[] = currentTier === undefined
-        ? reachable
-        : reachable.map((item) => ({
-          ...item,
-          locked: isItemLocked(item, currentTier, section.minPlan),
-        }));
+      // Pass 3 — rewrite the label for a construction business.
+      const items: NavItemConfig[] = reachable.map((item) => ({
+        ...item,
+        labelKey: resolveLabelKey(item.labelKey),
+        ...(currentTier === undefined
+          ? {}
+          : { locked: isItemLocked(item, currentTier, section.minPlan) }),
+      }));
 
       return { ...section, items };
     })
-    // Sections are judged on the pass-1 output; pass 2 only adds a marker.
+    // Sections are judged on the pass-1 output; passes 2 and 3 only annotate.
     .filter((section) => section.items.length > 0);
 }
 

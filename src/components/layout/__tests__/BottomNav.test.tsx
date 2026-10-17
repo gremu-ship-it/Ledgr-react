@@ -175,4 +175,53 @@ describe('mobile bottom navigation', () => {
     renderNav();
     expect(tabPaths()).toEqual(['/dashboard', '/income', '/products', '/reports']);
   });
+
+  // The bar keeps its own item lists instead of reading NAV_SECTIONS, so it
+  // resolves the construction vocabulary through the shared table. `t` is
+  // mocked to return the key, which is what makes the swap observable here.
+  it('reads Site Stores and Material Transfers in the More menu for a construction business', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'owner';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+    };
+    renderNav();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
+
+    expect(screen.getByText('navigation.items.siteStores')).toBeTruthy();
+    expect(screen.getByText('navigation.items.materialTransfers')).toBeTruthy();
+    expect(screen.queryByText('navigation.items.warehouse')).toBeNull();
+    expect(screen.queryByText('navigation.items.transfers')).toBeNull();
+  });
+
+  it('keeps Warehouse and Transfers for a retail business, and keeps its till', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'owner';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+    };
+    renderNav();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
+
+    expect(screen.getByText('navigation.items.warehouse')).toBeTruthy();
+    expect(screen.getByText('navigation.items.transfers')).toBeTruthy();
+    expect(screen.queryByText('navigation.items.siteStores')).toBeNull();
+    expect(screen.queryByText('navigation.items.materialTransfers')).toBeNull();
+  });
+
+  it('drops the POS tab for a construction till role, whose profile has no pos capability', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'cashier';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+    };
+    renderNav();
+
+    expect(tabPaths()).not.toContain('/pos');
+  });
 });
