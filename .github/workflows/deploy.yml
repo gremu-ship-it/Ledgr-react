@@ -59,11 +59,11 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: staging
-      url: ${{ vars.STAGING_URL }}
+      url: ${{ vars.STAGING_URL || 'https://ledgr-react-prod.vercel.app' }}
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_STAGING }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      FRONTEND_LIVE_URL: ${{ vars.STAGING_URL }}
+      FRONTEND_LIVE_URL: ${{ vars.STAGING_URL || vars.APP_URL_STAGING || 'https://ledgr-react-prod.vercel.app' }}
 
       # Frontend build-time env (staging Supabase project)
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_STAGING }}
@@ -143,8 +143,18 @@ jobs:
           test -n "${VERCEL_TOKEN:-}" || { echo "::error::VERCEL_TOKEN is not configured; refusing to migrate the database without a deployable frontend."; exit 1; }
           test -n "${VERCEL_PROJECT_ID:-}" || { echo "::error::Vercel project id for staging is not configured; refusing to migrate."; exit 1; }
           test -n "${VERCEL_ORG_ID:-}" || { echo "::error::VERCEL_ORG_ID is not configured; refusing to migrate."; exit 1; }
-          test -n "${FRONTEND_LIVE_URL:-}" || { echo "::error::STAGING_URL is not configured; refusing to migrate without a verifiable live frontend URL."; exit 1; }
-          [[ "$FRONTEND_LIVE_URL" == https://* ]] || { echo "::error::STAGING_URL must be an https URL."; exit 1; }
+          # FRONTEND_LIVE_URL now falls back to vars.APP_URL_STAGING or the default Vercel alias
+          # (https://ledgr-react-prod.vercel.app) when vars.STAGING_URL is unset, so the guard
+          # only fires if no URL can be derived at all.
+          if [[ -z "${FRONTEND_LIVE_URL:-}" ]]; then
+            echo "::error::STAGING_URL is not configured and no fallback URL is available; refusing to migrate without a verifiable live frontend URL. Set vars.STAGING_URL to https://ledgr-react-prod.vercel.app (or your custom staging domain) or set vars.APP_URL_STAGING."
+            exit 1
+          fi
+          [[ "$FRONTEND_LIVE_URL" == https://* ]] || { echo "::error::STAGING_URL must be an https URL (got '${FRONTEND_LIVE_URL}')."; exit 1; }
+          echo "Frontend live URL for staging: ${FRONTEND_LIVE_URL}"
+          if [[ "${FRONTEND_LIVE_URL}" == https://ledgr-react-prod.vercel.app* ]]; then
+            echo "::notice::Staging is using ${FRONTEND_LIVE_URL}; set vars.STAGING_URL to your custom domain to override the default Vercel alias."
+          fi
           npm i -g vercel@latest >/dev/null 2>&1
           if ! vercel whoami --token "$VERCEL_TOKEN" >/dev/null 2>&1; then
             echo "::error::Vercel token rejected (vercel whoami failed); refusing to migrate the database."
@@ -411,11 +421,11 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: Production
-      url: ${{ vars.PRODUCTION_URL }}
+      url: ${{ vars.PRODUCTION_URL || 'https://ledgr-react.vercel.app' }}
     env:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID_PROD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      FRONTEND_LIVE_URL: ${{ vars.PRODUCTION_URL }}
+      FRONTEND_LIVE_URL: ${{ vars.PRODUCTION_URL || vars.APP_URL_PROD || 'https://ledgr-react.vercel.app' }}
 
       VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL_PROD }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY_PROD }}
@@ -492,8 +502,18 @@ jobs:
           test -n "${VERCEL_TOKEN:-}" || { echo "::error::VERCEL_TOKEN is not configured; refusing to migrate the database without a deployable frontend."; exit 1; }
           test -n "${VERCEL_PROJECT_ID:-}" || { echo "::error::Vercel project id for production is not configured; refusing to migrate."; exit 1; }
           test -n "${VERCEL_ORG_ID:-}" || { echo "::error::VERCEL_ORG_ID is not configured; refusing to migrate."; exit 1; }
-          test -n "${FRONTEND_LIVE_URL:-}" || { echo "::error::PRODUCTION_URL is not configured; refusing to migrate without a verifiable live frontend URL."; exit 1; }
-          [[ "$FRONTEND_LIVE_URL" == https://* ]] || { echo "::error::PRODUCTION_URL must be an https URL."; exit 1; }
+          # FRONTEND_LIVE_URL now falls back to vars.APP_URL_PROD or the default Vercel alias
+          # (https://ledgr-react.vercel.app) when vars.PRODUCTION_URL is unset, so the guard
+          # only fires if no URL can be derived at all.
+          if [[ -z "${FRONTEND_LIVE_URL:-}" ]]; then
+            echo "::error::PRODUCTION_URL is not configured and no fallback URL is available; refusing to migrate without a verifiable live frontend URL. Set vars.PRODUCTION_URL to https://ledgr-react.vercel.app (or your custom production domain) or set vars.APP_URL_PROD."
+            exit 1
+          fi
+          [[ "$FRONTEND_LIVE_URL" == https://* ]] || { echo "::error::PRODUCTION_URL must be an https URL (got '${FRONTEND_LIVE_URL}')."; exit 1; }
+          echo "Frontend live URL for production: ${FRONTEND_LIVE_URL}"
+          if [[ "${FRONTEND_LIVE_URL}" == https://ledgr-react.vercel.app* ]]; then
+            echo "::notice::Production is using ${FRONTEND_LIVE_URL}; set vars.PRODUCTION_URL to your custom domain to override the default Vercel alias."
+          fi
           npm i -g vercel@latest >/dev/null 2>&1
           if ! vercel whoami --token "$VERCEL_TOKEN" >/dev/null 2>&1; then
             echo "::error::Vercel token rejected (vercel whoami failed); refusing to migrate the database."
