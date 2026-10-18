@@ -92,9 +92,13 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
     })).toBe(false);
   });
 
-  it('O — a missing POS decision fails open, while an explicit false still narrows', () => {
+  it('O — a missing POS decision fails closed now POS is profile-gated, while an explicit false still narrows', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
-    expect(resolveBusinessCapability('pos', undefined, fullAccess)).toBe(true);
+    // POS is in ALWAYS_PROFILE_GATED alongside Construction, so it resolves
+    // from the profile every time: no decision means no retail profile, and
+    // no till. Existing businesses are protected by the legacy pin instead,
+    // which resolves to an explicit `pos: true` decision (see A/B/H).
+    expect(resolveBusinessCapability('pos', undefined, fullAccess)).toBe(false);
     expect(resolveBusinessCapability('pos', {
       organisation_type: 'FOR_PROFIT',
       operating_models: ['SERVICE_SALES'],
@@ -234,17 +238,44 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
     expect(cashierPaths).not.toContain('/construction');
   });
 
-  it('retains the pre-architecture navigation when the build-time rollback switch is off', () => {
+  it('retains the pre-architecture navigation when the build-time rollback switch is off, except profile-gated POS', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
-    // The switch is off, so the four Phase-1 capabilities are all reachable;
-    // Construction stays profile-gated (a service profile does not select it).
-    const paths = visibleSectionsFor(() => true, 'owner', (capability) => capability !== 'construction')
-      .flatMap((section) => section.items.map((item) => item.path));
-    expect(resolveBusinessCapability('pos', {
+    const serviceProfile: BusinessOrganisationProfile = {
       organisation_type: 'FOR_PROFIT',
       operating_models: ['SERVICE_SALES'],
-    }, fullAccess)).toBe(true);
-    expect(paths).toContain('/pos');
+    };
+    // The switch is off, so the non-gated Phase-1 capabilities keep their
+    // legacy result; POS and Construction stay profile-gated (a service
+    // profile selects neither).
+    const paths = visibleSectionsFor(() => true, 'owner', (capability) => resolveBusinessCapability(capability, serviceProfile, fullAccess))
+      .flatMap((section) => section.items.map((item) => item.path));
+    expect(resolveBusinessCapability('pos', serviceProfile, fullAccess)).toBe(false);
+    expect(resolveBusinessCapability('inventory', serviceProfile, fullAccess)).toBe(true);
+    expect(paths).not.toContain('/pos');
     expect(paths).toContain('/products');
+  });
+
+  it('gates POS to RETAIL businesses regardless of the kill-switch state', () => {
+    // POS carries no plan requirement, so the subscription layer the hook
+    // composes for it is `true` on every tier — a RETAIL business sees POS
+    // on any plan, and no plan can grant it to a non-RETAIL business.
+    const retail: BusinessOrganisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+    };
+    const nonRetail: BusinessOrganisationProfile[] = [
+      { organisation_type: 'FOR_PROFIT', operating_models: ['CONSTRUCTION'] },
+      { organisation_type: 'FOR_PROFIT', operating_models: ['SERVICE_SALES'] },
+      { organisation_type: 'FOR_PROFIT', operating_models: [] },
+    ];
+    for (const organisationLayerEnabled of [true, false]) {
+      const options = { organisationLayerEnabled };
+      expect(resolveBusinessCapability('pos', retail, fullAccess, options)).toBe(true);
+      for (const profile of nonRetail) {
+        expect(resolveBusinessCapability('pos', profile, fullAccess, options)).toBe(false);
+      }
+      // The legacy pin is a profile decision, so it survives on both states.
+      expect(resolveBusinessCapability('pos', pinnedExisting, fullAccess, options)).toBe(true);
+    }
   });
 });

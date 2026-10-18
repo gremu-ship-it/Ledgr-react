@@ -30,11 +30,29 @@ describe('resolveCapability rollback and capability-layer semantics', () => {
     expect(resolveCapability('inventory', { ...allowed, role: false }, disabled)).toBe(false);
   });
 
-  it('allows an absent POS organisation key as the frozen rollback-compatibility rule', () => {
-    const enabled = { organisationLayerEnabled: true };
-    expect(resolveCapability('pos', { ...allowed, organisation: undefined }, enabled)).toBe(true);
-    expect(resolveCapability('pos', { ...allowed, organisation: null }, enabled)).toBe(true);
-    expect(resolveCapability('pos', { ...allowed, organisation: false }, enabled)).toBe(false);
+  it('fails POS closed on an absent organisation key, like the other profile-gated capabilities', () => {
+    // POS joined ALWAYS_PROFILE_GATED, so the frozen absent-POS fail-open no
+    // longer applies to it. Existing businesses are protected by the legacy
+    // pin, which resolves to an explicit decision rather than an absent one.
+    for (const options of [{ organisationLayerEnabled: true }, { organisationLayerEnabled: false }]) {
+      expect(resolveCapability('pos', { ...allowed, organisation: undefined }, options)).toBe(false);
+      expect(resolveCapability('pos', { ...allowed, organisation: null }, options)).toBe(false);
+      expect(resolveCapability('pos', { ...allowed, organisation: false }, options)).toBe(false);
+    }
+  });
+
+  it('profile-gates POS regardless of the kill switch, without touching other capabilities', () => {
+    const disabled = { organisationLayerEnabled: false };
+    // An explicit POS decision is honoured on rollback…
+    expect(resolveCapability('pos', { ...allowed, organisation: false }, disabled)).toBe(false);
+    expect(resolveCapability('pos', allowed, disabled)).toBe(true);
+    // …while non-gated capabilities keep their legacy rollback behaviour.
+    expect(resolveCapability('inventory', { ...allowed, organisation: false }, disabled)).toBe(true);
+    // …and the frozen absent-value fail-open no longer rescues POS.
+    expect(resolveCapability('pos', { ...allowed, organisation: undefined }, disabled)).toBe(false);
+    // The other layers still compose for a profile-gated capability.
+    expect(resolveCapability('pos', { ...allowed, subscription: false }, disabled)).toBe(false);
+    expect(resolveCapability('pos', { ...allowed, role: false }, disabled)).toBe(false);
   });
 
   it('does not fail-open a missing non-POS organisation decision', () => {
