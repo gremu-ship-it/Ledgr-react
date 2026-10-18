@@ -12,6 +12,8 @@ const paths = [
 const migrations = paths.map((path) => readFileSync(path, 'utf8'));
 const diagnostics = readFileSync('scripts/database/diagnose-project-status-log.sql', 'utf8');
 const sections = diagnostics.split(/^-- @query (\w+)\s*$/m);
+const dependencyDiagnosticPath = 'scripts/database/diagnose-project-status-log-dependencies.sql';
+const dependencyDiagnostic = readFileSync(dependencyDiagnosticPath, 'utf8');
 let db: Awaited<ReturnType<typeof createDatabaseFixture>>;
 
 const meta = (id: string, expected: string) => ({
@@ -86,6 +88,48 @@ test(meta('EVOLVED', 'Renamed constraints and an extra nullable column do not re
     expect((await db.client.query('select reason from public.project_status_log')).rows).toEqual([
       { reason: 'Synthetic audit row: preserve unchanged' },
     ]);
+  });
+});
+
+// Owner-supplied catalog evidence: a populated construction-shaped projects
+// table exists with lifecycle_state (not status), and its audit FK still targets
+// that table. This is NOT yet an approved rename/convergence plan. Until the
+// RPC/dependency evidence is reviewed, both complete files must fail closed.
+test(meta('LIFECYCLE-STATE', 'The observed lifecycle_state variant is refused without splitting project/audit data or changing existing dependencies'), async () => {
+  await inTransaction(async () => {
+    await db.client.query(`
+      DROP VIEW public.projects;
+      ALTER TABLE public.construction_projects RENAME TO projects;
+      ALTER TABLE public.projects RENAME COLUMN status TO lifecycle_state;
+    `);
+    const before = await snapshot();
+    const projectRows = (await db.client.query('select * from public.projects order by id')).rows;
+    expect(projectRows).toHaveLength(1);
+    expect(projectRows[0].lifecycle_state).toBe('tender');
+    const projectOid = (await db.client.query("select 'public.projects'::regclass::oid as oid")).rows[0].oid;
+    const dependencyReport = (await db.client.query(dependencyDiagnostic)).rows[0].evidence;
+    expect(dependencyReport.functions).toContainEqual(expect.objectContaining({
+      proname: 'create_project', returns: 'projects',
+    }));
+    expect(dependencyReport.incoming_foreign_keys).toContainEqual(expect.objectContaining({
+      table: 'public.project_status_log', definition: expect.stringContaining('REFERENCES projects(id)'),
+    }));
+    for (const sql of migrations) {
+      await db.client.query('savepoint lifecycle_probe');
+      let observed: { code?: string; message?: string } | undefined;
+      try { await db.client.query(sql); } catch (error) { observed = error as typeof observed; }
+      await db.client.query('rollback to savepoint lifecycle_probe');
+      expect(observed?.code).toBe('55000');
+      expect(observed?.message).toContain('Construction audit schema mismatch');
+      expect(await snapshot()).toEqual(before);
+      expect((await db.client.query('select * from public.projects order by id')).rows).toEqual(projectRows);
+      expect((await db.client.query("select to_regclass('public.construction_projects') as relation")).rows[0].relation).toBeNull();
+      expect((await db.client.query(`
+        select confrelid::oid as oid from pg_constraint
+        where conrelid = 'public.project_status_log'::regclass
+          and contype = 'f' and conname = 'project_status_log_project_id_fkey'
+      `)).rows[0].oid).toBe(projectOid);
+    }
   });
 });
 
@@ -172,5 +216,40 @@ test(meta('CATALOG-READONLY', 'The shared inspection SELECTs execute inside a re
     expect(audit.dependents).toEqual(expect.any(Array));
     expect(results.get('functions')!.rows).toContainEqual(expect.objectContaining({ owner: 'postgres', security_definer: true }));
     expect(results.get('history')!.rows).toEqual([{ version: '20261028000000', name: 'synthetic_phase_a' }]);
+  } finally { await db.client.query('rollback'); }
+});
+
+
+test({
+  ...meta('DEPENDENCIES-READONLY', 'The SQL-editor dependency report returns one read-only result with RPC definitions/return types, row-type dependents, policies, triggers and incoming FKs'),
+  source: dependencyDiagnosticPath,
+}, async () => {
+  await db.client.query('begin read only');
+  try {
+    const result = await db.client.query(dependencyDiagnostic);
+    expect(Array.isArray(result)).toBe(false); // pg returns an array for multiple statements
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].diagnostic).toBe('LEDGR_DEPENDENCY_CHECK_V1');
+    expect(result.rows[0]).not.toHaveProperty('remote_head');
+    expect((await db.client.query('show transaction_read_only')).rows[0].transaction_read_only).toBe('on');
+    const report = result.rows[0].evidence;
+    expect(report.objects).toContainEqual(expect.objectContaining({
+      qualified_name: 'public.construction_projects', owner: 'postgres', relpersistence: 'p',
+      column_acls: expect.any(Array),
+    }));
+    expect(report.functions).toContainEqual(expect.objectContaining({
+      proname: 'create_project', owner: 'postgres', returns: 'construction_projects',
+      definition: expect.stringContaining('RETURNS construction_projects'),
+    }));
+    expect(report.dependencies).toContainEqual(expect.objectContaining({
+      target: 'type construction_projects', object: expect.stringContaining('function create_project('),
+    }));
+    expect(report.policies).toContainEqual(expect.objectContaining({
+      name: 'project_log_member_grants', roles: ['authenticated'], table: 'public.project_status_log',
+    }));
+    expect(Array.isArray(report.triggers)).toBe(true);
+    expect(report.incoming_foreign_keys).toContainEqual(expect.objectContaining({
+      table: 'public.project_status_log', definition: expect.stringContaining('REFERENCES construction_projects(id)'),
+    }));
   } finally { await db.client.query('rollback'); }
 });

@@ -16,6 +16,11 @@
 --
 -- The @query markers and /* relations */ / /* versions */ arrays are consumed
 -- by the CI runner. Defaults below are runnable unchanged in the SQL editor.
+-- Some SQL editors display only the last result: run each @query section
+-- separately. If you only see remote_head/recorded_versions, that is the final
+-- summary, NOT the relation evidence. The standalone follow-up file
+-- diagnose-project-status-log-dependencies.sql produces one result with full
+-- coupled RPC definitions, dependencies, policies, triggers and incoming FKs.
 
 -- @query relations
 WITH requested(name) AS (

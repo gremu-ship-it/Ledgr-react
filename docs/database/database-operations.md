@@ -538,21 +538,22 @@ inventory) is the substitute.
 13. **`project_status_log` collision annotation: preserve evidence before repair.**
     Production runs `39128722410` and `39131240114` reported a wrapper annotation
     claiming SQLSTATE `42P07` while applying `20261028000000`. The raw job logs
-    were not accessible from this workspace; **the actual server error and the
-    live object's ownership/schema have not been confirmed**. Do not infer an
-    out-of-band application, an unrelated legacy table, or an applied migration
-    from that annotation alone.
+    were not accessible from this workspace; **the actual server error remains
+    unconfirmed**. Do not infer an out-of-band application, an unrelated legacy
+    table, or an applied migration from that annotation alone.
 
-    There is a reproducible reporting bug: the wrapper previously matched
-    `relation "…" already exists` anywhere in push output. Both construction
-    migrations already use `CREATE TABLE IF NOT EXISTS public.project_status_log`,
-    which emits the benign `NOTICE: relation "project_status_log" already exists,
-    skipping` when the name is occupied. If a later statement or the connection
-    failed, that notice caused a **hardcoded 42P07 annotation**, suppressing the
-    real error. The notice proves neither equivalence nor the cause of failure.
-    The corrected wrapper classifies actual `ERROR:` severity lines, preserves
-    their SQLSTATE/message/statement context, and keeps retries for transport and
-    explicitly transient PostgreSQL conditions (including serialization failures
+    Subsequent **owner-supplied catalog output** (not an independent live query
+    from this workspace) establishes a more specific shape:
+
+    - Remote head `20261027000000`, 133 recorded versions: Phase A and later
+      construction versions are not recorded on that database.
+    - `public.construction_projects` is absent. `public.projects` is a
+      postgres-owned, RLS-enabled ordinary table with the construction core,
+      `boq_locked_at`, and **`lifecycle_state` instead of `status`**, including
+      the five-state lifecycle check. That is not identical to the expected core.
+    - `project_status_log` is postgres-owned and RLS-enabled; its seven core
+      columns/defaults, validated non-deferrable FKs and valid indexes match
+      the construction audit design. Its projecPostgreSQL conditions (including serialization failures
     and deadlocks). Schema failures still stop after one attempt; neither those
     failures nor notices authorize history repair.
 
@@ -563,12 +564,21 @@ inventory) is the substitute.
       explicitly selected project's ref, sends catalog SELECTs with
       `read_only=true`, and requires no database password. A failed/incomplete
       inspection is **UNKNOWN**, not evidence that an object/version is absent.
-    - Alternatively, run all sections of
-      `scripts/database/diagnose-project-status-log.sql` in the affected project's
-      SQL editor, or run `bash scripts/ci/remote-schema-forensics.sh --label
-      production` with credentials supplied through your existing secure
-      environment. Do not put credentials into SQL, a command saved in the repo,
-      an issue, or chat.
+    - Alternatively, run each `@query` section of
+      `scripts/database/diagnose-project-status-log.sql` **separately** in the
+      affected project's SQL editor. Some editors show only the last statement's
+      result; `remote_head`/`recorded_versions` is only the history summary, not
+      the relation inspection. For the remaining RPC/dependency review, open a
+      **new empty query tab** and run only
+      `scripts/database/diagnose-project-status-log-dependencies.sql`: its single
+      statement returns one row labelled `LEDGR_DEPENDENCY_CHECK_V1`, containing
+      full coupled function definitions/return types, direct table and row-type
+      dependents, policies, triggers and incoming FKs. It changes no schema or
+      history and fetches no application rows. Review definitions for embedded
+      credentials before sharing externally.
+    - Or run `bash scripts/ci/remote-schema-forensics.sh --label production` with
+      credentials supplied through your existing secure environment. Do not put
+      credentials into SQL, a command saved in the repo, an issue, or chat.
     - The report includes relation **owner/OID/kind**, standalone type collisions,
       column defaults/nullability/identity/generated attributes, PK/FK target
       columns and delete/update actions, validation/deferral, full index
@@ -595,6 +605,23 @@ inventory) is the substitute.
     kind, core column types/nullability/defaults, PK and both validated,
     non-deferrable FKs (including referenced columns and actions) must match.
     Unknown shapes raise `55000` with the live owner/columns and inspection path;
+    missing FKs/defaults are **not silently added**. The guard does not constitute
+    an ownership approval or a full-feature equivalence verdict. No audit table
+    is dropped, renamed, re-pointed or rewritten, and no migration is marked
+    applied. Full-file transactional replays verify refusal preserves rows,
+    grants, policies, indexes and function definitions.
+
+    Source-edit exception: production's reported attempt is still failing in
+    `20261028000000`, so a later migration cannot protect that pending replay.
+    Both original and namespace sources carry the same guard for pending
+    installs/upgrades. Environments that already recorded either version **skip
+    its edited source**; this is not a claim that their live schemas changed.
+    Confirm remote versions first. Do not `migration repair --status applied`
+    merely to bypass this guard: that skips the remainder of the file. If any
+    object is unrelated or ownership is uncertain, stop for an owner-approved,
+    data-preserving reconciliation plan rather than automatically moving it
+    aside and retrying the deploy.
+nd inspection path;
     missing FKs/defaults are **not silently added**. The guard does not constitute
     an ownership approval or a full-feature equivalence verdict. No audit table
     is dropped, renamed, re-pointed or rewritten, and no migration is marked
