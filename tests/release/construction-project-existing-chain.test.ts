@@ -208,6 +208,7 @@ const aliasRefusals = [
   ['AMBIGUOUS', "alter table public.projects add column status text not null default 'tender'", 'lifecycle schema mismatch'],
   ['DEFAULT', "alter table public.projects alter column lifecycle_state set default 'active'", 'lifecycle schema mismatch'],
   ['VOCABULARY', "alter table public.projects drop constraint construction_projects_status_check", 'lifecycle schema mismatch'],
+  ['EXCLUSION', "alter table public.projects add constraint synthetic_exclusion exclude using gist (numrange(contract_sum,contract_sum,'[]') with &&)", 'lifecycle schema mismatch'],
   ['EXTRA-STATE-CHECK', "alter table public.projects add constraint synthetic_extra_state check(lifecycle_state <> 'closed')", 'lifecycle schema mismatch'],
   ['OPTIONAL-LOCK-TYPE', 'alter table public.projects alter column boq_locked_at type text', 'lifecycle schema mismatch'],
   ['OWNER', 'alter table public.projects owner to service_role', 'Unverified construction lifecycle relation'],

@@ -132,7 +132,7 @@ $project_contract$::jsonb);
      FROM pg_constraint k
      LEFT JOIN pg_class c ON c.oid = k.confrelid
      LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE k.conrelid = v_table AND k.contype IN ('p','u','f','c') INTO v_actual;
+     WHERE k.conrelid = v_table INTO v_actual;
  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_spec->'constraints') e WHERE NOT v_actual @> jsonb_build_array(e))
     OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_actual) a WHERE NOT (v_spec->'constraints') @> jsonb_build_array(a))
     OR NOT (NOT EXISTS (
