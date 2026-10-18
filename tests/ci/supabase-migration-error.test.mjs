@@ -147,7 +147,7 @@ exit 0
 // ---------------------------------------------------------------------------
 
 /** Run the wrapper against a fake `supabase`/`curl`/`sleep` and return the result. */
-function runWrapper(pushOutput, { label = 'production', pushExit = 1, password = 'not-a-real-production-password', forensics = '0' } = {}) {
+function runWrapper(pushOutput, { label = 'production', pushExit = 1, password = 'not-a-real-production-password', forensics = '0', autoRepair = '1' } = {}) {
   const cwd = mkdtempSync(join(tmpdir(), 'supabase-migration-error-'));
   const bin = join(cwd, 'bin');
   mkdirSync(bin);
@@ -183,6 +183,7 @@ exit 0
         SUPABASE_DB_PASSWORD: password,
         SUPABASE_ENV_LABEL: label,
         SUPABASE_MIGRATION_FORENSICS: forensics,
+        SUPABASE_MIGRATION_AUTO_REPAIR: autoRepair,
         GITHUB_STEP_SUMMARY: summaryPath,
         CALLS: calls,
         SLEEPS: sleeps,
@@ -359,4 +360,21 @@ At statement: 1
   assert.match(result.stdout, /SQLSTATE 42P07/);
   assert.match(result.summary, /UNKNOWN: relations inspection failed/);
   assert.doesNotMatch(result.calls, /migration repair/);
+});
+
+
+test('production workflow disables history repair even for a genuine remote-only drift hint', () => {
+  const workflow = readFileSync(join(root, '.github/workflows/deploy.yml'), 'utf8');
+  const production = workflow.split('  deploy-production:\n')[1].split('    steps:')[0];
+  const flag = production.match(/^ +SUPABASE_MIGRATION_AUTO_REPAIR: ['"]?([01])['"]?$/m)?.[1];
+  assert.equal(flag, '0');
+  const result = runWrapper(`Remote migration versions not found in local migrations directory.
+supabase migration repair --status reverted 20261028000000
+`, { autoRepair: flag });
+  assert.equal(result.status, 1);
+  assert.equal(result.attempts, 1);
+  assert.equal(result.sleeps, '');
+  assert.doesNotMatch(result.calls, /^migration repair/m);
+  assert.match(result.stdout, /Auto-repair is disabled/);
+  assert.match(result.stdout, /Stop for owner review/);
 });

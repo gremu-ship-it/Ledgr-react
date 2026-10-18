@@ -10,7 +10,7 @@ const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const script = join(root, 'scripts/ci/remote-schema-forensics.sh');
 const workflow = readFileSync(join(root, '.github/workflows/migration-forensics.yml'), 'utf8');
 const workflowRun = workflow.split('        run: |\n')[1].split('\n').map((line) => line.replace(/^ {10}/, '')).join('\n');
-const names = ['projects', 'construction_projects', 'project_status_log', 'project_status_log_project'];
+const names = ['projects', 'construction_projects', 'project_status_log', 'project_status_log_project', 'project_boq_lines', 'project_valuations', 'project_valuation_lines', 'project_retention_ledger'];
 const catalog = names.map((name) => ({ name, qualified_name: null, relkind: null, owner: null, same_named_type: null }));
 catalog[2] = {
   name: 'project_status_log', qualified_name: 'public.project_status_log', relkind: 'r', owner: 'legacy_owner',

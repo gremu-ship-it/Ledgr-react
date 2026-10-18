@@ -371,7 +371,7 @@ while :; do
     drift_repaired=1
     if ((auto_repair == 0)); then
       echo "::error::Remote migration history for ${label} contains versions missing from supabase/migrations/ in this checkout: ${drift_list[*]}"
-      echo "::error::Auto-repair is disabled (SUPABASE_MIGRATION_AUTO_REPAIR=0). Repair manually, then re-run:"
+      echo "::error::Auto-repair is disabled (SUPABASE_MIGRATION_AUTO_REPAIR=0). Stop for owner review; confirm remote versions and schema equivalence before using any repair hint:"
       echo "::error::  supabase migration repair --status reverted ${drift_list[*]}"
       echo "::error::  supabase db pull   # only if the remote should become the source of truth"
       exit 1

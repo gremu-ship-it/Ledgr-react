@@ -91,16 +91,15 @@ test(meta('EVOLVED', 'Renamed constraints and an extra nullable column do not re
   });
 });
 
-// Reproduce the owner-supplied catalog shape using synthetic populated rows:
-// projects has lifecycle_state (not status), and the audit FK still targets it.
-// Production row counts are unknown. This is NOT an approved rename plan. Until the
-// RPC/dependency evidence is reviewed, both complete files must fail closed.
-test(meta('LIFECYCLE-STATE', 'The observed lifecycle_state variant is refused without splitting project/audit data or changing existing dependencies'), async () => {
+// Two competing lifecycle columns are NOT the supplied, verified alias. Never
+// choose one from its name or silently split the existing project/audit graph.
+test(meta('LIFECYCLE-AMBIGUOUS', 'Ambiguous lifecycle columns are refused without splitting project/audit data or changing existing dependencies'), async () => {
   await inTransaction(async () => {
     await db.client.query(`
       DROP VIEW public.projects;
       ALTER TABLE public.construction_projects RENAME TO projects;
       ALTER TABLE public.projects RENAME COLUMN status TO lifecycle_state;
+      ALTER TABLE public.projects ADD COLUMN status text NOT NULL DEFAULT 'tender';
     `);
     const before = await snapshot();
     const projectRows = (await db.client.query('select * from public.projects order by id')).rows;
@@ -120,7 +119,7 @@ test(meta('LIFECYCLE-STATE', 'The observed lifecycle_state variant is refused wi
       try { await db.client.query(sql); } catch (error) { observed = error as typeof observed; }
       await db.client.query('rollback to savepoint lifecycle_probe');
       expect(observed?.code).toBe('55000');
-      expect(observed?.message).toContain('Construction audit schema mismatch');
+      expect(observed?.message).toContain('Construction lifecycle schema mismatch');
       expect(await snapshot()).toEqual(before);
       expect((await db.client.query('select * from public.projects order by id')).rows).toEqual(projectRows);
       expect((await db.client.query("select to_regclass('public.construction_projects') as relation")).rows[0].relation).toBeNull();

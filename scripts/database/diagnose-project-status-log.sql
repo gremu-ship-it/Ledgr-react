@@ -24,7 +24,7 @@
 
 -- @query relations
 WITH requested(name) AS (
-  SELECT unnest(/* relations */ ARRAY['projects', 'construction_projects', 'project_status_log', 'project_status_log_project'])
+  SELECT unnest(/* relations */ ARRAY['projects', 'construction_projects', 'project_status_log', 'project_status_log_project', 'project_boq_lines', 'project_valuations', 'project_valuation_lines', 'project_retention_ledger'])
 )
 SELECT v.name,
        CASE WHEN c.oid IS NOT NULL THEN format('%I.%I', n.nspname, c.relname) END AS qualified_name,
@@ -107,7 +107,7 @@ SELECT format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_argume
   FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
  WHERE n.nspname = 'public' AND p.prokind = 'f'
    AND (p.prorettype IN (SELECT to_regtype(format('public.%I', name))
-                          FROM unnest(/* relations */ ARRAY['projects', 'construction_projects', 'project_status_log', 'project_status_log_project']) name)
+                          FROM unnest(/* relations */ ARRAY['projects', 'construction_projects', 'project_status_log', 'project_status_log_project', 'project_boq_lines', 'project_valuations', 'project_valuation_lines', 'project_retention_ledger']) name)
         OR p.proname = ANY(ARRAY[
           '_ledgr_project_next_status','create_project','update_project','transition_project_status',
           'link_site_to_project','unlink_site_from_project','get_project_cost_summary',

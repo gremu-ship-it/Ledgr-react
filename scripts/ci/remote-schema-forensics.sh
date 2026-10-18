@@ -26,7 +26,7 @@ while (($#)); do
     *) echo 'Inspection UNKNOWN: unsupported argument.'; exit 2 ;;
   esac
 done
-((${#relations[@]})) || relations=(projects construction_projects project_status_log project_status_log_project)
+((${#relations[@]})) || relations=(projects construction_projects project_status_log project_status_log_project project_boq_lines project_valuations project_valuation_lines project_retention_ledger)
 ((${#versions[@]})) || versions=(20261028000000 20261028000001 20261029000000 20261030000000 20261031000000 20261031000001 20261101000000 20261102000000 20261103000000)
 for relation in "${relations[@]}"; do
   if [[ ! "${relation}" =~ ^[A-Za-z_][A-Za-z0-9_]{0,62}$ ]]; then

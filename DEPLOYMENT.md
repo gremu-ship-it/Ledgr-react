@@ -371,6 +371,21 @@ policies/writes to an unrelated object. Missing constraints are not repaired
 automatically. Matching names or columns is not an ownership approval, and
 recorded migrations skip edited source.
 
+Owner-supplied catalogs subsequently identified the specific construction
+variant: `public.projects.lifecycle_state`, the construction audit/procurement/
+BOQ/valuation/retention FKs, and project RPCs returning the existing table's row
+type. The prepared pending-source correction checks this footprint before an
+in-place lifecycle-column/table rename and preserves the existing row/FK/type
+identities. BOQ/valuation replays also verify pre-existing schemas before reusing
+them; mismatches fail closed rather than repairing or moving unknown objects.
+A populated disposable replica passes all nine pending files after the reported
+head `20261027000000` (133 recorded versions). This is **not** a production apply
+or proof of the unavailable original PostgreSQL error. Production sets
+`SUPABASE_MIGRATION_AUTO_REPAIR=0`, so an unexpected history mismatch stops for
+owner review too. No migration is marked applied: recorded versions still skip
+edited text. Review/staging validation and
+an approved controlled production deployment remain required.
+
 See **docs/database/database-operations.md §13** for the full review checklist,
 source hashes, pending-versus-recorded behavior, and recovery boundaries. Live
 production ownership/equivalence and a successful deployment still require

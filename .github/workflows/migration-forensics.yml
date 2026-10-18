@@ -16,7 +16,7 @@ on:
       relations:
         description: Space-separated bare relation names
         required: false
-        default: projects construction_projects project_status_log project_status_log_project
+        default: projects construction_projects project_status_log project_status_log_project project_boq_lines project_valuations project_valuation_lines project_retention_ledger
         type: string
       versions:
         description: Space-separated migration versions (blank inspects the construction chain)

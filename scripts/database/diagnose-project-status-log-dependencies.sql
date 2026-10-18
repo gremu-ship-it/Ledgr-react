@@ -18,7 +18,11 @@ WITH targets AS (
   FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
   WHERE c.oid IN (to_regclass('public.projects'),
                   to_regclass('public.construction_projects'),
-                  to_regclass('public.project_status_log'))
+                  to_regclass('public.project_status_log'),
+                  to_regclass('public.project_boq_lines'),
+                  to_regclass('public.project_valuations'),
+                  to_regclass('public.project_valuation_lines'),
+                  to_regclass('public.project_retention_ledger'))
 ), functions AS MATERIALIZED (
   SELECT p.oid, p.proname,
          format('%I.%I(%s)', n.nspname, p.proname,

@@ -2,7 +2,242 @@
 -- Income/invoicing subsystem. All writes are RPC-only; browser writes remain
 -- revoked and the existing project/BOQ lifecycle stays authoritative.
 
-CREATE TABLE public.project_valuations (
+-- Pending replay safety: existing feature objects must match the migration
+-- contract before IF NOT EXISTS/OR REPLACE is allowed to reuse them. This is
+-- catalog-only validation; mismatches raise 55000 without repairing any object.
+DO $confirm_existing_construction_valuations$
+DECLARE
+ v_spec jsonb;
+ v_table oid;
+ v_actual jsonb;
+ v_index jsonb;
+ v_index_oid oid;
+ v_lifecycle boolean := false;
+BEGIN
+ FOR v_spec IN SELECT value FROM jsonb_array_elements($replay_contracts$
+[
+  {"name": "project_valuations",
+   "columns": [
+     {"name": "id", "type": "uuid", "not_null": true, "default": "gen_random_uuid()"},
+     {"name": "project_id", "type": "uuid", "not_null": true, "default": null},
+     {"name": "valuation_number", "type": "integer", "not_null": true, "default": null},
+     {"name": "valuation_date", "type": "date", "not_null": true, "default": "CURRENT_DATE"},
+     {"name": "period_start", "type": "date", "not_null": false, "default": null},
+     {"name": "period_end", "type": "date", "not_null": false, "default": null},
+     {"name": "gross_amount", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "retention_amount", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "net_amount", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "previous_cumulative", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "status", "type": "text", "not_null": true, "default": "'draft'::text"},
+     {"name": "invoice_id", "type": "uuid", "not_null": false, "default": null},
+     {"name": "notes", "type": "text", "not_null": false, "default": null},
+     {"name": "created_by", "type": "uuid", "not_null": true, "default": null},
+     {"name": "created_at", "type": "timestamp with time zone", "not_null": true, "default": "now()"},
+     {"name": "updated_at", "type": "timestamp with time zone", "not_null": true, "default": "now()"}
+   ],
+   "constraints": [
+     {"kind": "c", "columns": ["period_start", "period_end"], "expression": "((period_start IS NULL) OR (period_end IS NULL) OR (period_start <= period_end))", "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "c", "columns": ["status"], "expression": "(status = ANY (ARRAY['draft'::text, 'submitted'::text, 'invoiced'::text]))", "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "c", "columns": ["valuation_number"], "expression": "(valuation_number > 0)", "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["created_by"], "expression": null, "target": "auth.users", "target_columns": ["id"], "on_delete": "a", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["invoice_id"], "expression": null, "target": "public.invoices", "target_columns": ["id"], "on_delete": "n", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["project_id"], "expression": null, "target": "public.construction_projects", "target_columns": ["id"], "on_delete": "c", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "p", "columns": ["id"], "expression": null, "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "u", "columns": ["project_id", "valuation_number"], "expression": null, "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false}
+   ],
+   "indexes": [
+     {"name": "project_valuations_pkey", "unique": true, "method": "btree", "columns": ["id"], "predicate": null, "options": [0], "key_count": 1, "column_count": 1},
+     {"name": "project_valuations_project_id_valuation_number_key", "unique": true, "method": "btree", "columns": ["project_id", "valuation_number"], "predicate": null, "options": [0, 0], "key_count": 2, "column_count": 2},
+     {"name": "project_valuations_project_status_idx", "unique": false, "method": "btree", "columns": ["project_id", "status"], "predicate": null, "options": [0, 0], "key_count": 2, "column_count": 2}
+   ],
+   "policies": [
+     {"command": "*", "permissive": true, "roles": ["authenticated"], "using": "(EXISTS ( SELECT 1\n   FROM construction_projects p\n  WHERE ((p.id = project_valuations.project_id) AND is_business_member(p.business_id) AND (cardinality(construction_procurement_capabilities_for(p.business_id)) > 0))))", "with_check": "(EXISTS ( SELECT 1\n   FROM construction_projects p\n  WHERE ((p.id = project_valuations.project_id) AND is_business_member(p.business_id) AND (cardinality(construction_procurement_capabilities_for(p.business_id)) > 0))))"}
+   ]},
+  {"name": "project_valuation_lines",
+   "columns": [
+     {"name": "id", "type": "uuid", "not_null": true, "default": "gen_random_uuid()"},
+     {"name": "valuation_id", "type": "uuid", "not_null": true, "default": null},
+     {"name": "boq_line_id", "type": "uuid", "not_null": true, "default": null},
+     {"name": "cumulative_pct", "type": "numeric(5,2)", "not_null": true, "default": null},
+     {"name": "cumulative_value", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "previous_cumulative_value", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "period_value", "type": "numeric(18,2)", "not_null": true, "default": "0"},
+     {"name": "notes", "type": "text", "not_null": false, "default": null}
+   ],
+   "constraints": [
+     {"kind": "c", "columns": ["cumulative_pct"], "expression": "((cumulative_pct >= (0)::numeric) AND (cumulative_pct <= (100)::numeric))", "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["boq_line_id"], "expression": null, "target": "public.project_boq_lines", "target_columns": ["id"], "on_delete": "c", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["valuation_id"], "expression": null, "target": "public.project_valuations", "target_columns": ["id"], "on_delete": "c", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "p", "columns": ["id"], "expression": null, "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "u", "columns": ["valuation_id", "boq_line_id"], "expression": null, "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false}
+   ],
+   "indexes": [
+     {"name": "project_valuation_lines_boq_line_idx", "unique": false, "method": "btree", "columns": ["boq_line_id"], "predicate": null, "options": [0], "key_count": 1, "column_count": 1},
+     {"name": "project_valuation_lines_pkey", "unique": true, "method": "btree", "columns": ["id"], "predicate": null, "options": [0], "key_count": 1, "column_count": 1},
+     {"name": "project_valuation_lines_valuation_id_boq_line_id_key", "unique": true, "method": "btree", "columns": ["valuation_id", "boq_line_id"], "predicate": null, "options": [0, 0], "key_count": 2, "column_count": 2},
+     {"name": "project_valuation_lines_valuation_idx", "unique": false, "method": "btree", "columns": ["valuation_id"], "predicate": null, "options": [0], "key_count": 1, "column_count": 1}
+   ],
+   "policies": [
+     {"command": "*", "permissive": true, "roles": ["authenticated"], "using": "(EXISTS ( SELECT 1\n   FROM (project_valuations v\n     JOIN construction_projects p ON ((p.id = v.project_id)))\n  WHERE ((v.id = project_valuation_lines.valuation_id) AND is_business_member(p.business_id) AND (cardinality(construction_procurement_capabilities_for(p.business_id)) > 0))))", "with_check": "(EXISTS ( SELECT 1\n   FROM (project_valuations v\n     JOIN construction_projects p ON ((p.id = v.project_id)))\n  WHERE ((v.id = project_valuation_lines.valuation_id) AND is_business_member(p.business_id) AND (cardinality(construction_procurement_capabilities_for(p.business_id)) > 0))))"}
+   ]},
+  {"name": "project_retention_ledger",
+   "columns": [
+     {"name": "id", "type": "uuid", "not_null": true, "default": "gen_random_uuid()"},
+     {"name": "project_id", "type": "uuid", "not_null": true, "default": null},
+     {"name": "valuation_id", "type": "uuid", "not_null": false, "default": null},
+     {"name": "type", "type": "text", "not_null": true, "default": null},
+     {"name": "amount", "type": "numeric(18,2)", "not_null": true, "default": null},
+     {"name": "description", "type": "text", "not_null": false, "default": null},
+     {"name": "invoice_id", "type": "uuid", "not_null": false, "default": null},
+     {"name": "created_by", "type": "uuid", "not_null": true, "default": null},
+     {"name": "created_at", "type": "timestamp with time zone", "not_null": true, "default": "now()"}
+   ],
+   "constraints": [
+     {"kind": "c", "columns": ["amount"], "expression": "((amount > (0)::numeric) AND (amount < 'Infinity'::numeric) AND (amount <> 'NaN'::numeric))", "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "c", "columns": ["type"], "expression": "(type = ANY (ARRAY['withheld'::text, 'released'::text]))", "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["created_by"], "expression": null, "target": "auth.users", "target_columns": ["id"], "on_delete": "a", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["invoice_id"], "expression": null, "target": "public.invoices", "target_columns": ["id"], "on_delete": "n", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["project_id"], "expression": null, "target": "public.construction_projects", "target_columns": ["id"], "on_delete": "c", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "f", "columns": ["valuation_id"], "expression": null, "target": "public.project_valuations", "target_columns": ["id"], "on_delete": "n", "on_update": "a", "match": "s", "validated": true, "deferrable": false, "initially_deferred": false},
+     {"kind": "p", "columns": ["id"], "expression": null, "target": null, "target_columns": null, "on_delete": null, "on_update": null, "match": null, "validated": true, "deferrable": false, "initially_deferred": false}
+   ],
+   "indexes": [
+     {"name": "project_retention_ledger_one_valuation_entry_idx", "unique": true, "method": "btree", "columns": ["valuation_id"], "predicate": "(valuation_id IS NOT NULL)", "options": [0], "key_count": 1, "column_count": 1},
+     {"name": "project_retention_ledger_pkey", "unique": true, "method": "btree", "columns": ["id"], "predicate": null, "options": [0], "key_count": 1, "column_count": 1},
+     {"name": "project_retention_ledger_project_idx", "unique": false, "method": "btree", "columns": ["project_id"], "predicate": null, "options": [0], "key_count": 1, "column_count": 1},
+     {"name": "project_retention_ledger_valuation_idx", "unique": false, "method": "btree", "columns": ["valuation_id"], "predicate": "(valuation_id IS NOT NULL)", "options": [0], "key_count": 1, "column_count": 1}
+   ],
+   "policies": [
+     {"command": "*", "permissive": true, "roles": ["authenticated"], "using": "(EXISTS ( SELECT 1\n   FROM construction_projects p\n  WHERE ((p.id = project_retention_ledger.project_id) AND is_business_member(p.business_id) AND (cardinality(construction_procurement_capabilities_for(p.business_id)) > 0))))", "with_check": "(EXISTS ( SELECT 1\n   FROM construction_projects p\n  WHERE ((p.id = project_retention_ledger.project_id) AND is_business_member(p.business_id) AND (cardinality(construction_procurement_capabilities_for(p.business_id)) > 0))))"}
+   ]}
+]
+$replay_contracts$::jsonb) LOOP
+  v_table := to_regclass(format('public.%I',v_spec->>'name'));
+  IF v_table IS NULL THEN
+   IF to_regtype(format('public.%I',v_spec->>'name')) IS NOT NULL THEN
+    RAISE EXCEPTION 'Construction replay type collision: %',v_spec->>'name' USING ERRCODE = '55000';
+   END IF;
+   IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_spec->'indexes') e
+              WHERE to_regclass(format('public.%I',e->>'name')) IS NOT NULL) THEN
+    RAISE EXCEPTION 'Construction replay reserved index name is occupied for missing table %',v_spec->>'name'
+     USING ERRCODE = '55000', HINT = 'Inspect the owning relation; do not drop or rename an unverified index.';
+   END IF;
+   CONTINUE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_class c WHERE c.oid = v_table AND c.relkind IN ('r','p')
+       AND c.relowner = (SELECT relowner FROM pg_class WHERE oid = 'public.construction_projects'::regclass)) THEN
+   EXECUTE format('LOCK TABLE public.%I IN ACCESS EXCLUSIVE MODE',v_spec->>'name');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.oid = v_table
+       AND c.relkind IN ('r','p') AND c.relpersistence = 'p' AND c.relrowsecurity AND NOT c.relforcerowsecurity
+       AND c.relowner = (SELECT relowner FROM pg_class WHERE oid = 'public.construction_projects'::regclass))
+     OR NOT (NOT EXISTS (
+     SELECT 1 FROM jsonb_to_recordset(v_spec->'columns')
+       AS e(name text, type text, not_null boolean, "default" text)
+     LEFT JOIN pg_attribute a ON a.attrelid = v_table
+       AND a.attname = CASE WHEN v_lifecycle AND e.name = 'status' THEN 'lifecycle_state' ELSE e.name END
+       AND a.attnum > 0 AND NOT a.attisdropped
+     LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE a.attname IS NULL OR format_type(a.atttypid,a.atttypmod) <> e.type
+       OR a.attnotnull IS DISTINCT FROM e.not_null OR a.attidentity <> '' OR a.attgenerated <> ''
+       OR a.attcollation <> (SELECT typcollation FROM pg_type WHERE oid = a.atttypid)
+       OR (CASE WHEN e."default" IN ('gen_random_uuid()', 'now()')
+            THEN regexp_replace(pg_get_expr(d.adbin,d.adrelid), '^(pg_catalog|public|extensions)\.', '')
+            ELSE pg_get_expr(d.adbin,d.adrelid) END) IS DISTINCT FROM e."default"
+   ) AND NOT EXISTS (
+     SELECT 1 FROM pg_attribute a WHERE a.attrelid = v_table AND a.attnum > 0 AND NOT a.attisdropped
+       AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_spec->'columns') e
+          WHERE a.attname = CASE WHEN v_lifecycle AND e->>'name' = 'status' THEN 'lifecycle_state' ELSE e->>'name' END)
+       AND a.attnotnull AND NOT a.atthasdef AND a.attidentity = '' AND a.attgenerated = ''
+   )) THEN
+   RAISE EXCEPTION 'Construction replay schema mismatch: % owner/kind/columns/defaults.',v_spec->>'name'
+    USING ERRCODE = '55000', HINT = 'Existing object left unchanged. Inspect the full schema; do not drop, re-point or mark the migration applied.';
+  END IF;
+  SELECT coalesce(jsonb_agg(jsonb_build_object(
+       'kind', k.contype,
+       'columns', ARRAY(SELECT CASE WHEN v_lifecycle AND a.attname = 'lifecycle_state' THEN 'status' ELSE a.attname::text END
+          FROM unnest(k.conkey) WITH ORDINALITY x(n,pos)
+          JOIN pg_attribute a ON a.attrelid = k.conrelid AND a.attnum = x.n ORDER BY x.pos),
+       'expression', CASE WHEN k.contype = 'c' THEN
+          CASE WHEN v_lifecycle THEN regexp_replace(pg_get_expr(k.conbin,k.conrelid), '\mlifecycle_state\M', 'status', 'g')
+               ELSE pg_get_expr(k.conbin,k.conrelid) END END,
+       'target', CASE WHEN k.contype = 'f' THEN format('%I.%I',n.nspname,c.relname) END,
+       'target_columns', CASE WHEN k.contype = 'f' THEN ARRAY(SELECT a.attname
+          FROM unnest(k.confkey) WITH ORDINALITY x(n,pos)
+          JOIN pg_attribute a ON a.attrelid = k.confrelid AND a.attnum = x.n ORDER BY x.pos) END,
+       'on_delete', CASE WHEN k.contype = 'f' THEN k.confdeltype END,
+       'on_update', CASE WHEN k.contype = 'f' THEN k.confupdtype END,
+       'match', CASE WHEN k.contype = 'f' THEN k.confmatchtype END,
+       'validated', k.convalidated, 'deferrable', k.condeferrable,
+       'initially_deferred', k.condeferred)), '[]'::jsonb)
+     FROM pg_constraint k
+     LEFT JOIN pg_class c ON c.oid = k.confrelid
+     LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE k.conrelid = v_table AND k.contype IN ('p','u','f','c') INTO v_actual;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(v_spec->'constraints') e WHERE NOT v_actual @> jsonb_build_array(e))
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_actual) a WHERE NOT (v_spec->'constraints') @> jsonb_build_array(a))
+     OR NOT (NOT EXISTS (
+     SELECT 1 FROM pg_policy p WHERE p.polrelid = v_table AND NOT EXISTS (
+       SELECT 1 FROM jsonb_array_elements(v_spec->'policies') e
+       WHERE p.polcmd::text = e->>'command' AND p.polpermissive = (e->>'permissive')::boolean
+         AND to_jsonb(ARRAY(SELECT CASE WHEN r = 0 THEN 'PUBLIC' ELSE pg_get_userbyid(r)::text END FROM unnest(p.polroles) r)) = e->'roles'
+         AND replace(replace(pg_get_expr(p.polqual,p.polrelid), 'public.', ''), 'FROM projects ', 'FROM construction_projects ')
+               IS NOT DISTINCT FROM replace(e->>'using', 'public.', '')
+         AND replace(replace(pg_get_expr(p.polwithcheck,p.polrelid), 'public.', ''), 'FROM projects ', 'FROM construction_projects ')
+               IS NOT DISTINCT FROM replace(e->>'with_check', 'public.', '')
+     )
+   )) OR NOT (NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = v_table
+      AND a.attnum > 0 AND NOT a.attisdropped AND a.attacl IS NOT NULL)
+   AND NOT EXISTS (
+     SELECT 1 FROM pg_class c, LATERAL aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+     WHERE c.oid = v_table AND (
+       acl.grantee NOT IN (c.relowner, to_regrole('service_role')::oid, to_regrole('authenticated')::oid)
+       OR (acl.grantee = to_regrole('authenticated')::oid AND acl.privilege_type <> 'SELECT')
+     )
+   ))
+     OR EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = v_table AND NOT tgisinternal) THEN
+   RAISE EXCEPTION 'Construction replay schema mismatch: % constraints/policies/grants/triggers.',v_spec->>'name'
+    USING ERRCODE = '55000', HINT = 'Existing object left unchanged. Confirm ownership and equivalence before replay.';
+  END IF;
+  FOR v_index IN SELECT value FROM jsonb_array_elements(v_spec->'indexes') LOOP
+   v_index_oid := to_regclass(format('public.%I',v_index->>'name'));
+   IF v_index_oid IS NULL THEN CONTINUE; END IF;
+   IF NOT EXISTS (
+    SELECT 1 FROM pg_index ix JOIN pg_class idx ON idx.oid = ix.indexrelid JOIN pg_am am ON am.oid = idx.relam
+    WHERE ix.indexrelid = v_index_oid AND ix.indrelid = v_table AND ix.indisvalid AND ix.indisready
+      AND ix.indisunique = (v_index->>'unique')::boolean AND am.amname = v_index->>'method'
+      AND ix.indexprs IS NULL AND ix.indnkeyatts = (v_index->>'key_count')::integer
+      AND ix.indnatts = (v_index->>'column_count')::integer
+      AND to_jsonb(ARRAY(SELECT a.attname FROM unnest(ix.indkey) WITH ORDINALITY x(n,pos)
+          JOIN pg_attribute a ON a.attrelid = ix.indrelid AND a.attnum = x.n ORDER BY x.pos)) = v_index->'columns'
+      AND to_jsonb(ix.indoption::smallint[]) = v_index->'options'
+      AND pg_get_expr(ix.indpred,ix.indrelid) IS NOT DISTINCT FROM v_index->>'predicate'
+   ) THEN
+    RAISE EXCEPTION 'Construction replay index collision: %',v_index->>'name'
+     USING ERRCODE = '55000', HINT = 'Do not drop or rename the existing index; inspect its owning table and definition.';
+   END IF;
+  END LOOP;
+  -- A differently named unique index can change valid write behavior too.
+  -- Accept the declared uniqueness semantics, not arbitrary extra uniqueness.
+  FOR v_index_oid IN SELECT indexrelid FROM pg_index WHERE indrelid = v_table AND indisunique LOOP
+   SELECT jsonb_build_object(
+     'unique',ix.indisunique,'method',am.amname,
+     'columns',ARRAY(SELECT a.attname FROM unnest(ix.indkey) WITH ORDINALITY x(n,pos)
+       JOIN pg_attribute a ON a.attrelid=ix.indrelid AND a.attnum=x.n ORDER BY x.pos),
+     'predicate',pg_get_expr(ix.indpred,ix.indrelid),'options',ix.indoption::smallint[],
+     'key_count',ix.indnkeyatts,'column_count',ix.indnatts)
+    INTO v_actual FROM pg_index ix JOIN pg_class idx ON idx.oid=ix.indexrelid JOIN pg_am am ON am.oid=idx.relam
+    WHERE ix.indexrelid=v_index_oid AND ix.indisvalid AND ix.indisready AND ix.indexprs IS NULL;
+   IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements(v_spec->'indexes') e WHERE e - 'name' = v_actual) THEN
+    RAISE EXCEPTION 'Construction replay has unreviewed unique-index semantics on %',v_spec->>'name'
+     USING ERRCODE = '55000', HINT = 'Inspect the additional uniqueness rule before approving reuse; no index is dropped.';
+   END IF;
+  END LOOP;
+ END LOOP;
+END
+$confirm_existing_construction_valuations$;
+
+CREATE TABLE IF NOT EXISTS public.project_valuations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.construction_projects(id) ON DELETE CASCADE,
   valuation_number integer NOT NULL,
@@ -26,12 +261,12 @@ CREATE TABLE public.project_valuations (
 );
 COMMENT ON COLUMN public.project_valuations.invoice_id IS
   'Reference to the invoice created by public.create_invoice_with_lines for this valuation.';
-CREATE INDEX project_valuations_project_status_idx
+CREATE INDEX IF NOT EXISTS project_valuations_project_status_idx
   ON public.project_valuations(project_id, status);
 -- The UNIQUE(project_id, valuation_number) constraint supplies the ordered
 -- project/number index used for sequential history and number assignment.
 
-CREATE TABLE public.project_valuation_lines (
+CREATE TABLE IF NOT EXISTS public.project_valuation_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   valuation_id uuid NOT NULL REFERENCES public.project_valuations(id) ON DELETE CASCADE,
   boq_line_id uuid NOT NULL REFERENCES public.project_boq_lines(id) ON DELETE CASCADE,
@@ -43,12 +278,12 @@ CREATE TABLE public.project_valuation_lines (
   notes text,
   UNIQUE (valuation_id, boq_line_id)
 );
-CREATE INDEX project_valuation_lines_valuation_idx
+CREATE INDEX IF NOT EXISTS project_valuation_lines_valuation_idx
   ON public.project_valuation_lines(valuation_id);
-CREATE INDEX project_valuation_lines_boq_line_idx
+CREATE INDEX IF NOT EXISTS project_valuation_lines_boq_line_idx
   ON public.project_valuation_lines(boq_line_id);
 
-CREATE TABLE public.project_retention_ledger (
+CREATE TABLE IF NOT EXISTS public.project_retention_ledger (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.construction_projects(id) ON DELETE CASCADE,
   valuation_id uuid REFERENCES public.project_valuations(id) ON DELETE SET NULL,
@@ -63,12 +298,12 @@ CREATE TABLE public.project_retention_ledger (
 );
 COMMENT ON COLUMN public.project_retention_ledger.invoice_id IS
   'Existing Income invoice associated with this retention entry; valuation entries also link through valuation_id.';
-CREATE INDEX project_retention_ledger_project_idx
+CREATE INDEX IF NOT EXISTS project_retention_ledger_project_idx
   ON public.project_retention_ledger(project_id);
-CREATE INDEX project_retention_ledger_valuation_idx
+CREATE INDEX IF NOT EXISTS project_retention_ledger_valuation_idx
   ON public.project_retention_ledger(valuation_id)
   WHERE valuation_id IS NOT NULL;
-CREATE UNIQUE INDEX project_retention_ledger_one_valuation_entry_idx
+CREATE UNIQUE INDEX IF NOT EXISTS project_retention_ledger_one_valuation_entry_idx
   ON public.project_retention_ledger(valuation_id)
   WHERE valuation_id IS NOT NULL;
 
@@ -76,6 +311,7 @@ ALTER TABLE public.project_valuations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_valuation_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_retention_ledger ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS project_valuations_member_grants ON public.project_valuations;
 CREATE POLICY project_valuations_member_grants
   ON public.project_valuations FOR ALL TO authenticated
   USING (
@@ -94,6 +330,7 @@ CREATE POLICY project_valuations_member_grants
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
     )
   );
+DROP POLICY IF EXISTS project_valuation_lines_member_grants ON public.project_valuation_lines;
 CREATE POLICY project_valuation_lines_member_grants
   ON public.project_valuation_lines FOR ALL TO authenticated
   USING (
@@ -116,6 +353,7 @@ CREATE POLICY project_valuation_lines_member_grants
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
     )
   );
+DROP POLICY IF EXISTS project_retention_ledger_member_grants ON public.project_retention_ledger;
 CREATE POLICY project_retention_ledger_member_grants
   ON public.project_retention_ledger FOR ALL TO authenticated
   USING (
