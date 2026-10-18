@@ -12,6 +12,7 @@ import {
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
@@ -122,9 +123,12 @@ export function RoleRoute() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
   const location = useLocation();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
 
   if (!isPathAllowedForRole(role, location.pathname)) {
-    const fallback = getHomePathForRole(role);
+    // Capability-aware: a till role in a business without POS (e.g.
+    // construction) must not be bounced "home" to a gated /pos page.
+    const fallback = getHomePathForRole(role, isOrgCapabilityEnabled);
     return <Navigate to={fallback} replace />;
   }
 
@@ -170,7 +174,8 @@ function App() {
   useAuthListener();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
-  const roleHome = getHomePathForRole(role);
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
+  const roleHome = getHomePathForRole(role, isOrgCapabilityEnabled);
   const homePath = isAdminPortalHost() ? '/partner-admin' : (roleHome !== '/dashboard' ? roleHome : '/dashboard');
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
@@ -246,10 +251,20 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/* Local draft only; no repository call, backend request, or project authorization path. */}
+                {/*
+                  Local draft only; no repository call, backend request, or
+                  project authorization path. Still a construction surface,
+                  so it sits behind the same construction capability gate as
+                  /construction/* — any authenticated user could previously
+                  reach it by URL.
+                */}
                 <Route
                   path="/projects-funding-sources/construction-draft"
-                  element={<ConstructionProjectSetupDraftPage />}
+                  element={
+                    <CapabilityGate capability="construction">
+                      <ConstructionProjectSetupDraftPage />
+                    </CapabilityGate>
+                  }
                 />
                 {/*
                   The Construction workspace is the real, command-backed workspace.

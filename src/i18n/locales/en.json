@@ -114,6 +114,38 @@
       "support": "Support",
       "businesses": "Businesses",
       "adminBilling": "Admin Billing"
+    },
+    "fab": {
+      "stockMovement": "Stock movement",
+      "materialMovement": "Material movement"
+    }
+  },
+  "pages": {
+    "inventory": {
+      "products": {
+        "title": "Products & Inventory",
+        "subtitle": "Manage products, stock levels, and movements for {{businessName}}"
+      },
+      "warehouse": {
+        "title": "Warehouse",
+        "subtitle": "Stock levels across all locations"
+      },
+      "transfers": {
+        "title": "Stock Transfers",
+        "subtitle": "Dispatch stock between warehouse and branches"
+      },
+      "materials": {
+        "title": "Materials",
+        "subtitle": "Materials and supplies across all sites"
+      },
+      "siteStores": {
+        "title": "Site Stores",
+        "subtitle": "Stock levels across all sites"
+      },
+      "materialTransfers": {
+        "title": "Material Transfers",
+        "subtitle": "Material movements between sites"
+      }
     }
   },
   "auth": {

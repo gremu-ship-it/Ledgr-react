@@ -225,3 +225,42 @@ describe('mobile bottom navigation', () => {
     expect(tabPaths()).not.toContain('/pos');
   });
 });
+
+// ── Bug A companion: the FAB speaks the same construction vocabulary ─────────
+//
+// The FAB's stock action used to read "Stock movement" for every business.
+// It now resolves through the construction vocabulary like every other
+// label, so site staff read "Material movement".
+
+describe('FAB movement vocabulary', () => {
+  function openFabMenu() {
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: 'common.openAddMenu' }));
+  }
+
+  it('reads "Material movement" for a construction business', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'stock_clerk';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+    };
+    openFabMenu();
+
+    expect(screen.getByText('navigation.fab.materialMovement')).toBeTruthy();
+    expect(screen.queryByText('navigation.fab.stockMovement')).toBeNull();
+  });
+
+  it('keeps "Stock movement" for a retail business', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'stock_clerk';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+    };
+    openFabMenu();
+
+    expect(screen.getByText('navigation.fab.stockMovement')).toBeTruthy();
+    expect(screen.queryByText('navigation.fab.materialMovement')).toBeNull();
+  });
+});
