@@ -534,3 +534,80 @@ inventory) is the substitute.
     upgrading in place (`construction-project-namespace`), and a legacy
     `public.projects` preserved while the feature tables are created
     alongside it (`construction-project-namespace-legacy`).
+
+13. **`project_status_log` collision annotation: preserve evidence before repair.**
+    Production runs `39128722410` and `39131240114` reported a wrapper annotation
+    claiming SQLSTATE `42P07` while applying `20261028000000`. The raw job logs
+    were not accessible from this workspace; **the actual server error and the
+    live object's ownership/schema have not been confirmed**. Do not infer an
+    out-of-band application, an unrelated legacy table, or an applied migration
+    from that annotation alone.
+
+    There is a reproducible reporting bug: the wrapper previously matched
+    `relation "…" already exists` anywhere in push output. Both construction
+    migrations already use `CREATE TABLE IF NOT EXISTS public.project_status_log`,
+    which emits the benign `NOTICE: relation "project_status_log" already exists,
+    skipping` when the name is occupied. If a later statement or the connection
+    failed, that notice caused a **hardcoded 42P07 annotation**, suppressing the
+    real error. The notice proves neither equivalence nor the cause of failure.
+    The corrected wrapper classifies actual `ERROR:` severity lines, preserves
+    their SQLSTATE/message/statement context, and keeps retries for transport and
+    explicitly transient PostgreSQL conditions (including serialization failures
+    and deadlocks). Schema failures still stop after one attempt; neither those
+    failures nor notices authorize history repair.
+
+    **Inspect without deploying:**
+
+    - Run **Migration forensics (read-only)** → `production` once the workflow is
+      available on GitHub. It uses the existing Management API token and the
+      explicitly selected project's ref, sends catalog SELECTs with
+      `read_only=true`, and requires no database password. A failed/incomplete
+      inspection is **UNKNOWN**, not evidence that an object/version is absent.
+    - Alternatively, run all sections of
+      `scripts/database/diagnose-project-status-log.sql` in the affected project's
+      SQL editor, or run `bash scripts/ci/remote-schema-forensics.sh --label
+      production` with credentials supplied through your existing secure
+      environment. Do not put credentials into SQL, a command saved in the repo,
+      an issue, or chat.
+    - The report includes relation **owner/OID/kind**, standalone type collisions,
+      column defaults/nullability/identity/generated attributes, PK/FK target
+      columns and delete/update actions, validation/deferral, full index
+      definitions/validity, RLS/policies/roles, grants (including column ACLs),
+      triggers, dependencies, coupled RPC signatures/return types/security, and
+      the construction migration history. Row figures are **estimates**, not
+      proof of an empty table; no application rows are fetched. Local migration
+      SHA-256 hashes identify the exact source being compared.
+
+    **Review the entire failing migration**, not only its audit-table declaration.
+    Phase A can adopt a recognized `public.projects` table, creates the project
+    and audit indexes, enables RLS, replaces policies, revokes direct browser
+    writes, adds procurement/location `project_id` columns and FKs, replaces the
+    lifecycle/procurement/location RPCs and triggers, and verifies authorization
+    and the state machine. The forward namespace migration also rewrites known
+    RPC bodies and may create a restricted compatibility view. Matching seven
+    audit columns alone cannot establish equivalence of all those effects.
+    Compare the deployed revision, remote history, relation ownership and every
+    dependent object before choosing a repair. A function return-type conflict,
+    for example, is not fixed by skipping table creation.
+
+    The pending Phase A and namespace sources now add a **read-only, fail-closed
+    audit guard** before attaching audit indexes/policies/grants: permanent table
+    kind, core column types/nullability/defaults, PK and both validated,
+    non-deferrable FKs (including referenced columns and actions) must match.
+    Unknown shapes raise `55000` with the live owner/columns and inspection path;
+    missing FKs/defaults are **not silently added**. The guard does not constitute
+    an ownership approval or a full-feature equivalence verdict. No audit table
+    is dropped, renamed, re-pointed or rewritten, and no migration is marked
+    applied. Full-file transactional replays verify refusal preserves rows,
+    grants, policies, indexes and function definitions.
+
+    Source-edit exception: production's reported attempt is still failing in
+    `20261028000000`, so a later migration cannot protect that pending replay.
+    Both original and namespace sources carry the same guard for pending
+    installs/upgrades. Environments that already recorded either version **skip
+    its edited source**; this is not a claim that their live schemas changed.
+    Confirm remote versions first. Do not `migration repair --status applied`
+    merely to bypass this guard: that skips the remainder of the file. If any
+    object is unrelated or ownership is uncertain, stop for an owner-approved,
+    data-preserving reconciliation plan rather than automatically moving it
+    aside and retrying the deploy.

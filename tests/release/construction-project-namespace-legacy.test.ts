@@ -22,6 +22,11 @@ beforeAll(async () => {
       // unrelated legacy relation. The old exact-signature guard aborted
       // here and blocked every later migration; the repair must preserve
       // the legacy table and create the feature tables alongside it.
+      // No audit feature is present in this legacy-only fixture. Dropping the
+      // project table alone leaves a log with its project FK removed by CASCADE;
+      // that is an unconfirmed partial shape and must now be refused, not silently
+      // repaired. The audit-ownership suite tests that refusal separately.
+      await client.query('DROP TABLE public.project_status_log');
       await client.query('DROP TABLE public.construction_projects CASCADE');
       await client.query(`
         CREATE TABLE public.projects (

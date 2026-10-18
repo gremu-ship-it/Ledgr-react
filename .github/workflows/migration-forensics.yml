@@ -1,0 +1,78 @@
+name: Migration forensics (read-only)
+
+# On-demand catalog evidence without deploying or repairing anything. Reuses
+# the Management API token/ref used by Schema Drift Check. The token itself is
+# privileged: the runner restricts queries to shared catalog SELECTs and sets
+# read_only=true. No database password is needed or loaded.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to inspect (no deployment)
+        required: true
+        default: production
+        type: choice
+        options: [staging, production]
+      relations:
+        description: Space-separated bare relation names
+        required: false
+        default: projects construction_projects project_status_log project_status_log_project
+        type: string
+      versions:
+        description: Space-separated migration versions (blank inspects the construction chain)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migration-forensics-${{ inputs.environment }}
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    name: Inspect ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Inspect catalogs and migration history
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          STAGING_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_STAGING }}
+          PRODUCTION_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF_PROD }}
+          SUPABASE_ENV_LABEL: ${{ inputs.environment }}
+          # User input is data, never interpolated into shell source. The
+          # runner validates identifiers/versions before building a query.
+          RELATIONS: ${{ inputs.relations }}
+          VERSIONS: ${{ inputs.versions }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$SUPABASE_ENV_LABEL" == staging ]]; then
+            export SUPABASE_PROJECT_REF="$STAGING_PROJECT_REF"
+          else
+            export SUPABASE_PROJECT_REF="$PRODUCTION_PROJECT_REF"
+          fi
+          read -r -a relations <<< "$RELATIONS"
+          read -r -a versions <<< "$VERSIONS"
+          args=()
+          for relation in "${relations[@]}"; do args+=(--relation "$relation"); done
+          for version in "${versions[@]}"; do args+=(--version "$version"); done
+          report="$(mktemp)"
+          trap 'rm -f "$report"' EXIT
+          set +e
+          bash scripts/ci/remote-schema-forensics.sh "${args[@]}" | tee "$report"
+          status=${PIPESTATUS[0]}
+          set -e
+          {
+            echo "### Migration forensics — ${SUPABASE_ENV_LABEL}"
+            echo
+            echo "Source revision: ${GITHUB_SHA}. Read-only inspection; not a deployment or an equivalence approval."
+            echo
+            echo '```text'
+            cat "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

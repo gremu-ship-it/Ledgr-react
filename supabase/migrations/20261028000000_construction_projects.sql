@@ -143,6 +143,100 @@ END
 $rename_project_indexes$;
 CREATE INDEX IF NOT EXISTS construction_projects_business_status ON public.construction_projects(business_id,status);
 CREATE INDEX IF NOT EXISTS construction_projects_business ON public.construction_projects(business_id);
+-- IF NOT EXISTS is not a schema/ownership check. Refuse an incompatible audit
+-- relation before attaching indexes, policies, grants or RPC writes to it.
+-- Match definitions, not constraint names; missing/wrong FKs and defaults are
+-- NOT repaired automatically. Review live ownership/dependencies separately
+-- with scripts/database/diagnose-project-status-log.sql before rollout.
+-- This source correction affects pending replays only (recorded versions are
+-- skipped by db push). The same guard is in the namespace forward migration.
+DO $confirm_project_status_log$
+DECLARE
+ v_log oid := to_regclass('public.project_status_log');
+ v_shape text;
+ v_matches boolean;
+BEGIN
+ IF v_log IS NULL THEN
+  RETURN; -- the name is free: CREATE TABLE below declares it.
+ END IF;
+
+ SELECT c.relkind IN ('r','p') AND c.relpersistence = 'p'
+   AND NOT EXISTS (
+     SELECT 1
+       FROM (VALUES
+         ('id', 'uuid', true, 'gen_random_uuid()'),
+         ('project_id', 'uuid', true, NULL),
+         ('from_status', 'text', true, NULL),
+         ('to_status', 'text', true, NULL),
+         ('changed_by', 'uuid', true, NULL),
+         ('reason', 'text', false, NULL),
+         ('changed_at', 'timestamp with time zone', true, 'now()')
+       ) AS expected(column_name, type_name, is_not_null, default_expr)
+       LEFT JOIN pg_attribute a
+         ON a.attrelid = c.oid AND a.attname = expected.column_name
+        AND a.attnum > 0 AND NOT a.attisdropped
+       LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+      WHERE a.attname IS NULL
+         OR format_type(a.atttypid, a.atttypmod) <> expected.type_name
+         OR a.attnotnull IS DISTINCT FROM expected.is_not_null
+         OR a.attgenerated <> '' OR a.attidentity <> ''
+         OR regexp_replace(pg_get_expr(d.adbin, d.adrelid),
+              '(pg_catalog|public|extensions)\.', '', 'g')
+              IS DISTINCT FROM expected.default_expr
+   )
+   AND EXISTS (
+     SELECT 1 FROM pg_constraint pk
+      WHERE pk.conrelid = c.oid AND pk.contype = 'p' AND NOT pk.condeferrable
+        AND pk.conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                              WHERE attrelid = c.oid AND attname = 'id')]
+   )
+   AND NOT EXISTS (
+     SELECT 1
+       FROM (VALUES
+         ('project_id', 'public.construction_projects'::regclass, 'c'),
+         ('changed_by', 'auth.users'::regclass, 'a')
+       ) AS expected(column_name, target, delete_action)
+      WHERE NOT EXISTS (
+        SELECT 1 FROM pg_constraint fk
+         WHERE fk.conrelid = c.oid AND fk.contype = 'f'
+           AND fk.conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                                  WHERE attrelid = c.oid AND attname = expected.column_name)]
+           AND fk.confrelid = expected.target
+           AND fk.confkey = ARRAY[(SELECT attnum FROM pg_attribute
+                                   WHERE attrelid = expected.target AND attname = 'id')]
+           AND fk.confdeltype::text = expected.delete_action
+           AND fk.confupdtype = 'a' AND fk.confmatchtype = 's'
+           AND fk.convalidated AND NOT fk.condeferrable
+      )
+   )
+   AND (SELECT count(*) FROM pg_constraint fk
+         WHERE fk.conrelid = c.oid AND fk.contype = 'f'
+           AND fk.conkey && ARRAY[(SELECT attnum FROM pg_attribute
+                                   WHERE attrelid = c.oid AND attname = 'project_id'),
+                                 (SELECT attnum FROM pg_attribute
+                                   WHERE attrelid = c.oid AND attname = 'changed_by')]) = 2
+   -- Extra required columns without defaults would break the audit INSERT.
+   AND NOT EXISTS (
+     SELECT 1 FROM pg_attribute a
+      WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped
+        AND a.attname NOT IN ('id','project_id','from_status','to_status','changed_by','reason','changed_at')
+        AND a.attnotnull AND NOT a.atthasdef AND a.attidentity = '' AND a.attgenerated = ''
+   )
+  INTO v_matches FROM pg_class c WHERE c.oid = v_log;
+
+ IF v_matches IS DISTINCT FROM true THEN
+  SELECT format('owner=%s; relkind=%s; columns=%s', pg_get_userbyid(c.relowner), c.relkind,
+          (SELECT string_agg(format('%I %s%s', a.attname, format_type(a.atttypid, a.atttypmod),
+                    CASE WHEN a.attnotnull THEN ' NOT NULL' ELSE '' END), ', ' ORDER BY a.attnum)
+             FROM pg_attribute a
+            WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped))
+    INTO v_shape FROM pg_class c WHERE c.oid = v_log;
+  RAISE EXCEPTION 'Construction audit schema mismatch: public.project_status_log does not match the Phase A columns, defaults, primary key and foreign keys.'
+    USING ERRCODE = '55000', DETAIL = v_shape,
+          HINT = 'Audit relation left untouched. Inspect ownership, constraints and dependencies with scripts/database/diagnose-project-status-log.sql (read-only). Do not drop, rename, re-point or mark the migration applied to bypass this check. See docs/database/database-operations.md section 13.';
+ END IF;
+END
+$confirm_project_status_log$;
 CREATE TABLE IF NOT EXISTS public.project_status_log (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  project_id uuid NOT NULL REFERENCES public.construction_projects(id) ON DELETE CASCADE,
