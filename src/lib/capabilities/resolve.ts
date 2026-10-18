@@ -19,14 +19,28 @@ export interface CapabilityResolveOptions {
 }
 
 /**
- * Capabilities introduced after the organisation layer shipped. They have no
- * pre-Phase-1 behaviour to preserve, so the compatibility kill switch — which
- * exists to protect the surfaces a business could already reach — does not
- * apply to them. They resolve from the profile every time, fail closed, and can
- * therefore never appear for a business whose profile does not select their
- * operating model (e.g. Construction for an Enterprise retail business).
+ * Capabilities whose visibility is always driven by the business profile,
+ * regardless of the `capability_org_layer` kill switch.
+ *
+ * Construction was introduced after the organisation layer shipped: it has
+ * no pre-Phase-1 behaviour to preserve, so the compatibility kill switch —
+ * which exists to protect the surfaces a business could already reach —
+ * does not apply to it.
+ *
+ * POS predates the layer, but it is a retail workflow: only a business whose
+ * operating models include RETAIL derives `pos: true` (see
+ * `deriveOrganisationCapabilityDefaults`), so honouring the profile decision
+ * on both switch states is what keeps POS from failing open for
+ * construction, service and other non-retail businesses while the switch is
+ * off. The legacy pin is unaffected: a pinned `pos: true` override is itself
+ * the profile decision, so pinned businesses keep POS on either state.
+ *
+ * Both resolve from the profile every time, fail closed, and can therefore
+ * never appear for a business whose profile does not select their operating
+ * model (e.g. Construction, or POS, for an Enterprise retail business whose
+ * profile never selected the matching model).
  */
-const ALWAYS_PROFILE_GATED: ReadonlySet<string> = new Set(['construction']);
+const ALWAYS_PROFILE_GATED: ReadonlySet<string> = new Set(['construction', 'pos']);
 
 /**
  * Resolve one effective capability. Normally all four frozen layers compose:
@@ -40,11 +54,15 @@ const ALWAYS_PROFILE_GATED: ReadonlySet<string> = new Set(['construction']);
  * `false` still narrows access; a missing non-POS decision stays closed until
  * its code-derived default has been resolved.
  *
- * Exception: capabilities listed in ALWAYS_PROFILE_GATED (Construction) ignore
- * the kill switch entirely. They were introduced after the switch's commitments
- * were frozen, so there is no legacy surface to preserve; resolving them from
- * the profile is what keeps an Enterprise retail business from seeing a
- * Construction workspace that its profile never selected.
+ * Exception: capabilities listed in ALWAYS_PROFILE_GATED (Construction and
+ * POS) ignore the kill switch entirely and fail closed on an absent decision.
+ * Construction was introduced after the switch's commitments were frozen, so
+ * there is no legacy surface to preserve; resolving it from the profile is
+ * what keeps an Enterprise retail business from seeing a Construction
+ * workspace that its profile never selected. For POS this supersedes the
+ * absent-value fail-open above: existing businesses are protected by the
+ * legacy pin, which resolves to an explicit decision, while a business with
+ * no POS decision at all has no retail profile to show a till for.
  *
  * The resolver is intentionally synchronous and O(1): callers must pass
  * already-loaded values. Do not add a database request or per-row lookup here;

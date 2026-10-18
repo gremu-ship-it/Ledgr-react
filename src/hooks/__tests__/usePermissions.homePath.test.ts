@@ -113,13 +113,21 @@ describe('capability-aware home paths (organisation layer on)', () => {
 });
 
 describe('capability-aware home paths (organisation layer off — kill switch)', () => {
-  it('keeps /pos as the till home while the legacy layer is off', () => {
-    // With the kill switch off, `pos` keeps its frozen fail-open semantics in
-    // the resolver — so the home path must not downgrade either. The home
-    // page changes on exactly the same terms as the POS nav item and the
-    // /pos route gate, never ahead of them.
+  it('still downgrades the till home for a non-RETAIL business', () => {
+    // POS is in ALWAYS_PROFILE_GATED, so its profile decision is honoured
+    // with the kill switch off too — the home path downgrades on exactly
+    // the same terms as the POS nav item and the /pos route gate, never
+    // ahead of them: a non-RETAIL cashier lands on /income, not the
+    // gated till, and a non-RETAIL manager on /dashboard.
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
     const predicate = predicateFor(construction);
+    expect(getHomePathForRole('cashier', predicate)).toBe('/income');
+    expect(getHomePathForRole('manager', predicate)).toBe('/dashboard');
+  });
+
+  it('keeps /pos as the till home for a retail business while the legacy layer is off', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
+    const predicate = predicateFor(retail);
     expect(getHomePathForRole('cashier', predicate)).toBe('/pos');
     expect(getHomePathForRole('manager', predicate)).toBe('/pos');
   });

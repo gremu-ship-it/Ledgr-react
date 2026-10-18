@@ -176,15 +176,16 @@ describe('construction vertical navigation cleanup', () => {
       expect(paths).toContain('/products');
     });
 
-    it('documents that POS narrowing needs the organisation layer on, exactly like every other Phase-1 capability', () => {
-      // The kill-switch bypass is construction-only (ALWAYS_PROFILE_GATED), so
-      // with the layer off POS keeps its frozen pre-architecture fail-open for
-      // every profile — a construction business included. That is the intended
-      // Phase-1 rollback semantics, not a construction regression: the vertical
-      // hides POS as soon as the layer the whole capability system runs on is
-      // enabled, which is what the acceptance matrix above asserts.
+    it('documents that POS is profile-gated even with the organisation layer off', () => {
+      // POS has joined Construction in ALWAYS_PROFILE_GATED, so its
+      // organisation decision is honoured on both switch states: with the
+      // layer off a construction business still has no till, while the
+      // non-gated Phase-1 capabilities keep their Phase-1 rollback
+      // semantics. Only RETAIL (or a CONSTRUCTION + RETAIL union, below)
+      // derives `pos: true`.
       vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
-      expect(resolveBusinessCapability('pos', constructionBusiness, fullAccess)).toBe(true);
+      expect(resolveBusinessCapability('pos', constructionBusiness, fullAccess)).toBe(false);
+      expect(resolveBusinessCapability('pos', retailBusiness, fullAccess)).toBe(true);
       // Construction itself never fails open, switch or no switch.
       expect(resolveBusinessCapability('construction', constructionBusiness, fullAccess)).toBe(true);
       expect(resolveBusinessCapability('construction', retailBusiness, fullAccess)).toBe(false);

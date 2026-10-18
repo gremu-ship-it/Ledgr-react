@@ -547,11 +547,11 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
  * definitions are untouched: cashier and manager stay valid roles for a
  * construction business; only where they land changes.
  *
- * Because the predicate runs through `resolveCapability`, the downgrade
- * activates on exactly the same terms as the POS nav item and the `/pos`
- * route gate: with the organisation-layer kill switch off, `pos` keeps its
- * fail-open legacy semantics everywhere and `/pos` is a working home page,
- * not a dead one.
+ * Because the predicate runs through `resolveCapability`, and POS is in
+ * ALWAYS_PROFILE_GATED, the downgrade activates on exactly the same terms
+ * as the POS nav item and the `/pos` route gate on both kill-switch
+ * states: a business whose profile gives it POS keeps `/pos` as a working
+ * home page, and one without it never lands there.
  */
 export function getHomePathForRole(
   role: string | null,

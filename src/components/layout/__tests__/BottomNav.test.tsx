@@ -93,6 +93,12 @@ describe('mobile bottom navigation', () => {
 
   it('gives a cashier a POS tab and hides back-office tabs', () => {
     state.role = 'cashier';
+    // POS is profile-gated: a till role only gets a till in a retail business.
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+      capability_overrides: {},
+    };
     renderNav();
     const paths = tabPaths();
 
@@ -121,6 +127,11 @@ describe('mobile bottom navigation', () => {
 
   it('leads a POS manager with the till, then its supervised pages', () => {
     state.role = 'manager';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+      capability_overrides: {},
+    };
     renderNav();
     const paths = tabPaths();
 
