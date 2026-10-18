@@ -344,6 +344,94 @@ files sharing a version prefix, and reports the colliding files by name instead
 of retrying; `src/lib/__tests__/migrationInvariants.test.ts` fails the fast CI
 suite for the same reason.
 
+#### `relation "..." already exists (SQLSTATE 42P07)`
+
+`supabase link` finishes, the push lists its pending files, and the **first
+statement** of one of them fails — then fails twice more, identically:
+
+```
+Applying migration 20261028000000_construction_projects.sql...
+ERROR: relation "projects" already exists (SQLSTATE 42P07)
+At statement: 0
+CREATE TABLE public.projects (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ ...
+supabase db push failed (attempt 1/3) — retrying in 20s ...
+```
+
+This is what stopped the production deploy on 2026-10-18 (Deploy #224, run
+`39118959766`): three attempts, one outcome, and a log that names the object but
+never says what the object **is**.
+
+**What it means.** The object is on the database while the migration version is
+not in `supabase_migrations.schema_migrations` — which is why `db push` still
+considers the file pending. Objects and history diverge in two ways, and they
+need opposite responses:
+
+1. **The migration's own objects, applied by hand.** The Supabase SQL editor and
+   `psql` commit every statement they manage to run and record **no** migration
+   version, so a hand application leaves the schema ahead of the history. This
+   is the 2026-10-18 case: production carried the Phase A `projects` objects
+   with version `20261028000000` unrecorded. (Contrast the drift case above,
+   where the *history* is ahead of the checkout.)
+2. **A foreign object owns the name.** Production is the legacy Ledgr project
+   and already held `api_keys`, `webhooks` and `webhook_deliveries` before this
+   repository declared them — see
+   `supabase/migrations/20261018000000_repair_legacy_public_api_tables.sql`. A
+   legacy `projects` table would look identical in the error text.
+
+**Retrying cannot help.** The object does not disappear between attempts, so all
+three retries reproduce the same error and the run ends with the generic
+"the database is likely unresponsive" framing that points at the dashboard
+instead of the migration. `scripts/ci/supabase-link-and-push.sh` now classifies
+every collision SQLSTATE (42P07 relation, 42710 policy/constraint, 42701
+column, 42723 function, 42P06 schema) as deterministic: it stops on the first
+attempt, names the failing file and object, and calls
+`scripts/ci/migration-conflict-forensics.sh`.
+
+**Read the forensics before touching anything.** That script issues two
+read-only queries through the Management API (no database password, no writes)
+and prints the live object — columns and types, RLS, policies, constraints,
+indexes, triggers, a row estimate — next to whether the version is recorded and
+what the remote migration head is. It appears in the job log, in `::warning::`
+annotations and in the step summary. Compare the column list with the
+`CREATE TABLE` in the failing migration:
+
+* **They match → case 1.** Make the migration *converge* on the objects that are
+  already there and re-run the deploy. That is what
+  `20261028000000_construction_projects.sql`, `20261030000000` and
+  `20261031000001` now do: `CREATE TABLE/INDEX IF NOT EXISTS`, `DROP POLICY|TRIGGER
+  IF EXISTS` before each `CREATE POLICY|TRIGGER`, `CREATE OR REPLACE FUNCTION`,
+  `ADD COLUMN IF NOT EXISTS`, and an additive re-assertion of the declared
+  `NOT NULL` / `DEFAULT` / `CHECK` contracts. Nothing is dropped and no row is
+  rewritten, so the file is a no-op on a clean replay, on staging (where the
+  version *is* recorded, so `db push` skips it) and on a second application.
+  `tests/database/construction_projects_convergence.test.js` proves all three
+  against a real disposable PostgreSQL, and asserts the converged schema is
+  entry-for-entry identical to a clean replay.
+  `src/lib/__tests__/migrationInvariants.test.ts` rule E fails the fast suite if
+  a new migration in this chain reintroduces unguarded DDL.
+  Shortcut, only after checking the shapes by eye:
+  `supabase migration repair --status applied <version>` records the version
+  without applying the file — it silently skips anything the file would still
+  have added, so converging the migration is the safer answer.
+* **They differ → case 2, an owner decision.** A deploy must never adopt, rename
+  or drop somebody else's table: `IF NOT EXISTS` would quietly keep the foreign
+  shape and the RPCs, FKs and RLS policy built on it would fail at runtime.
+  Phase A now *refuses* that case itself — its guard compares the live columns
+  and types with the declared ones and raises, naming every difference, the live
+  column list and the row count, changing nothing. Inspect the table, then move
+  it aside (`ALTER TABLE public.projects RENAME TO
+  legacy_projects_pre_construction;` — its indexes and constraints travel with
+  it, so drop or rename any policy/trigger whose name would now collide) or
+  reconcile it to the declared shape, and re-run.
+
+**Prevention.** Do not apply migration SQL by hand to a linked project — that is
+what desynchronises objects from history. Replay locally (`supabase start`, or
+`tests/release/database.mjs`), or push to the staging project through the
+workflow. If a hand application already happened, converge the file rather than
+editing the history table, and say so in the PR: the next deploy re-applies it.
+
 ## 5. Vercel setup
 
 1. Create two projects (`ledgr-staging`, `ledgr-production`) and link them to

@@ -31,6 +31,26 @@
 # Opt out with SUPABASE_MIGRATION_AUTO_REPAIR=0 — the script then fails
 # immediately with the manual repair commands instead of running them.
 #
+# Object-collision handling
+# -------------------------
+# `ERROR: relation "projects" already exists (SQLSTATE 42P07)` and its siblings
+# (42710 policy/constraint, 42701 column, 42723 function, 42P06 schema) are NOT
+# transport failures: the object is on the database and stays there, so all three
+# attempts fail identically. Production proved that on 2026-10-18 (Deploy #224,
+# run 39118959766) — the Phase A objects were live while version 20261028000000
+# was absent from supabase_migrations.schema_migrations, because they had been
+# applied by hand (the SQL editor / psql commits each statement it runs and
+# records no migration version).
+# The script therefore stops on the first collision, says which file and object
+# collided, and calls scripts/ci/migration-conflict-forensics.sh to print what
+# the LIVE object is (columns, RLS, policies, row estimate, recorded versions)
+# through the read-only Management API endpoint. That evidence is what separates
+# the two cases: this migration's own shape (make the file converge and re-run)
+# versus a foreign object that owns the name (an owner decision — never adopted
+# or dropped by a deploy). No repair is attempted automatically: marking a
+# version applied while the live objects differ from the file would silently skip
+# a migration and leave the runtime broken.
+#
 # Required env:
 #   SUPABASE_ACCESS_TOKEN   Management API token (project-status pre-flight)
 #   SUPABASE_PROJECT_REF    target project ref
@@ -64,6 +84,7 @@ esac
 # (20260926000001 and 20261003000000, each holding two files) and blocked the
 # staging deploy. Catch it here, before any project is touched.
 migrations_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/supabase/migrations"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 duplicate_versions="$(
   for f in "${migrations_dir}"/*.sql; do basename "${f}" | cut -d_ -f1; done | sort | uniq -d
 )"
@@ -126,6 +147,10 @@ push_output="$(mktemp)"
 drift_repaired=0
 attempt=1
 max_attempts=3
+# Backoff per attempt (seconds, multiplied by the attempt number). Overridable
+# because tests/ci/migration-collision.test.mjs executes this script for real,
+# and a 60s sleep there is a minute of CI proving nothing.
+retry_wait="${SUPABASE_PUSH_RETRY_WAIT:-20}"
 while :; do
   set +e
   supabase db push --password "${SUPABASE_DB_PASSWORD}" --include-all 2>&1 | tee "${push_output}"
@@ -176,6 +201,39 @@ while :; do
     continue
   fi
 
+  # Object-collision check: the database already carries an object this
+  # migration declares (relation, index, column, policy, constraint, function or
+  # schema). Deterministic — objects do not vanish between attempts, so every
+  # retry reproduces the identical error. On 2026-10-18 production burned its
+  # whole retry budget that way on `relation "projects" already exists` (42P07):
+  # the Phase A objects were live while version 20261028000000 was not recorded,
+  # because they had reached the database outside `supabase db push`. Report what
+  # the live object actually is — the only evidence that separates "this
+  # migration's own objects, applied by hand" (make the file converge, re-run)
+  # from "a foreign object owns the name" (an owner decision) — and stop.
+  if grep -qE 'already exists \(SQLSTATE (42P07|42710|42701|42723|42P06)\)' "${push_output}"; then
+    collision_state="$(grep -oE 'SQLSTATE (42P07|42710|42701|42723|42P06)' "${push_output}" | head -n 1 | awk '{print $2}')"
+    collision_file="$(grep -oE 'Applying migration [0-9]{8,14}_[A-Za-z0-9_.]+\.sql' "${push_output}" | tail -n 1 | awk '{print $3}')"
+    collision_version="${collision_file%%_*}"
+    if grep -qE 'column "[^"]+" of relation "[^"]+" already exists' "${push_output}"; then
+      collision_kind="column"
+      collision_name="$(grep -oE 'column "[^"]+" of relation "[^"]+"' "${push_output}" \
+        | head -n 1 | sed -E 's/column "([^"]+)" of relation "([^"]+)"/\2.\1/')"
+    else
+      collision_kind="$(grep -oE '[a-z]+ "[^"]+" already exists' "${push_output}" | head -n 1 | awk '{print $1}')"
+      collision_name="$(grep -oE '[a-z]+ "[^"]+" already exists' "${push_output}" \
+        | head -n 1 | sed -E 's/^[a-z]+ "([^"]+)" already exists$/\1/')"
+    fi
+    collision_kind="${collision_kind:-object}"
+    echo "::error::supabase db push for ${label} stopped in ${collision_file:-<unknown migration>} on ${collision_kind} \"${collision_name:-<unknown>}\" already existing (SQLSTATE ${collision_state:-unknown}). Version ${collision_version:-<unknown>} is not recorded in supabase_migrations.schema_migrations, so the object reached this database outside 'supabase db push' (a SQL-editor/psql application commits what it runs and records no version). Not retrying: every attempt reproduces this identically."
+    echo "::error::Fix the MIGRATION, not the retry budget: make ${collision_file:-the failing file} converge on the objects already present (CREATE TABLE/INDEX IF NOT EXISTS, DROP POLICY/TRIGGER IF EXISTS, CREATE OR REPLACE FUNCTION, ADD COLUMN IF NOT EXISTS) behind a guard that refuses a foreign shape, then re-run. See DEPLOYMENT.md -> relation \"...\" already exists (SQLSTATE 42P07)."
+    if [[ -n "${collision_name:-}" ]]; then
+      bash "${repo_root}/scripts/ci/migration-conflict-forensics.sh" \
+        "${collision_kind}" "${collision_name##*.}" "${collision_file}" "${collision_version}" || true
+    fi
+    exit 1
+  fi
+
   if ((attempt >= max_attempts)); then
     # Job logs live on Azure blob storage and often cannot be downloaded.
     # Annotations are the only failure text this network can read. Keep to
@@ -212,8 +270,8 @@ PY
     fi
     exit 1
   fi
-  echo "supabase db push failed (attempt ${attempt}/${max_attempts}) — retrying in $((attempt * 20))s ..."
-  sleep $((attempt * 20))
+  echo "supabase db push failed (attempt ${attempt}/${max_attempts}) — retrying in $((attempt * retry_wait))s ..."
+  sleep $((attempt * retry_wait))
   attempt=$((attempt + 1))
 done
 

@@ -1,8 +1,18 @@
 -- Phase C: progress valuations, retention and invoices created in the existing
 -- Income/invoicing subsystem. All writes are RPC-only; browser writes remain
 -- revoked and the existing project/BOQ lifecycle stays authoritative.
+--
+-- CONVERGENT RE-APPLY (2026-10-18): production carries the Phase A objects
+-- without a recorded migration version (see the header of
+-- 20261028000000_construction_projects.sql), so this file can arrive on a
+-- database where a hand application already created some of it. Every table,
+-- index and policy is guarded (IF NOT EXISTS / DROP POLICY IF EXISTS) and the
+-- functions are CREATE OR REPLACE, so a re-apply converges instead of failing
+-- with SQLSTATE 42P07. The Retention Receivable backfill below was already
+-- written to be re-runnable: it looks up the existing account first and only
+-- inserts when there is none. Nothing is dropped and no row is rewritten.
 
-CREATE TABLE public.project_valuations (
+CREATE TABLE IF NOT EXISTS public.project_valuations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   valuation_number integer NOT NULL,
@@ -26,12 +36,12 @@ CREATE TABLE public.project_valuations (
 );
 COMMENT ON COLUMN public.project_valuations.invoice_id IS
   'Reference to the invoice created by public.create_invoice_with_lines for this valuation.';
-CREATE INDEX project_valuations_project_status_idx
+CREATE INDEX IF NOT EXISTS project_valuations_project_status_idx
   ON public.project_valuations(project_id, status);
 -- The UNIQUE(project_id, valuation_number) constraint supplies the ordered
 -- project/number index used for sequential history and number assignment.
 
-CREATE TABLE public.project_valuation_lines (
+CREATE TABLE IF NOT EXISTS public.project_valuation_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   valuation_id uuid NOT NULL REFERENCES public.project_valuations(id) ON DELETE CASCADE,
   boq_line_id uuid NOT NULL REFERENCES public.project_boq_lines(id) ON DELETE CASCADE,
@@ -43,12 +53,12 @@ CREATE TABLE public.project_valuation_lines (
   notes text,
   UNIQUE (valuation_id, boq_line_id)
 );
-CREATE INDEX project_valuation_lines_valuation_idx
+CREATE INDEX IF NOT EXISTS project_valuation_lines_valuation_idx
   ON public.project_valuation_lines(valuation_id);
-CREATE INDEX project_valuation_lines_boq_line_idx
+CREATE INDEX IF NOT EXISTS project_valuation_lines_boq_line_idx
   ON public.project_valuation_lines(boq_line_id);
 
-CREATE TABLE public.project_retention_ledger (
+CREATE TABLE IF NOT EXISTS public.project_retention_ledger (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   valuation_id uuid REFERENCES public.project_valuations(id) ON DELETE SET NULL,
@@ -63,12 +73,12 @@ CREATE TABLE public.project_retention_ledger (
 );
 COMMENT ON COLUMN public.project_retention_ledger.invoice_id IS
   'Existing Income invoice associated with this retention entry; valuation entries also link through valuation_id.';
-CREATE INDEX project_retention_ledger_project_idx
+CREATE INDEX IF NOT EXISTS project_retention_ledger_project_idx
   ON public.project_retention_ledger(project_id);
-CREATE INDEX project_retention_ledger_valuation_idx
+CREATE INDEX IF NOT EXISTS project_retention_ledger_valuation_idx
   ON public.project_retention_ledger(valuation_id)
   WHERE valuation_id IS NOT NULL;
-CREATE UNIQUE INDEX project_retention_ledger_one_valuation_entry_idx
+CREATE UNIQUE INDEX IF NOT EXISTS project_retention_ledger_one_valuation_entry_idx
   ON public.project_retention_ledger(valuation_id)
   WHERE valuation_id IS NOT NULL;
 
@@ -76,6 +86,7 @@ ALTER TABLE public.project_valuations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_valuation_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.project_retention_ledger ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS project_valuations_member_grants ON public.project_valuations;
 CREATE POLICY project_valuations_member_grants
   ON public.project_valuations FOR ALL TO authenticated
   USING (
@@ -94,6 +105,7 @@ CREATE POLICY project_valuations_member_grants
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
     )
   );
+DROP POLICY IF EXISTS project_valuation_lines_member_grants ON public.project_valuation_lines;
 CREATE POLICY project_valuation_lines_member_grants
   ON public.project_valuation_lines FOR ALL TO authenticated
   USING (
@@ -116,6 +128,7 @@ CREATE POLICY project_valuation_lines_member_grants
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
     )
   );
+DROP POLICY IF EXISTS project_retention_ledger_member_grants ON public.project_retention_ledger;
 CREATE POLICY project_retention_ledger_member_grants
   ON public.project_retention_ledger FOR ALL TO authenticated
   USING (

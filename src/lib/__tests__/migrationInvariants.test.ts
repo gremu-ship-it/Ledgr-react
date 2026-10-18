@@ -74,6 +74,59 @@ describe('supabase/migrations invariants', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('E. the construction project chain re-applies safely on a database that already has its objects', () => {
+    // 2026-10-18, production (Deploy #224, run 39118959766): `supabase db push`
+    // died on the FIRST statement of 20261028000000_construction_projects.sql —
+    //   ERROR: relation "projects" already exists (SQLSTATE 42P07)
+    // — and then died twice more, identically, because the retry loop treated a
+    // permanent schema collision as a transport failure. public.projects was
+    // live on production while version 20261028000000 was absent from
+    // supabase_migrations.schema_migrations: the objects had been applied by
+    // hand (the SQL editor / psql commits every statement it runs and records no
+    // version), so `db push` still had the file to apply and re-applied it.
+    //
+    // The rule for everything from Phase A onwards is therefore that a file must
+    // survive meeting its own objects: guarded DDL, or a paired DROP ... IF
+    // EXISTS where Postgres offers no IF NOT EXISTS (policies, triggers). A
+    // migration that cannot be re-applied turns one hand-applied object into a
+    // blocked production deploy. Verified against a real database by
+    // tests/database/construction_projects_convergence.test.js.
+    const FROM = '20261028000000';
+    const offenders: string[] = [];
+    for (const file of files) {
+      if (version(file) < FROM) continue;
+      const sql = readFileSync(resolve(MIGRATIONS_DIR, file), 'utf8');
+      const problems: string[] = [];
+      const bare: [RegExp, string][] = [
+        [/^CREATE TABLE (?!IF NOT EXISTS)public\./m, 'CREATE TABLE without IF NOT EXISTS'],
+        [/^CREATE (?:UNIQUE )?INDEX (?!IF NOT EXISTS)/m, 'CREATE INDEX without IF NOT EXISTS'],
+        [/^CREATE FUNCTION public\./m, 'CREATE FUNCTION without OR REPLACE'],
+        [/^ALTER TABLE public\.[a-z_]+ ADD COLUMN (?!IF NOT EXISTS)/m, 'ADD COLUMN without IF NOT EXISTS'],
+        [/^ALTER TABLE public\.[a-z_]+ ADD CONSTRAINT /m, 'ADD CONSTRAINT outside a guarded DO block'],
+        [/^ALTER TYPE [\w.]+ ADD VALUE (?!IF NOT EXISTS)/m, 'ALTER TYPE ADD VALUE without IF NOT EXISTS'],
+      ];
+      for (const [pattern, label] of bare) if (pattern.test(sql)) problems.push(label);
+      // CREATE POLICY / CREATE TRIGGER have no IF NOT EXISTS: each one must be
+      // preceded by a DROP ... IF EXISTS naming the same object.
+      const paired: [string, RegExp, RegExp][] = [
+        ['policy', /^CREATE POLICY (\w+)\s*\n?\s*ON public\.(\w+)/gm, /^DROP POLICY IF EXISTS (\w+) ON public\.(\w+);/gm],
+        ['trigger', /^CREATE TRIGGER (\w+)[\s\S]{0,200}?\bON public\.(\w+)/gm, /^DROP TRIGGER IF EXISTS (\w+) ON public\.(\w+);/gm],
+        ['temp table', /^CREATE TEMP TABLE (\w+)/gm, /^DROP TABLE IF EXISTS (\w+);/gm],
+      ];
+      const key = (m: RegExpMatchArray) => [m[1], m[2]].filter(Boolean).join('.');
+      for (const [label, create, drop] of paired) {
+        const dropped = [...sql.matchAll(drop)].map(key);
+        for (const m of sql.matchAll(create)) {
+          if (!dropped.includes(key(m))) {
+            problems.push(`CREATE ${label.toUpperCase()} ${m[1]} without a paired DROP ... IF EXISTS`);
+          }
+        }
+      }
+      if (problems.length) offenders.push(`${file}: ${problems.join('; ')}`);
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('D. the chain asserts the single-writer invariant on stock_movements', () => {
     // The deploy must fail loudly if a second balance writer ever exists,
     // rather than silently double-counting stock. Cross-file and
