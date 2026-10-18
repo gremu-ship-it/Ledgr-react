@@ -18,6 +18,11 @@ let orgs: Awaited<ReturnType<typeof seedFixture>>;
 type C = {
   query: (sql: string, values?: unknown[]) => Promise<{ rows: any[] }>;
 };
+type MigrationHookContext = {
+  client: { query: (sql: string, values?: unknown[]) => Promise<{ rows: { legacy_label?: string }[] }> };
+  name: string;
+  source: string;
+};
 const owner = identities.A_owner.id;
 const rpc = async (c: C, sql: string, values: unknown[] = []) =>
   (await c.query(sql, values)).rows[0];
@@ -36,8 +41,24 @@ const statuses = [
 ];
 let n = 24000;
 let foreignProject: string;
+const legacyProjectId = '00000000-0000-4000-8000-000000000123';
 beforeAll(async () => {
-  db = await createDatabaseFixture();
+  // Reproduce an unrelated `projects` relation named in the reported failure
+  // before the construction-project migrations run. It must remain intact while
+  // the feature builds against construction_projects instead.
+  db = await createDatabaseFixture({
+    beforeMigration: async ({ client, name }: MigrationHookContext) => {
+      if (name !== '20261028000000_construction_projects.sql') return;
+      await client.query(`
+        create table public.projects (
+          id uuid primary key,
+          legacy_label text not null
+        );
+        insert into public.projects(id, legacy_label)
+        values ('${legacyProjectId}', 'preserve legacy table');
+      `);
+    },
+  });
   orgs = await seedFixture(db.client);
   await db.client.query(
     "update public.businesses set operating_models=array['CONSTRUCTION'],plan_tier='enterprise',plan_expires_at='2099-01-01' where id=$1",
@@ -98,6 +119,34 @@ async function rejects(
   if (message) expect(error?.message).toContain(message);
 }
 
+test(
+  meta(
+    'LEGACY_NAME_COLLISION',
+    'An unrelated public.projects table survives migration replay while the feature uses construction_projects',
+  ),
+  async () => {
+    const legacy = await db.client.query(
+      'select id, legacy_label from public.projects where id=$1',
+      [legacyProjectId],
+    );
+    expect(legacy.rows).toEqual([
+      { id: legacyProjectId, legacy_label: 'preserve legacy table' },
+    ]);
+    const columns = await db.client.query(
+      `select column_name from information_schema.columns
+        where table_schema='public' and table_name='projects'
+        order by ordinal_position`,
+    );
+    expect(columns.rows.map((row: { column_name: string }) => row.column_name)).toEqual([
+      'id',
+      'legacy_label',
+    ]);
+    const constructionTable = await db.client.query(
+      "select relkind from pg_class where oid=to_regclass('public.construction_projects')",
+    );
+    expect(constructionTable.rows[0]?.relkind).toBe('r');
+  },
+);
 test(
   meta(
     'CREATE',
@@ -273,7 +322,7 @@ test(
     for (const uid of [identities.B_owner.id, identities.A_admin.id])
       await db.asRole('authenticated', uid, async (c: C) => {
         expect(
-          (await c.query('select * from public.projects where id=$1', [p.id]))
+          (await c.query('select * from public.construction_projects where id=$1', [p.id]))
             .rows,
         ).toHaveLength(0);
         expect(
@@ -300,7 +349,7 @@ test(
     await db.asRole('authenticated', owner, async (c: C) => {
       await rejects(
         c,
-        "update public.projects set status='closed' where id=$1",
+        "update public.construction_projects set status='closed' where id=$1",
         [p.id],
         '42501',
       );
@@ -542,7 +591,7 @@ test(
       async (c: C) => {
         expect(
           (
-            await c.query('select * from public.projects where id=$1', [
+            await c.query('select * from public.construction_projects where id=$1', [
               projectId,
             ])
           ).rows,

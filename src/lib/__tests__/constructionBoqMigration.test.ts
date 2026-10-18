@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const sql = readFileSync('supabase/migrations/20261030000000_construction_project_boq.sql', 'utf8');
 describe('construction BOQ migration contract', () => {
   it('adds the nullable forward-compatible project lock and RLS-protected lines', () => {
-    expect(sql).toContain('ALTER TABLE public.projects ADD COLUMN boq_locked_at timestamptz');
+    expect(sql).toContain('ALTER TABLE public.construction_projects ADD COLUMN boq_locked_at timestamptz');
     expect(sql).toContain('CREATE TABLE public.project_boq_lines');
     expect(sql).toContain('ENABLE ROW LEVEL SECURITY');
     expect(sql).toContain('construction_procurement_capabilities_for(p.business_id)');

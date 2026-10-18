@@ -424,3 +424,50 @@ inventory) is the substitute.
    the schema-qualified name or resolve the schema at apply time.** Note the
    SQL editor is not a faithful proxy for `db push`: anything that only works
    there, works nowhere else.
+
+11. **`relation "projects" already exists` (SQLSTATE 42P07).** This is a
+    schema-name collision, not a project-health or connection problem. The
+    former Phase A migration used the generic `public.projects` name, and the
+    failing `CREATE TABLE` found that relation name occupied. The error alone
+    does not establish whether it is an unrelated legacy relation or a
+    Phase A table left by migration-history drift. Retries cannot resolve it.
+    The construction feature now uses the dedicated
+    `public.construction_projects` table; its repositories and later BOQ,
+    valuation and reporting migrations all target that relation.
+
+    `20261028000000_construction_projects.sql` adopts `public.projects` only if
+    its column types, nullability, primary/foreign keys and named checks match
+    the full Phase A construction table. Otherwise it leaves the existing
+    relation untouched and creates `construction_projects`. The forward
+    migration `20261028000001_construction_projects_namespace.sql` handles
+    environments that already recorded the old Phase A version (notably
+    staging): it renames only the recognized construction table, rewrites the
+    feature's known RPC bodies, and creates a restricted security-invoker
+    compatibility view only when the old name is free. An unrecognized existing
+    relation is never dropped, renamed or modified.
+
+    Because the reported attempt failed at table creation, do **not** mark
+    `20261028000000` as applied with `supabase migration repair`; that could
+    skip its remaining RLS, grants, FKs, triggers and RPCs. First inspect the
+    remote migration history and relation definition read-only. If the version
+    is still pending, apply the corrected chain; if it is already recorded, the
+    edited source will be skipped. The forward migration renames only a table
+    with the exact Phase A signature and deliberately stops if the relation or
+    migration history does not match that expected state; reconcile such drift
+    manually rather than bypassing the guard. After rollout, verify the remote
+    history and confirm `public.construction_projects` has the expected table,
+    policies, indexes and
+    RPC dependencies. The CI push wrapper fails immediately with the migration
+    name and recovery warning on SQLSTATE 42P07 instead of spending three
+    attempts retrying deterministic DDL.
+
+    Process exception: the source of `20261028000000` was corrected because the
+    reported failure occurs at its original `CREATE TABLE public.projects`.
+    Remote schema and migration history were not queried, so confirm both
+    before rollout. If production has not recorded that migration, the corrected
+    source can run; if it has recorded the original migration, the source edit is
+    skipped and the forward migration handles only the exact Phase A schema,
+    stopping for manual reconciliation otherwise. The release suite covers a
+    clean replay, a pre-existing unrelated
+    `public.projects` table, and a simulated staging upgrade from the original
+    Phase A schema.

@@ -30,7 +30,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_project public.projects%ROWTYPE;
+  v_project public.construction_projects%ROWTYPE;
   v_boq_total numeric := 0;
   v_po_total numeric := 0;
   v_issued_total numeric := 0;
@@ -54,7 +54,7 @@ BEGIN
   END IF;
 
   SELECT * INTO v_project
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = p_project_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Project not found.' USING ERRCODE = 'P0002';
@@ -257,13 +257,13 @@ BEGIN
             ON vl.valuation_id = latest_val.id AND vl.boq_line_id = b.id
          GROUP BY latest_val.id
       ), 0) AS completion_pct
-    FROM public.projects p
+    FROM public.construction_projects p
     WHERE p.business_id = p_business_id
   ),
   billed AS (
     SELECT COALESCE(SUM(v.net_amount), 0) AS amount
       FROM public.project_valuations v
-      JOIN public.projects p ON p.id = v.project_id
+      JOIN public.construction_projects p ON p.id = v.project_id
      WHERE p.business_id = p_business_id
        AND v.status = 'invoiced'
   ),
@@ -277,7 +277,7 @@ BEGIN
        AND EXISTS (
          SELECT 1
            FROM public.project_valuations v
-           JOIN public.projects p ON p.id = v.project_id
+           JOIN public.construction_projects p ON p.id = v.project_id
           WHERE p.business_id = p_business_id
             AND v.status = 'invoiced'
             AND v.invoice_id = i.id
@@ -323,7 +323,7 @@ BEGIN
   END IF;
 
   SELECT p.business_id INTO v_business_id
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = p_project_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Project not found.' USING ERRCODE = 'P0002';
@@ -407,7 +407,7 @@ BEGIN
         2
       )::numeric AS retention_balance,
       MIN(r.created_at) FILTER (WHERE r.type = 'withheld') AS oldest_retention_date
-    FROM public.projects p
+    FROM public.construction_projects p
     JOIN public.project_retention_ledger r ON r.project_id = p.id
     LEFT JOIN public.project_valuations rv ON rv.id = r.valuation_id
     WHERE p.business_id = p_business_id
@@ -517,20 +517,20 @@ BEGIN
             ON vl.valuation_id = latest_val.id AND vl.boq_line_id = b.id
          GROUP BY latest_val.id
       ), 0) AS completion_pct
-    FROM public.projects p
+    FROM public.construction_projects p
     WHERE p.business_id = p_business_id
   ),
   billed_all AS (
     SELECT COALESCE(SUM(v.net_amount), 0) AS amount
       FROM public.project_valuations v
-      JOIN public.projects p ON p.id = v.project_id
+      JOIN public.construction_projects p ON p.id = v.project_id
      WHERE p.business_id = p_business_id
        AND v.status = 'invoiced'
   ),
   billed_period AS (
     SELECT COALESCE(SUM(v.net_amount), 0) AS amount
       FROM public.project_valuations v
-      JOIN public.projects p ON p.id = v.project_id
+      JOIN public.construction_projects p ON p.id = v.project_id
      WHERE p.business_id = p_business_id
        AND v.status = 'invoiced'
        AND (v_since IS NULL OR v.valuation_date >= v_since)
@@ -545,7 +545,7 @@ BEGIN
        AND EXISTS (
          SELECT 1
            FROM public.project_valuations v
-           JOIN public.projects p ON p.id = v.project_id
+           JOIN public.construction_projects p ON p.id = v.project_id
           WHERE p.business_id = p_business_id
             AND v.status = 'invoiced'
             AND v.invoice_id = i.id
@@ -562,7 +562,7 @@ BEGIN
        AND EXISTS (
          SELECT 1
            FROM public.project_valuations v
-           JOIN public.projects p ON p.id = v.project_id
+           JOIN public.construction_projects p ON p.id = v.project_id
           WHERE p.business_id = p_business_id
             AND v.status = 'invoiced'
             AND v.invoice_id = i.id
@@ -574,21 +574,21 @@ BEGIN
         SELECT SUM(l.quantity_ordered * COALESCE(l.expected_unit_price, 0))
           FROM public.construction_purchase_orders o
           JOIN public.construction_purchase_order_lines l ON l.po_id = o.id
-          JOIN public.projects p ON p.id = o.project_id
+          JOIN public.construction_projects p ON p.id = o.project_id
          WHERE p.business_id = p_business_id
            AND (v_since IS NULL OR o.created_at::date >= v_since)
       ), 0)
       + COALESCE((
         SELECT SUM(i.total_cost_base)
           FROM public.construction_material_issues i
-          JOIN public.projects p ON p.id = i.project_id
+          JOIN public.construction_projects p ON p.id = i.project_id
          WHERE p.business_id = p_business_id
            AND (v_since IS NULL OR i.issue_date >= v_since)
       ), 0)
       - COALESCE((
         SELECT SUM(r.total_cost_base)
           FROM public.construction_material_returns r
-          JOIN public.projects p ON p.id = r.project_id
+          JOIN public.construction_projects p ON p.id = r.project_id
          WHERE p.business_id = p_business_id
            AND (v_since IS NULL OR r.return_date >= v_since)
       ), 0) AS amount
@@ -676,7 +676,7 @@ BEGIN
          WHERE r.project_id = p.id
       ), 0), 2)::numeric AS total_returned_value,
       round(p.budget, 2)::numeric AS budget
-    FROM public.projects p
+    FROM public.construction_projects p
     WHERE p.business_id = p_business_id
   )
   SELECT

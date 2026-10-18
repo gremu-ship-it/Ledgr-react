@@ -149,6 +149,26 @@ while :; do
     exit 1
   fi
 
+  # Duplicate relation (42P07): unlike a pooler timeout, PostgreSQL will return
+  # the same error on every attempt. This usually means the remote schema has
+  # an out-of-band/legacy relation colliding with a migration's CREATE TABLE.
+  # Never mark the migration applied or drop/rename the relation automatically:
+  # first compare its shape with the complete migration and preserve unknown
+  # production data. The reported `projects` collision is handled by namespacing
+  # the construction feature as public.construction_projects, with a forward
+  # migration for environments that applied the original staging version.
+  if grep -Eq 'SQLSTATE 42P07|relation "[^"]+" already exists' "${push_output}"; then
+    collision="$(sed -nE 's/.*relation "([^"]+)" already exists.*/\1/p' "${push_output}" | head -n 1 || true)"
+    failed_migration="$(grep -oE '[0-9]{14}_[a-z0-9_]+\.sql' "${push_output}" | tail -n 1 || true)"
+    echo "::error::supabase db push for ${label} hit SQLSTATE 42P07: relation ${collision:-<unknown>} already exists${failed_migration:+ while applying ${failed_migration}}. This is deterministic; not retrying."
+    if [[ "${collision}" == "projects" ]]; then
+      echo "::error::The construction feature now uses public.construction_projects. Do not drop public.projects or mark ${failed_migration:-the migration} applied until you verify whether it is an unrelated legacy relation or a Phase A table and confirm the remote migration history. See docs/database/database-operations.md §11."
+    else
+      echo "::error::Inspect the existing relation/object and the complete failing migration. Do not drop, rename, or mark the migration applied until ownership and schema equivalence are confirmed."
+    fi
+    exit 1
+  fi
+
   # Drift check: the CLI prints one "supabase migration repair --status
   # reverted <version>" hint line per remote-only version.
   drift_versions="$(grep -oE 'migration repair --status reverted [0-9]+' "${push_output}" \

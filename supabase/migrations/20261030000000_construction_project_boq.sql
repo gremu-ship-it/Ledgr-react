@@ -1,10 +1,29 @@
 -- Phase B: construction schedule of values (BOQ).
-ALTER TABLE public.projects ADD COLUMN boq_locked_at timestamptz;
-COMMENT ON COLUMN public.projects.boq_locked_at IS 'Set when first valuation is created; BOQ becomes read-only after this point.';
+ALTER TABLE public.construction_projects ADD COLUMN boq_locked_at timestamptz;
+COMMENT ON COLUMN public.construction_projects.boq_locked_at IS 'Set when first valuation is created; BOQ becomes read-only after this point.';
+
+-- The Phase A namespace migration creates this restricted view only on schemas
+-- where `public.projects` was free. Refresh its expanded column list after the
+-- BOQ lock column is added, without ever changing an unrelated legacy object.
+DO $refresh_projects_compatibility_view$
+DECLARE v_projects_oid oid := to_regclass('public.projects');
+BEGIN
+ IF v_projects_oid IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM pg_class
+       WHERE oid = v_projects_oid
+         AND relkind = 'v'
+         AND reloptions @> ARRAY['security_invoker=true']
+    )
+    AND obj_description(v_projects_oid, 'pg_class') = 'Ledgr construction projects compatibility view' THEN
+  EXECUTE 'CREATE OR REPLACE VIEW public.projects WITH (security_invoker = true) AS SELECT * FROM public.construction_projects';
+ END IF;
+END
+$refresh_projects_compatibility_view$;
 
 CREATE TABLE public.project_boq_lines (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
- project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+ project_id uuid NOT NULL REFERENCES public.construction_projects(id) ON DELETE CASCADE,
  line_number text NOT NULL,
  description text NOT NULL DEFAULT '',
  quantity decimal(18,4) NOT NULL DEFAULT 0 CHECK (quantity >= 0 AND quantity <> 'NaN'::numeric),
@@ -18,18 +37,18 @@ CREATE TABLE public.project_boq_lines (
 CREATE INDEX project_boq_lines_order ON public.project_boq_lines(project_id,sort_order);
 ALTER TABLE public.project_boq_lines ENABLE ROW LEVEL SECURITY;
 CREATE POLICY project_boq_lines_member_grants ON public.project_boq_lines FOR ALL TO authenticated
- USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id=project_id AND public.is_business_member(p.business_id)
+ USING (EXISTS (SELECT 1 FROM public.construction_projects p WHERE p.id=project_id AND public.is_business_member(p.business_id)
    AND cardinality(public.construction_procurement_capabilities_for(p.business_id))>0))
- WITH CHECK (EXISTS (SELECT 1 FROM public.projects p WHERE p.id=project_id AND public.is_business_member(p.business_id)
+ WITH CHECK (EXISTS (SELECT 1 FROM public.construction_projects p WHERE p.id=project_id AND public.is_business_member(p.business_id)
    AND cardinality(public.construction_procurement_capabilities_for(p.business_id))>0));
 REVOKE ALL ON public.project_boq_lines FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.project_boq_lines TO authenticated;
 
 CREATE FUNCTION public.create_boq_line(p_project_id uuid,p_line_number text,p_description text,p_quantity numeric,p_unit text,p_rate numeric,p_sort_order int)
 RETURNS public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_project public.projects; v_line public.project_boq_lines;
+DECLARE v_project public.construction_projects; v_line public.project_boq_lines;
 BEGIN
- SELECT * INTO v_project FROM public.projects WHERE id=p_project_id FOR UPDATE;
+ SELECT * INTO v_project FROM public.construction_projects WHERE id=p_project_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found.' USING ERRCODE='P0002'; END IF;
  PERFORM public._ledgr_construction_actor(v_project.business_id,'procurement.master.manage');
  IF v_project.boq_locked_at IS NOT NULL THEN RAISE EXCEPTION 'BOQ is locked and cannot be edited' USING ERRCODE='55000'; END IF;
@@ -41,9 +60,9 @@ END $$;
 
 CREATE FUNCTION public.update_boq_line(p_line_id uuid,p_line_number text,p_description text,p_quantity numeric,p_unit text,p_rate numeric,p_sort_order int)
 RETURNS public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_project public.projects; v_line public.project_boq_lines;
+DECLARE v_project public.construction_projects; v_line public.project_boq_lines;
 BEGIN
- SELECT p.* INTO v_project FROM public.projects p JOIN public.project_boq_lines l ON l.project_id=p.id WHERE l.id=p_line_id FOR UPDATE OF p;
+ SELECT p.* INTO v_project FROM public.construction_projects p JOIN public.project_boq_lines l ON l.project_id=p.id WHERE l.id=p_line_id FOR UPDATE OF p;
  IF NOT FOUND THEN RAISE EXCEPTION 'BOQ line not found.' USING ERRCODE='P0002'; END IF;
  PERFORM public._ledgr_construction_actor(v_project.business_id,'procurement.master.manage');
  IF v_project.boq_locked_at IS NOT NULL THEN RAISE EXCEPTION 'BOQ is locked and cannot be edited' USING ERRCODE='55000'; END IF;
@@ -53,20 +72,20 @@ BEGIN
 END $$;
 
 CREATE FUNCTION public.delete_boq_line(p_line_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_project public.projects; v_project_id uuid;
+DECLARE v_project public.construction_projects; v_project_id uuid;
 BEGIN
  SELECT project_id INTO v_project_id FROM public.project_boq_lines WHERE id=p_line_id;
  IF NOT FOUND THEN RAISE EXCEPTION 'BOQ line not found.' USING ERRCODE='P0002'; END IF;
- SELECT * INTO v_project FROM public.projects WHERE id=v_project_id FOR UPDATE;
+ SELECT * INTO v_project FROM public.construction_projects WHERE id=v_project_id FOR UPDATE;
  PERFORM public._ledgr_construction_actor(v_project.business_id,'procurement.master.manage');
  IF v_project.boq_locked_at IS NOT NULL THEN RAISE EXCEPTION 'BOQ is locked and cannot be edited' USING ERRCODE='55000'; END IF;
  DELETE FROM public.project_boq_lines WHERE id=p_line_id;
 END $$;
 
 CREATE FUNCTION public.reorder_boq_lines(p_project_id uuid,p_line_ids uuid[]) RETURNS SETOF public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_project public.projects; v_id uuid; v_order int:=0; v_count int;
+DECLARE v_project public.construction_projects; v_id uuid; v_order int:=0; v_count int;
 BEGIN
- SELECT * INTO v_project FROM public.projects WHERE id=p_project_id FOR UPDATE;
+ SELECT * INTO v_project FROM public.construction_projects WHERE id=p_project_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found.' USING ERRCODE='P0002'; END IF;
  PERFORM public._ledgr_construction_actor(v_project.business_id,'procurement.master.manage');
  IF v_project.boq_locked_at IS NOT NULL THEN RAISE EXCEPTION 'BOQ is locked and cannot be edited' USING ERRCODE='55000'; END IF;
@@ -82,9 +101,9 @@ BEGIN
 END $$;
 
 CREATE FUNCTION public.bulk_upsert_boq_lines(p_project_id uuid,p_lines jsonb) RETURNS SETOF public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
-DECLARE v_project public.projects; v jsonb; v_id uuid; v_qty numeric; v_rate numeric;
+DECLARE v_project public.construction_projects; v jsonb; v_id uuid; v_qty numeric; v_rate numeric;
 BEGIN
- SELECT * INTO v_project FROM public.projects WHERE id=p_project_id FOR UPDATE;
+ SELECT * INTO v_project FROM public.construction_projects WHERE id=p_project_id FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found.' USING ERRCODE='P0002'; END IF;
  PERFORM public._ledgr_construction_actor(v_project.business_id,'procurement.master.manage');
  IF v_project.boq_locked_at IS NOT NULL THEN RAISE EXCEPTION 'BOQ is locked and cannot be edited' USING ERRCODE='55000'; END IF;
@@ -115,10 +134,10 @@ CREATE FUNCTION public.get_boq_summary(p_project_id uuid) RETURNS TABLE(total_bo
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_business uuid;
 BEGIN
- SELECT p.business_id INTO v_business FROM public.projects p WHERE p.id=p_project_id;
+ SELECT p.business_id INTO v_business FROM public.construction_projects p WHERE p.id=p_project_id;
  IF NOT FOUND THEN RAISE EXCEPTION 'Project not found.' USING ERRCODE='P0002'; END IF;
  IF cardinality(public.construction_procurement_capabilities_for(v_business))=0 THEN RAISE EXCEPTION 'Construction procurement access required.' USING ERRCODE='42501'; END IF;
- RETURN QUERY SELECT coalesce(sum(l.total_value),0)::numeric,p.contract_sum,(p.contract_sum-coalesce(sum(l.total_value),0))::numeric,count(l.id),p.boq_locked_at IS NOT NULL FROM public.projects p LEFT JOIN public.project_boq_lines l ON l.project_id=p.id WHERE p.id=p_project_id GROUP BY p.id;
+ RETURN QUERY SELECT coalesce(sum(l.total_value),0)::numeric,p.contract_sum,(p.contract_sum-coalesce(sum(l.total_value),0))::numeric,count(l.id),p.boq_locked_at IS NOT NULL FROM public.construction_projects p LEFT JOIN public.project_boq_lines l ON l.project_id=p.id WHERE p.id=p_project_id GROUP BY p.id;
 END $$;
 
 DO $$ DECLARE f text; BEGIN
