@@ -123,3 +123,98 @@ The four new tests and the existing provisioning/project suites pass together
 (47 database tests). Apply this forward migration to the affected environment
 through the normal migration pipeline before retrying the Settings save; a browser
 refresh alone cannot replace the deployed database function.
+
+## Follow-up: the 2026-10-18 production collision and the convergent re-apply
+
+The first production deploy carrying Phase A (Deploy #224, run `39118959766`)
+failed on the **first statement** of `20261028000000_construction_projects.sql`,
+three attempts in a row:
+
+```
+Applying migration 20261028000000_construction_projects.sql...
+ERROR: relation "projects" already exists (SQLSTATE 42P07)
+At statement: 0
+```
+
+Production's `supabase_migrations.schema_migrations` did **not** record version
+`20261028000000` — the push listed the file as pending — yet `public.projects`
+existed on that project. Objects and history had diverged: the Phase A objects
+reached production outside `supabase db push`. A hand application (the Supabase
+SQL editor, or `psql`) commits every statement it manages to run and records no
+migration version, so the schema moved while the history stayed behind. Retrying
+cannot fix that; each attempt reproduces the collision byte for byte, which is
+what the three attempts did.
+
+This is the mirror image of the drift case `scripts/ci/supabase-link-and-push.sh`
+already handled (history ahead of the checkout → `migration repair --status
+reverted`), and the assumption in that header comment — "when the corresponding
+file lands in the repo later, its push applies and records it as usual" — only
+holds if the earlier application left nothing behind. Here it left everything.
+
+### What changed
+
+* **The Phase A/B/C migrations converge.** `20261028000000`, `20261030000000` and
+  `20261031000001` now guard every object they declare: `CREATE TABLE/INDEX IF
+  NOT EXISTS`, `DROP POLICY|TRIGGER IF EXISTS` before each `CREATE POLICY|TRIGGER`
+  (PostgreSQL offers no `IF NOT EXISTS` for either), `CREATE OR REPLACE FUNCTION`,
+  `ADD COLUMN IF NOT EXISTS`. Phase A additionally re-asserts its declared
+  `NOT NULL`, `DEFAULT` and `CHECK` contracts additively, so a table that arrived
+  by hand with the right columns but none of the guarantees still converges
+  instead of failing later inside `create_project`. Nothing is dropped, no row is
+  rewritten and no grant is widened: on a clean replay, on staging (where the
+  version *is* recorded, so `db push` skips the file) and on a second application,
+  the files are no-ops.
+* **A foreign `projects` is refused, not adopted.** Phase A starts with a
+  read-only guard that compares the live columns and types of `public.projects`
+  and `public.project_status_log` against the declared ones. A different table
+  owning the name — production is the legacy Ledgr project, which already held
+  `api_keys`, `webhooks` and `webhook_deliveries` before this repository declared
+  them — raises with every difference, the live column list and the row count,
+  having changed nothing. `IF NOT EXISTS` alone would have kept the foreign shape
+  and the RPCs, FKs and RLS policy built on it would have failed at runtime.
+  Moving such a table aside is an owner decision, not a deploy's.
+* **The pipeline stops retrying collisions and shows the live object.**
+  `scripts/ci/supabase-link-and-push.sh` classifies the collision SQLSTATEs
+  (42P07, 42710, 42701, 42723, 42P06) as deterministic: one attempt, an
+  annotation naming the file and object, and a call to
+  `scripts/ci/migration-conflict-forensics.sh`, which prints the live shape
+  (columns/types, RLS, policies, constraints, indexes, triggers, row estimate)
+  plus whether the version is recorded and what the remote head is, through the
+  read-only Management API endpoint — no database password, no writes, always
+  exit 0 so it can never mask the real failure. Genuine transport failures keep
+  their three attempts.
+* **The invariant is pinned.** `src/lib/__tests__/migrationInvariants.test.ts`
+  rule E fails the fast suite if any migration from `20261028000000` onwards
+  declares an object without a guard (or without a paired `DROP ... IF EXISTS`
+  where PostgreSQL has no `IF NOT EXISTS`).
+
+### Evidence
+
+`tests/database/construction_projects_convergence.test.js` replays the whole
+migration set in a real disposable PostgreSQL 17 in four states — clean,
+hand-applied (all objects live, then the pending files re-applied three times),
+partial (only Phase A's `CREATE TABLE`/`INDEX` head applied, no RLS, policies,
+RPCs, triggers or `project_id` dimensions), and legacy (a foreign `projects` with
+`id serial`, a `client` column and two rows). It asserts that the converged
+databases are **entry-for-entry identical** to the clean replay across columns,
+defaults, nullability, indexes, constraints, policies, RLS flags, triggers,
+function signatures *and bodies*, grants and execute privileges; that RLS is on
+and browser writes stay revoked after convergence; and that the legacy database
+is refused with SQLSTATE 42P07 while its columns, rows and the rest of the schema
+are untouched (no `project_status_log`, no `project_id` dimensions, no RPCs).
+
+`tests/ci/migration-collision.test.mjs` executes the real deploy script with a
+fake `supabase` and a fake `curl`: one push attempt on a collision (never three),
+no `migration repair`, the password never in the log, the forensics report and
+verdict present, column collisions reported with their table, and three attempts
+preserved for a pooler timeout.
+
+Unchanged by this follow-up: 93 release checks across
+`construction-projects`, `construction-procurement`, `construction-returns`,
+`construction-branch-scope`, `construction-provisioning` and
+`business-operating-model-audit`; 1291 fast unit tests; `typecheck`; `lint` (four
+pre-existing unused-disable warnings); and
+`tests/database/public_api_table_convergence.test.js` (17 checks), which replays
+the same chain over a legacy-shaped database.
+
+Runbook: DEPLOYMENT.md → `relation "..." already exists (SQLSTATE 42P07)`.

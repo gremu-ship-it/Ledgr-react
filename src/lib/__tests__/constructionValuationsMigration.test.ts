@@ -27,7 +27,10 @@ describe('construction valuation migration contract', () => {
       'project_valuation_lines',
       'project_retention_ledger',
     ]) {
-      expect(sql).toContain(`CREATE TABLE public.${table}`);
+      // Guarded: `db push` re-applies a file whose version the remote history
+      // does not record, which is exactly what production did on 2026-10-18
+      // (SQLSTATE 42P07). An unguarded CREATE TABLE turns that into an outage.
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS public.${table}`);
       expect(sql).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
       expect(sql).toContain(`${table}_member_grants`);
     }
@@ -38,6 +41,28 @@ describe('construction valuation migration contract', () => {
     expect(sql).toContain('project_retention_ledger_invoice_id_fkey');
     expect(sql).toContain('construction_procurement_capabilities_for(p.business_id)');
     expect(sql).toContain('GRANT SELECT ON public.project_valuations');
+  });
+
+  it('is safe to re-apply on a database that already carries its objects', () => {
+    expect(sql).not.toMatch(/^CREATE TABLE public\./m);
+    expect(sql).not.toMatch(/^CREATE (UNIQUE )?INDEX (?!IF NOT EXISTS)/m);
+    // CREATE POLICY has no IF NOT EXISTS form, so each one is preceded by a
+    // DROP POLICY IF EXISTS on the same policy and table (asserted below).
+    const created = [...sql.matchAll(/^CREATE POLICY (\w+)\s+\n?\s*ON public\.(\w+)/gm)]
+      .map((m) => `${m[1]} ON public.${m[2]}`);
+    const dropped = [...sql.matchAll(/^DROP POLICY IF EXISTS (\w+) ON public\.(\w+);/gm)]
+      .map((m) => `${m[1]} ON public.${m[2]}`);
+    expect(created.length).toBeGreaterThan(0);
+    for (const policy of created) {
+      expect(dropped).toContain(policy);
+    }
+    for (const table of [
+      'project_valuations',
+      'project_valuation_lines',
+      'project_retention_ledger',
+    ]) {
+      expect(sql).toContain(`DROP POLICY IF EXISTS ${table}_member_grants ON public.${table}`);
+    }
   });
 
   it('enforces cumulative percentages, correction reasons, sequential drafts and the first-valuation BOQ lock', () => {

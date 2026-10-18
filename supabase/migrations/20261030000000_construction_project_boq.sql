@@ -1,8 +1,19 @@
 -- Phase B: construction schedule of values (BOQ).
-ALTER TABLE public.projects ADD COLUMN boq_locked_at timestamptz;
+--
+-- CONVERGENT RE-APPLY (2026-10-18): production carries the Phase A objects
+-- without a recorded migration version (see the header of
+-- 20261028000000_construction_projects.sql), so this file can arrive on a
+-- database where a hand application already created some of it. Its DDL is
+-- guarded the same way — IF NOT EXISTS for the table, the index and the new
+-- projects column, DROP POLICY IF EXISTS before CREATE POLICY, CREATE OR
+-- REPLACE for every function — and it stays additive: no column is dropped, no
+-- BOQ line is rewritten, no grant is widened. A clean replay, staging (where the
+-- version is recorded and `db push` skips the file) and a second application are
+-- all no-ops.
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS boq_locked_at timestamptz;
 COMMENT ON COLUMN public.projects.boq_locked_at IS 'Set when first valuation is created; BOQ becomes read-only after this point.';
 
-CREATE TABLE public.project_boq_lines (
+CREATE TABLE IF NOT EXISTS public.project_boq_lines (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
  line_number text NOT NULL,
@@ -15,8 +26,9 @@ CREATE TABLE public.project_boq_lines (
  created_at timestamptz NOT NULL DEFAULT now(),
  updated_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX project_boq_lines_order ON public.project_boq_lines(project_id,sort_order);
+CREATE INDEX IF NOT EXISTS project_boq_lines_order ON public.project_boq_lines(project_id,sort_order);
 ALTER TABLE public.project_boq_lines ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS project_boq_lines_member_grants ON public.project_boq_lines;
 CREATE POLICY project_boq_lines_member_grants ON public.project_boq_lines FOR ALL TO authenticated
  USING (EXISTS (SELECT 1 FROM public.projects p WHERE p.id=project_id AND public.is_business_member(p.business_id)
    AND cardinality(public.construction_procurement_capabilities_for(p.business_id))>0))
@@ -25,7 +37,7 @@ CREATE POLICY project_boq_lines_member_grants ON public.project_boq_lines FOR AL
 REVOKE ALL ON public.project_boq_lines FROM PUBLIC,anon,authenticated;
 GRANT SELECT ON public.project_boq_lines TO authenticated;
 
-CREATE FUNCTION public.create_boq_line(p_project_id uuid,p_line_number text,p_description text,p_quantity numeric,p_unit text,p_rate numeric,p_sort_order int)
+CREATE OR REPLACE FUNCTION public.create_boq_line(p_project_id uuid,p_line_number text,p_description text,p_quantity numeric,p_unit text,p_rate numeric,p_sort_order int)
 RETURNS public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_project public.projects; v_line public.project_boq_lines;
 BEGIN
@@ -39,7 +51,7 @@ BEGIN
  RETURN v_line;
 END $$;
 
-CREATE FUNCTION public.update_boq_line(p_line_id uuid,p_line_number text,p_description text,p_quantity numeric,p_unit text,p_rate numeric,p_sort_order int)
+CREATE OR REPLACE FUNCTION public.update_boq_line(p_line_id uuid,p_line_number text,p_description text,p_quantity numeric,p_unit text,p_rate numeric,p_sort_order int)
 RETURNS public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_project public.projects; v_line public.project_boq_lines;
 BEGIN
@@ -52,7 +64,7 @@ BEGIN
  RETURN v_line;
 END $$;
 
-CREATE FUNCTION public.delete_boq_line(p_line_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.delete_boq_line(p_line_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_project public.projects; v_project_id uuid;
 BEGIN
  SELECT project_id INTO v_project_id FROM public.project_boq_lines WHERE id=p_line_id;
@@ -63,7 +75,7 @@ BEGIN
  DELETE FROM public.project_boq_lines WHERE id=p_line_id;
 END $$;
 
-CREATE FUNCTION public.reorder_boq_lines(p_project_id uuid,p_line_ids uuid[]) RETURNS SETOF public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.reorder_boq_lines(p_project_id uuid,p_line_ids uuid[]) RETURNS SETOF public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_project public.projects; v_id uuid; v_order int:=0; v_count int;
 BEGIN
  SELECT * INTO v_project FROM public.projects WHERE id=p_project_id FOR UPDATE;
@@ -81,7 +93,7 @@ BEGIN
  RETURN QUERY SELECT * FROM public.project_boq_lines WHERE project_id=p_project_id ORDER BY sort_order;
 END $$;
 
-CREATE FUNCTION public.bulk_upsert_boq_lines(p_project_id uuid,p_lines jsonb) RETURNS SETOF public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+CREATE OR REPLACE FUNCTION public.bulk_upsert_boq_lines(p_project_id uuid,p_lines jsonb) RETURNS SETOF public.project_boq_lines LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_project public.projects; v jsonb; v_id uuid; v_qty numeric; v_rate numeric;
 BEGIN
  SELECT * INTO v_project FROM public.projects WHERE id=p_project_id FOR UPDATE;
@@ -111,7 +123,7 @@ BEGIN
  RETURN QUERY SELECT * FROM public.project_boq_lines WHERE project_id=p_project_id ORDER BY sort_order,line_number;
 END $$;
 
-CREATE FUNCTION public.get_boq_summary(p_project_id uuid) RETURNS TABLE(total_boq_value numeric,contract_sum numeric,variance numeric,line_count bigint,is_locked boolean)
+CREATE OR REPLACE FUNCTION public.get_boq_summary(p_project_id uuid) RETURNS TABLE(total_boq_value numeric,contract_sum numeric,variance numeric,line_count bigint,is_locked boolean)
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
 DECLARE v_business uuid;
 BEGIN

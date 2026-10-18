@@ -18,6 +18,11 @@
 
 -- Snapshot the overrides before the change so the verification below can prove
 -- that nothing outside the intended `pos` key moved.
+-- DROP first: `supabase db push` normally gives each file its own transaction
+-- (so ON COMMIT DROP is enough), but a session that re-runs this file — a manual
+-- re-apply while reconciling the 2026-10-18 production collision, say — would
+-- otherwise die on 42P07 for its own scratch table.
+DROP TABLE IF EXISTS _pos_pin_snapshot;
 CREATE TEMP TABLE _pos_pin_snapshot ON COMMIT DROP AS
 SELECT id, operating_models, capability_overrides
   FROM public.businesses;
