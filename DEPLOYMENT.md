@@ -76,7 +76,7 @@ from `supabase/migrations/`; `deploy.yml` runs `supabase db push` against each.
 | `APP_URL_STAGING` / `APP_URL_PROD` | `https://staging.ledgr.app` | Edge Function secrets |
 | `SENTRY_ORG` | `ledgr` | both |
 | `SENTRY_PROJECT_STAGING` / `SENTRY_PROJECT_PROD` | `ledgr-web-staging` / `ledgr-web-prod` | Sentry upload |
-| `STAGING_URL` / `PRODUCTION_URL` | `https://staging.ledgr.app` | environment URLs |
+| `STAGING_URL` / `PRODUCTION_URL` | `https://staging.ledgr.app` | environment URLs — if unset, `deploy.yml` falls back to `APP_URL_*` then to the default Vercel aliases (`https://ledgr-react-prod.vercel.app` for staging, `https://ledgr-react.vercel.app` for production) so the pre-flight migration guard does not block on a missing variable; set the variable explicitly to silence the fallback notice |
 | `RAILWAY_PROJECT_ID_STAGING` / `_PROD` | `proj_xxx` | optional gateway |
 
 ### Repository Secrets (`Settings → Secrets and variables → Actions → Secrets`)
@@ -136,6 +136,25 @@ workflow versions began failing on 2026-09-08 with **no intervening repository
 change**. That points to the GitHub secrets — or the Supabase database
 passwords they wrap — having been rotated, removed, or rescoped since then.
 Re-entering the current database passwords in step 1 is the fix.
+
+#### `PRODUCTION_URL is not configured; refusing to migrate without a verifiable live frontend URL.`
+
+`deploy.yml`'s pre-flight step checks `FRONTEND_LIVE_URL` (derived from `vars.PRODUCTION_URL` for production, `vars.STAGING_URL` for staging) before running the irreversible `supabase db push`. If the variable is empty the job failed with this error and the database was never migrated — the release is safely blocked but no frontend ships.
+
+**Fix (2026-10-18 resilient fallback):** `deploy.yml` now falls back automatically:
+
+```
+PRODUCTION_URL → APP_URL_PROD → https://ledgr-react.vercel.app
+STAGING_URL    → APP_URL_STAGING → https://ledgr-react-prod.vercel.app
+```
+
+so a missing `PRODUCTION_URL` no longer blocks the deploy — the fallback Vercel alias is used and the job logs a `::notice::` naming the URL. The same applies to staging. To silence the notice and lock the canonical URL, set the repository variable explicitly:
+
+* GitHub → **Settings → Secrets and variables → Actions → Variables → New variable**
+* `PRODUCTION_URL = https://ledgr-react.vercel.app` (or your custom `https://app.ledgr.app`)
+* `STAGING_URL = https://ledgr-react-prod.vercel.app` (or your custom `https://staging.ledgr.app`)
+
+If you use a custom domain, also set `APP_URL_PROD` / `APP_URL_STAGING` to the same origin (they are consumed as Edge Function secrets and for CORS). Re-run the failed workflow via **Actions → Deploy → Run workflow** choosing `production` (or push a `v*` tag). The pre-flight now prints `Frontend live URL for production: …` so you can confirm which URL was resolved without opening the deploy log's environment URL field.
 
 #### `Unexpected error retrieving remote project status: {"message":"Unauthorized"}`
 
