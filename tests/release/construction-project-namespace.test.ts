@@ -28,6 +28,32 @@ type MigrationHookContext = {
 beforeAll(async () => {
   db = await createDatabaseFixture({
     beforeMigration: async ({ client, name }: MigrationHookContext) => {
+      if (name === '20261031000001_construction_progress_valuations.sql') {
+        // Same staging pattern as the BOQ probe below, confirmed by the
+        // remote history: valuations (and reporting) were already applied
+        // against the old public.projects name before the namespace
+        // migration existed, so their RPCs must have been rewritten too.
+        const { rows } = await client.query(
+          "select pg_get_functiondef('public.get_retention_summary(uuid)'::regprocedure) as definition",
+        );
+        const definition = rows[0]?.definition;
+        if (!definition?.includes('public.construction_projects') || definition.includes('public.projects')) {
+          throw new Error('The simulated existing valuation RPC was not rewritten by the namespace migration.');
+        }
+        await client.query('DROP FUNCTION public.get_retention_summary(uuid)');
+        return;
+      }
+      if (name === '20261101000000_construction_project_reporting.sql') {
+        const { rows } = await client.query(
+          "select pg_get_functiondef('public.get_project_pnl(uuid)'::regprocedure) as definition",
+        );
+        const definition = rows[0]?.definition;
+        if (!definition?.includes('public.construction_projects') || definition.includes('public.projects')) {
+          throw new Error('The simulated existing reporting RPC was not rewritten by the namespace migration.');
+        }
+        await client.query('DROP FUNCTION public.get_project_pnl(uuid)');
+        return;
+      }
       if (name === '20261030000000_construction_project_boq.sql') {
         const { rows } = await client.query(
           "select pg_get_functiondef('public.get_boq_summary(uuid)'::regprocedure) as definition",
@@ -42,7 +68,7 @@ beforeAll(async () => {
       if (name === '20261028000000_construction_projects.sql') {
         // Simulate a fully formed Phase A table already using the old name,
         // one possible explanation for the reported collision. The migration
-        // should adopt it only because its schema signature is exact.
+        // should adopt it because its core Phase A definition matches.
         await client.query(`
           CREATE TABLE public.projects (
             id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -117,10 +143,26 @@ beforeAll(async () => {
         if (!oldSource) throw new Error(`Missing simulated Phase A RPC: ${signature}`);
         await client.query(oldSource.replaceAll('public.construction_projects', 'public.projects'));
       }
-      // Model a later feature RPC that was already applied on staging: the
-      // forward migration must rewrite it now, not leave that source behind.
+      // Model later feature RPCs that were already applied on staging: the
+      // forward migration must rewrite them now, not leave that source
+      // behind. (The remote history confirms BOQ, valuations and reporting
+      // all landed against the old name before this repair existed; the
+      // per-migration hooks above assert each probe was rewritten before
+      // the real migrations replace them.)
       await client.query(`
         CREATE FUNCTION public.get_boq_summary(p_project_id uuid) RETURNS text
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+        BEGIN
+          PERFORM 1 FROM public.projects WHERE id=p_project_id;
+          RETURN 'migration-compat-probe';
+        END $$;
+        CREATE FUNCTION public.get_retention_summary(p_project_id uuid) RETURNS text
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+        BEGIN
+          PERFORM 1 FROM public.projects WHERE id=p_project_id;
+          RETURN 'migration-compat-probe';
+        END $$;
+        CREATE FUNCTION public.get_project_pnl(p_project_id uuid) RETURNS text
         LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
         BEGIN
           PERFORM 1 FROM public.projects WHERE id=p_project_id;

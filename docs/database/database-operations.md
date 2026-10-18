@@ -485,6 +485,25 @@ inventory) is the substitute.
     migration on staging (`project status: ACTIVE_HEALTHY` confirmed the
     project itself was fine).
 
+    Confirmed staging state (remote `schema_migrations`, 2026-10-18):
+    `20261028000000`, `20261030000000` (BOQ), `20261031000001` (valuations)
+    and `20261101000000` (reporting) are recorded, and `20261028000001` is
+    the missing one. The later construction migrations were therefore
+    applied against the old `public.projects` name before the namespace
+    migration existed, so staging's table is an *evolved* Phase A table
+    (it already carries `boq_locked_at` and the BOQ/valuation/reporting
+    tables, policies and RPC bodies built on the old name) — exactly the
+    state the exact-signature fingerprint rejected. On the next push,
+    `supabase db push` skips the recorded versions, applies
+    `20261028000001`, and then applies whatever else is still pending
+    (expected: `20261102000000` and `20261103000000`; confirm with
+    `supabase migration list`, which shows local vs remote per version).
+    The already-recorded BOQ/valuation/reporting migrations are not
+    re-run, so their objects must survive the rename in place: foreign
+    keys and policies follow the table OID automatically, and the
+    namespace migration rewrites the known RPC bodies from
+    `public.projects` to `public.construction_projects`.
+
     The guard now matches Phase A identity *by definition*: all 13 core
     columns with their types and nullability (extra columns allowed), a
     primary key on `id`, foreign keys `business_id → businesses` and
