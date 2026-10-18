@@ -22,6 +22,7 @@ import {
   LifeBuoy,
   Building2,
   ShoppingBag,
+  Factory,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -94,6 +95,19 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
       },
+      {
+        // Manufacturing follows Construction: an Enterprise module selected
+        // through the operating-model profile. `minPlan` is what a
+        // Starter/Growth/Free business hits; `requiresOrgCapability` is what
+        // hides it from an Enterprise business that does not manufacture.
+        // Deliberately no `partnerFeature` and no `allowAllAuthenticatedRoles`,
+        // matching the construction child exactly.
+        labelKey: 'navigation.items.manufacturingWorkspace',
+        path: '/manufacturing',
+        icon: Factory,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
     ],
   },
   {
@@ -139,7 +153,7 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
-// ── Construction label vocabulary ────────────────────────────────────────────
+// ── Materials label vocabulary (construction and manufacturing) ──────────────
 
 /**
  * A construction business buys its materials, stores them on site and moves
@@ -149,6 +163,11 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
  * nav items: `/products` must not appear twice under two names, and a
  * Construction + Retail business (both capabilities on) keeps one Materials
  * entry rather than a Materials/Products pair.
+ *
+ * A manufacturing business reads exactly the same vocabulary: it also buys
+ * materials, holds them in stores and moves them through production, so the
+ * same three keys are rewritten and MANUFACTURING_LABEL_OVERRIDES is an alias
+ * of this table rather than a second one that could drift from it.
  *
  * Keyed by the default label key so any surface holding a nav label — the
  * sidebar, the mobile workspace list, the bottom bar's own More menu — resolves
@@ -160,15 +179,22 @@ export const CONSTRUCTION_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
   'navigation.items.transfers': 'navigation.items.materialTransfers',
 };
 
+/** A manufacturing business uses the same materials vocabulary as construction. */
+export const MANUFACTURING_LABEL_OVERRIDES: Readonly<Record<string, string>> =
+  CONSTRUCTION_LABEL_OVERRIDES;
+
 /**
- * Resolve one nav label key for a business. Non-construction businesses get the
- * key back untouched, so the default vocabulary can never drift.
+ * Resolve one nav label key for a business.
+ *
+ * `useMaterialsVocabulary` is true for a construction or a manufacturing
+ * business; every other business gets the key back untouched, so the default
+ * vocabulary can never drift.
  */
 export function resolveNavLabelKey(
   labelKey: string,
-  isConstruction: boolean,
+  useMaterialsVocabulary: boolean,
 ): string {
-  if (!isConstruction) return labelKey;
+  if (!useMaterialsVocabulary) return labelKey;
   return CONSTRUCTION_LABEL_OVERRIDES[labelKey] ?? labelKey;
 }
 
@@ -181,8 +207,9 @@ export function resolveNavLabelKey(
 export function navLabelResolver(
   isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
 ): (labelKey: string) => string {
-  const isConstruction = isOrgCapabilityEnabled('construction');
-  return (labelKey: string) => resolveNavLabelKey(labelKey, isConstruction);
+  const useMaterialsVocabulary = isOrgCapabilityEnabled('construction')
+    || isOrgCapabilityEnabled('manufacturing');
+  return (labelKey: string) => resolveNavLabelKey(labelKey, useMaterialsVocabulary);
 }
 
 /**
@@ -203,11 +230,11 @@ export function navLabelResolver(
  * A section disappears only when pass 1 leaves it with no items, so a heading
  * can never outlive its entire contents.
  *
- * Pass 3 — vocabulary. A construction business reads the Supply Chain children
- * as Materials / Site Stores / Material Transfers (see
- * CONSTRUCTION_LABEL_OVERRIDES). Only `labelKey` is rewritten: paths, icons and
- * both gates above are untouched, and a business without the construction
- * capability gets the default keys back unchanged.
+ * Pass 3 — vocabulary. A construction or manufacturing business reads the Supply
+ * Chain children as Materials / Site Stores / Material Transfers (see
+ * CONSTRUCTION_LABEL_OVERRIDES, aliased by MANUFACTURING_LABEL_OVERRIDES). Only
+ * `labelKey` is rewritten: paths, icons and both gates above are untouched, and a
+ * business with neither capability gets the default keys back unchanged.
  *
  * `isOrgCapabilityEnabled` is required: without a business-type decision there
  * is nothing to filter on, and silently skipping the type gate is exactly how

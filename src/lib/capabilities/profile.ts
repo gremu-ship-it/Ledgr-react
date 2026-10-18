@@ -20,6 +20,7 @@ export const OPERATING_MODELS = [
   'PROJECT_BASED',
   'GRANT_FUNDED',
   'CONSTRUCTION',
+  'MANUFACTURING',
 ] as const;
 
 export type OperatingModel = (typeof OPERATING_MODELS)[number];
@@ -36,6 +37,7 @@ export const OPERATING_MODEL_LABELS: Readonly<Record<OperatingModel, string>> = 
   PROJECT_BASED: 'Project-based work',
   GRANT_FUNDED: 'Grant-funded',
   CONSTRUCTION: 'Construction',
+  MANUFACTURING: 'Manufacturing',
 };
 
 export const ORGANISATION_CAPABILITIES = [
@@ -44,6 +46,7 @@ export const ORGANISATION_CAPABILITIES = [
   'inventory',
   'services',
   'construction',
+  'manufacturing',
 ] as const;
 
 export type OrganisationCapability = (typeof ORGANISATION_CAPABILITIES)[number];
@@ -78,6 +81,13 @@ const MODEL_CAPABILITIES: Readonly<Record<OperatingModel, readonly OrganisationC
   // stock, so the model unions in inventory and services while leaving POS off:
   // POS is a retail till, not a site workflow.
   CONSTRUCTION: ['sales', 'inventory', 'services', 'construction'],
+  // A manufacturer buys raw materials and converts them into finished goods, so
+  // the model unions in inventory and the manufacturing workspace. It is not a
+  // services business and it does not retail over a till: POS stays off, and
+  // `services` stays off so a manufacturer never inherits the service-sales
+  // vocabulary that a construction business legitimately uses for its own
+  // contracted work.
+  MANUFACTURING: ['sales', 'inventory', 'manufacturing'],
 };
 
 /**
@@ -110,7 +120,8 @@ export function deriveOrganisationCapabilityDefaults(
     && !models.has('WHOLESALE')
     && !models.has('PRODUCT_SALES')
     && !models.has('SERVICE_SALES')
-    && !models.has('CONSTRUCTION');
+    && !models.has('CONSTRUCTION')
+    && !models.has('MANUFACTURING');
 
   return {
     sales: enabled.has('sales') || !pureGrantFunded,
@@ -118,6 +129,7 @@ export function deriveOrganisationCapabilityDefaults(
     inventory: enabled.has('inventory'),
     services: enabled.has('services'),
     construction: enabled.has('construction'),
+    manufacturing: enabled.has('manufacturing'),
   };
 }
 

@@ -132,6 +132,7 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
       inventory: false,
       services: true,
       construction: false,
+      manufacturing: false,
     });
     expect(resolveBusinessCapability('services', profile, fullAccess)).toBe(true);
     expect(resolveBusinessCapability('inventory', profile, fullAccess)).toBe(false);
@@ -153,6 +154,7 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
       inventory: true,
       services: true,
       construction: true,
+      manufacturing: false,
     });
     expect(resolveBusinessCapability('construction', construction, fullAccess)).toBe(true);
     expect(resolveBusinessCapability('inventory', construction, fullAccess)).toBe(true);
@@ -172,6 +174,7 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
       inventory: true,
       services: true,
       construction: true,
+      manufacturing: false,
     });
     expect(resolveBusinessCapability('pos', both, fullAccess)).toBe(true);
     expect(resolveBusinessCapability('construction', both, fullAccess)).toBe(true);
@@ -189,6 +192,7 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
       inventory: false,
       services: false,
       construction: false,
+      manufacturing: false,
     });
     expect(resolveBusinessCapability('construction', projectBased, fullAccess)).toBe(false);
     expect(resolveBusinessCapability('construction', { ...projectBased, operating_models: ['PROJECT_BASED', 'CONSTRUCTION'] }, fullAccess)).toBe(true);

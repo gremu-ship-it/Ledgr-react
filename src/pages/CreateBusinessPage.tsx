@@ -667,6 +667,29 @@ export function CreateBusinessPage() {
           provisionWarningMessage = t('construction.accounts.createProvisionWarning');
         }
       }
+    } else if (form.operating_models.includes('MANUFACTURING')) {
+      // Manufacturing bootstrap, same shape as the construction one: the
+      // production branch, the three typed stores, the Phase-A capability grant
+      // and the WIP Inventory account. Deliberately the same non-fatal
+      // contract — the business and its terms acceptance are already committed.
+      if (!currentUser) {
+        provisionWarningMessage = t('manufacturing.accounts.createOwnerWarning');
+      } else {
+        const manufacturingRpc = supabase as unknown as {
+          rpc: (fn: string, args: Record<string, unknown>) => Promise<{ error: { message?: string } | null }>;
+        };
+        const { error: provisionError } = await manufacturingRpc.rpc('provision_manufacturing_defaults', {
+          p_business_id: businessId,
+          p_owner_user_id: currentUser.id,
+        });
+        const { error: coaProvisionError } = await manufacturingRpc.rpc('provision_manufacturing_coa_accounts', {
+          p_business_id: businessId,
+        });
+        const error = provisionError ?? coaProvisionError;
+        if (error) {
+          provisionWarningMessage = t('manufacturing.accounts.createProvisionWarning');
+        }
+      }
     }
 
     // Reload memberships into the store

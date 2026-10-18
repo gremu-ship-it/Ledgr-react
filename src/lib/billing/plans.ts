@@ -14,7 +14,8 @@ export type PlanCapability =
   | 'inventory'
   | 'core_accounting'          // Accounts, Tax, Assets, Capital and Reports (Starter+)
   | 'accounting_organisation'  // Accounting + Organisation modules (Growth+)
-  | 'construction';            // Construction workspace + procurement commands (Enterprise)
+  | 'construction'             // Construction workspace + procurement commands (Enterprise)
+  | 'manufacturing';           // Manufacturing workspace + BOM commands (Enterprise)
 
 export interface Plan {
   tier: PlanTier;
@@ -95,7 +96,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     priceMWK: 500000,
     annualDiscount: 25,
     transactionLimit: null,
-    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding', 'construction'],
+    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding', 'construction', 'manufacturing'],
     features: [
       'Everything in Pro',
       'Unlimited transactions',

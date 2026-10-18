@@ -468,7 +468,10 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/income', '/expenses', '/invoices', '/pos', '/pos/shifts'].includes(path);
 
     case 'manager':
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports'].includes(path);
+      // `/manufacturing` is manager-and-above: production planning is a
+      // supervisory surface, so stock clerks and cashiers do not get it even
+      // though they keep the Supply Chain children they already had.
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
