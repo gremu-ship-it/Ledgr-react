@@ -445,6 +445,9 @@ jobs:
       # Used only to name the missing secret in pre-flight error messages.
       SUPABASE_SECRET_SUFFIX: PROD
       SUPABASE_ENV_LABEL: production
+      # Never rewrite production migration history from a CLI hint. Stop for
+      # owner-reviewed reconciliation; schema convergence must run in full.
+      SUPABASE_MIGRATION_AUTO_REPAIR: '0'
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

@@ -261,9 +261,9 @@ likelihood:
    section. `deploy.yml` now checks the project status before linking and
    fails fast with a "project is PAUSED" error in this case.
 3. **A transient pooler/network blip** between the GitHub runner and Supabase.
-   `deploy.yml` now retries `link` and `db push` (3 attempts with backoff;
-   the final `db push` attempt runs with `--debug`), so one-off blips go
-   green on their own. Both steps are idempotent, so retrying is safe.
+   `deploy.yml` retries `link` and transient `db push` failures (3 attempts
+   with backoff), so one-off blips can go green on their own. Deterministic
+   schema failures stop immediately and preserve the server's error context. Both steps are idempotent, so retrying is safe.
 4. **Database network restrictions or a disabled pooler.** In the Supabase
    dashboard → Database → Network restrictions / Pooler, confirm the pooler
    is enabled and GitHub Actions runner traffic is allowed.
@@ -343,6 +343,53 @@ an applied migration. The deploy script now refuses to run when it detects two
 files sharing a version prefix, and reports the colliding files by name instead
 of retrying; `src/lib/__tests__/migrationInvariants.test.ts` fails the fast CI
 suite for the same reason.
+
+#### `project_status_log already exists` / SQLSTATE 42P07 annotations
+
+Do not drop, rename or mark the migration applied from this annotation alone.
+Inspect the raw PostgreSQL `ERROR:` line and the complete failing migration.
+`20261028000000_construction_projects.sql` already uses `CREATE TABLE IF NOT
+EXISTS` for the audit table. Its harmless `NOTICE: relation
+"project_status_log" already exists, skipping` used to trigger the wrapper's
+hardcoded 42P07 annotation when a **different** statement or connection failed.
+That reporting defect is reproducible; the production annotation alone does
+not establish the underlying server error or ownership of the live relation.
+
+The wrapper now ignores notices when classifying errors, reports the actual
+SQLSTATE/message/statement, and keeps retries for known transient conditions.
+On a schema failure it optionally adds a read-only catalog report to the job
+summary; diagnostic failure remains UNKNOWN and cannot mask the push failure.
+
+Before another production push, run **Migration forensics (read-only)** against
+`production` once the workflow is available, or run
+`scripts/database/diagnose-project-status-log.sql` in the affected project's SQL
+editor. These inspect owner, object kind, defaults, constraints and FK actions,
+indexes, RLS/policies, grants, triggers, dependencies, RPC types and migration
+history without changing anything. The pending migration sources fail closed
+on an incompatible audit core instead of silently attaching construction
+policies/writes to an unrelated object. Missing constraints are not repaired
+automatically. Matching names or columns is not an ownership approval, and
+recorded migrations skip edited source.
+
+Owner-supplied catalogs subsequently identified the specific construction
+variant: `public.projects.lifecycle_state`, the construction audit/procurement/
+BOQ/valuation/retention FKs, and project RPCs returning the existing table's row
+type. The prepared pending-source correction checks this footprint before an
+in-place lifecycle-column/table rename and preserves the existing row/FK/type
+identities. BOQ/valuation replays also verify pre-existing schemas before reusing
+them; mismatches fail closed rather than repairing or moving unknown objects.
+A populated disposable replica passes all nine pending files after the reported
+head `20261027000000` (133 recorded versions). This is **not** a production apply
+or proof of the unavailable original PostgreSQL error. Production sets
+`SUPABASE_MIGRATION_AUTO_REPAIR=0`, so an unexpected history mismatch stops for
+owner review too. No migration is marked applied: recorded versions still skip
+edited text. Review/staging validation and
+an approved controlled production deployment remain required.
+
+See **docs/database/database-operations.md §13** for the full review checklist,
+source hashes, pending-versus-recorded behavior, and recovery boundaries. Live
+production ownership/equivalence and a successful deployment still require
+verification; local fixtures cannot establish them.
 
 ## 5. Vercel setup
 

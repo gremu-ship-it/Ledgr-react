@@ -27,7 +27,7 @@ describe('construction valuation migration contract', () => {
       'project_valuation_lines',
       'project_retention_ledger',
     ]) {
-      expect(sql).toContain(`CREATE TABLE public.${table}`);
+      expect(sql).toContain(`CREATE TABLE IF NOT EXISTS public.${table}`);
       expect(sql).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
       expect(sql).toContain(`${table}_member_grants`);
     }

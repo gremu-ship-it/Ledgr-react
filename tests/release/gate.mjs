@@ -8,6 +8,8 @@ export function evidenceExit(outcomes) {
 export const suites = {
   'business-operating-model-audit.test.ts': 'business-operating-model-audit.json',
   'construction-projects.test.ts': 'construction-projects.json',
+  'construction-project-audit-ownership.test.ts': 'construction-project-audit-ownership.json',
+  'construction-project-existing-chain.test.ts': 'construction-project-existing-chain.json',
   'construction-project-namespace.test.ts': 'construction-project-namespace.json',
   'construction-project-namespace-legacy.test.ts': 'construction-project-namespace-legacy.json',
   'database.test.ts': 'database.json',
