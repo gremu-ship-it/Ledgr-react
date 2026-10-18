@@ -292,9 +292,33 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
             : new Error(t('construction.accounts.provisionError'));
         }
       }
-      return { saved, provisionError };
+      // Manufacturing mirrors Construction exactly: provision only when the
+      // model is newly added, and always keep the WIP Inventory account present
+      // while the model is selected. Removing the model revokes nothing.
+      const manufacturingAdded = saved.includes('MANUFACTURING')
+        && !savedOperatingModels.includes('MANUFACTURING');
+      if (manufacturingAdded) {
+        try {
+          if (!currentUser?.id) throw new Error(t('manufacturing.accounts.ownerRequired'));
+          await repos.business.provisionManufacturingDefaults(business.id, currentUser.id);
+        } catch (err) {
+          provisionError ??= err instanceof Error
+            ? err
+            : new Error(t('manufacturing.accounts.provisionError'));
+        }
+      }
+      if (saved.includes('MANUFACTURING')) {
+        try {
+          await repos.business.provisionManufacturingCoaAccounts(business.id);
+        } catch (err) {
+          provisionError ??= err instanceof Error
+            ? err
+            : new Error(t('manufacturing.accounts.provisionError'));
+        }
+      }
+      return { saved, provisionError, manufacturingProvision: saved.includes('MANUFACTURING') };
     },
-    onSuccess: ({ saved, provisionError }) => {
+    onSuccess: ({ saved, provisionError, manufacturingProvision }) => {
       setOperatingModels(saved);
       // Keep the navigation's organisation-profile source in sync immediately;
       // otherwise the sidebar would only reflect the change after a reload.
@@ -315,7 +339,12 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       }
       queryClient.invalidateQueries({ queryKey: ['business', business.id] });
       setAlert(provisionError
-        ? { type: 'error', message: t('construction.accounts.settingsProvisionWarning') }
+        ? {
+            type: 'error',
+            message: manufacturingProvision
+              ? t('manufacturing.accounts.settingsProvisionWarning')
+              : t('construction.accounts.settingsProvisionWarning'),
+          }
         : { type: 'success', message: 'Operating models updated.' });
       setTimeout(() => setAlert(null), 6000);
     },
@@ -593,7 +622,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
               />
               <span>
                 {OPERATING_MODEL_LABELS[model]}
-                {model === 'CONSTRUCTION' && (
+                {(model === 'CONSTRUCTION' || model === 'MANUFACTURING') && (
                   <span className="ml-1 text-xs text-gray-500">(Enterprise)</span>
                 )}
               </span>

@@ -60,6 +60,10 @@ const ConstructionWorkspacePage = lazyPage(
   () => import('@/pages/construction/ConstructionWorkspacePage'),
   'ConstructionWorkspacePage',
 );
+const ManufacturingDashboardPage = lazyPage(
+  () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
+  'ManufacturingDashboardPage',
+);
 const ConstructionProjectSetupDraftPage = lazyPage(
   () => import('@/pages/ConstructionProjectSetupDraftPage'),
   'ConstructionProjectSetupDraftPage',
@@ -276,6 +280,20 @@ function App() {
                   element={
                     <CapabilityGate capability="construction">
                       <ConstructionWorkspacePage />
+                    </CapabilityGate>
+                  }
+                />
+                {/*
+                  Manufacturing Phase A: the placeholder workspace. It sits
+                  behind the same organisation capability gate as
+                  /construction/*, so a business whose profile never selected
+                  MANUFACTURING cannot reach it by URL even on Enterprise.
+                */}
+                <Route
+                  path="/manufacturing"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <ManufacturingDashboardPage />
                     </CapabilityGate>
                   }
                 />

@@ -78,6 +78,7 @@
       "overview": "Overview",
       "finance": "Finance",
       "inventory": "Supply Chain",
+      "manufacturing": "Manufacturing",
       "accounting": "Accounting",
       "organisation": "Organisation",
       "support": "Help",
@@ -110,6 +111,7 @@
       "branches": "Branches",
       "departments": "Departments",
       "constructionWorkspace": "Construction",
+      "manufacturingWorkspace": "Manufacturing",
       "settings": "Settings",
       "support": "Support",
       "businesses": "Businesses",
@@ -1040,6 +1042,29 @@
           "critical": "> 365 days"
         }
       }
+    }
+  },
+  "manufacturing": {
+    "title": "Manufacturing",
+    "comingSoon": "Manufacturing features coming soon",
+    "accounts": {
+      "ownerRequired": "You must be signed in to set up the Manufacturing workspace.",
+      "provisionError": "The Manufacturing workspace could not be set up.",
+      "createOwnerWarning": "Your business was created, but Manufacturing setup could not be completed because the signed-in owner could not be identified.",
+      "createProvisionWarning": "Your business was created, but Manufacturing setup could not be completed. In Settings, remove Manufacturing from the operating models, save, then add it again to retry.",
+      "settingsProvisionWarning": "Operating models were saved, but Manufacturing setup could not be completed. Save again to retry account setup; if the workspace is still incomplete, remove Manufacturing and add it again."
+    },
+    "productType": {
+      "raw_material": "Raw Material",
+      "wip": "Work in Progress",
+      "finished_good": "Finished Good",
+      "trading_good": "Trading Good"
+    },
+    "locationType": {
+      "warehouse": "Warehouse",
+      "raw_materials_store": "Raw Materials Store",
+      "production_floor": "Production Floor",
+      "finished_goods_store": "Finished Goods Store"
     }
   }
 }

@@ -168,6 +168,40 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
     if (error) throw toRepositoryError('businesses', error);
   }
 
+  /**
+   * One-time, idempotent Manufacturing bootstrap: the production branch, its
+   * three typed stores (Raw Materials Store, Production Floor, Finished Goods
+   * Store) and the manufacturing.bom.manage grant for the nominated owner. Safe
+   * to call again; a second call inserts nothing.
+   */
+  async provisionManufacturingDefaults(businessId: string, ownerUserId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_manufacturing_defaults',
+        args: { p_business_id: string; p_owner_user_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_manufacturing_defaults', {
+      p_business_id: businessId,
+      p_owner_user_id: ownerUserId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
+  /** Idempotently provisions the Manufacturing-only WIP Inventory account. */
+  async provisionManufacturingCoaAccounts(businessId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_manufacturing_coa_accounts',
+        args: { p_business_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_manufacturing_coa_accounts', {
+      p_business_id: businessId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
   /** Idempotently provisions the Construction-only Retention Receivable account. */
   async provisionConstructionCoaAccounts(businessId: string): Promise<void> {
     const client = this.client as unknown as {
