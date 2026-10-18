@@ -553,7 +553,33 @@ inventory) is the substitute.
       the five-state lifecycle check. That is not identical to the expected core.
     - `project_status_log` is postgres-owned and RLS-enabled; its seven core
       columns/defaults, validated non-deferrable FKs and valid indexes match
-      the construction audit design. Its projecPostgreSQL conditions (including serialization failures
+      the construction audit design. Its project FK targets **the existing
+      `public.projects(id)`**, with `ON DELETE CASCADE`.
+    - Both tables grant authenticated users SELECT, not direct writes. No
+      application rows or reliable row counts were inspected.
+
+    The current adoption predicate requires a `status` column, so it does not
+    recognize that variant. Creating a fresh construction table beside it does
+    not move the audit FK or existing data; the audit guard correctly refuses
+    that split with `55000`. Disposable full-file replays reproduce this refusal
+    without changing populated project/audit rows or existing dependencies.
+    **The safety/reporting PR is not a complete production remediation.** Do not
+    automatically rename `lifecycle_state`, re-point the FK, copy/drop data or
+    mark Phase A applied. Inspect the coupled RPC signatures/definitions, return
+    types, triggers, policies and table/row-type dependencies first, and approve a
+    data-preserving convergence plan. `postgres` ownership alone does not prove
+    business ownership, full equivalence or how the schema reached this state.
+
+    There is a reproducible reporting bug: the wrapper previously matched
+    `relation "…" already exists` anywhere in push output. Both construction
+    migrations already use `CREATE TABLE IF NOT EXISTS public.project_status_log`,
+    which emits the benign `NOTICE: relation "project_status_log" already exists,
+    skipping` when the name is occupied. If a later statement or the connection
+    failed, that notice caused a **hardcoded 42P07 annotation**, suppressing the
+    real error. The notice proves neither equivalence nor the cause of failure.
+    The corrected wrapper classifies actual `ERROR:` severity lines, preserves
+    their SQLSTATE/message/statement context, and keeps retries for transport and
+    explicitly transient PostgreSQL conditions (including serialization failures
     and deadlocks). Schema failures still stop after one attempt; neither those
     failures nor notices authorize history repair.
 
@@ -605,23 +631,6 @@ inventory) is the substitute.
     kind, core column types/nullability/defaults, PK and both validated,
     non-deferrable FKs (including referenced columns and actions) must match.
     Unknown shapes raise `55000` with the live owner/columns and inspection path;
-    missing FKs/defaults are **not silently added**. The guard does not constitute
-    an ownership approval or a full-feature equivalence verdict. No audit table
-    is dropped, renamed, re-pointed or rewritten, and no migration is marked
-    applied. Full-file transactional replays verify refusal preserves rows,
-    grants, policies, indexes and function definitions.
-
-    Source-edit exception: production's reported attempt is still failing in
-    `20261028000000`, so a later migration cannot protect that pending replay.
-    Both original and namespace sources carry the same guard for pending
-    installs/upgrades. Environments that already recorded either version **skip
-    its edited source**; this is not a claim that their live schemas changed.
-    Confirm remote versions first. Do not `migration repair --status applied`
-    merely to bypass this guard: that skips the remainder of the file. If any
-    object is unrelated or ownership is uncertain, stop for an owner-approved,
-    data-preserving reconciliation plan rather than automatically moving it
-    aside and retrying the deploy.
-nd inspection path;
     missing FKs/defaults are **not silently added**. The guard does not constitute
     an ownership approval or a full-feature equivalence verdict. No audit table
     is dropped, renamed, re-pointed or rewritten, and no migration is marked

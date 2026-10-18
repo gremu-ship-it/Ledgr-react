@@ -91,9 +91,9 @@ test(meta('EVOLVED', 'Renamed constraints and an extra nullable column do not re
   });
 });
 
-// Owner-supplied catalog evidence: a populated construction-shaped projects
-// table exists with lifecycle_state (not status), and its audit FK still targets
-// that table. This is NOT yet an approved rename/convergence plan. Until the
+// Reproduce the owner-supplied catalog shape using synthetic populated rows:
+// projects has lifecycle_state (not status), and the audit FK still targets it.
+// Production row counts are unknown. This is NOT an approved rename plan. Until the
 // RPC/dependency evidence is reviewed, both complete files must fail closed.
 test(meta('LIFECYCLE-STATE', 'The observed lifecycle_state variant is refused without splitting project/audit data or changing existing dependencies'), async () => {
   await inTransaction(async () => {
@@ -218,7 +218,6 @@ test(meta('CATALOG-READONLY', 'The shared inspection SELECTs execute inside a re
     expect(results.get('history')!.rows).toEqual([{ version: '20261028000000', name: 'synthetic_phase_a' }]);
   } finally { await db.client.query('rollback'); }
 });
-
 
 test({
   ...meta('DEPENDENCIES-READONLY', 'The SQL-editor dependency report returns one read-only result with RPC definitions/return types, row-type dependents, policies, triggers and incoming FKs'),
