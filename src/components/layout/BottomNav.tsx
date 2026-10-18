@@ -108,8 +108,11 @@ export function BottomNav() {
     [role],
   );
 
-  // Till-centric roles get the POS tab first — it is their home route.
-  const homeIsPos = Boolean(role) && getHomePathForRole(role) === '/pos';
+  // Till-centric roles get the POS tab first — it is their home route, but
+  // only in a business that actually has POS. Without the capability
+  // predicate a construction cashier's "home" would still point at the
+  // gated till even though the POS tab itself is filtered out below.
+  const homeIsPos = Boolean(role) && getHomePathForRole(role, isOrgCapabilityEnabled) === '/pos';
   const posNavItem = navItemForPath('/pos');
 
   // Both lists are derived in a memo so their identity stays stable: the
@@ -160,6 +163,12 @@ export function BottomNav() {
   const canRecordIncome = canQuickAdd('/income');
   const canRecordExpense = canQuickAdd('/expenses');
   const canRecordStock = canQuickAdd('/warehouse') && isOrgCapabilityEnabled('inventory');
+  // Same construction-vocabulary pattern as the nav label overrides: site
+  // staff move materials, not stock. Construction resolves from the
+  // organisation profile, so this matches the sidebar in every plan/role.
+  const stockMovementLabelKey = isOrgCapabilityEnabled('construction')
+    ? 'navigation.fab.materialMovement'
+    : 'navigation.fab.stockMovement';
   const hasFabActions = canCreateInvoice || canRecordIncome || canRecordExpense || canRecordStock;
 
   // Dynamic balanced split for FAB centering
@@ -285,7 +294,7 @@ export function BottomNav() {
               className="group flex min-h-[48px] items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-3 shadow-lg active:scale-95"
             >
               <IconBadge icon={Package} tone="brand" size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Stock movement</span>
+              <span className="text-sm font-semibold text-gray-900">{t(stockMovementLabelKey)}</span>
             </button>
             )}
             {canRecordIncome && (

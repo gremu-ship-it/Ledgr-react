@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/useAppStore';
+import type { OrganisationCapability } from '@/lib/capabilities/profile';
 
 /**
  * All permission booleans derived from the current user's role
@@ -524,7 +525,53 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
   }
 }
 
-export function getHomePathForRole(role: string | null): string {
+/**
+ * Home path for a role, optionally narrowed by the business's organisation
+ * capabilities.
+ *
+ * The till roles (`cashier`, `manager`) default to `/pos` — but POS is a
+ * retail workflow: a construction or service-only business has
+ * `pos: false`, so its cashier/manager was being sent home to a page the
+ * capability gate immediately rejected. When the caller supplies the
+ * organisation-capability predicate (the same one navigation uses,
+ * `useOrganisationCapabilityVisibility`), a `/pos` home is downgraded for a
+ * business without the `pos` capability. Callers that pass no predicate
+ * keep the legacy role-only mapping, byte for byte.
+ *
+ * The downgrade lands on `/dashboard` only when the role may actually open
+ * it. A `manager` can; a `cashier` cannot (`isPathAllowedForRole` confines
+ * cashiers to the till, sales documents and support), so sending a cashier
+ * "home" to `/dashboard` would make `RoleRoute` bounce them straight back
+ * to their home path — `/dashboard` — forever. Cashiers therefore fall
+ * back to `/income`, the first surface their role is allowed to use. Role
+ * definitions are untouched: cashier and manager stay valid roles for a
+ * construction business; only where they land changes.
+ *
+ * Because the predicate runs through `resolveCapability`, the downgrade
+ * activates on exactly the same terms as the POS nav item and the `/pos`
+ * route gate: with the organisation-layer kill switch off, `pos` keeps its
+ * fail-open legacy semantics everywhere and `/pos` is a working home page,
+ * not a dead one.
+ */
+export function getHomePathForRole(
+  role: string | null,
+  isOrgCapabilityEnabled?: (capability: OrganisationCapability) => boolean,
+): string {
+  const roleHome = roleHomePath(role);
+
+  if (
+    roleHome === '/pos'
+    && isOrgCapabilityEnabled
+    && !isOrgCapabilityEnabled('pos')
+  ) {
+    return isPathAllowedForRole(role, '/dashboard') ? '/dashboard' : '/income';
+  }
+
+  return roleHome;
+}
+
+/** The legacy role-only home mapping, unchanged. */
+function roleHomePath(role: string | null): string {
   if (role === 'cashier') return '/pos';
   if (role === 'manager') return '/pos';
   if (role === 'stock_clerk') return '/products';

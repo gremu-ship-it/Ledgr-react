@@ -8,6 +8,7 @@ import { repos } from '@/lib/repositories';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useInventoryPageLabels } from '@/hooks/useInventoryPageLabels';
 import type { Row } from '@/dal/types/database';
 import { newSaveClientKey } from '@/services/quickSaveService';
 import {
@@ -544,6 +545,9 @@ export function WarehousePage() {
   const currentUser = useAppStore((s) => s.currentUser);
   const queryClient = useQueryClient();
   const isMobile    = useIsMobile();
+  // Construction businesses read this page as "Site Stores" (see
+  // useInventoryPageLabels); everyone else keeps "Warehouse".
+  const pageLabels  = useInventoryPageLabels('warehouse');
 
   const [search, setSearch]               = useState('');
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -651,9 +655,9 @@ export function WarehousePage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>
-            Warehouse
+            {pageLabels.title}
           </h1>
-          {!isMobile && <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>}
+          {!isMobile && <p className="mt-1 text-sm text-gray-500">{pageLabels.subtitle}</p>}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ImportTemplateMenu entityTypes={['inventory_opening']} />
