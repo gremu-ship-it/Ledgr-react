@@ -248,7 +248,7 @@ export class ProjectRepository {
   ) {
     const page = Math.max(0, filters.page ?? 0);
     let query = client
-      .from('projects')
+      .from('construction_projects')
       .select('*', { count: 'exact' })
       .eq('business_id', businessId);
     if (filters.status) query = query.eq('status', filters.status);
@@ -261,7 +261,7 @@ export class ProjectRepository {
   async getById(businessId: string, projectId: string) {
     const project = unwrap<Project | null>(
       await client
-        .from('projects')
+        .from('construction_projects')
         .select('*')
         .eq('business_id', businessId)
         .eq('id', projectId)
@@ -368,7 +368,7 @@ export class ProjectRepository {
 
   private async projectBusinessId(projectId: string): Promise<string> {
     const project = unwrap<{ business_id: string } | null>(
-      await client.from('projects').select('business_id').eq('id', projectId).maybeSingle(),
+      await client.from('construction_projects').select('business_id').eq('id', projectId).maybeSingle(),
     );
     if (!project?.business_id) throw new Error('Project not found or not accessible.');
     return project.business_id;

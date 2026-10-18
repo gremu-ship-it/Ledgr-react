@@ -9,7 +9,7 @@ import { createServer } from 'node:net';
 import { assertLocalOnly, removeOwnedDirectory } from './safety.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-export async function createDatabaseFixture() {
+export async function createDatabaseFixture({ beforeMigration } = {}) {
   assertLocalOnly();
   if (process.getuid?.() === 0) throw new Error('R13 database requires non-root user; no host user is created.');
   const parent = tmpdir();
@@ -55,6 +55,7 @@ export async function createDatabaseFixture() {
     let liveShapeApplied = false;
     for (const name of (await readdir(join(root, 'supabase/migrations'))).filter(n => n.endsWith('.sql')).sort()) {
       const source = await readFile(join(root, 'supabase/migrations', name), 'utf8');
+      if (beforeMigration) await beforeMigration({ client, name, source });
       // Explicitly excluded platform extension installation, NOT a clean Supabase replay.
       // No other SQL edits and no changes to product migrations on disk.
       // LEDGR_R13_LIVE_UUID_SHAPE=1: reproduce the live column shape documented in

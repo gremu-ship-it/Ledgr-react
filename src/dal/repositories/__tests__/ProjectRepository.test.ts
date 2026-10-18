@@ -96,7 +96,7 @@ describe('ProjectRepository RPC contracts', () => {
       rows: [{ id: 'p1' }],
       count: 51,
     });
-    expect(mocks.from).toHaveBeenCalledWith('projects');
+    expect(mocks.from).toHaveBeenCalledWith('construction_projects');
     expect(chain.eq).toHaveBeenCalledWith('business_id', 'b1');
     expect(chain.eq).toHaveBeenCalledWith('status', 'active');
     expect(chain.range).toHaveBeenCalledWith(25, 49);
@@ -105,7 +105,7 @@ describe('ProjectRepository RPC contracts', () => {
     const project = { id: 'p1', business_id: 'b1' };
     mocks.from.mockImplementation((table: string) =>
       builder(
-        table === 'projects'
+        table === 'construction_projects'
           ? project
           : [
               { id: 'l1', project_id: 'p1' },

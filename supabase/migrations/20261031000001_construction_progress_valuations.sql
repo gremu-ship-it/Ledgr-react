@@ -4,7 +4,7 @@
 
 CREATE TABLE public.project_valuations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  project_id uuid NOT NULL REFERENCES public.construction_projects(id) ON DELETE CASCADE,
   valuation_number integer NOT NULL,
   valuation_date date NOT NULL DEFAULT CURRENT_DATE,
   period_start date,
@@ -50,7 +50,7 @@ CREATE INDEX project_valuation_lines_boq_line_idx
 
 CREATE TABLE public.project_retention_ledger (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
+  project_id uuid NOT NULL REFERENCES public.construction_projects(id) ON DELETE CASCADE,
   valuation_id uuid REFERENCES public.project_valuations(id) ON DELETE SET NULL,
   type text NOT NULL CHECK (type IN ('withheld', 'released')),
   amount numeric(18,2) NOT NULL CHECK (
@@ -80,7 +80,7 @@ CREATE POLICY project_valuations_member_grants
   ON public.project_valuations FOR ALL TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM public.projects p
+      SELECT 1 FROM public.construction_projects p
        WHERE p.id = project_id
          AND public.is_business_member(p.business_id)
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
@@ -88,7 +88,7 @@ CREATE POLICY project_valuations_member_grants
   )
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM public.projects p
+      SELECT 1 FROM public.construction_projects p
        WHERE p.id = project_id
          AND public.is_business_member(p.business_id)
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
@@ -100,7 +100,7 @@ CREATE POLICY project_valuation_lines_member_grants
     EXISTS (
       SELECT 1
         FROM public.project_valuations v
-        JOIN public.projects p ON p.id = v.project_id
+        JOIN public.construction_projects p ON p.id = v.project_id
        WHERE v.id = valuation_id
          AND public.is_business_member(p.business_id)
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
@@ -110,7 +110,7 @@ CREATE POLICY project_valuation_lines_member_grants
     EXISTS (
       SELECT 1
         FROM public.project_valuations v
-        JOIN public.projects p ON p.id = v.project_id
+        JOIN public.construction_projects p ON p.id = v.project_id
        WHERE v.id = valuation_id
          AND public.is_business_member(p.business_id)
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
@@ -120,7 +120,7 @@ CREATE POLICY project_retention_ledger_member_grants
   ON public.project_retention_ledger FOR ALL TO authenticated
   USING (
     EXISTS (
-      SELECT 1 FROM public.projects p
+      SELECT 1 FROM public.construction_projects p
        WHERE p.id = project_id
          AND public.is_business_member(p.business_id)
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
@@ -128,7 +128,7 @@ CREATE POLICY project_retention_ledger_member_grants
   )
   WITH CHECK (
     EXISTS (
-      SELECT 1 FROM public.projects p
+      SELECT 1 FROM public.construction_projects p
        WHERE p.id = project_id
          AND public.is_business_member(p.business_id)
          AND cardinality(public.construction_procurement_capabilities_for(p.business_id)) > 0
@@ -557,7 +557,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_project public.projects%ROWTYPE;
+  v_project public.construction_projects%ROWTYPE;
   v_actor uuid;
   v_number integer;
   v_totals record;
@@ -568,7 +568,7 @@ DECLARE
   v_valuation public.project_valuations%ROWTYPE;
 BEGIN
   SELECT * INTO v_project
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = p_project_id
    FOR UPDATE;
   IF NOT FOUND THEN
@@ -652,7 +652,7 @@ BEGIN
   END IF;
 
   IF v_number = 1 THEN
-    UPDATE public.projects
+    UPDATE public.construction_projects
        SET boq_locked_at = COALESCE(boq_locked_at, now()), updated_at = now()
      WHERE id = p_project_id;
   END IF;
@@ -677,7 +677,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_project_id uuid;
-  v_project public.projects%ROWTYPE;
+  v_project public.construction_projects%ROWTYPE;
   v_valuation public.project_valuations%ROWTYPE;
   v_actor uuid;
   v_totals record;
@@ -694,7 +694,7 @@ BEGIN
     RAISE EXCEPTION 'Valuation not found.' USING ERRCODE = 'P0002';
   END IF;
   SELECT * INTO v_project
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = v_project_id
    FOR UPDATE;
   IF NOT FOUND THEN
@@ -809,7 +809,7 @@ BEGIN
     RAISE EXCEPTION 'Valuation not found.' USING ERRCODE = 'P0002';
   END IF;
   SELECT p.business_id INTO v_business_id
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = v_valuation.project_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Project not found.' USING ERRCODE = 'P0002';
@@ -878,7 +878,7 @@ SET search_path = public
 AS $$
 DECLARE
   v_valuation public.project_valuations%ROWTYPE;
-  v_project public.projects%ROWTYPE;
+  v_project public.construction_projects%ROWTYPE;
   v_actor uuid;
   v_contact_id uuid;
   v_currency text;
@@ -901,7 +901,7 @@ BEGIN
     RAISE EXCEPTION 'Valuation not found.' USING ERRCODE = 'P0002';
   END IF;
   SELECT * INTO v_project
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = v_valuation.project_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Project not found.' USING ERRCODE = 'P0002';
@@ -1121,7 +1121,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_project public.projects%ROWTYPE;
+  v_project public.construction_projects%ROWTYPE;
   v_actor uuid;
   v_total_withheld numeric(18,2);
   v_total_released numeric(18,2);
@@ -1139,7 +1139,7 @@ DECLARE
   v_invoice_number text;
 BEGIN
   SELECT * INTO v_project
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = p_project_id
    FOR UPDATE;
   IF NOT FOUND THEN
@@ -1293,7 +1293,7 @@ DECLARE
   v_business_id uuid;
 BEGIN
   SELECT p.business_id INTO v_business_id
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = p_project_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Project not found.' USING ERRCODE = 'P0002';
@@ -1336,13 +1336,13 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_project public.projects%ROWTYPE;
+  v_project public.construction_projects%ROWTYPE;
   v_withheld numeric(18,2);
   v_released numeric(18,2);
   v_balance numeric(18,2);
 BEGIN
   SELECT * INTO v_project
-    FROM public.projects p
+    FROM public.construction_projects p
    WHERE p.id = p_project_id;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Project not found.' USING ERRCODE = 'P0002';

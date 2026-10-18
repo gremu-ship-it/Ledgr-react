@@ -17,16 +17,23 @@
 
 ## Authority and persistence
 
-Migration: `20261028000000_construction_projects.sql`.
+Migrations: `20261028000000_construction_projects.sql` and the forward-only
+`20261028000001_construction_projects_namespace.sql` repair.
 
-`projects` and `project_status_log` use member + business-scoped procurement-grant
-RLS. As in the procurement module, authenticated users have SELECT privileges,
-not direct table writes. All writes go through SECURITY DEFINER RPC commands that
-call `_ledgr_construction_actor` with `procurement.master.manage`. The status
-command locks the row and writes the audit record atomically. No backward,
-skipped or repeated transition is accepted. Sites are inventory locations and may
-only link to a project in the same business; changing projects requires unlinking
-first. Branch authorization is retained for link/unlink operations.
+The physical `construction_projects` table and `project_status_log` use member +
+business-scoped procurement-grant RLS. The generic `public.projects` name may
+already belong to a legacy relation. Migrations rename/adopt it only when a
+strict Phase A schema signature matches; otherwise they preserve it and keep the
+construction feature namespaced. Where that name is free, the namespace
+migration creates a restricted security-invoker compatibility view for older
+clients. As in the procurement module, authenticated users have SELECT
+privileges, not direct table writes. All
+writes go through SECURITY DEFINER RPC commands that call
+`_ledgr_construction_actor` with `procurement.master.manage`. The status command
+locks the row and writes the audit record atomically. No backward, skipped or
+repeated transition is accepted. Sites are inventory locations and may only link
+to a project in the same business; changing projects requires unlinking first.
+Branch authorization is retained for link/unlink operations.
 
 There is no separate TypeScript server/command layer in the existing procurement
 architecture. `ProjectRepository` therefore follows its typed RPC adapter pattern;
