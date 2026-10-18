@@ -1,5 +1,8 @@
 -- Phase B: construction schedule of values (BOQ).
-ALTER TABLE public.construction_projects ADD COLUMN boq_locked_at timestamptz;
+-- IF NOT EXISTS: a staging table adopted by the namespace repair may already
+-- carry this column (applied out of order against the old public.projects
+-- name); re-adding it would fail with SQLSTATE 42701 and block the chain.
+ALTER TABLE public.construction_projects ADD COLUMN IF NOT EXISTS boq_locked_at timestamptz;
 COMMENT ON COLUMN public.construction_projects.boq_locked_at IS 'Set when first valuation is created; BOQ becomes read-only after this point.';
 
 -- The Phase A namespace migration creates this restricted view only on schemas

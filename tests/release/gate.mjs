@@ -9,6 +9,7 @@ export const suites = {
   'business-operating-model-audit.test.ts': 'business-operating-model-audit.json',
   'construction-projects.test.ts': 'construction-projects.json',
   'construction-project-namespace.test.ts': 'construction-project-namespace.json',
+  'construction-project-namespace-legacy.test.ts': 'construction-project-namespace-legacy.json',
   'database.test.ts': 'database.json',
   'edge.test.ts': 'edge-handler-mocked-platform.json',
   'offline.test.ts': 'offline-indexeddb-postgres.json',

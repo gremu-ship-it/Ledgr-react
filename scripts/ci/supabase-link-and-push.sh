@@ -169,6 +169,21 @@ while :; do
     exit 1
   fi
 
+  # Namespace guard (SQLSTATE 55000, pre-fix 20261028000001): the old exact-
+  # signature guard aborted with "public.projects is not the known Phase A
+  # table" when staging's public.projects was a genuine but evolved Phase A
+  # table or an unrelated legacy relation. Deterministic — the same schema
+  # state produces the same error on every attempt, and retrying burned all
+  # three attempts before reporting it. Current migrations adopt an evolved
+  # Phase A table by core-definition identity and preserve an unrelated
+  # relation instead of raising, so this branch only fires for a checkout
+  # that still carries the old guard. Fail fast with the reconciliation path.
+  if grep -Eq 'Cannot namespace construction projects|public\.projects is not the known Phase A table' "${push_output}"; then
+    echo "::error::supabase db push for ${label} hit the construction-projects namespace guard (SQLSTATE 55000): public.projects was not recognized as the Phase A table. This is deterministic; not retrying."
+    echo "::error::Do not drop public.projects or mark 20261028000001 applied. Run the read-only queries in scripts/database/diagnose-projects-namespace.sql against ${label}, then deploy the current migrations (they adopt an evolved Phase A table and preserve an unrelated legacy relation). See docs/database/database-operations.md section 11."
+    exit 1
+  fi
+
   # Drift check: the CLI prints one "supabase migration repair --status
   # reverted <version>" hint line per remote-only version.
   drift_versions="$(grep -oE 'migration repair --status reverted [0-9]+' "${push_output}" \

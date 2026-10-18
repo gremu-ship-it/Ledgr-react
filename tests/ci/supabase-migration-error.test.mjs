@@ -66,3 +66,62 @@ exit 0
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+test('55000 namespace guard is reported and not retried', () => {
+  const cwd = mkdtempSync(join(tmpdir(), 'supabase-migration-error-'));
+  try {
+    const bin = join(cwd, 'bin');
+    mkdirSync(bin);
+    const calls = join(cwd, 'calls');
+    const sleeps = join(cwd, 'sleeps');
+    writeFileSync(sleeps, '');
+    writeFileSync(join(bin, 'curl'), `#!/usr/bin/env bash
+printf '{"status":"ACTIVE_HEALTHY"}'
+`, { mode: 0o755 });
+    writeFileSync(join(bin, 'sleep'), `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$SLEEPS"
+`, { mode: 0o755 });
+    // Emit the pre-fix namespace guard exactly as `supabase db push`
+    // reported it on staging (project status ACTIVE_HEALTHY).
+    writeFileSync(join(bin, 'supabase'), `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> "$CALLS"
+if [[ "$1" == "db" && "$2" == "push" ]]; then
+  echo 'Applying migration 20261028000001_construction_projects_namespace.sql...'
+  echo 'ERROR: Cannot namespace construction projects: public.projects is not the known Phase A table. Preserve it and reconcile the migration state before retrying. (SQLSTATE 55000)'
+  exit 1
+fi
+exit 0
+`, { mode: 0o755 });
+
+    const password = 'not-a-real-production-password';
+    const result = spawnSync('bash', [script], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        SUPABASE_ACCESS_TOKEN: 'fake-token',
+        SUPABASE_PROJECT_REF: 'fake-ref',
+        SUPABASE_DB_PASSWORD: password,
+        SUPABASE_ENV_LABEL: 'staging',
+        CALLS: calls,
+        SLEEPS: sleeps,
+      },
+    });
+
+    assert.notEqual(result.status, 0, 'namespace guard must fail the deploy');
+    assert.match(result.stdout, /SQLSTATE 55000/);
+    assert.match(result.stdout, /namespace guard/);
+    assert.match(result.stdout, /diagnose-projects-namespace\.sql/);
+    assert.match(result.stdout, /not retrying/i);
+    assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, new RegExp(password));
+    // Fail fast: exactly one push attempt and no retry sleeps.
+    assert.deepEqual(readFileSync(calls, 'utf8').trim().split('\n'), [
+      'link --project-ref fake-ref --password not-a-real-production-password',
+      'db push --password not-a-real-production-password --include-all',
+    ]);
+    assert.equal(readFileSync(sleeps, 'utf8').trim(), '');
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});

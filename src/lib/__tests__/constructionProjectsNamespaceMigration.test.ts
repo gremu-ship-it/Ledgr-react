@@ -29,14 +29,42 @@ describe('construction-project table namespace repair', () => {
     for (const sql of [phaseA, namespaceRepair]) {
       expect(sql).toContain("to_regclass('public.projects')");
       expect(sql).toContain("to_regclass('public.construction_projects')");
-      expect(sql).toContain("conname = 'projects_pkey'");
       expect(sql).toContain('ALTER TABLE public.projects RENAME TO construction_projects');
       expect(sql).not.toMatch(/DROP TABLE\s+(?:IF EXISTS\s+)?public\.projects/i);
     }
-    expect(namespaceRepair).toContain('public.projects is not the known Phase A table');
     expect(namespaceRepair).toContain("'get_boq_summary'");
     expect(namespaceRepair).toContain("'generate_invoice_from_valuation'");
     expect(namespaceRepair).toContain("'get_project_pnl'");
+  });
+
+  it('identifies Phase A by core definition, not by exact names or object counts', () => {
+    // Regression: the previous fingerprint required exactly 13 columns,
+    // exactly 9 constraints and projects_* constraint names. A genuine
+    // Phase A table that had evolved on staging (boq_locked_at applied
+    // out of order, an extra guard check, constraints created under the
+    // construction_projects_* names) failed it and raised SQLSTATE 55000,
+    // blocking every later migration in the chain.
+    for (const sql of [phaseA, namespaceRepair]) {
+      expect(sql).not.toContain('= 13');
+      expect(sql).not.toMatch(/count\(\*\) FROM pg_constraint WHERE conrelid = c\.oid\) = 9/);
+      expect(sql).not.toContain("conname = 'projects_pkey'");
+      expect(sql).toContain('pg_get_constraintdef(oid)');
+      expect(sql).toContain("attname = 'business_id'");
+      expect(sql).toContain("attname = 'created_by'");
+    }
+  });
+
+  it('preserves an unrelated public.projects instead of aborting the push', () => {
+    // The namespace migration previously raised 55000 for this state,
+    // which the deploy wrapper retried three times before failing the
+    // whole staging deploy mid-chain. It must now warn, leave the legacy
+    // relation untouched and create the feature tables alongside it.
+    expect(namespaceRepair).not.toContain('Cannot namespace construction projects');
+    expect(namespaceRepair).toContain('Preserving public.projects');
+    expect(namespaceRepair).toContain('RAISE WARNING');
+    expect(namespaceRepair).toContain('CREATE TABLE IF NOT EXISTS public.construction_projects');
+    expect(namespaceRepair).toContain('CREATE TABLE IF NOT EXISTS public.project_status_log');
+    expect(namespaceRepair).not.toMatch(/DROP TABLE\s+(?:IF EXISTS\s+)?public\.projects/i);
   });
 
   it('keeps a restricted security-invoker compatibility view only when the old name is free', () => {
