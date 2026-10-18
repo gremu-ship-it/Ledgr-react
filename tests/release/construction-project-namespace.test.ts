@@ -93,6 +93,21 @@ beforeAll(async () => {
         ALTER INDEX public.construction_projects_business RENAME TO projects_business;
       `);
 
+      // Evolve the table the way staging can before the repair lands:
+      // a later column applied out of order against the old name, an
+      // extra guard check, and one constraint that keeps a non-Phase A
+      // name. The previous exact-signature fingerprint (13 columns /
+      // 9 constraints / projects_* names) rejected this table with
+      // SQLSTATE 55000 and blocked the whole push; the repair must
+      // recognize it by core definition and adopt it with data intact.
+      await client.query(`
+        ALTER TABLE public.projects ADD COLUMN boq_locked_at timestamptz;
+        ALTER TABLE public.projects
+          ADD CONSTRAINT projects_contract_cap CHECK (contract_sum <= 1000000000);
+        ALTER TABLE public.projects
+          RENAME CONSTRAINT projects_status_check TO construction_status_vocabulary;
+      `);
+
       for (const signature of signatures) {
         const { rows } = await client.query(
           'select pg_get_functiondef(to_regprocedure($1)::oid) as definition',

@@ -436,38 +436,82 @@ inventory) is the substitute.
     valuation and reporting migrations all target that relation.
 
     `20261028000000_construction_projects.sql` adopts `public.projects` only if
-    its column types, nullability, primary/foreign keys and named checks match
-    the full Phase A construction table. Otherwise it leaves the existing
-    relation untouched and creates `construction_projects`. The forward
-    migration `20261028000001_construction_projects_namespace.sql` handles
-    environments that already recorded the old Phase A version (notably
-    staging): it renames only the recognized construction table, rewrites the
-    feature's known RPC bodies, and creates a restricted security-invoker
-    compatibility view only when the old name is free. An unrecognized existing
-    relation is never dropped, renamed or modified.
+    its core column types and nullability, primary/foreign keys (matched by
+    definition) and lifecycle status check match the Phase A construction
+    table. Otherwise it leaves the existing relation untouched and creates
+    `construction_projects`. The forward migration
+    `20261028000001_construction_projects_namespace.sql` handles environments
+    that already recorded the old Phase A version (notably staging): it
+    renames only the recognized construction table, rewrites the feature's
+    known RPC bodies, and creates a restricted security-invoker compatibility
+    view only when the old name is free. An unrecognized existing relation is
+    never dropped, renamed or modified.
 
     Because the reported attempt failed at table creation, do **not** mark
     `20261028000000` as applied with `supabase migration repair`; that could
     skip its remaining RLS, grants, FKs, triggers and RPCs. First inspect the
-    remote migration history and relation definition read-only. If the version
-    is still pending, apply the corrected chain; if it is already recorded, the
-    edited source will be skipped. The forward migration renames only a table
-    with the exact Phase A signature and deliberately stops if the relation or
-    migration history does not match that expected state; reconcile such drift
-    manually rather than bypassing the guard. After rollout, verify the remote
-    history and confirm `public.construction_projects` has the expected table,
-    policies, indexes and
-    RPC dependencies. The CI push wrapper fails immediately with the migration
-    name and recovery warning on SQLSTATE 42P07 instead of spending three
-    attempts retrying deterministic DDL.
+    remote migration history and relation definition read-only
+    (`scripts/database/diagnose-projects-namespace.sql`). If the version is
+    still pending, apply the corrected chain; if it is already recorded, the
+    edited source will be skipped. After rollout, verify the remote history
+    and confirm `public.construction_projects` has the expected table,
+    policies, indexes and RPC dependencies. The CI push wrapper fails
+    immediately with the migration name and recovery warning on SQLSTATE
+    42P07 instead of spending three attempts retrying deterministic DDL.
 
     Process exception: the source of `20261028000000` was corrected because the
     reported failure occurs at its original `CREATE TABLE public.projects`.
     Remote schema and migration history were not queried, so confirm both
     before rollout. If production has not recorded that migration, the corrected
     source can run; if it has recorded the original migration, the source edit is
-    skipped and the forward migration handles only the exact Phase A schema,
-    stopping for manual reconciliation otherwise. The release suite covers a
-    clean replay, a pre-existing unrelated
+    skipped and the forward migration handles the Phase A schema, stopping for
+    manual reconciliation only if the table is missing entirely afterwards.
+    The release suite covers a clean replay, a pre-existing unrelated
     `public.projects` table, and a simulated staging upgrade from the original
     Phase A schema.
+
+12. **`Cannot namespace construction projects … (SQLSTATE 55000)`.** The
+    namespace guard described in §11 originally required an *exact* Phase A
+    signature — exactly 13 columns, exactly 9 constraints and the original
+    `projects_*` constraint names — and aborted the push when staging's
+    `public.projects` did not match. That fingerprint rejected genuine but
+    evolved Phase A tables (for example `boq_locked_at` already applied out
+    of order under the old name, an extra guard check, or constraints
+    created while the table was called `construction_projects`), and it
+    also aborted when the name belonged to an unrelated legacy relation
+    whose Phase A history entry was already recorded. Because
+    `20261028000001` sits mid-chain, the one deterministic failure — retried
+    three times by the wrapper before reporting — blocked every later
+    migration on staging (`project status: ACTIVE_HEALTHY` confirmed the
+    project itself was fine).
+
+    The guard now matches Phase A identity *by definition*: all 13 core
+    columns with their types and nullability (extra columns allowed), a
+    primary key on `id`, foreign keys `business_id → businesses` and
+    `created_by → auth.users` (all matched by column/target, not by
+    constraint name), and the lifecycle status vocabulary in a check
+    constraint (definition, not name). A table matching that identity is
+    renamed with its data, indexes and dependencies intact; the BOQ
+    migration's `boq_locked_at` addition is `IF NOT EXISTS` so an adopted
+    table that already carries the column no longer fails next with
+    SQLSTATE 42701. A `public.projects` that does not match is preserved
+    untouched — never renamed, dropped or modified — and the namespace
+    migration creates `public.construction_projects` and
+    `public.project_status_log` alongside it (logging a WARNING), exactly
+    as the Phase A migration already behaved for the same collision. If
+    the preserved table did hold construction rows, they stay in it for
+    manual reconciliation after the push; nothing is deleted either way.
+    The CI wrapper now also fails fast (no retries) if it ever sees the
+    old 55000 guard from an older checkout, and points at the diagnosis
+    script. `20261028000001` was edited in place for this: it had never
+    applied successfully on the affected environment (it *is* the failing
+    migration, so it is pending there), and environments that did record
+    it skip the edited source as usual. Before retrying a failed staging
+    push, run `scripts/database/diagnose-projects-namespace.sql` read-only
+    to confirm which of the two states the project is in; afterwards,
+    confirm the WARNING/rename outcome in the push log and that the
+    migration target in `supabase migration list` was reached. The
+    release suite covers both states: an evolved original Phase A schema
+    upgrading in place (`construction-project-namespace`), and a legacy
+    `public.projects` preserved while the feature tables are created
+    alongside it (`construction-project-namespace-legacy`).

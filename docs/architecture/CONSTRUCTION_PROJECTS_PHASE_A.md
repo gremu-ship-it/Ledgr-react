@@ -22,8 +22,13 @@ Migrations: `20261028000000_construction_projects.sql` and the forward-only
 
 The physical `construction_projects` table and `project_status_log` use member +
 business-scoped procurement-grant RLS. The generic `public.projects` name may
-already belong to a legacy relation. Migrations rename/adopt it only when a
-strict Phase A schema signature matches; otherwise they preserve it and keep the
+already belong to a legacy relation. Migrations rename/adopt it only when its
+core Phase A identity matches by definition (core columns, key/foreign-key
+targets and the status vocabulary; constraint names and exact object counts
+are not identity, so an evolved staging table is still adopted — the earlier
+exact-signature guard raised SQLSTATE 55000 on such tables and blocked the
+whole staging push; see database-operations §12); otherwise they preserve it,
+create the feature tables alongside it with a WARNING, and keep the
 construction feature namespaced. Where that name is free, the namespace
 migration creates a restricted security-invoker compatibility view for older
 clients. As in the procurement module, authenticated users have SELECT

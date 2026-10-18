@@ -1,9 +1,11 @@
 -- Phase A: project dimension. Existing procurement commands, guards and grants
 -- remain authoritative. No stock, accounting, BOQ or billing logic is added.
 -- The legacy production schema may already own public.projects. Adopt that
--- relation only when its signature is the complete Phase A project table; an
--- unrelated legacy table is left untouched and the construction module gets a
--- collision-free relation of its own.
+-- relation only when its core columns and constraint definitions prove it is
+-- the Phase A project table (see the identity check below; names and exact
+-- object counts are not identity); an unrelated legacy table is left
+-- untouched and the construction module gets a collision-free relation of
+-- its own.
 DO $adopt_existing_construction_projects$
 DECLARE
  v_projects_oid oid := to_regclass('public.projects');
@@ -13,11 +15,19 @@ BEGIN
   RETURN;
  END IF;
 
- SELECT c.relkind IN ('r','p')
-    AND (
-      SELECT count(*) FROM pg_attribute
-       WHERE attrelid = c.oid AND attnum > 0 AND NOT attisdropped
-    ) = 13
+ -- Core Phase A identity, matched by definition rather than by object
+    -- names or exact object counts. Constraint names and totals are not
+    -- identity: a table created while it was called construction_projects
+    -- keeps construction_projects_* constraint names after a rename, and a
+    -- staging table may already carry later evolution (for example the
+    -- boq_locked_at column, applied out of order) or an extra guard check.
+    -- Requiring the exact 13 columns / 9 constraints / projects_* names
+    -- therefore rejected genuine Phase A tables with SQLSTATE 55000 and
+    -- blocked every later migration. Extra columns and constraints are
+    -- allowed; the 13 core columns, the primary key on id, the two foreign
+    -- keys and the lifecycle status vocabulary must all match by
+    -- definition, which an unrelated legacy relation cannot satisfy.
+    SELECT c.relkind IN ('r','p')
     AND NOT EXISTS (
       SELECT 1
         FROM (VALUES
@@ -46,30 +56,45 @@ BEGIN
     )
     AND EXISTS (
       SELECT 1 FROM pg_constraint
-       WHERE conrelid = c.oid AND contype = 'p' AND conname = 'projects_pkey'
+       WHERE conrelid = c.oid AND contype = 'p'
+         AND conkey = ARRAY[(
+           SELECT attnum FROM pg_attribute
+            WHERE attrelid = c.oid AND attname = 'id'
+         )]
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint fk
+       WHERE fk.conrelid = c.oid AND fk.contype = 'f'
+         AND fk.conkey = ARRAY[(
+           SELECT attnum FROM pg_attribute
+            WHERE attrelid = c.oid AND attname = 'business_id'
+         )]
+         AND fk.confrelid = 'public.businesses'::regclass
+         AND fk.confkey = ARRAY[(
+           SELECT attnum FROM pg_attribute
+            WHERE attrelid = 'public.businesses'::regclass AND attname = 'id'
+         )]
+    )
+    AND EXISTS (
+      SELECT 1 FROM pg_constraint fk
+       WHERE fk.conrelid = c.oid AND fk.contype = 'f'
+         AND fk.conkey = ARRAY[(
+           SELECT attnum FROM pg_attribute
+            WHERE attrelid = c.oid AND attname = 'created_by'
+         )]
+         AND fk.confrelid = 'auth.users'::regclass
+         AND fk.confkey = ARRAY[(
+           SELECT attnum FROM pg_attribute
+            WHERE attrelid = 'auth.users'::regclass AND attname = 'id'
+         )]
     )
     AND EXISTS (
       SELECT 1 FROM pg_constraint
-       WHERE conrelid = c.oid AND contype = 'f'
-         AND conname = 'projects_business_id_fkey'
-         AND confrelid = 'public.businesses'::regclass
-    )
-    AND EXISTS (
-      SELECT 1 FROM pg_constraint
-       WHERE conrelid = c.oid AND contype = 'f'
-         AND conname = 'projects_created_by_fkey'
-         AND confrelid = 'auth.users'::regclass
-    )
-    AND (
-      SELECT count(*) FROM pg_constraint
        WHERE conrelid = c.oid AND contype = 'c'
-         AND conname = ANY (ARRAY[
-           'projects_name_check', 'projects_contract_sum_check',
-           'projects_retention_pct_check', 'projects_budget_check',
-           'projects_status_check', 'projects_check'
-         ])
-     ) = 6
-    AND (SELECT count(*) FROM pg_constraint WHERE conrelid = c.oid) = 9
+         AND pg_get_constraintdef(oid) LIKE '%tender%'
+         AND pg_get_constraintdef(oid) LIKE '%practical_completion%'
+         AND pg_get_constraintdef(oid) LIKE '%defect_liability%'
+    )
    INTO v_is_construction_projects
    FROM pg_class c
   WHERE c.oid = v_projects_oid;
