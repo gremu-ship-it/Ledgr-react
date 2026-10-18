@@ -471,6 +471,9 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // `/manufacturing` is manager-and-above: production planning is a
       // supervisory surface, so stock clerks and cashiers do not get it even
       // though they keep the Supply Chain children they already had.
+      // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
+      // the same authority as the workspace itself.
+      if (path.startsWith('/manufacturing')) return true;
       return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
