@@ -42,13 +42,13 @@ const productionItem = (profile: BusinessOrganisationProfile, planTier: PlanTier
 describe('manufacturing work order navigation', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('keeps the Manufacturing section shaped BOM → Production → Dashboard', () => {
+  it('keeps the Manufacturing section shaped Dashboard → BOM → Production', () => {
     const section = NAV_SECTIONS.find((s) => s.labelKey === 'navigation.sections.manufacturing');
     expect(section).toBeDefined();
     expect(section?.items.map((i) => i.path)).toEqual([
+      '/manufacturing',
       '/manufacturing/bom',
       '/manufacturing/production',
-      '/manufacturing/dashboard',
     ]);
     // Every entry stays gated by the operating model and sold on Enterprise.
     for (const item of section?.items ?? []) {
@@ -68,11 +68,11 @@ describe('manufacturing work order navigation', () => {
     expect(en.manufacturing.bom.production).toBe('Production');
   });
 
-  it('leaves Dashboard as the coming-soon placeholder', () => {
-    const dashboard = navItemForPath('/manufacturing/dashboard');
+  it('activates Dashboard at the manufacturing root route', () => {
+    const dashboard = navItemForPath('/manufacturing');
     expect(dashboard?.labelKey).toBe('manufacturing.bom.dashboard');
+    expect(dashboard?.path).toBe('/manufacturing');
     expect(en.manufacturing.bom.dashboard).toBe('Dashboard');
-    expect(en.manufacturing.bom.comingSoon).toBe('Coming soon');
   });
 
   it('is completely ABSENT for a retail business — no BOM, no production', () => {
@@ -80,7 +80,7 @@ describe('manufacturing work order navigation', () => {
     expect(productionItem(retailBusiness, 'enterprise')).toBeUndefined();
     expect(navFor(retailBusiness, 'enterprise').map((i) => i.path)).not.toContain('/manufacturing/bom');
     expect(navFor(retailBusiness, 'enterprise').map((i) => i.path)).not.toContain('/manufacturing/production');
-    expect(navFor(retailBusiness, 'enterprise').map((i) => i.path)).not.toContain('/manufacturing/dashboard');
+    expect(navFor(retailBusiness, 'enterprise').map((i) => i.path)).not.toContain('/manufacturing');
   });
 
   it('is present and LOCKED for a manufacturing business on Free — plan gate', () => {

@@ -95,28 +95,21 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
       },
-      {
-        // Manufacturing follows Construction: an Enterprise module selected
-        // through the operating-model profile. `minPlan` is what a
-        // Starter/Growth/Free business hits; `requiresOrgCapability` is what
-        // hides it from an Enterprise business that does not manufacture.
-        // Deliberately no `partnerFeature` and no `allowAllAuthenticatedRoles`,
-        // matching the construction child exactly.
-        labelKey: 'navigation.items.manufacturingWorkspace',
-        path: '/manufacturing',
-        icon: Factory,
-        minPlan: 'enterprise',
-        requiresOrgCapability: 'manufacturing',
-      },
     ],
   },
   {
     labelKey: 'navigation.sections.manufacturing',
     items: [
       {
-        // Bill of Materials — the Phase B manufacturing workspace. Gated by the
-        // manufacturing operating model (requiresOrgCapability) and the Enterprise
-        // plan (minPlan), mirroring the top-level manufacturingWorkspace entry.
+        // Read-only reporting is the landing page for the manufacturing module.
+        labelKey: 'manufacturing.bom.dashboard',
+        path: '/manufacturing',
+        icon: LayoutDashboard,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
+        // Bill of Materials — Phase B workspace.
         labelKey: 'manufacturing.bom.title',
         path: '/manufacturing/bom',
         icon: Package,
@@ -124,21 +117,10 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiresOrgCapability: 'manufacturing',
       },
       {
-        // Production — the Phase C work-order workspace (/manufacturing/production).
-        // It was a placeholder until Phase C; it now renders the real work order
-        // list, create and detail pages on the same gates as BOM.
+        // Production — Phase C work-order workspace.
         labelKey: 'manufacturing.bom.production',
         path: '/manufacturing/production',
         icon: Factory,
-        minPlan: 'enterprise',
-        requiresOrgCapability: 'manufacturing',
-      },
-      {
-        // Dashboard stays a coming-soon placeholder: it still resolves to the
-        // Phase A dashboard page, which says so. Gating is unchanged.
-        labelKey: 'manufacturing.bom.dashboard',
-        path: '/manufacturing/dashboard',
-        icon: LayoutDashboard,
         minPlan: 'enterprise',
         requiresOrgCapability: 'manufacturing',
       },

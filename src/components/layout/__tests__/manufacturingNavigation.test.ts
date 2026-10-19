@@ -55,20 +55,10 @@ const manufacturingItem = (profile: BusinessOrganisationProfile, planTier: PlanT
 describe('manufacturing workspace navigation', () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it('sits in the Supply Chain section, directly after Construction', () => {
-    const section = NAV_SECTIONS.find((candidate) =>
-      candidate.items.some((item) => item.path === '/manufacturing'));
-    expect(section?.labelKey).toBe('navigation.sections.inventory');
-    expect(en.navigation.sections.inventory).toBe('Supply Chain');
-    expect(en.navigation.items.manufacturingWorkspace).toBe('Manufacturing');
-
-    const paths = section?.items.map((item) => item.path) ?? [];
-    expect(paths.indexOf('/manufacturing')).toBe(paths.indexOf('/construction') + 1);
-  });
-
-  it('is an Enterprise child gated by the business type, not a role-free link', () => {
-    expect(navItemForPath('/manufacturing')).toMatchObject({
-      labelKey: 'navigation.items.manufacturingWorkspace',
+  it('places the manufacturing dashboard in the dedicated Manufacturing section', () => {
+    const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.manufacturing');
+    expect(section?.items[0]).toMatchObject({
+      labelKey: 'manufacturing.bom.dashboard',
       path: '/manufacturing',
       minPlan: 'enterprise',
       requiresOrgCapability: 'manufacturing',
@@ -76,6 +66,7 @@ describe('manufacturing workspace navigation', () => {
     expect(navItemForPath('/manufacturing')?.allowAllAuthenticatedRoles).toBeUndefined();
     expect(navItemForPath('/manufacturing')?.partnerFeature).toBeUndefined();
     expect(navItemForPath('/manufacturing')?.requiresCapability).toBeUndefined();
+    expect(navItemForPath('/manufacturing')?.labelKey).not.toBe('navigation.items.manufacturingWorkspace');
   });
 
   // ── Pass 1: visibility ────────────────────────────────────────────────────

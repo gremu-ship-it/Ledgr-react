@@ -38,11 +38,13 @@ describe('manufacturing work orders migration contract', () => {
     const idxBom = versions.indexOf('20261104000000');
     const idxTypes = versions.indexOf('20261105000000');
     const idxWorkOrders = versions.indexOf('20261105000001');
+    const idxDashboard = versions.indexOf('20261105000002');
     expect(idxBom).toBeGreaterThan(-1);
     expect(idxTypes).toBe(idxBom + 1);
     expect(idxWorkOrders).toBe(idxTypes + 1);
-    expect(idxWorkOrders).toBe(versions.length - 1);
-    for (const version of ['20261105000000', '20261105000001']) {
+    expect(idxDashboard).toBe(idxWorkOrders + 1);
+    expect(idxDashboard).toBe(versions.length - 1);
+    for (const version of ['20261105000000', '20261105000001', '20261105000002']) {
       expect(versions.filter((v) => v === version)).toHaveLength(1);
     }
   });

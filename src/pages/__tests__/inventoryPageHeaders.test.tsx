@@ -53,6 +53,7 @@ import { inventoryPageLabelKeys } from '@/hooks/useInventoryPageLabels';
 
 const RETAIL = { organisation_type: 'FOR_PROFIT', operating_models: ['RETAIL'] };
 const CONSTRUCTION = { organisation_type: 'FOR_PROFIT', operating_models: ['CONSTRUCTION'] };
+const MANUFACTURING = { organisation_type: 'FOR_PROFIT', operating_models: ['MANUFACTURING'] };
 
 const BUSINESS_NAME = 'Chirwa Build';
 
@@ -117,6 +118,22 @@ describe('supply chain page headers for a construction business', () => {
     selectBusiness(CONSTRUCTION);
     renderPage(<ProductsPage />);
     expect(screen.queryByText(new RegExp(BUSINESS_NAME))).toBeNull();
+  });
+});
+
+describe('supply chain page headers for a manufacturing business', () => {
+  it('uses the same Materials, Site Stores and Material Transfers vocabulary as the sidebar', () => {
+    selectBusiness(MANUFACTURING);
+    const products = renderPage(<ProductsPage />);
+    expect(screen.getByRole('heading', { name: 'Materials' })).toBeTruthy();
+    products.unmount();
+
+    renderPage(<WarehousePage />);
+    expect(screen.getByRole('heading', { name: 'Site Stores' })).toBeTruthy();
+    cleanup();
+
+    renderPage(<TransfersPage />);
+    expect(screen.getByRole('heading', { name: 'Material Transfers' })).toBeTruthy();
   });
 });
 

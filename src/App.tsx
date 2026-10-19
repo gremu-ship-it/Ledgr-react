@@ -298,12 +298,9 @@ function App() {
                     </CapabilityGate>
                   }
                 />
-                {/*
-                  Manufacturing Phase A: the placeholder workspace. It sits
-                  behind the same organisation capability gate as
-                  /construction/*, so a business whose profile never selected
-                  MANUFACTURING cannot reach it by URL even on Enterprise.
-                */}
+                {/* Manufacturing reporting and production remain behind the
+                    same organisation capability gate; non-manufacturers cannot
+                    reach the dashboard by URL even on Enterprise. */}
                 <Route
                   path="/manufacturing"
                   element={
