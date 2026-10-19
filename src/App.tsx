@@ -64,6 +64,9 @@ const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
 );
+const BomListPage = lazyPage(() => import('@/pages/manufacturing/BomListPage'), 'BomListPage');
+const BomEditorPage = lazyPage(() => import('@/pages/manufacturing/BomEditorPage'), 'BomEditorPage');
+const BomDetailPage = lazyPage(() => import('@/pages/manufacturing/BomDetailPage'), 'BomDetailPage');
 const ConstructionProjectSetupDraftPage = lazyPage(
   () => import('@/pages/ConstructionProjectSetupDraftPage'),
   'ConstructionProjectSetupDraftPage',
@@ -291,6 +294,54 @@ function App() {
                 */}
                 <Route
                   path="/manufacturing"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <ManufacturingDashboardPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomListPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom/new"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomEditorPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom/:id"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomDetailPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom/:id/edit"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomEditorPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/production"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <ManufacturingDashboardPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/dashboard"
                   element={
                     <CapabilityGate capability="manufacturing">
                       <ManufacturingDashboardPage />

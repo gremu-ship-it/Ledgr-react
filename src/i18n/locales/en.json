@@ -1065,6 +1065,38 @@
       "raw_materials_store": "Raw Materials Store",
       "production_floor": "Production Floor",
       "finished_goods_store": "Finished Goods Store"
+    },
+    "bom": {
+      "title": "Bill of Materials",
+      "create": "Create BOM",
+      "edit": "Edit BOM",
+      "outputProduct": "Output Product",
+      "version": "Version",
+      "status": {
+        "draft": "Draft",
+        "active": "Active",
+        "archived": "Archived"
+      },
+      "locked": "Locked",
+      "lockedMessage": "This BOM is locked because it has been used in a work order. Create a new version to make changes.",
+      "addComponent": "Add Component",
+      "component": "Component",
+      "quantity": "Quantity",
+      "unitOfMeasure": "Unit of Measure",
+      "scrapPercent": "Scrap %",
+      "effectiveQuantity": "Effective Qty",
+      "unitCost": "Unit Cost",
+      "lineCost": "Line Cost",
+      "totalCost": "Total Material Cost",
+      "activate": "Activate",
+      "newVersion": "New Version",
+      "versionHistory": "Version History",
+      "emptyState": "No bills of materials yet. Create your first BOM to define how your products are assembled.",
+      "noComponents": "Add at least one component to activate this BOM.",
+      "circularRef": "A product cannot be a component of itself.",
+      "production": "Production",
+      "dashboard": "Dashboard",
+      "comingSoon": "Coming soon"
     }
   }
 }

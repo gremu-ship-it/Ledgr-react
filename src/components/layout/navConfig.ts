@@ -111,6 +111,38 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    labelKey: 'navigation.sections.manufacturing',
+    items: [
+      {
+        // Bill of Materials — the Phase B manufacturing workspace. Gated by the
+        // manufacturing operating model (requiresOrgCapability) and the Enterprise
+        // plan (minPlan), mirroring the top-level manufacturingWorkspace entry.
+        // Per spec: Bill of Materials -> /manufacturing/bom, Production/Dashboard
+        // are coming-soon placeholders still rendered so the section shape is
+        // visible.
+        labelKey: 'manufacturing.bom.title',
+        path: '/manufacturing/bom',
+        icon: Package,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
+        labelKey: 'manufacturing.bom.production',
+        path: '/manufacturing/production',
+        icon: Factory,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
+        labelKey: 'manufacturing.bom.dashboard',
+        path: '/manufacturing/dashboard',
+        icon: LayoutDashboard,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+    ],
+  },
+  {
     labelKey: 'navigation.sections.accounting',
     items: [
       { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, requiresCapability: 'core_accounting' },
