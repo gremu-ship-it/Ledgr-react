@@ -523,6 +523,18 @@ The seed was run **twice** against the same database. The second run created **z
 No `DELETE`, `TRUNCATE`, or destructive `UPDATE` is present in the seed. Existing products/projects/BOMs/work
 orders/entries are detected by natural keys and left untouched.
 
+### 9.1 Operating-model guards
+
+The “skip the phase if the model is absent” rule was exercised on two additional disposable businesses:
+
+| Business | Products | BOMs | Work orders | Stock movements | Journal entries |
+|---|---:|---:|---:|---:|---:|
+| Construction only | 10 (`product`) | 0 | 0 | 10 | 12 (10 purchases + 2 valuations) |
+| Manufacturing only | 10 (6 raw, 4 finished) | 4 | 3 | 26 | 19 (6 purchases + 7 manufacturing + 6 sales) |
+
+Neither run tried to create the other vertical's locations, products or entries. These extra businesses exist only
+in the local disposable database and are not part of the target's counts.
+
 ---
 
 ## 10. Issues found

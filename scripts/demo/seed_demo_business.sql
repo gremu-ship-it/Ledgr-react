@@ -103,9 +103,12 @@ BEGIN
   SELECT id INTO v_stock_fg FROM public.accounts WHERE business_id = v_business_id AND code = '1142' AND deleted_at IS NULL LIMIT 1;
   SELECT id INTO v_wip FROM public.accounts WHERE business_id = v_business_id AND lower(btrim(name)) = 'wip inventory' AND deleted_at IS NULL LIMIT 1;
 
-  IF v_ap IS NULL OR v_ar IS NULL OR v_cogs IS NULL OR v_stock_construction IS NULL
-     OR v_revenue_contract IS NULL THEN
-    RAISE EXCEPTION 'Core chart of accounts is incomplete for business % (need 2111, 1131, 5100, 1141, 4114).', v_business_id;
+  IF v_ap IS NULL OR v_ar IS NULL OR v_cogs IS NULL THEN
+    RAISE EXCEPTION 'Core chart of accounts is incomplete for business % (need 2111, 1131, 5100).', v_business_id;
+  END IF;
+  IF 'CONSTRUCTION' = ANY (v_models)
+     AND (v_stock_construction IS NULL OR v_revenue_contract IS NULL) THEN
+    RAISE EXCEPTION 'Construction chart of accounts is incomplete for business % (need 1141, 4114).', v_business_id;
   END IF;
   IF 'MANUFACTURING' = ANY (v_models)
      AND (v_stock_raw IS NULL OR v_stock_fg IS NULL OR v_wip IS NULL OR v_revenue_mfg IS NULL) THEN
@@ -125,8 +128,11 @@ BEGIN
    WHERE l.business_id = v_business_id AND l.location_type = 'finished_goods_store'
    ORDER BY l.created_at LIMIT 1;
 
-  IF v_loc_site IS NULL OR v_loc_raw IS NULL OR v_loc_fg IS NULL THEN
-    RAISE EXCEPTION 'Required inventory locations are missing (warehouse / raw_materials_store / finished_goods_store).';
+  IF 'CONSTRUCTION' = ANY (v_models) AND v_loc_site IS NULL THEN
+    RAISE EXCEPTION 'Construction requires a warehouse/site location.';
+  END IF;
+  IF 'MANUFACTURING' = ANY (v_models) AND (v_loc_raw IS NULL OR v_loc_fg IS NULL) THEN
+    RAISE EXCEPTION 'Manufacturing requires a raw_materials_store and a finished_goods_store location.';
   END IF;
 
   -- ==========================================================================
