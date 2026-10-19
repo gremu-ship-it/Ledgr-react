@@ -521,7 +521,9 @@ The seed was run **twice** against the same database. The second run created **z
 | Valuations | 2 | 2 |
 
 No `DELETE`, `TRUNCATE`, or destructive `UPDATE` is present in the seed. Existing products/projects/BOMs/work
-orders/entries are detected by natural keys and left untouched.
+orders/entries are detected by natural keys and left untouched. A pre-existing valuation whose notes do not start
+with `Demo seed` is left completely alone — no retention row and no journal entry is created for it, because it may
+already have been invoiced or posted by the live business.
 
 ### 9.1 Operating-model guards
 

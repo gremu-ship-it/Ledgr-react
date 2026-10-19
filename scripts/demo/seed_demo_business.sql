@@ -51,6 +51,7 @@ DECLARE
   v_retention_amt numeric;
   v_net         numeric;
   v_previous    numeric;
+  v_notes       text;
   v_bom_cost    numeric;
   r             record;
 BEGIN
@@ -452,7 +453,7 @@ BEGIN
           (2, 26000000.00::numeric, 2600000.00::numeric, 26000000.00::numeric, '2026-12-31'::date)
         ) AS x(num, gross, retention, previous, valuation_date)
       LOOP
-        SELECT v.id INTO v_valuation_id FROM public.project_valuations v
+        SELECT v.id, v.notes INTO v_valuation_id, v_notes FROM public.project_valuations v
          WHERE v.project_id = v_project_id AND v.valuation_number = r.num LIMIT 1;
 
         IF v_valuation_id IS NULL THEN
@@ -466,11 +467,19 @@ BEGIN
             r.gross, r.retention, r.gross - r.retention, r.previous,
             'submitted', 'Demo seed — certification-ready progress valuation', v_owner_id
           ) RETURNING id INTO v_valuation_id;
+          v_notes := 'Demo seed — certification-ready progress valuation';
         END IF;
 
         SELECT v.gross_amount, v.retention_amount, v.net_amount, v.previous_cumulative
           INTO v_gross, v_retention_amt, v_net, v_previous
           FROM public.project_valuations v WHERE v.id = v_valuation_id;
+
+        -- Never create a second ledger entry for a valuation that was not
+        -- created by this seed. A pre-existing live valuation may already be
+        -- invoiced/posted elsewhere; the posting key cannot tell us that.
+        IF v_notes IS NULL OR v_notes NOT LIKE 'Demo seed%' THEN
+          CONTINUE;
+        END IF;
 
         IF NOT EXISTS (
           SELECT 1 FROM public.project_retention_ledger l WHERE l.valuation_id = v_valuation_id
