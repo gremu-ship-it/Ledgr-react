@@ -568,6 +568,11 @@ orders/entries are detected by natural keys and left untouched.
 14. **Construction stock sits in `Main Store` (warehouse).** The brief says "default warehouse/site store".
     The construction provisioning RPC creates `Main Store` with the default `warehouse` type; there is no
     construction-specific location type at head.
+15. **The target UUID also appears in the repository as a sample auth user, not a business.**
+    `scripts/diagnose-business-not-found.sql:139` uses
+    `487334df-a057-45c3-b088-85e6c0a6aeb3` as a JWT `sub` (user id) in a diagnostic. The brief calls it a
+    business ID. Before any live write, run Phase 1a and confirm `businesses.id` returns the row; if it is only a
+    user id, the seed will refuse with "Business … not found" rather than guessing.
 
 ---
 
