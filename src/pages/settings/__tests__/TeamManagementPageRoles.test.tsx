@@ -116,6 +116,12 @@ describe('Settings → Team role pickers', () => {
     ];
     const { container } = await renderTeamPage();
 
+    // renderTeamPage waits for the invite form, but the member list loads
+    // asynchronously. Wait for the member role changer before inspecting it.
+    await waitFor(() =>
+      expect(container.querySelectorAll('select').length).toBeGreaterThanOrEqual(2),
+    );
+
     // Two selects now: the invite form and the member's role changer.
     const selects = Array.from(container.querySelectorAll<HTMLSelectElement>('select'));
     expect(selects.length).toBeGreaterThanOrEqual(2);
