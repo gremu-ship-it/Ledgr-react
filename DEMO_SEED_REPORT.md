@@ -632,7 +632,7 @@ select set_config('request.jwt.claim.sub',
 -- then paste scripts/demo/seed_demo_business.sql
 ```
 
-Run the discovery queries in §3 first and confirm the live schema still matches the repository head. If the live
+Run `scripts/demo/discover.sql` first (read-only) and confirm the live schema still matches the repository head. If the live
 project has drifted (for example, `source_id` is `uuid` rather than `text`), the seed's UUID `source_id` values are
 already compatible; if table names differ, stop and adapt before writing.
 
@@ -656,6 +656,7 @@ against a hosted project.
 
 | File | Purpose |
 |---|---|
+| `scripts/demo/discover.sql` | Read-only Phase 1 discovery, adapted to the real schema |
 | `scripts/demo/seed_demo_business.sql` | Idempotent construction + manufacturing + accounting seed |
 | `scripts/demo/run-seed.mjs` | Guarded runner (local by default, `--allow-remote` for hosted) |
 | `scripts/demo/verify_demo.mjs` | Read-only Phase 5/6 verifier; writes JSON evidence |
