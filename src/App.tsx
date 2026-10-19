@@ -67,6 +67,18 @@ const ManufacturingDashboardPage = lazyPage(
 const BomListPage = lazyPage(() => import('@/pages/manufacturing/BomListPage'), 'BomListPage');
 const BomEditorPage = lazyPage(() => import('@/pages/manufacturing/BomEditorPage'), 'BomEditorPage');
 const BomDetailPage = lazyPage(() => import('@/pages/manufacturing/BomDetailPage'), 'BomDetailPage');
+const WorkOrderListPage = lazyPage(
+  () => import('@/pages/manufacturing/WorkOrderListPage'),
+  'WorkOrderListPage',
+);
+const WorkOrderCreatePage = lazyPage(
+  () => import('@/pages/manufacturing/WorkOrderCreatePage'),
+  'WorkOrderCreatePage',
+);
+const WorkOrderDetailPage = lazyPage(
+  () => import('@/pages/manufacturing/WorkOrderDetailPage'),
+  'WorkOrderDetailPage',
+);
 const ConstructionProjectSetupDraftPage = lazyPage(
   () => import('@/pages/ConstructionProjectSetupDraftPage'),
   'ConstructionProjectSetupDraftPage',
@@ -336,7 +348,23 @@ function App() {
                   path="/manufacturing/production"
                   element={
                     <CapabilityGate capability="manufacturing">
-                      <ManufacturingDashboardPage />
+                      <WorkOrderListPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/production/new"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <WorkOrderCreatePage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/production/:id"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <WorkOrderDetailPage />
                     </CapabilityGate>
                   }
                 />
