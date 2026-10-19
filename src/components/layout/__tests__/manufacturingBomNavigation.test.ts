@@ -60,21 +60,14 @@ describe('manufacturing BOM navigation', () => {
     expect(en.manufacturing.bom.title).toBe('Bill of Materials');
   });
 
-  it('restructures Manufacturing to have Production and Dashboard placeholders', () => {
+  it('puts the active Dashboard first in Manufacturing and keeps BOM and Production', () => {
     const section = NAV_SECTIONS.find((s) => s.labelKey === 'navigation.sections.manufacturing');
-    expect(section?.items.map((i) => i.path)).toContain('/manufacturing/production');
-    expect(section?.items.map((i) => i.path)).toContain('/manufacturing/dashboard');
-    expect(en.manufacturing.bom.production).toBe('Production');
+    expect(section?.items.map((i) => i.path)).toEqual([
+      '/manufacturing', '/manufacturing/bom', '/manufacturing/production',
+    ]);
+    expect(navItemForPath('/manufacturing')?.labelKey).toBe('manufacturing.bom.dashboard');
     expect(en.manufacturing.bom.dashboard).toBe('Dashboard');
-    expect(en.manufacturing.bom.comingSoon).toBe('Coming soon');
-  });
-
-  it('keeps the original manufacturing workspace link in Supply Chain for backwards compat', () => {
-    const supplySection = NAV_SECTIONS.find((s) => s.labelKey === 'navigation.sections.inventory');
-    expect(supplySection?.items.map((i) => i.path)).toContain('/manufacturing');
-    expect(supplySection?.items.map((i) => i.path).indexOf('/manufacturing')).toBe(
-      supplySection!.items.map((i) => i.path).indexOf('/construction') + 1,
-    );
+    expect(en.manufacturing.bom.production).toBe('Production');
   });
 
   it('is completely ABSENT for a retail business — no BOM, no production', () => {

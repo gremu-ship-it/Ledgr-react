@@ -47,20 +47,16 @@ export interface InventoryPageLabels {
 /**
  * Translated header labels for a Supply Chain page.
  *
- * Construction is detected through the organisation-only predicate
- * (`useOrganisationCapabilityVisibility`) — the exact predicate
- * `visibleSectionsFor` uses for the sidebar override — rather than the
- * full `useCapability('construction')`. The full hook also requires the
- * Enterprise plan and role access to `/construction`, so a construction
- * business on a lower plan, or a stock clerk who may open the inventory
- * pages but not the construction workspace, would get "Materials" in the
- * sidebar and "Products & Inventory" on the page. Vocabulary follows the
- * business profile; plan/role gates stay where they already are.
+ * Construction and manufacturing are detected through the organisation-only
+ * predicate (`useOrganisationCapabilityVisibility`) — the same predicate the
+ * sidebar override uses — rather than the full plan/role capability gate.
+ * Vocabulary follows the business profile; plan/role gates stay where they
+ * already are. Both operating models use the sidebar's Materials / Site Stores
+ * / Material Transfers terminology on these page headers.
  *
- * Construction is always profile-gated (`ALWAYS_PROFILE_GATED` in
- * `src/lib/capabilities/resolve.ts`), so this resolves from the profile
- * whether or not the organisation-layer kill switch is on — again,
- * exactly like the sidebar labels it must match.
+ * These operating models are profile-gated (`ALWAYS_PROFILE_GATED` in
+ * `src/lib/capabilities/resolve.ts`), so the labels follow the profile whether
+ * or not the organisation-layer kill switch is on — exactly like the sidebar.
  *
  * `interpolation` is forwarded to both strings (the products subtitle
  * names the business: "…for {{businessName}}").
@@ -72,10 +68,9 @@ export function useInventoryPageLabels(
   const { t } = useTranslation();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
 
-  const { titleKey, subtitleKey } = inventoryPageLabelKeys(
-    page,
-    isOrgCapabilityEnabled('construction'),
-  );
+  const usesMaterialsVocabulary =
+    isOrgCapabilityEnabled('construction') || isOrgCapabilityEnabled('manufacturing');
+  const { titleKey, subtitleKey } = inventoryPageLabelKeys(page, usesMaterialsVocabulary);
 
   return {
     title: t(titleKey, interpolation),
