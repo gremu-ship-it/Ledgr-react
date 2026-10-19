@@ -24,9 +24,12 @@ describe('manufacturing foundation migration contract', () => {
     const files = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort();
     const versions = files.map((f) => f.split('_')[0]);
     const latest = versions[versions.length - 1];
-    // After Phase B, the head is 20261104000000 (BOM). When this test was written the head was 20261103000000;
-    // allow either so the suite remains green on both branches while still asserting uniqueness.
-    expect(['20261103000000', '20261104000000']).toContain(latest);
+    // The head moves on as later phases land: Phase B's BOM migration was the
+    // head when this test was written, and Phase C's work-order migration
+    // (20261105000000 stock movement types + 20261105000001 work orders) is the
+    // head now. Allow any of them so the suite stays green across branches while
+    // still asserting that each version is used exactly once.
+    expect(['20261103000000', '20261104000000', '20261105000001']).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);
   });

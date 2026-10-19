@@ -40,4 +40,5 @@ export const suites = {
   'construction-provisioning.test.ts': 'construction-provisioning.json',
   'tax-configurations.test.ts': 'tax-configurations.json',
   'manufacturing-provisioning.test.ts': 'manufacturing-provisioning.json',
+  'manufacturing-work-orders.test.ts': 'manufacturing-work-orders.json',
 };

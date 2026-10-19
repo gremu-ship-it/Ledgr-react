@@ -117,9 +117,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         // Bill of Materials — the Phase B manufacturing workspace. Gated by the
         // manufacturing operating model (requiresOrgCapability) and the Enterprise
         // plan (minPlan), mirroring the top-level manufacturingWorkspace entry.
-        // Per spec: Bill of Materials -> /manufacturing/bom, Production/Dashboard
-        // are coming-soon placeholders still rendered so the section shape is
-        // visible.
         labelKey: 'manufacturing.bom.title',
         path: '/manufacturing/bom',
         icon: Package,
@@ -127,6 +124,9 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiresOrgCapability: 'manufacturing',
       },
       {
+        // Production — the Phase C work-order workspace (/manufacturing/production).
+        // It was a placeholder until Phase C; it now renders the real work order
+        // list, create and detail pages on the same gates as BOM.
         labelKey: 'manufacturing.bom.production',
         path: '/manufacturing/production',
         icon: Factory,
@@ -134,6 +134,8 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiresOrgCapability: 'manufacturing',
       },
       {
+        // Dashboard stays a coming-soon placeholder: it still resolves to the
+        // Phase A dashboard page, which says so. Gating is unchanged.
         labelKey: 'manufacturing.bom.dashboard',
         path: '/manufacturing/dashboard',
         icon: LayoutDashboard,
