@@ -373,6 +373,7 @@ describe('ProjectPnlOverview', () => {
     business_id: 'b1',
     name: 'Lilongwe Bypass',
     client_name: 'Roads Authority',
+    client_id: null,
     status: 'active',
     contract_sum: 1000000,
     retention_pct: 10,

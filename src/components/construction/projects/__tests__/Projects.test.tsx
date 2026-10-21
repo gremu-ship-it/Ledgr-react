@@ -71,6 +71,7 @@ const project: Project = {
   business_id: 'b1',
   name: 'Hospital',
   client_name: 'City Council',
+  client_id: null,
   status: 'tender',
   contract_sum: 1000,
   retention_pct: 10,
@@ -231,6 +232,8 @@ describe('construction project list', () => {
     expect(mock.projects.create).toHaveBeenCalledWith('b1', {
       name: 'Hospital',
       client_name: 'City Council',
+      // P2-3: non-construction profile → text input path → no client link.
+      client_id: null,
       contract_sum: 1000,
       retention_pct: 10,
       budget: 0,

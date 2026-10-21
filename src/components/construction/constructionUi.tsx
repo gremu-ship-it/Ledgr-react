@@ -19,7 +19,8 @@ export function SectionCard({
   children,
 }: {
   title: string;
-  description?: string;
+  /** ReactNode since P2-3: the project header renders the client as a link. */
+  description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 }) {

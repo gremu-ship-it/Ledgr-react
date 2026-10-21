@@ -20,14 +20,13 @@ const FOUNDATION_SQL = readFileSync(
  * (tests/release/database.test.ts replays every migration in order).
  */
 describe('extend_location_types migration contract', () => {
-  it('is the migration head and uniquely versioned', () => {
+  it('is uniquely versioned and follows the manufacturing Phase D migration', () => {
     const files = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort();
     const versions = files.map((f) => f.split('_')[0]);
-    // Later migrations extend the head; this list is the allow-list of known
-    // heads, mirroring manufacturingFoundationMigration.test.ts.
-    expect(versions[versions.length - 1]).toBe('20261106000000');
+    // Relative order is the contract here; the HEAD moves on with later
+    // phases (P2-3 client linkage, 20261107000000). Head tracking lives in
+    // constructionClientLinkageMigration.test.ts.
     expect(versions.filter((v) => v === '20261106000000')).toHaveLength(1);
-    // It follows the manufacturing Phase D dashboard migration.
     expect(versions.indexOf('20261106000000')).toBe(versions.indexOf('20261105000002') + 1);
   });
 

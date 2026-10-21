@@ -7,7 +7,7 @@ import { i18n } from '@/i18n';
 import { ProjectBoqEditor } from '../ProjectBoqEditor';
 const mock = vi.hoisted(() => ({ getBoqLines: vi.fn(), getBoqSummary: vi.fn(), bulkUpsertBoqLines: vi.fn() }));
 vi.mock('@/lib/repositories', () => ({ repos: { projects: mock } }));
-const project = { id:'p1', business_id:'b1', name:'Project', client_name:'Client', contract_sum:200, retention_pct:0, budget:200, status:'active' as const, start_date:null, end_date:null, created_by:'u1', created_at:'', updated_at:'', boq_locked_at:null };
+const project = { id:'p1', business_id:'b1', name:'Project', client_name:'Client', client_id:null, contract_sum:200, retention_pct:0, budget:200, status:'active' as const, start_date:null, end_date:null, created_by:'u1', created_at:'', updated_at:'', boq_locked_at:null };
 function mount(canManage=true) { const client=new QueryClient({defaultOptions:{queries:{retry:false},mutations:{retry:false}}}); return render(<QueryClientProvider client={client}><ProjectBoqEditor project={project} canManage={canManage} onNotice={vi.fn()} /></QueryClientProvider>); }
 beforeEach(() => { vi.clearAllMocks(); void i18n.changeLanguage('en'); mock.getBoqLines.mockResolvedValue([
  {id:'l1',project_id:'p1',line_number:'2',description:'Second',quantity:2,unit:'m',rate:10,total_value:20,sort_order:1,created_at:'',updated_at:''},

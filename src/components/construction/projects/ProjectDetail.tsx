@@ -19,6 +19,7 @@ import { ConstructionPurchaseOrdersSection } from '../ConstructionPurchaseOrders
 import { ConstructionMaterialIssuesSection } from '../ConstructionMaterialIssuesSection';
 import { ConstructionReturnsSection } from '../ConstructionReturnsSection';
 import { ProjectForm, PROJECT_BUTTON } from './ProjectForm';
+import { ClientPicker } from './ClientPicker';
 import { ProjectStatusBadge } from './ProjectsSection';
 import { ProjectBoqEditor } from './ProjectBoqEditor';
 import { ProjectValuationsPanel } from './ProjectValuationsPanel';
@@ -64,6 +65,9 @@ function ProjectDetailContent({
   const [tab, setTab] = useState<(typeof TABS)[number]>('overview');
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [linkClientId, setLinkClientId] = useState<string | null>(null);
+  const [linkClientName, setLinkClientName] = useState('');
   const [reason, setReason] = useState('');
   const [notice, setNotice] = useState(
     location.state?.projectCreated ? t(`${k}.created`) : '',
@@ -80,6 +84,26 @@ function ProjectDetailContent({
       void cache.invalidateQueries({ queryKey: ['construction'] });
     },
   });
+  // P2-3: linking a client is a normal update — the RPC validates the
+  // contact against the project's business and caches its name.
+  const linkClient = useMutation({
+    mutationFn: () =>
+      repos.projects.update(project.id, {
+        name: project.name,
+        client_name: linkClientName,
+        client_id: linkClientId,
+        contract_sum: project.contract_sum,
+        retention_pct: project.retention_pct,
+        budget: project.budget,
+        start_date: project.start_date,
+        end_date: project.end_date,
+      }),
+    onSuccess: () => {
+      setLinking(false);
+      setNotice(t(`${k}.updated`));
+      void cache.invalidateQueries({ queryKey: ['construction'] });
+    },
+  });
   return (
     <div className="space-y-4">
       <Link
@@ -91,10 +115,42 @@ function ProjectDetailContent({
       {notice && <ProjectToast message={notice} onClose={dismissNotice} />}
       <SectionCard
         title={project.name}
-        description={project.client_name}
+        description={
+          project.client_id ? (
+            // P2-3: a linked client jumps to its Contacts context.
+            <Link
+              className="font-medium text-brand-700 underline hover:text-brand-800"
+              to={`/contacts?search=${encodeURIComponent(project.client_name)}`}
+              data-testid="project-client-link"
+            >
+              {project.client_name}
+            </Link>
+          ) : (
+            <span data-testid="project-client-unlinked">
+              {project.client_name}
+              <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                {t('construction.clients.unlinked')}
+              </span>
+            </span>
+          )
+        }
         actions={
           <>
             <ProjectStatusBadge status={project.status} />
+            {!project.client_id && (
+              <button
+                className={PROJECT_BUTTON}
+                disabled={!canManage}
+                data-testid="project-link-client"
+                onClick={() => {
+                  setLinkClientId(null);
+                  setLinkClientName(project.client_name);
+                  setLinking(true);
+                }}
+              >
+                {t('construction.clients.linkClient')}
+              </button>
+            )}
             <button
               className={PROJECT_BUTTON}
               disabled={!canManage}
@@ -186,6 +242,53 @@ function ProjectDetailContent({
             void cache.invalidateQueries({ queryKey: ['construction'] });
           }}
         />
+      )}
+      {linking && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="link-client-title"
+        >
+          <div
+            className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6"
+            data-testid="link-client-dialog"
+          >
+            <h2 id="link-client-title" className="font-semibold">
+              {t('construction.clients.linkClient')}
+            </h2>
+            <ClientPicker
+              businessId={project.business_id}
+              value={linkClientId}
+              clientName={linkClientName}
+              disabled={linkClient.isPending}
+              onChange={(id, name) => {
+                setLinkClientId(id);
+                setLinkClientName(name);
+              }}
+            />
+            {linkClient.isError && (
+              <ErrorBanner message={linkClient.error.message} />
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={linkClient.isPending}
+                onClick={() => setLinking(false)}
+              >
+                {t(`${k}.cancel`)}
+              </button>
+              <button
+                className={PROJECT_BUTTON}
+                disabled={!linkClientId || linkClient.isPending}
+                data-testid="link-client-save"
+                onClick={() => linkClient.mutate()}
+              >
+                {t('common.save')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {confirming && (
         <div

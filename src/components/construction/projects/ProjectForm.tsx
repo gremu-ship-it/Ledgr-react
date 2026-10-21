@@ -3,6 +3,8 @@ import { validateProject } from '@/lib/construction/projectValidation';
 import { useTranslation } from 'react-i18next';
 import { useMutation } from '@tanstack/react-query';
 import { repos } from '@/lib/repositories';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
+import { ClientPicker } from './ClientPicker';
 import type {
   Project,
   ProjectInput,
@@ -24,6 +26,10 @@ export function ProjectForm({
 }) {
   const { t } = useTranslation();
   const k = 'construction.projects';
+  // P2-3: the client picker exists for construction businesses only —
+  // absent, not locked. Anyone else keeps the original text input.
+  const { profile } = useBusinessProfile();
+  const hasConstruction = profile?.operating_models.includes('CONSTRUCTION') ?? false;
   const [form, setForm] = useState({
     name: project?.name ?? '',
     client_name: project?.client_name ?? '',
@@ -33,6 +39,13 @@ export function ProjectForm({
     start_date: project?.start_date ?? '',
     end_date: project?.end_date ?? '',
   });
+  const [clientId, setClientId] = useState<string | null>(
+    project?.client_id ?? null,
+  );
+  // Clearing the picker (×) reverts client_name to manual text entry —
+  // tender-stage projects may bill a client that is not in contacts yet.
+  const [manualClient, setManualClient] = useState(!hasConstruction);
+  const showPicker = hasConstruction && !manualClient;
   const [validation, setValidation] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: (input: ProjectInput) =>
@@ -45,6 +58,7 @@ export function ProjectForm({
     event.preventDefault();
     const input: ProjectInput = {
       ...form,
+      client_id: clientId,
       contract_sum: form.contract_sum.trim() ? Number(form.contract_sum) : NaN,
       retention_pct: form.retention_pct.trim()
         ? Number(form.retention_pct)
@@ -80,6 +94,49 @@ export function ProjectForm({
             const amount = ['contract_sum', 'retention_pct', 'budget'].includes(
               key,
             );
+            if (key === 'client_name' && showPicker) {
+              // Deliberately NOT <Field>: Field wraps its children in a
+              // <label>, whose activation behavior forwards clicks to the
+              // first labelable descendant — the picker's toggle button —
+              // double-toggling the dropdown in jsdom. A button-driven
+              // combobox must not be a label's control. The markup mirrors
+              // Field's classes so the grid styling is identical.
+              return (
+                <div key={key} className="block text-sm">
+                  <span className="mb-1 block font-medium text-gray-700">
+                    {t('construction.clients.pickerLabel')}
+                    <span className="ml-0.5 text-red-600">*</span>
+                  </span>
+                  <ClientPicker
+                    businessId={businessId}
+                    value={clientId}
+                    clientName={form.client_name}
+                    disabled={mutation.isPending}
+                    onChange={(id, name) => {
+                      setClientId(id);
+                      setForm((previous) => ({
+                        ...previous,
+                        client_name: name,
+                      }));
+                      // Unlinking drops back to the manual text input with
+                      // the display-cache text preserved.
+                      if (id === null) setManualClient(true);
+                    }}
+                  />
+                  {clientId === null ? (
+                    <button
+                      type="button"
+                      className="mt-1 text-xs text-brand-600 underline"
+                      data-testid="client-manual-entry"
+                      disabled={mutation.isPending}
+                      onClick={() => setManualClient(true)}
+                    >
+                      {t('construction.clients.manualEntry')}
+                    </button>
+                  ) : null}
+                </div>
+              );
+            }
             return (
               <Field
                 key={key}
@@ -117,6 +174,17 @@ export function ProjectForm({
                     }))
                   }
                 />
+                {key === 'client_name' && hasConstruction ? (
+                  <button
+                    type="button"
+                    className="mt-1 text-xs text-brand-600 underline"
+                    data-testid="client-picker-entry"
+                    disabled={mutation.isPending}
+                    onClick={() => setManualClient(false)}
+                  >
+                    {t('construction.clients.pickerLabel')}
+                  </button>
+                ) : null}
               </Field>
             );
           })}

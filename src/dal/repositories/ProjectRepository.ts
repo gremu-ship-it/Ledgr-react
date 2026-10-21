@@ -11,6 +11,13 @@ export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 export interface ProjectInput {
   name: string;
   client_name: string;
+  /**
+   * P2-3: FK to contacts, preferred over client_name for billing. Null for
+   * tender-stage projects whose client is not in the system yet — the
+   * client_name display cache covers that case. The RPC write path treats
+   * an explicit null on update as an unlink (the cache text survives).
+   */
+  client_id: string | null;
   contract_sum: number;
   retention_pct: number;
   budget: number;
@@ -304,6 +311,22 @@ export class ProjectRepository {
         p_project_id: projectId,
         ...args(input),
       }),
+    );
+  }
+  /**
+   * P2-3: resolve the project's billing contact the same way valuation
+   * invoicing does server-side — client_id FK first, frozen name bridge as
+   * fallback (which also backfills the FK on success). Exposed for client
+   * preflight/diagnostics; the invoice path itself calls it inside
+   * generate_invoice_from_valuation.
+   */
+  async resolveClient(projectId: string): Promise<string | null> {
+    return (
+      unwrap<string | null>(
+        await client.rpc('_ledgr_resolve_construction_client', {
+          p_project_id: projectId,
+        }),
+      ) ?? null
     );
   }
   async transitionStatus(
