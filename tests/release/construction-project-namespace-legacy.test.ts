@@ -76,7 +76,8 @@ test({
   ]);
 
   // No compatibility view is created over the legacy name, and the feature
-  // table carries the full Phase A core (BOQ adds boq_locked_at later).
+  // table carries the full Phase A core (BOQ adds boq_locked_at and P2-3
+  // client linkage adds client_id later).
   const constructionColumns = await db.client.query(
     `select column_name from information_schema.columns
       where table_schema='public' and table_name='construction_projects'
@@ -85,6 +86,6 @@ test({
   expect(constructionColumns.rows.map((r: { column_name: string }) => r.column_name)).toEqual([
     'id', 'business_id', 'name', 'client_name', 'contract_sum', 'retention_pct',
     'budget', 'status', 'start_date', 'end_date', 'created_by', 'created_at',
-    'updated_at', 'boq_locked_at',
+    'updated_at', 'boq_locked_at', 'client_id',
   ]);
 });

@@ -54,6 +54,7 @@
     "reset": "Reset",
     "retry": "Retry",
     "save": "Save",
+    "saving": "Saving…",
     "search": "Search",
     "settings": "Settings",
     "status": "Status",
@@ -706,7 +707,26 @@
       }
     }
   },
+  "contacts": {
+    "typeLabel": "Contact type",
+    "typeCustomer": "Customer",
+    "typeSupplier": "Supplier",
+    "typeBoth": "Customer & Supplier"
+  },
   "construction": {
+    "clients": {
+      "pickerLabel": "Client",
+      "pickerPlaceholder": "Search clients...",
+      "addNewClient": "Add new client",
+      "createClient": "Create client \"{{name}}\"",
+      "noClientsFound": "No clients found. Add one to get started.",
+      "unlinkClient": "Unlink client",
+      "unlinkConfirm": "Remove the client link? The project will keep the client name as text.",
+      "manualEntry": "Enter client name manually",
+      "linkedClient": "Linked client",
+      "unlinked": "Unlinked",
+      "linkClient": "Link client"
+    },
     "accounts": {
       "ownerRequired": "You must be signed in to set up the Construction workspace.",
       "provisionError": "The Construction workspace could not be set up.",

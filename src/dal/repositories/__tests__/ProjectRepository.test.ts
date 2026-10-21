@@ -7,6 +7,7 @@ const repository = new ProjectRepository();
 const input = {
   name: 'Hospital',
   client_name: 'Client',
+  client_id: null,
   contract_sum: 1000,
   retention_pct: 10,
   budget: 800,
@@ -41,6 +42,7 @@ describe('ProjectRepository RPC contracts', () => {
       p_business_id: 'b1',
       p_name: 'Hospital',
       p_client_name: 'Client',
+      p_client_id: null,
       p_contract_sum: 1000,
       p_retention_pct: 10,
       p_budget: 800,
@@ -68,6 +70,32 @@ describe('ProjectRepository RPC contracts', () => {
       p_location_id: 'l1',
     });
     expect(mocks.from).not.toHaveBeenCalled();
+  });
+  it('carries the client link through the RPC write path and resolves clients (P2-3)', async () => {
+    await repository.create('b1', { ...input, client_id: 'c1' });
+    expect(mocks.rpc).toHaveBeenLastCalledWith(
+      'create_project',
+      expect.objectContaining({
+        p_business_id: 'b1',
+        p_client_id: 'c1',
+        p_client_name: 'Client',
+      }),
+    );
+    // An explicit null is the unlink intent — forwarded, never omitted, so
+    // the RPC can distinguish "unlink" from "legacy caller" by presence.
+    await repository.update('p1', { ...input, client_id: null });
+    expect(mocks.rpc).toHaveBeenLastCalledWith(
+      'update_project',
+      expect.objectContaining({ p_project_id: 'p1', p_client_id: null }),
+    );
+    mocks.rpc.mockResolvedValueOnce({ data: 'contact-9', error: null });
+    await expect(repository.resolveClient('p1')).resolves.toBe('contact-9');
+    expect(mocks.rpc).toHaveBeenLastCalledWith(
+      '_ledgr_resolve_construction_client',
+      { p_project_id: 'p1' },
+    );
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
+    await expect(repository.resolveClient('p1')).resolves.toBeNull();
   });
   it('reads the single cost-summary result row and propagates server errors', async () => {
     const cost = {

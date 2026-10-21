@@ -78,6 +78,11 @@ async function transaction(run: () => Promise<void>) {
 
 async function legacyShape() {
   await db.client.query('drop view public.projects; alter table public.construction_projects rename to projects');
+  // P2-3 (20261107000000) added construction_projects.client_id (+ FK to
+  // contacts + index). The supplied legacy graph predates P2-3 and the
+  // normalize verifier pins the complete historical relation shape, so strip
+  // the column first — its FK and index drop with it.
+  await db.client.query('alter table public.projects drop column if exists client_id');
   const functions = await db.client.query(`
     select pg_get_functiondef(p.oid) as definition from pg_proc p
     join pg_namespace n on n.oid=p.pronamespace
@@ -85,6 +90,24 @@ async function legacyShape() {
       and position('public.construction_projects' in p.prosrc)>0
   `);
   for (const row of functions.rows) await db.client.query(row.definition.replaceAll('public.construction_projects', 'public.projects'));
+  // P2-3 (20261107000000) replaced the historical 8-argument
+  // create/update_project pair with a 9-argument (p_client_id) pair. The
+  // supplied legacy graph predates P2-3 and the normalize/namespace verifiers
+  // pin the exact historical signatures, so degrade the pair back to the
+  // 8-argument shape. The plpgsql bodies (which still mention p_client_id)
+  // are not revalidated at creation, and the pending chain replaces them with
+  // the canonical Phase A definitions anyway.
+  for (const name of ['create_project', 'update_project']) {
+    const definition = (await db.client.query(`
+      select pg_get_functiondef(p.oid) as definition from pg_proc p
+      join pg_namespace n on n.oid=p.pronamespace
+      where n.nspname='public' and p.proname=$1`, [name])).rows[0].definition as string;
+    const historical = definition.replace(/,\s*p_client_id uuid DEFAULT NULL::uuid/, '');
+    if (historical === definition)
+      throw new Error(`P2-3 signature drift: cannot derive the historical 8-argument ${name} from pg_get_functiondef output.`);
+    await db.client.query(`drop function public.${name}(uuid,text,text,numeric,numeric,numeric,date,date,uuid)`);
+    await db.client.query(historical);
+  }
   await db.client.query(`
     alter table public.projects rename column status to lifecycle_state;
     alter index public.construction_projects_business_status rename to projects_business_status;
@@ -128,6 +151,63 @@ async function identitySnapshot(legacy = false) {
   };
 }
 
+// P2-3 (20261107000000) re-adds exactly one FK (client_id → contacts,
+// ON DELETE SET NULL) and one index during the chain, and the synthetic
+// legacy rows predate the nullable client_id column (the backfill NOTICEs and
+// leaves it NULL because no contact matches 'Synthetic client'). Project the
+// column away for row comparisons; allow exactly the FK/index additions.
+function stripClientLink(snapshot: unknown[]) {
+  const projectsIndex = tables.indexOf('construction_projects');
+  return snapshot.map((rows, index) =>
+    index === projectsIndex
+      ? (rows as Array<Record<string, unknown>>).map(({ client_id: _clientLink, ...rest }) => rest)
+      : rows);
+}
+
+async function expectClientLinkAdditions(
+  before: Awaited<ReturnType<typeof identitySnapshot>>,
+  after: Awaited<ReturnType<typeof identitySnapshot>>,
+  createdFunctions: number,
+) {
+  expect(after.tables).toEqual(before.tables);
+  // ::oid casts matter: node-pg renders bare regclass results as relation
+  // NAME strings, while pg_constraint/pg_index columns arrive numeric.
+  const contactsOid = (await db.client.query("select to_regclass('public.contacts')::oid as oid")).rows[0].oid;
+  const addedFks = after.fks.filter((row: Record<string, unknown>) => String(row.confrelid) === String(contactsOid));
+  expect(addedFks).toHaveLength(1);
+  expect(addedFks[0].confdeltype).toBe('n');
+  expect(after.fks.filter((row: Record<string, unknown>) => String(row.confrelid) !== String(contactsOid))).toEqual(before.fks);
+  const clientIndex = (await db.client.query(
+    "select to_regclass('public.idx_construction_projects_client_id')::oid as oid")).rows[0].oid;
+  expect(clientIndex).not.toBeNull();
+  expect(after.indexes.filter((row: Record<string, unknown>) => String(row.indexrelid) !== String(clientIndex))).toEqual(before.indexes);
+  expect(after.indexes).toHaveLength(before.indexes.length + 1);
+  expectRpcPairChurn(before.functions, after.functions, createdFunctions);
+}
+
+// P2-3 (20261107000000) deliberately replaces the historical 8-argument
+// create/update_project RPC pair with a 9-argument (p_client_id) pair: the
+// adopted legacy OIDs are dropped and fresh ones created. FULL-PENDING-CHAIN's
+// trailing Phase A reapplication then recreates the 8-argument pair alongside.
+// Those RPC-pair OIDs are the ONLY churn allowed — every other adopted
+// function must keep its exact OID, return type, owner and ACL.
+function expectRpcPairChurn(
+  before: Array<Record<string, unknown>>,
+  after: Array<Record<string, unknown>>,
+  createdCount: number,
+) {
+  const dropped = before.filter(row => !after.some(a => a.oid === row.oid));
+  const created = after.filter(row => !before.some(b => b.oid === row.oid));
+  expect(after.filter(row => before.some(b => b.oid === row.oid)))
+    .toEqual(before.filter(row => after.some(a => a.oid === row.oid)));
+  expect(dropped).toHaveLength(2);
+  expect(created).toHaveLength(createdCount);
+  const shape = (row: Record<string, unknown>) => `${String(row.prorettype)}:${String(row.proowner)}`;
+  const droppedShapes = new Set(dropped.map(shape));
+  expect(droppedShapes.size).toBe(1);
+  for (const row of created) expect(droppedShapes.has(shape(row))).toBe(true);
+}
+
 async function refuses(sql: string, setup: string, expectedMessage: string) {
   await transaction(async () => {
     await legacyShape();
@@ -157,8 +237,10 @@ test(meta('FULL-PENDING-CHAIN', 'All pending files apply to the populated suppli
     const before = await dataSnapshot(true);
     const identitiesBefore = await identitySnapshot(true);
     for (const name of pending) await db.client.query(readFileSync(root + name, 'utf8'));
-    expect(await dataSnapshot()).toEqual(before);
-    expect(await identitySnapshot()).toEqual(identitiesBefore);
+    expect(stripClientLink(await dataSnapshot())).toEqual(before);
+    // P2-3: the chain re-adds the client link (FK + index) and swaps the
+    // adopted synthetic 8-arg RPC pair for a fresh 9-arg pair.
+    await expectClientLinkAdditions(identitiesBefore, await identitySnapshot(), 2);
     expect((await db.client.query(`select relkind,reloptions from pg_class
       where oid='public.projects'::regclass`)).rows[0]).toEqual({ relkind: 'v', reloptions: ['security_invoker=true'] });
     const stale = await db.client.query(`select p.proname from pg_proc p
@@ -166,8 +248,10 @@ test(meta('FULL-PENDING-CHAIN', 'All pending files apply to the populated suppli
       and (position('public.projects' in p.prosrc)>0 or position('lifecycle_state' in p.prosrc)>0)`);
     expect(stale.rows).toEqual([]);
     for (const sql of [phaseA, namespace, boq, valuations]) await db.client.query(sql);
-    expect(await dataSnapshot()).toEqual(before);
-    expect(await identitySnapshot()).toEqual(identitiesBefore);
+    expect(stripClientLink(await dataSnapshot())).toEqual(before);
+    // The Phase A reapplication recreates the historical 8-arg pair beside
+    // the P2-3 9-arg pair: four fresh OIDs versus the two synthetic ones.
+    await expectClientLinkAdditions(identitiesBefore, await identitySnapshot(), 4);
   });
 });
 
