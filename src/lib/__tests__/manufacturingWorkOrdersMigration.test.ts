@@ -43,7 +43,10 @@ describe('manufacturing work orders migration contract', () => {
     expect(idxTypes).toBe(idxBom + 1);
     expect(idxWorkOrders).toBe(idxTypes + 1);
     expect(idxDashboard).toBe(idxWorkOrders + 1);
-    expect(idxDashboard).toBe(versions.length - 1);
+    // The relative order above is the contract; the dashboard migration is no
+    // longer the HEAD — later work extends the chain (P2-2 location types,
+    // 20261106000000). Head tracking lives in locationTypesMigration.test.ts.
+    expect(versions.length).toBeGreaterThan(idxDashboard + 1);
     for (const version of ['20261105000000', '20261105000001', '20261105000002']) {
       expect(versions.filter((v) => v === version)).toHaveLength(1);
     }
