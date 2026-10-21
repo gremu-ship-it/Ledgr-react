@@ -14,6 +14,7 @@ import {
   FIELD_CLASS,
   LoadingBlock,
   SectionCard,
+  StatusPill,
 } from '../constructionUi';
 import { ConstructionPurchaseOrdersSection } from '../ConstructionPurchaseOrdersSection';
 import { ConstructionMaterialIssuesSection } from '../ConstructionMaterialIssuesSection';
@@ -197,6 +198,7 @@ function ProjectDetailContent({
             <ProjectSites
               businessId={project.business_id}
               projectId={project.id}
+              projectName={project.name}
               canManage={canManage}
               onNotice={setNotice}
             />
@@ -346,26 +348,30 @@ function ProjectDetailContent({
 function ProjectSites({
   businessId,
   projectId,
+  projectName,
   canManage,
   onNotice,
 }: {
   businessId: string;
   projectId: string;
+  projectName: string;
   canManage: boolean;
   onNotice: (notice: string) => void;
 }) {
   const { t } = useTranslation();
   const cache = useQueryClient();
+  const [linkSiteId, setLinkSiteId] = useState('');
   const query = useQuery({
     queryKey: ['construction', 'project-sites', businessId, projectId],
     queryFn: async () => {
-      const [locations, orders, issues, sites] = await Promise.all([
+      const [locations, orders, issues, sites, branches] = await Promise.all([
         repos.projects.locations(businessId),
         repos.construction.findPurchaseOrders(businessId, projectId),
         repos.construction.findMaterialIssues(businessId, projectId),
         repos.construction.findSites(businessId),
+        repos.branch.findByBusiness(businessId),
       ]);
-      return { locations, orders, issues, sites };
+      return { locations, orders, issues, sites, branches };
     },
   });
   const mutation = useMutation({
@@ -378,10 +384,46 @@ function ProjectSites({
       void cache.invalidateQueries({ queryKey: ['construction'] });
     },
   });
+  // Procurement-site linkage (P2-4): authoritative FK writes go through the
+  // update_construction_procurement_site lifecycle RPC, never a table write.
+  const siteMutation = useMutation({
+    mutationFn: ({
+      siteId,
+      projectId: nextProjectId,
+      projectRef,
+    }: {
+      siteId: string;
+      projectId: string | null;
+      projectRef?: string;
+    }) =>
+      repos.construction.updateSite(siteId, {
+        projectId: nextProjectId,
+        ...(projectRef !== undefined ? { projectRef } : {}),
+      }),
+    onSuccess: (_, variables) => {
+      setLinkSiteId('');
+      onNotice(
+        variables.projectId
+          ? t('construction.sites.siteLinked')
+          : t('construction.sites.siteUnlinked'),
+      );
+      void cache.invalidateQueries({ queryKey: ['construction'] });
+    },
+  });
   if (query.isLoading) return <LoadingBlock label={t(`${k}.loading`)} />;
   if (query.isError) return <ErrorBanner message={query.error.message} />;
   if (!query.data) return null;
-  const { locations, orders, issues, sites } = query.data;
+  const { locations, orders, issues, sites, branches } = query.data;
+  const branchesById = new Map(branches.map((branch) => [branch.id, branch]));
+  const locationsById = new Map(
+    locations.map((location) => [location.id, location]),
+  );
+  const linkedProcurementSites = sites.filter(
+    (site) => site.project_id === projectId,
+  );
+  const unlinkedProcurementSites = sites.filter(
+    (site) => site.project_id === null,
+  );
   const act = (id: string, unlink: boolean) => {
     const hasActivity =
       issues.some((issue) => issue.location_id === id) ||
@@ -399,6 +441,9 @@ function ProjectSites({
   return (
     <div className="space-y-5">
       {mutation.isError && <ErrorBanner message={mutation.error.message} />}
+      {siteMutation.isError && (
+        <ErrorBanner message={siteMutation.error.message} />
+      )}
       {[true, false].map((linked) => {
         const rows = locations.filter((site) =>
           linked ? site.project_id === projectId : site.project_id === null,
@@ -431,6 +476,95 @@ function ProjectSites({
           </section>
         );
       })}
+      {/* Procurement sites (P2-4): linked through the authoritative
+          construction_procurement_sites.project_id FK, independent from the
+          inventory-location lists above. */}
+      <section>
+        <h3 className="mb-3 font-medium">
+          {t('construction.sites.procurementSites')}
+        </h3>
+        {!linkedProcurementSites.length && (
+          <p className="text-sm text-gray-500">
+            {t('construction.sites.noProcurementSites')}
+          </p>
+        )}
+        <ul>
+          {linkedProcurementSites.map((site) => (
+            <li
+              className="flex items-center justify-between border-b py-3"
+              key={site.id}
+            >
+              <span className="text-sm">
+                {site.site_name}{' '}
+                <span className="font-mono text-xs text-gray-500">
+                  ({site.site_code})
+                </span>
+                <span className="block text-xs text-gray-500">
+                  {branchesById.get(site.branch_id)?.name ?? '—'} ·{' '}
+                  {locationsById.get(site.location_id)?.name ?? '—'}
+                </span>
+              </span>
+              <span className="flex items-center gap-2">
+                <StatusPill
+                  label={
+                    site.is_active
+                      ? t('construction.sites.active')
+                      : t('construction.sites.inactive')
+                  }
+                  className={
+                    site.is_active
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-slate-100 text-slate-700'
+                  }
+                />
+                {canManage ? (
+                  <button
+                    className={PROJECT_BUTTON}
+                    disabled={siteMutation.isPending}
+                    onClick={() =>
+                      siteMutation.mutate({ siteId: site.id, projectId: null })
+                    }
+                  >
+                    {t('construction.sites.unlinkProject')}
+                  </button>
+                ) : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {canManage && unlinkedProcurementSites.length ? (
+          <div className="mt-3 flex items-center gap-2">
+            <select
+              aria-label={t('construction.sites.linkProcurementSite')}
+              value={linkSiteId}
+              onChange={(event) => setLinkSiteId(event.target.value)}
+              className={FIELD_CLASS}
+            >
+              <option value="">
+                {t('construction.sites.linkProcurementSite')}
+              </option>
+              {unlinkedProcurementSites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.site_name} ({site.site_code})
+                </option>
+              ))}
+            </select>
+            <button
+              className={PROJECT_BUTTON}
+              disabled={!linkSiteId || siteMutation.isPending}
+              onClick={() =>
+                siteMutation.mutate({
+                  siteId: linkSiteId,
+                  projectId,
+                  projectRef: projectName,
+                })
+              }
+            >
+              {t(`${k}.link`)}
+            </button>
+          </div>
+        ) : null}
+      </section>
     </div>
   );
 }

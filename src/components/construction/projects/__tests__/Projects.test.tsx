@@ -43,6 +43,10 @@ const mock = vi.hoisted(() => ({
     findPurchaseOrders: vi.fn(),
     findMaterialIssues: vi.fn(),
     findSites: vi.fn(),
+    updateSite: vi.fn(),
+  },
+  branch: {
+    findByBusiness: vi.fn(),
   },
 }));
 vi.mock('@/lib/repositories', () => ({ repos: mock }));
@@ -162,6 +166,8 @@ beforeEach(() => {
   mock.construction.findPurchaseOrders.mockResolvedValue([]);
   mock.construction.findMaterialIssues.mockResolvedValue([]);
   mock.construction.findSites.mockResolvedValue([]);
+  mock.construction.updateSite.mockResolvedValue({});
+  mock.branch.findByBusiness.mockResolvedValue([{ id: 'br1', name: 'Main Branch' }]);
 });
 afterEach(cleanup);
 describe('construction project list', () => {
@@ -534,5 +540,103 @@ describe('project detail', () => {
     await screen.findByText('Manual retention release is available at practical completion or later.');
     expect(screen.queryByRole('button', { name: 'Create release invoice' })).toBeNull();
     expect(mock.projects.releaseRetention).not.toHaveBeenCalled();
+  });
+});
+
+describe('project detail procurement sites (P2-4)', () => {
+  function procurementSite(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'site-1',
+      business_id: 'b1',
+      branch_id: 'br1',
+      location_id: 'linked',
+      site_code: 'SITE-001',
+      site_name: 'Hospital Main Gate',
+      project_id: 'p1',
+      project_ref: 'Hospital',
+      is_active: true,
+      created_at: '2026-11-08T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  async function openSitesTab(capabilities: string[] = grants) {
+    mount(
+      <ProjectDetail businessId="b1" projectId="p1" capabilities={capabilities} />,
+    );
+    await screen.findByText('Hospital');
+    fireEvent.click(screen.getByRole('tab', { name: 'Sites' }));
+  }
+
+  it('lists FK-linked procurement sites with branch, location and status', async () => {
+    mock.construction.findSites.mockResolvedValue([procurementSite()]);
+    await openSitesTab();
+    expect(await screen.findByText('Hospital Main Gate')).toBeTruthy();
+    expect(screen.getByText('Procurement sites')).toBeTruthy();
+    expect(screen.getByText('(SITE-001)')).toBeTruthy();
+    expect(screen.getByText('Main Branch · Site One')).toBeTruthy();
+    expect(screen.getByText('Active')).toBeTruthy();
+    expect(
+      screen.queryByText('No procurement sites linked to this project.'),
+    ).toBeNull();
+  });
+
+  it('links an unlinked site through the update RPC using the project name as reference', async () => {
+    mock.projects.locations.mockResolvedValue([]);
+    mock.construction.findSites.mockResolvedValue([
+      procurementSite({
+        id: 'site-2',
+        project_id: null,
+        site_code: 'SITE-002',
+        site_name: 'Annex Gate',
+      }),
+    ]);
+    await openSitesTab();
+    const picker = await screen.findByLabelText('Link procurement site');
+    fireEvent.change(picker, { target: { value: 'site-2' } });
+    fireEvent.click(screen.getByText('Link to project'));
+    await waitFor(() =>
+      expect(mock.construction.updateSite).toHaveBeenCalledWith('site-2', {
+        projectId: 'p1',
+        projectRef: 'Hospital',
+      }),
+    );
+  });
+
+  it('unlinks a site by writing an explicit null project id', async () => {
+    mock.construction.findSites.mockResolvedValue([procurementSite()]);
+    await openSitesTab();
+    fireEvent.click(await screen.findByText('Unlink project'));
+    await waitFor(() =>
+      expect(mock.construction.updateSite).toHaveBeenCalledWith('site-1', {
+        projectId: null,
+      }),
+    );
+  });
+
+  it('shows the empty state for a project without FK-linked sites', async () => {
+    mock.construction.findSites.mockResolvedValue([
+      procurementSite({ id: 'site-9', project_id: 'p2', site_name: 'Other' }),
+    ]);
+    await openSitesTab();
+    expect(
+      await screen.findByText('No procurement sites linked to this project.'),
+    ).toBeTruthy();
+  });
+
+  it('hides procurement link controls without the manage capability', async () => {
+    mock.construction.findSites.mockResolvedValue([
+      procurementSite(),
+      procurementSite({
+        id: 'site-2',
+        project_id: null,
+        site_code: 'SITE-002',
+        site_name: 'Annex Gate',
+      }),
+    ]);
+    await openSitesTab([]);
+    expect(await screen.findByText('Hospital Main Gate')).toBeTruthy();
+    expect(screen.queryByText('Unlink project')).toBeNull();
+    expect(screen.queryByLabelText('Link procurement site')).toBeNull();
   });
 });

@@ -32,13 +32,13 @@ const code = sql
 const statements = code.split(';');
 
 describe('construction client linkage migration contract', () => {
-  it('is the migration head, uniquely versioned, and follows the location types migration', () => {
+  it('is uniquely versioned and follows the location types migration', () => {
     const files = readdirSync('supabase/migrations').filter((f) => f.endsWith('.sql')).sort();
     const versions = files.map((f) => f.split('_')[0]);
-    // Later migrations extend the head; this assertion is the head tracker
-    // for the chain (locationTypesMigration.test.ts keeps the relative
-    // ordering of its own version).
-    expect(versions[versions.length - 1]).toBe('20261107000000');
+    // Head tracking lives in the newest phase's contract test (P2-4:
+    // constructionSiteLifecycleMigration.test.ts); this file keeps the
+    // relative ordering of its own version.
+    expect(versions).toContain('20261107000000');
     expect(versions.filter((v) => v === '20261107000000')).toHaveLength(1);
     expect(versions.indexOf('20261107000000')).toBe(versions.indexOf('20261106000000') + 1);
   });
