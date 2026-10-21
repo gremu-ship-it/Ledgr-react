@@ -13,6 +13,7 @@ import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { useDefaultRoute } from './hooks/useDefaultRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
@@ -189,13 +190,14 @@ function UpdateAvailableBanner() {
   );
 }
 
+export function SmartRedirect() {
+  const route = useDefaultRoute();
+  return <Navigate to={route} replace />;
+}
+
 function App() {
   useAuthListener();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
-  const role = currentBusiness?.role || null;
-  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
-  const roleHome = getHomePathForRole(role, isOrgCapabilityEnabled);
-  const homePath = isAdminPortalHost() ? '/partner-admin' : (roleHome !== '/dashboard' ? roleHome : '/dashboard');
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -521,8 +523,14 @@ function App() {
             </Route>
 
             {/* Fallbacks */}
-            <Route path="/" element={<Navigate to={homePath} replace />} />
-            <Route path="*" element={<Navigate to={homePath} replace />} />
+            <Route
+              path="/"
+              element={isAdminPortalHost() ? <Navigate to="/partner-admin" replace /> : <SmartRedirect />}
+            />
+            <Route
+              path="*"
+              element={isAdminPortalHost() ? <Navigate to="/partner-admin" replace /> : <SmartRedirect />}
+            />
           </Routes>
           </Suspense>
 

@@ -19,6 +19,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
+import { useDefaultRoute } from '../../hooks/useDefaultRoute';
 import { NAV_SECTIONS } from './navConfig';
 
 interface CommandItem {
@@ -34,6 +35,7 @@ interface CommandItem {
 export function CommandPalette() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const defaultRoute = useDefaultRoute();
   const businesses = useAppStore((s) => s.businesses);
   const currentBusinessId = useAppStore((s) => s.currentBusiness?.business.id);
   const switchBusiness = useAppStore((s) => s.switchBusiness);
@@ -83,7 +85,7 @@ export function CommandPalette() {
       group: 'Businesses',
       action: () => {
         switchBusiness(m.business.id);
-        navigate('/dashboard');
+        navigate(defaultRoute);
       },
     }));
 
@@ -97,7 +99,7 @@ export function CommandPalette() {
     }));
 
     return [...productCommands, ...quickActions, ...navItems, ...businessSwitches];
-  }, [t, businesses, switchBusiness, navigate, products]);
+  }, [t, businesses, switchBusiness, navigate, products, defaultRoute]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands.slice(0, 20);
