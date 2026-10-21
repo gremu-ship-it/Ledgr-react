@@ -148,7 +148,53 @@
       "materialTransfers": {
         "title": "Material Transfers",
         "subtitle": "Material movements between sites"
-      }
+      },
+      "noLocationsMessage": "No locations found.",
+      "goToLocations": "Go to Settings → Locations to add one"
+    }
+  },
+  "settings": {
+    "locations": {
+      "tabTitle": "Locations",
+      "title": "Inventory Locations",
+      "description": "Manage your warehouses, stores, and site locations.",
+      "addLocation": "Add location",
+      "editLocation": "Edit location",
+      "name": "Name",
+      "code": "Code",
+      "codeHint": "Optional. Generated from the name when left blank.",
+      "locationType": "Location type",
+      "branch": "Branch",
+      "noBranch": "No branch",
+      "isDefault": "Default location",
+      "isDefaultHint": "Pre-selected in stock pickers. Only one location can be the default.",
+      "isActive": "Active",
+      "project": "Linked project",
+      "noLocations": "No locations found. Add your first location to get started.",
+      "confirmDeactivate": "Deactivate this location?",
+      "confirmDeactivateDesc": "Deactivated locations won't appear in stock selection dropdowns. This can be reversed.",
+      "confirmDefault": "Change default location?",
+      "confirmDefaultDesc": "This will replace {{currentDefault}} as your default stock location.",
+      "deactivateBlocked": "Cannot deactivate",
+      "deactivateBlockedStock": "This location has {{count}} units of stock on hand. Transfer or adjust stock before deactivating.",
+      "deactivateBlockedWorkOrder": "This location is assigned to {{count}} open work order(s). Complete or reassign them first.",
+      "deactivateBlockedSite": "This location is linked to an active procurement site. Deactivate the site first.",
+      "deactivateBlockedLastDefault": "Cannot deactivate the only default location. Set another location as default first.",
+      "reactivate": "Reactivate",
+      "deactivate": "Deactivate",
+      "setAsDefault": "Set as default",
+      "active": "Active",
+      "inactive": "Inactive",
+      "created": "Location added.",
+      "updated": "Location updated.",
+      "deactivated": "Location deactivated.",
+      "reactivated": "Location reactivated.",
+      "defaultSet": "Default location updated.",
+      "saving": "Saving…",
+      "loadError": "Locations could not be loaded.",
+      "upgradeTitle": "Locations requires an upgrade",
+      "upgradeText": "This feature is available on the Growth plan and above.",
+      "viewPlans": "View plans"
     }
   },
   "auth": {
@@ -1065,7 +1111,10 @@
       "warehouse": "Warehouse",
       "raw_materials_store": "Raw Materials Store",
       "production_floor": "Production Floor",
-      "finished_goods_store": "Finished Goods Store"
+      "finished_goods_store": "Finished Goods Store",
+      "job_site": "Job Site",
+      "site_office": "Site Office",
+      "material_yard": "Material Yard"
     },
     "bom": {
       "title": "Bill of Materials",

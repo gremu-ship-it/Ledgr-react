@@ -25,8 +25,15 @@ describe('manufacturing foundation migration contract', () => {
     const versions = files.map((f) => f.split('_')[0]);
     const latest = versions[versions.length - 1];
     // Later manufacturing phases extend the migration head. Phase D dashboard
-    // reporting follows the Phase C work-order migrations.
-    expect(['20261103000000', '20261104000000', '20261105000001', '20261105000002']).toContain(latest);
+    // reporting follows the Phase C work-order migrations; P2-2 (construction
+    // location types) extends the head again after Phase D.
+    expect([
+      '20261103000000',
+      '20261104000000',
+      '20261105000001',
+      '20261105000002',
+      '20261106000000',
+    ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);
   });

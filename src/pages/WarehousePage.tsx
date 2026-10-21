@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle, CheckCircle2,
@@ -47,6 +49,7 @@ function ReceiveStockModal({
   isLoading: boolean;
   error: string | null;
 }) {
+  const { t } = useTranslation();
   const [lines, setLines] = useState<ReceiveLineForm[]>([
     { productId: '', quantity: 1, unitCost: 0 },
   ]);
@@ -106,8 +109,16 @@ function ReceiveStockModal({
             Receive into location <span className="text-red-400">*</span>
           </label>
           {locations.length === 0 ? (
+            /* P2-1: this used to be a hardcoded dead end pointing at a tab that
+               did not exist. The Locations tab is real now — link to it. */
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              No warehouse locations found. Go to Settings → Locations to add one first.
+              {t('pages.inventory.noLocationsMessage')}{' '}
+              <Link
+                to="/settings?tab=locations"
+                className="font-semibold underline hover:text-amber-900"
+              >
+                {t('pages.inventory.goToLocations')}
+              </Link>
             </p>
           ) : (
             <select
