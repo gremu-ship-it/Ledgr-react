@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Key,
   LogOut,
+  MapPin,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -34,6 +35,7 @@ import { useCookieConsent } from '@/lib/cookieConsent';
 import { DataExportButton } from '@/components/DataExportButton';
 import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
+import { LocationsTab } from '@/components/settings/LocationsTab';
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BusinessDataBackup } from '@/components/settings/BusinessDataBackup';
 import { BillingTab } from '@/components/billing/BillingTab';
@@ -116,15 +118,18 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance';
-const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance'];
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'locations' | 'privacy' | 'api' | 'billing' | 'appearance';
+const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'locations', 'privacy', 'api', 'billing', 'appearance'];
 
-const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
+// Legacy tabs carry hardcoded labels; new tabs MUST provide `labelKey` and
+// resolve through i18n (the renderer prefers labelKey when present).
+const TABS: { value: Tab; label: string; labelKey?: string; icon: typeof Building2 }[] = [
   { value: 'business', label: 'Business Profile', icon: Building2 },
   { value: 'financial', label: 'Financial Settings', icon: DollarSign },
   { value: 'profile', label: 'User Profile', icon: User },
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'team', label: 'Team Members', icon: Users },
+  { value: 'locations', label: 'Locations', labelKey: 'settings.locations.tabTitle', icon: MapPin },
   { value: 'api', label: 'API & Webhooks', icon: Key },
   { value: 'billing', label: 'Billing & Plans', icon: DollarSign },
   { value: 'appearance', label: 'Appearance', icon: Eye },
@@ -2150,6 +2155,7 @@ For privacy requests, email privacy@ledgr.app or use the in-app tools.
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
@@ -2223,7 +2229,7 @@ export function SettingsPage() {
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  {tab.label}
+                  {tab.labelKey ? t(tab.labelKey) : tab.label}
                 </button>
               );
             })}
@@ -2262,6 +2268,9 @@ export function SettingsPage() {
                 {activeTab === 'profile' && <UserProfileTab />}
                 {activeTab === 'security' && <SecurityTab />}
                 {activeTab === 'team' && <TeamManagementPage />}
+                {activeTab === 'locations' && business && (
+                  <LocationsTab businessId={business.id} />
+                )}
                 {activeTab === 'api' && (
                   <PlanGate capability="webhooks" featureName="API & Webhooks" fallback="lock">
                     <WebhookSettings />

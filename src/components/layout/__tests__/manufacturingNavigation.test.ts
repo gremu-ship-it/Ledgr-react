@@ -205,11 +205,17 @@ describe('manufacturing i18n keys', () => {
       finished_good: 'Finished Good',
       trading_good: 'Trading Good',
     });
+    // P2-2 extends the shared locationType vocabulary with the three
+    // construction values (migration 20261106000000). The namespace name is
+    // historical; the labels serve every vertical's location pickers.
     expect(en.manufacturing.locationType).toEqual({
       warehouse: 'Warehouse',
       raw_materials_store: 'Raw Materials Store',
       production_floor: 'Production Floor',
       finished_goods_store: 'Finished Goods Store',
+      job_site: 'Job Site',
+      site_office: 'Site Office',
+      material_yard: 'Material Yard',
     });
     expect(en.navigation.sections.manufacturing).toBe('Manufacturing');
   });
