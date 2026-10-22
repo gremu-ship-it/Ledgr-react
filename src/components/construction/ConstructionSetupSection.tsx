@@ -1,10 +1,14 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Ruler, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
+import { MapPin, Pencil, Power, Ruler, ShieldCheck } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import {
   CONSTRUCTION_CAPABILITIES,
   CONSTRUCTION_CAPABILITY_LABELS,
+  type ConstructionProcurementSite,
 } from '@/dal/repositories/ConstructionProcurementRepository';
 import { describeConstructionFailure } from '@/lib/construction/constructionCommandFeedback';
 import { formatDate, gateForCapability } from '@/lib/construction/constructionWorkspaceView';
@@ -32,21 +36,56 @@ import {
  * `procurement.master.manage` records sites and conversions.
  */
 export function ConstructionSetupSection({ businessId, capabilities }: { businessId: string; capabilities: string[] }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
+  const [editingSite, setEditingSite] = useState<ConstructionProcurementSite | null>(null);
+  const [statusSite, setStatusSite] = useState<ConstructionProcurementSite | null>(null);
+
+  const invalidateSetup = () => {
+    void queryClient.invalidateQueries({ queryKey: ['construction'] });
+  };
+
+  // Site lifecycle mutations (20261108). Both go through the lifecycle RPCs;
+  // the server enforces capability, deactivation guards and the append-only
+  // bypass. Refusals surface as ConstructionCommandError.
+  const updateSiteMutation = useMutation({
+    mutationFn: (input: { siteId: string; siteName: string; projectId: string | null; projectRef: string }) =>
+      repos.construction.updateSite(input.siteId, {
+        siteName: input.siteName,
+        projectId: input.projectId,
+        projectRef: input.projectRef,
+      }),
+    onSuccess: () => {
+      setEditingSite(null);
+      setNotice(t('construction.sites.updated'));
+      invalidateSetup();
+    },
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: (input: { siteId: string; active: boolean; reason?: string }) =>
+      repos.construction.setSiteStatus(input.siteId, input.active, input.reason),
+    onSuccess: (_result, input) => {
+      setStatusSite(null);
+      setNotice(input.active ? t('construction.sites.reactivated') : t('construction.sites.deactivated'));
+      invalidateSetup();
+    },
+  });
 
   const dataQuery = useQuery({
     queryKey: ['construction', 'setup', businessId],
     queryFn: async () => {
-      const [sites, conversions, branches, locations, products, policy] = await Promise.all([
+      const [sites, conversions, branches, locations, products, policy, projectPage] = await Promise.all([
         repos.construction.findSites(businessId),
         repos.construction.findUomConversions(businessId),
         repos.branch.findByBusiness(businessId),
         repos.branch.findLocations(businessId),
         repos.inventory.findAllProducts(businessId),
         repos.construction.findPostingPolicy(businessId),
+        repos.projects.list(businessId),
       ]);
-      return { sites, conversions, branches, locations, products, policy };
+      return { sites, conversions, branches, locations, products, policy, projects: projectPage.rows };
     },
   });
 
@@ -61,7 +100,7 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
     );
   }
 
-  const { sites, conversions, branches, locations, products, policy } = dataQuery.data!;
+  const { sites, conversions, branches, locations, products, policy, projects } = dataQuery.data!;
   const productsById = new Map(products.map((product) => [product.id, product]));
   const branchesById = new Map(branches.map((branch) => [branch.id, branch]));
   const locationsById = new Map(locations.map((location) => [location.id, location]));
@@ -70,9 +109,24 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
     queryClient.invalidateQueries({ queryKey: ['construction'] });
   };
 
+  // One gate for every lifecycle affordance: without procurement.master.manage
+  // the action buttons are hidden entirely (not disabled), matching the house
+  // GatedButton semantics used by the register forms below.
+  const manageGate = gateForCapability(
+    capabilities,
+    CONSTRUCTION_CAPABILITIES.masterManage,
+    CONSTRUCTION_CAPABILITY_LABELS[CONSTRUCTION_CAPABILITIES.masterManage],
+  );
+
+  const statusFailure = statusMutation.isError ? describeConstructionFailure(statusMutation.error) : null;
+  const statusBlocked = statusFailure ? localizeSiteBlock(statusFailure.message, t) : null;
+
   return (
     <div className="space-y-6">
       {notice ? <SuccessBanner message={notice} /> : null}
+      {statusBlocked ? <ErrorBanner message={statusBlocked} /> : null}
+      {!statusBlocked && statusFailure ? <FailureBanner failure={statusFailure} /> : null}
+      {updateSiteMutation.isError ? <FailureBanner failure={describeConstructionFailure(updateSiteMutation.error)} /> : null}
 
       <SiteForm
         businessId={businessId}
@@ -80,6 +134,7 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
         branches={branches}
         locations={locations}
         products={products}
+        projects={projects}
         onDone={(message) => {
           setNotice(message);
           invalidate();
@@ -100,11 +155,15 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
                   <th className="px-2 py-2">Branch</th>
                   <th className="px-2 py-2">Inventory location</th>
                   <th className="px-2 py-2">Status</th>
+                  {manageGate.allowed ? <th className="px-2 py-2">{t('construction.sites.actions')}</th> : null}
                 </tr>
               </thead>
               <tbody>
                 {sites.map((site) => (
-                  <tr key={site.id} className="border-t border-gray-100">
+                  <tr
+                    key={site.id}
+                    className={`border-t border-gray-100${site.is_active ? '' : ' bg-slate-50 opacity-60'}`}
+                  >
                     <td className="px-2 py-2 font-mono text-xs text-gray-800">{site.site_code}</td>
                     <td className="px-2 py-2 text-gray-900">{site.site_name}</td>
                     <td className="px-2 py-2 font-mono text-xs text-gray-700">{site.project_ref}</td>
@@ -116,6 +175,30 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
                         className={site.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}
                       />
                     </td>
+                    {manageGate.allowed ? (
+                      <td className="px-2 py-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingSite(site)}
+                            className="rounded border border-gray-200 p-1.5 text-gray-700 hover:bg-gray-50"
+                            aria-label={t('construction.sites.editSite')}
+                            title={t('construction.sites.editSite')}
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setStatusSite(site)}
+                            className="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                            aria-label={site.is_active ? t('construction.sites.deactivateSite') : t('construction.sites.reactivateSite')}
+                          >
+                            <Power className="h-3.5 w-3.5" aria-hidden />
+                            {site.is_active ? t('construction.sites.deactivateSite') : t('construction.sites.reactivateSite')}
+                          </button>
+                        </div>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
@@ -181,6 +264,24 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
           invalidate();
         }}
       />
+
+      {editingSite ? (
+        <SiteEditModal
+          site={editingSite}
+          projects={projects}
+          isPending={updateSiteMutation.isPending}
+          onClose={() => setEditingSite(null)}
+          onSubmit={(input) => updateSiteMutation.mutate({ siteId: editingSite.id, ...input })}
+        />
+      ) : null}
+      {statusSite ? (
+        <SiteStatusDialog
+          site={statusSite}
+          isPending={statusMutation.isPending}
+          onClose={() => setStatusSite(null)}
+          onSubmit={(reason) => statusMutation.mutate({ siteId: statusSite.id, active: !statusSite.is_active, reason })}
+        />
+      ) : null}
     </div>
   );
 }
@@ -191,6 +292,7 @@ function SiteForm({
   branches,
   locations,
   products,
+  projects,
   onDone,
 }: {
   businessId: string;
@@ -198,13 +300,16 @@ function SiteForm({
   branches: Array<{ id: string; name: string }>;
   locations: Array<{ id: string; name: string; branch_id: string | null }>;
   products: Array<{ id: string; name: string }>;
+  projects: Array<{ id: string; name: string }>;
   onDone: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [branchId, setBranchId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [siteCode, setSiteCode] = useState('');
   const [siteName, setSiteName] = useState('');
   const [projectRef, setProjectRef] = useState('');
+  const [projectId, setProjectId] = useState('');
 
   const gate = gateForCapability(
     capabilities,
@@ -213,19 +318,28 @@ function SiteForm({
   );
 
   const mutation = useMutation({
-    mutationFn: () =>
-      repos.construction.registerSite({
+    mutationFn: async () => {
+      const registered = await repos.construction.registerSite({
         businessId,
         branchId,
         locationId,
         siteCode: siteCode.trim(),
         siteName: siteName.trim(),
         projectRef: projectRef.trim(),
-      }),
+      });
+      // Optional authoritative project link: register owns the immutable
+      // identity fields, so the FK is set through the lifecycle RPC right
+      // after a successful (or idempotent) registration.
+      if (projectId && registered.id) {
+        await repos.construction.updateSite(String(registered.id), { projectId });
+      }
+      return registered;
+    },
     onSuccess: () => {
       setSiteCode('');
       setSiteName('');
       setProjectRef('');
+      setProjectId('');
       onDone('Construction site registered.');
     },
   });
@@ -272,6 +386,28 @@ function SiteForm({
         </Field>
         <Field label="Site name" required>
           <input aria-label="Site name" value={siteName} onChange={(event) => setSiteName(event.target.value)} className={FIELD_CLASS} />
+        </Field>
+        <Field label={t('construction.sites.projectLink')} hint={t('construction.sites.projectLinkPlaceholder')}>
+          <select
+            aria-label={t('construction.sites.projectLink')}
+            value={projectId}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProjectId(next);
+              // Auto-fill (not auto-submit) the project reference: selecting a
+              // project copies its name, and the field stays editable.
+              const project = projects.find((entry) => entry.id === next);
+              if (project) setProjectRef(project.name);
+            }}
+            className={FIELD_CLASS}
+          >
+            <option value="">{t('construction.sites.noProject')}</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="Project reference" required hint="The reference material issues are booked against.">
           <input aria-label="Project reference" value={projectRef} onChange={(event) => setProjectRef(event.target.value)} className={FIELD_CLASS} />
@@ -503,5 +639,174 @@ function PolicyForm({
         </div>
       </form>
     </SectionCard>
+  );
+}
+
+/**
+ * Maps the lifecycle RPC's guard refusals onto the localized
+ * `construction.sites.deactivateBlocked*` strings, extracting the count from
+ * the server message. Anything unrecognized returns null and falls through to
+ * the house FailureBanner, which shows the raw server message verbatim.
+ */
+function localizeSiteBlock(message: string, t: TFunction): string | null {
+  const poMatch = /(\d+)\s+open purchase order\(s\)/.exec(message);
+  if (poMatch) return t('construction.sites.deactivateBlockedPOs', { count: Number(poMatch[1]) });
+  const issueMatch = /(\d+)\s+open material issue\(s\)/.exec(message);
+  if (issueMatch) return t('construction.sites.deactivateBlockedIssues', { count: Number(issueMatch[1]) });
+  const stockMatch = /linked location has\s+([\d.]+)\s+units on hand/.exec(message);
+  if (stockMatch) {
+    return t('construction.sites.deactivateBlockedStock', { count: Number(stockMatch[1].replace(/,/g, '')) });
+  }
+  return null;
+}
+
+function DialogShell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label={label}>
+      <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-lg">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Edit modal for a registered site (P2-4). Site name, the authoritative
+ * project link (with an explicit "No project linked" unlink option) and the
+ * project reference — auto-filled from the selected project's name but still
+ * editable. Branch, location and site_code are deliberately absent: those are
+ * owned by the immutable registration and re-registering with the same site
+ * code is the documented way to move them.
+ */
+function SiteEditModal({
+  site,
+  projects,
+  isPending,
+  onClose,
+  onSubmit,
+}: {
+  site: ConstructionProcurementSite;
+  projects: Array<{ id: string; name: string }>;
+  isPending: boolean;
+  onClose: () => void;
+  onSubmit: (input: { siteName: string; projectId: string | null; projectRef: string }) => void;
+}) {
+  const { t } = useTranslation();
+  const [siteName, setSiteName] = useState(site.site_name);
+  const [projectId, setProjectId] = useState(site.project_id ?? '');
+  const [projectRef, setProjectRef] = useState(site.project_ref);
+  const canSubmit = siteName.trim().length > 0 && projectRef.trim().length > 0 && !isPending;
+
+  return (
+    <DialogShell label={t('construction.sites.editSite')}>
+      <h3 className="text-sm font-semibold text-gray-900">{t('construction.sites.editSite')}</h3>
+      <p className="mt-1 font-mono text-xs text-gray-500">{site.site_code}</p>
+      <form
+        className="mt-3 space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!canSubmit) return;
+          onSubmit({ siteName: siteName.trim(), projectId: projectId || null, projectRef: projectRef.trim() });
+        }}
+      >
+        <Field label={t('construction.sites.siteName')} required>
+          <input aria-label={t('construction.sites.siteName')} value={siteName} onChange={(event) => setSiteName(event.target.value)} className={FIELD_CLASS} />
+        </Field>
+        <Field label={t('construction.sites.projectLink')} hint={t('construction.sites.projectLinkPlaceholder')}>
+          <select
+            aria-label={t('construction.sites.projectLink')}
+            value={projectId}
+            onChange={(event) => {
+              const next = event.target.value;
+              setProjectId(next);
+              const project = projects.find((entry) => entry.id === next);
+              if (project) setProjectRef(project.name);
+            }}
+            className={FIELD_CLASS}
+          >
+            <option value="">{t('construction.sites.noProject')}</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label={t('construction.sites.projectRef')} required>
+          <input aria-label={t('construction.sites.projectRef')} value={projectRef} onChange={(event) => setProjectRef(event.target.value)} className={FIELD_CLASS} />
+        </Field>
+        <InfoNote>
+          <p>{t('construction.sites.reRegisterNote')}</p>
+        </InfoNote>
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={onClose} className="rounded border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+            {t('common.cancel')}
+          </button>
+          <button type="submit" disabled={!canSubmit} className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
+            {isPending ? '…' : t('common.save')}
+          </button>
+        </div>
+      </form>
+    </DialogShell>
+  );
+}
+
+/**
+ * Confirmation dialog for deactivation (with an optional reason) and
+ * reactivation (no guards, no reason). The RPC stays the single source of
+ * truth for what blocks a deactivation.
+ */
+function SiteStatusDialog({
+  site,
+  isPending,
+  onClose,
+  onSubmit,
+}: {
+  site: ConstructionProcurementSite;
+  isPending: boolean;
+  onClose: () => void;
+  onSubmit: (reason?: string) => void;
+}) {
+  const { t } = useTranslation();
+  const deactivating = site.is_active;
+  const [reason, setReason] = useState('');
+
+  return (
+    <DialogShell label={deactivating ? t('construction.sites.deactivateSite') : t('construction.sites.reactivateSite')}>
+      <h3 className="text-sm font-semibold text-gray-900">
+        {deactivating ? t('construction.sites.deactivateConfirm') : t('construction.sites.reactivateConfirm')}
+      </h3>
+      <p className="mt-1 text-xs text-gray-700">
+        {site.site_name} <span className="font-mono text-gray-500">({site.site_code})</span>
+      </p>
+      <p className="mt-2 text-xs text-gray-600">
+        {deactivating ? t('construction.sites.deactivateConfirmDesc') : t('construction.sites.reactivateConfirmDesc')}
+      </p>
+      {deactivating ? (
+        <div className="mt-3">
+          <Field label={t('construction.sites.deactivateReason')}>
+            <textarea
+              aria-label={t('construction.sites.deactivateReason')}
+              placeholder={t('construction.sites.deactivateReasonPlaceholder')}
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              rows={2}
+              className={FIELD_CLASS}
+            />
+          </Field>
+        </div>
+      ) : null}
+      <div className="mt-4 flex items-center justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded border border-gray-200 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+          {t('common.cancel')}
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => onSubmit(deactivating ? reason.trim() || undefined : undefined)}
+          className="rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {deactivating ? t('construction.sites.deactivateSite') : t('construction.sites.reactivateSite')}
+        </button>
+      </div>
+    </DialogShell>
   );
 }

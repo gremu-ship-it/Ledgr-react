@@ -42,6 +42,10 @@ const mockState = vi.hoisted(() => ({
     findSites: vi.fn(),
     findPurchaseOrders: vi.fn(),
     findMaterialIssues: vi.fn(),
+    updateSite: vi.fn(),
+  },
+  branch: {
+    findByBusiness: vi.fn(async () => []),
   },
 }));
 
@@ -55,6 +59,7 @@ vi.mock('@/lib/repositories', () => ({
     projects: mockState.projects,
     reporting: mockState.projects,
     construction: mockState.construction,
+    branch: mockState.branch,
   },
 }));
 

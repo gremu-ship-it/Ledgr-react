@@ -108,6 +108,8 @@ export interface ConstructionProcurementSite {
   location_id: string;
   site_code: string;
   site_name: string;
+  /** Authoritative FK to construction_projects (nullable); project_ref stays the display label. */
+  project_id: string | null;
   project_ref: string;
   is_active: boolean;
   created_at: string;
@@ -699,6 +701,24 @@ export class ConstructionProcurementRepository {
     );
   }
 
+  /** Active-or-not sites authoritatively linked to one project (project_id FK). */
+  async findSitesForProject(businessId: string, projectId: string): Promise<ConstructionProcurementSite[]> {
+    return this.rows<ConstructionProcurementSite>(
+      'construction_procurement_sites',
+      (b) => b.eq('business_id', businessId).eq('project_id', projectId).order('site_code'),
+      'Could not load construction sites.',
+    );
+  }
+
+  /** Registered sites with no project link yet — the picker source for ProjectDetail. */
+  async findUnlinkedSites(businessId: string): Promise<ConstructionProcurementSite[]> {
+    return this.rows<ConstructionProcurementSite>(
+      'construction_procurement_sites',
+      (b) => b.eq('business_id', businessId).is('project_id', null).order('site_code'),
+      'Could not load construction sites.',
+    );
+  }
+
   async findUomConversions(businessId: string): Promise<ConstructionUomConversion[]> {
     return this.rows<ConstructionUomConversion>(
       'construction_product_uom_conversions',
@@ -911,6 +931,47 @@ export class ConstructionProcurementRepository {
         p_project_ref: input.projectRef,
       },
       'Could not register the construction site.',
+    );
+  }
+
+  /**
+   * Deactivates or reactivates a registered site (20261108 lifecycle RPC).
+   * The server refuses deactivation while open purchase orders reference the
+   * site or its inventory location holds stock; refusals surface as
+   * ConstructionCommandError with the server's specific message.
+   */
+  async setSiteStatus(siteId: string, active: boolean, reason?: string): Promise<ConstructionCommandResult> {
+    return this.call(
+      'set_construction_procurement_site_status',
+      {
+        p_site_id: siteId,
+        p_active: active,
+        p_reason: reason ?? null,
+      },
+      active ? 'Could not reactivate the construction site.' : 'Could not deactivate the construction site.',
+    );
+  }
+
+  /**
+   * Edits a registered site's name and/or project link (20261108 lifecycle
+   * RPC). `projectId` is explicit-intent: omitted = keep the current link,
+   * null = unlink, uuid = link. `p_set_project` carries that intent to the
+   * server because SQL COALESCE cannot distinguish null from "not supplied".
+   */
+  async updateSite(
+    siteId: string,
+    data: { siteName?: string; projectId?: string | null; projectRef?: string },
+  ): Promise<ConstructionCommandResult> {
+    return this.call(
+      'update_construction_procurement_site',
+      {
+        p_site_id: siteId,
+        p_site_name: data.siteName ?? null,
+        p_project_id: data.projectId ?? null,
+        p_project_ref: data.projectRef ?? null,
+        p_set_project: data.projectId !== undefined,
+      },
+      'Could not update the construction site.',
     );
   }
 

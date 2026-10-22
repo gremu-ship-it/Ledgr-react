@@ -347,3 +347,98 @@ describe('ConstructionProcurementRepository — reads', () => {
     await expect(repository.findCapabilities('biz')).resolves.toEqual([]);
   });
 });
+
+describe('ConstructionProcurementRepository — site lifecycle (P2-4)', () => {
+  it('setSiteStatus calls the lifecycle RPC with the documented argument names', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: { status: 'ok' }, error: null });
+    const repository = new ConstructionProcurementRepository();
+    await repository.setSiteStatus('site-1', false, 'Project completed');
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      'set_construction_procurement_site_status',
+      { p_site_id: 'site-1', p_active: false, p_reason: 'Project completed' },
+    );
+  });
+
+  it('setSiteStatus sends a null reason on the unguarded reactivation path', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: { status: 'ok' }, error: null });
+    const repository = new ConstructionProcurementRepository();
+    await repository.setSiteStatus('site-1', true);
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      'set_construction_procurement_site_status',
+      { p_site_id: 'site-1', p_active: true, p_reason: null },
+    );
+  });
+
+  it('setSiteStatus surfaces guard refusals as ConstructionCommandError with the server message intact', async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Cannot deactivate: 3 open purchase order(s) reference this site', code: '55000' },
+    });
+    const repository = new ConstructionProcurementRepository();
+    const failure = await repository.setSiteStatus('site-1', false).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ConstructionCommandError);
+    expect((failure as ConstructionCommandError).rawMessage).toBe(
+      'Cannot deactivate: 3 open purchase order(s) reference this site',
+    );
+    expect((failure as ConstructionCommandError).sqlState).toBe('55000');
+  });
+
+  it('updateSite sets p_set_project only when link intent is explicitly supplied', async () => {
+    const repository = new ConstructionProcurementRepository();
+
+    await repository.updateSite('site-1', { siteName: 'Hospital Main Gate' });
+    expect(mocks.rpc).toHaveBeenLastCalledWith('update_construction_procurement_site', {
+      p_site_id: 'site-1',
+      p_site_name: 'Hospital Main Gate',
+      p_project_id: null,
+      p_project_ref: null,
+      p_set_project: false,
+    });
+
+    await repository.updateSite('site-1', { projectId: 'p1', projectRef: 'Hospital' });
+    expect(mocks.rpc).toHaveBeenLastCalledWith('update_construction_procurement_site', {
+      p_site_id: 'site-1',
+      p_site_name: null,
+      p_project_id: 'p1',
+      p_project_ref: 'Hospital',
+      p_set_project: true,
+    });
+
+    // Explicit null is the unlink intent — still p_set_project true.
+    await repository.updateSite('site-1', { projectId: null });
+    expect(mocks.rpc).toHaveBeenLastCalledWith('update_construction_procurement_site', {
+      p_site_id: 'site-1',
+      p_site_name: null,
+      p_project_id: null,
+      p_project_ref: null,
+      p_set_project: true,
+    });
+  });
+
+  it('scoped site reads hit the sites table with the documented filters', async () => {
+    const chains: Array<Record<string, unknown>> = [];
+    const tables: string[] = [];
+    mocks.from.mockImplementation((table: string) => {
+      tables.push(table);
+      const chain = builder();
+      chains.push(chain);
+      return chain as never;
+    });
+    const repository = new ConstructionProcurementRepository();
+
+    await repository.findSitesForProject('biz', 'p1');
+    await repository.findUnlinkedSites('biz');
+
+    expect(tables).toEqual([
+      'construction_procurement_sites',
+      'construction_procurement_sites',
+    ]);
+    expect(chains[0].eq).toHaveBeenCalledWith('project_id', 'p1');
+    expect(chains[1].is).toHaveBeenCalledWith('project_id', null);
+
+    // Restore the throwing default so later suites keep the no-direct-writes rule.
+    mocks.from.mockImplementation((table: string) => {
+      throw new Error(`direct table access is not allowed on this path (${table})`);
+    });
+  });
+});
