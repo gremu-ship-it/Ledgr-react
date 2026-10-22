@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { BusinessMembership } from '@/types';
 import type { Database, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { NotFoundError, toRepositoryError } from '../errors/RepositoryError';
@@ -247,7 +248,7 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
    * and filters deleted/inactive businesses DB-side to avoid RLS circular
    * dependency issues where only id+name were previously selected.
    */
-  async findMembershipsWithRole(userId: string) {
+  async findMembershipsWithRole(userId: string): Promise<BusinessMembership[]> {
     const { data, error } = await this.client
       .from('business_users')
       .select(`
@@ -276,6 +277,12 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
         Boolean(m.business?.id && m.business.name),
       );
 
-    return memberships;
+    // Boundary refinement: `Business` (src/types) narrows generated columns
+    // that the live schema constrains at the DB level (e.g.
+    // organisation_type text + CHECK IN ('FOR_PROFIT','NON_PROFIT',
+    // 'GOVERNMENT','OTHER'), jsonb profile columns backed by app shapes).
+    // The regenerated Row<'businesses'> now includes those columns as
+    // `string`/`Json`, so the assignment needs one explicit cast here.
+    return memberships as unknown as BusinessMembership[];
   }
 }

@@ -4,24 +4,19 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+import type { Database } from '@/dal/types/database';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as unknown as { from: (t: string) => any; rpc: (n: string, p: unknown) => any; auth: any };
 import { useCapability } from '@/hooks/useCapability';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 
-type ProductRow = {
-  id: string;
-  name: string;
-  product_type: string;
-  unit_of_measure: string | null;
-};
+// Derived from the regenerated Database types (P3-4): these reads select a
+// fixed column subset through the untyped `sb` adapter below.
+type Tables = Database['public']['Tables'];
 
-type LocationRow = {
-  id: string;
-  name: string;
-  location_type: string;
-  is_default: boolean;
-};
+type ProductRow = Pick<Tables['products']['Row'], 'id' | 'name' | 'product_type' | 'unit_of_measure'>;
+
+type LocationRow = Pick<Tables['inventory_locations']['Row'], 'id' | 'name' | 'location_type' | 'is_default'>;
 
 /** The store the order draws materials from, and the store it delivers into. */
 const DEFAULT_SOURCE_TYPE = 'raw_materials_store';

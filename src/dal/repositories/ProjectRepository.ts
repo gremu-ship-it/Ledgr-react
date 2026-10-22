@@ -1,5 +1,10 @@
 import { supabase } from '@/lib/supabase';
 
+import type { Database } from '../types/database';
+
+type Tables = Database['public']['Tables'];
+type PublicFunctions = Database['public']['Functions'];
+
 export const PROJECT_STATUSES = [
   'tender',
   'active',
@@ -24,34 +29,30 @@ export interface ProjectInput {
   start_date: string | null;
   end_date: string | null;
 }
-export interface Project extends ProjectInput {
-  id: string;
-  business_id: string;
+/**
+ * The `construction_projects` row (the live table was renamed from `projects`;
+ * a compatibility view `projects` also exists). `status` is CHECK-constrained
+ * `text` in the live schema, so the app-facing union is re-asserted here.
+ * Structurally still satisfies `ProjectInput` (the command payload).
+ */
+export type Project = Omit<Tables['construction_projects']['Row'], 'status'> & {
   status: ProjectStatus;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  boq_locked_at: string | null;
-}
-export interface ProjectCostSummary {
-  total_po_value: number;
-  total_issued_value: number;
-  total_returned_value: number;
-  net_cost: number;
-}
-export interface ProjectBoqLine {
-  id: string;
-  project_id: string;
-  line_number: string;
-  description: string;
-  quantity: number;
-  unit: string;
-  rate: number;
-  total_value: number;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-}
+};
+export type ProjectCostSummary = PublicFunctions['get_project_cost_summary']['Returns'][number];
+export type ProjectBoqLine = Pick<
+  Tables['project_boq_lines']['Row'],
+  | 'id'
+  | 'project_id'
+  | 'line_number'
+  | 'description'
+  | 'quantity'
+  | 'unit'
+  | 'rate'
+  | 'total_value'
+  | 'sort_order'
+  | 'created_at'
+  | 'updated_at'
+>;
 export interface ProjectBoqSummary {
   total_boq_value: number;
   contract_sum: number;
@@ -60,58 +61,65 @@ export interface ProjectBoqSummary {
   is_locked: boolean;
 }
 export type BoqLineInput = Omit<ProjectBoqLine, 'id' | 'project_id' | 'total_value' | 'created_at' | 'updated_at'> & { id: string | null; _deleted?: boolean };
-export interface ProjectLocation {
-  id: string;
-  business_id: string;
-  name: string;
-  project_id: string | null;
-}
+export type ProjectLocation = Pick<Tables['inventory_locations']['Row'], 'id' | 'business_id' | 'name' | 'project_id'>;
 export type ProjectValuationStatus = 'draft' | 'submitted' | 'invoiced';
-export interface ProjectValuation {
-  id: string;
-  project_id: string;
-  valuation_number: number;
-  valuation_date: string;
-  period_start: string | null;
-  period_end: string | null;
-  gross_amount: number;
-  retention_amount: number;
-  net_amount: number;
-  previous_cumulative: number;
-  status: ProjectValuationStatus;
-  invoice_id: string | null;
-  notes: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
-export interface ProjectValuationLine {
-  id: string;
-  valuation_id: string;
-  boq_line_id: string;
-  cumulative_pct: number;
-  cumulative_value: number;
-  previous_cumulative_value: number;
-  period_value: number;
-  notes: string | null;
-}
-export interface ProjectInvoiceReference {
-  id: string;
-  invoice_number: string;
-  status: string;
-}
-export interface ProjectRetentionEntry {
-  id: string;
-  project_id: string;
-  valuation_id: string | null;
+export type ProjectValuation = Omit<
+  Pick<
+    Tables['project_valuations']['Row'],
+    | 'id'
+    | 'project_id'
+    | 'valuation_number'
+    | 'valuation_date'
+    | 'period_start'
+    | 'period_end'
+    | 'gross_amount'
+    | 'retention_amount'
+    | 'net_amount'
+    | 'previous_cumulative'
+    | 'status'
+    | 'invoice_id'
+    | 'notes'
+    | 'created_by'
+    | 'created_at'
+    | 'updated_at'
+  >,
+  'status'
+> & { status: ProjectValuationStatus };
+export type ProjectValuationLine = Pick<
+  Tables['project_valuation_lines']['Row'],
+  | 'id'
+  | 'valuation_id'
+  | 'boq_line_id'
+  | 'cumulative_pct'
+  | 'cumulative_value'
+  | 'previous_cumulative_value'
+  | 'period_value'
+  | 'notes'
+>;
+export type ProjectInvoiceReference = Pick<Tables['invoices']['Row'], 'id' | 'invoice_number' | 'status'>;
+/**
+ * A `project_retention_ledger` row; `invoice` is the optional join the
+ * valuation-history RPC attaches (extra field — not a pure table mirror).
+ * `type` is CHECK-constrained text in the live schema.
+ */
+export type ProjectRetentionEntry = Omit<
+  Pick<
+    Tables['project_retention_ledger']['Row'],
+    | 'id'
+    | 'project_id'
+    | 'valuation_id'
+    | 'type'
+    | 'amount'
+    | 'description'
+    | 'invoice_id'
+    | 'created_by'
+    | 'created_at'
+  >,
+  'type'
+> & {
   type: 'withheld' | 'released';
-  amount: number;
-  description: string | null;
-  invoice_id: string | null;
-  created_by: string;
-  created_at: string;
   invoice?: ProjectInvoiceReference | null;
-}
+};
 export interface ProjectValuationDocument {
   valuation: ProjectValuation;
   lines: ProjectValuationLine[];
@@ -133,13 +141,7 @@ export interface ProjectValuationInput {
   }>;
   notes: string | null;
 }
-export interface ProjectRetentionSummary {
-  total_withheld: number;
-  total_released: number;
-  balance_held: number;
-  retention_pct: number;
-  can_release: boolean;
-}
+export type ProjectRetentionSummary = PublicFunctions['get_retention_summary']['Returns'][number];
 export interface ProjectRetentionReleaseResult {
   retention_entry: ProjectRetentionEntry;
   invoice: ProjectInvoiceReference;
@@ -148,78 +150,24 @@ export type ProjectDetail = Project & {
   site_count: number;
   cost: ProjectCostSummary;
 };
-export interface ProjectPnl {
-  project_name: string;
-  client_name: string;
-  status: ProjectStatus;
-  contract_sum: number;
-  budget: number;
-  retention_pct: number;
-  boq_total: number;
-  total_po_value?: number;
-  total_issued_value?: number;
-  total_returned_value?: number;
-  total_costs: number;
-  total_billed: number;
-  total_retention_withheld: number;
-  total_retention_released: number;
-  retention_balance: number;
-  total_paid: number;
-  cost_variance: number;
-  billing_pct: number;
-  completion_pct: number;
-  profit_margin: number;
-}
-export interface PortfolioSummary {
-  total_projects: number;
-  active_projects: number;
-  total_contract_value: number;
-  total_billed: number;
-  total_paid: number;
-  total_costs: number;
-  total_retention_held: number;
-  outstanding_receivables: number;
-  avg_completion_pct: number;
-  projects_over_budget: number;
-}
-export interface ProjectValuationTrendPoint {
-  valuation_number: number;
-  valuation_date: string;
-  gross_amount: number;
-  retention_amount: number;
-  net_amount: number;
-  cumulative_billed: number;
-}
-export interface RetentionAgingRow {
-  project_id: string;
-  project_name: string;
-  client_name: string;
-  project_status: ProjectStatus;
-  retention_balance: number;
-  oldest_retention_date: string;
-  days_held: number;
-}
-export interface ConstructionDashboardMetrics {
-  active_projects: number;
-  total_contract_value: number;
-  total_billed_this_period: number;
-  total_paid_this_period: number;
-  total_costs_this_period: number;
-  total_retention_held: number;
-  outstanding_receivables: number;
-  projects_over_budget: number;
-  avg_completion_pct: number;
-}
-export interface ProjectCostBreakdownRow {
-  project_id: string;
-  project_name: string;
-  total_po_value: number;
-  total_issued_value: number;
-  total_returned_value: number;
-  net_cost: number;
-  budget: number;
-  variance: number;
-}
+export type ProjectPnl = Omit<
+  PublicFunctions['get_project_pnl']['Returns'][number],
+  'status'
+> & { status: ProjectStatus };
+export type PortfolioSummary = PublicFunctions['get_portfolio_summary']['Returns'][number];
+export type ProjectValuationTrendPoint = PublicFunctions['get_project_valuation_trend']['Returns'][number];
+export type RetentionAgingRow = Omit<
+  PublicFunctions['get_retention_aging']['Returns'][number],
+  'project_status'
+> & { project_status: ProjectStatus };
+/**
+ * `get_dashboard_metrics` has two overloads in the live schema; the generated
+ * surface renders them as a union whose `Returns` elements are identical, so
+ * the indexed access below collapses to that single row shape.
+ */
+export type ConstructionDashboardMetrics =
+  PublicFunctions['get_dashboard_metrics']['Returns'][number];
+export type ProjectCostBreakdownRow = PublicFunctions['get_cost_breakdown_by_project']['Returns'][number];
 interface Result<T> {
   data: T | null;
   error: { message: string } | null;

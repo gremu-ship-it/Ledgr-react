@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { Database } from '../types/database';
 
 /**
  * Construction procurement — typed adapter over the EXISTING database command
@@ -21,12 +22,16 @@ import { supabase } from '@/lib/supabase';
  *    installed. `anon` has no access, and `authenticated` has SELECT only, so a
  *    direct write from this module is impossible even if someone tried.
  *
- * The generated `Database` types in this repository do not yet include the
- * construction tables (the migration has not been applied to a deployed Supabase
- * project, and code generation runs against the deployed schema). Following the
- * established pattern in `src/services/invoiceApprovalRpc.ts` and
- * `PosRepository`, the client is adapted through a narrow interface so the
- * module stays fully typed without pretending the generated types are current.
+ * The generated `Database` types now include the construction tables
+ * (regenerated from the live schema in P3-4), and every read model below is
+ * derived from them (`Pick` of a generated Row, or an RPC `Returns` element).
+ * Where the live schema stores a CHECK-constrained `text` column, the
+ * app-facing union is re-asserted with `Omit<...> & { ... }`; the CHECK
+ * constraint is the authority for the narrower union. The narrow
+ * `ConstructionClient` adapter is retained: every write goes through an RPC
+ * command whose jsonb payload shapes are not part of the generated surface,
+ * following the established pattern in `src/services/invoiceApprovalRpc.ts`
+ * and `PosRepository`.
  */
 
 /** PostgREST error shape as far as this module needs it. */
@@ -101,257 +106,307 @@ export const CONSTRUCTION_CAPABILITY_LABELS: Record<string, string> = {
 // Read models
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface ConstructionProcurementSite {
-  id: string;
-  business_id: string;
-  branch_id: string;
-  location_id: string;
-  site_code: string;
-  site_name: string;
+type Tables = Database['public']['Tables'];
+type PublicFunctions = Database['public']['Functions'];
+
+export type ConstructionProcurementSite = Pick<
+  Tables['construction_procurement_sites']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'branch_id'
+  | 'location_id'
+  | 'site_code'
+  | 'site_name'
   /** Authoritative FK to construction_projects (nullable); project_ref stays the display label. */
-  project_id: string | null;
-  project_ref: string;
-  is_active: boolean;
-  created_at: string;
-}
+  | 'project_id'
+  | 'project_ref'
+  | 'is_active'
+  | 'created_at'
+>;
 
-export interface ConstructionUomConversion {
-  id: string;
-  business_id: string;
-  product_id: string;
-  from_uom: string;
-  to_uom: string;
-  factor: number | string;
-  evidence_reference: string;
-  is_active: boolean;
-  approved_at: string;
-}
+export type ConstructionUomConversion = Pick<
+  Tables['construction_product_uom_conversions']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'product_id'
+  | 'from_uom'
+  | 'to_uom'
+  | 'factor'
+  | 'evidence_reference'
+  | 'is_active'
+  | 'approved_at'
+>;
 
+/** CHECK `construction_purchase_orders_status_check` in the live schema. */
 export type ConstructionPurchaseOrderStatus = 'draft' | 'authorized' | 'cancelled';
 
-export interface ConstructionPurchaseOrder {
-  project_id?: string | null;
-  id: string;
-  business_id: string;
-  branch_id: string;
-  site_id: string;
-  project_ref: string;
-  supplier_contact_id: string;
-  po_number: string;
-  currency: string;
-  status: ConstructionPurchaseOrderStatus;
-  notes: string | null;
-  created_by: string;
-  created_at: string;
-  authorized_by: string | null;
-  authorized_at: string | null;
-  cancelled_by: string | null;
-  cancelled_at: string | null;
-  cancel_reason: string | null;
-}
+export type ConstructionPurchaseOrder = Omit<
+  Pick<
+    Tables['construction_purchase_orders']['Row'],
+    | 'id'
+    | 'business_id'
+    | 'branch_id'
+    | 'site_id'
+    | 'project_id'
+    | 'project_ref'
+    | 'supplier_contact_id'
+    | 'po_number'
+    | 'currency'
+    | 'status'
+    | 'notes'
+    | 'created_by'
+    | 'created_at'
+    | 'authorized_by'
+    | 'authorized_at'
+    | 'cancelled_by'
+    | 'cancelled_at'
+    | 'cancel_reason'
+  >,
+  'status'
+> & { status: ConstructionPurchaseOrderStatus };
 
-export interface ConstructionPurchaseOrderLine {
-  id: string;
-  business_id: string;
-  po_id: string;
-  line_number: number;
-  product_id: string;
-  uom: string;
-  quantity_ordered: number | string;
-  quantity_ordered_base: number | string;
-  expected_unit_price: number | string | null;
-  line_note: string | null;
-}
+export type ConstructionPurchaseOrderLine = Pick<
+  Tables['construction_purchase_order_lines']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'po_id'
+  | 'line_number'
+  | 'product_id'
+  | 'uom'
+  | 'quantity_ordered'
+  | 'quantity_ordered_base'
+  | 'expected_unit_price'
+  | 'line_note'
+>;
 
-export interface ConstructionPurchaseOrderEvent {
-  id: number;
-  po_id: string;
-  action: string;
-  actor: string | null;
-  detail: string | null;
-  created_at: string;
-}
+export type ConstructionPurchaseOrderEvent = Pick<
+  Tables['construction_purchase_order_events']['Row'],
+  'id' | 'po_id' | 'action' | 'actor' | 'detail' | 'created_at'
+>;
 
-export interface ConstructionDeliveryNote {
-  id: string;
-  business_id: string;
-  po_id: string;
-  supplier_contact_id: string;
-  delivery_note_number: string;
-  normalized_reference: string;
-  document_date: string;
-  document_received_by: string | null;
-  evidence_reference: string;
-  notes: string | null;
-  recorded_by: string;
-  recorded_at: string;
-  is_exception: boolean;
-  exception_of: string | null;
-}
+export type ConstructionDeliveryNote = Pick<
+  Tables['construction_delivery_notes']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'po_id'
+  | 'supplier_contact_id'
+  | 'delivery_note_number'
+  | 'normalized_reference'
+  | 'document_date'
+  | 'document_received_by'
+  | 'evidence_reference'
+  | 'notes'
+  | 'recorded_by'
+  | 'recorded_at'
+  | 'is_exception'
+  | 'exception_of'
+>;
 
-export interface ConstructionDeliveryNoteLine {
-  id: string;
-  delivery_note_id: string;
-  po_line_id: string;
-  line_number: number;
-  product_id: string;
-  uom: string;
-  quantity_declared: number | string;
-  quantity_declared_base: number | string;
-  line_note: string | null;
-}
+export type ConstructionDeliveryNoteLine = Pick<
+  Tables['construction_delivery_note_lines']['Row'],
+  | 'id'
+  | 'delivery_note_id'
+  | 'po_line_id'
+  | 'line_number'
+  | 'product_id'
+  | 'uom'
+  | 'quantity_declared'
+  | 'quantity_declared_base'
+  | 'line_note'
+>;
 
-export interface ConstructionGoodsReceipt {
-  id: string;
-  business_id: string;
-  branch_id: string;
-  site_id: string;
-  location_id: string;
-  project_ref: string;
-  po_id: string;
-  delivery_note_id: string | null;
-  grn_number: string;
-  receipt_date: string;
-  notes: string | null;
-  created_by: string;
-  created_at: string;
-}
+/**
+ * GRN header. The live table is `construction_goods_receipt_notes` (the
+ * `_notes` suffix is the schema's own naming — see migration
+ * 20261021000000_construction_procurement_traceability.sql); the app-facing
+ * name predates it and is kept for compatibility.
+ */
+export type ConstructionGoodsReceipt = Pick<
+  Tables['construction_goods_receipt_notes']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'branch_id'
+  | 'site_id'
+  | 'location_id'
+  | 'project_ref'
+  | 'po_id'
+  | 'delivery_note_id'
+  | 'grn_number'
+  | 'receipt_date'
+  | 'notes'
+  | 'created_by'
+  | 'created_at'
+>;
 
-export interface ConstructionGoodsReceiptLine {
-  id: string;
-  business_id: string;
-  grn_id: string;
-  line_number: number;
-  po_line_id: string;
-  product_id: string;
-  uom: string;
-  quantity_received: number | string;
-  quantity_accepted: number | string;
-  quantity_rejected: number | string;
-  quantity_quarantined: number | string;
-  quantity_disputed: number | string;
-  received_base: number | string;
-  accepted_base: number | string;
-  rejected_base: number | string;
-  quarantined_base: number | string;
-  disputed_base: number | string;
-  quantity_posted_base: number | string;
-  over_receipt_exception: boolean;
-  over_receipt_reason: string | null;
-  over_receipt_evidence: string | null;
-  line_note: string | null;
-}
+export type ConstructionGoodsReceiptLine = Pick<
+  Tables['construction_goods_receipt_lines']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'grn_id'
+  | 'line_number'
+  | 'po_line_id'
+  | 'product_id'
+  | 'uom'
+  | 'quantity_received'
+  | 'quantity_accepted'
+  | 'quantity_rejected'
+  | 'quantity_quarantined'
+  | 'quantity_disputed'
+  | 'received_base'
+  | 'accepted_base'
+  | 'rejected_base'
+  | 'quarantined_base'
+  | 'disputed_base'
+  | 'quantity_posted_base'
+  | 'over_receipt_exception'
+  | 'over_receipt_reason'
+  | 'over_receipt_evidence'
+  | 'line_note'
+>;
 
-export interface ConstructionGoodsReceiptHold {
-  id: string;
-  business_id: string;
-  grn_line_id: string;
+export type ConstructionGoodsReceiptHold = Omit<
+  Pick<
+    Tables['construction_goods_receipt_holds']['Row'],
+    | 'id'
+    | 'business_id'
+    | 'grn_line_id'
+    | 'hold_type'
+    | 'quantity'
+    | 'quantity_base'
+    | 'reason'
+    | 'evidence_reference'
+    | 'status'
+    | 'released_at'
+    | 'release_reason'
+    | 'created_at'
+  >,
+  'hold_type' | 'status'
+> & {
+  /** CHECK-constrained in the live schema. */
   hold_type: 'rejected' | 'quarantined' | 'disputed';
-  quantity: number | string;
-  quantity_base: number | string;
-  reason: string;
-  evidence_reference: string;
   status: 'open' | 'released';
-  released_at: string | null;
-  release_reason: string | null;
-  created_at: string;
-}
+};
 
-export interface ConstructionReceiptInspection {
-  id: string;
-  business_id: string;
-  grn_line_id: string;
-  inspection_date: string;
+export type ConstructionReceiptInspection = Omit<
+  Pick<
+    Tables['construction_receipt_inspections']['Row'],
+    | 'id'
+    | 'business_id'
+    | 'grn_line_id'
+    | 'inspection_date'
+    | 'outcome'
+    | 'quantity_inspected'
+    | 'quantity_inspected_base'
+    | 'method'
+    | 'certificate_reference'
+    | 'evidence_reference'
+    | 'inspected_by'
+    | 'inspected_at'
+  >,
+  'outcome'
+> & {
+  /** CHECK-constrained in the live schema. */
   outcome: 'passed' | 'failed' | 'partial';
-  quantity_inspected: number | string;
-  quantity_inspected_base: number | string;
-  method: string;
-  certificate_reference: string | null;
-  evidence_reference: string;
-  inspected_by: string;
-  inspected_at: string;
-}
+};
 
-export interface ConstructionReceiptLineReclassification {
-  id: string;
-  business_id: string;
-  grn_line_id: string;
-  inspection_id: string;
+export type ConstructionReceiptLineReclassification = Omit<
+  Pick<
+    Tables['construction_receipt_line_reclassifications']['Row'],
+    | 'id'
+    | 'business_id'
+    | 'grn_line_id'
+    | 'inspection_id'
+    | 'from_bucket'
+    | 'to_bucket'
+    | 'quantity'
+    | 'quantity_base'
+    | 'accepted_before_base'
+    | 'accepted_after_base'
+    | 'reason'
+    | 'evidence_reference'
+    | 'reclassified_by'
+    | 'reclassified_at'
+  >,
+  'from_bucket' | 'to_bucket'
+> & {
+  /** CHECK-constrained in the live schema. */
   from_bucket: 'quarantined' | 'disputed';
   to_bucket: 'accepted';
-  quantity: number | string;
-  quantity_base: number | string;
-  accepted_before_base: number | string;
-  accepted_after_base: number | string;
-  reason: string;
-  evidence_reference: string;
-  reclassified_by: string;
-  reclassified_at: string;
-}
+};
 
-export interface ConstructionReceiptBillAllocation {
-  id: string;
-  business_id: string;
-  grn_line_id: string;
-  expense_id: string;
-  expense_line_id: string;
-  bill_uom: string;
-  bill_quantity: number | string;
-  bill_quantity_base: number | string;
-  receipt_uom: string;
-  receipt_quantity: number | string;
-  receipt_quantity_base: number | string;
-  is_exception: boolean;
-  exception_reason: string | null;
-  matched_by: string;
-  matched_at: string;
-}
+export type ConstructionReceiptBillAllocation = Pick<
+  Tables['construction_receipt_bill_allocations']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'grn_line_id'
+  | 'expense_id'
+  | 'expense_line_id'
+  | 'bill_uom'
+  | 'bill_quantity'
+  | 'bill_quantity_base'
+  | 'receipt_uom'
+  | 'receipt_quantity'
+  | 'receipt_quantity_base'
+  | 'is_exception'
+  | 'exception_reason'
+  | 'matched_by'
+  | 'matched_at'
+>;
 
-export interface ConstructionReceiptCostBasis {
-  id: string;
-  business_id: string;
-  grn_line_id: string;
-  expense_line_id: string;
-  allocation_id: string;
-  quantity_base: number | string;
-  unit_cost_base: number | string;
-  cost_currency: string;
-  exchange_rate_used: number | string;
-  bill_unit_cost: number | string | null;
-  discount_deducted: number | string;
-  nonrecoverable_tax: number | string;
-  vat_recoverable: boolean;
-  evidence_reference: string;
-  claimed_by: string;
-  claimed_at: string;
-}
+export type ConstructionReceiptCostBasis = Pick<
+  Tables['construction_receipt_cost_bases']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'grn_line_id'
+  | 'expense_line_id'
+  | 'allocation_id'
+  | 'quantity_base'
+  | 'unit_cost_base'
+  | 'cost_currency'
+  | 'exchange_rate_used'
+  | 'bill_unit_cost'
+  | 'discount_deducted'
+  | 'nonrecoverable_tax'
+  | 'vat_recoverable'
+  | 'evidence_reference'
+  | 'claimed_by'
+  | 'claimed_at'
+>;
 
-export interface ConstructionReceiptPostingPolicy {
-  business_id: string;
-  movement_posting_enabled: boolean;
-  cost_basis_source: string | null;
-  gl_posting_enabled: boolean;
-  approved_by: string | null;
-  approved_at: string | null;
-  approved_reason: string | null;
-  approved_evidence: string | null;
-  updated_at: string;
-}
+export type ConstructionReceiptPostingPolicy = Pick<
+  Tables['construction_receipt_posting_policies']['Row'],
+  | 'business_id'
+  | 'movement_posting_enabled'
+  | 'cost_basis_source'
+  | 'gl_posting_enabled'
+  | 'approved_by'
+  | 'approved_at'
+  | 'approved_reason'
+  | 'approved_evidence'
+  | 'updated_at'
+>;
 
-export interface ConstructionSupplierInvoiceReference {
-  id: string;
-  business_id: string;
-  supplier_contact_id: string;
-  expense_id: string;
-  reference_raw: string;
-  reference_normalized: string;
-  source: string;
+export type ConstructionSupplierInvoiceReference = Omit<
+  Pick<
+    Tables['construction_supplier_invoice_references']['Row'],
+    | 'id'
+    | 'business_id'
+    | 'supplier_contact_id'
+    | 'expense_id'
+    | 'reference_raw'
+    | 'reference_normalized'
+    | 'source'
+    | 'status'
+    | 'exception_of'
+    | 'exception_reason'
+    | 'recorded_by'
+    | 'recorded_at'
+  >,
+  'status'
+> & {
+  /** CHECK-constrained in the live schema. */
   status: 'active' | 'exception';
-  exception_of: string | null;
-  exception_reason: string | null;
-  recorded_by: string;
-  recorded_at: string;
-}
+};
 
 /**
  * A line of an EXISTING supplier bill (`expense_lines`). The decision matrix is
@@ -361,49 +416,56 @@ export interface ConstructionSupplierInvoiceReference {
  * exists so the matching screen can show those lines; it creates no second
  * invoice document and writes nothing.
  */
-export interface ConstructionSupplierBillLine {
-  id: string;
-  business_id: string;
-  expense_id: string;
-  line_number: number;
-  description: string;
-  product_id: string | null;
-  quantity: number | string;
-  unit_price: number | string;
-  discount_percent: number | string;
-  discount_amount: number | string;
-  tax_code: string;
-  tax_rate: number | string;
-  tax_amount: number | string;
-  line_total: number | string;
-}
+export type ConstructionSupplierBillLine = Pick<
+  Tables['expense_lines']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'expense_id'
+  | 'line_number'
+  | 'description'
+  | 'product_id'
+  | 'quantity'
+  | 'unit_price'
+  | 'discount_percent'
+  | 'discount_amount'
+  | 'tax_code'
+  | 'tax_rate'
+  | 'tax_amount'
+  | 'line_total'
+>;
 
-export interface ConstructionMaterialIssue {
-  project_id?: string | null;
-  id: string;
-  business_id: string;
-  site_id: string;
-  branch_id: string;
-  location_id: string;
-  project_ref: string;
-  product_id: string;
-  uom: string;
-  quantity: number | string;
-  quantity_base: number | string;
-  unit_cost_base: number | string;
-  total_cost_base: number | string;
-  currency: string;
-  issue_date: string;
-  issued_to: string | null;
-  evidence_reference: string;
-  stock_movement_id: string;
-  issued_by: string;
-  issued_at: string;
-  notes: string | null;
-  client_key: string;
-}
+export type ConstructionMaterialIssue = Pick<
+  Tables['construction_material_issues']['Row'],
+  | 'id'
+  | 'business_id'
+  | 'site_id'
+  | 'branch_id'
+  | 'location_id'
+  | 'project_id'
+  | 'project_ref'
+  | 'product_id'
+  | 'uom'
+  | 'quantity'
+  | 'quantity_base'
+  | 'unit_cost_base'
+  | 'total_cost_base'
+  | 'currency'
+  | 'issue_date'
+  | 'issued_to'
+  | 'evidence_reference'
+  | 'stock_movement_id'
+  | 'issued_by'
+  | 'issued_at'
+  | 'notes'
+  | 'client_key'
+>;
 
-/** The `construction_procurement_open_items` read model (server-computed). */
+/**
+ * The `construction_procurement_open_items` read model (server-computed).
+ * The RPC is `RETURNS jsonb` in the live schema, so the generated surface
+ * types it as `Json`; this hand-written shape documents the payload the
+ * server actually returns and stays.
+ */
 export interface ConstructionOpenItems {
   business_id: string;
   movement_posting_enabled: boolean;
@@ -447,43 +509,43 @@ export interface ConstructionOpenItems {
 }
 
 /** An append-only record of usable material returned from a site to its store. */
-export interface ConstructionMaterialReturn {
-  project_id?: string | null;
-  id: string;
-  business_id: string;
-  source_issue_id: string;
-  site_id: string;
-  branch_id: string;
-  location_id: string;
-  project_ref: string;
-  product_id: string;
-  uom: string;
-  quantity: number | string;
-  quantity_base: number | string;
-  unit_cost_base: number | string;
-  total_cost_base: number | string;
-  currency: string;
-  return_date: string;
+export type ConstructionMaterialReturn = Omit<
+  Pick<
+    Tables['construction_material_returns']['Row'],
+    | 'id'
+    | 'business_id'
+    | 'source_issue_id'
+    | 'site_id'
+    | 'branch_id'
+    | 'location_id'
+    | 'project_id'
+    | 'project_ref'
+    | 'product_id'
+    | 'uom'
+    | 'quantity'
+    | 'quantity_base'
+    | 'unit_cost_base'
+    | 'total_cost_base'
+    | 'currency'
+    | 'return_date'
+    | 'condition'
+    | 'reason'
+    | 'evidence_reference'
+    | 'received_by'
+    | 'stock_movement_id'
+    | 'created_by'
+    | 'created_at'
+    | 'notes'
+    | 'client_key'
+  >,
+  'condition'
+> & {
+  /** CHECK-constrained in the live schema. */
   condition: 'usable' | 'usable_with_restriction';
-  reason: string;
-  evidence_reference: string;
-  received_by: string | null;
-  stock_movement_id: string;
-  created_by: string;
-  created_at: string;
-  notes: string | null;
-  client_key: string;
-}
+};
 
-export interface ConstructionProjectMaterialCostRow {
-  project_ref: string;
-  issue_count: number;
-  quantity_base: string | number;
-  material_cost: string | number;
-  currency: string;
-  first_issue_date: string;
-  last_issue_date: string;
-}
+export type ConstructionProjectMaterialCostRow =
+  PublicFunctions['construction_project_material_cost']['Returns'][number];
 
 /** Result envelope of the mutating construction commands. */
 export interface ConstructionCommandResult {
