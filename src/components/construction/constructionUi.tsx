@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, CheckCircle2, Info, Loader2 } from 'lucide-react';
 import type { ConstructionFailure } from '@/lib/construction/constructionCommandFeedback';
 
@@ -44,11 +45,12 @@ export function StatusPill({ label, className }: { label: string; className: str
   );
 }
 
-export function LoadingBlock({ label = 'Loading…' }: { label?: string }) {
+export function LoadingBlock({ label }: { label?: string }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2 py-6 text-sm text-gray-500" role="status">
       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-      {label}
+      {label ?? t('construction.procurement.shared.loading')}
     </div>
   );
 }
@@ -95,6 +97,7 @@ export function InfoNote({ children }: { children: ReactNode }) {
  * message is never replaced — it is the authoritative statement.
  */
 export function FailureBanner({ failure }: { failure: ConstructionFailure }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" role="alert">
       {failure.explanation ? (
@@ -103,23 +106,23 @@ export function FailureBanner({ failure }: { failure: ConstructionFailure }) {
         // A 42501 is not a rule about the document — it is about who is asking and
         // in which business or branch. Saying so is more useful than "refused",
         // and the server's own wording is still printed below, unaltered.
-        <p className="font-medium">You do not have authority for this action in this business.</p>
+        <p className="font-medium">{t('construction.procurement.shared.noAuthoritySummary')}</p>
       ) : (
-        <p className="font-medium">The database refused this operation.</p>
+        <p className="font-medium">{t('construction.procurement.shared.refusedSummary')}</p>
       )}
       {failure.explanation ? (
         <p className="mt-1 text-xs text-red-800">{failure.explanation.action}</p>
       ) : failure.isAuthorityDenial ? (
         <p className="mt-1 text-xs text-red-800">
-          Check the business and branch you are working in, and ask an approver to grant the capability if you should have it.
+          {t('construction.procurement.shared.noAuthorityAction')}
         </p>
       ) : null}
       <p className="mt-1 break-words font-mono text-[11px] leading-4 text-red-700">{failure.message}</p>
       {failure.token || failure.sqlState ? (
         <p className="mt-1 text-[11px] text-red-600">
-          {failure.token ? `Refusal: ${failure.token}` : null}
+          {failure.token ? t('construction.procurement.shared.refusalToken', { token: failure.token }) : null}
           {failure.token && failure.sqlState ? ' · ' : null}
-          {failure.sqlState ? `SQLSTATE ${failure.sqlState}` : null}
+          {failure.sqlState ? t('construction.procurement.shared.sqlState', { sqlState: failure.sqlState }) : null}
         </p>
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';
 import { AlertTriangle, CheckCircle2, FilePlus2, Plus, Search, Send, XCircle } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -55,6 +56,7 @@ export function ConstructionPurchaseOrdersSection({
   capabilities: string[];
   projectId?: string;
 }) {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedPoId = searchParams.get('po');
   const [search, setSearch] = useState('');
@@ -76,13 +78,13 @@ export function ConstructionPurchaseOrdersSection({
     },
   });
 
-  if (listQuery.isLoading) return <LoadingBlock label="Loading purchase orders…" />;
+  if (listQuery.isLoading) return <LoadingBlock label={t('construction.procurement.purchaseOrders.loading')} />;
   if (listQuery.isError) {
     return (
       <ErrorBanner
-        message={`Purchase orders could not be loaded: ${
-          listQuery.error instanceof Error ? listQuery.error.message : 'unknown error'
-        }`}
+        message={t('construction.procurement.purchaseOrders.loadError', {
+          detail: listQuery.error instanceof Error ? listQuery.error.message : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
@@ -111,8 +113,8 @@ export function ConstructionPurchaseOrdersSection({
       {notice ? <SuccessBanner message={notice} /> : null}
 
       <SectionCard
-        title="Purchase orders"
-        description="A purchase order authorizes procurement. It never moves stock, and it needs a different person to authorize it than the person who raised it."
+        title={t('construction.procurement.purchaseOrders.title')}
+        description={t('construction.procurement.purchaseOrders.description')}
         actions={
           <>
             <div className="relative">
@@ -121,8 +123,8 @@ export function ConstructionPurchaseOrdersSection({
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search number, supplier, project…"
-                aria-label="Search purchase orders"
+                placeholder={t('construction.procurement.purchaseOrders.searchPlaceholder')}
+                aria-label={t('construction.procurement.purchaseOrders.searchAria')}
                 className="w-56 rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
               />
             </div>
@@ -132,7 +134,7 @@ export function ConstructionPurchaseOrdersSection({
               onClick={() => setShowCreate((open) => !open)}
             >
               <>
-                <Plus className="h-4 w-4" aria-hidden /> New purchase order
+                <Plus className="h-4 w-4" aria-hidden /> {t('construction.procurement.purchaseOrders.newPurchaseOrder')}
               </>
             </WithCapabilityButton>
           </>
@@ -140,8 +142,8 @@ export function ConstructionPurchaseOrdersSection({
       >
         {sites.length === 0 ? (
           <EmptyState
-            title="Register a construction site first"
-            detail="A purchase order must name a registered site, which fixes its branch, inventory location and project reference."
+            title={t('construction.procurement.purchaseOrders.registerSiteFirst')}
+            detail={t('construction.procurement.purchaseOrders.registerSiteFirstDetail')}
           />
         ) : null}
 
@@ -155,7 +157,7 @@ export function ConstructionPurchaseOrdersSection({
             baseCurrency={baseCurrency}
             onCreated={(poId, number) => {
               setShowCreate(false);
-              setNotice(`Purchase order ${number} created as a draft. A different person must authorize it.`);
+              setNotice(t('construction.procurement.purchaseOrders.createdNotice', { number }));
               selectPo(poId);
             }}
           />
@@ -163,23 +165,23 @@ export function ConstructionPurchaseOrdersSection({
 
         {purchaseOrders.length === 0 ? (
           <div className="mt-3">
-            <EmptyState title="No purchase orders yet" detail="Create the first one to start the procurement chain." />
+            <EmptyState title={t('construction.procurement.purchaseOrders.noneTitle')} detail={t('construction.procurement.purchaseOrders.noneDetail')} />
           </div>
         ) : filtered.length === 0 ? (
           <div className="mt-3">
-            <EmptyState title="No purchase order matches that search" />
+            <EmptyState title={t('construction.procurement.purchaseOrders.noMatchTitle')} />
           </div>
         ) : (
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Number</th>
-                  <th className="px-2 py-2">Supplier</th>
-                  <th className="px-2 py-2">Site / project</th>
-                  <th className="px-2 py-2">Currency</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2 text-right">Action</th>
+                  <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thNumber')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thSupplier')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thSiteProject')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thCurrency')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thStatus')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.purchaseOrders.thAction')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,7 +203,7 @@ export function ConstructionPurchaseOrdersSection({
                         onClick={() => selectPo(po.id === selectedPoId ? null : po.id)}
                         className="text-sm font-medium text-brand-700 hover:underline"
                       >
-                        {po.id === selectedPoId ? 'Hide details' : 'Open'}
+                        {po.id === selectedPoId ? t('construction.procurement.purchaseOrders.hideDetails') : t('construction.procurement.purchaseOrders.open')}
                       </button>
                     </td>
                   </tr>
@@ -277,6 +279,7 @@ function CreatePurchaseOrderForm({
   baseCurrency: string;
   onCreated: (poId: string, number: string) => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [siteId, setSiteId] = useState(sites[0]?.id ?? '');
   const [supplierId, setSupplierId] = useState('');
@@ -332,19 +335,19 @@ function CreatePurchaseOrderForm({
       }}
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Field label="Construction site" required>
-          <select aria-label="Construction site" value={siteId} onChange={(event) => setSiteId(event.target.value)} className={FIELD_CLASS}>
-            <option value="">Select a site…</option>
+        <Field label={t('construction.procurement.purchaseOrders.siteLabel')} required>
+          <select aria-label={t('construction.procurement.purchaseOrders.siteLabel')} value={siteId} onChange={(event) => setSiteId(event.target.value)} className={FIELD_CLASS}>
+            <option value="">{t('construction.procurement.purchaseOrders.selectSite')}</option>
             {sites.map((site) => (
               <option key={site.id} value={site.id}>
-                {site.site_code} — {site.site_name} ({site.project_ref})
+                {t('construction.procurement.purchaseOrders.siteOption', { code: site.site_code, name: site.site_name, projectRef: site.project_ref })}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Supplier" required hint="Only active supplier contacts of this business can be used.">
-          <select aria-label="Supplier" value={supplierId} onChange={(event) => setSupplierId(event.target.value)} className={FIELD_CLASS}>
-            <option value="">Select a supplier…</option>
+        <Field label={t('construction.procurement.purchaseOrders.supplierLabel')} required hint={t('construction.procurement.purchaseOrders.supplierHint')}>
+          <select aria-label={t('construction.procurement.purchaseOrders.supplierLabel')} value={supplierId} onChange={(event) => setSupplierId(event.target.value)} className={FIELD_CLASS}>
+            <option value="">{t('construction.procurement.purchaseOrders.selectSupplier')}</option>
             {suppliers.map((supplier) => (
               <option key={supplier.id} value={supplier.id}>
                 {supplier.name}
@@ -352,20 +355,20 @@ function CreatePurchaseOrderForm({
             ))}
           </select>
         </Field>
-        <Field label="Order currency" required hint="The bill that later matches this order must be in the same currency.">
-          <input aria-label="Order currency" value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} maxLength={3} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.purchaseOrders.currencyLabel')} required hint={t('construction.procurement.purchaseOrders.currencyHint')}>
+          <input aria-label={t('construction.procurement.purchaseOrders.currencyLabel')} value={currency} onChange={(event) => setCurrency(event.target.value.toUpperCase())} maxLength={3} className={FIELD_CLASS} />
         </Field>
       </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-gray-800">Lines</h4>
+          <h4 className="text-sm font-semibold text-gray-800">{t('construction.procurement.purchaseOrders.linesHeading')}</h4>
           <button
             type="button"
             onClick={() => setLines((current) => [...current, { ...EMPTY_LINE }])}
             className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
           >
-            <Plus className="h-4 w-4" aria-hidden /> Add line
+            <Plus className="h-4 w-4" aria-hidden /> {t('construction.procurement.purchaseOrders.addLine')}
           </button>
         </div>
         {lines.map((line, index) => {
@@ -373,9 +376,9 @@ function CreatePurchaseOrderForm({
           const baseUom = product?.unit_of_measure ? String(product.unit_of_measure).toUpperCase() : '';
           return (
             <div key={index} className="grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-white p-3 sm:grid-cols-5">
-              <Field label={`Line ${index + 1} product`}>
+              <Field label={t('construction.procurement.purchaseOrders.lineProductLabel', { index: index + 1 })}>
                 <select
-                  aria-label={`Line ${index + 1} product`}
+                  aria-label={t('construction.procurement.purchaseOrders.lineProductLabel', { index: index + 1 })}
                   value={line.product_id}
                   onChange={(event) => {
                     const selected = productsById.get(event.target.value);
@@ -389,7 +392,7 @@ function CreatePurchaseOrderForm({
                   }}
                   className={FIELD_CLASS}
                 >
-                  <option value="">Select a product…</option>
+                  <option value="">{t('construction.procurement.purchaseOrders.selectProduct')}</option>
                   {products.map((entry) => (
                     <option key={entry.id} value={entry.id}>
                       {entry.name}
@@ -397,17 +400,24 @@ function CreatePurchaseOrderForm({
                   ))}
                 </select>
               </Field>
-              <Field label="Unit" hint={baseUom ? `Base unit: ${baseUom}` : 'Set a base unit on the product first.'}>
+              <Field
+                label={t('construction.procurement.purchaseOrders.unitLabel')}
+                hint={
+                  baseUom
+                    ? t('construction.procurement.purchaseOrders.baseUnitHint', { unit: baseUom })
+                    : t('construction.procurement.purchaseOrders.setBaseUnitFirst')
+                }
+              >
                 <input
-                  aria-label={`Line ${index + 1} unit`}
+                  aria-label={t('construction.procurement.purchaseOrders.lineUnitAria', { index: index + 1 })}
                   value={line.uom}
                   onChange={(event) => setLines((current) => current.map((entry, i) => (i === index ? { ...entry, uom: event.target.value.toUpperCase() } : entry)))}
                   className={FIELD_CLASS}
                 />
               </Field>
-              <Field label="Quantity">
+              <Field label={t('construction.procurement.purchaseOrders.quantityLabel')}>
                 <input
-                  aria-label={`Line ${index + 1} quantity`}
+                  aria-label={t('construction.procurement.purchaseOrders.lineQuantityAria', { index: index + 1 })}
                   type="number"
                   min="0"
                   step="any"
@@ -416,9 +426,9 @@ function CreatePurchaseOrderForm({
                   className={FIELD_CLASS}
                 />
               </Field>
-              <Field label="Expected unit price">
+              <Field label={t('construction.procurement.purchaseOrders.expectedPriceLabel')}>
                 <input
-                  aria-label={`Line ${index + 1} expected unit price`}
+                  aria-label={t('construction.procurement.purchaseOrders.linePriceAria', { index: index + 1 })}
                   type="number"
                   min="0"
                   step="any"
@@ -434,7 +444,7 @@ function CreatePurchaseOrderForm({
                     onClick={() => setLines((current) => current.filter((_, i) => i !== index))}
                     className="text-sm text-red-600 hover:underline"
                   >
-                    Remove line
+                    {t('construction.procurement.purchaseOrders.removeLine')}
                   </button>
                 ) : null}
               </div>
@@ -443,13 +453,13 @@ function CreatePurchaseOrderForm({
         })}
       </div>
 
-      <Field label="Notes">
+      <Field label={t('construction.procurement.purchaseOrders.notesLabel')}>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} className={FIELD_CLASS} />
       </Field>
 
       <InfoNote>
-        <p>The order is created as a draft. Authorization is a separate step and must be done by a different person (four eyes).</p>
-        <p>Quantities are converted to the product base unit by the server using registered conversions only — an unregistered unit is refused.</p>
+        <p>{t('construction.procurement.purchaseOrders.infoP1')}</p>
+        <p>{t('construction.procurement.purchaseOrders.infoP2')}</p>
       </InfoNote>
 
       {mutation.isError ? <FailureBanner failure={describeConstructionFailure(mutation.error)} /> : null}
@@ -461,10 +471,10 @@ function CreatePurchaseOrderForm({
           className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
         >
           <FilePlus2 className="h-4 w-4" aria-hidden />
-          {mutation.isPending ? 'Creating…' : 'Create draft purchase order'}
+          {mutation.isPending ? t('construction.procurement.purchaseOrders.creating') : t('construction.procurement.purchaseOrders.createDraft')}
         </button>
         {!canSubmit ? (
-          <span className="text-xs text-gray-500">Choose a site, a supplier, a 3-letter currency and at least one complete line.</span>
+          <span className="text-xs text-gray-500">{t('construction.procurement.purchaseOrders.submitHint')}</span>
         ) : null}
       </div>
     </form>
@@ -490,6 +500,7 @@ function PurchaseOrderDetail({
   onNotice: (message: string) => void;
   onClosed: () => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const currentUser = useAppStore((state) => state.currentUser);
   const [cancelReason, setCancelReason] = useState('');
@@ -539,7 +550,7 @@ function PurchaseOrderDetail({
     mutationFn: () => repos.construction.authorizePurchaseOrder(poId),
     onSuccess: () => {
       invalidate();
-      onNotice('Purchase order authorized.');
+      onNotice(t('construction.procurement.purchaseOrders.authorizedNotice'));
     },
   });
 
@@ -548,24 +559,24 @@ function PurchaseOrderDetail({
     onSuccess: () => {
       invalidate();
       setCancelReason('');
-      onNotice('Purchase order cancelled.');
+      onNotice(t('construction.procurement.purchaseOrders.cancelledNotice'));
     },
   });
 
-  if (detailQuery.isLoading) return <LoadingBlock label="Loading the purchase order…" />;
+  if (detailQuery.isLoading) return <LoadingBlock label={t('construction.procurement.purchaseOrders.detailLoading')} />;
   if (detailQuery.isError) {
     return (
       <ErrorBanner
-        message={`The purchase order could not be loaded: ${
-          detailQuery.error instanceof Error ? detailQuery.error.message : 'unknown error'
-        }`}
+        message={t('construction.procurement.purchaseOrders.detailLoadError', {
+          detail: detailQuery.error instanceof Error ? detailQuery.error.message : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
 
   const { po, lines, events, sites, deliveryNotes, supplierRecordedNotes, receipts, products, contacts } = detailQuery.data!;
   if (!po) {
-    return <ErrorBanner message="That purchase order is not visible to you in this business." />;
+    return <ErrorBanner message={t('construction.procurement.purchaseOrders.notVisible')} />;
   }
 
   const site = sites.find((entry) => entry.id === po.site_id);
@@ -591,31 +602,41 @@ function PurchaseOrderDetail({
 
   return (
     <SectionCard
-      title={`Purchase order ${po.po_number}`}
-      description={`${site ? `${site.site_code} — ${site.site_name}` : 'Site'} · project ${po.project_ref} · supplier ${supplier?.name ?? '—'}`}
+      title={t('construction.procurement.purchaseOrders.detailTitle', { number: po.po_number })}
+      description={t('construction.procurement.purchaseOrders.detailDescription', {
+        site: site ? `${site.site_code} — ${site.site_name}` : t('construction.procurement.purchaseOrders.siteFallback'),
+        project: po.project_ref,
+        supplier: supplier?.name ?? '—',
+      })}
       actions={
         <>
           <StatusPill label={po.status} className={PO_STATUS_STYLE[po.status] ?? 'bg-slate-100 text-slate-700'} />
           <button type="button" onClick={onClosed} className="text-sm text-gray-500 hover:text-gray-800">
-            Close
+            {t('construction.procurement.purchaseOrders.close')}
           </button>
         </>
       }
     >
       <div className="space-y-4">
         {po.status === 'cancelled' ? (
-          <ErrorBanner message={`Cancelled ${formatDateTime(po.cancelled_at)}${po.cancel_reason ? ` — ${po.cancel_reason}` : ''}`} />
+          <ErrorBanner
+            message={
+              po.cancel_reason
+                ? t('construction.procurement.purchaseOrders.cancelledBannerReason', { when: formatDateTime(po.cancelled_at), reason: po.cancel_reason })
+                : t('construction.procurement.purchaseOrders.cancelledBanner', { when: formatDateTime(po.cancelled_at) })
+            }
+          />
         ) : null}
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                <th className="px-2 py-2">Line</th>
-                <th className="px-2 py-2">Product</th>
-                <th className="px-2 py-2 text-right">Ordered</th>
-                <th className="px-2 py-2 text-right">Base quantity</th>
-                <th className="px-2 py-2 text-right">Expected unit price</th>
+                <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thLine')}</th>
+                <th className="px-2 py-2">{t('construction.procurement.purchaseOrders.thProduct')}</th>
+                <th className="px-2 py-2 text-right">{t('construction.procurement.purchaseOrders.thOrdered')}</th>
+                <th className="px-2 py-2 text-right">{t('construction.procurement.purchaseOrders.thBaseQuantity')}</th>
+                <th className="px-2 py-2 text-right">{t('construction.procurement.purchaseOrders.thExpectedPrice')}</th>
               </tr>
             </thead>
             <tbody>
@@ -643,18 +664,18 @@ function PurchaseOrderDetail({
             <>
               <GatedButton
                 allowed={authorizeGate.allowed && !fourEyesBlocked}
-                reason={fourEyesBlocked ? 'You raised this purchase order. Authorization must be recorded by a different person.' : authorizeGate.reason}
+                reason={fourEyesBlocked ? t('construction.procurement.purchaseOrders.fourEyesReason') : authorizeGate.reason}
                 onClick={() => authorizeMutation.mutate()}
                 disabled={authorizeMutation.isPending}
               >
                 <>
-                  <CheckCircle2 className="h-4 w-4" aria-hidden /> {authorizeMutation.isPending ? 'Authorizing…' : 'Authorize'}
+                  <CheckCircle2 className="h-4 w-4" aria-hidden /> {authorizeMutation.isPending ? t('construction.procurement.purchaseOrders.authorizing') : t('construction.procurement.purchaseOrders.authorize')}
                 </>
               </GatedButton>
               <div className="flex items-end gap-2">
-                <Field label="Cancellation reason">
+                <Field label={t('construction.procurement.purchaseOrders.cancelReasonLabel')}>
                   <input
-                    aria-label="Cancellation reason"
+                    aria-label={t('construction.procurement.purchaseOrders.cancelReasonLabel')}
                     value={cancelReason}
                     onChange={(event) => setCancelReason(event.target.value)}
                     className={FIELD_CLASS}
@@ -662,13 +683,13 @@ function PurchaseOrderDetail({
                 </Field>
                 <GatedButton
                   allowed={manageGate.allowed && cancelReason.trim().length > 0}
-                  reason={manageGate.allowed ? 'A written reason is required to cancel.' : manageGate.reason}
+                  reason={manageGate.allowed ? t('construction.procurement.purchaseOrders.cancelRequiresReason') : manageGate.reason}
                   onClick={() => cancelMutation.mutate()}
                   disabled={cancelMutation.isPending}
                   className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 transition disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
                 >
                   <>
-                    <XCircle className="h-4 w-4" aria-hidden /> Cancel order
+                    <XCircle className="h-4 w-4" aria-hidden /> {t('construction.procurement.purchaseOrders.cancelOrder')}
                   </>
                 </GatedButton>
               </div>
@@ -684,14 +705,14 @@ function PurchaseOrderDetail({
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 transition disabled:cursor-not-allowed disabled:text-gray-400"
               >
                 <>
-                  <FilePlus2 className="h-4 w-4" aria-hidden /> Record delivery note
+                  <FilePlus2 className="h-4 w-4" aria-hidden /> {t('construction.procurement.purchaseOrders.recordDeliveryNote')}
                 </>
               </GatedButton>
               <GatedButton
                 allowed={exceptionGate.allowed && supplierRecordedNotes.length > 0}
                 reason={
                   supplierRecordedNotes.length === 0
-                    ? 'No delivery note is recorded for this supplier yet. Record the first note normally — this path only records a duplicate of an existing note.'
+                    ? t('construction.procurement.purchaseOrders.noNoteForException')
                     : exceptionGate.reason
                 }
                 onClick={() => {
@@ -701,7 +722,7 @@ function PurchaseOrderDetail({
                 className="inline-flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900 transition disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-white disabled:text-gray-400"
               >
                 <>
-                  <FilePlus2 className="h-4 w-4" aria-hidden /> Record duplicate note (exception)
+                  <FilePlus2 className="h-4 w-4" aria-hidden /> {t('construction.procurement.purchaseOrders.recordDuplicateNote')}
                 </>
               </GatedButton>
               <GatedButton
@@ -711,7 +732,7 @@ function PurchaseOrderDetail({
                 className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
               >
                 <>
-                  <Send className="h-4 w-4" aria-hidden /> Record goods receipt
+                  <Send className="h-4 w-4" aria-hidden /> {t('construction.procurement.purchaseOrders.recordGoodsReceipt')}
                 </>
               </GatedButton>
             </>
@@ -731,7 +752,7 @@ function PurchaseOrderDetail({
             onRecorded={(number) => {
               setShowDeliveryNote(false);
               invalidate();
-              onNotice(`Delivery note ${number} recorded as evidence. No stock or ledger effect.`);
+              onNotice(t('construction.procurement.purchaseOrders.deliveryNoteNotice', { number }));
             }}
             onCancel={() => setShowDeliveryNote(false)}
           />
@@ -749,7 +770,7 @@ function PurchaseOrderDetail({
               setShowDeliveryNoteException(false);
               invalidate();
               onNotice(
-                `Delivery note ${number} recorded as an authorized duplicate exception. The recorded note was not changed; no stock or ledger effect.`,
+                t('construction.procurement.purchaseOrders.deliveryNoteExceptionNotice', { number }),
               );
             }}
             onCancel={() => setShowDeliveryNoteException(false)}
@@ -769,8 +790,8 @@ function PurchaseOrderDetail({
               invalidate();
               onNotice(
                 acceptedBase > 0
-                  ? `Goods receipt ${number} recorded. ${formatQuantity(acceptedBase)} base units were accepted and need an evidenced cost basis before posting.`
-                  : `Goods receipt ${number} recorded. Nothing was accepted, so no quantity can reach stock.`,
+                  ? t('construction.procurement.purchaseOrders.grnNoticeAccepted', { number, quantity: formatQuantity(acceptedBase) })
+                  : t('construction.procurement.purchaseOrders.grnNoticeNothing', { number }),
               );
             }}
             onCancel={() => setShowReceipt(false)}
@@ -779,9 +800,9 @@ function PurchaseOrderDetail({
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Delivery notes (evidence only)</h4>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.purchaseOrders.dnListHeading')}</h4>
             {deliveryNotes.length === 0 ? (
-              <EmptyState title="No delivery note recorded" detail="A delivery note records what the supplier's paperwork says; it never moves stock." />
+              <EmptyState title={t('construction.procurement.purchaseOrders.dnNoneTitle')} detail={t('construction.procurement.purchaseOrders.dnNoneDetail')} />
             ) : (
               <ul className="space-y-2">
                 {deliveryNotes.map((note) => (
@@ -789,18 +810,18 @@ function PurchaseOrderDetail({
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-xs text-gray-800">{note.delivery_note_number}</span>
                       <span className="text-xs text-gray-500">{note.document_date}</span>
-                      {note.is_exception ? <StatusPill label="exception" className="bg-amber-50 text-amber-800" /> : null}
+                      {note.is_exception ? <StatusPill label={t('construction.procurement.purchaseOrders.dnExceptionPill')} className="bg-amber-50 text-amber-800" /> : null}
                     </div>
-                    <p className="mt-1 text-xs text-gray-600">Evidence: {note.evidence_reference}</p>
+                    <p className="mt-1 text-xs text-gray-600">{t('construction.procurement.purchaseOrders.dnEvidenceLine', { evidence: note.evidence_reference })}</p>
                   </li>
                 ))}
               </ul>
             )}
           </div>
           <div>
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Goods receipts</h4>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.purchaseOrders.grnListHeading')}</h4>
             {receipts.length === 0 ? (
-              <EmptyState title="No goods receipt recorded" detail="A goods receipt is the only document that can lead to stock." />
+              <EmptyState title={t('construction.procurement.purchaseOrders.grnNoneTitle')} detail={t('construction.procurement.purchaseOrders.grnNoneDetail')} />
             ) : (
               <ul className="space-y-2">
                 {receipts.map((receipt) => (
@@ -813,7 +834,7 @@ function PurchaseOrderDetail({
                       to={`/construction/receipts?grn=${receipt.id}`}
                       className="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline"
                     >
-                      Open receipt, inspection and cost review →
+                      {t('construction.procurement.purchaseOrders.openReceiptLink')}
                     </Link>
                   </li>
                 ))}
@@ -823,9 +844,9 @@ function PurchaseOrderDetail({
         </div>
 
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">History</h4>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.purchaseOrders.historyHeading')}</h4>
           {events.length === 0 ? (
-            <EmptyState title="No events yet" />
+            <EmptyState title={t('construction.procurement.purchaseOrders.noEventsTitle')} />
           ) : (
             <ul className="space-y-1 text-xs text-gray-600">
               {events.map((event) => (
@@ -843,8 +864,7 @@ function PurchaseOrderDetail({
           <InfoNote>
             <p>
               <AlertTriangle className="mr-1 inline h-3.5 w-3.5" aria-hidden />
-              Goods receipt quantities are converted by the server with registered unit conversions only. Rejected, quarantined and disputed
-              quantities each need a hold with a reason and evidence, and need the receipt-inspection capability.
+              {t('construction.procurement.purchaseOrders.inspectionNote')}
             </p>
           </InfoNote>
         ) : null}

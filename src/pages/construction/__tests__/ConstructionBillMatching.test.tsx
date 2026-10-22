@@ -19,6 +19,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
+import { i18n } from '@/i18n';
 
 const construction = vi.hoisted(() => ({
   findCapabilities: vi.fn(),
@@ -177,6 +178,7 @@ function renderWorkspace(entry = '/construction/bill-matching') {
 }
 
 beforeEach(() => {
+  void i18n.changeLanguage('en');
   Object.values(construction).forEach((mock) => mock.mockReset());
   construction.findCapabilities.mockResolvedValue(['procurement.bill.match']);
   construction.findSites.mockResolvedValue([{ id: 'site-1', site_code: 'SITE-1' }]);

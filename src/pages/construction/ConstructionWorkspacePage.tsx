@@ -36,13 +36,13 @@ import { ErrorBanner, LoadingBlock } from '@/components/construction/constructio
 const SECTIONS = [
   { path: '/construction/projects', label: 'construction.projects.title' },
   { path: '/construction/retention', label: 'construction.reports.retentionAging.tabTitle' },
-  { path: '/construction', label: 'Overview' },
-  { path: '/construction/purchase-orders', label: 'Purchase orders' },
-  { path: '/construction/receipts', label: 'Receipts' },
-  { path: '/construction/bill-matching', label: 'Bill matching' },
-  { path: '/construction/material-issues', label: 'Material issues' },
-  { path: '/construction/returns', label: 'Returns' },
-  { path: '/construction/setup', label: 'Setup' },
+  { path: '/construction', label: 'construction.procurement.workspace.overview' },
+  { path: '/construction/purchase-orders', label: 'construction.procurement.workspace.purchaseOrders' },
+  { path: '/construction/receipts', label: 'construction.procurement.workspace.receipts' },
+  { path: '/construction/bill-matching', label: 'construction.procurement.workspace.billMatching' },
+  { path: '/construction/material-issues', label: 'construction.procurement.workspace.materialIssues' },
+  { path: '/construction/returns', label: 'construction.procurement.workspace.materialReturns' },
+  { path: '/construction/setup', label: 'construction.procurement.workspace.setup' },
 ] as const;
 
 export function ConstructionWorkspacePage() {
@@ -81,7 +81,7 @@ export function ConstructionWorkspacePage() {
   if (!businessId) {
     return (
       <div className="px-4 py-6">
-        <ErrorBanner message="Select a business before using the construction workspace." />
+        <ErrorBanner message={t('construction.procurement.workspace.selectBusiness')} />
       </div>
     );
   }
@@ -94,9 +94,11 @@ export function ConstructionWorkspacePage() {
             <HardHat className="h-5 w-5" aria-hidden />
           </span>
           <div>
-            <h1 className="text-xl font-semibold text-gray-900">Construction workspace</h1>
+            <h1 className="text-xl font-semibold text-gray-900">{t('construction.procurement.workspace.title')}</h1>
             <p className="text-sm text-gray-500">
-              {businessName ? `${businessName} · ` : ''}purchase orders, delivery evidence, goods receipts, supplier-bill matching and site consumption.
+              {businessName
+                ? t('construction.procurement.workspace.subtitleWithBusiness', { businessName })
+                : t('construction.procurement.workspace.subtitle')}
             </p>
           </div>
         </div>
@@ -106,7 +108,7 @@ export function ConstructionWorkspacePage() {
         </p>
       </header>
 
-      <nav className="mb-5 flex flex-wrap gap-1 border-b border-gray-200" aria-label="Construction workspace sections">
+      <nav className="mb-5 flex flex-wrap gap-1 border-b border-gray-200" aria-label={t('construction.procurement.workspace.sectionsAriaLabel')}>
         {SECTIONS.map((section) => {
           const active = section.path === activePath;
           return (
@@ -126,12 +128,15 @@ export function ConstructionWorkspacePage() {
         })}
       </nav>
 
-      {capabilitiesQuery.isLoading ? <LoadingBlock label="Checking your construction capabilities…" /> : null}
+      {capabilitiesQuery.isLoading ? <LoadingBlock label={t('construction.procurement.workspace.checkingCapabilities')} /> : null}
       {capabilitiesQuery.isError ? (
         <ErrorBanner
-          message={`Your construction capabilities could not be read: ${
-            capabilitiesQuery.error instanceof Error ? capabilitiesQuery.error.message : 'unknown error'
-          }`}
+          message={t('construction.procurement.workspace.capabilitiesError', {
+            detail:
+              capabilitiesQuery.error instanceof Error
+                ? capabilitiesQuery.error.message
+                : t('construction.procurement.shared.unknownError'),
+          })}
         />
       ) : null}
 
@@ -171,14 +176,15 @@ export function ConstructionWorkspacePage() {
 }
 
 function CapabilitySummary({ held, all }: { held: string[]; all: string[] }) {
+  const { t } = useTranslation();
   const missing = all.filter((code) => !held.includes(code));
   return (
     <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Your capabilities</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.workspace.yourCapabilities')}</span>
         {held.length === 0 ? (
           <span className="text-xs text-gray-600">
-            None granted for this business. You can still read the workspace; every action is disabled until an approver grants a capability.
+            {t('construction.procurement.workspace.noneGranted')}
           </span>
         ) : (
           held.map((code) => (
@@ -190,7 +196,9 @@ function CapabilitySummary({ held, all }: { held: string[]; all: string[] }) {
       </div>
       {missing.length > 0 && held.length > 0 ? (
         <p className="mt-2 text-xs text-gray-500">
-          Not granted: {missing.map((code) => CONSTRUCTION_CAPABILITY_LABELS[code] ?? code).join(', ')}.
+          {t('construction.procurement.workspace.notGranted', {
+            list: missing.map((code) => CONSTRUCTION_CAPABILITY_LABELS[code] ?? code).join(', '),
+          })}
         </p>
       ) : null}
     </div>

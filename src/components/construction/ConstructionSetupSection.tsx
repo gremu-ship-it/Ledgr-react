@@ -89,13 +89,13 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
     },
   });
 
-  if (dataQuery.isLoading) return <LoadingBlock label="Loading construction master data…" />;
+  if (dataQuery.isLoading) return <LoadingBlock label={t('construction.procurement.setup.loading')} />;
   if (dataQuery.isError) {
     return (
       <ErrorBanner
-        message={`Construction master data could not be loaded: ${
-          dataQuery.error instanceof Error ? dataQuery.error.message : 'unknown error'
-        }`}
+        message={t('construction.procurement.setup.loadError', {
+          detail: dataQuery.error instanceof Error ? dataQuery.error.message : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
@@ -141,20 +141,20 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
         }}
       />
 
-      <SectionCard title="Registered sites" description="A site fixes the branch, the inventory location and the project reference every document inherits.">
+      <SectionCard title={t('construction.procurement.setup.registeredSites')} description={t('construction.procurement.setup.registeredSitesDescription')}>
         {sites.length === 0 ? (
-          <EmptyState title="No sites registered" detail="Register the first site above." />
+          <EmptyState title={t('construction.procurement.setup.noSitesRegistered')} detail={t('construction.procurement.setup.noSitesDetail')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Site code</th>
-                  <th className="px-2 py-2">Name</th>
-                  <th className="px-2 py-2">Project reference</th>
-                  <th className="px-2 py-2">Branch</th>
-                  <th className="px-2 py-2">Inventory location</th>
-                  <th className="px-2 py-2">Status</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thSiteCode')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thName')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thProjectRef')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thBranch')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thLocation')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thStatus')}</th>
                   {manageGate.allowed ? <th className="px-2 py-2">{t('construction.sites.actions')}</th> : null}
                 </tr>
               </thead>
@@ -171,7 +171,7 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
                     <td className="px-2 py-2 text-gray-700">{locationsById.get(site.location_id)?.name ?? '—'}</td>
                     <td className="px-2 py-2">
                       <StatusPill
-                        label={site.is_active ? 'Active' : 'Inactive'}
+                        label={site.is_active ? t('construction.procurement.setup.active') : t('construction.procurement.setup.inactive')}
                         className={site.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}
                       />
                     </td>
@@ -218,22 +218,22 @@ export function ConstructionSetupSection({ businessId, capabilities }: { busines
       />
 
       <SectionCard
-        title="Registered unit conversions"
-        description="Conversions are product-specific, explicit and evidenced, and always target the product base unit. No conversion is inferred or chained."
+        title={t('construction.procurement.setup.registeredConversions')}
+        description={t('construction.procurement.setup.registeredConversionsDescription')}
       >
         {conversions.length === 0 ? (
-          <EmptyState title="No conversions registered" detail="Without one, a purchase order can only use the product base unit." />
+          <EmptyState title={t('construction.procurement.setup.noConversions')} detail={t('construction.procurement.setup.noConversionsDetail')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Product</th>
-                  <th className="px-2 py-2">From</th>
-                  <th className="px-2 py-2">To (base)</th>
-                  <th className="px-2 py-2 text-right">Factor</th>
-                  <th className="px-2 py-2">Evidence</th>
-                  <th className="px-2 py-2">Approved</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thProduct')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thFrom')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thTo')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.setup.thFactor')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thEvidence')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.setup.thApproved')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -340,7 +340,7 @@ function SiteForm({
       setSiteName('');
       setProjectRef('');
       setProjectId('');
-      onDone('Construction site registered.');
+      onDone(t('construction.procurement.setup.siteRegistered'));
     },
   });
 
@@ -350,8 +350,8 @@ function SiteForm({
 
   return (
     <SectionCard
-      title="Register a construction site"
-      description="The site maps a project reference to exactly one branch and one inventory location. Repeat registration of the same site code is idempotent."
+      title={t('construction.procurement.setup.registerSiteTitle')}
+      description={t('construction.procurement.setup.registerSiteDescription')}
       actions={<MapPin className="h-4 w-4 text-gray-400" aria-hidden />}
     >
       <form
@@ -361,9 +361,9 @@ function SiteForm({
           mutation.mutate();
         }}
       >
-        <Field label="Branch" required>
-          <select aria-label="Branch" value={branchId} onChange={(event) => { setBranchId(event.target.value); setLocationId(''); }} className={FIELD_CLASS}>
-            <option value="">Select a branch…</option>
+        <Field label={t('construction.procurement.setup.branch')} required>
+          <select aria-label={t('construction.procurement.setup.branch')} value={branchId} onChange={(event) => { setBranchId(event.target.value); setLocationId(''); }} className={FIELD_CLASS}>
+            <option value="">{t('construction.procurement.setup.selectBranch')}</option>
             {branches.map((branch) => (
               <option key={branch.id} value={branch.id}>
                 {branch.name}
@@ -371,9 +371,9 @@ function SiteForm({
             ))}
           </select>
         </Field>
-        <Field label="Inventory location" required hint="The store that holds the material for this site.">
-          <select aria-label="Inventory location" value={locationId} onChange={(event) => setLocationId(event.target.value)} className={FIELD_CLASS}>
-            <option value="">Select a location…</option>
+        <Field label={t('construction.procurement.setup.location')} required hint={t('construction.procurement.setup.locationHint')}>
+          <select aria-label={t('construction.procurement.setup.location')} value={locationId} onChange={(event) => setLocationId(event.target.value)} className={FIELD_CLASS}>
+            <option value="">{t('construction.procurement.setup.selectLocation')}</option>
             {locationsForBranch.map((location) => (
               <option key={location.id} value={location.id}>
                 {location.name}
@@ -381,11 +381,11 @@ function SiteForm({
             ))}
           </select>
         </Field>
-        <Field label="Site code" required hint="Short code used on every document for this site.">
-          <input aria-label="Site code" value={siteCode} onChange={(event) => setSiteCode(event.target.value.toUpperCase())} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.siteCode')} required hint={t('construction.procurement.setup.siteCodeHint')}>
+          <input aria-label={t('construction.procurement.setup.siteCode')} value={siteCode} onChange={(event) => setSiteCode(event.target.value.toUpperCase())} className={FIELD_CLASS} />
         </Field>
-        <Field label="Site name" required>
-          <input aria-label="Site name" value={siteName} onChange={(event) => setSiteName(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.siteNameField')} required>
+          <input aria-label={t('construction.procurement.setup.siteNameField')} value={siteName} onChange={(event) => setSiteName(event.target.value)} className={FIELD_CLASS} />
         </Field>
         <Field label={t('construction.sites.projectLink')} hint={t('construction.sites.projectLinkPlaceholder')}>
           <select
@@ -409,18 +409,18 @@ function SiteForm({
             ))}
           </select>
         </Field>
-        <Field label="Project reference" required hint="The reference material issues are booked against.">
-          <input aria-label="Project reference" value={projectRef} onChange={(event) => setProjectRef(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.projectRefField')} required hint={t('construction.procurement.setup.projectRefHint')}>
+          <input aria-label={t('construction.procurement.setup.projectRefField')} value={projectRef} onChange={(event) => setProjectRef(event.target.value)} className={FIELD_CLASS} />
         </Field>
         <div className="flex items-end">
           <GatedButton
             allowed={gate.allowed && Boolean(branchId && locationId && siteCode.trim() && siteName.trim() && projectRef.trim())}
-            reason={gate.allowed ? 'Branch, location, site code, site name and project reference are required.' : gate.reason}
+            reason={gate.allowed ? t('construction.procurement.setup.siteRequiredReason') : gate.reason}
             disabled={mutation.isPending}
             type="submit"
           >
             <>
-              <MapPin className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Registering…' : 'Register site'}
+              <MapPin className="h-4 w-4" aria-hidden /> {mutation.isPending ? t('construction.procurement.setup.registering') : t('construction.procurement.setup.registerSite')}
             </>
           </GatedButton>
         </div>
@@ -445,6 +445,7 @@ function UomForm({
   products: Array<{ id: string; name: string; unit_of_measure?: string | null }>;
   onDone: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [productId, setProductId] = useState('');
   const [fromUom, setFromUom] = useState('');
   const [toUom, setToUom] = useState('');
@@ -471,7 +472,7 @@ function UomForm({
       setFromUom('');
       setFactor('');
       setEvidence('');
-      onDone('Unit conversion registered.');
+      onDone(t('construction.procurement.setup.conversionRegistered'));
     },
   });
 
@@ -479,8 +480,8 @@ function UomForm({
 
   return (
     <SectionCard
-      title="Register a product unit conversion"
-      description="One factor, one product, one direction — always into the product base unit. The server refuses chained or mismatched targets."
+      title={t('construction.procurement.setup.conversionTitle')}
+      description={t('construction.procurement.setup.conversionDescription')}
       actions={<Ruler className="h-4 w-4 text-gray-400" aria-hidden />}
     >
       <form
@@ -490,9 +491,9 @@ function UomForm({
           mutation.mutate();
         }}
       >
-        <Field label="Product" required>
+        <Field label={t('construction.procurement.setup.productLabel')} required>
           <select
-            aria-label="Conversion product"
+            aria-label={t('construction.procurement.setup.conversionProductAria')}
             value={productId}
             onChange={(event) => {
               setProductId(event.target.value);
@@ -501,7 +502,7 @@ function UomForm({
             }}
             className={FIELD_CLASS}
           >
-            <option value="">Select a product…</option>
+            <option value="">{t('construction.procurement.setup.selectProduct')}</option>
             {products.map((product) => (
               <option key={product.id} value={product.id}>
                 {product.name}
@@ -509,27 +510,35 @@ function UomForm({
             ))}
           </select>
         </Field>
-        <Field label="From unit" required hint="For example CTN.">
-          <input aria-label="From unit" value={fromUom} onChange={(event) => setFromUom(event.target.value.toUpperCase())} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.fromUnit')} required hint={t('construction.procurement.setup.fromUnitHint')}>
+          <input aria-label={t('construction.procurement.setup.fromUnit')} value={fromUom} onChange={(event) => setFromUom(event.target.value.toUpperCase())} className={FIELD_CLASS} />
         </Field>
-        <Field label="To unit (product base unit)" required hint={selected ? `Base unit: ${String(selected.unit_of_measure ?? 'not set')}` : 'Select a product first.'}>
-          <input aria-label="To unit" value={toUom} onChange={(event) => setToUom(event.target.value.toUpperCase())} className={FIELD_CLASS} />
+        <Field
+          label={t('construction.procurement.setup.toUnit')}
+          required
+          hint={
+            selected
+              ? t('construction.procurement.setup.baseUnitHint', { unit: String(selected.unit_of_measure ?? t('construction.procurement.setup.notSet')) })
+              : t('construction.procurement.setup.selectProductFirst')
+          }
+        >
+          <input aria-label={t('construction.procurement.setup.toUnitAria')} value={toUom} onChange={(event) => setToUom(event.target.value.toUpperCase())} className={FIELD_CLASS} />
         </Field>
-        <Field label="Factor" required hint="How many base units one “from” unit contains.">
-          <input aria-label="Conversion factor" type="number" min="0" step="any" value={factor} onChange={(event) => setFactor(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.factorLabel')} required hint={t('construction.procurement.setup.factorHint')}>
+          <input aria-label={t('construction.procurement.setup.factorAria')} type="number" min="0" step="any" value={factor} onChange={(event) => setFactor(event.target.value)} className={FIELD_CLASS} />
         </Field>
-        <Field label="Evidence reference" required hint="For example the supplier’s packaging specification.">
-          <input aria-label="Conversion evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.evidenceLabel')} required hint={t('construction.procurement.setup.evidenceHint')}>
+          <input aria-label={t('construction.procurement.setup.evidenceAria')} value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
         </Field>
         <div className="flex items-end">
           <GatedButton
             allowed={gate.allowed && Boolean(productId && fromUom.trim() && toUom.trim() && Number(factor) > 0 && evidence.trim())}
-            reason={gate.allowed ? 'Product, both units, a positive factor and an evidence reference are required.' : gate.reason}
+            reason={gate.allowed ? t('construction.procurement.setup.conversionRequiredReason') : gate.reason}
             disabled={mutation.isPending}
             type="submit"
           >
             <>
-              <Ruler className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Registering…' : 'Register conversion'}
+              <Ruler className="h-4 w-4" aria-hidden /> {mutation.isPending ? t('construction.procurement.setup.registering') : t('construction.procurement.setup.registerConversion')}
             </>
           </GatedButton>
         </div>
@@ -554,6 +563,7 @@ function PolicyForm({
   policy: { business_id: string; movement_posting_enabled: boolean; approved_reason: string | null; approved_at: string | null; cost_basis_source: string | null } | null;
   onDone: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [enable, setEnable] = useState(policy?.movement_posting_enabled ?? false);
   const [reason, setReason] = useState('');
   const [evidence, setEvidence] = useState('');
@@ -569,27 +579,31 @@ function PolicyForm({
     onSuccess: () => {
       setReason('');
       setEvidence('');
-      onDone(`Receipt posting policy ${enable ? 'enabled' : 'withdrawn'}. GL posting remains structurally disabled.`);
+      onDone(
+        t('construction.procurement.setup.policyNotice', {
+          state: enable ? t('construction.procurement.setup.policyEnabledWord') : t('construction.procurement.setup.policyWithdrawnWord'),
+        }),
+      );
     },
   });
 
   return (
     <SectionCard
-      title="Receipt posting policy"
-      description="The only switch that lets a goods receipt or a material issue move stock. Approving it needs a written reason and evidence, and it never enables journal posting."
+      title={t('construction.procurement.setup.policyTitle')}
+      description={t('construction.procurement.setup.policyDescription')}
       actions={<ShieldCheck className="h-4 w-4 text-gray-400" aria-hidden />}
     >
       <div className="flex flex-wrap items-center gap-3">
         <StatusPill
-          label={policy?.movement_posting_enabled ? 'Movement posting enabled' : 'Movement posting disabled'}
+          label={policy?.movement_posting_enabled ? t('construction.procurement.setup.movementEnabled') : t('construction.procurement.setup.movementDisabled')}
           className={policy?.movement_posting_enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}
         />
-        <StatusPill label="GL posting: not approved" className="bg-slate-100 text-slate-700" />
-        {policy?.cost_basis_source ? <span className="text-xs text-gray-600">Cost basis source: {policy.cost_basis_source}</span> : null}
+        <StatusPill label={t('construction.procurement.setup.glNotApproved')} className="bg-slate-100 text-slate-700" />
+        {policy?.cost_basis_source ? <span className="text-xs text-gray-600">{t('construction.procurement.setup.costBasisSource', { source: policy.cost_basis_source })}</span> : null}
       </div>
       {policy?.approved_reason ? (
         <p className="mt-2 text-xs text-gray-600">
-          Approved {formatDate(policy.approved_at)} — {policy.approved_reason}
+          {t('construction.procurement.setup.approvedLine', { when: formatDate(policy.approved_at), reason: policy.approved_reason })}
         </p>
       ) : null}
 
@@ -600,34 +614,33 @@ function PolicyForm({
           mutation.mutate();
         }}
       >
-        <Field label="Policy state" required>
-          <select aria-label="Policy state" value={enable ? 'enable' : 'disable'} onChange={(event) => setEnable(event.target.value === 'enable')} className={FIELD_CLASS}>
-            <option value="disable">Keep movement posting disabled</option>
-            <option value="enable">Enable movement posting from the matched bill line</option>
+        <Field label={t('construction.procurement.setup.policyState')} required>
+          <select aria-label={t('construction.procurement.setup.policyState')} value={enable ? 'enable' : 'disable'} onChange={(event) => setEnable(event.target.value === 'enable')} className={FIELD_CLASS}>
+            <option value="disable">{t('construction.procurement.setup.keepDisabled')}</option>
+            <option value="enable">{t('construction.procurement.setup.enableFromBill')}</option>
           </select>
         </Field>
-        <Field label="Approval reason" required>
-          <input aria-label="Approval reason" value={reason} onChange={(event) => setReason(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.approvalReason')} required>
+          <input aria-label={t('construction.procurement.setup.approvalReason')} value={reason} onChange={(event) => setReason(event.target.value)} className={FIELD_CLASS} />
         </Field>
-        <Field label="Approval evidence" required hint="For example the board minute or accounting policy reference.">
-          <input aria-label="Approval evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.setup.approvalEvidence')} required hint={t('construction.procurement.setup.approvalEvidenceHint')}>
+          <input aria-label={t('construction.procurement.setup.approvalEvidence')} value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
         </Field>
         <div className="sm:col-span-3">
           <InfoNote>
             <p>
-              Enabling this policy allows accepted quantities to reach stock at the evidenced bill-line cost. It does not create journal entries and
-              does not change any expense treatment.
+              {t('construction.procurement.setup.policyInfo')}
             </p>
           </InfoNote>
           <div className="mt-3">
             <GatedButton
               allowed={gate.allowed && reason.trim().length > 0 && evidence.trim().length > 0}
-              reason={gate.allowed ? 'A written reason and an evidence reference are required.' : gate.reason}
+              reason={gate.allowed ? t('construction.procurement.setup.policyRequiredReason') : gate.reason}
               disabled={mutation.isPending}
               type="submit"
             >
               <>
-                <ShieldCheck className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Recording…' : 'Record policy decision'}
+                <ShieldCheck className="h-4 w-4" aria-hidden /> {mutation.isPending ? t('construction.procurement.setup.recording') : t('construction.procurement.setup.recordPolicy')}
               </>
             </GatedButton>
           </div>

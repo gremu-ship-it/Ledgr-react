@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
 import { ClipboardCheck, FlaskConical, Lock, Search, Unlock } from 'lucide-react';
 import { repos } from '@/lib/repositories';
@@ -51,6 +52,7 @@ export function ConstructionReceiptsSection({
   businessId: string;
   capabilities: string[];
 }) {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('grn');
   const [search, setSearch] = useState('');
@@ -67,11 +69,13 @@ export function ConstructionReceiptsSection({
     },
   });
 
-  if (listQuery.isLoading) return <LoadingBlock label="Loading goods receipts…" />;
+  if (listQuery.isLoading) return <LoadingBlock label={t('construction.procurement.receipts.loading')} />;
   if (listQuery.isError) {
     return (
       <ErrorBanner
-        message={`Goods receipts could not be loaded: ${listQuery.error instanceof Error ? listQuery.error.message : 'unknown error'}`}
+        message={t('construction.procurement.receipts.loadError', {
+          detail: listQuery.error instanceof Error ? listQuery.error.message : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
@@ -94,8 +98,8 @@ export function ConstructionReceiptsSection({
   return (
     <div className="space-y-6">
       <SectionCard
-        title="Goods receipts"
-        description="A receipt records what was physically received and classified. Only accepted quantities can reach stock, and only after an evidenced cost basis and an approved policy."
+        title={t('construction.procurement.receipts.title')}
+        description={t('construction.procurement.receipts.description')}
         actions={
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-2.5 h-4 w-4 text-gray-400" aria-hidden />
@@ -103,8 +107,8 @@ export function ConstructionReceiptsSection({
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search receipt number, project…"
-              aria-label="Search goods receipts"
+              placeholder={t('construction.procurement.receipts.searchPlaceholder')}
+              aria-label={t('construction.procurement.receipts.searchAria')}
               className="w-60 rounded-lg border border-gray-300 py-2 pl-8 pr-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
@@ -112,21 +116,21 @@ export function ConstructionReceiptsSection({
       >
         {receipts.length === 0 ? (
           <EmptyState
-            title="No goods receipts yet"
-            detail="Record one against an authorized purchase order from the Purchase orders screen."
+            title={t('construction.procurement.receipts.noneTitle')}
+            detail={t('construction.procurement.receipts.noneDetail')}
           />
         ) : filtered.length === 0 ? (
-          <EmptyState title="No receipt matches that search" />
+          <EmptyState title={t('construction.procurement.receipts.noMatchTitle')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Receipt</th>
-                  <th className="px-2 py-2">Date</th>
-                  <th className="px-2 py-2">Purchase order</th>
-                  <th className="px-2 py-2">Site / project</th>
-                  <th className="px-2 py-2 text-right">Action</th>
+                  <th className="px-2 py-2">{t('construction.procurement.receipts.thReceipt')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.receipts.thDate')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.receipts.thPurchaseOrder')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.receipts.thSiteProject')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.receipts.thAction')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,7 +149,7 @@ export function ConstructionReceiptsSection({
                         onClick={() => select(receipt.id === selectedId ? null : receipt.id)}
                         className="text-sm font-medium text-brand-700 hover:underline"
                       >
-                        {receipt.id === selectedId ? 'Hide' : 'Review'}
+                        {receipt.id === selectedId ? t('construction.procurement.receipts.hide') : t('construction.procurement.receipts.review')}
                       </button>
                     </td>
                   </tr>
@@ -164,6 +168,7 @@ export function ConstructionReceiptsSection({
 // ─────────────────────────────────────────────────────────────────────────────
 
 function ReceiptReview({ businessId, grnId, capabilities }: { businessId: string; grnId: string; capabilities: string[] }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
   const [postingFailure, setPostingFailure] = useState<ConstructionFailure | null>(null);
@@ -208,17 +213,19 @@ function ReceiptReview({ businessId, grnId, capabilities }: { businessId: string
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['construction'] });
 
-  if (detailQuery.isLoading) return <LoadingBlock label="Loading the receipt…" />;
+  if (detailQuery.isLoading) return <LoadingBlock label={t('construction.procurement.receipts.detailLoading')} />;
   if (detailQuery.isError) {
     return (
       <ErrorBanner
-        message={`The receipt could not be loaded: ${detailQuery.error instanceof Error ? detailQuery.error.message : 'unknown error'}`}
+        message={t('construction.procurement.receipts.detailLoadError', {
+          detail: detailQuery.error instanceof Error ? detailQuery.error.message : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
 
   const data = detailQuery.data!;
-  if (!data.receipt) return <ErrorBanner message="That goods receipt is not visible to you in this business." />;
+  if (!data.receipt) return <ErrorBanner message={t('construction.procurement.receipts.notVisible')} />;
   const receipt: ConstructionGoodsReceipt = data.receipt;
   const site = data.sites.find((entry) => entry.id === receipt.site_id);
   const po = data.purchaseOrders.find((entry) => entry.id === receipt.po_id);
@@ -228,26 +235,36 @@ function ReceiptReview({ businessId, grnId, capabilities }: { businessId: string
   const journalNote = (
     <InfoNote>
       <p>
-        A posted receipt writes <strong>one stock movement per receipt line</strong> through the shared weighted-average-cost writer. It does not
-        write a journal entry: general-ledger posting for construction receipts is not approved.
+        {t('construction.procurement.receipts.journalNoteBefore')}<strong>{t('construction.procurement.receipts.journalNoteStrong')}</strong>{t('construction.procurement.receipts.journalNoteAfter')}
       </p>
     </InfoNote>
   );
 
   return (
     <SectionCard
-      title={`Receipt ${receipt.grn_number}`}
-      description={`${site ? `${site.site_code} — ${site.site_name}` : 'Site'} · project ${receipt.project_ref} · received ${formatDate(receipt.receipt_date)}${
-        po ? ` · purchase order ${po.po_number}` : ''
-      }`}
-      actions={<StatusPill label="Stock effect only when posted" className="bg-blue-50 text-blue-700" />}
+      title={t('construction.procurement.receipts.detailTitle', { number: receipt.grn_number })}
+      description={
+        po
+          ? t('construction.procurement.receipts.detailDescriptionPo', {
+              site: site ? `${site.site_code} — ${site.site_name}` : t('construction.procurement.receipts.siteFallback'),
+              project: receipt.project_ref,
+              received: formatDate(receipt.receipt_date),
+              poNumber: po.po_number,
+            })
+          : t('construction.procurement.receipts.detailDescription', {
+              site: site ? `${site.site_code} — ${site.site_name}` : t('construction.procurement.receipts.siteFallback'),
+              project: receipt.project_ref,
+              received: formatDate(receipt.receipt_date),
+            })
+      }
+      actions={<StatusPill label={t('construction.procurement.receipts.stockEffectPill')} className="bg-blue-50 text-blue-700" />}
     >
       <div className="space-y-5">
         {notice ? <SuccessBanner message={notice} /> : null}
         {journalNote}
 
         {data.lines.length === 0 ? (
-          <EmptyState title="This receipt has no lines" />
+          <EmptyState title={t('construction.procurement.receipts.noLinesTitle')} />
         ) : (
           data.lines.map((line) => {
             const progress = describeReceiptLineProgress(line, data.costBases, data.holds, data.policy);
@@ -255,21 +272,24 @@ function ReceiptReview({ businessId, grnId, capabilities }: { businessId: string
               <div key={line.id} className="rounded-xl border border-gray-200 p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-semibold text-gray-900">
-                    Line {line.line_number} · {productsById.get(line.product_id)?.name ?? line.product_id}
+                    {t('construction.procurement.receipts.lineHeading', {
+                      line: line.line_number,
+                      product: productsById.get(line.product_id)?.name ?? line.product_id,
+                    })}
                   </span>
                   <StatusPill label={progress.label} className={receiptStageClassName(progress.stage)} />
                   {progress.holdBase > 0 ? (
-                    <StatusPill label={`${formatQuantity(progress.holdBase)} held`} className="bg-amber-50 text-amber-800" />
+                    <StatusPill label={t('construction.procurement.receipts.heldPill', { quantity: formatQuantity(progress.holdBase) })} className="bg-amber-50 text-amber-800" />
                   ) : null}
                 </div>
 
                 <div className="mt-2 grid grid-cols-2 gap-3 text-xs text-gray-600 sm:grid-cols-6">
-                  <span>Received: <strong className="text-gray-900">{formatQuantity(line.quantity_received, line.uom)}</strong></span>
-                  <span>Accepted: <strong className="text-gray-900">{formatQuantity(line.quantity_accepted, line.uom)}</strong></span>
-                  <span>Rejected: <strong className="text-gray-900">{formatQuantity(line.quantity_rejected)}</strong></span>
-                  <span>Quarantined: <strong className="text-gray-900">{formatQuantity(line.quantity_quarantined)}</strong></span>
-                  <span>Disputed: <strong className="text-gray-900">{formatQuantity(line.quantity_disputed)}</strong></span>
-                  <span>In stock: <strong className="text-gray-900">{formatQuantity(line.quantity_posted_base)}</strong></span>
+                  <span>{t('construction.procurement.receipts.statReceived')}<strong className="text-gray-900">{formatQuantity(line.quantity_received, line.uom)}</strong></span>
+                  <span>{t('construction.procurement.receipts.statAccepted')}<strong className="text-gray-900">{formatQuantity(line.quantity_accepted, line.uom)}</strong></span>
+                  <span>{t('construction.procurement.receipts.statRejected')}<strong className="text-gray-900">{formatQuantity(line.quantity_rejected)}</strong></span>
+                  <span>{t('construction.procurement.receipts.statQuarantined')}<strong className="text-gray-900">{formatQuantity(line.quantity_quarantined)}</strong></span>
+                  <span>{t('construction.procurement.receipts.statDisputed')}<strong className="text-gray-900">{formatQuantity(line.quantity_disputed)}</strong></span>
+                  <span>{t('construction.procurement.receipts.statInStock')}<strong className="text-gray-900">{formatQuantity(line.quantity_posted_base)}</strong></span>
                 </div>
 
                 <p className="mt-2 text-xs text-gray-600">{progress.detail}</p>
@@ -318,14 +338,13 @@ function ReceiptReview({ businessId, grnId, capabilities }: { businessId: string
         {postingFailure ? <FailureBanner failure={postingFailure} /> : null}
 
         <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <h4 className="text-sm font-semibold text-gray-900">Post this receipt&rsquo;s stock movements</h4>
+          <h4 className="text-sm font-semibold text-gray-900">{t('construction.procurement.receipts.postTitle')}</h4>
           <p className="mt-1 text-xs text-gray-600">
-            Posting is refused by the database unless (a) an approved policy enables movement posting, and (b) every accepted quantity on every
-            line has an evidenced cost basis. Quantities already posted are skipped, so pressing this twice never doubles stock.
+            {t('construction.procurement.receipts.postInfo')}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <StatusPill
-              label={data.policy?.movement_posting_enabled ? 'Policy: enabled' : 'Policy: disabled'}
+              label={data.policy?.movement_posting_enabled ? t('construction.procurement.receipts.policyEnabledPill') : t('construction.procurement.receipts.policyDisabledPill')}
               className={data.policy?.movement_posting_enabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}
             />
             <PostReceiptButton
@@ -343,14 +362,20 @@ function ReceiptReview({ businessId, grnId, capabilities }: { businessId: string
         </div>
 
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Quality releases recorded</h4>
+          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.receipts.releasesHeading')}</h4>
           {data.reclassifications.length === 0 ? (
-            <EmptyState title="No quality release recorded" detail="Quarantined or disputed quantities stay outside inventory until released." />
+            <EmptyState title={t('construction.procurement.receipts.noReleasesTitle')} detail={t('construction.procurement.receipts.noReleasesDetail')} />
           ) : (
             <ul className="space-y-2">
               {data.reclassifications.map((row) => (
                 <li key={row.id} className="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700">
-                  {formatQuantity(row.quantity_base)} base units from {row.from_bucket} to {row.to_bucket} · {row.reason} · evidence {row.evidence_reference}
+                  {t('construction.procurement.receipts.releaseLine', {
+                    quantity: formatQuantity(row.quantity_base),
+                    from: row.from_bucket,
+                    to: row.to_bucket,
+                    reason: row.reason,
+                    evidence: row.evidence_reference,
+                  })}
                 </li>
               ))}
             </ul>
@@ -376,6 +401,7 @@ function LineHolds({
   capabilities: string[];
   onDone: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [releaseReason, setReleaseReason] = useState<Record<string, string>>({});
   const gate = gateForCapability(
     capabilities,
@@ -385,32 +411,32 @@ function LineHolds({
 
   const mutation = useMutation({
     mutationFn: ({ holdId, reason }: { holdId: string; reason: string }) => repos.construction.releaseHold(holdId, reason),
-    onSuccess: (_result, variables) => onDone(`Hold released: ${variables.reason}`),
+    onSuccess: (_result, variables) => onDone(t('construction.procurement.receipts.holdReleased', { reason: variables.reason })),
   });
 
   if (holds.length === 0) return null;
 
   return (
     <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3">
-      <h5 className="text-xs font-semibold uppercase tracking-wide text-amber-900">Holds on line {receiptLine.line_number}</h5>
+      <h5 className="text-xs font-semibold uppercase tracking-wide text-amber-900">{t('construction.procurement.receipts.holdsHeading', { line: receiptLine.line_number })}</h5>
       <ul className="mt-2 space-y-2">
         {holds.map((hold) => (
           <li key={hold.id} className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <StatusPill label={hold.hold_type} className="bg-amber-100 text-amber-900" />
-              <span className="font-medium text-gray-900">{formatQuantity(hold.quantity_base)} base units</span>
+              <span className="font-medium text-gray-900">{t('construction.procurement.receipts.holdBaseUnits', { quantity: formatQuantity(hold.quantity_base) })}</span>
               <StatusPill
                 label={hold.status}
                 className={hold.status === 'open' ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-700'}
               />
             </div>
             <p className="mt-1 text-gray-700">{hold.reason}</p>
-            <p className="text-[11px] text-gray-500">Evidence: {hold.evidence_reference}</p>
+            <p className="text-[11px] text-gray-500">{t('construction.procurement.receipts.evidenceLine', { evidence: hold.evidence_reference })}</p>
             {hold.status === 'open' ? (
               <div className="mt-2 flex flex-wrap items-end gap-2">
-                <Field label={`Release reason for the ${hold.hold_type} hold`}>
+                <Field label={t('construction.procurement.receipts.releaseReasonLabel', { holdType: hold.hold_type })}>
                   <input
-                    aria-label={`Release reason for hold ${hold.id}`}
+                    aria-label={t('construction.procurement.receipts.releaseReasonAria', { holdId: hold.id })}
                     value={releaseReason[hold.id] ?? ''}
                     onChange={(event) => setReleaseReason((current) => ({ ...current, [hold.id]: event.target.value }))}
                     className={`${FIELD_CLASS} mt-0 w-64`}
@@ -418,13 +444,13 @@ function LineHolds({
                 </Field>
                 <GatedButton
                   allowed={gate.allowed && (releaseReason[hold.id] ?? '').trim().length > 0}
-                  reason={gate.allowed ? 'A written reason is required to release a hold.' : gate.reason}
+                  reason={gate.allowed ? t('construction.procurement.receipts.releaseRequiresReason') : gate.reason}
                   onClick={() => mutation.mutate({ holdId: hold.id, reason: (releaseReason[hold.id] ?? '').trim() })}
                   disabled={mutation.isPending}
                   className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-900 disabled:cursor-not-allowed disabled:text-gray-400"
                 >
                   <>
-                    <Unlock className="h-3.5 w-3.5" aria-hidden /> Release hold
+                    <Unlock className="h-3.5 w-3.5" aria-hidden /> {t('construction.procurement.receipts.releaseHold')}
                   </>
                 </GatedButton>
               </div>
@@ -433,8 +459,7 @@ function LineHolds({
         ))}
       </ul>
       <p className="mt-2 text-[11px] text-amber-900">
-        Releasing a hold records the decision. It does not move stock: a quarantined or disputed quantity must also pass an inspection and be
-        reclassified before it can be accepted.
+        {t('construction.procurement.receipts.releaseFooter')}
       </p>
       {mutation.isError ? (
         <div className="mt-2">
@@ -462,6 +487,7 @@ function LineInspection({
   capabilities: string[];
   onDone: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [outcome, setOutcome] = useState<'passed' | 'failed' | 'partial'>('passed');
   const [quantity, setQuantity] = useState('');
@@ -511,7 +537,7 @@ function LineInspection({
       setMethod('');
       setCertificate('');
       setEvidence('');
-      onDone(`Inspection recorded on line ${receiptLine.line_number}. An inspection does not move stock by itself.`);
+      onDone(t('construction.procurement.receipts.inspectionNotice', { line: receiptLine.line_number }));
     },
   });
 
@@ -535,7 +561,7 @@ function LineInspection({
       setReleaseReason('');
       setReleaseEvidence('');
       onDone(
-        `Quantity released from ${fromBucket} into accepted on line ${receiptLine.line_number}. Request an evidenced cost basis before posting.`,
+        t('construction.procurement.receipts.releaseNotice', { bucket: fromBucket, line: receiptLine.line_number }),
       );
     },
   });
@@ -546,7 +572,7 @@ function LineInspection({
   return (
     <div className="mt-3 rounded-lg border border-gray-200 p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Inspection and quality release</h5>
+        <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.receipts.inspectionHeading')}</h5>
         <GatedButton
           allowed={inspectGate.allowed}
           reason={inspectGate.reason}
@@ -554,7 +580,7 @@ function LineInspection({
           className="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-800 disabled:cursor-not-allowed disabled:text-gray-400"
         >
           <>
-            <FlaskConical className="h-3.5 w-3.5" aria-hidden /> {showForm ? 'Hide inspection form' : 'Record inspection'}
+            <FlaskConical className="h-3.5 w-3.5" aria-hidden /> {showForm ? t('construction.procurement.receipts.hideInspectionForm') : t('construction.procurement.receipts.recordInspection')}
           </>
         </GatedButton>
       </div>
@@ -563,13 +589,17 @@ function LineInspection({
         <ul className="mt-2 space-y-1 text-xs text-gray-700">
           {inspections.map((inspection) => (
             <li key={inspection.id}>
-              <span className="font-medium uppercase">{inspection.outcome}</span> · {formatQuantity(inspection.quantity_inspected)} inspected on{' '}
-              {formatDate(inspection.inspection_date)} · {inspection.method} · evidence {inspection.evidence_reference}
+              <span className="font-medium uppercase">{inspection.outcome}</span>{t('construction.procurement.receipts.inspectionLine', {
+                quantity: formatQuantity(inspection.quantity_inspected),
+                date: formatDate(inspection.inspection_date),
+                method: inspection.method,
+                evidence: inspection.evidence_reference,
+              })}
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-2 text-xs text-gray-500">No inspection recorded for this line.</p>
+        <p className="mt-2 text-xs text-gray-500">{t('construction.procurement.receipts.noInspection')}</p>
       )}
 
       {showForm ? (
@@ -580,27 +610,27 @@ function LineInspection({
             inspectionMutation.mutate();
           }}
         >
-          <Field label="Inspection date" required>
-            <input aria-label="Inspection date" type="date" value={inspectionDate} onChange={(event) => setInspectionDate(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.inspectionDate')} required>
+            <input aria-label={t('construction.procurement.receipts.inspectionDate')} type="date" value={inspectionDate} onChange={(event) => setInspectionDate(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Outcome" required>
-            <select aria-label="Inspection outcome" value={outcome} onChange={(event) => setOutcome(event.target.value as 'passed' | 'failed' | 'partial')} className={FIELD_CLASS}>
+          <Field label={t('construction.procurement.receipts.outcomeLabel')} required>
+            <select aria-label={t('construction.procurement.receipts.outcomeAria')} value={outcome} onChange={(event) => setOutcome(event.target.value as 'passed' | 'failed' | 'partial')} className={FIELD_CLASS}>
               <option value="passed">passed</option>
               <option value="failed">failed</option>
               <option value="partial">partial</option>
             </select>
           </Field>
-          <Field label="Quantity inspected" required hint={`Received on this line: ${formatQuantity(receiptLine.quantity_received, receiptLine.uom)}`}>
-            <input aria-label="Quantity inspected" type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.quantityInspected')} required hint={t('construction.procurement.receipts.receivedOnLine', { quantity: formatQuantity(receiptLine.quantity_received, receiptLine.uom) })}>
+            <input aria-label={t('construction.procurement.receipts.quantityInspected')} type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Method" required>
-            <input aria-label="Inspection method" value={method} onChange={(event) => setMethod(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.methodLabel')} required>
+            <input aria-label={t('construction.procurement.receipts.methodAria')} value={method} onChange={(event) => setMethod(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Certificate reference">
-            <input aria-label="Certificate reference" value={certificate} onChange={(event) => setCertificate(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.certificateReference')}>
+            <input aria-label={t('construction.procurement.receipts.certificateReference')} value={certificate} onChange={(event) => setCertificate(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Evidence reference" required>
-            <input aria-label="Inspection evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.evidenceLabel')} required>
+            <input aria-label={t('construction.procurement.receipts.inspectionEvidenceAria')} value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
           </Field>
           <div className="sm:col-span-3">
             <button
@@ -608,7 +638,7 @@ function LineInspection({
               disabled={inspectionMutation.isPending || !quantity || !method.trim() || !evidence.trim()}
               className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300"
             >
-              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden /> {inspectionMutation.isPending ? 'Recording…' : 'Record inspection'}
+              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden /> {inspectionMutation.isPending ? t('construction.procurement.receipts.recording') : t('construction.procurement.receipts.recordInspection')}
             </button>
           </div>
           {inspectionMutation.isError ? (
@@ -628,38 +658,42 @@ function LineInspection({
           }}
         >
           <h6 className="text-xs font-semibold text-amber-900">
-            Release held quantity into accepted (quarantined {formatQuantity(receiptLine.quarantined_base)} · disputed{' '}
-            {formatQuantity(receiptLine.disputed_base)})
+            {t('construction.procurement.receipts.releaseHeading', {
+              quarantined: formatQuantity(receiptLine.quarantined_base),
+              disputed: formatQuantity(receiptLine.disputed_base),
+            })}
           </h6>
           <p className="mt-1 text-[11px] text-amber-900">
-            A release needs a <strong>passed</strong> inspection of this line covering the released quantity, plus the exception authority and a
-            written reason. Rejected material can never be released, and accepted stock can never be released back out.
+            {t('construction.procurement.receipts.releasePBefore')}<strong>{t('construction.procurement.receipts.releasePStrong')}</strong>{t('construction.procurement.receipts.releasePAfter')}
           </p>
           <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Field label="From bucket" required>
-              <select aria-label="From bucket" value={fromBucket} onChange={(event) => setFromBucket(event.target.value as 'quarantined' | 'disputed')} className={FIELD_CLASS}>
+            <Field label={t('construction.procurement.receipts.fromBucket')} required>
+              <select aria-label={t('construction.procurement.receipts.fromBucket')} value={fromBucket} onChange={(event) => setFromBucket(event.target.value as 'quarantined' | 'disputed')} className={FIELD_CLASS}>
                 <option value="quarantined">quarantined</option>
                 <option value="disputed">disputed</option>
               </select>
             </Field>
-            <Field label="Quantity" required>
-              <input aria-label="Release quantity" type="number" min="0" step="any" value={releaseQuantity} onChange={(event) => setReleaseQuantity(event.target.value)} className={FIELD_CLASS} />
+            <Field label={t('construction.procurement.receipts.quantityLabel')} required>
+              <input aria-label={t('construction.procurement.receipts.releaseQuantityAria')} type="number" min="0" step="any" value={releaseQuantity} onChange={(event) => setReleaseQuantity(event.target.value)} className={FIELD_CLASS} />
             </Field>
-            <Field label="Passed inspection" required>
-              <select aria-label="Passed inspection" value={inspectionId} onChange={(event) => setInspectionId(event.target.value)} className={FIELD_CLASS}>
-                <option value="">Select an inspection…</option>
+            <Field label={t('construction.procurement.receipts.passedInspection')} required>
+              <select aria-label={t('construction.procurement.receipts.passedInspection')} value={inspectionId} onChange={(event) => setInspectionId(event.target.value)} className={FIELD_CLASS}>
+                <option value="">{t('construction.procurement.receipts.selectInspection')}</option>
                 {passedInspections.map((inspection) => (
                   <option key={inspection.id} value={inspection.id}>
-                    {formatDate(inspection.inspection_date)} · {formatQuantity(inspection.quantity_inspected)} inspected
+                    {t('construction.procurement.receipts.inspectionOption', {
+                      date: formatDate(inspection.inspection_date),
+                      quantity: formatQuantity(inspection.quantity_inspected),
+                    })}
                   </option>
                 ))}
               </select>
             </Field>
-            <Field label="Release reason" required>
-              <input aria-label="Release reason" value={releaseReason} onChange={(event) => setReleaseReason(event.target.value)} className={FIELD_CLASS} />
+            <Field label={t('construction.procurement.receipts.releaseReason')} required>
+              <input aria-label={t('construction.procurement.receipts.releaseReason')} value={releaseReason} onChange={(event) => setReleaseReason(event.target.value)} className={FIELD_CLASS} />
             </Field>
-            <Field label="Release evidence" required>
-              <input aria-label="Release evidence" value={releaseEvidence} onChange={(event) => setReleaseEvidence(event.target.value)} className={FIELD_CLASS} />
+            <Field label={t('construction.procurement.receipts.releaseEvidence')} required>
+              <input aria-label={t('construction.procurement.receipts.releaseEvidence')} value={releaseEvidence} onChange={(event) => setReleaseEvidence(event.target.value)} className={FIELD_CLASS} />
             </Field>
             <div className="flex items-end">
               <GatedButton
@@ -673,14 +707,14 @@ function LineInspection({
                 }
                 reason={
                   exceptionGate.allowed && inspectGate.allowed
-                    ? 'A quantity, a passed inspection, a reason and evidence are all required.'
+                    ? t('construction.procurement.receipts.releaseSubmitHint')
                     : `${inspectGate.reason} ${exceptionGate.reason}`.trim()
                 }
                 onClick={() => releaseMutation.mutate()}
                 disabled={releaseMutation.isPending}
               >
                 <>
-                  <Unlock className="h-3.5 w-3.5" aria-hidden /> {releaseMutation.isPending ? 'Releasing…' : 'Release into accepted'}
+                  <Unlock className="h-3.5 w-3.5" aria-hidden /> {releaseMutation.isPending ? t('construction.procurement.receipts.releasing') : t('construction.procurement.receipts.releaseIntoAccepted')}
                 </>
               </GatedButton>
             </div>
@@ -723,6 +757,7 @@ function LineCostBasis({
   onDone: (message: string) => void;
   onFailure: (failure: ConstructionFailure | null) => void;
 }) {
+  const { t } = useTranslation();
   const [quantity, setQuantity] = useState('');
   const [evidence, setEvidence] = useState('');
   const [clientKey, setClientKey] = useState(() => newIdempotencyKey());
@@ -751,11 +786,13 @@ function LineCostBasis({
       setEvidence('');
       onFailure(null);
       onDone(
-        `Cost basis recorded at ${formatMoney(String(result.unit_cost_base ?? ''), String(result.cost_currency ?? ''))} per base unit (rate ${String(
-          result.exchange_rate_used ?? '',
-        )}, discount ${String(result.discount_deducted ?? 0)}, non-recoverable tax ${String(result.nonrecoverable_tax ?? 0)}${
-          result.vat_recoverable ? ', recoverable VAT excluded' : ''
-        }).`,
+        t('construction.procurement.receipts.costBasisNotice', {
+          cost: formatMoney(String(result.unit_cost_base ?? ''), String(result.cost_currency ?? '')),
+          rate: String(result.exchange_rate_used ?? ''),
+          discount: String(result.discount_deducted ?? 0),
+          tax: String(result.nonrecoverable_tax ?? 0),
+          vatSuffix: result.vat_recoverable ? t('construction.procurement.receipts.vatExcludedSuffix') : '',
+        }),
       );
     },
   });
@@ -771,12 +808,12 @@ function LineCostBasis({
 
   return (
     <div className="mt-3 rounded-lg border border-gray-200 p-3">
-      <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Supplier bill match and cost basis</h5>
+      <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.receipts.costBasisHeading')}</h5>
 
       {allocations.length === 0 ? (
         <EmptyState
-          title="Not matched to a supplier bill line"
-          detail="Cost cannot be claimed until a bill line is matched to this receipt line (Bill matching screen)."
+          title={t('construction.procurement.receipts.unmatchedTitle')}
+          detail={t('construction.procurement.receipts.unmatchedDetail')}
         />
       ) : (
         <ul className="mt-2 space-y-1 text-xs text-gray-700">
@@ -785,11 +822,11 @@ function LineCostBasis({
             const billLine = billLinesById.get(allocation.expense_line_id);
             return (
               <li key={allocation.id}>
-                Matched {formatQuantity(allocation.bill_quantity, allocation.bill_uom)} of{' '}
+                {t('construction.procurement.receipts.allocationPrefix', { quantity: formatQuantity(allocation.bill_quantity, allocation.bill_uom) })}
                 <span className="font-mono">{bill?.expense_number ?? allocation.expense_id}</span>
-                {bill?.reference ? ` (supplier ref ${bill.reference})` : ''} · {billLine?.description ?? 'line'} · matched{' '}
-                {formatQuantity(allocation.receipt_quantity)} against the receipt
-                {allocation.is_exception ? ' · authorized exception' : ''}
+                {bill?.reference ? t('construction.procurement.receipts.allocationRefSuffix', { reference: bill.reference }) : ''}{t('construction.procurement.receipts.allocationMiddle', { description: billLine?.description ?? t('construction.procurement.receipts.allocationLineFallback') })}
+                {formatQuantity(allocation.receipt_quantity)}{t('construction.procurement.receipts.allocationSuffix')}
+                {allocation.is_exception ? t('construction.procurement.receipts.allocationExceptionSuffix') : ''}
               </li>
             );
           })}
@@ -800,10 +837,14 @@ function LineCostBasis({
         <ul className="mt-2 space-y-1 text-xs text-gray-700">
           {costBases.map((basis) => (
             <li key={basis.id}>
-              Cost basis: {formatQuantity(basis.quantity_base)} base units at{' '}
-              <strong>{formatMoney(basis.unit_cost_base, basis.cost_currency)}</strong> (rate {String(basis.exchange_rate_used)}; discount{' '}
-              {String(basis.discount_deducted)}; non-recoverable tax {String(basis.nonrecoverable_tax)}
-              {basis.vat_recoverable ? '; recoverable VAT excluded' : ''}) · evidence {basis.evidence_reference}
+              {t('construction.procurement.receipts.costBasisPrefix', { quantity: formatQuantity(basis.quantity_base) })}
+              <strong>{formatMoney(basis.unit_cost_base, basis.cost_currency)}</strong>{t('construction.procurement.receipts.costBasisMiddle', {
+                rate: String(basis.exchange_rate_used),
+                discount: String(basis.discount_deducted),
+                tax: String(basis.nonrecoverable_tax),
+                vatSuffix: basis.vat_recoverable ? t('construction.procurement.receipts.vatExcludedSuffixSemicolon') : '',
+                evidence: basis.evidence_reference,
+              })}
             </li>
           ))}
         </ul>
@@ -819,14 +860,17 @@ function LineCostBasis({
           }}
         >
           <Field
-            label="Quantity to cost"
+            label={t('construction.procurement.receipts.quantityToCost')}
             required
-            hint={`Covered so far: ${formatQuantity(progress.coveredBase)} of ${formatQuantity(progress.acceptedBase)} accepted.`}
+            hint={t('construction.procurement.receipts.coveredHint', {
+              covered: formatQuantity(progress.coveredBase),
+              accepted: formatQuantity(progress.acceptedBase),
+            })}
           >
-            <input aria-label="Quantity to cost" type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} />
+            <input aria-label={t('construction.procurement.receipts.quantityToCost')} type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Cost evidence" required hint="For example the supplier invoice page reference.">
-            <input aria-label="Cost evidence" value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.costEvidence')} required hint={t('construction.procurement.receipts.costEvidenceHint')}>
+            <input aria-label={t('construction.procurement.receipts.costEvidence')} value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
           </Field>
           <div className="flex items-end">
             <GatedButton
@@ -834,21 +878,22 @@ function LineCostBasis({
               reason={
                 gate.allowed
                   ? claimable.length === 0
-                    ? 'Every matched bill quantity on this line has already been claimed.'
-                    : 'A quantity and an evidence reference are required.'
+                    ? t('construction.procurement.receipts.allClaimed')
+                    : t('construction.procurement.receipts.costSubmitHint')
                   : gate.reason
               }
               onClick={() => mutation.mutate({ allocationId: claimable[0].id })}
               disabled={mutation.isPending}
             >
               <>
-                <Lock className="h-3.5 w-3.5" aria-hidden /> {mutation.isPending ? 'Recording…' : 'Prepare cost basis'}
+                <Lock className="h-3.5 w-3.5" aria-hidden /> {mutation.isPending ? t('construction.procurement.receipts.recording') : t('construction.procurement.receipts.prepareCostBasis')}
               </>
             </GatedButton>
           </div>
           <p className="self-center text-[11px] text-gray-500">
-            Posting policy: {policy?.movement_posting_enabled ? 'enabled' : 'disabled'}. Cost is derived by the server from the bill line: price net
-            of the stated trade discount, plus tax only when it is not recoverable, at the rate recorded for the bill date.
+            {t('construction.procurement.receipts.policyLine', {
+              state: policy?.movement_posting_enabled ? t('construction.procurement.receipts.policyEnabled') : t('construction.procurement.receipts.policyDisabled'),
+            })}
           </p>
           {mutation.isError ? (
             <div className="sm:col-span-4">
@@ -874,6 +919,7 @@ function PostReceiptButton({
   onDone: (message: string) => void;
   onFailure: (failure: ConstructionFailure | null) => void;
 }) {
+  const { t } = useTranslation();
   const gate = gateForCapability(
     capabilities,
     CONSTRUCTION_CAPABILITIES.receiptPost,
@@ -887,8 +933,8 @@ function PostReceiptButton({
       const movements = Number(result.movements ?? 0);
       onDone(
         result.idempotent || movements === 0
-          ? 'Nothing to post: every accepted quantity on this receipt has already reached stock.'
-          : `${movements} stock movement(s) posted through the shared weighted-average-cost writer. No journal entry was created.`,
+          ? t('construction.procurement.receipts.nothingToPost')
+          : t('construction.procurement.receipts.movementsPosted', { movements }),
       );
     },
     onError: (error) => {
@@ -899,12 +945,12 @@ function PostReceiptButton({
   return (
     <GatedButton
       allowed={gate.allowed}
-      reason={policyEnabled ? gate.reason : `${gate.reason} Movement posting is also disabled for this business.`}
+      reason={policyEnabled ? gate.reason : `${gate.reason} ${t('construction.procurement.receipts.policyAlsoDisabled')}`}
       onClick={() => mutation.mutate()}
       disabled={mutation.isPending}
     >
       <>
-        <Unlock className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Posting…' : 'Post stock movements'}
+        <Unlock className="h-4 w-4" aria-hidden /> {mutation.isPending ? t('construction.procurement.receipts.posting') : t('construction.procurement.receipts.postStockMovements')}
       </>
     </GatedButton>
   );

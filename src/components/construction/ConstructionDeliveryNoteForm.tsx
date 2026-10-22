@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { FileText } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import type {
@@ -66,6 +67,7 @@ export function ConstructionDeliveryNoteForm({
   onRecorded: (number: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const isException = Boolean(exception);
   const candidates = exception?.candidates ?? [];
   const [number, setNumber] = useState('');
@@ -138,26 +140,23 @@ export function ConstructionDeliveryNoteForm({
         event.preventDefault();
         mutation.mutate();
       }}
-      aria-label={isException ? 'Record duplicate delivery note exception' : 'Record delivery note'}
+      aria-label={isException ? t('construction.procurement.receipts.deliveryNoteForm.ariaException') : t('construction.procurement.receipts.deliveryNoteForm.title')}
     >
       <div className="flex flex-wrap items-center gap-2">
         <h4 className="text-sm font-semibold text-gray-900">
-          {isException ? 'Record duplicate delivery note — authorized exception' : 'Record delivery note'}
+          {isException ? t('construction.procurement.receipts.deliveryNoteForm.exceptionTitle') : t('construction.procurement.receipts.deliveryNoteForm.title')}
         </h4>
-        <StatusPill label="Evidence only" className="bg-slate-100 text-slate-700" />
-        {isException ? <StatusPill label="Exception" className="bg-amber-100 text-amber-900" /> : null}
+        <StatusPill label={t('construction.procurement.receipts.deliveryNoteForm.evidenceOnly')} className="bg-slate-100 text-slate-700" />
+        {isException ? <StatusPill label={t('construction.procurement.receipts.deliveryNoteForm.exceptionPill')} className="bg-amber-100 text-amber-900" /> : null}
       </div>
 
       {isException ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <p>
-            The supplier reused a delivery-note number that is <strong>already recorded</strong> for this supplier. This records the
-            second document as an exception against the recorded one, and needs the exception authority plus a written reason and an
-            evidence reference. The recorded note is not edited: construction procurement history is append-only.
+            {t('construction.procurement.receipts.deliveryNoteForm.excP1Before')}<strong>{t('construction.procurement.receipts.deliveryNoteForm.excP1Strong')}</strong>{t('construction.procurement.receipts.deliveryNoteForm.excP1After')}
           </p>
           <p className="mt-1">
-            It is still evidence only — the command returns <code>stock_effect: none</code> and <code>journal_effect: none</code>.
-            Nothing reaches stock until a goods receipt is recorded against the purchase order and the posting policy allows it.
+            {t('construction.procurement.receipts.deliveryNoteForm.excP2Before')}<code>stock_effect: none</code>{t('construction.procurement.receipts.deliveryNoteForm.excP2Middle')}<code>journal_effect: none</code>{t('construction.procurement.receipts.deliveryNoteForm.excP2After')}
           </p>
         </div>
       ) : (
@@ -168,20 +167,24 @@ export function ConstructionDeliveryNoteForm({
 
       {isException ? (
         <Field
-          label="Recorded delivery note this duplicates"
+          label={t('construction.procurement.receipts.deliveryNoteForm.conflictLabel')}
           required
-          hint="Only the notes recorded for this supplier can be named. The server refuses any other note."
+          hint={t('construction.procurement.receipts.deliveryNoteForm.conflictHint')}
         >
           <select
-            aria-label="Recorded delivery note this duplicates"
+            aria-label={t('construction.procurement.receipts.deliveryNoteForm.conflictLabel')}
             value={conflictId}
             onChange={(event) => setConflictId(event.target.value)}
             className={FIELD_CLASS}
           >
-            <option value="">Select the recorded delivery note…</option>
+            <option value="">{t('construction.procurement.receipts.deliveryNoteForm.selectConflict')}</option>
             {candidates.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
-                {candidate.delivery_note_number} · {candidate.document_date} · evidence {candidate.evidence_reference}
+                {t('construction.procurement.receipts.deliveryNoteForm.conflictOption', {
+                  number: candidate.delivery_note_number,
+                  date: candidate.document_date,
+                  evidence: candidate.evidence_reference,
+                })}
               </option>
             ))}
           </select>
@@ -190,22 +193,22 @@ export function ConstructionDeliveryNoteForm({
 
       {isException && conflict ? (
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-          <p className="font-medium text-gray-900">This will be recorded as an exception against:</p>
+          <p className="font-medium text-gray-900">{t('construction.procurement.receipts.deliveryNoteForm.exceptionAgainst')}</p>
           <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-4">
             <div>
-              <dt className="text-gray-500">Note number</dt>
+              <dt className="text-gray-500">{t('construction.procurement.receipts.deliveryNoteForm.noteNumber')}</dt>
               <dd className="font-mono">{conflict.delivery_note_number}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Document date</dt>
+              <dt className="text-gray-500">{t('construction.procurement.receipts.deliveryNoteForm.documentDateDt')}</dt>
               <dd>{conflict.document_date}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Recorded by</dt>
+              <dt className="text-gray-500">{t('construction.procurement.receipts.deliveryNoteForm.recordedBy')}</dt>
               <dd className="truncate">{conflict.recorded_by}</dd>
             </div>
             <div>
-              <dt className="text-gray-500">Evidence</dt>
+              <dt className="text-gray-500">{t('construction.procurement.receipts.deliveryNoteForm.evidenceDt')}</dt>
               <dd className="truncate">{conflict.evidence_reference}</dd>
             </div>
           </dl>
@@ -214,79 +217,81 @@ export function ConstructionDeliveryNoteForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {isException ? (
-          <Field label="Reused delivery note number" required hint="Taken from the recorded note being named. Read-only — it is the conflict.">
+          <Field label={t('construction.procurement.receipts.deliveryNoteForm.reusedNumber')} required hint={t('construction.procurement.receipts.deliveryNoteForm.reusedHint')}>
             <input
-              aria-label="Reused delivery note number"
+              aria-label={t('construction.procurement.receipts.deliveryNoteForm.reusedNumber')}
               value={effectiveNumber}
               readOnly
               className={`${FIELD_CLASS} bg-gray-100 font-mono text-gray-700`}
             />
           </Field>
         ) : (
-          <Field label="Supplier delivery note number" required hint="A duplicate for the same supplier is refused.">
+          <Field label={t('construction.procurement.receipts.deliveryNoteForm.numberLabel')} required hint={t('construction.procurement.receipts.deliveryNoteForm.numberHint')}>
             <input
-              aria-label="Supplier delivery note number"
+              aria-label={t('construction.procurement.receipts.deliveryNoteForm.numberLabel')}
               value={number}
               onChange={(event) => setNumber(event.target.value)}
               className={FIELD_CLASS}
             />
           </Field>
         )}
-        <Field label="Document date" required>
+        <Field label={t('construction.procurement.receipts.deliveryNoteForm.documentDate')} required>
           <input
-            aria-label="Document date"
+            aria-label={t('construction.procurement.receipts.deliveryNoteForm.documentDate')}
             type="date"
             value={documentDate}
             onChange={(event) => setDocumentDate(event.target.value)}
             className={FIELD_CLASS}
           />
         </Field>
-        <Field label="Received by (as written on the note)">
-          <input aria-label="Received by" value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.receipts.deliveryNoteForm.receivedByLabel')}>
+          <input aria-label={t('construction.procurement.receipts.deliveryNoteForm.receivedByAria')} value={receivedBy} onChange={(event) => setReceivedBy(event.target.value)} className={FIELD_CLASS} />
         </Field>
       </div>
 
-      <Field label="Evidence reference" required hint="Where the signed delivery note is filed. Required by the command.">
-        <input aria-label="Evidence reference" value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
+      <Field label={t('construction.procurement.receipts.deliveryNoteForm.evidenceLabel')} required hint={t('construction.procurement.receipts.deliveryNoteForm.evidenceHint')}>
+        <input aria-label={t('construction.procurement.receipts.deliveryNoteForm.evidenceLabel')} value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
       </Field>
 
       {isException ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Exception reason" required hint="Why the supplier's reused number is being recorded rather than refused.">
+          <Field label={t('construction.procurement.receipts.deliveryNoteForm.exceptionReason')} required hint={t('construction.procurement.receipts.deliveryNoteForm.exceptionReasonHint')}>
             <input
-              aria-label="Exception reason"
+              aria-label={t('construction.procurement.receipts.deliveryNoteForm.exceptionReason')}
               value={exceptionReason}
               onChange={(event) => setExceptionReason(event.target.value)}
               className={FIELD_CLASS}
-              placeholder="e.g. supplier reissued the same number for a second delivery"
+              placeholder={t('construction.procurement.receipts.deliveryNoteForm.exceptionReasonPlaceholder')}
             />
           </Field>
-          <Field label="Exception evidence" required hint="The document that supports the exception — a supplier e-mail, a reissued note, a memo.">
+          <Field label={t('construction.procurement.receipts.deliveryNoteForm.exceptionEvidence')} required hint={t('construction.procurement.receipts.deliveryNoteForm.exceptionEvidenceHint')}>
             <input
-              aria-label="Exception evidence"
+              aria-label={t('construction.procurement.receipts.deliveryNoteForm.exceptionEvidence')}
               value={exceptionEvidence}
               onChange={(event) => setExceptionEvidence(event.target.value)}
               className={FIELD_CLASS}
-              placeholder="e.g. supplier e-mail thread 2026-10-16"
+              placeholder={t('construction.procurement.receipts.deliveryNoteForm.exceptionEvidencePlaceholder')}
             />
           </Field>
         </div>
       ) : null}
 
       <div className="space-y-2">
-        <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500">Declared quantities</h5>
+        <h5 className="text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.receipts.deliveryNoteForm.declaredQuantities')}</h5>
         {existingNotes.length > 0 ? (
           <p className="text-xs text-gray-500">
-            Already recorded against this order: {existingNotes.map((note) => note.delivery_note_number).join(', ')}
+            {t('construction.procurement.receipts.deliveryNoteForm.alreadyRecorded', {
+              list: existingNotes.map((note) => note.delivery_note_number).join(', '),
+            })}
           </p>
         ) : null}
         <table className="min-w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-              <th className="px-2 py-1">Product</th>
-              <th className="px-2 py-1">Unit</th>
-              <th className="px-2 py-1 text-right">Ordered</th>
-              <th className="px-2 py-1">Declared on the note</th>
+              <th className="px-2 py-1">{t('construction.procurement.receipts.deliveryNoteForm.thProduct')}</th>
+              <th className="px-2 py-1">{t('construction.procurement.receipts.deliveryNoteForm.thUnit')}</th>
+              <th className="px-2 py-1 text-right">{t('construction.procurement.receipts.deliveryNoteForm.thOrdered')}</th>
+              <th className="px-2 py-1">{t('construction.procurement.receipts.deliveryNoteForm.thDeclared')}</th>
             </tr>
           </thead>
           <tbody>
@@ -297,14 +302,14 @@ export function ConstructionDeliveryNoteForm({
                 <td className="px-2 py-2 text-right text-gray-700">{String(line.quantity_ordered)}</td>
                 <td className="px-2 py-2">
                   <input
-                    aria-label={`Declared quantity for line ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.deliveryNoteForm.declaredAria', { line: line.line_number })}
                     type="number"
                     min="0"
                     step="any"
                     value={quantities[line.id] ?? ''}
                     onChange={(event) => setQuantities((current) => ({ ...current, [line.id]: event.target.value }))}
                     className={`${FIELD_CLASS} mt-0 w-32`}
-                    placeholder="not declared"
+                    placeholder={t('construction.procurement.receipts.deliveryNoteForm.notDeclared')}
                   />
                 </td>
               </tr>
@@ -313,8 +318,8 @@ export function ConstructionDeliveryNoteForm({
         </table>
       </div>
 
-      <Field label="Notes">
-        <textarea aria-label="Delivery note notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} className={FIELD_CLASS} />
+      <Field label={t('construction.procurement.receipts.deliveryNoteForm.notesLabel')}>
+        <textarea aria-label={t('construction.procurement.receipts.deliveryNoteForm.notesAria')} value={notes} onChange={(event) => setNotes(event.target.value)} rows={2} className={FIELD_CLASS} />
       </Field>
 
       {mutation.isError ? <FailureBanner failure={describeConstructionFailure(mutation.error)} /> : null}
@@ -326,16 +331,20 @@ export function ConstructionDeliveryNoteForm({
           className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
         >
           <FileText className="h-4 w-4" aria-hidden />{' '}
-          {mutation.isPending ? 'Recording…' : isException ? 'Record duplicate note as exception' : 'Record delivery note'}
+          {mutation.isPending
+            ? t('construction.procurement.receipts.deliveryNoteForm.recording')
+            : isException
+              ? t('construction.procurement.receipts.deliveryNoteForm.recordException')
+              : t('construction.procurement.receipts.deliveryNoteForm.title')}
         </button>
         <button type="button" onClick={onCancel} className="text-sm text-gray-600 hover:text-gray-900">
-          Cancel
+          {t('construction.procurement.shared.cancel')}
         </button>
         {!canSubmit ? (
           <span className="text-xs text-gray-500">
             {isException
-              ? 'The recorded note it duplicates, an exception reason, an exception evidence reference, the note evidence reference and at least one declared quantity are required.'
-              : 'A note number, an evidence reference and at least one declared quantity are required.'}
+              ? t('construction.procurement.receipts.deliveryNoteForm.exceptionSubmitHint')
+              : t('construction.procurement.receipts.deliveryNoteForm.submitHint')}
           </span>
         ) : null}
       </div>
