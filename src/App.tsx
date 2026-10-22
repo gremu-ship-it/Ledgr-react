@@ -105,6 +105,7 @@ const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPag
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
 const TransfersPage = lazyPage(() => import('@/pages/TransfersPage'), 'TransfersPage');
 const BranchesPage = lazyPage(() => import('@/pages/BranchesPage'), 'BranchesPage');
+const LocationsPage = lazyPage(() => import('@/pages/LocationsPage'), 'LocationsPage');
 const DepartmentsPage = lazyPage(() => import('@/pages/DepartmentsPage'), 'DepartmentsPage');
 const PeriodManagementPage = lazyPage(() => import('@/pages/PeriodManagementPage'), 'PeriodManagementPage');
 const JournalsPage = lazyPage(() => import('@/pages/JournalsPage'), 'JournalsPage');
@@ -479,6 +480,11 @@ function App() {
                   <Route path="/branches" element={
                     <PlanGate capability="accounting_organisation" featureName="Branches">
                       <BranchesPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/locations" element={
+                    <PlanGate capability="accounting_organisation" featureName="Locations">
+                      <LocationsPage />
                     </PlanGate>
                   } />
                   <Route path="/departments" element={

@@ -284,6 +284,7 @@ describe('construction vertical navigation cleanup', () => {
         'navigation.items.products': 'navigation.items.materials',
         'navigation.items.warehouse': 'navigation.items.siteStores',
         'navigation.items.transfers': 'navigation.items.materialTransfers',
+        'navigation.items.locations': 'navigation.items.sites',
       });
       // Non-construction resolves to itself; unknown keys pass through.
       expect(resolveNavLabelKey('navigation.items.products', false)).toBe('navigation.items.products');

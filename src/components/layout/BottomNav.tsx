@@ -20,6 +20,7 @@ import {
   LogOut,
   Warehouse,
   ArrowLeftRight,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -67,6 +68,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
   { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, tone: 'info' },
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
+  { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, tone: 'brand' },
   { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },

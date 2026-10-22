@@ -16,6 +16,7 @@ import {
 import { repos } from '@/lib/repositories';
 import { supabase } from '@/lib/supabase';
 import { useBusinessProfile } from '@/hooks/useBusinessProfile';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useLocationTypes, type LocationType } from '@/hooks/useLocationTypes';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useUsage } from '@/hooks/useUsage';
@@ -28,11 +29,12 @@ import type {
 } from '@/dal/repositories/LocationRepository';
 
 /**
- * Settings → Locations (P2-1): the master-data CRUD for inventory_locations
- * that the construction org audit found missing. Before this tab, locations
- * could only be born as side effects (branch pairing, provisioning RPCs,
- * project-site linking) and the Warehouse page pointed users at a tab that
- * did not exist.
+ * Organisation → Locations (P2-1, moved out of the Settings tabs into the
+ * `/locations` route and labelled "Sites" in the construction/manufacturing
+ * vocabulary): the master-data CRUD for inventory_locations that the
+ * construction org audit found missing. Before P2-1, locations could only be
+ * born as side effects (branch pairing, provisioning RPCs, project-site
+ * linking) and the Warehouse page pointed users at a tab that did not exist.
  *
  * Authority: every write goes through LocationRepository under the EXISTING
  * role-aware RLS tier — member read, writer insert/update, admin delete. No
@@ -118,11 +120,16 @@ function LocationsManager({ businessId }: { businessId: string }) {
   const queryClient = useQueryClient();
   const { canWrite } = usePermissions();
   const { profile } = useBusinessProfile();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const operatingModels = useMemo(
     () => profile?.operating_models ?? [],
     [profile?.operating_models],
   );
   const hasConstruction = operatingModels.includes('CONSTRUCTION');
+  // Page-header vocabulary follows the nav label override (capability-based,
+  // so it matches the sidebar's "Sites" exactly, overrides included).
+  const sitesVocabulary = isOrgCapabilityEnabled('construction')
+    || isOrgCapabilityEnabled('manufacturing');
 
   const [alert, setAlert] = useState<Alert | null>(null);
   const [formTarget, setFormTarget] = useState<FormTarget>(null);
@@ -235,8 +242,8 @@ function LocationsManager({ businessId }: { businessId: string }) {
     <div data-testid="locations-tab">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-gray-900">{t(`${k}.title`)}</h2>
-          <p className="mt-1 text-sm text-gray-500">{t(`${k}.description`)}</p>
+          <h2 className="text-base font-semibold text-gray-900">{t(sitesVocabulary ? `${k}.sitesTitle` : `${k}.title`)}</h2>
+          <p className="mt-1 text-sm text-gray-500">{t(sitesVocabulary ? `${k}.sitesDescription` : `${k}.description`)}</p>
         </div>
         {canWrite ? (
           <button

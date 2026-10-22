@@ -111,6 +111,8 @@
       "auditLog": "Audit Log",
       "contacts": "Contacts",
       "branches": "Branches",
+      "locations": "Locations",
+      "sites": "Sites",
       "departments": "Departments",
       "constructionWorkspace": "Construction",
       "manufacturingWorkspace": "Manufacturing",
@@ -156,9 +158,10 @@
   },
   "settings": {
     "locations": {
-      "tabTitle": "Locations",
       "title": "Inventory Locations",
       "description": "Manage your warehouses, stores, and site locations.",
+      "sitesTitle": "Sites",
+      "sitesDescription": "Manage your sites, stores, and yards.",
       "addLocation": "Add location",
       "editLocation": "Edit location",
       "name": "Name",
