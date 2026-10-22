@@ -114,7 +114,7 @@ function ReceiveStockModal({
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               {t('pages.inventory.noLocationsMessage')}{' '}
               <Link
-                to="/settings?tab=locations"
+                to="/locations"
                 className="font-semibold underline hover:text-amber-900"
               >
                 {t('pages.inventory.goToLocations')}

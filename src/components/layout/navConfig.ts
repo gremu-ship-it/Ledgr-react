@@ -23,6 +23,7 @@ import {
   Building2,
   ShoppingBag,
   Factory,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -41,6 +42,14 @@ export interface NavItemConfig {
   /** For authenticated, memory-only routes that expose no role-protected server data. */
   allowAllAuthenticatedRoles?: boolean;
   requiresOrgCapability?: OrganisationCapability;
+  /**
+   * Pass-1 removal for the sites vocabulary: a pure construction or
+   * manufacturing business manages its branch mirrors under Organisation →
+   * Sites/Locations, so the Branches surface is absent for it (never locked).
+   * A business that also runs a retail-family model (RETAIL / WHOLESALE /
+   * PRODUCT_SALES) keeps Branches — see `sitesVocabularyReplacesBranches`.
+   */
+  hiddenWhenSitesReplaceBranches?: boolean;
   /**
    * Set by `visibleSectionsFor`, never by the static configuration. True when
    * the business has the right type (pass 1 kept the item) but its plan does not
@@ -144,7 +153,8 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.organisation',
     items: [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
-      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth' },
+      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', hiddenWhenSitesReplaceBranches: true },
+      { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth' },
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth' },
     ],
   },
@@ -193,7 +203,38 @@ export const CONSTRUCTION_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
   'navigation.items.products': 'navigation.items.materials',
   'navigation.items.warehouse': 'navigation.items.siteStores',
   'navigation.items.transfers': 'navigation.items.materialTransfers',
+  // A construction business runs sites, and a manufacturer runs its factory
+  // and stores as sites too, so the locations master-data entry reads in the
+  // same vocabulary ("Sites") for both — one shared table, no drift.
+  'navigation.items.locations': 'navigation.items.sites',
 };
+
+/**
+ * Operating models whose daily surface is the retail till and its branch
+ * scoping. When any of them is selected, branch management stays visible even
+ * if a sites-vocabulary vertical is also on (a Retail + Construction business
+ * keeps both workflows, exactly as it keeps one Materials entry).
+ */
+export const RETAIL_FAMILY_MODELS: ReadonlySet<string> =
+  new Set(['RETAIL', 'WHOLESALE', 'PRODUCT_SALES']);
+
+/**
+ * True when the Sites vocabulary replaces branch management for a business:
+ * construction or manufacturing is enabled AND no retail-family operating
+ * model is selected. The Branches nav item is then REMOVED (absent, not
+ * locked) and /branches redirects to /locations; the branch-mirror locations
+ * ("Main Site", "Main Factory") stay manageable there through the existing
+ * mirror-guarded name sync in Branch/LocationRepository.
+ */
+export function sitesVocabularyReplacesBranches(
+  isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
+  operatingModels?: readonly string[] | null,
+): boolean {
+  const sitesVocabulary = isOrgCapabilityEnabled('construction')
+    || isOrgCapabilityEnabled('manufacturing');
+  if (!sitesVocabulary) return false;
+  return !(operatingModels ?? []).some((model) => RETAIL_FAMILY_MODELS.has(model));
+}
 
 /** A manufacturing business uses the same materials vocabulary as construction. */
 export const MANUFACTURING_LABEL_OVERRIDES: Readonly<Record<string, string>> =
@@ -233,8 +274,10 @@ export function navLabelResolver(
  *
  * Two gates, deliberately with different rendering:
  *
- *   Pass 1 — business type (`requiresOrgCapability`), plus the partner and role
- *   reachability gates. These REMOVE the item. A business must never see a
+ *   Pass 1 — business type (`requiresOrgCapability`), the sites-vocabulary rule
+ *   (`hiddenWhenSitesReplaceBranches`: a pure construction/manufacturing
+ *   business manages branch mirrors under Sites and never sees Branches), plus
+ *   the partner and role reachability gates. These REMOVE the item. A business must never see a
  *   surface that belongs to a different line of business: no locked icon, no
  *   placeholder, no trace. A role that cannot open a route gets no link to it.
  *
@@ -261,14 +304,17 @@ export function visibleSectionsFor(
   role: string | null | undefined,
   isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
   currentTier?: PlanTier,
+  operatingModels?: readonly string[] | null,
 ): NavSectionConfig[] {
   const resolveLabelKey = navLabelResolver(isOrgCapabilityEnabled);
+  const sitesReplaceBranches = sitesVocabularyReplacesBranches(isOrgCapabilityEnabled, operatingModels);
 
   return NAV_SECTIONS
     .map((section) => {
       // Pass 1 — remove. Nothing plan-related is decided here.
       const reachable = section.items.filter((item) => {
         if (item.requiresOrgCapability && !isOrgCapabilityEnabled(item.requiresOrgCapability)) return false;
+        if (item.hiddenWhenSitesReplaceBranches && sitesReplaceBranches) return false;
         if (item.partnerFeature && !isFeatureEnabled(item.partnerFeature)) return false;
         if (role && !item.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, item.path)) return false;
         return true;

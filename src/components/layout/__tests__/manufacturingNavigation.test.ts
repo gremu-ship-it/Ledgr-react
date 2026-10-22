@@ -157,6 +157,7 @@ describe('manufacturing label vocabulary', () => {
       'navigation.items.products': 'navigation.items.materials',
       'navigation.items.warehouse': 'navigation.items.siteStores',
       'navigation.items.transfers': 'navigation.items.materialTransfers',
+      'navigation.items.locations': 'navigation.items.sites',
     });
     expect(MANUFACTURING_LABEL_OVERRIDES['navigation.items.products'])
       .toBe(MANUFACTURING_LABEL_OVERRIDES['navigation.items.products']);

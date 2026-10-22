@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { DemoNotice } from '@/components/demo/DemoNotice';
@@ -24,7 +24,6 @@ import {
   ExternalLink,
   Key,
   LogOut,
-  MapPin,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -35,7 +34,6 @@ import { useCookieConsent } from '@/lib/cookieConsent';
 import { DataExportButton } from '@/components/DataExportButton';
 import { DeleteAccountSection } from '@/components/DeleteAccountSection';
 import { InactivityTimeoutSetting } from '@/components/settings/InactivityTimeoutSetting';
-import { LocationsTab } from '@/components/settings/LocationsTab';
 import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BusinessDataBackup } from '@/components/settings/BusinessDataBackup';
 import { BillingTab } from '@/components/billing/BillingTab';
@@ -118,8 +116,8 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'locations' | 'privacy' | 'api' | 'billing' | 'appearance';
-const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'locations', 'privacy', 'api', 'billing', 'appearance'];
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance';
+const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance'];
 
 // Legacy tabs carry hardcoded labels; new tabs MUST provide `labelKey` and
 // resolve through i18n (the renderer prefers labelKey when present).
@@ -129,7 +127,6 @@ const TABS: { value: Tab; label: string; labelKey?: string; icon: typeof Buildin
   { value: 'profile', label: 'User Profile', icon: User },
   { value: 'security', label: 'Security', icon: Shield },
   { value: 'team', label: 'Team Members', icon: Users },
-  { value: 'locations', label: 'Locations', labelKey: 'settings.locations.tabTitle', icon: MapPin },
   { value: 'api', label: 'API & Webhooks', icon: Key },
   { value: 'billing', label: 'Billing & Plans', icon: DollarSign },
   { value: 'appearance', label: 'Appearance', icon: Eye },
@@ -2194,6 +2191,13 @@ export function SettingsPage() {
     }
   }
 
+  // Locations moved out of Settings into the Organisation nav (/locations,
+  // labelled "Sites" in the construction/manufacturing vocabulary). Old links
+  // and bookmarks keep working.
+  if (searchParams.get('tab') === 'locations') {
+    return <Navigate to="/locations" replace />;
+  }
+
   if (!businessId) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -2268,9 +2272,6 @@ export function SettingsPage() {
                 {activeTab === 'profile' && <UserProfileTab />}
                 {activeTab === 'security' && <SecurityTab />}
                 {activeTab === 'team' && <TeamManagementPage />}
-                {activeTab === 'locations' && business && (
-                  <LocationsTab businessId={business.id} />
-                )}
                 {activeTab === 'api' && (
                   <PlanGate capability="webhooks" featureName="API & Webhooks" fallback="lock">
                     <WebhookSettings />

@@ -162,7 +162,7 @@ export function MobileDashboard() {
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
-  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled, planTier)
+  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled, planTier, currentBusiness?.business?.operating_models ?? null)
     .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
   const [showExpense, setShowExpense] = useState(false);

@@ -22,12 +22,13 @@ export function Sidebar() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
   const role = useAppStore((s) => s.currentBusiness?.role);
+  const operatingModels = useAppStore((s) => s.currentBusiness?.business?.operating_models ?? null);
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
   const { isFeatureEnabled } = usePartner();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const isPlatformAdmin = useIsPlatformAdmin();
-  const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier);
+  const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier, operatingModels);
   // `visibleSectionsFor` already rewrote each item's labelKey for a
   // construction business; the resolver keeps the collapsed-rail tooltip and
   // the upgrade prompt on the same vocabulary as the link text.
