@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 import { repos } from '@/lib/repositories';
 import {
@@ -31,6 +32,7 @@ export function ConstructionOverviewSection({
   businessId: string;
   capabilities: string[];
 }) {
+  const { t } = useTranslation();
   const overviewQuery = useQuery({
     queryKey: ['construction', 'overview', businessId],
     queryFn: async () => {
@@ -45,13 +47,16 @@ export function ConstructionOverviewSection({
     },
   });
 
-  if (overviewQuery.isLoading) return <LoadingBlock label="Loading the construction overview…" />;
+  if (overviewQuery.isLoading) return <LoadingBlock label={t('construction.procurement.overview.loading')} />;
   if (overviewQuery.isError) {
     return (
       <ErrorBanner
-        message={`The construction overview could not be loaded: ${
-          overviewQuery.error instanceof Error ? overviewQuery.error.message : 'unknown error'
-        }`}
+        message={t('construction.procurement.overview.loadError', {
+          detail:
+            overviewQuery.error instanceof Error
+              ? overviewQuery.error.message
+              : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
@@ -69,59 +74,67 @@ export function ConstructionOverviewSection({
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric
-          label="Open holds"
+          label={t('construction.procurement.overview.openHolds')}
           value={String(numbers.holdsOpen)}
           detail={
             numbers.holdsOpen > 0
-              ? `${formatQuantity(numbers.heldQuantityBase)} base units held · oldest ${numbers.oldestHoldDays} day(s)`
-              : 'No rejected, quarantined or disputed quantity is held.'
+              ? t('construction.procurement.overview.holdsDetail', {
+                  quantity: formatQuantity(numbers.heldQuantityBase),
+                  days: numbers.oldestHoldDays,
+                })
+              : t('construction.procurement.overview.noHoldsDetail')
           }
           tone={numbers.holdsOpen > 0 ? 'attention' : 'default'}
         />
         <Metric
-          label="Accepted, awaiting cost basis"
+          label={t('construction.procurement.overview.awaitingCostBasisLabel')}
           value={String(numbers.acceptedAwaitingCostBasisLines)}
-          detail="Receipt lines whose accepted quantity has no evidenced cost basis yet. Posting is refused for these."
+          detail={t('construction.procurement.overview.awaitingCostBasisDetail')}
           tone={numbers.acceptedAwaitingCostBasisLines > 0 ? 'attention' : 'default'}
         />
         <Metric
-          label="Accepted, not yet in stock"
+          label={t('construction.procurement.overview.awaitingPostingLabel')}
           value={String(numbers.acceptedAwaitingPostingLines)}
-          detail={`${formatQuantity(numbers.acceptedAwaitingPostingBase)} base units outstanding across all receipts.`}
+          detail={t('construction.procurement.overview.awaitingPostingDetail', {
+            quantity: formatQuantity(numbers.acceptedAwaitingPostingBase),
+          })}
         />
         <Metric
-          label="Outstanding supplier claims"
+          label={t('construction.procurement.overview.claimsLabel')}
           value={formatQuantity(numbers.outstandingClaimsBase)}
-          detail="Rejected, quarantined and disputed quantities the supplier still has to settle."
+          detail={t('construction.procurement.overview.claimsDetail')}
         />
       </div>
 
       <SectionCard
-        title="Receipt posting policy"
-        description="The only switch that allows a goods receipt to move stock. It is off unless an approver has recorded it, and general-ledger posting is structurally disabled."
+        title={t('construction.procurement.overview.policyTitle')}
+        description={t('construction.procurement.overview.policyDescription')}
       >
         <div className="flex flex-wrap items-center gap-3">
           <StatusPill
-            label={postingEnabled ? 'Movement posting enabled' : 'Movement posting disabled'}
+            label={postingEnabled ? t('construction.procurement.overview.movementEnabled') : t('construction.procurement.overview.movementDisabled')}
             className={postingEnabled ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}
           />
-          <StatusPill label="GL posting: not approved" className="bg-slate-100 text-slate-700" />
+          <StatusPill label={t('construction.procurement.overview.glNotApproved')} className="bg-slate-100 text-slate-700" />
           <span className="text-xs text-gray-500">
             {policy
-              ? `Recorded ${formatDate(policy.approved_at ?? policy.updated_at)}${policy.cost_basis_source ? ` · cost basis source: ${policy.cost_basis_source}` : ''}`
-              : 'No policy row exists for this business.'}
+              ? `${t('construction.procurement.overview.policyRecorded', { date: formatDate(policy.approved_at ?? policy.updated_at) })}${policy.cost_basis_source ? t('construction.procurement.overview.policyCostBasisSource', { source: policy.cost_basis_source }) : ''}`
+              : t('construction.procurement.overview.noPolicyRow')}
           </span>
         </div>
         {policy?.approved_reason ? (
-          <p className="mt-2 text-xs text-gray-600">Approved reason: {policy.approved_reason}</p>
+          <p className="mt-2 text-xs text-gray-600">{t('construction.procurement.overview.approvedReason', { reason: policy.approved_reason })}</p>
         ) : null}
         {!postingEnabled ? (
           <div className="mt-3">
             <InfoNote>
               <p>
-                Receipts can be recorded, inspected and costed while posting is disabled. Their stock movements are refused by the
-                database until an approver holding “{capabilities.length > 0 ? 'Approve the receipt posting policy' : 'Approve the receipt posting policy'}”
-                records the policy.
+                {t('construction.procurement.overview.policyDisabledNote', {
+                  capability:
+                    capabilities.length > 0
+                      ? t('construction.procurement.overview.approvePolicyCapability')
+                      : t('construction.procurement.overview.approvePolicyCapability'),
+                })}
               </p>
             </InfoNote>
           </div>
@@ -129,23 +142,23 @@ export function ConstructionOverviewSection({
       </SectionCard>
 
       <SectionCard
-        title="Project and site references"
-        description="Sites are registered with an explicit site code, project reference, branch and inventory location. Consumption is always booked against this reference."
+        title={t('construction.procurement.overview.sitesTitle')}
+        description={t('construction.procurement.overview.sitesDescription')}
       >
         {sites.length === 0 ? (
           <EmptyState
-            title="No construction sites registered yet"
-            detail="Register a site (setup screen) before raising purchase orders or issuing material."
+            title={t('construction.procurement.overview.noSitesTitle')}
+            detail={t('construction.procurement.overview.noSitesDetail')}
           />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Site</th>
-                  <th className="px-2 py-2">Project reference</th>
-                  <th className="px-2 py-2">Status</th>
-                  <th className="px-2 py-2">Material issued</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thSite')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thProjectReference')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thStatus')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thMaterialIssued')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -160,14 +173,18 @@ export function ConstructionOverviewSection({
                       <td className="px-2 py-2 font-mono text-xs text-gray-700">{site.project_ref}</td>
                       <td className="px-2 py-2">
                         <StatusPill
-                          label={site.is_active ? 'Active' : 'Inactive'}
+                          label={site.is_active ? t('construction.procurement.overview.statusActive') : t('construction.procurement.overview.statusInactive')}
                           className={site.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}
                         />
                       </td>
                       <td className="px-2 py-2 text-gray-700">
                         {cost
-                          ? `${formatMoney(cost.material_cost, cost.currency)} · ${formatQuantity(cost.quantity_base)} base units in ${cost.issue_count} issue(s)`
-                          : 'No issue recorded'}
+                          ? t('construction.procurement.overview.materialIssuedDetail', {
+                              amount: formatMoney(cost.material_cost, cost.currency),
+                              quantity: formatQuantity(cost.quantity_base),
+                              issues: cost.issue_count,
+                            })
+                          : t('construction.procurement.overview.noIssueRecorded')}
                       </td>
                     </tr>
                   );
@@ -179,9 +196,9 @@ export function ConstructionOverviewSection({
       </SectionCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <SectionCard title="Purchase orders by status" description="Procurement documents only — a purchase order authorizes ordering, never stock.">
+        <SectionCard title={t('construction.procurement.overview.poByStatusTitle')} description={t('construction.procurement.overview.poByStatusDescription')}>
           {purchaseOrders.length === 0 ? (
-            <EmptyState title="No purchase orders yet" detail="Create one from the Purchase orders screen." />
+            <EmptyState title={t('construction.procurement.overview.noPosTitle')} detail={t('construction.procurement.overview.noPosDetail')} />
           ) : (
             <div className="flex flex-wrap gap-3">
               {(['draft', 'authorized', 'cancelled'] as const).map((status) => (
@@ -191,29 +208,29 @@ export function ConstructionOverviewSection({
                 </div>
               ))}
               <Link to="/construction/purchase-orders" className="self-center text-sm font-medium text-brand-700 hover:underline">
-                Open purchase orders →
+                {t('construction.procurement.overview.openPurchaseOrders')}
               </Link>
             </div>
           )}
         </SectionCard>
 
         <SectionCard
-          title="Receipts awaiting inspection or acceptance"
-          description="Held quantities are outside inventory until an inspection passes; only accepted quantities are eligible for stock."
+          title={t('construction.procurement.overview.holdsTitle')}
+          description={t('construction.procurement.overview.holdsDescription')}
         >
           {openItems.open_holds.length === 0 ? (
-            <EmptyState title="Nothing is held" detail="No rejected, quarantined or disputed quantity is waiting on a decision." />
+            <EmptyState title={t('construction.procurement.overview.nothingHeldTitle')} detail={t('construction.procurement.overview.nothingHeldDetail')} />
           ) : (
             <ul className="space-y-2">
               {openItems.open_holds.map((hold, index) => (
                 <li key={`${hold.hold_type}-${index}`} className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusPill label={hold.hold_type} className="bg-amber-100 text-amber-800" />
-                    <span className="font-medium text-gray-900">{formatQuantity(hold.quantity_base)} base units</span>
-                    <span className="text-xs text-gray-600">{hold.age_days} day(s) old</span>
+                    <span className="font-medium text-gray-900">{t('construction.procurement.overview.baseUnits', { quantity: formatQuantity(hold.quantity_base) })}</span>
+                    <span className="text-xs text-gray-600">{t('construction.procurement.overview.daysOld', { days: hold.age_days })}</span>
                   </div>
                   <p className="mt-1 text-xs text-gray-700">{hold.reason}</p>
-                  <p className="text-[11px] text-gray-500">Evidence: {hold.evidence_reference}</p>
+                  <p className="text-[11px] text-gray-500">{t('construction.procurement.overview.evidencePrefix', { reference: hold.evidence_reference })}</p>
                 </li>
               ))}
             </ul>
@@ -223,25 +240,28 @@ export function ConstructionOverviewSection({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <SectionCard
-          title="Accepted quantities awaiting a cost basis"
-          description="Until an evidenced cost basis exists for every accepted unit, the receipt cannot be posted."
+          title={t('construction.procurement.overview.costBasisTitle')}
+          description={t('construction.procurement.overview.costBasisDescription')}
           actions={
             <Link to="/construction/receipts" className="text-sm font-medium text-brand-700 hover:underline">
-              Review receipts →
+              {t('construction.procurement.overview.reviewReceipts')}
             </Link>
           }
         >
           {openItems.awaiting_cost_basis.length === 0 ? (
-            <EmptyState title="Nothing outstanding" detail="Every accepted quantity already has an evidenced cost basis." />
+            <EmptyState title={t('construction.procurement.overview.nothingOutstandingTitle')} detail={t('construction.procurement.overview.allCostBasedDetail')} />
           ) : (
             <ul className="space-y-2">
               {openItems.awaiting_cost_basis.map((row) => (
                 <li key={`${row.grn_number}-${row.line_number}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
                   <span className="font-mono text-xs text-gray-700">
-                    {row.grn_number} · line {row.line_number}
+                    {t('construction.procurement.overview.grnLine', { grn: row.grn_number, line: row.line_number })}
                   </span>
                   <span className="text-gray-700">
-                    {formatQuantity(row.covered_base)} of {formatQuantity(row.accepted_base)} base units costed
+                    {t('construction.procurement.overview.costedProgress', {
+                      covered: formatQuantity(row.covered_base),
+                      accepted: formatQuantity(row.accepted_base),
+                    })}
                   </span>
                 </li>
               ))}
@@ -250,24 +270,26 @@ export function ConstructionOverviewSection({
         </SectionCard>
 
         <SectionCard
-          title="Accepted quantities not yet in stock"
+          title={t('construction.procurement.overview.postingTitle')}
           description={
             postingEnabled
-              ? 'Posting is enabled for this business; these receipts will move stock once their cost basis is complete.'
-              : 'Posting is disabled for this business, so these receipts stay out of stock even when fully costed.'
+              ? t('construction.procurement.overview.postingDescriptionEnabled')
+              : t('construction.procurement.overview.postingDescriptionDisabled')
           }
         >
           {openItems.awaiting_posting.length === 0 ? (
-            <EmptyState title="Nothing outstanding" detail="Every accepted quantity has reached stock." />
+            <EmptyState title={t('construction.procurement.overview.nothingOutstandingTitle')} detail={t('construction.procurement.overview.allPostedDetail')} />
           ) : (
             <ul className="space-y-2">
               {openItems.awaiting_posting.map((row) => (
                 <li key={`${row.grn_number}-${row.line_number}`} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
                   <span className="font-mono text-xs text-gray-700">
-                    {row.grn_number} · line {row.line_number}
+                    {t('construction.procurement.overview.grnLine', { grn: row.grn_number, line: row.line_number })}
                   </span>
                   <span className="text-gray-700">
-                    {formatQuantity(Number(row.accepted_base) - Number(row.quantity_posted_base))} base units outstanding
+                    {t('construction.procurement.overview.outstandingBaseUnits', {
+                      quantity: formatQuantity(Number(row.accepted_base) - Number(row.quantity_posted_base)),
+                    })}
                   </span>
                 </li>
               ))}
@@ -277,23 +299,23 @@ export function ConstructionOverviewSection({
       </div>
 
       <SectionCard
-        title="Outstanding supplier claims"
-        description="Rejected material never entered inventory, and quarantined or disputed material is not yet the entity's. Both are listed here for period close."
+        title={t('construction.procurement.overview.claimsTitle')}
+        description={t('construction.procurement.overview.claimsDescription')}
       >
         {openItems.outstanding_supplier_claims.length === 0 ? (
-          <EmptyState title="No outstanding claims" detail="No rejected, quarantined or disputed quantity is open with a supplier." />
+          <EmptyState title={t('construction.procurement.overview.noClaimsTitle')} detail={t('construction.procurement.overview.noClaimsDetail')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Supplier</th>
-                  <th className="px-2 py-2">Receipt date</th>
-                  <th className="px-2 py-2">Age</th>
-                  <th className="px-2 py-2 text-right">Rejected</th>
-                  <th className="px-2 py-2 text-right">Quarantined</th>
-                  <th className="px-2 py-2 text-right">Disputed</th>
-                  <th className="px-2 py-2 text-right">Outstanding</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thSupplier')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thReceiptDate')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.overview.thAge')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.overview.thRejected')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.overview.thQuarantined')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.overview.thDisputed')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.overview.thOutstanding')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -301,7 +323,7 @@ export function ConstructionOverviewSection({
                   <tr key={`${claim.supplier}-${claim.receipt_date}-${index}`} className="border-t border-gray-100">
                     <td className="px-2 py-2 text-gray-900">{claim.supplier}</td>
                     <td className="px-2 py-2 text-gray-700">{formatDate(claim.receipt_date)}</td>
-                    <td className="px-2 py-2 text-gray-700">{claim.age_days} day(s)</td>
+                    <td className="px-2 py-2 text-gray-700">{t('construction.procurement.overview.days', { days: claim.age_days })}</td>
                     <td className="px-2 py-2 text-right text-gray-700">{formatQuantity(claim.rejected_base)}</td>
                     <td className="px-2 py-2 text-right text-gray-700">{formatQuantity(claim.quarantined_base)}</td>
                     <td className="px-2 py-2 text-right text-gray-700">{formatQuantity(claim.disputed_base)}</td>
@@ -316,16 +338,16 @@ export function ConstructionOverviewSection({
 
       {numbers.blockedBills > 0 ? (
         <SectionCard
-          title="Bills blocked from receipt matching"
-          description="These bills already moved stock through the ordinary purchase path, so the construction matcher refuses them: one bill must not create two receipts."
+          title={t('construction.procurement.overview.blockedBillsTitle')}
+          description={t('construction.procurement.overview.blockedBillsDescription')}
         >
           <ul className="space-y-2">
             {openItems.blocked_bills.map((bill) => (
               <li key={bill.expense_number} className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm">
                 <span className="font-mono text-xs text-gray-700">{bill.expense_number}</span>
-                <span className="ml-2 text-gray-800">{bill.reference ?? 'no supplier reference'}</span>
+                <span className="ml-2 text-gray-800">{bill.reference ?? t('construction.procurement.overview.noSupplierReference')}</span>
                 <span className="ml-2 text-xs text-gray-600">
-                  {bill.legacy_movements} legacy stock movement(s)
+                  {t('construction.procurement.overview.legacyMovements', { movements: bill.legacy_movements })}
                 </span>
               </li>
             ))}

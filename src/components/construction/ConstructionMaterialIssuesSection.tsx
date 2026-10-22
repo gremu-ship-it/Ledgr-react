@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { PackageMinus } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import {
@@ -47,6 +48,7 @@ export function ConstructionMaterialIssuesSection({
   capabilities: string[];
   projectId?: string;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<string | null>(null);
   const [siteId, setSiteId] = useState('');
@@ -104,19 +106,22 @@ export function ConstructionMaterialIssuesSection({
       setIssuedTo('');
       queryClient.invalidateQueries({ queryKey: ['construction'] });
       setNotice(
-        `Issued ${formatQuantity(String(result.quantity_base ?? ''))} base units at ${formatMoney(
-          String(result.unit_cost_base ?? ''),
-          String(result.currency ?? ''),
-        )} per base unit (project ${String(result.project_ref ?? '')}). One outbound stock movement; no journal entry.`,
+        t('construction.procurement.materialIssues.successNotice', {
+          quantity: formatQuantity(String(result.quantity_base ?? '')),
+          cost: formatMoney(String(result.unit_cost_base ?? ''), String(result.currency ?? '')),
+          project: String(result.project_ref ?? ''),
+        }),
       );
     },
   });
 
-  if (dataQuery.isLoading) return <LoadingBlock label="Loading sites, products and stock…" />;
+  if (dataQuery.isLoading) return <LoadingBlock label={t('construction.procurement.materialIssues.loading')} />;
   if (dataQuery.isError) {
     return (
       <ErrorBanner
-        message={`Material issues could not be loaded: ${dataQuery.error instanceof Error ? dataQuery.error.message : 'unknown error'}`}
+        message={t('construction.procurement.materialIssues.loadError', {
+          detail: dataQuery.error instanceof Error ? dataQuery.error.message : t('construction.procurement.shared.unknownError'),
+        })}
       />
     );
   }
@@ -135,16 +140,15 @@ export function ConstructionMaterialIssuesSection({
       {notice ? <SuccessBanner message={notice} /> : null}
 
       <SectionCard
-        title="Issue material to a construction site"
-        description="Consumption is valued by the server at the pool weighted-average cost. You supply the site, the product, the unit and the quantity — never the cost."
+        title={t('construction.procurement.materialIssues.issueTitle')}
+        description={t('construction.procurement.materialIssues.issueDescription')}
       >
         <InfoNote>
           <p>
-            An issue is gated on the same approved policy as receipt posting. It writes one outbound stock movement and <strong>no journal
-            entry</strong>: the project-cost debit has no approved account mapping, so only the inventory side is recorded.
+            {t('construction.procurement.materialIssues.policyNoteBefore')}<strong>{t('construction.procurement.materialIssues.policyNoteStrong')}</strong>{t('construction.procurement.materialIssues.policyNoteAfter')}
           </p>
           {!postingEnabled ? (
-            <p>Movement posting is disabled for this business, so the database will refuse this issue even when the form is complete.</p>
+            <p>{t('construction.procurement.materialIssues.postingDisabledNote')}</p>
           ) : null}
         </InfoNote>
 
@@ -155,9 +159,9 @@ export function ConstructionMaterialIssuesSection({
             mutation.mutate();
           }}
         >
-          <Field label="Construction site" required hint="The site fixes the branch, inventory location and project reference.">
+          <Field label={t('construction.procurement.materialIssues.siteLabel')} required hint={t('construction.procurement.materialIssues.siteHint')}>
             <select
-              aria-label="Construction site"
+              aria-label={t('construction.procurement.materialIssues.siteLabel')}
               value={siteId}
               onChange={(event) => {
                 setSiteId(event.target.value);
@@ -165,71 +169,75 @@ export function ConstructionMaterialIssuesSection({
               }}
               className={FIELD_CLASS}
             >
-              <option value="">Select a site…</option>
+              <option value="">{t('construction.procurement.materialIssues.selectSite')}</option>
               {sites.map((site) => (
                 <option key={site.id} value={site.id}>
-                  {site.site_code} — {site.site_name} ({site.project_ref})
+                  {t('construction.procurement.materialIssues.siteOption', { code: site.site_code, name: site.site_name, projectRef: site.project_ref })}
                 </option>
               ))}
             </select>
           </Field>
-          <Field label="Product" required>
-            <select aria-label="Product" value={productId} onChange={(event) => setProductId(event.target.value)} className={FIELD_CLASS} disabled={!siteId}>
-              <option value="">Select a product…</option>
+          <Field label={t('construction.procurement.materialIssues.productLabel')} required>
+            <select aria-label={t('construction.procurement.materialIssues.productLabel')} value={productId} onChange={(event) => setProductId(event.target.value)} className={FIELD_CLASS} disabled={!siteId}>
+              <option value="">{t('construction.procurement.materialIssues.selectProduct')}</option>
               {products.map((product) => {
                 const balance = balanceRows.find((row) => row.product_id === product.id);
                 return (
                   <option key={product.id} value={product.id}>
                     {product.name}
-                    {balance ? ` — on hand ${formatQuantity(balance.quantity_on_hand)}` : ''}
+                    {balance ? t('construction.procurement.materialIssues.onHandSuffix', { quantity: formatQuantity(balance.quantity_on_hand) }) : ''}
                   </option>
                 );
               })}
             </select>
           </Field>
           <Field
-            label="Unit"
+            label={t('construction.procurement.materialIssues.unitLabel')}
             required
-            hint={productId ? `Base unit: ${String(productsById.get(productId)?.unit_of_measure ?? 'not set')}` : 'Select a product first.'}
+            hint={
+              productId
+                ? t('construction.procurement.materialIssues.baseUnitHint', {
+                    unit: String(productsById.get(productId)?.unit_of_measure ?? t('construction.procurement.materialIssues.notSet')),
+                  })
+                : t('construction.procurement.materialIssues.selectProductFirst')
+            }
           >
-            <input aria-label="Issue unit" value={uom} onChange={(event) => setUom(event.target.value.toUpperCase())} className={FIELD_CLASS} />
+            <input aria-label={t('construction.procurement.materialIssues.issueUnitAria')} value={uom} onChange={(event) => setUom(event.target.value.toUpperCase())} className={FIELD_CLASS} />
           </Field>
-          <Field label="Quantity" required>
-            <input aria-label="Issue quantity" type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.materialIssues.quantityLabel')} required>
+            <input aria-label={t('construction.procurement.materialIssues.issueQuantityAria')} type="number" min="0" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Issue date" required>
-            <input aria-label="Issue date" type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.materialIssues.issueDateLabel')} required>
+            <input aria-label={t('construction.procurement.materialIssues.issueDateLabel')} type="date" value={issueDate} onChange={(event) => setIssueDate(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Issued to" hint="For example the crew or the works supervisor.">
-            <input aria-label="Issued to" value={issuedTo} onChange={(event) => setIssuedTo(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.materialIssues.issuedToLabel')} hint={t('construction.procurement.materialIssues.issuedToHint')}>
+            <input aria-label={t('construction.procurement.materialIssues.issuedToLabel')} value={issuedTo} onChange={(event) => setIssuedTo(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Evidence reference" required hint="The signed site requisition or issue note.">
-            <input aria-label="Evidence reference" value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.materialIssues.evidenceLabel')} required hint={t('construction.procurement.materialIssues.evidenceHint')}>
+            <input aria-label={t('construction.procurement.materialIssues.evidenceLabel')} value={evidence} onChange={(event) => setEvidence(event.target.value)} className={FIELD_CLASS} />
           </Field>
 
           <div className="sm:col-span-3">
             {selectedBalance ? (
               <p className="mb-2 text-xs text-gray-600">
-                Available at {selectedSite?.site_code}: <strong>{formatQuantity(selectedBalance.quantity_on_hand)}</strong> base units · pool
-                weighted-average cost <strong>{String(selectedBalance.average_cost)}</strong>. The issue is valued at that cost and cannot exceed the
-                available quantity.
+                {t('construction.procurement.materialIssues.availablePrefix', { site: selectedSite?.site_code })}<strong>{formatQuantity(selectedBalance.quantity_on_hand)}</strong>{t('construction.procurement.materialIssues.availableMiddle')}<strong>{String(selectedBalance.average_cost)}</strong>{t('construction.procurement.materialIssues.availableSuffix')}
               </p>
             ) : productId ? (
-              <p className="mb-2 text-xs text-amber-800">No stock balance exists yet for this product at that site store.</p>
+              <p className="mb-2 text-xs text-amber-800">{t('construction.procurement.materialIssues.noStockBalance')}</p>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
               <GatedButton
                 allowed={gate.allowed && canSubmit}
-                reason={gate.allowed ? 'A site, a product, a unit, a quantity and an evidence reference are required.' : gate.reason}
+                reason={gate.allowed ? t('construction.procurement.materialIssues.requiredReason') : gate.reason}
                 disabled={mutation.isPending}
                 type="submit"
               >
                 <>
-                  <PackageMinus className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Recording…' : 'Record material issue'}
+                  <PackageMinus className="h-4 w-4" aria-hidden /> {mutation.isPending ? t('construction.procurement.materialIssues.recording') : t('construction.procurement.materialIssues.recordIssue')}
                 </>
               </GatedButton>
               {!postingEnabled ? (
-                <StatusPill label="Movement posting disabled for this business" className="bg-slate-100 text-slate-700" />
+                <StatusPill label={t('construction.procurement.materialIssues.postingDisabledPill')} className="bg-slate-100 text-slate-700" />
               ) : null}
             </div>
             {mutation.isError ? (
@@ -242,22 +250,22 @@ export function ConstructionMaterialIssuesSection({
       </SectionCard>
 
       {!projectId && <SectionCard
-        title="Project material cost"
-        description="Derived by the server from the append-only issue register, grouped by project reference. There is no stored project-cost balance."
+        title={t('construction.procurement.materialIssues.projectCostTitle')}
+        description={t('construction.procurement.materialIssues.projectCostDescription')}
       >
         {projectCost.length === 0 ? (
-          <EmptyState title="No material issued yet" />
+          <EmptyState title={t('construction.procurement.materialIssues.noMaterialIssued')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Project reference</th>
-                  <th className="px-2 py-2 text-right">Issues</th>
-                  <th className="px-2 py-2 text-right">Base quantity</th>
-                  <th className="px-2 py-2 text-right">Material cost</th>
-                  <th className="px-2 py-2">First issue</th>
-                  <th className="px-2 py-2">Last issue</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thProjectReference')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.materialIssues.thIssues')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.materialIssues.thBaseQuantity')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.materialIssues.thMaterialCost')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thFirstIssue')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thLastIssue')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -277,22 +285,22 @@ export function ConstructionMaterialIssuesSection({
         )}
       </SectionCard>}
 
-      <SectionCard title="Issued material" description="Append-only history of every issue, with the cost the server applied.">
+      <SectionCard title={t('construction.procurement.materialIssues.issuedTitle')} description={t('construction.procurement.materialIssues.issuedDescription')}>
         {issues.length === 0 ? (
-          <EmptyState title="No issues recorded" />
+          <EmptyState title={t('construction.procurement.materialIssues.noIssuesRecorded')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
-                  <th className="px-2 py-2">Date</th>
-                  <th className="px-2 py-2">Project</th>
-                  <th className="px-2 py-2">Product</th>
-                  <th className="px-2 py-2 text-right">Quantity</th>
-                  <th className="px-2 py-2 text-right">Unit cost</th>
-                  <th className="px-2 py-2 text-right">Total</th>
-                  <th className="px-2 py-2">Issued to</th>
-                  <th className="px-2 py-2">Evidence</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thDate')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thProject')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thProduct')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.materialIssues.thQuantity')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.materialIssues.thUnitCost')}</th>
+                  <th className="px-2 py-2 text-right">{t('construction.procurement.materialIssues.thTotal')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thIssuedTo')}</th>
+                  <th className="px-2 py-2">{t('construction.procurement.materialIssues.thEvidence')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -314,9 +322,9 @@ export function ConstructionMaterialIssuesSection({
         )}
       </SectionCard>
 
-      <SectionCard title="Site store balances" description="Read from the shared inventory balance table — the same table the stock commands maintain.">
+      <SectionCard title={t('construction.procurement.materialIssues.balancesTitle')} description={t('construction.procurement.materialIssues.balancesDescription')}>
         {sites.length === 0 ? (
-          <EmptyState title="No sites registered" />
+          <EmptyState title={t('construction.procurement.materialIssues.noSitesRegistered')} />
         ) : (
           <ul className="space-y-2">
             {sites.map((site) => {
@@ -327,13 +335,16 @@ export function ConstructionMaterialIssuesSection({
                   <span className="font-mono text-xs text-gray-800">{site.site_code}</span>
                   <span className="ml-2 text-gray-700">{site.site_name}</span>
                   {held.length === 0 ? (
-                    <span className="ml-2 text-xs text-gray-500">no stock on hand</span>
+                    <span className="ml-2 text-xs text-gray-500">{t('construction.procurement.materialIssues.noStockOnHand')}</span>
                   ) : (
                     <ul className="mt-1 space-y-0.5 text-xs text-gray-600">
                       {held.map((row) => (
                         <li key={row.id}>
-                          {productsById.get(row.product_id)?.name ?? row.product_id}: {formatQuantity(row.quantity_on_hand)} on hand · average cost{' '}
-                          {String(row.average_cost)}
+                          {t('construction.procurement.materialIssues.balanceLine', {
+                            product: productsById.get(row.product_id)?.name ?? row.product_id,
+                            quantity: formatQuantity(row.quantity_on_hand),
+                            cost: String(row.average_cost),
+                          })}
                         </li>
                       ))}
                     </ul>

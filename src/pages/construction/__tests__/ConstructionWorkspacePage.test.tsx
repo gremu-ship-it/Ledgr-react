@@ -17,6 +17,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
+import { i18n } from '@/i18n';
 
 const construction = vi.hoisted(() => ({
   findCapabilities: vi.fn(),
@@ -151,6 +152,7 @@ function renderWorkspace(entry = '/construction') {
 }
 
 beforeEach(() => {
+  void i18n.changeLanguage('en');
   Object.values(construction).forEach((mock) => mock.mockReset());
   construction.findCapabilities.mockResolvedValue([]);
   construction.findOpenItems.mockResolvedValue(OPEN_ITEMS);

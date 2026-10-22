@@ -18,6 +18,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
+import { i18n } from '@/i18n';
 
 const construction = vi.hoisted(() => ({
   findCapabilities: vi.fn(),
@@ -90,6 +91,7 @@ function business(id: string, name: string) {
 }
 
 beforeEach(() => {
+  void i18n.changeLanguage('en');
   Object.values(construction).forEach((mock) => mock.mockReset());
   construction.findCapabilities.mockResolvedValue(['procurement.po.manage']);
   construction.findSites.mockResolvedValue([]);

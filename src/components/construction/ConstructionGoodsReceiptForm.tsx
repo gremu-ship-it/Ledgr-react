@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { ClipboardCheck } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import {
@@ -70,6 +71,7 @@ export function ConstructionGoodsReceiptForm({
   onRecorded: (number: string, acceptedBase: number) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [receiptDate, setReceiptDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [deliveryNoteId, setDeliveryNoteId] = useState(deliveryNotes[0]?.id ?? '');
   const [notes, setNotes] = useState('');
@@ -169,36 +171,35 @@ export function ConstructionGoodsReceiptForm({
         event.preventDefault();
         mutation.mutate();
       }}
-      aria-label="Record goods receipt"
+      aria-label={t('construction.procurement.receipts.grnForm.title')}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <h4 className="text-sm font-semibold text-gray-900">Record goods receipt</h4>
-        <StatusPill label="May lead to stock" className="bg-blue-50 text-blue-700" />
+        <h4 className="text-sm font-semibold text-gray-900">{t('construction.procurement.receipts.grnForm.title')}</h4>
+        <StatusPill label={t('construction.procurement.receipts.grnForm.mayLeadToStock')} className="bg-blue-50 text-blue-700" />
       </div>
       <InfoNote>
         <p>
-          Only the accepted quantity can ever reach stock, and only after an evidenced cost basis exists and the approved posting policy allows a
-          movement. Rejected, quarantined and disputed quantities stay outside inventory and are reported as outstanding supplier claims.
+          {t('construction.procurement.receipts.grnForm.infoP1')}
         </p>
-        <p>No journal entry is created by a goods receipt.</p>
+        <p>{t('construction.procurement.receipts.grnForm.infoP2')}</p>
       </InfoNote>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Field label="Receipt date" required>
-          <input aria-label="Receipt date" type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.receipts.grnForm.receiptDate')} required>
+          <input aria-label={t('construction.procurement.receipts.grnForm.receiptDate')} type="date" value={receiptDate} onChange={(event) => setReceiptDate(event.target.value)} className={FIELD_CLASS} />
         </Field>
-        <Field label="Delivery note (optional)" hint="Link the supplier paperwork this receipt was checked against.">
-          <select aria-label="Delivery note" value={deliveryNoteId} onChange={(event) => setDeliveryNoteId(event.target.value)} className={FIELD_CLASS}>
-            <option value="">No delivery note linked</option>
+        <Field label={t('construction.procurement.receipts.grnForm.deliveryNoteOptional')} hint={t('construction.procurement.receipts.grnForm.deliveryNoteHint')}>
+          <select aria-label={t('construction.procurement.receipts.grnForm.deliveryNoteAria')} value={deliveryNoteId} onChange={(event) => setDeliveryNoteId(event.target.value)} className={FIELD_CLASS}>
+            <option value="">{t('construction.procurement.receipts.grnForm.noDeliveryNote')}</option>
             {deliveryNotes.map((note) => (
               <option key={note.id} value={note.id}>
-                {note.delivery_note_number} ({note.document_date})
+                {t('construction.procurement.receipts.grnForm.deliveryNoteOption', { number: note.delivery_note_number, date: note.document_date })}
               </option>
             ))}
           </select>
         </Field>
-        <Field label="Notes">
-          <input aria-label="Receipt notes" value={notes} onChange={(event) => setNotes(event.target.value)} className={FIELD_CLASS} />
+        <Field label={t('construction.procurement.receipts.grnForm.notesLabel')}>
+          <input aria-label={t('construction.procurement.receipts.grnForm.notesAria')} value={notes} onChange={(event) => setNotes(event.target.value)} className={FIELD_CLASS} />
         </Field>
       </div>
 
@@ -213,12 +214,17 @@ export function ConstructionGoodsReceiptForm({
           return (
             <fieldset key={line.id} className="rounded-lg border border-gray-200 p-3">
               <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
-                Line {line.line_number} · {productsById.get(line.product_id)?.name ?? line.product_id} · ordered {String(line.quantity_ordered)} {line.uom}
+                {t('construction.procurement.receipts.grnForm.legend', {
+                  line: line.line_number,
+                  product: productsById.get(line.product_id)?.name ?? line.product_id,
+                  quantity: String(line.quantity_ordered),
+                  uom: line.uom,
+                })}
               </legend>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                <Field label="Received" required>
+                <Field label={t('construction.procurement.receipts.grnForm.received')} required>
                   <input
-                    aria-label={`Received quantity line ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.grnForm.receivedAria', { line: line.line_number })}
                     type="number"
                     min="0"
                     step="any"
@@ -232,9 +238,9 @@ export function ConstructionGoodsReceiptForm({
                     className={FIELD_CLASS}
                   />
                 </Field>
-                <Field label="Accepted">
+                <Field label={t('construction.procurement.receipts.grnForm.accepted')}>
                   <input
-                    aria-label={`Accepted quantity line ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.grnForm.acceptedAria', { line: line.line_number })}
                     type="number"
                     min="0"
                     step="any"
@@ -243,9 +249,9 @@ export function ConstructionGoodsReceiptForm({
                     className={FIELD_CLASS}
                   />
                 </Field>
-                <Field label="Rejected">
+                <Field label={t('construction.procurement.receipts.grnForm.rejected')}>
                   <input
-                    aria-label={`Rejected quantity line ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.grnForm.rejectedAria', { line: line.line_number })}
                     type="number"
                     min="0"
                     step="any"
@@ -254,9 +260,9 @@ export function ConstructionGoodsReceiptForm({
                     className={FIELD_CLASS}
                   />
                 </Field>
-                <Field label="Quarantined">
+                <Field label={t('construction.procurement.receipts.grnForm.quarantined')}>
                   <input
-                    aria-label={`Quarantined quantity line ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.grnForm.quarantinedAria', { line: line.line_number })}
                     type="number"
                     min="0"
                     step="any"
@@ -265,9 +271,9 @@ export function ConstructionGoodsReceiptForm({
                     className={FIELD_CLASS}
                   />
                 </Field>
-                <Field label="Disputed">
+                <Field label={t('construction.procurement.receipts.grnForm.disputed')}>
                   <input
-                    aria-label={`Disputed quantity line ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.grnForm.disputedAria', { line: line.line_number })}
                     type="number"
                     min="0"
                     step="any"
@@ -281,33 +287,33 @@ export function ConstructionGoodsReceiptForm({
               {received > 0 ? (
                 <p className={`mt-2 text-xs ${balanced ? 'text-gray-500' : 'text-amber-700'}`}>
                   {balanced
-                    ? `Classification balances: ${accepted} accepted + ${held} held = ${received} received.`
-                    : `Classification does not balance by ${difference.toFixed(6)}: received must equal accepted + rejected + quarantined + disputed.`}
+                    ? t('construction.procurement.receipts.grnForm.balances', { accepted, held, received })
+                    : t('construction.procurement.receipts.grnForm.doesNotBalance', { difference: difference.toFixed(6) })}
                 </p>
               ) : null}
 
               {held > 0 ? (
                 <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <p className="text-xs font-medium text-amber-900">
-                    {held} unit(s) are not accepted and each needs a hold with a reason and evidence.
+                    {t('construction.procurement.receipts.grnForm.holdNeeded', { held })}
                   </p>
                   {!hasInspectionCapability ? (
                     <p className="mt-1 text-xs text-amber-800">
-                      Your account does not hold “Inspect and classify receipts”. The database will refuse this receipt; ask an approver to record it.
+                      {t('construction.procurement.receipts.grnForm.noInspectCapability')}
                     </p>
                   ) : null}
                   <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label="Hold reason" required>
+                    <Field label={t('construction.procurement.receipts.grnForm.holdReason')} required>
                       <input
-                        aria-label={`Hold reason line ${line.line_number}`}
+                        aria-label={t('construction.procurement.receipts.grnForm.holdReasonAria', { line: line.line_number })}
                         value={draft.holdReason}
                         onChange={(event) => setField(line.id, 'holdReason', event.target.value)}
                         className={FIELD_CLASS}
                       />
                     </Field>
-                    <Field label="Hold evidence reference" required>
+                    <Field label={t('construction.procurement.receipts.grnForm.holdEvidence')} required>
                       <input
-                        aria-label={`Hold evidence line ${line.line_number}`}
+                        aria-label={t('construction.procurement.receipts.grnForm.holdEvidenceAria', { line: line.line_number })}
                         value={draft.holdEvidence}
                         onChange={(event) => setField(line.id, 'holdEvidence', event.target.value)}
                         className={FIELD_CLASS}
@@ -318,9 +324,9 @@ export function ConstructionGoodsReceiptForm({
               ) : null}
 
               <div className="mt-3">
-                <Field label="Line note">
+                <Field label={t('construction.procurement.receipts.grnForm.lineNote')}>
                   <input
-                    aria-label={`Line note ${line.line_number}`}
+                    aria-label={t('construction.procurement.receipts.grnForm.lineNoteAria', { line: line.line_number })}
                     value={draft.note}
                     onChange={(event) => setField(line.id, 'note', event.target.value)}
                     className={FIELD_CLASS}
@@ -333,17 +339,16 @@ export function ConstructionGoodsReceiptForm({
       </div>
 
       <details className="rounded-lg border border-gray-200 bg-gray-50 p-3">
-        <summary className="cursor-pointer text-sm font-medium text-gray-800">Receiving more than was ordered?</summary>
+        <summary className="cursor-pointer text-sm font-medium text-gray-800">{t('construction.procurement.receipts.grnForm.overReceiptSummary')}</summary>
         <p className="mt-1 text-xs text-gray-600">
-          An over-receipt is refused unless an authorized reason and evidence are recorded. Leave these blank when receiving within the ordered
-          quantity.
+          {t('construction.procurement.receipts.grnForm.overReceiptInfo')}
         </p>
         <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field label="Over-receipt reason">
-            <input aria-label="Over-receipt reason" value={overReceiptReason} onChange={(event) => setOverReceiptReason(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.grnForm.overReceiptReason')}>
+            <input aria-label={t('construction.procurement.receipts.grnForm.overReceiptReason')} value={overReceiptReason} onChange={(event) => setOverReceiptReason(event.target.value)} className={FIELD_CLASS} />
           </Field>
-          <Field label="Over-receipt evidence">
-            <input aria-label="Over-receipt evidence" value={overReceiptEvidence} onChange={(event) => setOverReceiptEvidence(event.target.value)} className={FIELD_CLASS} />
+          <Field label={t('construction.procurement.receipts.grnForm.overReceiptEvidence')}>
+            <input aria-label={t('construction.procurement.receipts.grnForm.overReceiptEvidence')} value={overReceiptEvidence} onChange={(event) => setOverReceiptEvidence(event.target.value)} className={FIELD_CLASS} />
           </Field>
         </div>
       </details>
@@ -356,14 +361,14 @@ export function ConstructionGoodsReceiptForm({
           disabled={!canSubmit || mutation.isPending}
           className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-300 disabled:text-gray-600"
         >
-          <ClipboardCheck className="h-4 w-4" aria-hidden /> {mutation.isPending ? 'Recording…' : 'Record goods receipt'}
+          <ClipboardCheck className="h-4 w-4" aria-hidden /> {mutation.isPending ? t('construction.procurement.receipts.grnForm.recording') : t('construction.procurement.receipts.grnForm.title')}
         </button>
         <button type="button" onClick={onCancel} className="text-sm text-gray-600 hover:text-gray-900">
-          Cancel
+          {t('construction.procurement.shared.cancel')}
         </button>
         {!canSubmit ? (
           <span className="text-xs text-gray-500">
-            Enter at least one received quantity; the classification must balance and every hold needs a reason and evidence.
+            {t('construction.procurement.receipts.grnForm.submitHint')}
           </span>
         ) : null}
       </div>
