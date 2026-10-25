@@ -45,9 +45,9 @@ describe('legacy pos pin cleanup migration contract (P3-1 audit item)', () => {
     expect(versions.indexOf('20261102000000')).toBeLessThan(
       versions.indexOf('20261103000000'),
     );
-    // And no duplicate cleanup was added later: the chain head belongs to
-    // P2-4, pinned by constructionSiteLifecycleMigration.test.ts.
-    expect(versions[versions.length - 1]).toBe('20261108000000');
+    // No duplicate cleanup was added later; the additive P4-1 report RPC now
+    // follows the P2-4 site lifecycle migration.
+    expect(versions[versions.length - 1]).toBe('20261109000000');
     expect(
       files.filter((f) => f.toLowerCase().includes('pos_capability_cleanup')),
     ).toHaveLength(0);

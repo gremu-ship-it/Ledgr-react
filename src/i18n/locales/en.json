@@ -126,6 +126,11 @@
       "materialMovement": "Material movement"
     }
   },
+  "nav": {
+    "reports": {
+      "trialBalance": "Trial Balance"
+    }
+  },
   "pages": {
     "inventory": {
       "products": {
@@ -481,7 +486,53 @@
     "operatingProfit": "Operating Profit",
     "profitBeforeTax": "Profit Before Tax",
     "netProfitLoss": "Net Profit / (Loss)",
-    "forPeriod": "For the period {{period}}"
+    "forPeriod": "For the period {{period}}",
+    "shared": {
+      "period": "Period",
+      "thisMonth": "This Month",
+      "lastMonth": "Last Month",
+      "thisQuarter": "This Quarter",
+      "yearToDate": "Year to Date",
+      "lastYear": "Last Year",
+      "custom": "Custom",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "toSeparator": "to",
+      "branch": "Branch",
+      "allBranches": "All Branches",
+      "selectedBranch": "Selected branch",
+      "branchLoadError": "Could not load branches. Branch access is still enforced by the report.",
+      "filters": "Trial balance filters",
+      "runReport": "Run Report",
+      "loading": "Loading report…",
+      "noData": "No data for the selected period.",
+      "total": "Total",
+      "debit": "Debit",
+      "credit": "Credit",
+      "balance": "Balance",
+      "accountCode": "Account Code",
+      "accountName": "Account Name",
+      "debitMwk": "Debit (MWK)",
+      "creditMwk": "Credit (MWK)",
+      "balanceMwk": "Balance (MWK)",
+      "error": "Could not load the trial balance. Check your access and try again.",
+      "imbalanced": "Warning: Debits and credits do not balance. Difference: {{amount}} MWK.",
+      "balanced": "Debits and credits balance.",
+      "imbalancedShort": "Debits and credits do not balance.",
+      "upgradePrompt": "Financial reports are available on the Growth plan and above.",
+      "viewPlans": "View plans",
+      "invalidDateRange": "Choose a valid date range. The start date must be on or before the end date."
+    },
+    "trialBalance": {
+      "title": "Trial Balance",
+      "subtitle": "{{from}} to {{to}} · {{branch}}",
+      "description": "Summary of posted account activity for the selected period and branch.",
+      "noEntries": "No posted journal entries found for this period.",
+      "expandAll": "Expand all",
+      "collapseAll": "Collapse all",
+      "expandAccount": "Expand {{account}}",
+      "collapseAccount": "Collapse {{account}}"
+    }
   },
   "ai": {
     "title": "Ledgr AI",
@@ -761,7 +812,7 @@
       "reactivated": "Site reactivated.",
       "siteLinked": "Procurement site linked to the project.",
       "siteUnlinked": "Procurement site unlinked from the project."
-},
+    },
     "accounts": {
       "ownerRequired": "You must be signed in to set up the Construction workspace.",
       "provisionError": "The Construction workspace could not be set up.",
