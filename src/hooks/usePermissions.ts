@@ -454,6 +454,9 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
 
   // The Support assistant is available to every authenticated role.
   if (path === '/support') return true;
+  const isBankReconciliationPath = path === '/bank-reconciliation/accounts'
+    || path === '/bank-reconciliation/statements'
+    || path.startsWith('/bank-reconciliation/statements/');
 
   switch (role) {
     case 'owner':
@@ -495,7 +498,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/tax', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
 
     case 'treasury_manager':
-      return ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
+      return isBankReconciliationPath || ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
 
     case 'asset_manager':
       return ['/dashboard', '/assets', '/capital', '/accounts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
@@ -517,7 +520,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'payroll_manager':
-      if (['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path)) {
+      if (isBankReconciliationPath || ['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path)) {
         return false;
       }
       return true;

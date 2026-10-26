@@ -156,6 +156,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    labelKey: 'navigation.sections.bankReconciliation',
+    items: [
+      { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+    ],
+  },
+  {
     labelKey: 'navigation.sections.organisation',
     items: [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
