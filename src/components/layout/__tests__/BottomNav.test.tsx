@@ -93,6 +93,12 @@ describe('mobile bottom navigation', () => {
 
   it('gives a cashier a POS tab and hides back-office tabs', () => {
     state.role = 'cashier';
+    // POS is profile-gated: a till role only gets a till in a retail business.
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+      capability_overrides: {},
+    };
     renderNav();
     const paths = tabPaths();
 
@@ -121,6 +127,11 @@ describe('mobile bottom navigation', () => {
 
   it('leads a POS manager with the till, then its supervised pages', () => {
     state.role = 'manager';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+      capability_overrides: {},
+    };
     renderNav();
     const paths = tabPaths();
 
@@ -174,5 +185,93 @@ describe('mobile bottom navigation', () => {
     state.hasBusiness = false;
     renderNav();
     expect(tabPaths()).toEqual(['/dashboard', '/income', '/products', '/reports']);
+  });
+
+  // The bar keeps its own item lists instead of reading NAV_SECTIONS, so it
+  // resolves the construction vocabulary through the shared table. `t` is
+  // mocked to return the key, which is what makes the swap observable here.
+  it('reads Site Stores and Material Transfers in the More menu for a construction business', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'owner';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+    };
+    renderNav();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
+
+    expect(screen.getByText('navigation.items.siteStores')).toBeTruthy();
+    expect(screen.getByText('navigation.items.materialTransfers')).toBeTruthy();
+    expect(screen.queryByText('navigation.items.warehouse')).toBeNull();
+    expect(screen.queryByText('navigation.items.transfers')).toBeNull();
+  });
+
+  it('keeps Warehouse and Transfers for a retail business, and keeps its till', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'owner';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+    };
+    renderNav();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
+
+    expect(screen.getByText('navigation.items.warehouse')).toBeTruthy();
+    expect(screen.getByText('navigation.items.transfers')).toBeTruthy();
+    expect(screen.queryByText('navigation.items.siteStores')).toBeNull();
+    expect(screen.queryByText('navigation.items.materialTransfers')).toBeNull();
+  });
+
+  it('drops the POS tab for a construction till role, whose profile has no pos capability', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'cashier';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+    };
+    renderNav();
+
+    expect(tabPaths()).not.toContain('/pos');
+  });
+});
+
+// ── Bug A companion: the FAB speaks the same construction vocabulary ─────────
+//
+// The FAB's stock action used to read "Stock movement" for every business.
+// It now resolves through the construction vocabulary like every other
+// label, so site staff read "Material movement".
+
+describe('FAB movement vocabulary', () => {
+  function openFabMenu() {
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: 'common.openAddMenu' }));
+  }
+
+  it('reads "Material movement" for a construction business', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'stock_clerk';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+    };
+    openFabMenu();
+
+    expect(screen.getByText('navigation.fab.materialMovement')).toBeTruthy();
+    expect(screen.queryByText('navigation.fab.stockMovement')).toBeNull();
+  });
+
+  it('keeps "Stock movement" for a retail business', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'stock_clerk';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['RETAIL'],
+    };
+    openFabMenu();
+
+    expect(screen.getByText('navigation.fab.stockMovement')).toBeTruthy();
+    expect(screen.queryByText('navigation.fab.materialMovement')).toBeNull();
   });
 });

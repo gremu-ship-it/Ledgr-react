@@ -7,6 +7,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useInventoryPageLabels } from '@/hooks/useInventoryPageLabels';
 import type { Row } from '@/dal/types/database';
 import type { TransferWithLines, TransferStatus } from '@/dal/repositories/TransferRepository';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -488,6 +489,9 @@ export function TransfersPage() {
   const businessName = useAppStore((s) => s.currentBusiness?.business.name ?? 'Business');
   const queryClient  = useQueryClient();
   const isMobile     = useIsMobile();
+  // Construction businesses read this page as "Material Transfers" (see
+  // useInventoryPageLabels); everyone else keeps "Stock Transfers".
+  const pageLabels   = useInventoryPageLabels('transfers');
 
   const membership = businesses.find((m) => m.business.id === businessId);
   const isOwner    = membership?.role === 'owner';
@@ -606,8 +610,8 @@ export function TransfersPage() {
     <div className={isMobile ? 'pb-4' : undefined}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>Stock Transfers</h1>
-          {!isMobile && <p className="mt-1 text-sm text-gray-500">Dispatch stock between warehouse and branches</p>}
+          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>{pageLabels.title}</h1>
+          {!isMobile && <p className="mt-1 text-sm text-gray-500">{pageLabels.subtitle}</p>}
         </div>
         <button onClick={() => setCreateOpen(true)}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600">

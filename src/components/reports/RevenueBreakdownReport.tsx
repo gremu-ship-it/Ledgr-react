@@ -21,6 +21,7 @@ interface BreakdownData {
   invoices: RevenueInvoice[];
   lines: RevenueInvoiceLine[];
   productNames: Map<string, string>;
+  accountTypes: Map<string, string>;
 }
 
 function escapeHtml(value: string): string {
@@ -47,17 +48,20 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd }: P
         .eq('business_id', businessId)
         .in('invoice_type', REVENUE_INVOICE_TYPES)
         .neq('status', 'void')
+        .neq('status', 'draft')
         .gte('issue_date', periodStart)
         .lte('issue_date', periodEnd)
         .is('deleted_at', null);
       if (invoiceError) throw invoiceError;
 
       const invoices = (invoiceRows ?? []) as RevenueInvoice[];
-      if (invoices.length === 0) return { invoices, lines: [], productNames: new Map() };
+      if (invoices.length === 0) {
+        return { invoices, lines: [], productNames: new Map(), accountTypes: new Map() };
+      }
 
       const { data: lineRows, error: lineError } = await supabase
         .from('invoice_lines')
-        .select('invoice_id, product_id, description, quantity, line_subtotal, line_total, tax_amount')
+        .select('invoice_id, product_id, account_id, description, quantity, line_subtotal, line_total, tax_amount')
         .eq('business_id', businessId)
         .in('invoice_id', invoices.map((invoice) => invoice.id));
       if (lineError) throw lineError;
@@ -76,12 +80,25 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd }: P
         for (const product of products ?? []) productNames.set(product.id, product.name);
       }
 
-      return { invoices, lines, productNames };
+      const accountIds = [...new Set(lines.map((line) => line.account_id).filter((id): id is string => Boolean(id)))];
+      const accountTypes = new Map<string, string>();
+      if (accountIds.length > 0) {
+        const { data: accounts, error: accountError } = await supabase
+          .from('accounts')
+          .select('id, account_type')
+          .eq('business_id', businessId)
+          .in('id', accountIds)
+          .is('deleted_at', null);
+        if (accountError) throw accountError;
+        for (const account of accounts ?? []) accountTypes.set(account.id, account.account_type);
+      }
+
+      return { invoices, lines, productNames, accountTypes };
     },
   });
 
   const rows = useMemo(
-    () => data ? buildRevenueBreakdown(data.invoices, data.lines, data.productNames) : [],
+    () => data ? buildRevenueBreakdown(data.invoices, data.lines, data.productNames, data.accountTypes) : [],
     [data],
   );
   const totalRevenue = rows.reduce((total, row) => total + row.amount, 0);
