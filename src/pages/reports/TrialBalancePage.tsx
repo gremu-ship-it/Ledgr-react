@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { useAccessibleReportBranches } from '@/hooks/useAccessibleReportBranches';
@@ -94,12 +96,36 @@ export function TrialBalancePage() {
     setExpandedIds(expanded ? new Set(allExpandableIds) : new Set());
   };
 
+  const handleExportCSV = () => {
+    const headers = [
+      t('reports.shared.accountCode'),
+      t('reports.shared.accountName'),
+      t('reports.shared.debitMwk'),
+      t('reports.shared.creditMwk'),
+      t('reports.shared.balanceMwk'),
+    ];
+    const accountRows: (string | number | null)[][] = [];
+    const visit = (nodes: typeof tree) => {
+      for (const node of nodes) {
+        accountRows.push([node.account_code, node.account_name, node.total_debit, node.total_credit, node.balance]);
+        visit(node.children);
+      }
+    };
+    visit(tree);
+    accountRows.push(['', t('reports.shared.total'), totalDebit, totalCredit, difference]);
+    downloadFile(
+      generateCSV(headers, accountRows),
+      reportFilename('trial-balance', period.from, period.to),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   return (
-    <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-      <header className="mb-6">
+    <main className="report-container mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
+      <header className="report-header mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t('reports.trialBalance.title')}</h1>
         <p className="mt-1 text-sm text-gray-600">{t('reports.trialBalance.description')}</p>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="subtitle mt-2 text-sm text-gray-500">
           {t('reports.trialBalance.subtitle', {
             from: formatDate(period.from, i18n.language),
             to: formatDate(period.to, i18n.language),
@@ -108,20 +134,27 @@ export function TrialBalancePage() {
         </p>
       </header>
 
-      <section aria-label={t('reports.shared.filters')} className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:flex-row lg:items-end lg:justify-between">
+      <section aria-label={t('reports.shared.filters')} className="report-filters mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm lg:flex-row lg:items-end lg:justify-between">
         <div className="flex flex-1 flex-col gap-4">
           <PeriodPicker value={period} onChange={setRange} />
           <BranchFilter businessId={businessId} value={branchId} onChange={setBranchId} />
         </div>
-        <button
-          type="button"
-          onClick={() => void reportQuery.refetch()}
-          disabled={!businessId || hasInvalidPeriod || reportQuery.isFetching}
-          className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 lg:self-end"
-        >
-          <RefreshCw className={`h-4 w-4 ${reportQuery.isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
-          {t('reports.shared.runReport')}
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-start lg:self-end">
+          <button
+            type="button"
+            onClick={() => void reportQuery.refetch()}
+            disabled={!businessId || hasInvalidPeriod || reportQuery.isFetching}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-4 w-4 ${reportQuery.isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {t('reports.shared.runReport')}
+          </button>
+          <ReportExportButtons
+            onExportCSV={handleExportCSV}
+            onExportPDF={printReport}
+            disabled={reportQuery.isFetching || reportQuery.isError || !hasActivity || hasInvalidPeriod}
+          />
+        </div>
       </section>
 
       {reportQuery.isError && (
@@ -175,7 +208,7 @@ export function TrialBalancePage() {
           </div>
         ) : !reportQuery.isError ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[700px] border-collapse text-sm">
+            <table className="report-table trial-balance-table w-full min-w-[700px] border-collapse text-sm">
               <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left">{t('reports.shared.accountCode')}</th>
@@ -222,7 +255,7 @@ export function TrialBalancePage() {
                   );
                 })}
               </tbody>
-              <tfoot className="border-t-2 border-gray-300 bg-gray-50 font-bold text-gray-900">
+              <tfoot className="total-row border-t-2 border-gray-300 bg-gray-50 font-bold text-gray-900">
                 <tr>
                   <td colSpan={2} className="px-4 py-3">{t('reports.shared.total')}</td>
                   <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{formatAmount(totalDebit)}</td>

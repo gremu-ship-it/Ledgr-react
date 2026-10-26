@@ -8,8 +8,14 @@ import type { TrialBalanceRow } from '@/dal/repositories/ReportRepository';
 const mocks = vi.hoisted(() => ({
   rows: [] as TrialBalanceRow[],
   getTrialBalance: vi.fn(),
+  downloadFile: vi.fn(),
+  printReport: vi.fn(),
 }));
 
+vi.mock('@/lib/reports/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/reports/export')>();
+  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+});
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
 }));
@@ -52,6 +58,8 @@ function renderPage() {
 afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
+  mocks.downloadFile.mockReset();
+  mocks.printReport.mockReset();
   mocks.rows = activeRows;
 });
 
@@ -77,8 +85,31 @@ describe('TrialBalancePage', () => {
     }));
   });
 
-  it('expands and collapses account rows and applies the selected branch server-side', async () => {
+  it('exports every hierarchical account with a totals row and opens print for PDF', async () => {
     mocks.getTrialBalance.mockImplementation(async () => activeRows);
+    renderPage();
+    await screen.findByText('Cash');
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    const [csv, filename, mimeType] = mocks.downloadFile.mock.calls[0];
+    expect(csv).toContain('reports.shared.accountCode,reports.shared.accountName,reports.shared.debitMwk,reports.shared.creditMwk,reports.shared.balanceMwk');
+    expect(csv).toContain('1000,Assets,10.00,0.00,10.00');
+    expect(csv).toContain('1100,Cash,90.00,100.00,-10.00');
+    expect(csv).toContain(',reports.shared.total,100.00,100.00,0.00');
+    expect(filename).toMatch(/^trial-balance_\d{4}-\d{2}-\d{2}_to_\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(mimeType).toBe('text/csv;charset=utf-8');
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportPDF' }));
+    expect(mocks.printReport).toHaveBeenCalledOnce();
+  });
+
+  it('exports data from the selected branch after applying the server-side filter', async () => {
+    const branchRows: TrialBalanceRow[] = [
+      { account_id: 'branch-cash', account_code: '1110', account_name: 'Branch Cash', account_type: 'asset', parent_account_id: null, total_debit: 55, total_credit: 0, balance: 55, level: 0 },
+    ];
+    mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: { branchId: string | null }) => (
+      params.branchId ? branchRows : activeRows
+    ));
     renderPage();
     await screen.findByText('Assets');
 
@@ -88,9 +119,15 @@ describe('TrialBalancePage', () => {
     expect(screen.getByText('Cash')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('reports.shared.branch'), { target: { value: 'branch-1' } });
+    expect(await screen.findByText('Branch Cash')).toBeTruthy();
     await waitFor(() => {
       expect(mocks.getTrialBalance).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ branchId: 'branch-1' }));
     });
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    const csv = mocks.downloadFile.mock.calls[0][0] as string;
+    expect(csv).toContain('1110,Branch Cash,55.00,0.00,55.00');
+    expect(csv).not.toContain('1100,Cash');
   });
 
   it('shows the no-posted-entry empty state when every account has zero activity', async () => {
@@ -99,5 +136,7 @@ describe('TrialBalancePage', () => {
     renderPage();
     expect(await screen.findByText('reports.trialBalance.noEntries')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByRole('button', { name: 'reports.shared.exportCSV' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'reports.shared.exportPDF' }).hasAttribute('disabled')).toBe(true);
   });
 });

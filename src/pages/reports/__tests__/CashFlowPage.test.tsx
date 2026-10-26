@@ -7,8 +7,16 @@ import { CashFlowPage } from '../CashFlowPage';
 import { periodForPreset } from '@/lib/reports/periods';
 import { CASH_FLOW_BALANCE_START_DATE } from '@/lib/reports/cashFlow';
 
-const mocks = vi.hoisted(() => ({ getTrialBalance: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getTrialBalance: vi.fn(),
+  downloadFile: vi.fn(),
+  printReport: vi.fn(),
+}));
 
+vi.mock('@/lib/reports/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/reports/export')>();
+  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+});
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
 }));
@@ -74,6 +82,8 @@ function renderPage() {
 afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
+  mocks.downloadFile.mockReset();
+  mocks.printReport.mockReset();
 });
 
 describe('CashFlowPage', () => {
@@ -104,6 +114,40 @@ describe('CashFlowPage', () => {
       dateTo: expectedPeriod.to,
       branchId: null,
     }));
+  });
+
+  it('exports the indirect sections and reconciliation amounts for the selected branch', async () => {
+    const branchPeriodRows = [row('4110', 'income', -5, 'Branch Sales')];
+    const branchCurrentRows = [row('1110', 'asset', 205, 'Cash on Hand')];
+    const branchPriorRows = [row('1110', 'asset', 200, 'Cash on Hand')];
+    mocks.getTrialBalance.mockImplementation((_client: unknown, params: TrialBalanceParams) => {
+      if (!params.branchId) {
+        if (params.dateFrom !== CASH_FLOW_BALANCE_START_DATE) return Promise.resolve(periodRows);
+        return Promise.resolve(params.dateTo === periodForPreset('thisMonth').to ? currentRows : priorRows);
+      }
+      if (params.dateFrom !== CASH_FLOW_BALANCE_START_DATE) return Promise.resolve(branchPeriodRows);
+      return Promise.resolve(params.dateTo === periodForPreset('thisMonth').to ? branchCurrentRows : branchPriorRows);
+    });
+    renderPage();
+    await screen.findByText('reports.cashFlow.reconciled');
+
+    fireEvent.change(screen.getByLabelText('reports.shared.branch'), { target: { value: 'branch-1' } });
+    await waitFor(() => expect(mocks.getTrialBalance.mock.calls.filter((call) =>
+      (call[1] as TrialBalanceParams).branchId === 'branch-1',
+    )).toHaveLength(3));
+    await waitFor(() => {
+      expect((screen.getByRole('button', { name: 'reports.shared.exportCSV' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    const [csv, filename] = mocks.downloadFile.mock.calls[0];
+    expect(csv).toContain('reports.shared.section,reports.shared.accountName,reports.shared.balanceMwk');
+    expect(csv).toContain('reports.cashFlow.operating,,');
+    expect(csv).toContain(',reports.cashFlow.netIncome,5.00');
+    expect(csv).toContain(',reports.cashFlow.netCashChange,5.00');
+    expect(csv).toContain(',reports.cashFlow.cashBeginning,200.00');
+    expect(csv).toContain(',reports.cashFlow.cashEnd,205.00');
+    expect(filename).toMatch(/^cash-flow_/);
   });
 
   it('updates the P&L period and cumulative comparison dates when the user changes the period', async () => {
