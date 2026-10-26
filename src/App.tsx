@@ -98,6 +98,9 @@ const BankReconciliation = lazyPage(
   () => import('@/components/bank/BankReconciliation'),
   'BankReconciliation',
 );
+const BankAccountsPage = lazyPage(() => import('@/pages/bank-reconciliation/BankAccountsPage'), 'BankAccountsPage');
+const StatementsPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementsPage'), 'StatementsPage');
+const StatementDetailPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementDetailPage'), 'StatementDetailPage');
 const SupportPage = lazyPage(() => import('@/pages/SupportPage'), 'SupportPage');
 const ToolsPage = lazyPage(() => import('@/pages/ToolsPage'), 'default');
 const DataImportPage = lazyPage(() => import('@/pages/DataImportPage'), 'DataImportPage');
@@ -108,6 +111,7 @@ const DemoEntryPage = lazyPage(() => import('@/pages/DemoEntryPage'), 'DemoEntry
 import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
 import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
+import { BankReconciliationPlanGate } from '@/components/bank-reconciliation/BankReconciliationPlanGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -336,6 +340,15 @@ function App() {
                     <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
                       <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
                     </PartnerPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/accounts" element={
+                    <BankReconciliationPlanGate><BankAccountsPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/statements" element={
+                    <BankReconciliationPlanGate><StatementsPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/statements/:id" element={
+                    <BankReconciliationPlanGate><StatementDetailPage /></BankReconciliationPlanGate>
                   } />
                   <Route path="/audit" element={
                     <PlanGate capability="accounting_organisation" featureName="Audit Log">
