@@ -474,7 +474,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
       // the same authority as the workspace itself.
       if (path.startsWith('/manufacturing')) return true;
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/manufacturing'].includes(path);
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
@@ -486,19 +486,19 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'sales_manager':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
 
     case 'customer_service_rep':
       return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/pos'].includes(path);
 
     case 'tax_compliance_officer':
-      return ['/dashboard', '/tax', '/reports', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
+      return ['/dashboard', '/tax', '/reports', '/reports/trial-balance', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
 
     case 'treasury_manager':
-      return ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports'].includes(path);
+      return ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance'].includes(path);
 
     case 'asset_manager':
-      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports'].includes(path);
+      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports', '/reports/trial-balance'].includes(path);
 
     case 'board_member':
       if (path === '/payroll' || path === '/settings') return false;
@@ -508,7 +508,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'supervisor':
-      if (path === '/payroll' || path === '/reports') return false;
+      if (path === '/payroll' || path === '/reports' || path.startsWith('/reports/')) return false;
       return true;
 
     case 'auditor':
@@ -517,7 +517,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'payroll_manager':
-      if (['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments'].includes(path)) {
+      if (['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance'].includes(path)) {
         return false;
       }
       return true;

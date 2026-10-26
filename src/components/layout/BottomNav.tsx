@@ -4,6 +4,7 @@ import {
   DollarSign,
   Package,
   BarChart2,
+  Scale,
   MoreHorizontal,
   Plus,
   Wallet,
@@ -61,6 +62,7 @@ const ALL_MORE_MENU_ITEMS: {
   tone: IconTone;
   partnerFeature?: PartnerFeatureKey;
 }[] = [
+  { labelKey: 'nav.reports.trialBalance', path: '/reports/trial-balance', icon: Scale, tone: 'brand' },
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },

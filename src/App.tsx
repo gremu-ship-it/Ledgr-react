@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
@@ -16,6 +17,7 @@ import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useDefaultRoute } from './hooks/useDefaultRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgradePrompt';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
@@ -100,6 +102,7 @@ const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage
 const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
 const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
+const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
@@ -154,6 +157,19 @@ export function RoleRoute() {
   }
 
   return <Outlet />;
+}
+
+function TrialBalanceRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.trialBalance.title')}
+      fallback={<TrialBalanceUpgradePrompt />}
+    >
+      <TrialBalancePage />
+    </PlanGate>
+  );
 }
 
 /**
@@ -450,6 +466,7 @@ function App() {
                       <ReportsPage />
                     </PlanGate>
                   } />
+                  <Route path="/reports/trial-balance" element={<TrialBalanceRoute />} />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />
