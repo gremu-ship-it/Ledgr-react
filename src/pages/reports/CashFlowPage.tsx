@@ -35,11 +35,14 @@ interface CashFlowQueryData {
   priorRows: TrialBalanceRow[];
 }
 
-function formatDate(date: string, locale: string): string {
-  if (!date) return date;
-  const [year, month, day] = date.split('-').map(Number);
-  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' })
-    .format(new Date(year, month - 1, day));
+function formatDate(dateValue: string, locale: string): string {
+  if (!dateValue) return dateValue;
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const date = new Date(0);
+  date.setHours(12, 0, 0, 0);
+  date.setDate(1);
+  date.setFullYear(year, month - 1, day);
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
 }
 
 function formatAmount(value: number): string {

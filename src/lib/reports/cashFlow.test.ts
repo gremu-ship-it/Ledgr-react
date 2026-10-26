@@ -245,11 +245,12 @@ describe('computeCashFlow — indirect method', () => {
     const prior = computeBalanceSheet([row('1141', 'asset', 10, 'Raw Materials')], false);
     const current = computeBalanceSheet([row('1141', 'asset', 15, 'Raw Materials')], false);
     expect(bsDelta(current, prior, '114')).toBe(5);
-    expect(CASH_FLOW_BALANCE_START_DATE).toBe('2020-01-01');
+    expect(CASH_FLOW_BALANCE_START_DATE).toBe('0001-01-01');
     expect(dayBefore('2026-10-01')).toBe('2026-09-30');
     expect(dayBefore('2026-03-01')).toBe('2026-02-28');
+    expect(dayBefore('0001-01-01')).toBeNull();
     expect(isValidCashFlowPeriod({ from: '2026-10-01', to: '2026-10-26' })).toBe(true);
-    expect(isValidCashFlowPeriod({ from: '2019-12-31', to: '2026-10-26' })).toBe(false);
+    expect(isValidCashFlowPeriod({ from: '0000-12-31', to: '0001-01-01' })).toBe(false);
     expect(isValidCashFlowPeriod({ from: '2026-10-31', to: '2026-10-01' })).toBe(false);
   });
 });

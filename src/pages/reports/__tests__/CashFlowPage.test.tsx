@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { TrialBalanceParams, TrialBalanceRow } from '@/dal/repositories/ReportRepository';
 import { CashFlowPage } from '../CashFlowPage';
 import { periodForPreset } from '@/lib/reports/periods';
+import { CASH_FLOW_BALANCE_START_DATE } from '@/lib/reports/cashFlow';
 
 const mocks = vi.hoisted(() => ({ getTrialBalance: vi.fn() }));
 
@@ -55,7 +56,7 @@ function configureSuccessfulQuery(
   priorData: TrialBalanceRow[] = priorRows,
 ) {
   mocks.getTrialBalance.mockImplementation((_client: unknown, params: TrialBalanceParams) => {
-    if (params.dateFrom !== '2020-01-01') return Promise.resolve(periodData);
+    if (params.dateFrom !== CASH_FLOW_BALANCE_START_DATE) return Promise.resolve(periodData);
     if (params.dateTo === periodForPreset('thisMonth').to) return Promise.resolve(currentData);
     return Promise.resolve(priorData);
   });
@@ -99,7 +100,7 @@ describe('CashFlowPage', () => {
     }));
     expect(mocks.getTrialBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       businessId: 'business-1',
-      dateFrom: '2020-01-01',
+      dateFrom: CASH_FLOW_BALANCE_START_DATE,
       dateTo: expectedPeriod.to,
       branchId: null,
     }));
@@ -119,7 +120,7 @@ describe('CashFlowPage', () => {
         dateTo: lastMonth.to,
       }));
       expect(mocks.getTrialBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-        dateFrom: '2020-01-01',
+        dateFrom: CASH_FLOW_BALANCE_START_DATE,
         dateTo: lastMonth.to,
       }));
     });
@@ -157,13 +158,13 @@ describe('CashFlowPage', () => {
     expect(await screen.findByText('reports.cashFlow.noData')).toBeTruthy();
   });
 
-  it('rejects periods before the cumulative balance-sheet baseline', async () => {
+  it('rejects reversed periods', async () => {
     configureSuccessfulQuery();
     renderPage();
     const from = screen.getByLabelText('reports.shared.dateFrom');
     const to = screen.getByLabelText('reports.shared.dateTo');
-    fireEvent.change(from, { target: { value: '2019-12-01' } });
-    fireEvent.change(to, { target: { value: '2019-12-31' } });
+    fireEvent.change(from, { target: { value: '2026-11-01' } });
+    fireEvent.change(to, { target: { value: '2026-10-01' } });
     expect(await screen.findByText('reports.cashFlow.invalidPeriod')).toBeTruthy();
   });
 });

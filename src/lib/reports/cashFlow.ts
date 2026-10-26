@@ -27,7 +27,7 @@ export interface CashFlowReport {
   discrepancy: number;
 }
 
-export const CASH_FLOW_BALANCE_START_DATE = '2020-01-01';
+export const CASH_FLOW_BALANCE_START_DATE = '0001-01-01';
 const CASH_RECONCILIATION_TOLERANCE = 0.01;
 const DISPOSAL_NAME = /dispos(?:al|ed)|sale of (?:fixed )?(?:assets?|property|equipment)/i;
 const DEPRECIATION_NAME = /depreciat|amortis/i;
@@ -44,7 +44,10 @@ export interface CashFlowPeriod {
 function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
+  if (year < 1) return false;
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
   return date.getUTCFullYear() === year
     && date.getUTCMonth() === month - 1
     && date.getUTCDate() === day;
@@ -60,9 +63,12 @@ export function isValidCashFlowPeriod(period: CashFlowPeriod): boolean {
 export function dayBefore(dateValue: string): string | null {
   if (!isValidIsoDate(dateValue)) return null;
   const [year, month, day] = dateValue.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, day));
+  const date = new Date(0);
+  date.setUTCHours(0, 0, 0, 0);
+  date.setUTCFullYear(year, month - 1, day);
   date.setUTCDate(date.getUTCDate() - 1);
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  if (date.getUTCFullYear() < 1) return null;
+  return `${String(date.getUTCFullYear()).padStart(4, '0')}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
 /** Infer cash/bank/mobile-money codes from the Trial Balance's live account rows. */

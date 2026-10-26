@@ -636,7 +636,7 @@
       "noData": "No cash flow data for the selected period.",
       "noActivityAmount": "—",
       "error": "Could not load the cash flow statement. Check your access and try again.",
-      "invalidPeriod": "Select a valid period beginning on or after 1 January 2020.",
+      "invalidPeriod": "Select a valid period.",
       "currencyNote": "All amounts are in MWK.",
       "upgradePrompt": "The Cash Flow Statement is available on the Growth plan and above.",
       "viewPlans": "View plans"
