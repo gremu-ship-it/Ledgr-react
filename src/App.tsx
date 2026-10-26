@@ -19,6 +19,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgradePrompt';
 import { ProfitLossUpgradePrompt } from '@/components/reports/ProfitLossUpgradePrompt';
+import { BalanceSheetUpgradePrompt } from '@/components/reports/BalanceSheetUpgradePrompt';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
@@ -105,6 +106,7 @@ const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPa
 const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
+const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
@@ -183,6 +185,19 @@ function ProfitLossRoute() {
       fallback={<ProfitLossUpgradePrompt />}
     >
       <ProfitLossPage />
+    </PlanGate>
+  );
+}
+
+function BalanceSheetRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.balanceSheet.title')}
+      fallback={<BalanceSheetUpgradePrompt />}
+    >
+      <BalanceSheetPage />
     </PlanGate>
   );
 }
@@ -483,6 +498,7 @@ function App() {
                   } />
                   <Route path="/reports/trial-balance" element={<TrialBalanceRoute />} />
                   <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
+                  <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />

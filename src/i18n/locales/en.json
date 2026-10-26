@@ -129,7 +129,8 @@
   "nav": {
     "reports": {
       "trialBalance": "Trial Balance",
-      "profitLoss": "Profit & Loss"
+      "profitLoss": "Profit & Loss",
+      "balanceSheet": "Balance Sheet"
     }
   },
   "pages": {
@@ -561,6 +562,41 @@
       "currencyNote": "All amounts are in MWK.",
       "notAvailable": "N/A",
       "upgradePrompt": "Profit & Loss is available on the Growth plan and above.",
+      "viewPlans": "View plans"
+    },
+    "balanceSheet": {
+      "title": "Balance Sheet",
+      "subtitle": "As of {{date}} · {{branch}}",
+      "description": "Statement of financial position at a point in time.",
+      "assets": "Assets",
+      "currentAssets": "Current Assets",
+      "nonCurrentAssets": "Non-Current Assets",
+      "totalCurrentAssets": "Total Current Assets",
+      "totalNonCurrentAssets": "Total Non-Current Assets",
+      "totalAssets": "Total Assets",
+      "liabilities": "Liabilities",
+      "liabilitiesAndEquity": "Liabilities & Equity",
+      "currentLiabilities": "Current Liabilities",
+      "nonCurrentLiabilities": "Non-Current Liabilities",
+      "totalCurrentLiabilities": "Total Current Liabilities",
+      "totalNonCurrentLiabilities": "Total Non-Current Liabilities",
+      "totalLiabilities": "Total Liabilities",
+      "equity": "Equity",
+      "retainedEarnings": "Retained Earnings",
+      "totalEquity": "Total Equity",
+      "totalLiabilitiesAndEquity": "Total Liabilities & Equity",
+      "balanced": "Balanced",
+      "imbalanced": "Out of balance by {{amount}}",
+      "asOf": "As of",
+      "endOfMonth": "End of This Month",
+      "endOfLastMonth": "End of Last Month",
+      "endOfQuarter": "End of This Quarter",
+      "endOfLastYear": "End of Last Year",
+      "noData": "No balance sheet data as of the selected date.",
+      "error": "Could not load the balance sheet. Check your access and try again.",
+      "invalidAsOfDate": "Choose a valid as-of date.",
+      "currencyNote": "All amounts are in MWK.",
+      "upgradePrompt": "The Balance Sheet is available on the Growth plan and above.",
       "viewPlans": "View plans"
     }
   },
