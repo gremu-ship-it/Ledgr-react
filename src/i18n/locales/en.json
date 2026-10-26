@@ -130,7 +130,8 @@
     "reports": {
       "trialBalance": "Trial Balance",
       "profitLoss": "Profit & Loss",
-      "balanceSheet": "Balance Sheet"
+      "balanceSheet": "Balance Sheet",
+      "cashFlow": "Cash Flow Statement"
     }
   },
   "pages": {
@@ -597,6 +598,47 @@
       "invalidAsOfDate": "Choose a valid as-of date.",
       "currencyNote": "All amounts are in MWK.",
       "upgradePrompt": "The Balance Sheet is available on the Growth plan and above.",
+      "viewPlans": "View plans"
+    },
+    "cashFlow": {
+      "title": "Cash Flow Statement",
+      "subtitle": "{{from}} to {{to}} · {{branch}}",
+      "description": "Cash movements classified by operating, investing, and financing activities.",
+      "operating": "Cash Flows from Operating Activities",
+      "investing": "Cash Flows from Investing Activities",
+      "financing": "Cash Flows from Financing Activities",
+      "netIncome": "Net Income",
+      "depreciation": "Depreciation & Amortisation",
+      "impairment": "Impairment Losses",
+      "gainLossDisposal": "(Gain)/Loss on Disposal",
+      "changeInDebtors": "(Increase)/Decrease in Trade Debtors",
+      "changeInInventory": "(Increase)/Decrease in Inventory",
+      "changeInWip": "(Increase)/Decrease in Work in Progress",
+      "changeInCreditors": "Increase/(Decrease) in Trade Creditors",
+      "changeInAccruals": "Increase/(Decrease) in Accrued Expenses",
+      "changeInVat": "Increase/(Decrease) in VAT Payable",
+      "changeInRetention": "Increase/(Decrease) in Retention Payable",
+      "netOperating": "Net Cash from Operating Activities",
+      "purchasePPE": "Purchase of Property, Plant & Equipment",
+      "proceedsDisposal": "Proceeds from Disposal of Assets",
+      "purchaseIntangibles": "Purchase of Intangible Assets",
+      "netInvesting": "Net Cash from Investing Activities",
+      "proceedsBorrowings": "Proceeds from Borrowings",
+      "repaymentBorrowings": "Repayment of Borrowings",
+      "dividendsPaid": "Dividends Paid",
+      "capitalContributions": "Capital Contributions",
+      "netFinancing": "Net Cash from Financing Activities",
+      "netCashChange": "Net Increase/(Decrease) in Cash",
+      "cashBeginning": "Cash at Beginning of Period",
+      "cashEnd": "Cash at End of Period",
+      "reconciled": "Reconciled",
+      "notReconciled": "Cash reconciliation discrepancy: {{amount}}",
+      "noData": "No cash flow data for the selected period.",
+      "noActivityAmount": "—",
+      "error": "Could not load the cash flow statement. Check your access and try again.",
+      "invalidPeriod": "Select a valid period beginning on or after 1 January 2020.",
+      "currencyNote": "All amounts are in MWK.",
+      "upgradePrompt": "The Cash Flow Statement is available on the Growth plan and above.",
       "viewPlans": "View plans"
     }
   },
