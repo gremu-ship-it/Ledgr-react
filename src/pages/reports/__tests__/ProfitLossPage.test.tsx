@@ -6,8 +6,16 @@ import { ProfitLossPage } from '../ProfitLossPage';
 import type { TrialBalanceParams, TrialBalanceRow } from '@/dal/repositories/ReportRepository';
 import { periodForPreset, previousPeriod } from '@/lib/reports/periods';
 
-const mocks = vi.hoisted(() => ({ getTrialBalance: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getTrialBalance: vi.fn(),
+  downloadFile: vi.fn(),
+  printReport: vi.fn(),
+}));
 
+vi.mock('@/lib/reports/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/reports/export')>();
+  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+});
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
 }));
@@ -80,6 +88,8 @@ function reportRows(params: TrialBalanceParams) {
 afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
+  mocks.downloadFile.mockReset();
+  mocks.printReport.mockReset();
 });
 
 describe('ProfitLossPage', () => {
@@ -154,8 +164,11 @@ describe('ProfitLossPage', () => {
     });
   });
 
-  it('applies the selected branch to both period queries', async () => {
-    mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => reportRows(params));
+  it('exports data from the selected branch for both comparison periods', async () => {
+    const branchRows = [row('4114', 'income', -77, 'Branch Sales')];
+    mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => (
+      params.branchId ? branchRows : reportRows(params)
+    ));
     renderPage();
     await screen.findByText('reports.profitLoss.netIncome');
     fireEvent.change(screen.getByLabelText('reports.shared.branch'), { target: { value: 'branch-1' } });
@@ -164,6 +177,32 @@ describe('ProfitLossPage', () => {
       const branchCalls = mocks.getTrialBalance.mock.calls.filter((call) => (call[1] as TrialBalanceParams).branchId === 'branch-1');
       expect(branchCalls).toHaveLength(2);
     });
+    await screen.findByText('Branch Sales');
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    const csv = mocks.downloadFile.mock.calls[0][0] as string;
+    expect(csv).toContain('reports.profitLoss.revenue,4114,Branch Sales,77.00,77.00,0.00,0.00');
+    expect(csv).not.toContain('Contract Revenue');
+  });
+
+  it('exports section totals, accounts, computed lines, and the enabled comparison columns', async () => {
+    mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => reportRows(params));
+    renderPage();
+    await screen.findByText('reports.profitLoss.netIncome');
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    let csv = mocks.downloadFile.mock.calls[0][0] as string;
+    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.profitLoss.current,reports.profitLoss.prior,reports.profitLoss.variance,reports.profitLoss.variancePct');
+    expect(csv).toContain('reports.profitLoss.revenue,,,950.00,900.00,50.00,5.56');
+    expect(csv).toContain('reports.profitLoss.revenue,4114,Contract Revenue,1000.00,900.00,100.00,11.11');
+    expect(csv).toContain(',,reports.profitLoss.grossProfit,700.00,700.00,0.00,0.00');
+    expect(csv).toContain(',,reports.profitLoss.netIncome,615.00,625.00,-10.00,-1.60');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'reports.profitLoss.comparePrior' }));
+    await waitFor(() => expect(screen.getAllByRole('columnheader')).toHaveLength(2));
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    csv = mocks.downloadFile.mock.calls[1][0] as string;
+    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.profitLoss.current');
+    expect(csv).not.toContain('Variance %');
   });
 
   it('shows the empty state when neither selected period has P&L activity', async () => {
@@ -173,5 +212,7 @@ describe('ProfitLossPage', () => {
     renderPage();
     expect(await screen.findByText('reports.profitLoss.noActivity')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByRole('button', { name: 'reports.shared.exportCSV' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'reports.shared.exportPDF' }).hasAttribute('disabled')).toBe(true);
   });
 });

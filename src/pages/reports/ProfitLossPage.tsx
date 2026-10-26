@@ -1,6 +1,8 @@
 import { Fragment, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
+import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { PeriodPicker } from '@/components/reports/PeriodPicker';
@@ -100,7 +102,7 @@ function SectionRows({
   const priorAccounts = new Map((priorSection?.accounts ?? []).map((account) => [account.accountId, account.amount]));
   return (
     <>
-      <tr className={`bg-gray-100 font-semibold ${section.total < 0 ? 'text-red-800' : 'text-gray-900'}`}>
+      <tr className={`section-header bg-gray-100 font-semibold ${section.total < 0 ? 'text-red-800' : 'text-gray-900'}`}>
         <th scope="row" className="px-4 py-3 text-left">{t(section.labelKey)}</th>
         <MetricCells current={section.total} prior={priorSection?.total ?? 0} comparePrior={comparePrior} locale={locale} />
       </tr>
@@ -139,7 +141,7 @@ function ComputedLineRow({
     ? line.amount > 0 ? 'bg-emerald-50 text-emerald-900' : line.amount < 0 ? 'bg-red-50 text-red-900' : 'bg-gray-50 text-gray-900'
     : 'bg-white text-gray-900';
   return (
-    <tr className={`border-t-2 border-gray-300 font-bold ${tone}`}>
+    <tr className={`computed-line border-t-2 border-gray-300 font-bold ${tone}`}>
       <th scope="row" className="px-4 py-3 text-left">{label}</th>
       <MetricCells current={line.amount} prior={priorAmount} comparePrior={comparePrior} locale={locale} />
     </tr>
@@ -201,6 +203,71 @@ export function ProfitLossPage() {
   };
   const updatePeriod = (from: string, to: string) => setPeriod({ from, to });
 
+  const handleExportCSV = () => {
+    const headers = [
+      t('reports.shared.section'),
+      t('reports.shared.accountCode'),
+      t('reports.shared.accountName'),
+      t('reports.profitLoss.current'),
+      ...(comparePrior ? [
+        t('reports.profitLoss.prior'),
+        t('reports.profitLoss.variance'),
+        t('reports.profitLoss.variancePct'),
+      ] : []),
+    ];
+    const csvRows: (string | number | null)[][] = [];
+    const metrics = (current: number, prior: number) => {
+      if (!comparePrior) return [current];
+      const variance = computeVariance(current, prior);
+      return [current, prior, variance.absolute, variance.percentage];
+    };
+
+    for (const section of currentReport.sections) {
+      const priorSection = priorSections.get(section.key);
+      const sectionLabel = t(section.labelKey);
+      csvRows.push([sectionLabel, '', '', ...metrics(section.total, priorSection?.total ?? 0)]);
+      const priorAccounts = new Map((priorSection?.accounts ?? []).map((account) => [account.accountId, account.amount]));
+      for (const account of section.accounts) {
+        const priorAmount = priorAccounts.get(account.accountId) ?? 0;
+        if (Math.abs(account.amount) < 0.000001 && Math.abs(priorAmount) < 0.000001) continue;
+        csvRows.push([
+          sectionLabel,
+          account.accountCode,
+          account.accountName,
+          ...metrics(account.amount, priorAmount),
+        ]);
+      }
+
+      const computedKey = section.key === 'cogs'
+        ? 'grossProfit'
+        : section.key === 'operatingExpenses'
+          ? 'operatingIncome'
+          : section.key === 'otherExpenses'
+            ? 'netIncome'
+            : null;
+      if (computedKey !== null) {
+        const computedLine = currentLines.get(computedKey);
+        if (computedLine) {
+          const label = computedKey === 'netIncome' && computedLine.amount < 0
+            ? t('reports.profitLoss.netLoss')
+            : t(computedLine.labelKey);
+          csvRows.push([
+            '',
+            '',
+            label,
+            ...metrics(computedLine.amount, priorLines.get(computedKey) ?? 0),
+          ]);
+        }
+      }
+    }
+
+    downloadFile(
+      generateCSV(headers, csvRows),
+      reportFilename('profit-loss', period.from, period.to),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   const renderComputedLine = (key: PnlComputedLine['key']) => {
     const line = currentLines.get(key);
     if (!line) return null;
@@ -220,11 +287,11 @@ export function ProfitLossPage() {
   };
 
   return (
-    <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-      <header className="mb-6">
+    <main className="report-container mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
+      <header className="report-header mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t('reports.profitLoss.title')}</h1>
         <p className="mt-1 text-sm text-gray-600">{t('reports.profitLoss.description')}</p>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="subtitle mt-2 text-sm text-gray-500">
           {t('reports.profitLoss.subtitle', {
             from: formatDate(period.from, i18n.language),
             to: formatDate(period.to, i18n.language),
@@ -233,7 +300,7 @@ export function ProfitLossPage() {
         </p>
       </header>
 
-      <section aria-label={t('reports.shared.filters')} className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <section aria-label={t('reports.shared.filters')} className="report-filters mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <PeriodPicker value={period} onChange={updatePeriod} onPresetChange={setPeriodPreset} />
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <BranchFilter businessId={businessId} value={branchId} onChange={setBranchId} />
@@ -256,6 +323,11 @@ export function ProfitLossPage() {
               <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
               {t('reports.shared.runReport')}
             </button>
+            <ReportExportButtons
+              onExportCSV={handleExportCSV}
+              onExportPDF={printReport}
+              disabled={isFetching || hasError || !hasActivity || !validPeriod}
+            />
           </div>
         </div>
       </section>
@@ -288,7 +360,7 @@ export function ProfitLossPage() {
           </div>
         ) : !hasError ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] border-collapse text-sm">
+            <table className="report-table w-full min-w-[640px] border-collapse text-sm">
               <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
                   <th scope="col" className="px-4 py-3 text-left">{t('reports.profitLoss.account')}</th>

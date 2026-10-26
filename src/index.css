@@ -818,3 +818,127 @@
     color: #64748B;
   }
 }
+@media print {
+  @page {
+    margin: 1.5cm;
+  }
+
+  html,
+  body,
+  #root {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  nav,
+  aside,
+  footer,
+  header:not(.report-header),
+  button,
+  .sidebar,
+  .mobile-menu,
+  .report-filters,
+  .report-export-buttons {
+    display: none !important;
+  }
+
+  .report-container {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .report-container > section:not(.report-filters) {
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .report-header {
+    margin-bottom: 1rem !important;
+    text-align: center;
+  }
+
+  .report-header h1 {
+    margin-bottom: 0.25rem;
+    font-size: 18pt !important;
+  }
+
+  .report-header .subtitle {
+    color: #666 !important;
+    font-size: 10pt !important;
+  }
+
+  .report-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: collapse !important;
+    font-size: 9pt !important;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 4px 8px !important;
+    border-bottom: 1px solid #ddd !important;
+    text-align: right;
+  }
+
+  .report-table th:first-child,
+  .report-table td:first-child {
+    text-align: left;
+  }
+
+  .trial-balance-table th:nth-child(2),
+  .trial-balance-table td:nth-child(2),
+  .cash-flow-table td:nth-child(2) {
+    text-align: left;
+  }
+
+  .report-container .section-header {
+    border-top: 2px solid #333 !important;
+    background: #f5f5f5 !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .report-container .total-row {
+    border-top: 2px solid #333 !important;
+    border-bottom: 2px solid #333 !important;
+    font-weight: 700 !important;
+  }
+
+  .report-container .computed-line {
+    border-top: 1px solid #999 !important;
+    font-weight: 700 !important;
+  }
+
+  .report-container .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  .balance-sheet-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+    padding: 0 !important;
+  }
+
+  .report-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-line,
+  .total-row {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-container .shadow-sm,
+  .report-container .shadow {
+    box-shadow: none !important;
+  }
+}

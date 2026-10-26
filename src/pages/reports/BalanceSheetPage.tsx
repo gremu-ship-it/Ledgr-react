@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { useAccessibleReportBranches } from '@/hooks/useAccessibleReportBranches';
@@ -63,7 +65,7 @@ function AccountRows({ accounts }: { accounts: ReturnType<typeof computeBalanceS
       {accounts.map((account) => {
         if (Math.abs(account.amount) < 0.000001) return null;
         return (
-          <div key={account.accountId} className={`flex items-baseline justify-between gap-4 px-3 py-2 text-sm ${account.amount < 0 ? 'text-red-700' : 'text-gray-700'}`}>
+          <div key={account.accountId} className={`report-line flex items-baseline justify-between gap-4 px-3 py-2 text-sm ${account.amount < 0 ? 'text-red-700' : 'text-gray-700'}`}>
             <div className="flex min-w-0 items-baseline gap-2" style={{ paddingLeft: `${account.level}rem` }}>
               <span className="shrink-0 font-mono text-[11px] text-gray-500">{account.accountCode}</span>
               <span className="truncate">{account.accountName}</span>
@@ -85,10 +87,10 @@ function StatementSection({
 }) {
   const { t } = useTranslation();
   return (
-    <section className="border-t border-gray-100 py-3 first:border-t-0">
-      <h3 className="px-3 py-2 text-sm font-semibold text-gray-800">{t(section.labelKey)}</h3>
+    <section className="report-section border-t border-gray-100 py-3 first:border-t-0">
+      <h3 className="section-header px-3 py-2 text-sm font-semibold text-gray-800">{t(section.labelKey)}</h3>
       <AccountRows accounts={section.accounts} />
-      <div className="mt-1 flex items-center justify-between gap-4 border-t border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900">
+      <div className="total-row mt-1 flex items-center justify-between gap-4 border-t border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900">
         <span>{t(totalLabelKey)}</span>
         <span className="whitespace-nowrap text-right tabular-nums">{formatAmount(section.total)}</span>
       </div>
@@ -138,17 +140,69 @@ export function BalanceSheetPage() {
   };
   const refresh = () => void reportQuery.refetch();
 
+  const handleExportCSV = () => {
+    const csvRows: (string | number | null)[][] = [];
+    const addGroup = (label: string) => csvRows.push([label, '', '', null]);
+    const addAccounts = (section: ReturnType<typeof computeBalanceSheet>['assets'][number]) => {
+      const sectionLabel = t(section.labelKey);
+      addGroup(sectionLabel);
+      for (const account of section.accounts) {
+        if (Math.abs(account.amount) < 0.000001) continue;
+        csvRows.push([sectionLabel, account.accountCode, account.accountName, account.amount]);
+      }
+    };
+    const addSubtotal = (label: string, amount: number) => csvRows.push(['', '', label, amount]);
+
+    addGroup(t('reports.balanceSheet.assets'));
+    for (const section of report.assets) {
+      addAccounts(section);
+      const totalLabelKey = ASSET_TOTAL_LABELS[section.key as keyof typeof ASSET_TOTAL_LABELS];
+      addSubtotal(t(totalLabelKey), section.total);
+    }
+    addSubtotal(t('reports.balanceSheet.totalAssets'), report.totalAssets);
+
+    addGroup(t('reports.balanceSheet.liabilities'));
+    for (const section of report.liabilities) {
+      addAccounts(section);
+      const totalLabelKey = LIABILITY_TOTAL_LABELS[section.key as keyof typeof LIABILITY_TOTAL_LABELS];
+      addSubtotal(t(totalLabelKey), section.total);
+    }
+    addSubtotal(t('reports.balanceSheet.totalLiabilities'), report.totalLiabilities);
+
+    addGroup(t('reports.balanceSheet.equity'));
+    for (const section of report.equity) {
+      for (const account of section.accounts) {
+        if (Math.abs(account.amount) < 0.000001) continue;
+        csvRows.push([t(section.labelKey), account.accountCode, account.accountName, account.amount]);
+      }
+    }
+    addSubtotal(t('reports.balanceSheet.retainedEarnings'), report.retainedEarnings);
+    addSubtotal(t('reports.balanceSheet.totalEquity'), report.totalEquity);
+    addSubtotal(t('reports.balanceSheet.totalLiabilitiesAndEquity'), totalLiabilitiesAndEquity);
+
+    downloadFile(
+      generateCSV([
+        t('reports.shared.section'),
+        t('reports.shared.accountCode'),
+        t('reports.shared.accountName'),
+        t('reports.shared.balanceMwk'),
+      ], csvRows),
+      reportFilename('balance-sheet', asOfDate, asOfDate),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   return (
-    <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-      <header className="mb-6">
+    <main className="report-container mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
+      <header className="report-header mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t('reports.balanceSheet.title')}</h1>
         <p className="mt-1 text-sm text-gray-600">{t('reports.balanceSheet.description')}</p>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="subtitle mt-2 text-sm text-gray-500">
           {t('reports.balanceSheet.subtitle', { date: formatDate(asOfDate, i18n.language), branch: branchLabel })}
         </p>
       </header>
 
-      <section aria-label={t('reports.shared.filters')} className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <section aria-label={t('reports.shared.filters')} className="report-filters mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <fieldset>
           <legend className="mb-2 text-sm font-semibold text-gray-800">{t('reports.balanceSheet.asOf')}</legend>
           <div className="flex flex-wrap items-center gap-2">
@@ -183,15 +237,22 @@ export function BalanceSheetPage() {
         </fieldset>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <BranchFilter businessId={businessId} value={branchId} onChange={setBranchId} />
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={!businessId || !validAsOfDate || reportQuery.isFetching}
-            className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:self-end"
-          >
-            <RefreshCw className={`h-4 w-4 ${reportQuery.isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
-            {t('reports.shared.runReport')}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-end">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={!businessId || !validAsOfDate || reportQuery.isFetching}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${reportQuery.isFetching ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {t('reports.shared.runReport')}
+            </button>
+            <ReportExportButtons
+              onExportCSV={handleExportCSV}
+              onExportPDF={printReport}
+              disabled={reportQuery.isFetching || reportQuery.isError || !hasActivity || !validAsOfDate}
+            />
+          </div>
         </div>
       </section>
 
@@ -242,35 +303,35 @@ export function BalanceSheetPage() {
             <p className="mt-1 text-sm text-gray-500">{t('reports.shared.noData')}</p>
           </div>
         ) : !reportQuery.isError ? (
-          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 sm:p-5">
-            <section aria-label={t('reports.balanceSheet.assets')} className="rounded-xl border border-gray-200 p-3 sm:p-4">
-              <h2 className="mb-2 border-b-2 border-gray-300 px-3 py-3 text-base font-bold uppercase tracking-wide text-gray-900">
+          <div className="balance-sheet-grid grid grid-cols-1 gap-4 p-4 md:grid-cols-2 sm:p-5">
+            <section aria-label={t('reports.balanceSheet.assets')} className="report-section rounded-xl border border-gray-200 p-3 sm:p-4">
+              <h2 className="section-header mb-2 border-b-2 border-gray-300 px-3 py-3 text-base font-bold uppercase tracking-wide text-gray-900">
                 {t('reports.balanceSheet.assets')}
               </h2>
               {report.assets.map((section) => (
                 <StatementSection key={section.key} section={section} totalLabelKey={ASSET_TOTAL_LABELS[section.key as keyof typeof ASSET_TOTAL_LABELS]} />
               ))}
-              <div className="mt-2 flex items-center justify-between gap-4 border-t-2 border-gray-400 px-3 py-3 text-sm font-bold text-gray-900">
+              <div className="total-row mt-2 flex items-center justify-between gap-4 border-t-2 border-gray-400 px-3 py-3 text-sm font-bold text-gray-900">
                 <span>{t('reports.balanceSheet.totalAssets')}</span>
                 <span className="whitespace-nowrap text-right tabular-nums">{formatAmount(report.totalAssets)}</span>
               </div>
             </section>
 
-            <section aria-label={t('reports.balanceSheet.liabilitiesAndEquity')} className="rounded-xl border border-gray-200 p-3 sm:p-4">
-              <h2 className="mb-2 border-b-2 border-gray-300 px-3 py-3 text-base font-bold uppercase tracking-wide text-gray-900">
+            <section aria-label={t('reports.balanceSheet.liabilitiesAndEquity')} className="report-section rounded-xl border border-gray-200 p-3 sm:p-4">
+              <h2 className="section-header mb-2 border-b-2 border-gray-300 px-3 py-3 text-base font-bold uppercase tracking-wide text-gray-900">
                 {t('reports.balanceSheet.liabilitiesAndEquity')}
               </h2>
               {report.liabilities.map((section) => (
                 <StatementSection key={section.key} section={section} totalLabelKey={LIABILITY_TOTAL_LABELS[section.key as keyof typeof LIABILITY_TOTAL_LABELS]} />
               ))}
-              <div className="mt-1 flex items-center justify-between gap-4 border-t-2 border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900">
+              <div className="total-row mt-1 flex items-center justify-between gap-4 border-t-2 border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900">
                 <span>{t('reports.balanceSheet.totalLiabilities')}</span>
                 <span className="whitespace-nowrap text-right tabular-nums">{formatAmount(report.totalLiabilities)}</span>
               </div>
 
               {report.equity.map((section) => (
                 <section key={section.key} className="border-t border-gray-100 py-3">
-                  <h3 className="px-3 py-2 text-sm font-semibold text-gray-800">{t(section.labelKey)}</h3>
+                  <h3 className="section-header px-3 py-2 text-sm font-semibold text-gray-800">{t(section.labelKey)}</h3>
                   <AccountRows accounts={section.accounts} />
                   <div className="flex items-center justify-between gap-4 px-3 py-2 text-sm text-gray-700">
                     <span>{t('reports.balanceSheet.retainedEarnings')}</span>
@@ -278,13 +339,13 @@ export function BalanceSheetPage() {
                       {formatAmount(report.retainedEarnings)}
                     </span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-4 border-t border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900">
+                  <div className="total-row mt-1 flex items-center justify-between gap-4 border-t border-gray-200 px-3 py-2 text-sm font-semibold text-gray-900">
                     <span>{t('reports.balanceSheet.totalEquity')}</span>
                     <span className="whitespace-nowrap text-right tabular-nums">{formatAmount(report.totalEquity)}</span>
                   </div>
                 </section>
               ))}
-              <div className="mt-2 flex items-center justify-between gap-4 border-t-2 border-gray-400 px-3 py-3 text-sm font-bold text-gray-900">
+              <div className="total-row mt-2 flex items-center justify-between gap-4 border-t-2 border-gray-400 px-3 py-3 text-sm font-bold text-gray-900">
                 <span>{t('reports.balanceSheet.totalLiabilitiesAndEquity')}</span>
                 <span className="whitespace-nowrap text-right tabular-nums">{formatAmount(totalLiabilitiesAndEquity)}</span>
               </div>

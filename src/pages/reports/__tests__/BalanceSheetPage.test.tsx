@@ -3,11 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BalanceSheetPage } from '../BalanceSheetPage';
-import type { TrialBalanceRow } from '@/dal/repositories/ReportRepository';
+import type { TrialBalanceParams, TrialBalanceRow } from '@/dal/repositories/ReportRepository';
 import { balanceSheetDateForPreset } from '@/lib/reports/balanceSheet';
 
-const mocks = vi.hoisted(() => ({ getTrialBalance: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getTrialBalance: vi.fn(),
+  downloadFile: vi.fn(),
+  printReport: vi.fn(),
+}));
 
+vi.mock('@/lib/reports/export', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/reports/export')>();
+  return { ...actual, downloadFile: mocks.downloadFile, printReport: mocks.printReport };
+});
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
 }));
@@ -66,6 +74,8 @@ function renderPage() {
 afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
+  mocks.downloadFile.mockReset();
+  mocks.printReport.mockReset();
 });
 
 describe('BalanceSheetPage', () => {
@@ -93,6 +103,32 @@ describe('BalanceSheetPage', () => {
       dateTo: balanceSheetDateForPreset('thisMonth'),
       branchId: null,
     }));
+  });
+
+  it('exports the flattened sections and reflects the selected branch data', async () => {
+    const branchRows = [row('1110', 'asset', 55, 'Branch Cash')];
+    mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) =>
+      params.branchId ? branchRows : currentRows,
+    );
+    renderPage();
+    await screen.findByText('Cash on Hand');
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    let csv = mocks.downloadFile.mock.calls[0][0] as string;
+    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.shared.balanceMwk');
+    expect(csv).toContain('reports.balanceSheet.assets,,,');
+    expect(csv).toContain('reports.balanceSheet.currentAssets,1110,Cash on Hand,100.00');
+    expect(csv).toContain(',,reports.balanceSheet.totalAssets,100.00');
+    expect(csv).toContain('reports.balanceSheet.liabilities,,,');
+    expect(csv).toContain(',,reports.balanceSheet.totalLiabilitiesAndEquity,100.00');
+    expect(csv.indexOf('reports.balanceSheet.assets,,,')).toBeLessThan(csv.indexOf('reports.balanceSheet.liabilities,,,'));
+
+    fireEvent.change(screen.getByLabelText('reports.shared.branch'), { target: { value: 'branch-1' } });
+    await screen.findByText('Branch Cash');
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    csv = mocks.downloadFile.mock.calls[1][0] as string;
+    expect(csv).toContain('reports.balanceSheet.currentAssets,1110,Branch Cash,55.00');
+    expect(csv).not.toContain('Cash on Hand');
   });
 
   it('updates the cumulative as-of date from the end-of-last-month preset', async () => {

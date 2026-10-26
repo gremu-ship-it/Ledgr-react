@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw } from 'lucide-react';
+import { ReportExportButtons } from '@/components/reports/ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 import { useTranslation } from 'react-i18next';
 import { BranchFilter } from '@/components/reports/BranchFilter';
 import { PeriodPicker } from '@/components/reports/PeriodPicker';
@@ -130,15 +132,39 @@ export function CashFlowPage() {
 
   const refresh = () => void reportQuery.refetch();
   const updatePeriod = (from: string, to: string) => setPeriod({ from, to });
+
+  const handleExportCSV = () => {
+    const csvRows: (string | number | null)[][] = [];
+    for (const section of report.sections) {
+      csvRows.push([t(section.labelKey), '', null]);
+      for (const line of section.lines) {
+        csvRows.push(['', t(line.labelKey), line.amount]);
+      }
+    }
+    csvRows.push(['', t('reports.cashFlow.netCashChange'), report.netCashChange]);
+    csvRows.push(['', t('reports.cashFlow.cashBeginning'), report.cashBeginning]);
+    csvRows.push(['', t('reports.cashFlow.cashEnd'), report.cashEnd]);
+
+    downloadFile(
+      generateCSV([
+        t('reports.shared.section'),
+        t('reports.shared.accountName'),
+        t('reports.shared.balanceMwk'),
+      ], csvRows),
+      reportFilename('cash-flow', period.from, period.to),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   const isLoading = reportQuery.isFetching;
   const hasError = reportQuery.isError;
 
   return (
-    <main className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
-      <header className="mb-6">
+    <main className="report-container mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8">
+      <header className="report-header mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t('reports.cashFlow.title')}</h1>
         <p className="mt-1 text-sm text-gray-600">{t('reports.cashFlow.description')}</p>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="subtitle mt-2 text-sm text-gray-500">
           {t('reports.cashFlow.subtitle', {
             from: formatDate(period.from, i18n.language),
             to: formatDate(period.to, i18n.language),
@@ -147,19 +173,26 @@ export function CashFlowPage() {
         </p>
       </header>
 
-      <section aria-label={t('reports.shared.filters')} className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+      <section aria-label={t('reports.shared.filters')} className="report-filters mb-6 flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
         <PeriodPicker value={period} onChange={updatePeriod} />
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <BranchFilter businessId={businessId} value={branchId} onChange={setBranchId} />
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={!businessId || !validPeriod || isLoading}
-            className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60 sm:self-end"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
-            {t('reports.shared.runReport')}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-end">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={!businessId || !validPeriod || isLoading}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {t('reports.shared.runReport')}
+            </button>
+            <ReportExportButtons
+              onExportCSV={handleExportCSV}
+              onExportPDF={printReport}
+              disabled={isLoading || hasError || !validPeriod || !hasActivity}
+            />
+          </div>
         </div>
       </section>
 
@@ -212,12 +245,12 @@ export function CashFlowPage() {
           </div>
         ) : !hasError ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[36rem] border-collapse text-sm">
+            <table className="report-table cash-flow-table w-full min-w-[36rem] border-collapse text-sm">
               <tbody>
                 {report.sections.map((section) => (
                   <FragmentSection key={section.key} section={section} formatAmount={formatAmount} />
                 ))}
-                <tr className="border-y-2 border-gray-400 bg-brand-50 font-bold text-gray-950">
+                <tr className="total-row border-y-2 border-gray-400 bg-brand-50 font-bold text-gray-950">
                   <th scope="row" className="px-4 py-3 text-left">{t('reports.cashFlow.netCashChange')}</th>
                   <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums">{formatAmount(report.netCashChange)}</td>
                 </tr>
@@ -253,13 +286,13 @@ function FragmentSection({
   const { t } = useTranslation();
   return (
     <>
-      <tr className="bg-gray-100 text-gray-900">
+      <tr className="section-header bg-gray-100 text-gray-900">
         <th scope="colgroup" colSpan={2} className="px-4 py-3 text-left font-bold uppercase tracking-wide">
           {t(section.labelKey)}
         </th>
       </tr>
       {section.lines.map((line) => (
-        <tr key={line.key} className={line.isSubtotal ? 'border-t border-gray-300 bg-gray-50 font-bold text-gray-900' : line.amount < 0 ? 'text-red-700' : 'text-gray-700'}>
+        <tr key={line.key} className={line.isSubtotal ? 'computed-line total-row border-t border-gray-300 bg-gray-50 font-bold text-gray-900' : line.amount < 0 ? 'text-red-700' : 'text-gray-700'}>
           <th scope="row" className="px-4 py-2.5 text-left font-medium">
             {t(line.labelKey)}
           </th>
