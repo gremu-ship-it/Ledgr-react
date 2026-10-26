@@ -26,6 +26,17 @@ describe('Reports navigation', () => {
     expect(isItemLocked(item!, 'growth')).toBe(false);
   });
 
+  it('adds Balance Sheet beside other reports and gates it to Growth+', () => {
+    const item = navItemForPath('/reports/balance-sheet');
+    expect(item).toBeDefined();
+    expect(item?.labelKey).toBe('nav.reports.balanceSheet');
+    expect(item?.minPlan).toBe('growth');
+    expect(item?.requiresOrgCapability).toBeUndefined();
+    expect(item?.partnerFeature).toBeUndefined();
+    expect(isItemLocked(item!, 'starter')).toBe(true);
+    expect(isItemLocked(item!, 'growth')).toBe(false);
+  });
+
   it('preserves report role restrictions on the new deep route', () => {
     expect(isPathAllowedForRole('owner', '/reports/trial-balance')).toBe(true);
     expect(isPathAllowedForRole('manager', '/reports/trial-balance')).toBe(true);
@@ -37,5 +48,10 @@ describe('Reports navigation', () => {
     expect(isPathAllowedForRole('payroll_manager', '/reports/profit-loss')).toBe(false);
     expect(isPathAllowedForRole('supervisor', '/reports/profit-loss')).toBe(false);
     expect(isPathAllowedForRole('cashier', '/reports/profit-loss')).toBe(false);
+    expect(isPathAllowedForRole('owner', '/reports/balance-sheet')).toBe(true);
+    expect(isPathAllowedForRole('manager', '/reports/balance-sheet')).toBe(true);
+    expect(isPathAllowedForRole('payroll_manager', '/reports/balance-sheet')).toBe(false);
+    expect(isPathAllowedForRole('supervisor', '/reports/balance-sheet')).toBe(false);
+    expect(isPathAllowedForRole('cashier', '/reports/balance-sheet')).toBe(false);
   });
 });
