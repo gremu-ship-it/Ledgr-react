@@ -250,6 +250,7 @@ describe('computeCashFlow — indirect method', () => {
     expect(dayBefore('2026-03-01')).toBe('2026-02-28');
     expect(dayBefore('0001-01-01')).toBeNull();
     expect(isValidCashFlowPeriod({ from: '2026-10-01', to: '2026-10-26' })).toBe(true);
+    expect(isValidCashFlowPeriod({ from: '0001-01-01', to: '0001-01-01' })).toBe(false);
     expect(isValidCashFlowPeriod({ from: '0000-12-31', to: '0001-01-01' })).toBe(false);
     expect(isValidCashFlowPeriod({ from: '2026-10-31', to: '2026-10-01' })).toBe(false);
   });

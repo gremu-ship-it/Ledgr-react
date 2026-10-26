@@ -56,7 +56,7 @@ function isValidIsoDate(value: string): boolean {
 export function isValidCashFlowPeriod(period: CashFlowPeriod): boolean {
   return isValidIsoDate(period.from)
     && isValidIsoDate(period.to)
-    && period.from >= CASH_FLOW_BALANCE_START_DATE
+    && period.from > CASH_FLOW_BALANCE_START_DATE
     && period.from <= period.to;
 }
 
