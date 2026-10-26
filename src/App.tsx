@@ -18,6 +18,7 @@ import { useDefaultRoute } from './hooks/useDefaultRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgradePrompt';
+import { ProfitLossUpgradePrompt } from '@/components/reports/ProfitLossUpgradePrompt';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
@@ -103,6 +104,7 @@ const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage')
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
 const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
+const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
@@ -168,6 +170,19 @@ function TrialBalanceRoute() {
       fallback={<TrialBalanceUpgradePrompt />}
     >
       <TrialBalancePage />
+    </PlanGate>
+  );
+}
+
+function ProfitLossRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.profitLoss.title')}
+      fallback={<ProfitLossUpgradePrompt />}
+    >
+      <ProfitLossPage />
     </PlanGate>
   );
 }
@@ -467,6 +482,7 @@ function App() {
                     </PlanGate>
                   } />
                   <Route path="/reports/trial-balance" element={<TrialBalanceRoute />} />
+                  <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />
