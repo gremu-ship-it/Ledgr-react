@@ -128,7 +128,8 @@
   },
   "nav": {
     "reports": {
-      "trialBalance": "Trial Balance"
+      "trialBalance": "Trial Balance",
+      "profitLoss": "Profit & Loss"
     }
   },
   "pages": {
@@ -532,6 +533,35 @@
       "collapseAll": "Collapse all",
       "expandAccount": "Expand {{account}}",
       "collapseAccount": "Collapse {{account}}"
+    },
+    "profitLoss": {
+      "title": "Profit & Loss",
+      "subtitle": "{{from}} to {{to}} · {{branch}}",
+      "description": "Income statement for the selected period.",
+      "revenue": "Revenue",
+      "cogs": "Cost of Goods Sold",
+      "lessCogs": "Less: Cost of Goods Sold",
+      "grossProfit": "Gross Profit",
+      "operatingExpenses": "Operating Expenses",
+      "lessOperatingExpenses": "Less: Operating Expenses",
+      "operatingIncome": "Operating Income",
+      "otherIncome": "Other Income",
+      "otherExpenses": "Other Expenses",
+      "lessOtherExpenses": "Less: Other Expenses",
+      "netIncome": "Net Income",
+      "netLoss": "Net Loss",
+      "comparePrior": "Compare to prior period",
+      "current": "Current",
+      "prior": "Prior",
+      "variance": "Variance",
+      "variancePct": "Variance %",
+      "account": "Account",
+      "noActivity": "No revenue or expense activity for the selected period.",
+      "error": "Could not load the profit and loss report. Check your access and try again.",
+      "currencyNote": "All amounts are in MWK.",
+      "notAvailable": "N/A",
+      "upgradePrompt": "Profit & Loss is available on the Growth plan and above.",
+      "viewPlans": "View plans"
     }
   },
   "ai": {

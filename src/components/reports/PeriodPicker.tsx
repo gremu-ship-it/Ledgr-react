@@ -5,6 +5,7 @@ import { periodForPreset, type DateRange, type PeriodPreset } from '@/lib/report
 interface PeriodPickerProps {
   value: DateRange;
   onChange: (from: string, to: string) => void;
+  onPresetChange?: (preset: PeriodPreset | 'custom') => void;
 }
 
 const PRESETS: { key: PeriodPreset; labelKey: string }[] = [
@@ -15,7 +16,7 @@ const PRESETS: { key: PeriodPreset; labelKey: string }[] = [
   { key: 'lastYear', labelKey: 'reports.shared.lastYear' },
 ];
 
-export function PeriodPicker({ value, onChange }: PeriodPickerProps) {
+export function PeriodPicker({ value, onChange, onPresetChange }: PeriodPickerProps) {
   const { t } = useTranslation();
   const [activePreset, setActivePreset] = useState<PeriodPreset | 'custom' | null>('thisMonth');
   const invalidRange = Boolean(value.from && value.to && value.from > value.to);
@@ -23,6 +24,7 @@ export function PeriodPicker({ value, onChange }: PeriodPickerProps) {
   const selectPreset = (preset: PeriodPreset) => {
     const range = periodForPreset(preset);
     setActivePreset(preset);
+    onPresetChange?.(preset);
     onChange(range.from, range.to);
   };
 
@@ -54,6 +56,7 @@ export function PeriodPicker({ value, onChange }: PeriodPickerProps) {
           value={value.from}
           onChange={(event) => {
             setActivePreset('custom');
+            onPresetChange?.('custom');
             onChange(event.target.value, value.to);
           }}
           className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
@@ -67,6 +70,7 @@ export function PeriodPicker({ value, onChange }: PeriodPickerProps) {
           value={value.to}
           onChange={(event) => {
             setActivePreset('custom');
+            onPresetChange?.('custom');
             onChange(value.from, event.target.value);
           }}
           className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
