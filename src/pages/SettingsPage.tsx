@@ -1,4 +1,4 @@
-import { Navigate, useNavigate } from 'react-router';
+import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { DemoNotice } from '@/components/demo/DemoNotice';
@@ -23,6 +23,7 @@ import {
   Copy,
   ExternalLink,
   Key,
+  ClipboardCheck,
   LogOut,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -38,6 +39,7 @@ import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BusinessDataBackup } from '@/components/settings/BusinessDataBackup';
 import { BillingTab } from '@/components/billing/BillingTab';
 import { TeamManagementPage } from '@/pages/settings/TeamManagementPage';
+import { ApprovalsTab } from '@/pages/settings/ApprovalsTab';
 import { PlanGate } from '@/components/billing/PlanGate';
 import {
   OPERATING_MODELS,
@@ -116,8 +118,8 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance';
-const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance'];
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance' | 'approvals';
+const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance', 'approvals'];
 
 // Legacy tabs carry hardcoded labels; new tabs MUST provide `labelKey` and
 // resolve through i18n (the renderer prefers labelKey when present).
@@ -131,6 +133,7 @@ const TABS: { value: Tab; label: string; labelKey?: string; icon: typeof Buildin
   { value: 'billing', label: 'Billing & Plans', icon: DollarSign },
   { value: 'appearance', label: 'Appearance', icon: Eye },
   { value: 'privacy', label: 'Privacy', icon: Cookie },
+  { value: 'approvals', label: '', labelKey: 'settings.approvals.tabTitle', icon: ClipboardCheck },
 ];
 
 function AppearanceTab() {
@@ -2154,13 +2157,16 @@ For privacy requests, email privacy@ledgr.app or use the in-app tools.
 export function SettingsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const [signingOut, setSigningOut] = useState(false);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>(
-    tabParam && TAB_VALUES.includes(tabParam) ? tabParam : 'business',
+    location.pathname === '/settings/approvals'
+      ? 'approvals'
+      : tabParam && TAB_VALUES.includes(tabParam) ? tabParam : 'business',
   );
 
   // Keep the active tab in sync if the ?tab= query param changes after mount
@@ -2175,12 +2181,21 @@ export function SettingsPage() {
       setActiveTab(tabParam);
     }
   }
+  const selectedTab: Tab = location.pathname === '/settings/approvals'
+    ? 'approvals'
+    : activeTab === 'approvals' && tabParam !== 'approvals' ? 'business' : activeTab;
 
   const { data: business, isLoading } = useQuery({
     queryKey: ['business', businessId],
     queryFn: () => repos.business.findById(businessId!),
     enabled: Boolean(businessId),
   });
+
+  function handleTabSelect(tab: Tab) {
+    setActiveTab(tab);
+    if (tab === 'approvals') navigate('/settings/approvals');
+    else if (location.pathname === '/settings/approvals') navigate(`/settings?tab=${tab}`);
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -2224,10 +2239,10 @@ export function SettingsPage() {
               return (
                 <button
                   key={tab.value}
-                  onClick={() => setActiveTab(tab.value)}
+                  onClick={() => handleTabSelect(tab.value)}
                   className={cls(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left',
-                    activeTab === tab.value
+                    selectedTab === tab.value
                       ? 'bg-brand-50 text-brand-700'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
                   )}
@@ -2263,23 +2278,24 @@ export function SettingsPage() {
               </div>
             ) : (
               <>
-                {activeTab === 'business' && business && (
+                {selectedTab === 'business' && business && (
                   <BusinessProfileTab business={business} />
                 )}
-                {activeTab === 'financial' && business && (
+                {selectedTab === 'financial' && business && (
                   <FinancialSettingsTab business={business} />
                 )}
-                {activeTab === 'profile' && <UserProfileTab />}
-                {activeTab === 'security' && <SecurityTab />}
-                {activeTab === 'team' && <TeamManagementPage />}
-                {activeTab === 'api' && (
+                {selectedTab === 'profile' && <UserProfileTab />}
+                {selectedTab === 'security' && <SecurityTab />}
+                {selectedTab === 'team' && <TeamManagementPage />}
+                {selectedTab === 'api' && (
                   <PlanGate capability="webhooks" featureName="API & Webhooks" fallback="lock">
                     <WebhookSettings />
                   </PlanGate>
                 )}
-                {activeTab === 'billing' && <BillingTab />}
-                {activeTab === 'appearance' && <AppearanceTab />}
-                {activeTab === 'privacy' && <PrivacyTab />}
+                {selectedTab === 'billing' && <BillingTab />}
+                {selectedTab === 'appearance' && <AppearanceTab />}
+                {selectedTab === 'privacy' && <PrivacyTab />}
+                {selectedTab === 'approvals' && <ApprovalsTab />}
               </>
             )}
           </div>

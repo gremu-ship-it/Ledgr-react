@@ -34,6 +34,153 @@ export type Database = {
   }
   public: {
     Tables: {
+      approval_history: {
+        Row: {
+          action: string
+          acted_at: string
+          acted_by: string
+          comments: string | null
+          id: number
+          request_id: string
+          step_order: number
+        }
+        Insert: {
+          action: string
+          acted_at?: string
+          acted_by: string
+          comments?: string | null
+          id?: never
+          request_id: string
+          step_order: number
+        }
+        Update: {
+          action?: string
+          acted_at?: string
+          acted_by?: string
+          comments?: string | null
+          id?: never
+          request_id?: string
+          step_order?: number
+        }
+        Relationships: []
+      }
+      approval_request_steps: {
+        Row: {
+          description: string | null
+          request_id: string
+          required_role: string
+          step_order: number
+        }
+        Insert: {
+          description?: string | null
+          request_id: string
+          required_role: string
+          step_order: number
+        }
+        Update: {
+          description?: string | null
+          request_id?: string
+          required_role?: string
+          step_order?: number
+        }
+        Relationships: []
+      }
+      approval_requests: {
+        Row: {
+          business_id: string
+          completed_at: string | null
+          current_step: number
+          document_id: string
+          document_snapshot: Json
+          document_type: string
+          id: string
+          requested_at: string
+          requested_by: string
+          status: string
+          workflow_id: string
+        }
+        Insert: {
+          business_id: string
+          completed_at?: string | null
+          current_step?: number
+          document_id: string
+          document_snapshot: Json
+          document_type: string
+          id?: string
+          requested_at?: string
+          requested_by: string
+          status?: string
+          workflow_id: string
+        }
+        Update: {
+          business_id?: string
+          completed_at?: string | null
+          current_step?: number
+          document_id?: string
+          document_snapshot?: Json
+          document_type?: string
+          id?: string
+          requested_at?: string
+          requested_by?: string
+          status?: string
+          workflow_id?: string
+        }
+        Relationships: []
+      }
+      approval_workflow_steps: {
+        Row: {
+          description: string | null
+          id: string
+          required_role: string
+          step_order: number
+          workflow_id: string
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          required_role: string
+          step_order: number
+          workflow_id: string
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          required_role?: string
+          step_order?: number
+          workflow_id?: string
+        }
+        Relationships: []
+      }
+      approval_workflows: {
+        Row: {
+          business_id: string
+          created_at: string
+          document_type: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          document_type: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          document_type?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       accounting_period_events: {
         Row: {
           action: string
@@ -11384,6 +11531,40 @@ export type Database = {
       }
     }
     Functions: {
+      act_on_approval: {
+        Args: { p_action: string; p_comments?: string | null; p_request_id: string }
+        Returns: Json
+      }
+      can_approve_step: {
+        Args: { p_request_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      get_approval_state: {
+        Args: { p_business_id: string; p_document_id: string; p_document_type: string }
+        Returns: Json
+      }
+      requires_approval: {
+        Args: { p_business_id: string; p_document_type: string }
+        Returns: boolean
+      }
+      resubmit_approval: {
+        Args: { p_request_id: string }
+        Returns: Json
+      }
+      save_approval_workflow: {
+        Args: {
+          p_business_id: string
+          p_document_type: string
+          p_is_active: boolean
+          p_name: string
+          p_steps: Json
+        }
+        Returns: string
+      }
+      start_approval_workflow: {
+        Args: { p_business_id: string; p_document_id: string; p_document_type: string }
+        Returns: Json
+      }
       _ledgr_account_by_code: {
         Args: { p_business_id: string; p_code: string }
         Returns: string

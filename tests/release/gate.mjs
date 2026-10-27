@@ -6,6 +6,7 @@ export function evidenceExit(outcomes) {
   return outcomes.some(r => r.status === 'PASS') ? 0 : 2;
 }
 export const suites = {
+  'approval-workflows.test.ts': 'approval-workflows.json',
   'business-operating-model-audit.test.ts': 'business-operating-model-audit.json',
   'construction-projects.test.ts': 'construction-projects.json',
   'construction-project-audit-ownership.test.ts': 'construction-project-audit-ownership.json',

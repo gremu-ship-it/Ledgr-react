@@ -34,6 +34,7 @@ import {
 } from '@/components/construction/constructionUi';
 import { ConstructionDeliveryNoteForm } from '@/components/construction/ConstructionDeliveryNoteForm';
 import { ConstructionGoodsReceiptForm } from '@/components/construction/ConstructionGoodsReceiptForm';
+import { ApprovalBanner } from '@/components/approvals/ApprovalBanner';
 
 const PO_STATUS_STYLE: Record<string, string> = {
   draft: 'bg-slate-100 text-slate-700',
@@ -546,11 +547,24 @@ function PurchaseOrderDetail({
     queryClient.invalidateQueries({ queryKey: ['construction'] });
   };
 
+  const approvalRequirement = useQuery({
+    queryKey: ['approval-required', businessId, 'purchase_order'],
+    queryFn: () => repos.approval.requiresApproval(businessId, 'purchase_order'),
+    enabled: Boolean(businessId),
+  });
+
   const authorizeMutation = useMutation({
-    mutationFn: () => repos.construction.authorizePurchaseOrder(poId),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const approval = await repos.approval.start(businessId, 'purchase_order', poId);
+      if (approval.required) return { approvalSubmitted: true };
+      await repos.construction.authorizePurchaseOrder(poId);
+      return { approvalSubmitted: false };
+    },
+    onSuccess: (result) => {
       invalidate();
-      onNotice(t('construction.procurement.purchaseOrders.authorizedNotice'));
+      onNotice(result.approvalSubmitted
+        ? t('approvals.banner.submittedNotice')
+        : t('construction.procurement.purchaseOrders.authorizedNotice'));
     },
   });
 
@@ -598,7 +612,14 @@ function PurchaseOrderDetail({
     CONSTRUCTION_CAPABILITY_LABELS[CONSTRUCTION_CAPABILITIES.poManage],
   );
   const isCreator = Boolean(currentUser?.id && po.created_by === currentUser.id);
-  const fourEyesBlocked = po.status === 'draft' && isCreator;
+  const fourEyesBlocked = po.status === 'draft' && isCreator && !approvalRequirement.data;
+  const approvalConfigured = approvalRequirement.data === true;
+  const authorizeButtonAllowed = approvalConfigured
+    ? manageGate.allowed || authorizeGate.allowed
+    : authorizeGate.allowed && !fourEyesBlocked;
+  const authorizeButtonReason = approvalConfigured
+    ? (manageGate.allowed || authorizeGate.allowed ? '' : manageGate.reason)
+    : fourEyesBlocked ? t('construction.procurement.purchaseOrders.fourEyesReason') : authorizeGate.reason;
 
   return (
     <SectionCard
@@ -626,6 +647,20 @@ function PurchaseOrderDetail({
                 : t('construction.procurement.purchaseOrders.cancelledBanner', { when: formatDateTime(po.cancelled_at) })
             }
           />
+        ) : null}
+
+        <ApprovalBanner
+          businessId={businessId}
+          documentId={po.id}
+          documentType="purchase_order"
+          documentStatus={po.status}
+          showSubmit={false}
+          onSubmitted={invalidate}
+          onApproved={invalidate}
+          onRejected={invalidate}
+        />
+        {authorizeMutation.isError ? (
+          <ErrorBanner message={t('approvals.errors.actionFailed')} />
         ) : null}
 
         <div className="overflow-x-auto">
@@ -663,13 +698,16 @@ function PurchaseOrderDetail({
           {po.status === 'draft' ? (
             <>
               <GatedButton
-                allowed={authorizeGate.allowed && !fourEyesBlocked}
-                reason={fourEyesBlocked ? t('construction.procurement.purchaseOrders.fourEyesReason') : authorizeGate.reason}
+                allowed={authorizeButtonAllowed}
+                reason={authorizeButtonReason}
                 onClick={() => authorizeMutation.mutate()}
                 disabled={authorizeMutation.isPending}
               >
                 <>
-                  <CheckCircle2 className="h-4 w-4" aria-hidden /> {authorizeMutation.isPending ? t('construction.procurement.purchaseOrders.authorizing') : t('construction.procurement.purchaseOrders.authorize')}
+                  <CheckCircle2 className="h-4 w-4" aria-hidden />
+                  {approvalConfigured
+                    ? authorizeMutation.isPending ? t('approvals.banner.submitting') : t('approvals.banner.submit')
+                    : authorizeMutation.isPending ? t('construction.procurement.purchaseOrders.authorizing') : t('construction.procurement.purchaseOrders.authorize')}
                 </>
               </GatedButton>
               <div className="flex items-end gap-2">
