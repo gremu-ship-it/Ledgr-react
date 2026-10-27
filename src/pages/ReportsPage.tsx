@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router';
 import { AlertCircle, TrendingUp, Scale, ArrowLeftRight, Table2, Building2, Coins, PackageOpen } from 'lucide-react';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
@@ -35,6 +36,28 @@ function todayStr(): string {
 }
 
 type Tab = 'trial' | 'sofp' | 'pl-ifrs' | 'revenue' | 'cashflow-ifrs' | 'equity' | 'branches' | 'currency';
+
+const QUERY_TAB_MAP: Readonly<Record<string, Tab>> = {
+  'trial-balance': 'trial',
+  'profit-loss': 'pl-ifrs',
+  'balance-sheet': 'sofp',
+  'cash-flow': 'cashflow-ifrs',
+  'revenue-breakdown': 'revenue',
+  'changes-in-equity': 'equity',
+  'branch-performance': 'branches',
+  'multi-currency': 'currency',
+};
+
+const TAB_QUERY_MAP: Readonly<Record<Tab, string | null>> = {
+  trial: 'trial-balance',
+  sofp: 'balance-sheet',
+  'pl-ifrs': 'profit-loss',
+  revenue: 'revenue-breakdown',
+  'cashflow-ifrs': 'cash-flow',
+  equity: 'changes-in-equity',
+  branches: 'branch-performance',
+  currency: 'multi-currency',
+};
 
 type TrialBalanceRow = Row<'v_trial_balance'>;
 
@@ -353,7 +376,15 @@ function MultiCurrencyReport({ businessId, functionalCurrency }: { businessId: s
 export function ReportsPage() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
-  const [tab, setTab] = useState<Tab>('sofp');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = QUERY_TAB_MAP[searchParams.get('tab') ?? ''] ?? 'sofp';
+  const setTab = (nextTab: Tab) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    const queryValue = TAB_QUERY_MAP[nextTab];
+    if (queryValue) nextSearchParams.set('tab', queryValue);
+    else nextSearchParams.delete('tab');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
   const [range, setRange] = useState<DateRange>({ from: startOfYear(), to: todayStr() });
   const [showComparative, setShowComparative] = useState(false);
 
