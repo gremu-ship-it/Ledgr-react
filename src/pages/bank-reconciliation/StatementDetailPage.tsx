@@ -82,11 +82,16 @@ export function StatementDetailPage() {
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t('bankReconciliation.detail.title')}</h1>
           <p className="mt-1 text-sm text-gray-600">{statement.bank_name} · {statement.account_number} · {statement.account_code} {statement.account_name}</p>
         </div>
-        {canDelete && statement.status === 'draft' && (
-          <button type="button" onClick={() => void deleteStatement()} disabled={deleting} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
-            <Trash2 className="h-4 w-4" aria-hidden="true" />{deleting ? t('bankReconciliation.statements.deleting') : t('bankReconciliation.statements.delete')}
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <Link to={`/bank-reconciliation/reconcile/${statement.id}`} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white">
+            {t('bankReconciliation.detail.reconcile')}
+          </Link>
+          {canDelete && statement.status === 'draft' && (
+            <button type="button" onClick={() => void deleteStatement()} disabled={deleting} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
+              <Trash2 className="h-4 w-4" aria-hidden="true" />{deleting ? t('bankReconciliation.statements.deleting') : t('bankReconciliation.statements.delete')}
+            </button>
+          )}
+        </div>
       </header>
 
       {deleteFailed && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{t('bankReconciliation.shared.deleteFailed')}</p>}

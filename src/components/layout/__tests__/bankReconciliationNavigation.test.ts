@@ -18,6 +18,7 @@ describe('bank reconciliation routes and navigation', () => {
       '/bank-reconciliation/accounts',
       '/bank-reconciliation/statements',
       '/bank-reconciliation/statements/statement-1',
+      '/bank-reconciliation/reconcile/statement-1',
     ];
     for (const path of paths) {
       expect(isPathAllowedForRole('treasury_manager', path)).toBe(true);
