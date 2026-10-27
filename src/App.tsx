@@ -21,6 +21,7 @@ import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgr
 import { ProfitLossUpgradePrompt } from '@/components/reports/ProfitLossUpgradePrompt';
 import { BalanceSheetUpgradePrompt } from '@/components/reports/BalanceSheetUpgradePrompt';
 import { CashFlowUpgradePrompt } from '@/components/reports/CashFlowUpgradePrompt';
+import { TaxReportUpgradePrompt } from '@/components/reports/TaxReportUpgradePrompt';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
@@ -109,6 +110,8 @@ const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
 const CashFlowPage = lazyPage(() => import('@/pages/reports/CashFlowPage'), 'CashFlowPage');
+const VatReturnPage = lazyPage(() => import('@/pages/reports/VatReturnPage'), 'VatReturnPage');
+const WhtSchedulePage = lazyPage(() => import('@/pages/reports/WhtSchedulePage'), 'WhtSchedulePage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
@@ -218,6 +221,34 @@ function CashFlowRoute() {
       fallback={<CashFlowUpgradePrompt />}
     >
       <CashFlowPage />
+    </PlanGate>
+  );
+}
+
+function VatReturnRoute() {
+  const { t } = useTranslation();
+  const title = t('reports.vatReturn.title');
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={title}
+      fallback={<TaxReportUpgradePrompt title={title} />}
+    >
+      <VatReturnPage />
+    </PlanGate>
+  );
+}
+
+function WhtScheduleRoute() {
+  const { t } = useTranslation();
+  const title = t('reports.whtSchedule.title');
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={title}
+      fallback={<TaxReportUpgradePrompt title={title} />}
+    >
+      <WhtSchedulePage />
     </PlanGate>
   );
 }
@@ -520,6 +551,8 @@ function App() {
                   <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
                   <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
                   <Route path="/reports/cash-flow" element={<CashFlowRoute />} />
+                  <Route path="/reports/vat-return" element={<VatReturnRoute />} />
+                  <Route path="/reports/wht-schedule" element={<WhtScheduleRoute />} />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />
