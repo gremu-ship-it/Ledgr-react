@@ -1,10 +1,14 @@
 import { useState } from 'react';
+import { Navigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2, Plus, MapPin, MoreVertical,
   CheckCircle, XCircle, Pencil, Loader2, AlertCircle,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import { useBusinessProfile } from '@/hooks/useBusinessProfile';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { sitesVocabularyReplacesBranches } from '@/components/layout/navConfig';
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
 
@@ -109,6 +113,8 @@ function BranchModal({
 export function BranchesPage() {
   const businessId  = useAppStore((s) => s.currentBusiness?.business.id);
   const queryClient = useQueryClient();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
+  const { profile } = useBusinessProfile();
 
   const [modalOpen,   setModalOpen]   = useState(false);
   const [editTarget,  setEditTarget]  = useState<{ id: string; data: BranchFormData } | null>(null);
@@ -171,6 +177,15 @@ export function BranchesPage() {
       )
       .map((l) => [l.branch_id, l]),
   );
+
+  // Sites vocabulary: a pure construction/manufacturing business has no
+  // Branches surface (absent, not locked) — its branch-mirror locations
+  // ("Main Site", "Main Factory") are managed under Organisation → Sites,
+  // where the mirror-guarded name sync keeps both sides in step. Direct URL
+  // access follows the navigation and redirects.
+  if (sitesVocabularyReplacesBranches(isOrgCapabilityEnabled, profile?.operating_models)) {
+    return <Navigate to="/locations" replace />;
+  }
 
   if (!businessId) return null;
 

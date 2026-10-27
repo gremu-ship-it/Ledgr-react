@@ -1,5 +1,6 @@
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import {
@@ -56,6 +57,7 @@ function periodLabel(periodStart: string, periodEnd: string): string {
 
 const SUBTYPE_LABELS: Record<AccountSubtype, string> = {
   current_asset: 'Current Assets',
+  contra_ar: 'accounting.accountSubtypes.contraAr',
   non_current_asset: 'Non-Current Assets',
   fixed_asset: 'Fixed Assets',
   current_liability: 'Current Liabilities',
@@ -171,8 +173,11 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
 }
 
 function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
+  const { t } = useTranslation();
   const grouped = row.accountBreakdown.reduce<Record<string, AccountBreakdown[]>>((acc, line) => {
-    const label = SUBTYPE_LABELS[line.subtype];
+    const label = line.subtype === 'contra_ar'
+      ? t(SUBTYPE_LABELS[line.subtype])
+      : SUBTYPE_LABELS[line.subtype];
     acc[label] = acc[label] ?? [];
     acc[label].push(line);
     return acc;

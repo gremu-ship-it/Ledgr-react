@@ -52,6 +52,7 @@ describe('Role-Based Access Control (RBAC)', () => {
       expect(isPathAllowedForRole('payroll_manager', '/payroll')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/dashboard')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/reports')).toBe(false);
+      expect(isPathAllowedForRole('payroll_manager', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/products')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/accounts')).toBe(false);
     });
@@ -61,6 +62,7 @@ describe('Role-Based Access Control (RBAC)', () => {
     it('blocks payroll for supervisor and auditor', () => {
       expect(isPathAllowedForRole('supervisor', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('supervisor', '/reports')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('viewer', '/payroll')).toBe(false);
     });

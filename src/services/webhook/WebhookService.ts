@@ -49,7 +49,12 @@ export class WebhookService {
 
     if (error) throw error;
     if (!data) throw new Error('Webhook was not created.');
-    return data;
+    // The regenerated schema types mark webhooks.is_active/created_at as
+    // nullable (live schema truth). This service always writes is_active
+    // explicitly and created_at is DB-defaulted, so rows returned here are
+    // populated in practice; refine at the boundary to keep the app-facing
+    // contract (and every caller) unchanged. Type-only — no runtime change.
+    return data as Webhook;
   }
 
   async listWebhooks(businessId: string): Promise<Webhook[]> {
@@ -61,7 +66,9 @@ export class WebhookService {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data ?? [];
+    // See registerWebhook: nullable-in-schema columns are always populated
+    // for rows this service returns (is_active is filtered to true here).
+    return (data ?? []) as Webhook[];
   }
 
   async deleteWebhook(webhookId: string): Promise<void> {
@@ -81,7 +88,10 @@ export class WebhookService {
       .limit(limit);
 
     if (error) throw error;
-    return data ?? [];
+    // See registerWebhook. Deliveries are inserted by the Edge Function with
+    // created_at defaulted; payload is jsonb (generated type `Json`, app type
+    // `unknown`), so this refinement needs the double assertion.
+    return (data ?? []) as unknown as WebhookDelivery[];
   }
 
   /**

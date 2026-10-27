@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/useAppStore';
+import type { OrganisationCapability } from '@/lib/capabilities/profile';
 
 /**
  * All permission booleans derived from the current user's role
@@ -470,7 +471,13 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/income', '/expenses', '/invoices', '/pos', '/pos/shifts'].includes(path);
 
     case 'manager':
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports'].includes(path);
+      // `/manufacturing` is manager-and-above: production planning is a
+      // supervisory surface, so stock clerks and cashiers do not get it even
+      // though they keep the Supply Chain children they already had.
+      // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
+      // the same authority as the workspace itself.
+      if (path.startsWith('/manufacturing')) return true;
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
@@ -482,19 +489,19 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'sales_manager':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
 
     case 'customer_service_rep':
       return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/pos'].includes(path);
 
     case 'tax_compliance_officer':
-      return ['/dashboard', '/tax', '/reports', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
+      return ['/dashboard', '/tax', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
 
     case 'treasury_manager':
-      return isBankReconciliationPath || ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports'].includes(path);
+      return isBankReconciliationPath || ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
 
     case 'asset_manager':
-      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports'].includes(path);
+      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
 
     case 'board_member':
       if (path === '/payroll' || path === '/settings') return false;
@@ -504,7 +511,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'supervisor':
-      if (path === '/payroll' || path === '/reports') return false;
+      if (path === '/payroll' || path === '/reports' || path.startsWith('/reports/')) return false;
       return true;
 
     case 'auditor':
@@ -513,7 +520,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'payroll_manager':
-      if (isBankReconciliationPath || ['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/departments'].includes(path)) {
+      if (isBankReconciliationPath || ['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path)) {
         return false;
       }
       return true;
@@ -527,7 +534,53 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
   }
 }
 
-export function getHomePathForRole(role: string | null): string {
+/**
+ * Home path for a role, optionally narrowed by the business's organisation
+ * capabilities.
+ *
+ * The till roles (`cashier`, `manager`) default to `/pos` — but POS is a
+ * retail workflow: a construction or service-only business has
+ * `pos: false`, so its cashier/manager was being sent home to a page the
+ * capability gate immediately rejected. When the caller supplies the
+ * organisation-capability predicate (the same one navigation uses,
+ * `useOrganisationCapabilityVisibility`), a `/pos` home is downgraded for a
+ * business without the `pos` capability. Callers that pass no predicate
+ * keep the legacy role-only mapping, byte for byte.
+ *
+ * The downgrade lands on `/dashboard` only when the role may actually open
+ * it. A `manager` can; a `cashier` cannot (`isPathAllowedForRole` confines
+ * cashiers to the till, sales documents and support), so sending a cashier
+ * "home" to `/dashboard` would make `RoleRoute` bounce them straight back
+ * to their home path — `/dashboard` — forever. Cashiers therefore fall
+ * back to `/income`, the first surface their role is allowed to use. Role
+ * definitions are untouched: cashier and manager stay valid roles for a
+ * construction business; only where they land changes.
+ *
+ * Because the predicate runs through `resolveCapability`, and POS is in
+ * ALWAYS_PROFILE_GATED, the downgrade activates on exactly the same terms
+ * as the POS nav item and the `/pos` route gate on both kill-switch
+ * states: a business whose profile gives it POS keeps `/pos` as a working
+ * home page, and one without it never lands there.
+ */
+export function getHomePathForRole(
+  role: string | null,
+  isOrgCapabilityEnabled?: (capability: OrganisationCapability) => boolean,
+): string {
+  const roleHome = roleHomePath(role);
+
+  if (
+    roleHome === '/pos'
+    && isOrgCapabilityEnabled
+    && !isOrgCapabilityEnabled('pos')
+  ) {
+    return isPathAllowedForRole(role, '/dashboard') ? '/dashboard' : '/income';
+  }
+
+  return roleHome;
+}
+
+/** The legacy role-only home mapping, unchanged. */
+function roleHomePath(role: string | null): string {
   if (role === 'cashier') return '/pos';
   if (role === 'manager') return '/pos';
   if (role === 'stock_clerk') return '/products';

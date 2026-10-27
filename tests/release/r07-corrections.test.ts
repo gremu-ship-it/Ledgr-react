@@ -72,7 +72,13 @@ test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is serv
   }
   // No foreign or duplicated correction-shaped entrypoints beyond the canonical six.
   const invoiceApproval = ['_ledgr_invoice_approval_guard','_ledgr_invoice_line_revokes_approval','_ledgr_invoice_needs_approval','_ledgr_revoke_invoice_approval','approve_invoice','set_invoice_approval_policy'];
-  expect(hits.sort()).toEqual(['_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval','refund_pos_sale_command','request_pos_approval','void_pos_sale_command', ...invoiceApproval].sort());
+  // One further approval-shaped command is owner-decided and additive:
+  // approve_construction_receipt_posting_policy (20261021000000_construction_procurement_traceability.sql)
+  // toggles the construction receipt movement policy. It is not correction-shaped,
+  // touches no invoice/pos document, and GL posting stays structurally impossible
+  // (chk_crpp_gl) — see docs/architecture/CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md.
+  const constructionPolicy = ['approve_construction_receipt_posting_policy'];
+  expect(hits.sort()).toEqual(['_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval','refund_pos_sale_command','request_pos_approval','void_pos_sale_command', ...invoiceApproval, ...constructionPolicy].sort());
 });
 
 test(meta('R07.APPROVAL.SERVER-STATE', 'Minimal authoritative approval state exists server-side: pos_approvals (org/document/action/requester/approver/expiry/single-use) + pos_corrections ledger; financial documents remain untouched by approval columns; authorization never takes a PIN', 'supabase/migrations/20260928000002_r07_correction_commands.sql'), async () => {
