@@ -149,6 +149,8 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'nav.reports.profitLoss', path: '/reports/profit-loss', icon: TrendingUp, minPlan: 'growth' },
       { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, minPlan: 'growth' },
       { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Coins, minPlan: 'growth' },
+      { labelKey: 'nav.reports.vatReturn', path: '/reports/vat-return', icon: Receipt, minPlan: 'growth' },
+      { labelKey: 'nav.reports.whtSchedule', path: '/reports/wht-schedule', icon: FileText, minPlan: 'growth' },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Building2, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
