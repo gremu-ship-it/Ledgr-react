@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router';
+import { NavLink, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { clsx } from 'clsx';
 import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'lucide-react';
@@ -14,6 +14,7 @@ import { pushUpgradeRequired } from '@/lib/notifications';
 
 export function Sidebar() {
   const { t } = useTranslation();
+  const location = useLocation();
   const sidebarOpen = useAppStore((s) => s.sidebarOpen);
   const sidebarWidth = useAppStore((s) => s.sidebarWidth);
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth);
@@ -105,7 +106,7 @@ export function Sidebar() {
           {sidebarOpen && (
             <button
               onClick={() => setSidebarOpen(false)}
-              aria-label="Close navigation"
+              aria-label={t('common.close')}
               className="ms-auto rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 lg:hidden touch-manipulation"
             >
               <X className="h-5 w-5" />
@@ -135,17 +136,25 @@ export function Sidebar() {
                     // Pass 2 already marked plan-locked items; the fallback keeps
                     // any caller-constructed item behaving as before.
                     const locked = item.locked ?? isItemLocked(item, planTier, section.minPlan);
+                    const queryTargetIsActive = item.path.includes('?')
+                      && `${location.pathname}${location.search}` === item.path;
+                    const isItemActive = (navLinkIsActive: boolean) =>
+                      item.path.includes('?') ? queryTargetIsActive : navLinkIsActive;
                     const handleClick = (e: React.MouseEvent) => {
                       if (locked) {
                         e.preventDefault();
-                        pushUpgradeRequired(t(labelKeyFor(item.labelKey)), planRequiredForItem(item, section.minPlan)?.name ?? 'a higher plan', businessId);
+                        pushUpgradeRequired(
+                          t(labelKeyFor(item.labelKey)),
+                          planRequiredForItem(item, section.minPlan)?.name ?? t('navigation.accessibility.higherPlan'),
+                          businessId,
+                        );
                         if (window.innerWidth < 1024) setSidebarOpen(false);
                         return;
                       }
                       if (window.innerWidth < 1024) setSidebarOpen(false);
                     };
                     return (
-                      <li key={item.path} className="group relative">
+                      <li key={`${item.labelKey}:${item.path}`} className="group relative">
                         <NavLink
                           to={item.path}
                           onClick={handleClick}
@@ -153,7 +162,7 @@ export function Sidebar() {
                             clsx(
                               'relative flex items-center gap-3 rounded-xl px-3 text-sm font-medium transition-colors touch-manipulation',
                               density === 'compact' ? 'py-1.5' : 'py-2.5',
-                              isActive ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                              isItemActive(isActive) ? 'bg-brand-50 text-brand-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
                               !sidebarOpen && 'justify-center',
                               locked && 'opacity-60',
                             )
@@ -165,20 +174,20 @@ export function Sidebar() {
                               {sidebarOpen ? (
                                 <span className="flex flex-1 items-center justify-between gap-2 truncate">
                                   <span className="truncate">{t(labelKeyFor(item.labelKey))}</span>
-                                  {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Upgrade required" />}
+                                  {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label={t('navigation.accessibility.upgradeRequired')} />}
                                 </span>
                               ) : null}
                               {!sidebarOpen && locked && (
                                 <Lock className="absolute right-1 top-1 h-2.5 w-2.5 text-gray-400" aria-hidden="true" />
                               )}
-                              {isActive && <span className="sr-only"> (current page)</span>}
+                              {isItemActive(isActive) && <span className="sr-only"> {t('navigation.accessibility.currentPage')}</span>}
                             </>
                           )}
                         </NavLink>
                         {!sidebarOpen && (
                           <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-within:block">
                             {t(labelKeyFor(item.labelKey))}
-                            {locked ? ' (upgrade)' : ''}
+                            {locked ? ` ${t('navigation.accessibility.upgradeSuffix')}` : ''}
                             <div className="absolute right-full top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rotate-45 bg-gray-900" />
                           </div>
                         )}
@@ -216,7 +225,7 @@ export function Sidebar() {
                         {sidebarOpen ? (
                           <span className="truncate">{t('navigation.items.businesses')}</span>
                         ) : null}
-                        {isActive && <span className="sr-only"> (current page)</span>}
+                        {isActive && <span className="sr-only"> {t('navigation.accessibility.currentPage')}</span>}
                       </>
                     )}
                   </NavLink>
@@ -239,7 +248,7 @@ export function Sidebar() {
                         {sidebarOpen ? (
                           <span className="truncate">{t('navigation.items.adminBilling')}</span>
                         ) : null}
-                        {isActive && <span className="sr-only"> (current page)</span>}
+                        {isActive && <span className="sr-only"> {t('navigation.accessibility.currentPage')}</span>}
                       </>
                     )}
                   </NavLink>
@@ -252,7 +261,7 @@ export function Sidebar() {
         <div className="border-t border-gray-200 p-3 shrink-0">
           <button
             onClick={toggleSidebar}
-            aria-label={sidebarOpen ? t('common.collapse') : 'Expand sidebar'}
+            aria-label={sidebarOpen ? t('common.collapse') : t('common.expandSidebar')}
             className={clsx(
               'hidden lg:flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-900 touch-manipulation',
               !sidebarOpen && 'justify-center',
@@ -275,7 +284,7 @@ export function Sidebar() {
             onPointerDown={onPointerDown}
             className="absolute bottom-0 right-0 top-0 hidden w-1.5 cursor-col-resize touch-none select-none bg-transparent hover:bg-brand-100 lg:block"
             aria-hidden="true"
-            title="Drag to resize sidebar"
+            title={t('navigation.accessibility.dragToResize')}
           >
             <div className="absolute right-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-gray-200" />
           </div>

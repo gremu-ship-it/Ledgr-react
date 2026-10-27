@@ -85,21 +85,17 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
-    // Renamed from "Inventory": the section now carries the materials flow
-    // (products → warehouse → transfers → construction procurement). The label
-    // key is unchanged so no route, translation key or test path moves.
     labelKey: 'navigation.sections.inventory',
     items: [
       { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
       { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
       { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.construction',
+    items: [
       {
-        // Construction is an Enterprise module selected through the operating
-        // model profile. `minPlan` is what a Starter/Growth/Free business hits;
-        // `requiresOrgCapability` is what hides it from an Enterprise business
-        // that does not do construction. Deliberately no `partnerFeature`: the
-        // partner inventory flag does not gate construction procurement, and no
-        // `allowAllAuthenticatedRoles`: the role list now applies.
         labelKey: 'navigation.items.constructionWorkspace',
         path: '/construction',
         icon: Building2,
@@ -112,7 +108,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.manufacturing',
     items: [
       {
-        // Read-only reporting is the landing page for the manufacturing module.
         labelKey: 'manufacturing.bom.dashboard',
         path: '/manufacturing',
         icon: LayoutDashboard,
@@ -120,15 +115,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiresOrgCapability: 'manufacturing',
       },
       {
-        // Bill of Materials — Phase B workspace.
-        labelKey: 'manufacturing.bom.title',
+        labelKey: 'navigation.items.manufacturingBom',
         path: '/manufacturing/bom',
         icon: Package,
         minPlan: 'enterprise',
         requiresOrgCapability: 'manufacturing',
       },
       {
-        // Production — Phase C work-order workspace.
         labelKey: 'manufacturing.bom.production',
         path: '/manufacturing/production',
         icon: Factory,
@@ -141,37 +134,59 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.accounting',
     items: [
       { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, requiresCapability: 'core_accounting' },
-      { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, requiresCapability: 'core_accounting' },
-      { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, requiresCapability: 'core_accounting' },
-      { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, requiresCapability: 'core_accounting' },
-      { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.reports',
+    items: [
       { labelKey: 'nav.reports.trialBalance', path: '/reports/trial-balance', icon: Scale, minPlan: 'growth' },
       { labelKey: 'nav.reports.profitLoss', path: '/reports/profit-loss', icon: TrendingUp, minPlan: 'growth' },
       { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, minPlan: 'growth' },
       { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Coins, minPlan: 'growth' },
-      { labelKey: 'nav.reports.vatReturn', path: '/reports/vat-return', icon: Receipt, minPlan: 'growth' },
-      { labelKey: 'nav.reports.whtSchedule', path: '/reports/wht-schedule', icon: FileText, minPlan: 'growth' },
-      { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
-      { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Building2, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
-      { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
-      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth' },
+      { labelKey: 'navigation.items.reportsRevenueBreakdown', path: '/reports?tab=revenue-breakdown', icon: BarChart2, minPlan: 'growth' },
+      { labelKey: 'navigation.items.reportsChangesInEquity', path: '/reports?tab=changes-in-equity', icon: Scale, minPlan: 'growth' },
+      { labelKey: 'navigation.items.reportsBranchPerformance', path: '/reports?tab=branch-performance', icon: Building2, minPlan: 'growth' },
+      { labelKey: 'navigation.items.reportsMultiCurrency', path: '/reports?tab=multi-currency', icon: Coins, minPlan: 'growth' },
     ],
   },
   {
-    labelKey: 'navigation.sections.bankReconciliation',
+    labelKey: 'navigation.sections.taxation',
     items: [
-      { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
-      { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
-      { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/statements', icon: Landmark, requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.taxConfiguration', path: '/tax', icon: Percent, minPlan: 'starter', requiresCapability: 'core_accounting' },
+      { labelKey: 'nav.reports.vatReturn', path: '/reports/vat-return', icon: Receipt, minPlan: 'growth' },
+      { labelKey: 'nav.reports.whtSchedule', path: '/reports/wht-schedule', icon: FileText, minPlan: 'growth' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.banking',
+    items: [
+      { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/statements', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.assetsCapital',
+    items: [
+      { labelKey: 'navigation.items.fixedAssets', path: '/assets', icon: Landmark, minPlan: 'starter', requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.capitalEquity', path: '/capital', icon: Coins, minPlan: 'starter', requiresCapability: 'core_accounting' },
     ],
   },
   {
     labelKey: 'navigation.sections.organisation',
     items: [
-      { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
-      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', hiddenWhenSitesReplaceBranches: true },
-      { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth' },
-      { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth' },
+      { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', requiresCapability: 'accounting_organisation', hiddenWhenSitesReplaceBranches: true },
+      { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.audit',
+    items: [
+      { labelKey: 'navigation.items.auditLog', path: '/audit', icon: ShieldCheck, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {
@@ -332,7 +347,7 @@ export function visibleSectionsFor(
         if (item.requiresOrgCapability && !isOrgCapabilityEnabled(item.requiresOrgCapability)) return false;
         if (item.hiddenWhenSitesReplaceBranches && sitesReplaceBranches) return false;
         if (item.partnerFeature && !isFeatureEnabled(item.partnerFeature)) return false;
-        if (role && !item.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, item.path)) return false;
+        if (role && !item.allowAllAuthenticatedRoles && !isPathAllowedForRole(role, item.path.split('?')[0])) return false;
         return true;
       });
 
