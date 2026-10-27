@@ -456,7 +456,8 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
   if (path === '/support') return true;
   const isBankReconciliationPath = path === '/bank-reconciliation/accounts'
     || path === '/bank-reconciliation/statements'
-    || path.startsWith('/bank-reconciliation/statements/');
+    || path.startsWith('/bank-reconciliation/statements/')
+    || path.startsWith('/bank-reconciliation/reconcile/');
 
   switch (role) {
     case 'owner':

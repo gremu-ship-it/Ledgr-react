@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ImportedStatementLine } from '@/lib/bankReconciliation/statementCsv';
+import type { GlMatchLine } from '@/lib/reconciliation/matcher';
 
 export interface CashBankCoaAccount {
   id: string;
@@ -85,6 +86,40 @@ export interface UnreconciledGlLine {
   is_debit: boolean;
   amount: number;
   account_id: string;
+}
+
+export interface BankReconciliationMatch {
+  id: string;
+  business_id: string;
+  statement_line_id: string;
+  journal_line_id: string;
+  matched_amount: number;
+  is_auto_match: boolean;
+  matched_by: string;
+  matched_at: string;
+}
+
+export interface CreateMatchInput {
+  bankLineId: string;
+  glLineId: string;
+  matchedAmount: number;
+  isAutoMatch: boolean;
+}
+
+export interface ReconciliationGlLine extends GlMatchLine {
+  account_id: string;
+  matchedAmount: number;
+}
+
+interface RawReconciliationGlLine {
+  journal_line_id: string;
+  entry_date: string;
+  description: string;
+  entry_number: string;
+  is_debit: boolean;
+  amount: number | string;
+  account_id: string;
+  matched_amount: number | string;
 }
 
 interface RawBankAccount {
@@ -395,5 +430,107 @@ export const BankReconciliationRepository = {
     } as never);
     if (error) throw error;
     return (data ?? []) as unknown as UnreconciledGlLine[];
+  },
+
+  async getMatchesForStatement(supabase: SupabaseClient, statementId: string): Promise<BankReconciliationMatch[]> {
+    const { data: lineRows, error: linesError } = await supabase
+      .from('bank_statement_lines')
+      .select('id')
+      .eq('statement_id', statementId);
+    if (linesError) throw linesError;
+    const lineIds = ((lineRows ?? []) as unknown as Array<{ id: string }>).map(({ id }) => id);
+    if (lineIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from('bank_reconciliation_matches')
+      .select('id,business_id,statement_line_id,journal_line_id,matched_amount,is_auto_match,matched_by,matched_at')
+      .in('statement_line_id', lineIds)
+      .order('matched_at');
+    if (error) throw error;
+    return ((data ?? []) as unknown as BankReconciliationMatch[]).map((match) => ({
+      ...match,
+      matched_amount: numeric(match.matched_amount),
+    }));
+  },
+
+  async getReconciliationGlLines(
+    supabase: SupabaseClient,
+    params: { businessId: string; bankAccountId: string; dateFrom: string; dateTo: string },
+  ): Promise<ReconciliationGlLine[]> {
+    const { data, error } = await supabase.rpc('get_bank_reconciliation_gl_lines', {
+      p_business_id: params.businessId,
+      p_bank_account_id: params.bankAccountId,
+      p_date_from: params.dateFrom,
+      p_date_to: params.dateTo,
+    } as never);
+    if (error) throw error;
+    return ((data ?? []) as unknown as RawReconciliationGlLine[]).map((line) => ({
+      id: line.journal_line_id,
+      entry_date: line.entry_date,
+      description: line.description,
+      entry_number: line.entry_number,
+      is_debit: line.is_debit,
+      amount: numeric(line.amount),
+      account_id: line.account_id,
+      matchedAmount: numeric(line.matched_amount),
+    }));
+  },
+
+  async getBookBalance(
+    supabase: SupabaseClient,
+    businessId: string,
+    bankAccountId: string,
+    asOfDate: string,
+  ): Promise<number> {
+    const { data, error } = await supabase.rpc('get_bank_gl_book_balance', {
+      p_business_id: businessId,
+      p_bank_account_id: bankAccountId,
+      p_as_of_date: asOfDate,
+    } as never);
+    if (error) throw error;
+    return numeric(data as number | string | null);
+  },
+
+  async bulkCreateMatches(
+    supabase: SupabaseClient,
+    businessId: string,
+    statementId: string,
+    matches: CreateMatchInput[],
+  ): Promise<void> {
+    if (matches.length === 0) return;
+    const { error } = await supabase.rpc('create_bank_reconciliation_matches', {
+      p_business_id: businessId,
+      p_statement_id: statementId,
+      p_matches: matches.map((match) => ({
+        statement_line_id: match.bankLineId,
+        journal_line_id: match.glLineId,
+        matched_amount: match.matchedAmount,
+        is_auto_match: match.isAutoMatch,
+      })) as never,
+    } as never);
+    if (error) throw error;
+  },
+
+  async deleteMatch(supabase: SupabaseClient, businessId: string, matchId: string): Promise<void> {
+    const { error } = await supabase.rpc('delete_bank_reconciliation_match', {
+      p_business_id: businessId,
+      p_match_id: matchId,
+    } as never);
+    if (error) throw error;
+  },
+
+  async reconcileStatement(supabase: SupabaseClient, businessId: string, statementId: string): Promise<void> {
+    const { error } = await supabase.rpc('reconcile_bank_statement', {
+      p_business_id: businessId,
+      p_statement_id: statementId,
+    } as never);
+    if (error) throw error;
+  },
+
+  async unreconcileStatement(supabase: SupabaseClient, businessId: string, statementId: string): Promise<void> {
+    const { error } = await supabase.rpc('unreconcile_bank_statement', {
+      p_business_id: businessId,
+      p_statement_id: statementId,
+    } as never);
+    if (error) throw error;
   },
 };

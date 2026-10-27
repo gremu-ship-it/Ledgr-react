@@ -136,6 +136,7 @@ const BankReconciliation = lazyPage(
 const BankAccountsPage = lazyPage(() => import('@/pages/bank-reconciliation/BankAccountsPage'), 'BankAccountsPage');
 const StatementsPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementsPage'), 'StatementsPage');
 const StatementDetailPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementDetailPage'), 'StatementDetailPage');
+const ReconcilePage = lazyPage(() => import('@/pages/bank-reconciliation/ReconcilePage'), 'ReconcilePage');
 const SupportPage = lazyPage(() => import('@/pages/SupportPage'), 'SupportPage');
 const ToolsPage = lazyPage(() => import('@/pages/ToolsPage'), 'default');
 const DataImportPage = lazyPage(() => import('@/pages/DataImportPage'), 'DataImportPage');
@@ -542,6 +543,9 @@ function App() {
                   } />
                   <Route path="/bank-reconciliation/statements/:id" element={
                     <BankReconciliationPlanGate><StatementDetailPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/reconcile/:statementId" element={
+                    <BankReconciliationPlanGate><ReconcilePage /></BankReconciliationPlanGate>
                   } />
                   <Route path="/audit" element={
                     <PlanGate capability="accounting_organisation" featureName="Audit Log">

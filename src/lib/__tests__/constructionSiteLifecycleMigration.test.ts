@@ -36,7 +36,7 @@ describe('construction site lifecycle migration contract', () => {
       .filter((f) => f.endsWith('.sql'))
       .sort();
     const versions = files.map((f) => f.split('_')[0]);
-    expect(versions[versions.length - 1]).toBe('20261109000000');
+    expect(versions[versions.length - 1]).toBe('20261110000001');
     expect(versions.filter((v) => v === '20261108000000')).toHaveLength(1);
     expect(versions.indexOf('20261108000000')).toBe(
       versions.indexOf('20261107000000') + 1,

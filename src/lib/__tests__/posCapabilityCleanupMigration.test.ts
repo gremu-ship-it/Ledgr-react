@@ -45,9 +45,9 @@ describe('legacy pos pin cleanup migration contract (P3-1 audit item)', () => {
     expect(versions.indexOf('20261102000000')).toBeLessThan(
       versions.indexOf('20261103000000'),
     );
-    // No duplicate cleanup was added later; the additive P4-1 report RPC now
-    // follows the P2-4 site lifecycle migration.
-    expect(versions[versions.length - 1]).toBe('20261109000000');
+    // No duplicate cleanup was added later; the additive P4-1 report RPC and
+    // P4B-1/2 bank reconciliation migrations extend the migration head.
+    expect(versions[versions.length - 1]).toBe('20261110000001');
     expect(
       files.filter((f) => f.toLowerCase().includes('pos_capability_cleanup')),
     ).toHaveLength(0);
