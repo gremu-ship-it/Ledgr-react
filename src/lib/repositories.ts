@@ -24,6 +24,7 @@ import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PosRepository } from '@/dal/repositories/PosRepository';
 import { constructionProcurementRepository } from '@/dal/repositories/ConstructionProcurementRepository';
+import { ApprovalRepository } from '@/dal/repositories/ApprovalRepository';
 
 export const repos = {
   projects: new ProjectRepository(),
@@ -34,6 +35,7 @@ export const repos = {
    * write goes through a construction command that authorizes internally.
    */
   construction: constructionProcurementRepository,
+  approval: ApprovalRepository,
   business:   new BusinessRepository(supabase),
   journal:    new JournalRepository(supabase),
   invoice:    new InvoiceRepository(supabase),

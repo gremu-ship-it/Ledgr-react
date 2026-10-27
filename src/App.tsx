@@ -600,6 +600,7 @@ function App() {
                   } />
                   <Route path="/chat" element={<Navigate to="/ai" replace />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings/approvals" element={<SettingsPage />} />
                   <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                   <Route path="/support" element={<SupportPage />} />
                   <Route path="/tools" element={<ToolsPage />} />

@@ -14,7 +14,8 @@ const head = '20261027000000';
 // one-shot and unrelated to this supplied-shape construction upgrade probe.
 const pending = readdirSync(root).filter(name => name.endsWith('.sql') && name.slice(0, 14) > head
   && !name.includes('_p4b1_bank_reconciliation_')
-  && !name.includes('_p4b2_bank_reconciliation_')).sort();
+  && !name.includes('_p4b2_bank_reconciliation_')
+  && !name.includes('_p4c_approval_workflows')).sort();
 const phaseA = readFileSync(root + '20261028000000_construction_projects.sql', 'utf8');
 const namespace = readFileSync(root + '20261028000001_construction_projects_namespace.sql', 'utf8');
 const boq = readFileSync(root + '20261030000000_construction_project_boq.sql', 'utf8');
