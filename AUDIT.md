@@ -1,407 +1,381 @@
-# Full Application Audit
+# Ledgr React — corrected application audit (current `main`)
 
-**Audit date:** 2026-10-27  
-**Repository snapshot:** `arena/48af1f5c-ledgr-react` at `09b30a1` (`Merge pull request #213 from gremu-ship-it/main`)  
-**Mode:** Read-only audit. No application code, routes, dependencies, migrations, or database objects were changed.
+**Audit basis:** current `origin/main` source snapshot `a5360fb` (merge of PR #256; it includes the completed Phase 4 work in PRs #246–#256). That tree was read from Git objects without checking out or switching the session branch. The audit PR branch therefore contains this document only; route, type, and implementation citations below refer to the audited `main` snapshot.
 
-## Scope and evidence
+**Method and limits:** read-only source audit. No live database was queried; schema inventory is only what `src/dal/types/database.generated.ts` declares, and RPC inventory is only what source `.rpc(...)` call sites invoke. No package install, migration, test, build, or runtime check was performed. A source path proves a declared client implementation, not that a remote migration is deployed or that a workflow succeeds against a live tenant. Facts not established by source are explicitly **Unknown** or **Requires runtime verification**. “i18n: yes/no” below means the routed page module directly imports/uses `useTranslation`; child components can make a page only partially localized.
 
-This report describes the checked-out repository, not a hypothetical newer branch. I inspected `src/App.tsx`, `src/components/layout/navConfig.ts`, `src/components/layout/Sidebar.tsx`, route/page implementations, generated Supabase types, repository/service code, source tests, and migration files. I also queried read-only metadata and exact row counts from the active Supabase project named **Ledgr** on 2026-10-27. The live database is ahead of this source snapshot in some vertical areas: it has construction and manufacturing tables/data that are not routed to operational pages in this checkout. Do not infer that a database object is a user-facing feature.
+**Phase labels:** P4 labels are mapped to the Phase 4 PR scopes (#246, #249–#256); #247 and #248 are dependency-only updates. Earlier product phase labels are recorded only when source/PR scope explicitly identifies them. Otherwise they are **Unknown** rather than inferred from route names. “Track A” remains deferred pending review and approval of this audit.
 
-Quality marks in Section 4 are source inspection findings; this audit did not run the test suite or build. `✅` = clearly present, `⚠️` = partial/inconsistent, `❌` = absent or materially deficient.
+## 1. Complete route inventory
 
----
+The router has three main families: public/public-only pages; platform/partner administration; and authenticated business routes. Business pages ordinarily sit inside `ProtectedRoute → AppLayout → RoleRoute`; vertical routes have their own capability gate. `ProtectedRoute` waits for auth/business loading, redirects anonymous users to login, and handles users with no accessible business (`src/routes/ProtectedRoute.tsx:8–35`). `CapabilityGate` composes organisation profile, plan, partner and role decisions through `useCapability` (`src/components/billing/CapabilityGate.tsx:23–52`; `src/hooks/useCapability.ts:14–43,60–85`). `PlanGate` is a soft gate which preserves the route and renders an upgrade prompt (`src/components/billing/PlanGate.tsx:25–60`). Exact plan mapping is in `src/lib/billing/plans.ts:8–19,32–109`.
 
-## 1. Route Inventory
+| Route(s) | Routed page / purpose | Guard and plan / capability | i18n | Phase / note |
+|---|---|---|---|---|
+| `/login`, `/register`, `/forgot-password` | Login, registration, password request | `PublicOnlyRoute`; signed-in user is redirected to their default route | Yes | Auth; phase N/A |
+| `/terms-and-conditions` | Legal terms | Public | No | Public; phase N/A |
+| `/demo` | Product tour | Public; documented as no auth/tenant data | Yes | Demo; phase N/A |
+| `/demo/enter` | Browser-local seeded demo entry | Public | No | Demo; phase N/A; local demo behavior is not a live tenant |
+| `/reset-password` | Password recovery completion | Standalone; explicitly available during password recovery | Yes | Auth; phase N/A |
+| `/accept-invitation` | Invitation acceptance | Standalone route; no route-level `ProtectedRoute` | Yes | Auth; phase N/A |
+| `/create-business` | New business onboarding | `ProtectedRoute`, no `AppLayout`; no page-level plan gate in router | Yes | Onboarding; phase Unknown |
+| `/admin/billing`, `/admin/businesses` | Platform billing and tenant administration | `PlatformAdminRoute → AdminLayout`; platform-admin check | No | Platform admin; phase Unknown |
+| `/partner-admin` | Partner admin dashboard | `PartnerAdminRoute → PartnerAdminLayout` | No | Partner portal; phase Unknown |
+| `/partner-admin/partners/:id`, `/partner-admin/partners/:id/settings`, `/partner-admin/partners/:id/clients`, `/partner-admin/partners/:id/billing` | Partner overview, settings, clients and billing | `PartnerAdminRoute → PartnerAdminLayout` | No | Partner portal; phase Unknown |
+| `/projects-funding-sources/construction-draft` | Local construction project draft/preparation surface | Protected business layout + `CapabilityGate(construction)`; not inside the common `RoleRoute` wrapper, but capability resolution checks role | No | Legacy/local draft; phase Unknown. App comment says no repository/backend call (`src/App.tsx:370–400`); not the real project workspace |
+| `/construction/*` (internal paths: `/construction` overview; `/construction/projects`; `/construction/projects/:projectId`; `/construction/retention`; `/construction/purchase-orders`; `/construction/receipts`; `/construction/bill-matching`; `/construction/material-issues`; `/construction/returns`; `/construction/setup`) | Real construction workspace; query-parameter deep links include `?po=`, `?grn=` and `?issue=` | Protected business layout + `CapabilityGate(construction)`; Enterprise plan, construction operating profile and role are effective requirements | Yes | Construction workspace; phase label Unknown. Path list and project-detail selection are in `src/pages/construction/ConstructionWorkspacePage.tsx:36–46,73–79,147–172` |
+| `/manufacturing`, `/manufacturing/dashboard` | Same manufacturing dashboard | Protected business layout + `CapabilityGate(manufacturing)`; Enterprise, manufacturing profile and role | Yes | Dashboard; specific phase Unknown |
+| `/manufacturing/bom` | BOM list | Same manufacturing capability gate | Yes | BOM workspace; Phase B label in nav source (`src/components/layout/navConfig.ts:123–129`); underlying PR phase number Unknown |
+| `/manufacturing/bom/new` | BOM creation | Same manufacturing capability gate | Yes | BOM workspace; phase number Unknown |
+| `/manufacturing/bom/:id` | BOM detail | Same manufacturing capability gate | Yes | BOM workspace; phase number Unknown |
+| `/manufacturing/bom/:id/edit` | BOM edit | Same manufacturing capability gate | Yes | BOM workspace; phase number Unknown |
+| `/manufacturing/production` | Work-order list | Same manufacturing capability gate | Yes | Production; Phase C label in nav source (`src/components/layout/navConfig.ts:131–137`); underlying PR phase number Unknown |
+| `/manufacturing/production/new` | Work-order creation | Same manufacturing capability gate | Yes | Production; phase number Unknown |
+| `/manufacturing/production/:id` | Work-order detail and run/consumption actions | Same manufacturing capability gate | Yes | Production; phase number Unknown |
+| `/dashboard` | Business dashboard | Protected business layout + `RoleRoute`; no explicit route-level plan gate | Yes | Core; phase Unknown |
+| `/pos` | Point of sale | Protected business layout + `RoleRoute` + `CapabilityGate(pos)`; profile and role; no explicit plan capability mapping | No | POS; phase Unknown |
+| `/income`, `/expenses`, `/invoices` | Sales/income, expenses and invoices | Protected business layout + `RoleRoute`; no explicit router `PlanGate` | No | Core finance; phase Unknown |
+| `/payroll` | Payroll | Protected business layout + `RoleRoute` + `PartnerPlanGate(featureKey="payroll")`; no `capability` prop, so no Ledgr plan tier is imposed by this wrapper | No | Partner package controls availability; phase Unknown |
+| `/products` | Products | Protected business layout + `RoleRoute` + partner inventory feature + inventory plan and organisation capability | No | Inventory; Starter+ (`inventory` capability) and inventory profile/partner feature |
+| `/inventory` | Inventory surface | Same partner/plan/profile gates; `rolePath="/inventory"` | No | Legacy/alias surface; phase Unknown |
+| `/warehouse` | Warehouse / site stores | Same partner/plan/profile gates; `rolePath="/warehouse"` | Yes | Inventory; Starter+ |
+| `/transfers` | Stock/material transfers | Same partner/plan/profile gates; `rolePath="/transfers"` | No | Inventory; Starter+ |
+| `/accounts`, `/assets`, `/capital`, `/tax` | Chart of accounts, fixed assets, capital and tax | Protected business layout + `RoleRoute` + `PlanGate(core_accounting)` | Mixed: accounts yes; others no | Starter+; legacy/core phase Unknown |
+| `/reports` | Legacy tabbed financial-report hub | Protected business layout + `RoleRoute` + `PlanGate(core_accounting)` | No at hub; child reports mixed | Legacy hub; phase Unknown; contains the old reports in Section 5 |
+| `/reports/trial-balance` | New Trial Balance | Protected business layout + `RoleRoute` + `PlanGate(accounting_organisation)`; Growth+ | Yes | P4-1 / PR #246 |
+| `/reports/profit-loss` | New Profit & Loss | Same; Growth+ | Yes | P4-2 / PR #249 |
+| `/reports/balance-sheet` | New Balance Sheet | Same; Growth+ | Yes | P4-3 / PR #250 |
+| `/reports/cash-flow` | New Cash Flow Statement | Same; Growth+ | Yes | P4-4 / PR #251 |
+| `/reports/vat-return` | VAT Return | Same; Growth+ | Yes | P4-6 / PR #256 |
+| `/reports/wht-schedule` | WHT Schedule | Same; Growth+ | Yes | P4-6 / PR #256 |
+| `/journals` | Journal entries | Protected business layout + `RoleRoute` + `PlanGate(accounting_organisation)`; Growth+ | Yes | Legacy/core; phase Unknown |
+| `/periods` | Period management | Same; Growth+ | No | Legacy/core; phase Unknown |
+| `/bank-reconcile` | Legacy single-page bank reconciliation | Protected business layout + `RoleRoute` + `PartnerPlanGate(bank_reconciliation, bank_reconciliation capability)`; Growth+ and partner feature | No | Legacy; phase Unknown; preserved alongside P4B routes |
+| `/bank-reconciliation/accounts` | Bank-account setup | Protected business layout + `RoleRoute` + `BankReconciliationPlanGate`; Growth+ | Yes | P4B-1 / PR #253 |
+| `/bank-reconciliation/statements` | Statement history and import | Same; Growth+ | Yes | P4B-1 / PR #253 |
+| `/bank-reconciliation/statements/:id` | Statement detail | Same; Growth+ | Yes | P4B-1 / PR #253 |
+| `/bank-reconciliation/reconcile/:statementId` | Match and reconcile a selected statement | Same; Growth+ | Yes | P4B-2 / PR #254 |
+| `/audit` | Audit log | Protected business layout + `RoleRoute` + `PlanGate(accounting_organisation)`; Growth+ | No | Legacy/core; phase Unknown |
+| `/contacts`, `/branches`, `/locations`, `/departments` | Organisation master data | Protected business layout + `RoleRoute` + `PlanGate(accounting_organisation)`; Growth+ | No | Legacy/core; phase Unknown. For construction/manufacturing-only profiles, Branches may be hidden and `/branches` redirects to `/locations` (`src/components/layout/navConfig.ts:237–253`) |
+| `/api-docs`, `/api-keys` | Public API documentation and key management | Protected business layout + `RoleRoute` + `PlanGate(api_access)`; Pro+ | Yes | Integrations; phase Unknown |
+| `/zapier` | Zapier/webhook integration | Protected business layout + `RoleRoute` + `PlanGate(webhooks)`; Pro+ | Yes | Integrations; phase Unknown |
+| `/ai` | AI insights | Protected business layout + `RoleRoute` + partner AI feature + `PlanGate(ai_insights)`; Pro+ | No | AI; phase Unknown |
+| `/chat` | Redirect to `/ai` | Protected business layout + `RoleRoute`; `Navigate` only | N/A | Alias; phase Unknown |
+| `/settings`, `/settings/approvals` | Same Settings page; the latter is a deep-link/alias into the approvals tab | Protected business layout + `RoleRoute`; approval UI itself is Enterprise-gated | Yes | General settings Unknown; approvals P4C / PR #255 |
+| `/settings/repair-coa` | Chart-of-accounts repair | Protected business layout + `RoleRoute`; no explicit plan gate | No | Utility; phase Unknown |
+| `/support` | Support | Protected business layout + `RoleRoute`; no explicit plan gate | Yes | Support; phase Unknown |
+| `/tools` | Tools | Protected business layout + `RoleRoute`; no explicit plan gate | No | Utility; phase Unknown |
+| `/import`, `/data-import`, `/onboarding/import` | Same data-import page at three paths | Protected business layout + `RoleRoute`; no explicit plan gate | No | Import aliases; phase Unknown |
+| `/` and `*` | Smart default redirect; on admin portal host redirects to `/partner-admin` | No route-level auth wrapper; `SmartRedirect`/host redirect handles destination | N/A | Fallbacks; phase Unknown |
 
-All application route definitions are in `src/App.tsx`. Authenticated business routes are wrapped by `ProtectedRoute` and `AppLayout`; most business routes are also inside `RoleRoute`, which sends users without a route role to their role home. The two construction draft aliases are outside `RoleRoute`. Plan gates are soft gates: the route exists, but the page content is replaced by the upgrade screen when the plan lacks the capability.
+Router definitions and component imports are in `src/App.tsx:58–147,160–254,322–655`. The six report route wrappers and Growth+ gate are at `:176–254,550–555`; protected business routes start at `:370–377`; bank routes are `:566–582`. No bare `/bank-reconciliation` route is declared. The new Reconcile page requires `:statementId`; it is not the statements-list route.
 
-Data-source abbreviations: **DB** = direct Supabase table/view query; **RPC** = Supabase RPC; **Repo** = DAL/repository; **Local** = browser-only/demo/local state; **—** = no application data query.
+**Plan mapping verified in source:** Free has no gated capabilities; Starter adds `inventory` and `core_accounting`; Growth adds `bank_reconciliation` and `accounting_organisation`; Pro adds AI/API/webhooks; Enterprise adds construction, manufacturing and approval workflows (`src/lib/billing/plans.ts:32–109`). `CapabilityGate` applies plan/partner/role/profile layers for construction and manufacturing (`src/hooks/useCapability.ts:14–43,60–85`). Exact effective business/role data at runtime is **Requires runtime verification**.
 
-| Route path | Component file | Renders real UI? | Data source | Plan gate | Vertical gate | i18n? |
-|---|---|---|---|---|---|---|
-| `/login` | `src/pages/LoginPage.tsx` | Yes — sign-in | Supabase Auth | None | Public-only while signed out | Yes |
-| `/register` | `src/pages/RegisterPage.tsx` | Yes — registration | Supabase Auth | None | Public-only while signed out | Yes |
-| `/forgot-password` | `src/pages/auth/ForgotPasswordPage.tsx` | Yes — password reset request | Supabase Auth | None | Public-only while signed out | Yes |
-| `/terms-and-conditions` | `src/pages/TermsAndConditionsPage.tsx` | Yes — static legal text | — | None | Public | No |
-| `/demo` | `src/pages/DemoPage.tsx` | Yes — static product tour, not tenant data | Local/static | None | Public | Partial |
-| `/demo/enter` | `src/pages/DemoEntryPage.tsx` | Yes — enters seeded browser-local demo | Local/demo mode + Auth | None | Public entry | No |
-| `/reset-password` | `src/pages/auth/ResetPasswordPage.tsx` | Yes — password update | Supabase Auth | None | Standalone password-recovery flow | Yes |
-| `/accept-invitation` | `src/pages/AcceptInvitationPage.tsx` | Yes — invitation acceptance | RPC/Auth | None | Standalone invite flow | Yes |
-| `/create-business` | `src/pages/CreateBusinessPage.tsx` | Yes — business setup | RPC + Supabase | None | Authenticated | No |
-| `/admin/billing` | `src/pages/admin/AdminBillingPage.tsx` | Yes — platform billing administration | DB/RPC | None | `PlatformAdminRoute` | No |
-| `/admin/businesses` | `src/pages/admin/AdminBusinessesPage.tsx` | Yes — platform business administration | DB/RPC | None | `PlatformAdminRoute` | No |
-| `/partner-admin` | `src/pages/partner-admin/PartnerAdminDashboard.tsx` | Yes — partner portal | DB/repositories | None | `PartnerAdminRoute` | No |
-| `/partner-admin/partners/:id` | `src/pages/partner-admin/PartnerOverviewPage.tsx` | Yes — partner detail | DB/repositories | None | `PartnerAdminRoute` | No |
-| `/partner-admin/partners/:id/settings` | `src/pages/partner-admin/PartnerSettingsPage.tsx` | Yes — partner configuration | DB | None | `PartnerAdminRoute` | No |
-| `/partner-admin/partners/:id/clients` | `src/pages/partner-admin/PartnerClientsPage.tsx` | Yes — client management | DB | None | `PartnerAdminRoute` | No |
-| `/partner-admin/partners/:id/billing` | `src/pages/partner-admin/PartnerBillingPage.tsx` | Yes — partner billing | DB/RPC | None | `PartnerAdminRoute` | No |
-| `/projects-funding-sources/construction-draft` | `src/pages/ConstructionProjectSetupDraftPage.tsx` | Draft UI only — not a posted or server-backed project workflow | Local draft storage | None | None; outside `RoleRoute` | No |
-| `/construction` | `src/pages/ConstructionProjectSetupDraftPage.tsx` | Draft UI only — route comment explicitly says no repository/backend/auth path | Local draft storage | None | None; outside `RoleRoute` | No |
-| `/dashboard` | `src/pages/DashboardPage.tsx` | Yes — business dashboard | DB/repositories | None | `RoleRoute`; capability-aware home | Yes |
-| `/pos` | `src/pages/PosPage.tsx` | Yes — POS, shifts, sales, returns, discounts, split tender | RPC/services + DB reads | No explicit `PlanGate`; `CapabilityGate(pos)` | Organisation capability `pos`; role route | No |
-| `/income` | `src/pages/IncomePage.tsx` | Yes — income/receipt creation | DB/services + ledger posting | None | Role route | No |
-| `/expenses` | `src/pages/ExpensesPage.tsx` | Yes — expense entry and payments | DB/services + ledger posting | None | Role route | No |
-| `/invoices` | `src/pages/InvoicesPage.tsx` | Yes — invoice lifecycle | DB/services/RPC in write paths | None | Role route | No |
-| `/payroll` | `src/pages/PayrollPage.tsx` | Yes — payroll | DB/repositories | Partner feature `payroll` | Role route | No |
-| `/products` | `src/pages/ProductsPage.tsx` | Yes — product catalogue | DB/repositories | Partner `inventory` + plan capability `inventory` | Organisation capability `inventory` | No |
-| `/inventory` | `src/pages/InventoryPage.tsx` | **No — placeholder** (“Coming soon.”) | None | Partner `inventory` + plan capability `inventory` | Organisation capability `inventory` | No |
-| `/warehouse` | `src/pages/WarehousePage.tsx` | Yes — warehouse UI, but stock synchronization is explicitly suspended | DB/repositories | Partner `inventory` + plan capability `inventory` | Organisation capability `inventory` | No |
-| `/transfers` | `src/pages/TransfersPage.tsx` | Yes — stock transfers | DB/services | Partner `inventory` + plan capability `inventory` | Organisation capability `inventory` | No |
-| `/accounts` | `src/pages/AccountsPage.tsx` | Yes — chart of accounts | DB/repositories | `core_accounting` (Starter+) | Role route | No |
-| `/assets` | `src/pages/AssetsPage.tsx` | Yes — fixed asset register/depreciation | DB/repositories | `core_accounting` (Starter+) | Role route | No |
-| `/capital` | `src/pages/CapitalPage.tsx` | Yes — loans/share capital | DB/repositories | `core_accounting` (Starter+) | Role route | No |
-| `/tax` | `src/pages/TaxPage.tsx` | Yes — tax configuration and PAYE bands; not a tax-return report | DB | `core_accounting` (Starter+) | Role route | No |
-| `/reports` | `src/pages/ReportsPage.tsx` | Yes — combined tabbed reporting surface | View, DB, repository; see Section 5 | `core_accounting` (Starter+) | Role route | **No** — tab/filter text is hardcoded |
-| `/journals` | `src/pages/JournalsPage.tsx` | Yes — journal entry workflow | DB/repositories/services | `accounting_organisation` (Growth+) | Role route | No |
-| `/periods` | `src/pages/PeriodManagementPage.tsx` | Yes — accounting-period management | DB/RPC | `accounting_organisation` (Growth+) | Role route | No |
-| `/bank-reconcile` | `src/components/bank/BankReconciliation.tsx` | Yes — one reconciliation surface, including statement/account workflow | DB; some direct writes | Partner feature + `bank_reconciliation` (Growth+) | Role route | No |
-| `/audit` | `src/pages/AuditLogPage.tsx` | Yes — audit log and exports | DB + audit-chain RPCs | `accounting_organisation` (Growth+) | Role route | No |
-| `/contacts` | `src/pages/ContactsPage.tsx` | Yes — customer/supplier contacts | DB/repositories | `accounting_organisation` (Growth+) | Role route | No |
-| `/branches` | `src/pages/BranchesPage.tsx` | Yes — branch management | DB | `accounting_organisation` (Growth+) | Role route and branch-aware access | No |
-| `/departments` | `src/pages/DepartmentsPage.tsx` | Yes — department management | DB | `accounting_organisation` (Growth+) | Role route | No |
-| `/api-docs` | `src/pages/ApiDocumentationPage.tsx` | Yes — API documentation | Static | `api_access` (Pro+) | Role route | Yes |
-| `/api-keys` | `src/pages/ApiKeysPage.tsx` | Yes — API-key management | DB | `api_access` (Pro+) | Role route | Yes |
-| `/zapier` | `src/pages/ZapierIntegrationPage.tsx` | Yes — webhook/Zapier configuration | DB | `webhooks` (Pro+) | Role route | Yes |
-| `/ai` | `src/pages/AiInsightsPage.tsx` | Yes — AI insights/chat | Edge function/DB context | Partner AI feature + `ai_insights` (Pro+) | Role route | No |
-| `/chat` | `Navigate` to `/ai` | No separate UI — redirect | — | Inherits `/ai` gate | Role route | N/A |
-| `/settings` | `src/pages/SettingsPage.tsx` | Yes — business/settings tabs | DB | None | Role route | No |
-| `/settings/repair-coa` | `src/pages/RepairCoaPage.tsx` | Yes — chart repair utility | DB/RPC | None | Role route | No |
-| `/support` | `src/pages/SupportPage.tsx` | Yes — support surface | Static/edge knowledge base | None | Role route | Yes |
-| `/tools` | `src/pages/ToolsPage.tsx` (default export) | Yes — tools catalogue | Mixed/local | None | Role route | No |
-| `/import` | `src/pages/DataImportPage.tsx` | Yes — CSV import | DB/services | None | Role route | No |
-| `/data-import` | `src/pages/DataImportPage.tsx` | Same import UI alias | DB/services | None | Role route | No |
-| `/onboarding/import` | `src/pages/DataImportPage.tsx` | Same import UI alias | DB/services | None | Role route | No |
-| `/` | `Navigate` to computed home | Redirect only | — | Computed by home route | Auth/role-dependent | N/A |
-| `*` | `Navigate` to computed home | Redirect only | — | Computed by home route | Auth/role-dependent | N/A |
+## 2. Exact sidebar and navigation structure
 
-**Important gate behavior:** `PlanGate` is soft gating, not route removal. `/accounts`, `/tax`, `/assets`, and `/reports` are Starter+; `/journals`, `/periods`, `/audit`, and organisation surfaces are Growth+; API and AI surfaces are Pro+. `CapabilityGate` handles operating-model access. Not every `featureName` string in route wrappers is translated.
+`NAV_SECTIONS` is the source of the ordinary sidebar order and item paths (`src/components/layout/navConfig.ts:70–189`). Sidebar renders visible sections, translated labels, active state and plan locks (`src/components/layout/Sidebar.tsx:116–191`). Admin links are separately rendered only for platform admins (`src/components/layout/Sidebar.tsx:193–249`).
 
----
-
-## 2. Sidebar Navigation Structure
-
-`src/components/layout/navConfig.ts` supplies flat section arrays; `src/components/layout/Sidebar.tsx` renders each section as a heading and a single `<ul>`. **There are no nested submenus or sub-submenus.** Every configured route is one level under its section. Section/item labels are i18n keys, not literal English; most page content itself is not localized.
-
-| Section label key | Item label key | Route | Nesting | Visibility/gating in code | Route status |
-|---|---|---|---|---|---|
-| `navigation.sections.overview` | `navigation.items.dashboard` | `/dashboard` | Section → item | Role path filter | Exists; live dashboard |
-| `navigation.sections.overview` | `navigation.items.pos` | `/pos` | Section → item | `requiresOrgCapability: pos`; route `CapabilityGate(pos)` | Exists; operational POS |
-| `navigation.sections.finance` | `navigation.items.income` | `/income` | Section → item | Role path filter | Exists; operational |
-| `navigation.sections.finance` | `navigation.items.expenses` | `/expenses` | Section → item | Role path filter | Exists; operational |
-| `navigation.sections.finance` | `navigation.items.invoices` | `/invoices` | Section → item | Role path filter | Exists; operational |
-| `navigation.sections.finance` | `navigation.items.payroll` | `/payroll` | Section → item | Partner feature `payroll`; route partner gate | Exists; operational |
-| `navigation.sections.inventory` | `navigation.items.products` | `/products` | Section → item | Partner `inventory`; plan `inventory`; org capability `inventory` | Exists; operational |
-| `navigation.sections.inventory` | `navigation.items.warehouse` | `/warehouse` | Section → item | Partner `inventory`; plan `inventory`; org capability `inventory` | Exists; UI present, stock sync suspended |
-| `navigation.sections.inventory` | `navigation.items.transfers` | `/transfers` | Section → item | Partner `inventory`; plan `inventory`; org capability `inventory` | Exists; operational stock transfers |
-| `navigation.sections.accounting` | `navigation.items.accounts` | `/accounts` | Section → item | `core_accounting` (Starter+) | Exists; operational |
-| `navigation.sections.accounting` | `navigation.items.tax` | `/tax` | Section → item | `core_accounting` (Starter+) | Exists; tax setup, not filing report |
-| `navigation.sections.accounting` | `navigation.items.assets` | `/assets` | Section → item | `core_accounting` (Starter+) | Exists; operational |
-| `navigation.sections.accounting` | `navigation.items.capital` | `/capital` | Section → item | `core_accounting` (Starter+) | Exists; operational |
-| `navigation.sections.accounting` | `navigation.items.reports` | `/reports` | Section → item | `core_accounting` (Starter+) | Exists; combined reports, quality issues below |
-| `navigation.sections.accounting` | `navigation.items.journals` | `/journals` | Section → item | `accounting_organisation` (Growth+) | Exists; operational |
-| `navigation.sections.accounting` | `navigation.items.bankReconciliation` | `/bank-reconcile` | Section → item | Partner `bank_reconciliation`; capability `bank_reconciliation`; Growth+ | Exists; one combined workflow |
-| `navigation.sections.accounting` | `navigation.items.periods` | `/periods` | Section → item | `accounting_organisation` (Growth+) | Exists; operational |
-| `navigation.sections.accounting` | `navigation.items.auditLog` | `/audit` | Section → item | `accounting_organisation` (Growth+) | Exists; audit log |
-| `navigation.sections.organisation` | `navigation.items.contacts` | `/contacts` | Section → item | `accounting_organisation` (Growth+) | Exists; operational |
-| `navigation.sections.organisation` | `navigation.items.branches` | `/branches` | Section → item | `accounting_organisation` (Growth+) | Exists; operational |
-| `navigation.sections.organisation` | `navigation.items.departments` | `/departments` | Section → item | `accounting_organisation` (Growth+) | Exists; operational |
-| `navigation.sections.construction` | `navigation.items.constructionWorkspace` | `/construction` | Section → item | `allowAllAuthenticatedRoles`; no plan or vertical gate in nav | Exists, but only local draft page; not an operational workspace |
-| `navigation.sections.ai` | `navigation.items.ledgrAi` | `/ai` | Section → item | Partner `ai_advisor`; `ai_insights` (Pro+) | Exists; operational AI surface |
-| `navigation.sections.support` | `navigation.items.support` | `/support` | Section → item | Role path filter | Exists; support UI |
-| `navigation.sections.admin` (Sidebar-only) | `navigation.items.businesses` | `/admin/businesses` | Admin section → item | Platform admin only | Exists; operational |
-| `navigation.sections.admin` (Sidebar-only) | `navigation.items.adminBilling` | `/admin/billing` | Admin section → item | Platform admin only | Exists; operational |
-
-The route guard separately blocks role-ineligible business routes. Locked items remain visible and show an upgrade lock; partner feature and organisation-capability filters remove items. The construction link is the exception: it deliberately bypasses the role filter and, in this checkout, exposes a draft page without Enterprise or construction-model gating. `/inventory` is not in the main sidebar, but appears in the Tools catalogue. A shared navigation helper maps that path to the Products nav item, while `App.tsx` still routes `/inventory` to the “Coming soon” placeholder; these alternate navigation surfaces therefore disagree about what the route does.
-
----
-
-## 3. Database Schema Summary
-
-### Source and count methodology
-
-The live **Ledgr** Supabase project was queried read-only on 2026-10-27. It reported **124 public base tables**, **308 policies across 112 tables**, and 12 other public tables with RLS enabled but no policies (therefore default-deny for ordinary roles). `pg_class.reltuples` values below are approximate planner estimates; unknown/negative estimates are represented as `0~`, which does **not** mean an exact empty table. Exact counts were separately queried for key tables. These figures are a live-DB snapshot, not necessarily the schema state represented by this older source commit.
-
-#### Public tables and estimated rows
-
-`0~` denotes an unavailable/zero planner estimate; other numbers are the `reltuples` estimate.
-
-```text
-accounting_period_events:0~, accounting_periods:10, accounts:2613, ai_insights_usage:1, api_keys:0~, api_usage:0~, approval_history:0~, approval_request_steps:0~, approval_requests:0~, approval_workflow_steps:0~, approval_workflows:0~, asset_categories:71, audit_20260927_sent_to_paid:0~, audit_log:21309, bank_accounts:0~, bank_reconciliation_matches:0~, bank_statement_import_metadata:0~, bank_statement_lines:0~, bank_statements:0~, branches:19, budget_lines:0~, budgets:0~, business_invitations:2, business_terms_acceptances:0~, business_users:19, businesses:13,
-construction_delivery_note_lines:0~, construction_delivery_notes:0~, construction_goods_receipt_holds:0~, construction_goods_receipt_lines:0~, construction_goods_receipt_notes:0~, construction_material_issues:0~, construction_material_returns:0~, construction_procurement_capabilities:0~, construction_procurement_grants:0~, construction_procurement_sites:0~, construction_product_uom_conversions:0~, construction_projects:5, construction_purchase_order_events:0~, construction_purchase_order_lines:0~, construction_purchase_orders:0~, construction_receipt_bill_allocations:0~, construction_receipt_cost_bases:0~, construction_receipt_inspections:0~, construction_receipt_line_reclassifications:0~, construction_receipt_posting_policies:0~, construction_supplier_invoice_references:0~, contacts:10, currencies:155, departments:7, depreciation_schedules:1, employee_allowances:0~, employee_deductions:0~, employees:20, exchange_rates:0~,
-expense_lines:499, expense_payments:0~, expenses:514, fixed_assets:4, fx_revaluations:0~, inventory_balances:94, inventory_locations:25, invoice_approval_policies:0~, invoice_approvals:0~, invoice_delivery_events:0~, invoice_lines:561, invoice_payments:4, invoices:513, journal_entries:2124, journal_lines:4511, loan_repayments:6, loans:4, manufacturing_bom_lines:0~, manufacturing_boms:0~, manufacturing_capabilities:0~, manufacturing_capability_grants:0~, manufacturing_material_transactions:0~, manufacturing_production_runs:0~, manufacturing_work_order_lines:0~, manufacturing_work_orders:0~, offline_queue_reconciliations:0~, partner_admins:0~, partner_clients:0~, partner_feature_flags:0~, partner_invoices:0~, partners:0~,
-paye_bands:59, payroll_employee_lines:3, payroll_runs:5, phone_accounts:0~, pos_approvals:0~, pos_cash_movements:0~, pos_corrections:0~, pos_price_overrides:0~, pos_settings:0~, pos_shift_closes:0~, pos_shift_late_adjustments:0~, pos_shifts:0~, pos_terminals:0~, product_categories:0~, products:38, profiles:0~, project_boq_lines:0~, project_retention_ledger:0~, project_status_log:0~, project_valuation_lines:0~, project_valuations:0~, recurring_invoices:0~, share_transactions:6, stock_movements:896, stock_transfer_lines:85, stock_transfers:53, subscription_payments:29, subscription_reminders_sent:0~, subscriptions:0~, support_agent_usage:8, tax_alerts:0~, tax_configurations:120, tax_payments:0~, tax_returns:0~, usage_counters:0~, user_profiles:16, webhook_deliveries:0~, webhooks:0~
-```
-
-#### Exact counts for selected tables
-
-| Table | Exact rows | Table | Exact rows |
-|---|---:|---|---:|
-| `businesses` | 13 | `accounts` | 2,616 |
-| `branches` | 25 | `contacts` | 14 |
-| `journal_entries` | 2,260 | `journal_lines` | 4,577 |
-| `invoices` | 563 | `expenses` | 528 |
-| `products` | 82 | `stock_movements` | 907 |
-| `fixed_assets` | 8 | `bank_statements` | 0 |
-| `budgets` | 0 | `recurring_invoices` | 0 |
-| `tax_returns` | 8 | `construction_projects` | 5 |
-| `manufacturing_boms` | 8 | `manufacturing_work_orders` | 7 |
-
-### RPC/function inventory
-
-The source code's explicit `.rpc()` call names are: `accept_invitation`, `create_business_with_owner`, `pos_stock_availability`, plus dynamically selected `quickSaveService` commands. Database metadata shows a much wider public routine surface. The following are 174 unique, non-extension public function names after excluding underscore-prefixed private helpers and trigger-returning functions; `×2` indicates overloads. `rls_auto_enable` is an event-trigger helper, not a client RPC. The list includes security/helper functions as well as business commands, so it should not be mistaken for a list of safe client-callable operations.
-
-```text
-accept_invitation, accept_invitation_membership, act_on_approval, add_partner_admin, ai_context×2, apply_subscription_payment, approve_construction_receipt_posting_policy, approve_invoice, audit_chain_hash, authorize_construction_purchase_order, authorize_pos_approval, authorize_pos_price_override, backfill_and_recalculate_inventory, bulk_upsert_boq_lines, business_partner_id, can_access_branch, can_access_location, can_admin_business_data, can_approve_step, can_operate_pos, can_read_audit, can_read_partner_client, can_read_partner_peer_business, can_view_payroll, can_write_business_data, can_write_contacts_data, can_write_expense_data, can_write_ledger_directly, can_write_payroll, can_write_sales_data, cancel_construction_purchase_order, clear_partner_admins, close_accounting_period, close_pos_shift_command, construction_procurement_capabilities_for, construction_procurement_open_items, construction_project_material_cost, construction_supplier_reference_visible, consume_api_rate_limit, create_api_journal_entry, create_bank_reconciliation_matches, create_boq_line, create_business_with_owner, create_construction_purchase_order, create_invoice_with_lines, create_project, create_project_purchase_order, create_valuation, current_partner_ids, current_user_role, delete_bank_reconciliation_match, delete_boq_line, delete_draft_bank_statement, diagnose_user_login, effective_plan_tier, find_user_by_email, generate_invoice_from_valuation, get_approval_state, get_bank_gl_book_balance, get_bank_reconciliation_gl_lines, get_boq_summary, get_cost_breakdown_by_project, get_dashboard_metrics×2, get_enum_values, get_portfolio_summary, get_pos_shift_report, get_project_cost_summary, get_project_pnl, get_project_valuation_trend, get_retention_aging, get_retention_summary, get_trial_balance, get_unreconciled_gl_lines, get_user_role, get_valuation_history, get_valuation_trend, grant_construction_procurement_capability, grant_user_business_access, import_bank_statement, increment_amount_paid, invite_member, is_business_member, is_partner_admin, is_partner_business_admin, is_platform_admin, issue_construction_materials_to_project, issue_project_materials, ledgr_monthly_document_count, link_site_to_project, list_all_businesses, list_partner_admins, log_manual_audit_event×2, manufacturing_bom_activate, manufacturing_bom_cost, manufacturing_bom_new_version, manufacturing_cost_variance, manufacturing_dashboard_metrics, manufacturing_production_summary, manufacturing_throughput_trend, manufacturing_wip_aging, manufacturing_wo_cancel, manufacturing_wo_close, manufacturing_wo_complete, manufacturing_wo_create, manufacturing_wo_record_consumption, manufacturing_wo_record_return, manufacturing_wo_record_run, manufacturing_wo_release, manufacturing_wo_start, manufacturing_wo_yield, manufacturing_yield_by_product, match_construction_bill_line_to_receipt, next_journal_entry_number, open_pos_shift_command, plan_tier_rank, pos_stock_availability, post_construction_receipt_movement, post_pos_sale, provision_construction_coa_accounts, provision_construction_defaults, provision_manufacturing_coa_accounts, provision_manufacturing_defaults, reclassify_construction_receipt_line, reconcile_bank_statement, reconcile_offline_queue_item, record_business_terms_acceptance, record_construction_delivery_note, record_construction_delivery_note_exception, record_construction_goods_receipt, record_construction_receipt_cost_basis, record_construction_receipt_inspection, record_expense_payment, record_inventory_journal_movement, record_invoice_payment, record_pos_cash_movement_command, record_sale_stock_and_cogs, refund_pos_sale_command, register_construction_procurement_site, register_construction_product_uom_conversion, register_construction_supplier_invoice_reference, register_construction_supplier_invoice_reference_exception, release_construction_receipt_hold, release_retention, remove_partner_admin, reopen_accounting_period, reorder_boq_lines, request_pos_approval, request_pos_price_override, requires_approval, reserve_next_document_number, resubmit_approval, return_construction_materials_to_store, return_project_materials, revoke_construction_procurement_capability, save_approval_workflow, save_quick_expense, save_quick_sale, seed_new_business×2, set_construction_procurement_site_status, set_invoice_approval_policy, set_user_business_access, start_approval_workflow, submit_valuation, transition_project_status, unlink_site_from_project, unreconcile_bank_statement, update_boq_line, update_business_operating_models, update_construction_procurement_site, update_project, update_valuation, user_has_role, verify_audit_chain, void_pos_sale_command
-```
-
-### RLS policy inventory
-
-Live catalog: 308 policies on 112 tables. `public` below is the PostgreSQL `PUBLIC` role; `authenticated` and `anon` are explicit roles. Commands are `ALL`, `SELECT`, `INSERT`, `UPDATE`, or `DELETE`. Policies' `USING`/`WITH CHECK` expressions are not repeated here; role/command/name are as requested. Twelve tables have RLS enabled but zero policies: `ai_insights_usage`, `api_usage`, `audit_20260927_sent_to_paid`, `business_terms_acceptances`, `phone_accounts`, `pos_approvals`, `pos_corrections`, `profiles`, `subscription_reminders_sent`, `subscriptions`, `support_agent_usage`, `usage_counters` (default-deny for normal roles).
-
-| Table | Policies (policy name [role command]) |
-|---|---|
-| `accounting_period_events` | `period_events_member_read` [authenticated SELECT] |
-| `accounting_periods` | `accounting_periods_admin_delete` [public DELETE]; `accounting_periods_member_read` [public SELECT]; `accounting_periods_platform_admin_read` [public SELECT]; `accounting_periods_writer_insert` [public INSERT]; `accounting_periods_writer_update` [public UPDATE] |
-| `accounts` | `accounts_admin_delete` [public DELETE]; `accounts_member_read` [public SELECT]; `accounts_platform_admin_read` [public SELECT]; `accounts_writer_insert` [public INSERT]; `accounts_writer_update` [public UPDATE] |
-| `api_keys` | `Users can manage their business api keys` [public ALL]; `api_keys_business_read` [public SELECT]; `api_keys_business_update` [public UPDATE] |
-| `approval_history` | `approval_history_member_read` [authenticated SELECT] |
-| `approval_request_steps` | `approval_request_steps_member_read` [authenticated SELECT] |
-| `approval_requests` | `approval_requests_member_read` [authenticated SELECT] |
-| `approval_workflow_steps` | `approval_workflow_steps_member_read` [authenticated SELECT] |
-| `approval_workflows` | `approval_workflows_member_read` [authenticated SELECT] |
-| `asset_categories` | `asset_categories_admin_delete` [public DELETE]; `asset_categories_member_read` [public SELECT]; `asset_categories_platform_admin_read` [public SELECT]; `asset_categories_writer_insert` [public INSERT]; `asset_categories_writer_update` [public UPDATE] |
-| `audit_log` | `audit_log_insert` [authenticated INSERT]; `audit_log_platform_admin_read` [public SELECT]; `audit_log_read` [public SELECT]; `audit_log_select` [public SELECT] |
-| `bank_accounts` | `bank_accounts_admin_delete` [authenticated DELETE]; `bank_accounts_member_read` [authenticated SELECT]; `bank_accounts_writer_insert` [authenticated INSERT]; `bank_accounts_writer_update` [authenticated UPDATE] |
-| `bank_reconciliation_matches` | `bank_recon_matches_member_read` [authenticated SELECT]; `bank_recon_matches_writer_delete` [authenticated DELETE]; `bank_recon_matches_writer_insert` [authenticated INSERT] |
-| `bank_statement_import_metadata` | `bank_statement_import_metadata_admin_delete` [authenticated DELETE]; `bank_statement_import_metadata_member_read` [authenticated SELECT]; `bank_statement_import_metadata_writer_insert` [authenticated INSERT]; `bank_statement_import_metadata_writer_update` [authenticated UPDATE] |
-| `bank_statement_lines` | `bank_statement_lines_admin_delete` [public DELETE]; `bank_statement_lines_member_read` [public SELECT]; `bank_statement_lines_platform_admin_read` [public SELECT]; `bank_statement_lines_writer_insert` [public INSERT]; `bank_statement_lines_writer_update` [public UPDATE] |
-| `bank_statements` | `bank_statements_admin_delete` [public DELETE]; `bank_statements_member_read` [public SELECT]; `bank_statements_platform_admin_read` [public SELECT]; `bank_statements_writer_insert` [public INSERT]; `bank_statements_writer_update` [public UPDATE] |
-| `branches` | `branches_admin_delete` [public DELETE]; `branches_member_read` [public SELECT]; `branches_platform_admin_read` [public SELECT]; `branches_writer_insert` [public INSERT]; `branches_writer_update` [public UPDATE] |
-| `budget_lines` | `budget_lines_admin_delete` [public DELETE]; `budget_lines_member_read` [public SELECT]; `budget_lines_platform_admin_read` [public SELECT]; `budget_lines_writer_insert` [public INSERT]; `budget_lines_writer_update` [public UPDATE] |
-| `budgets` | `budgets_admin_delete` [public DELETE]; `budgets_member_read` [public SELECT]; `budgets_platform_admin_read` [public SELECT]; `budgets_writer_insert` [public INSERT]; `budgets_writer_update` [public UPDATE] |
-| `business_invitations` | `business_invitations_business_access` [public ALL] |
-| `business_users` | `Users can read own memberships` [public SELECT]; `bu_delete` [public DELETE]; `bu_insert_self` [anon,authenticated INSERT]; `bu_select` [public SELECT]; `bu_update` [public UPDATE]; `business_users_accept_invitation` [authenticated SELECT]; `business_users_admin_delete` [public DELETE]; `business_users_admin_update` [public UPDATE]; `business_users_admin_write` [public INSERT]; `business_users_member_read` [public SELECT]; `business_users_platform_admin_read` [public SELECT] |
-| `businesses` | `businesses_delete` [public DELETE]; `businesses_insert` [authenticated INSERT]; `businesses_member_read` [public SELECT]; `businesses_partner_admin_read` [public SELECT]; `businesses_partner_peer_read` [public SELECT]; `businesses_platform_admin_read` [public SELECT]; `businesses_update` [public UPDATE] |
-| `construction_delivery_note_lines` | `construction_delivery_note_lines_member_read` [authenticated SELECT] |
-| `construction_delivery_notes` | `construction_delivery_notes_member_read` [authenticated SELECT] |
-| `construction_goods_receipt_holds` | `construction_goods_receipt_holds_member_read` [authenticated SELECT] |
-| `construction_goods_receipt_lines` | `construction_goods_receipt_lines_member_read` [authenticated SELECT] |
-| `construction_goods_receipt_notes` | `construction_goods_receipt_notes_member_read` [authenticated SELECT] |
-| `construction_material_issues` | `construction_material_issues_member_read` [authenticated SELECT] |
-| `construction_material_returns` | `construction_material_returns_member_read` [authenticated SELECT] |
-| `construction_procurement_capabilities` | `construction_procurement_capabilities_read` [authenticated SELECT] |
-| `construction_procurement_grants` | `construction_procurement_grants_member_read` [authenticated SELECT] |
-| `construction_procurement_sites` | `construction_procurement_sites_member_read` [authenticated SELECT] |
-| `construction_product_uom_conversions` | `construction_product_uom_conversions_member_read` [authenticated SELECT] |
-| `construction_projects` | `projects_member_grants` [authenticated ALL] |
-| `construction_purchase_order_events` | `construction_purchase_order_events_member_read` [authenticated SELECT] |
-| `construction_purchase_order_lines` | `construction_purchase_order_lines_member_read` [authenticated SELECT] |
-| `construction_purchase_orders` | `construction_purchase_orders_member_read` [authenticated SELECT] |
-| `construction_receipt_bill_allocations` | `construction_receipt_bill_allocations_member_read` [authenticated SELECT] |
-| `construction_receipt_cost_bases` | `construction_receipt_cost_bases_member_read` [authenticated SELECT] |
-| `construction_receipt_inspections` | `construction_receipt_inspections_member_read` [authenticated SELECT] |
-| `construction_receipt_line_reclassifications` | `construction_receipt_line_reclassifications_member_read` [authenticated SELECT] |
-| `construction_receipt_posting_policies` | `construction_receipt_posting_policies_member_read` [authenticated SELECT] |
-| `construction_supplier_invoice_references` | `construction_supplier_invoice_references_member_read` [authenticated SELECT] |
-| `contacts` | `contacts_admin_delete` [public DELETE]; `contacts_member_read` [public SELECT]; `contacts_platform_admin_read` [public SELECT]; `contacts_writer_insert` [public INSERT]; `contacts_writer_update` [public UPDATE] |
-| `currencies` | `currencies_read` [authenticated SELECT] |
-| `departments` | `departments_admin_delete` [public DELETE]; `departments_member_read` [public SELECT]; `departments_platform_admin_read` [public SELECT]; `departments_writer_insert` [public INSERT]; `departments_writer_update` [public UPDATE] |
-| `depreciation_schedules` | `depreciation_schedules_admin_delete` [public DELETE]; `depreciation_schedules_member_read` [public SELECT]; `depreciation_schedules_platform_admin_read` [public SELECT]; `depreciation_schedules_writer_insert` [public INSERT]; `depreciation_schedules_writer_update` [public UPDATE] |
-| `employee_allowances` | `employee_allowances_payroll_delete` [public DELETE]; `employee_allowances_payroll_insert` [public INSERT]; `employee_allowances_payroll_read` [public SELECT]; `employee_allowances_payroll_update` [public UPDATE] |
-| `employee_deductions` | `employee_deductions_payroll_delete` [public DELETE]; `employee_deductions_payroll_insert` [public INSERT]; `employee_deductions_payroll_read` [public SELECT]; `employee_deductions_payroll_update` [public UPDATE] |
-| `employees` | `employees_admin_delete` [public DELETE]; `employees_member_read` [public SELECT]; `employees_platform_admin_read` [public SELECT]; `employees_writer_insert` [public INSERT]; `employees_writer_update` [public UPDATE] |
-| `exchange_rates` | `exchange_rates_business_read` [public SELECT]; `exchange_rates_business_write` [public INSERT]; `exchange_rates_delete` [public DELETE]; `exchange_rates_insert` [public INSERT]; `exchange_rates_select` [public SELECT]; `exchange_rates_update` [public UPDATE] |
-| `expense_lines` | `expense_lines_admin_delete` [public DELETE]; `expense_lines_member_read` [public SELECT]; `expense_lines_platform_admin_read` [public SELECT]; `expense_lines_writer_insert` [public INSERT]; `expense_lines_writer_update` [public UPDATE] |
-| `expense_payments` | `expense_payments_admin_delete` [public DELETE]; `expense_payments_member_read` [public SELECT]; `expense_payments_platform_admin_read` [public SELECT]; `expense_payments_writer_insert` [public INSERT]; `expense_payments_writer_update` [public UPDATE] |
-| `expenses` | `expenses_admin_delete` [public DELETE]; `expenses_member_read` [public SELECT]; `expenses_platform_admin_read` [public SELECT]; `expenses_writer_insert` [public INSERT]; `expenses_writer_update` [public UPDATE] |
-| `fixed_assets` | `fixed_assets_admin_delete` [public DELETE]; `fixed_assets_member_read` [public SELECT]; `fixed_assets_platform_admin_read` [public SELECT]; `fixed_assets_writer_insert` [public INSERT]; `fixed_assets_writer_update` [public UPDATE] |
-| `fx_revaluations` | `fx_revaluations_business_read` [public SELECT] |
-| `inventory_balances` | `inventory_balances_admin_delete` [public DELETE]; `inventory_balances_member_read` [public SELECT]; `inventory_balances_platform_admin_read` [public SELECT]; `inventory_balances_writer_insert` [public INSERT]; `inventory_balances_writer_update` [public UPDATE] |
-| `inventory_locations` | `inventory_locations_admin_delete` [public DELETE]; `inventory_locations_member_read` [public SELECT]; `inventory_locations_platform_admin_read` [public SELECT]; `inventory_locations_writer_insert` [public INSERT]; `inventory_locations_writer_update` [public UPDATE] |
-| `invoice_approval_policies` | `invoice_approval_policies_member_read` [authenticated SELECT] |
-| `invoice_approvals` | `invoice_approvals_member_read` [authenticated SELECT] |
-| `invoice_delivery_events` | `invoice_delivery_events_member_read` [public SELECT]; `invoice_delivery_events_writer_insert` [public INSERT] |
-| `invoice_lines` | `invoice_lines_admin_delete` [public DELETE]; `invoice_lines_member_read` [public SELECT]; `invoice_lines_platform_admin_read` [public SELECT]; `invoice_lines_writer_insert` [public INSERT]; `invoice_lines_writer_update` [public UPDATE] |
-| `invoice_payments` | `invoice_payments_admin_delete` [public DELETE]; `invoice_payments_member_read` [public SELECT]; `invoice_payments_platform_admin_read` [public SELECT]; `invoice_payments_writer_insert` [public INSERT]; `invoice_payments_writer_update` [public UPDATE] |
-| `invoices` | `invoices_admin_delete` [public DELETE]; `invoices_member_read` [public SELECT]; `invoices_platform_admin_read` [public SELECT]; `invoices_writer_insert` [public INSERT]; `invoices_writer_update` [public UPDATE] |
-| `journal_entries` | `journal_entries_admin_delete` [public DELETE]; `journal_entries_member_read` [public SELECT]; `journal_entries_platform_admin_read` [public SELECT]; `journal_entries_writer_insert` [public INSERT]; `journal_entries_writer_update` [public UPDATE] |
-| `journal_lines` | `journal_lines_admin_delete` [public DELETE]; `journal_lines_member_read` [public SELECT]; `journal_lines_platform_admin_read` [public SELECT]; `journal_lines_writer_insert` [public INSERT]; `journal_lines_writer_update` [public UPDATE] |
-| `loan_repayments` | `loan_repayments_business_access` [public ALL] |
-| `loans` | `loans_business_access` [public ALL] |
-| `manufacturing_bom_lines` | `manufacturing_bom_lines_member_read` [authenticated SELECT]; `manufacturing_bom_lines_member_write` [authenticated ALL] |
-| `manufacturing_boms` | `manufacturing_boms_member_read` [authenticated SELECT]; `manufacturing_boms_member_write` [authenticated ALL] |
-| `manufacturing_capabilities` | `manufacturing_capabilities_read` [authenticated SELECT] |
-| `manufacturing_capability_grants` | `manufacturing_capability_grants_member_read` [authenticated SELECT] |
-| `manufacturing_material_transactions` | `manufacturing_material_transactions_member_read` [authenticated SELECT]; `manufacturing_material_transactions_member_write` [authenticated ALL] |
-| `manufacturing_production_runs` | `manufacturing_production_runs_member_read` [authenticated SELECT]; `manufacturing_production_runs_member_write` [authenticated ALL] |
-| `manufacturing_work_order_lines` | `manufacturing_work_order_lines_member_read` [authenticated SELECT]; `manufacturing_work_order_lines_member_write` [authenticated ALL] |
-| `manufacturing_work_orders` | `manufacturing_work_orders_member_read` [authenticated SELECT]; `manufacturing_work_orders_member_write` [authenticated ALL] |
-| `offline_queue_reconciliations` | `offline_queue_reconciliations_member_read` [public SELECT] |
-| `partner_admins` | `partner_admins_read` [public SELECT]; `partner_admins_write` [public ALL] |
-| `partner_clients` | `partner_clients_read` [public SELECT]; `partner_clients_write` [public ALL] |
-| `partner_feature_flags` | `partner_feature_flags_read` [public SELECT]; `partner_feature_flags_write` [public ALL] |
-| `partner_invoices` | `partner_invoices_read` [public SELECT]; `partner_invoices_write` [public ALL] |
-| `partners` | `partners_admin_write` [public ALL]; `partners_partner_admin_update` [public UPDATE]; `partners_public_read` [public SELECT] |
-| `paye_bands` | `paye_bands_admin_delete` [public DELETE]; `paye_bands_member_read` [public SELECT]; `paye_bands_platform_admin_read` [public SELECT]; `paye_bands_writer_insert` [public INSERT]; `paye_bands_writer_update` [public UPDATE] |
-| `payroll_employee_lines` | `payroll_employee_lines_payroll_delete` [public DELETE]; `payroll_employee_lines_payroll_insert` [public INSERT]; `payroll_employee_lines_payroll_read` [public SELECT]; `payroll_employee_lines_payroll_update` [public UPDATE] |
-| `payroll_runs` | `payroll_runs_payroll_delete` [public DELETE]; `payroll_runs_payroll_insert` [public INSERT]; `payroll_runs_payroll_read` [public SELECT]; `payroll_runs_payroll_update` [public UPDATE] |
-| `pos_cash_movements` | `pos_cash_movements_delete` [public DELETE]; `pos_cash_movements_select` [public SELECT] |
-| `pos_price_overrides` | `pos_price_overrides_member_read` [public SELECT] |
-| `pos_settings` | `pos_settings_delete` [public DELETE]; `pos_settings_insert` [public INSERT]; `pos_settings_select` [public SELECT]; `pos_settings_update` [public UPDATE] |
-| `pos_shift_closes` | `pos_shift_closes_select` [public SELECT] |
-| `pos_shift_late_adjustments` | `pos_shift_late_adjust_select` [public SELECT] |
-| `pos_shifts` | `pos_shifts_delete` [public DELETE]; `pos_shifts_select` [public SELECT] |
-| `pos_terminals` | `pos_terminals_select` [public SELECT]; `pos_terminals_update` [public UPDATE]; `pos_terminals_write` [public INSERT] |
-| `product_categories` | `product_categories_admin_delete` [public DELETE]; `product_categories_member_read` [public SELECT]; `product_categories_platform_admin_read` [public SELECT]; `product_categories_writer_insert` [public INSERT]; `product_categories_writer_update` [public UPDATE] |
-| `products` | `products_admin_delete` [public DELETE]; `products_member_read` [public SELECT]; `products_platform_admin_read` [public SELECT]; `products_writer_insert` [public INSERT]; `products_writer_update` [public UPDATE] |
-| `project_boq_lines` | `project_boq_lines_member_grants` [authenticated ALL] |
-| `project_retention_ledger` | `project_retention_ledger_member_grants` [authenticated ALL] |
-| `project_status_log` | `project_log_member_grants` [authenticated ALL] |
-| `project_valuation_lines` | `project_valuation_lines_member_grants` [authenticated ALL] |
-| `project_valuations` | `project_valuations_member_grants` [authenticated ALL] |
-| `recurring_invoices` | `recurring_invoices_admin_delete` [public DELETE]; `recurring_invoices_member_read` [public SELECT]; `recurring_invoices_writer_insert` [public INSERT]; `recurring_invoices_writer_update` [public UPDATE] |
-| `share_transactions` | `share_transactions_business_access` [public ALL] |
-| `stock_movements` | `stock_movements_admin_delete` [public DELETE]; `stock_movements_member_read` [public SELECT]; `stock_movements_platform_admin_read` [public SELECT]; `stock_movements_writer_insert` [public INSERT]; `stock_movements_writer_update` [public UPDATE] |
-| `stock_transfer_lines` | `stock_transfer_lines_admin_delete` [public DELETE]; `stock_transfer_lines_member_read` [public SELECT]; `stock_transfer_lines_platform_admin_read` [public SELECT]; `stock_transfer_lines_writer_insert` [public INSERT]; `stock_transfer_lines_writer_update` [public UPDATE] |
-| `stock_transfers` | `stock_transfers_admin_delete` [public DELETE]; `stock_transfers_member_read` [public SELECT]; `stock_transfers_platform_admin_read` [public SELECT]; `stock_transfers_writer_insert` [public INSERT]; `stock_transfers_writer_update` [public UPDATE] |
-| `subscription_payments` | `subscription_payments_platform_admin_read` [public SELECT]; `subscription_payments_read` [public SELECT] |
-| `tax_alerts` | `tax_alerts_business_access` [public ALL] |
-| `tax_configurations` | `tax_configurations_admin_delete` [public DELETE]; `tax_configurations_member_read` [public SELECT]; `tax_configurations_platform_admin_read` [public SELECT]; `tax_configurations_writer_insert` [public INSERT]; `tax_configurations_writer_update` [public UPDATE] |
-| `tax_payments` | `tax_payments_business_access` [public ALL] |
-| `tax_returns` | `tax_returns_business_access` [public ALL] |
-| `user_profiles` | `profiles_own` [public ALL]; `user_profiles_own_read` [public SELECT]; `user_profiles_own_update` [public UPDATE]; `user_profiles_platform_admin_read` [public SELECT] |
-| `webhook_deliveries` | `webhook_deliveries_business_read` [public SELECT] |
-| `webhooks` | `Users can manage their business webhooks` [public ALL]; `webhooks_business_insert` [public INSERT]; `webhooks_business_read` [public SELECT]; `webhooks_business_update` [public UPDATE] |
-
----
-
-## 4. Feature Quality Assessment
-
-| Feature | Clean RPC? | Branch-scoped? | i18n? | Export? | Error/empty states? | Responsive? | Type-safe? | Tests? |
-|---|---|---|---|---|---|---|---|---|
-| Dashboard | ⚠️ mixed read queries | ⚠️ varies by widget | ✅ | ❌ | ✅ | ✅ | ⚠️ | ⚠️ no page-focused test found |
-| Income / receipts | ⚠️ service + direct writes | ⚠️ branch field exists; audit query paths | ❌ | ⚠️ receipt/doc output | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Expenses | ⚠️ service + direct writes | ⚠️ | ❌ | ⚠️ receipt data, no general report export | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Invoices | ⚠️ mixed DB/RPC | ⚠️ | ❌ | ✅ document/PDF | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| POS | ✅ server commands cover sale/void/refund/approval | ✅ branch/shift context is used | ❌ | ✅ receipt/Z report | ✅ | ✅ | ✅ | ✅ POS workflow/approval tests |
-| Products | ⚠️ direct CRUD + service operations | ⚠️ | ❌ | ⚠️ import/export utilities exist | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| `/inventory` | ❌ | ❌ | ❌ | ❌ | ❌ placeholder only | ⚠️ | ✅ trivial | ❌ |
-| Warehouse | ⚠️ | ⚠️ | ❌ | ⚠️ | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Stock transfers | ⚠️ direct/service workflow | ✅ branch/location fields | ❌ | ❌ | ⚠️ | ✅ | ⚠️ | ⚠️ shared preparation tests only |
-| Chart of accounts | ⚠️ direct table CRUD | ⚠️ branch-aware schema/access | ❌ | ⚠️ template/import paths | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Journals / periods | ⚠️ mixed direct/repository/RPC | ⚠️ | ❌ | ⚠️ | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Tax configuration | ❌ direct CRUD | ⚠️ business-scoped; some branch relevance | ❌ | ❌ | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Fixed assets / capital | ⚠️ direct + repository operations | ⚠️ | ❌ | ✅ at least some CSV/PDF | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Combined financial reports | ❌ mostly views/direct table reads | ❌ several reports lack branch filter | ❌ tabs/filter hardcoded | ✅ PDF/XBRL in several statements | ⚠️ mixed; error boundary on some tabs | ✅ tables scroll | ⚠️ mostly TS, direct casts remain | ❌ no report-page/component test suite found in this checkout |
-| Bank reconciliation | ❌ direct client-side statement/journal writes remain | ⚠️ business-scoped, explicit branch workflow incomplete | ❌ | ⚠️ statement import/export | ⚠️ | ✅ | ⚠️ | ❌ focused tests not found |
-| Contacts / branches / departments | ❌ direct CRUD | ⚠️ fields/queries vary | ❌ | ❌ | ⚠️ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| CSV import | ❌ direct bulk writes | ⚠️ business scope; destination-specific branches vary | ❌ | ✅ CSV input/template | ✅ import feedback | ✅ | ⚠️ | ⚠️ service/parser coverage, no full page flow test found |
-| AI/support | ⚠️ edge function/repository mix | ⚠️ context can accept branch but not every surface | ⚠️ support localized; AI page mostly hardcoded | ❌ | ✅ fallback/error paths | ✅ | ⚠️ | ✅ AI/provider/support unit coverage |
-| Audit log | ⚠️ direct reads + verification RPC | ⚠️ business/resource scope | ❌ | ✅ CSV/PDF | ✅ | ✅ | ⚠️ | ❌ page-focused tests not found |
-| Construction (current routed page) | ❌ no server workflow | ❌ local draft has no branch authorization | ❌ | ❌ | ⚠️ validation only | ✅ | ✅ local draft contracts | ✅ draft validation/page tests |
-| Manufacturing (current frontend checkout) | N/A — no routed UI | N/A | N/A | N/A | N/A | N/A | N/A | ❌ no manufacturing UI/tests |
-
-**Assessment notes:** Most mature transactional write paths are POS and selected invoice/expense services; many screens still query/write Supabase tables directly. The repository has useful reusable typed repositories and shared export helpers, but their adoption is uneven. `useTranslation` is absent from most operational screens (the report tabs are entirely hardcoded), despite English locale resources being present. `WarehousePage.tsx` sets `STOCK_SYNC_SUSPENDED = true`, so its presence should not be read as end-to-end stock availability.
-
----
-
-## 5. Duplicate Detection
-
-The requested “Reports submenu vs standalone Phase 4 route” premise does **not** match this checkout. The only report route is `/reports`; it contains tabs in `ReportsPage.tsx`. There are no `/reports/trial-balance`, `/reports/profit-loss`, `/reports/balance-sheet`, `/reports/cash-flow`, `/reports/vat-return`, or `/reports/wht-schedule` route definitions and no such navigation items. Do not move links to nonexistent routes as part of a nav reorganization.
-
-| Concept | Versions actually present | Feature/accuracy/architecture comparison | Recommendation |
-|---|---|---|---|
-| Trial Balance | One tab in `/reports` → `TrialBalanceReport` | Reads `v_trial_balance` directly; query key is only business ID, does not use the report date range and has no branch filter. It says “all posted journal entries.” It has a PDF export and empty state but no isolated route. No newer alternate implementation exists in this checkout. | **Keep the single surface, rebuild the report query contract**: date/branch controls and one typed repository/RPC result should be wired before considering another route. |
-| P&L | One `/reports` tab → `StatementOfProfitOrLoss` | Uses the date range and comparative option, typed `FinancialStatementRepository` transforms, localized portions, PDF/XBRL. Direct route `/reports/profit-loss` is absent. | **Keep** the current statement component; improve localization/branch scoping and add component tests before splitting routes. |
-| Balance Sheet / SOFP | One `/reports` tab → `StatementOfFinancialPosition` | Uses as-of date, typed repository, comparative support, balance/integrity warnings, PDF/XBRL. No separate `/reports/balance-sheet` route. | **Keep** the single implementation; add branch support and tests, do not duplicate it. |
-| Cash Flow | One `/reports` tab → `CashFlowStatement` | Reads `v_cash_flow`, date range supplied, localized UI and PDF/XBRL; no separate `/reports/cash-flow` route. Branch filtering is not exposed by the parent page. | **Keep** the single implementation; make branch scope explicit and test reconciliation. |
-| Changes in Equity | One `/reports` tab → `StatementOfChangesInEquity` | Typed statement-style report, date range and export support; not a separate route. | **Keep**; no duplicate found. |
-| Revenue Breakdown | One `/reports` tab → `RevenueBreakdownReport` | Direct invoice/line/product reads and date filters; no separate route. Scope/export/localization are weaker than statement components. | **Keep one tab, improve data layer**; do not add another link to an absent route. |
-| Branch Performance | One `/reports` tab → `BranchPerformanceReport` | Uses branch and journal data; branch-aware logic exists, but no separate route. | **Keep**; add query tests and align exports/i18n. |
-| Multi-Currency | One `/reports` tab → `MultiCurrencyReport` | Direct journal-line query, no date filter in parent UI for this tab, no branch filter; PDF output. Not a duplicate route. | **Rebuild report query/filtering**, retain the single tab until scope/accuracy are corrected. |
-| Bank Reconciliation | One Accounting nav item `/bank-reconcile` → `BankReconciliation` component | No `/bank-reconciliation/accounts`, `/bank-reconciliation/statements`, or `/bank-reconciliation` routes in App. The single component owns account/statement/reconcile UI and uses direct DB writes in places. | **Keep one nav entry for now;** split into route-level surfaces only after access and transactional boundaries are designed. |
-| Tax | `/tax` only → tax configuration/PAYE management | No VAT Return or WHT Schedule report pages/routes in this checkout. `tax_returns`/`tax_payments` tables are not equivalent to a generated filing schedule. | **Keep `/tax` as configuration;** treat VAT/WHT reports as new features, not duplicates to merge. |
-| CSV import URLs | `/import`, `/data-import`, and `/onboarding/import` all render `DataImportPage` | Three direct aliases to the same UI; no differences in workflow or data source. | **Keep one canonical URL and redirect the aliases** when link compatibility is confirmed | The aliases are route-level duplication, not distinct import products. |
-| Construction draft URLs | `/construction` and `/projects-funding-sources/construction-draft` both render `ConstructionProjectSetupDraftPage` | Same local-only draft, no server-backed projects or authorization difference; route is outside `RoleRoute`. | **Replace** with one approved future project route; keep legacy aliases only as redirects if draft persistence/deep links require them | Two paths overstate the number and maturity of construction workflows. |
-| AI chat URL | `/chat` redirects to `/ai` | No second chat implementation; the target route has Pro/partner gates. | **Keep redirect** only for backwards compatibility; use `/ai` canonically | This is a true compatibility alias, not a separate feature. |
-| Password reset source files | `src/pages/ResetPasswordPage.tsx` and `src/pages/auth/ResetPasswordPage.tsx`; only the `auth/` version is imported by `App.tsx` | Two implementations of the same recovery flow; the active one uses i18n, while the unreferenced root-page implementation uses hardcoded text and extra explanatory comments. | **Retire the unreferenced file** after import/test search | Avoid future fixes landing in the inactive implementation. |
-| Inventory navigation mapping | `ToolsPage` exposes `/inventory`; `navItemForPath('/inventory')` canonicalizes to Products, but the router renders `InventoryPage` placeholder | The secondary navigation helper and route disagree; the sidebar itself points to `/products`. | **Replace with a redirect to `/products` or remove the Tools entry** | Otherwise one “Inventory” link resolves to a coming-soon screen while other navigation surfaces treat it as Products. |
-
-The supplied standalone Phase 4 destinations and `/bank-reconciliation/*` destinations are not merely duplicate implementations—they are absent from this router. The current tabbed report page does have multiple report types under one pathname, so URL-driven tabs/deep links would be a separate product decision.
-
----
-
-## 6. Gap Analysis
-
-### All verticals
-
-| Capability | Current state in this checkout | Evidence / gap |
+| Order / section label key | Items in configured order (label key → path) | Visibility / plan notes |
 |---|---|---|
-| Multi-currency transactions and reporting | **Partial** | Income/expense/invoice and journal records carry currency, original amount, exchange rate, and base/functional amounts. A Multi-currency report exists, but lacks period/branch filtering. Live `exchange_rates` exact count is 0, so reliable rate coverage is not demonstrated. |
-| File attachments on transactions | **Partial, not general** | Live `expenses` has receipt URL/filename/size/MIME fields; this is a receipt link, not a consistent storage-backed attachment model across invoices, journals, contacts, POS, and project transactions. No general transaction attachment UI/service was found. |
-| CSV bulk import (contacts, products, CoA) | **Present** | `/import`, `/data-import`, `/onboarding/import` use `DataImportPage`; supported entities include contacts, products, chart of accounts, opening balances, and trial balance. Bulk write flow appears service/direct-table based rather than a single atomic import RPC. |
-| Advanced role-based permissions | **Partial** | `RoleRoute`, path policy, plan/partner/capability gates, database RLS and invite roles exist. This is fixed-role/path gating, not a tenant-configurable permissions matrix; page-level hardcoded strings and differing direct-write paths complicate consistent enforcement. |
-| Recurring transactions | **Schema only / no UI** | `recurring_invoices` exists, but exact live count is 0 and no route/component for recurring invoice setup/run was found. |
-| Budget vs Actual | **Schema only / no UI/report** | `budgets` and `budget_lines` exist; exact live count is 0 for budgets. No budget-vs-actual route/report found. |
+| 1. `navigation.sections.overview` | Dashboard → `/dashboard`; POS → `/pos` | POS requires `requiresOrgCapability: pos`; no explicit min plan |
+| 2. `navigation.sections.finance` | Income → `/income`; Expenses → `/expenses`; Invoices → `/invoices`; Payroll → `/payroll` | Payroll requires partner feature `payroll`; no capability is passed to its PartnerPlanGate |
+| 3. `navigation.sections.inventory` | Products → `/products`; Warehouse → `/warehouse`; Transfers → `/transfers`; Construction workspace → `/construction` | First three require partner inventory feature + inventory plan/profile. Construction requires Enterprise and construction profile; construction/manufacturing profiles use Materials / Site Stores / Material Transfers label overrides |
+| 4. `navigation.sections.manufacturing` | Manufacturing dashboard → `/manufacturing`; BOM → `/manufacturing/bom`; Production → `/manufacturing/production` | Enterprise + manufacturing profile; ordinary role filtering applies |
+| 5. `navigation.sections.accounting` | Accounts → `/accounts`; Tax → `/tax`; Assets → `/assets`; Capital → `/capital`; Reports → `/reports`; Trial Balance → `/reports/trial-balance`; Profit & Loss → `/reports/profit-loss`; Balance Sheet → `/reports/balance-sheet`; Cash Flow → `/reports/cash-flow`; VAT Return → `/reports/vat-return`; WHT Schedule → `/reports/wht-schedule`; Journals → `/journals`; Bank Reconciliation → `/bank-reconcile`; Periods → `/periods`; Audit Log → `/audit` | Accounts/Tax/Assets/Capital/legacy Reports require Starter `core_accounting`. Six direct P4 reports, Journals, old-bank link, Periods and Audit are Growth+; old-bank link also has partner feature + capability |
+| 6. `navigation.sections.bankReconciliation` | Bank accounts → `/bank-reconciliation/accounts`; Bank statements → `/bank-reconciliation/statements`; Reconcile → `/bank-reconciliation/statements` | All Growth+ and bank-reconciliation capability. **Reconcile and Statements point to the same list URL**; actual matching is reached from a statement detail/action |
+| 7. `navigation.sections.organisation` | Contacts → `/contacts`; Branches → `/branches`; Locations → `/locations`; Departments → `/departments` | Growth+. Branches item is removed when construction/manufacturing sites vocabulary replaces it; retail-family operating models preserve it |
+| 8. `navigation.sections.ai` | Ledgr AI → `/ai` | Partner feature `ai_advisor` + Pro `ai_insights` capability |
+| 9. `navigation.sections.support` | Support → `/support` | No explicit plan gate |
+| Separate Admin section | Businesses → `/admin/businesses`; Admin billing → `/admin/billing` | Only rendered when `isPlatformAdmin`; routes independently use `PlatformAdminRoute` |
+
+`visibleSectionsFor` first removes items by organisation capability, site-vocabulary rule, partner feature and role reachability; then keeps plan-ineligible items but marks them locked; it rewrites labels for construction/manufacturing and removes empty sections (`src/components/layout/navConfig.ts:288–355,365–378`). This distinction is important: business-type/role absence is not the same as an upsell lock.
+
+**Not in the ordinary sidebar:** P4 report export/detail controls, bank statement detail and `/bank-reconciliation/reconcile/:statementId`, construction workspace sections, manufacturing new/edit/detail routes, `/settings/approvals`, repair COA, tools/import aliases, API routes, and partner-admin portal routes. The legacy Reports hub and six P4 report links coexist; the legacy and new bank links also coexist. The nav’s “Reconcile” item is a duplicate destination, not a direct reconcile route.
+
+## 3. Generated public schema and source RPC signatures
+
+### Public type inventory
+
+The source of truth for this section is **only** the current-main `src/dal/types/database.generated.ts`; counts below are declarations in that file, not production database inventory. It declares **121 public Tables, 23 public Views and 166 public Functions**. Section ranges are `Tables` at lines 36–10636, `Views` at 10638–11531, and `Functions` at 11533–13239. No live database access or schema introspection was done.
+
+**Tables declared in the generated types, grouped by domain:**
+
+- **Accounting, payments, tax and organisation:** `accounting_period_events`, `accounting_periods`, `accounts`, `asset_categories`, `audit_log`, `bank_statement_lines`, `bank_statements`, `branches`, `budget_lines`, `budgets`, `contacts`, `currencies`, `departments`, `depreciation_schedules`, `exchange_rates`, `expense_lines`, `expense_payments`, `expenses`, `fixed_assets`, `fx_revaluations`, `invoice_approval_policies`, `invoice_approvals`, `invoice_delivery_events`, `invoice_lines`, `invoice_payments`, `invoices`, `journal_entries`, `journal_lines`, `loan_repayments`, `loans`, `recurring_invoices`, `share_transactions`, `tax_alerts`, `tax_configurations`, `tax_payments`, `tax_returns`.
+- **Construction / projects / procurement:** `construction_delivery_note_lines`, `construction_delivery_notes`, `construction_goods_receipt_holds`, `construction_goods_receipt_lines`, `construction_goods_receipt_notes`, `construction_material_issues`, `construction_material_returns`, `construction_procurement_capabilities`, `construction_procurement_grants`, `construction_procurement_sites`, `construction_product_uom_conversions`, `construction_projects`, `construction_purchase_order_events`, `construction_purchase_order_lines`, `construction_purchase_orders`, `construction_receipt_bill_allocations`, `construction_receipt_cost_bases`, `construction_receipt_inspections`, `construction_receipt_line_reclassifications`, `construction_receipt_posting_policies`, `construction_supplier_invoice_references`, `project_boq_lines`, `project_retention_ledger`, `project_status_log`, `project_valuation_lines`, `project_valuations`.
+- **Manufacturing:** `manufacturing_bom_lines`, `manufacturing_boms`, `manufacturing_capabilities`, `manufacturing_capability_grants`, `manufacturing_material_transactions`, `manufacturing_production_runs`, `manufacturing_work_order_lines`, `manufacturing_work_orders`.
+- **Inventory and POS:** `inventory_balances`, `inventory_locations`, `phone_accounts`, `pos_approvals`, `pos_cash_movements`, `pos_corrections`, `pos_price_overrides`, `pos_settings`, `pos_shift_closes`, `pos_shift_late_adjustments`, `pos_shifts`, `pos_terminals`, `product_categories`, `products`, `stock_movements`, `stock_transfer_lines`, `stock_transfers`.
+- **People / payroll:** `employee_allowances`, `employee_deductions`, `employees`, `paye_bands`, `payroll_employee_lines`, `payroll_runs`.
+- **Identity, approval, partner, platform, subscriptions and integration:** `approval_history`, `approval_request_steps`, `approval_requests`, `approval_workflow_steps`, `approval_workflows`, `ai_insights_usage`, `api_keys`, `api_usage`, `audit_20260927_sent_to_paid`, `business_invitations`, `business_terms_acceptances`, `business_users`, `businesses`, `offline_queue_reconciliations`, `partner_admins`, `partner_clients`, `partner_feature_flags`, `partner_invoices`, `partners`, `profiles`, `subscription_payments`, `subscription_reminders_sent`, `subscriptions`, `support_agent_usage`, `usage_counters`, `user_profiles`, `webhook_deliveries`, `webhooks`.
+
+**Views declared:** `business_members`, `projects`, `v_ai_anomalies`, `v_ai_cash_accounts`, `v_ai_cash_movements`, `v_ai_customer_concentration`, `v_ai_expense_docs`, `v_ai_kpis`, `v_ai_monthly_trend`, `v_ai_overdue_invoices`, `v_ai_revenue_invoices`, `v_ai_top_customers`, `v_ai_top_expenses`, `v_ai_upcoming_payables`, `v_ai_upcoming_receivables`, `v_ar_ageing`, `v_asset_register`, `v_cash_flow`, `v_inventory_balance_ledger_drift`, `v_inventory_ledger_variance`, `v_partner_client_usage`, `v_reorder_alerts`, `v_trial_balance` (`src/dal/types/database.generated.ts:10638–11531`).
+
+**Type-coverage caveat:** the generated table list contains `bank_statements` and `bank_statement_lines`, but does not declare the new bank-account/match tables used by the reconciliation implementation. The new bank repository uses type erasure/casts around some writes and RPCs. This is evidence of generated-type coverage drift, **not** evidence that a table/function is absent from a deployed database. See `src/dal/repositories/BankReconciliationRepository.ts:286–312,399–530` and the source signatures below.
+
+### RPC inventory
+
+A source scan of non-test `src` code found **89 unique literal `.rpc('name', …)` targets**, plus **37 additional computed targets** in construction procurement, manufacturing dashboard/work-order lifecycle and quick-save code: **126 distinct source-referenced RPC targets** total. Generated `Functions` declarations exist for 115 of these. The signatures below are `Args`/`Returns` from generated types where present; structured object return shapes are abbreviated as `object`/`object[]`, with their exact field declarations at the linked generated-source range. Eleven invoked targets are not declared in `Functions` and are marked accordingly; they must not be described as verified database functions solely from the client call.
+
+Source call-site groups include `src/dal/repositories/ReportRepository.ts:22–36`, `src/dal/repositories/ApprovalRepository.ts:85–177`, `src/dal/repositories/BankReconciliationRepository.ts:399–530`; `src/dal/repositories/ConstructionProcurementRepository.ts` (dynamic construction command selection), `src/dal/repositories/ProjectRepository.ts:182–198,199+`, `src/dal/repositories/ManufacturingDashboardRepository.ts`, `src/pages/manufacturing/WorkOrderListPage.tsx`, `src/pages/manufacturing/WorkOrderDetailPage.tsx`, and `src/services/quickSaveService.ts`. The generated signature declarations are source-linked below; function references do not imply deployment/runtime verification.
+
+| Source RPC signature (argument types from generated `Args`) | Generated declaration |
+|---|---|
+| `_ledgr_resolve_construction_client(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `accept_invitation(p_token: string) → Json` | `src/dal/types/database.generated.ts:12036–12036` |
+| `act_on_approval(p_action: string; p_comments?: string \| null; p_request_id: string) → Json` | `src/dal/types/database.generated.ts:11534–11537` |
+| `add_partner_admin(p_partner_id: string; p_role?: string; p_user_email_or_id: string) → undefined` | `src/dal/types/database.generated.ts:12045–12052` |
+| `ai_context(p_business_id: string) → Json` | `src/dal/types/database.generated.ts:12053–12058` |
+| `approve_construction_receipt_posting_policy(p_business_id: string; p_enable: boolean; p_evidence: string; p_reason: string) → Json` | `src/dal/types/database.generated.ts:12091–12099` |
+| `approve_invoice(p_invoice_id: string; p_note?: string) → Json` | `src/dal/types/database.generated.ts:12100–12103` |
+| `authorize_construction_purchase_order(p_po_id: string) → Json` | `src/dal/types/database.generated.ts:12120–12123` |
+| `authorize_pos_price_override(p_token: string) → Json` | `src/dal/types/database.generated.ts:12125–12125` |
+| `backfill_and_recalculate_inventory(p_business_id?: string) → object[]` | `src/dal/types/database.generated.ts:12126–12135` |
+| `bulk_upsert_boq_lines(p_lines: Json; p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12136–12157` |
+| `cancel_construction_purchase_order(p_po_id: string; p_reason: string) → Json` | `src/dal/types/database.generated.ts:12203–12206` |
+| `clear_partner_admins(p_partner_id: string) → number` | `src/dal/types/database.generated.ts:12207–12207` |
+| `close_pos_shift_command(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12212–12212` |
+| `construction_procurement_capabilities_for(p_business_id: string) → string[]` | `src/dal/types/database.generated.ts:12213–12216` |
+| `construction_procurement_open_items(p_business_id: string) → Json` | `src/dal/types/database.generated.ts:12217–12220` |
+| `construction_project_material_cost(p_business_id: string) → object[]` | `src/dal/types/database.generated.ts:12221–12232` |
+| `create_bank_reconciliation_matches(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `create_boq_line(p_description: string; p_line_number: string; p_project_id: string; p_quantity: number; p_rate: number; p_sort_order: number; p_unit: string) → object` | `src/dal/types/database.generated.ts:12245–12274` |
+| `create_business_with_owner(p_address_line1: string; p_base_currency: string; p_brand_color: string; p_city: string; p_country: string; p_email: string; p_expense_prefix: string; p_financial_year_start: string; p_invoice_prefix: string; p_name: string; p_operating_models?: string[]; p_organisation_type?: string; p_payroll_prefix: string; p_phone: string; p_registration_number: string; p_timezone: string; p_tpin: string; p_trading_name: string; p_vat_number: string; p_vat_registered: boolean) → string` | `src/dal/types/database.generated.ts:12275–12299` |
+| `create_construction_purchase_order(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12300–12303` |
+| `create_invoice_with_lines(p_client_key?: string; p_invoice: Json; p_lines: Json) → Json` | `src/dal/types/database.generated.ts:12304–12307` |
+| `create_project(p_budget: number; p_business_id: string; p_client_id?: string; p_client_name: string; p_contract_sum: number; p_end_date: string; p_name: string; p_retention_pct: number; p_start_date: string) → object` | `src/dal/types/database.generated.ts:12308–12343` |
+| `create_project_purchase_order(p_client_key: string; p_payload: Json; p_project_id: string) → Json` | `src/dal/types/database.generated.ts:12344–12347` |
+| `create_valuation(p_lines: Json; p_notes?: string; p_period_end: string; p_period_start: string; p_project_id: string; p_valuation_date: string) → Json` | `src/dal/types/database.generated.ts:12348–12358` |
+| `delete_bank_reconciliation_match(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `delete_boq_line(p_line_id: string) → undefined` | `src/dal/types/database.generated.ts:12364–12364` |
+| `delete_draft_bank_statement(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `generate_invoice_from_valuation(p_valuation_id: string) → Json` | `src/dal/types/database.generated.ts:12378–12381` |
+| `get_approval_state(p_business_id: string; p_document_id: string; p_document_type: string) → Json` | `src/dal/types/database.generated.ts:11542–11545` |
+| `get_bank_gl_book_balance(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `get_bank_reconciliation_gl_lines(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `get_boq_summary(p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12382–12391` |
+| `get_cost_breakdown_by_project(p_business_id: string) → object[]` | `src/dal/types/database.generated.ts:12392–12404` |
+| `get_dashboard_metrics(p_business_id: string) → object[]` | `src/dal/types/database.generated.ts:12405–12433` |
+| `get_portfolio_summary(p_business_id: string) → object[]` | `src/dal/types/database.generated.ts:12435–12449` |
+| `get_pos_shift_report(p_shift_id: string) → Json` | `src/dal/types/database.generated.ts:12450–12450` |
+| `get_project_cost_summary(p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12451–12459` |
+| `get_project_pnl(p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12460–12484` |
+| `get_project_valuation_trend(p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12485–12495` |
+| `get_retention_aging(p_business_id: string) → object[]` | `src/dal/types/database.generated.ts:12496–12507` |
+| `get_retention_summary(p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12508–12517` |
+| `get_trial_balance(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `get_unreconciled_gl_lines(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `get_valuation_history(p_project_id: string) → Json` | `src/dal/types/database.generated.ts:12522–12522` |
+| `import_bank_statement(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `increment_amount_paid(p_amount: number; p_id: string; p_table: string) → undefined` | `src/dal/types/database.generated.ts:12556–12559` |
+| `invite_member(p_business_id: string; p_email: string; p_role: Database["public"]["Enums"]["user_role"]) → string` | `src/dal/types/database.generated.ts:12560–12567` |
+| `issue_construction_materials_to_project(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12572–12575` |
+| `issue_project_materials(p_client_key: string; p_payload: Json; p_project_id: string) → Json` | `src/dal/types/database.generated.ts:12576–12579` |
+| `ledgr_monthly_document_count(p_business_id: string) → number` | `src/dal/types/database.generated.ts:12580–12583` |
+| `link_site_to_project(p_location_id: string; p_project_id: string) → object` | `src/dal/types/database.generated.ts:12584–12604` |
+| `list_all_businesses() → object[]` | `src/dal/types/database.generated.ts:12605–12618` |
+| `list_partner_admins(p_partner_id: string) → object[]` | `src/dal/types/database.generated.ts:12619–12628` |
+| `manufacturing_bom_activate(p_bom_id: string) → undefined` | `src/dal/types/database.generated.ts:12656–12659` |
+| `manufacturing_bom_cost(p_bom_id: string) → number` | `src/dal/types/database.generated.ts:12660–12660` |
+| `manufacturing_bom_new_version(p_bom_id: string) → string` | `src/dal/types/database.generated.ts:12661–12664` |
+| `manufacturing_cost_variance(p_business_id: string; p_end_date?: string; p_start_date?: string) → object[]` | `src/dal/types/database.generated.ts:12665–12680` |
+| `manufacturing_dashboard_metrics(p_business_id: string; p_end_date?: string; p_start_date?: string) → Json` | `src/dal/types/database.generated.ts:12681–12688` |
+| `manufacturing_production_summary(p_business_id: string; p_end_date?: string; p_start_date?: string) → object[]` | `src/dal/types/database.generated.ts:12689–12707` |
+| `manufacturing_throughput_trend(p_business_id: string; p_end_date?: string; p_granularity?: string; p_start_date?: string) → object[]` | `src/dal/types/database.generated.ts:12708–12721` |
+| `manufacturing_wip_aging(p_business_id: string) → object[]` | `src/dal/types/database.generated.ts:12722–12735` |
+| `manufacturing_wo_cancel(p_work_order_id: string) → undefined` | `src/dal/types/database.generated.ts:12736–12739` |
+| `manufacturing_wo_close(p_work_order_id: string) → undefined` | `src/dal/types/database.generated.ts:12740–12743` |
+| `manufacturing_wo_complete(p_work_order_id: string) → undefined` | `src/dal/types/database.generated.ts:12744–12747` |
+| `manufacturing_wo_create(p_business_id: string; p_from_location_id: string; p_notes: string; p_planned_end: string; p_planned_qty: number; p_planned_start: string; p_product_id: string; p_to_location_id: string) → string` | `src/dal/types/database.generated.ts:12748–12760` |
+| `manufacturing_wo_record_consumption(p_component_id: string; p_from_location_id: string; p_notes: string; p_quantity: number; p_run_id: string; p_work_order_id: string) → string` | `src/dal/types/database.generated.ts:12761–12771` |
+| `manufacturing_wo_record_run(p_notes: string; p_output_qty: number; p_scrap_qty: number; p_work_order_id: string) → string` | `src/dal/types/database.generated.ts:12783–12791` |
+| `manufacturing_wo_release(p_work_order_id: string) → undefined` | `src/dal/types/database.generated.ts:12792–12795` |
+| `manufacturing_wo_start(p_work_order_id: string) → undefined` | `src/dal/types/database.generated.ts:12796–12799` |
+| `manufacturing_yield_by_product(p_business_id: string; p_end_date?: string; p_start_date?: string) → object[]` | `src/dal/types/database.generated.ts:12818–12832` |
+| `match_construction_bill_line_to_receipt(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12833–12836` |
+| `next_journal_entry_number(p_business_id?: string) → string` | `src/dal/types/database.generated.ts:12837–12840` |
+| `open_pos_shift_command(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12841–12841` |
+| `pos_stock_availability(p_branch_id?: string; p_business_id: string) → Json` | `src/dal/types/database.generated.ts:12843–12846` |
+| `post_construction_receipt_movement(p_grn_id: string) → Json` | `src/dal/types/database.generated.ts:12847–12850` |
+| `post_pos_sale(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12851–12851` |
+| `provision_construction_coa_accounts(p_business_id: string) → string` | `src/dal/types/database.generated.ts:12852–12855` |
+| `provision_construction_defaults(p_business_id: string; p_owner_user_id: string) → Json` | `src/dal/types/database.generated.ts:12856–12859` |
+| `provision_manufacturing_coa_accounts(p_business_id: string) → string` | `src/dal/types/database.generated.ts:12860–12863` |
+| `provision_manufacturing_defaults(p_business_id: string; p_owner_user_id: string) → Json` | `src/dal/types/database.generated.ts:12864–12867` |
+| `reclassify_construction_receipt_line(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12868–12871` |
+| `reconcile_bank_statement(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `reconcile_offline_queue_item(p_request: Json) → Json` | `src/dal/types/database.generated.ts:12872–12872` |
+| `record_business_terms_acceptance(p_business_id: string; p_terms_version: string) → string` | `src/dal/types/database.generated.ts:12873–12876` |
+| `record_construction_delivery_note(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12877–12880` |
+| `record_construction_delivery_note_exception(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12881–12884` |
+| `record_construction_goods_receipt(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12885–12888` |
+| `record_construction_receipt_cost_basis(p_client_key: string; p_evidence: string; p_expense_line_id: string; p_grn_line_id: string; p_quantity: number) → Json` | `src/dal/types/database.generated.ts:12889–12898` |
+| `record_construction_receipt_inspection(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12899–12902` |
+| `record_expense_payment(p_client_key: string; p_payment: Json) → Json` | `src/dal/types/database.generated.ts:12903–12906` |
+| `record_inventory_journal_movement(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12907–12910` |
+| `record_invoice_payment(p_client_key: string; p_payment: Json) → Json` | `src/dal/types/database.generated.ts:12911–12914` |
+| `record_pos_cash_movement_command(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12915–12918` |
+| `record_sale_stock_and_cogs(p_invoice_id: string; p_lines: Json) → Json` | `src/dal/types/database.generated.ts:12919–12922` |
+| `refund_pos_sale_command(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:12923–12923` |
+| `register_construction_procurement_site(p_branch_id: string; p_business_id: string; p_location_id: string; p_project_ref: string; p_site_code: string; p_site_name: string) → Json` | `src/dal/types/database.generated.ts:12924–12934` |
+| `register_construction_product_uom_conversion(p_business_id: string; p_evidence_reference: string; p_factor: number; p_from_uom: string; p_product_id: string; p_to_uom: string) → Json` | `src/dal/types/database.generated.ts:12935–12945` |
+| `register_construction_supplier_invoice_reference(p_expense_id: string) → Json` | `src/dal/types/database.generated.ts:12946–12949` |
+| `register_construction_supplier_invoice_reference_exception(p_evidence: string; p_exception_of: string; p_expense_id: string; p_reason: string) → Json` | `src/dal/types/database.generated.ts:12950–12958` |
+| `release_construction_receipt_hold(p_hold_id: string; p_reason: string) → Json` | `src/dal/types/database.generated.ts:12959–12962` |
+| `release_retention(p_amount: number; p_description: string; p_project_id: string) → Json` | `src/dal/types/database.generated.ts:12963–12966` |
+| `remove_partner_admin(p_partner_id: string; p_user_email_or_id: string) → undefined` | `src/dal/types/database.generated.ts:12967–12970` |
+| `reorder_boq_lines(p_line_ids: string[]; p_project_id: string) → object[]` | `src/dal/types/database.generated.ts:12975–12996` |
+| `request_pos_approval(p_action: string; p_amount?: number; p_business_id: string; p_document_id: string; p_reason?: string; p_ttl_minutes?: number) → Json` | `src/dal/types/database.generated.ts:12997–13007` |
+| `request_pos_price_override(p_business_id: string; p_kind: string; p_max_discount_percent?: number; p_product_id?: string; p_reason?: string; p_ttl_minutes?: number; p_unit_price?: number) → Json` | `src/dal/types/database.generated.ts:13008–13019` |
+| `requires_approval(p_business_id: string; p_document_type: string) → boolean` | `src/dal/types/database.generated.ts:11546–11549` |
+| `reserve_next_document_number(p_business_id: string; p_kind: string) → string` | `src/dal/types/database.generated.ts:13020–13023` |
+| `resubmit_approval(p_request_id: string) → Json` | `src/dal/types/database.generated.ts:11550–11553` |
+| `return_construction_materials_to_store(p_client_key: string; p_payload: Json) → Json` | `src/dal/types/database.generated.ts:13024–13027` |
+| `return_project_materials(p_client_key: string; p_payload: Json; p_project_id: string) → Json` | `src/dal/types/database.generated.ts:13028–13031` |
+| `save_approval_workflow(p_business_id: string; p_document_type: string; p_is_active: boolean; p_name: string; p_steps: Json) → string` | `src/dal/types/database.generated.ts:11554–11563` |
+| `save_quick_expense(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:13036–13036` |
+| `save_quick_sale(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:13037–13037` |
+| `set_construction_procurement_site_status(p_active: boolean; p_reason?: string; p_site_id: string) → Json` | `src/dal/types/database.generated.ts:13051–13054` |
+| `start_approval_workflow(p_business_id: string; p_document_id: string; p_document_type: string) → Json` | `src/dal/types/database.generated.ts:11564–12035` |
+| `submit_valuation(p_valuation_id: string) → Json` | `src/dal/types/database.generated.ts:13080–13080` |
+| `transition_project_status(p_new_status: string; p_project_id: string; p_reason?: string) → object` | `src/dal/types/database.generated.ts:13081–13106` |
+| `unlink_site_from_project(p_location_id: string) → object` | `src/dal/types/database.generated.ts:13107–13127` |
+| `unreconcile_bank_statement(source call; no generated Args/Returns)` | **Absent from generated Functions** |
+| `update_boq_line(p_description: string; p_line_id: string; p_line_number: string; p_quantity: number; p_rate: number; p_sort_order: number; p_unit: string) → object` | `src/dal/types/database.generated.ts:13128–13157` |
+| `update_business_operating_models(p_business_id: string; p_operating_models: string[]) → string[]` | `src/dal/types/database.generated.ts:13158–13161` |
+| `update_construction_procurement_site(p_project_id?: string; p_project_ref?: string; p_set_project?: boolean; p_site_id: string; p_site_name?: string) → Json` | `src/dal/types/database.generated.ts:13162–13171` |
+| `update_project(p_budget: number; p_client_id?: string; p_client_name: string; p_contract_sum: number; p_end_date: string; p_name: string; p_project_id: string; p_retention_pct: number; p_start_date: string) → object` | `src/dal/types/database.generated.ts:13172–13207` |
+| `update_valuation(p_lines: Json; p_notes?: string; p_period_end: string; p_period_start: string; p_valuation_date: string; p_valuation_id: string) → Json` | `src/dal/types/database.generated.ts:13208–13218` |
+| `void_pos_sale_command(p_payload: Json) → Json` | `src/dal/types/database.generated.ts:13239–13239` |
+
+**Missing generated declarations (11):** `_ledgr_resolve_construction_client`, `create_bank_reconciliation_matches`, `delete_bank_reconciliation_match`, `delete_draft_bank_statement`, `get_bank_gl_book_balance`, `get_bank_reconciliation_gl_lines`, `get_trial_balance`, `get_unreconciled_gl_lines`, `import_bank_statement`, `reconcile_bank_statement`, `unreconcile_bank_statement`. The report repository calls `get_trial_balance` with business, inclusive date range and branch arguments (`src/dal/repositories/ReportRepository.ts:22–35`); new bank calls are in `src/dal/repositories/BankReconciliationRepository.ts:399–530`. Some functions expected to be type-drifted in an earlier audit are now present in this generated file: `ai_context` and `get_dashboard_metrics` are declared at `src/dal/types/database.generated.ts:12053–12058` and `src/dal/types/database.generated.ts:12405–12433` respectively.
+
+## 4. Operational feature quality (source-level assessment)
+
+This is a code-path assessment, not a runtime acceptance test. It distinguishes implemented surface from business outcome. Live authorization, migration deployment, real-world import variants, multi-user concurrency and resulting GL balances are **Requires runtime verification**.
+
+### Phase 4 financial reports
+
+| Route / phase | What current source implements | Quality / limits evidenced in source |
+|---|---|---|
+| `/reports/trial-balance` — P4-1 / #246 | Growth+ page queries `ReportRepository.getTrialBalance` with business, period and optional branch; builds expandable account hierarchy, aggregates debit/credit/balance, warns on imbalance and offers CSV (and post-P4-5 PDF/print) export. `src/pages/reports/TrialBalancePage.tsx:45–120,123+`; shared RPC adapter `src/dal/repositories/ReportRepository.ts:22–36` | Better scope and explicit states than the legacy tab. Tree roll-up is client-side; posted-only/date/branch server behavior is part of the named RPC contract in the PR/source, but the function has no generated `Functions` signature. Database behavior is **Requires runtime verification**. |
+| `/reports/profit-loss` — P4-2 / #249 | Reuses Trial Balance rows for current and previous periods; default prior-period comparison, amount/percentage variance, branch and period selection; P&L sections computed by shared helper; CSV/PDF after #252. `src/pages/reports/ProfitLossPage.tsx:151–190,206–230,320–333` | Strong shared data/calculation path, but account classification depends on available account fields/codes because no account subtype is supplied by the source RPC; chart-of-accounts edge cases need runtime verification. |
+| `/reports/balance-sheet` — P4-3 / #250 | Cumulative Trial Balance query through selected as-of date and branch; computes assets/liabilities/equity and retained earnings, balance check, CSV/PDF. `src/pages/reports/BalanceSheetPage.tsx:101–193,250–255` | Suitable cumulative architecture, but classification and retained-earnings behavior are client-side helper rules. No prior-year comparison control on this new page is visible in the inspected state; legacy SOFP does support comparative date. |
+| `/reports/cash-flow` — P4-4 / #251 | Three parallel Trial Balance calls: period P&L, cumulative current balance and cumulative prior balance; indirect method, operating/investing/financing sections, reconciliation and branch/period filters. CSV/PDF. `src/pages/reports/CashFlowPage.tsx:57–204`; shared calculators under `src/lib/reports/` | Reuses common source, but cash-account and balance-sheet movement detection are heuristic/client-side. Source uses a fixed cumulative start date; cash-flow totals and account classifications require runtime/accounting review. |
+| `/reports/vat-return` — P4-6 / #256 | Period type/month/quarter/year and branch; account list plus Trial Balance; account classification, output/input VAT and net payable; CSV only; loading/error/activity state. `src/pages/reports/VatReturnPage.tsx:105–195`; `src/lib/tax-accounts.ts:20–42` | Useful management schedule, not evidence of filing/submission/compliance workflow. Tax account classification is heuristic from code/name/type; CSV only. |
+| `/reports/wht-schedule` — P4-6 / #256 | Monthly date range and branch; classifies payable accounts, fetches posted journal lines, groups tax-code rows, summarizes and exports CSV. `src/pages/reports/WhtSchedulePage.tsx:93–193` | Detailed trace to posted lines and explicit filters; unknown tax codes are retained as an `unknown` bucket. Tax-code normalization and filing requirements require runtime/product verification. CSV only. |
+
+Phase 4 sequence from PR descriptions: #246 Trial Balance; #247 production dependency refresh (not a product feature); #248 development dependency refresh; #249 Profit & Loss; #250 Balance Sheet; #251 Cash Flow; #252 shared CSV/PDF exports for the first four; #253 bank account/statement import foundation; #254 matching/reconciliation report; #255 approval workflows; #256 VAT/WHT. PR descriptions and source were read, but their test/build claims were not rerun in this audit.
+
+### Operational workspaces
+
+- **New bank reconciliation:** distinct account setup, statement import/history/detail, match workspace, statement status and reconciliation report. `src/dal/repositories/BankReconciliationRepository.ts:286–312` uses direct bank-account table operations; `src/dal/repositories/BankReconciliationRepository.ts:399–530` uses RPCs for statement import/delete and match/reconcile transitions. The CSV parser validates headers/amounts/rows (`src/lib/bankReconciliation/statementCsv.ts:44–232+`). The matcher includes prioritized suggestions and ambiguity safeguards (`src/lib/reconciliation/matcher.ts`); reconcile page supports statement lock/unlock, auto-match, unmatch, manual partial/one-to-many matches, export and error states (`src/pages/bank-reconciliation/ReconcilePage.tsx:300–337,339–458`). This is a material improvement over one-shot reconciliation. It is not wholly RPC-only. Parser support is verified for CSV, not OFX/MT940; those formats are **Unknown** for the new flow. |
+- **Legacy bank reconciliation:** single-page import/match/save flow with client-side suggestion scoring and optional `suggest-bank-matches` Edge Function (`src/components/bank/BankReconciliation.tsx:69–127,130–145,211–238`). It directly inserts draft journal entries/lines and persists statement/match/lock state through table writes (`:240–299,302–399`). The flow requires all lines matched and zero difference before save/lock (`:302–320`). It has more direct write surface, a hard-coded English UI, and less explicit lifecycle structure than the new workspace. |
+- **Approval workflows (P4C / #255):** Enterprise capability, opt-in ordered steps only for purchase orders and manual journal entries; Settings UI configures those document types and surfaces save/error states (`src/pages/settings/ApprovalsTab.tsx:50–109,110–147,149–299`). Repository calls save/require/start/state/act/resubmit approval functions and lists pending requests (`src/dal/repositories/ApprovalRepository.ts:85–177`). `ApprovalBanner` loads state, invalidates approvals/journal/procurement queries, supports submit, approve/reject with comments, history and author resubmission after rejection (`src/components/approvals/ApprovalBanner.tsx:8–17,34–85,143–200+`). Rejection requires a nonblank comment; construction PO integration uses `showSubmit={false}` and refreshes related queries (`src/components/construction/ConstructionPurchaseOrdersSection.tsx:652–661`). No approval UI/configuration for invoices, expenses or other document types is verified. Direct PO authorization and journal posting remain when a workflow is not configured (PR #255 scope); runtime transition safeguards are not tested here. |
+- **Construction workspace:** `/construction/*` is a real capability-gated workspace with projects, retention aging, procurement overview, purchase orders, receipts, bill matching, material issues/returns and setup (`src/pages/construction/ConstructionWorkspacePage.tsx:22–46,89–172`). It reads server capabilities and shows loading/error/held-capability state (`src/pages/construction/ConstructionWorkspacePage.tsx:55–70,131–145`). `src/dal/repositories/ProjectRepository.ts:8–15,38–64,65–169` models project lifecycle, flat BOQ, valuations, retention entries and summary RPCs; procurement command actions and server capability checks are presented as a boundary in `src/pages/construction/ConstructionWorkspacePage.tsx:22–33`. Retention aging is implemented, not a missing feature (`src/components/construction/reports/RetentionAgingReport.tsx:19–24,99–176`). The separate `/projects-funding-sources/construction-draft` is local React state with local IDs and drafts, no persistence (`src/pages/ConstructionProjectSetupDraftPage.tsx:25–37,89–109`; router comment `src/App.tsx:373–387`). |
+- **Manufacturing:** Enterprise/profile/role-gated dashboard, versioned BOM list/editor/detail and work-order list/create/detail. BOM editor supports output, component lines, quantity/UOM/scrap percent, draft edits and activation (`src/pages/manufacturing/BomEditorPage.tsx:220–319,339–400`). Work orders expose lifecycle commands, consumption, production runs and scrap; run dialog sends output/scrap quantity (`src/pages/manufacturing/WorkOrderDetailPage.tsx:210–247,329–360,810–880`). Dashboard summaries and cost/yield/WIP measures are present through `src/dal/repositories/ManufacturingDashboardRepository.ts` and `ManufacturingDashboardPage.tsx`. This is a useful small production-control foundation, not a full MRP/MES suite. Generated BOM lines contain a BOM ID and component product ID but no child-BOM reference (`src/dal/types/database.generated.ts:6723–6773`); see the gap analysis. |
+
+## 5. Corrected duplicate comparison: Phase 4, legacy reports and bank reconciliation
+
+### Old `/reports` tabs vs Phase 4 routes
+
+The old hub still contains eight tabs—Trial Balance, SOFP (IFRS), P&L (IFRS), Revenue Breakdown, Cash Flow (IFRS), Changes in Equity, Branch Performance and Multi-currency—and applies its parent date filter except for Trial Balance and Multi-currency (`src/pages/ReportsPage.tsx:370–414`). Only SOFP/P&L have the old prior-year comparison toggle (`:416–426`). These are live route implementations, not deleted by Phase 4.
+
+| Old tab | Old implementation and scope | P4 overlap / difference | Decision |
+|---|---|---|---|
+| Trial Balance | Direct business-only `v_trial_balance` query, no report date/branch parameters; PDF output and loading/empty states; query does not expose an explicit error branch in the component (`src/pages/ReportsPage.tsx:101–117,126–181`). | Duplicates new `/reports/trial-balance`, which uses branch/date RPC inputs, tree/filters and CSV/PDF. Data source and control surface differ. | Replace the old tab’s canonical path with the new report after parity check; keep a redirect or compatibility entry during cutover. |
+| SOFP (IFRS) | `FinancialStatementRepository.computeBalances` reads accounts and posted/reversed journal lines, filters by business/date, pages lines and uses `amount_base`; no branch input (`src/dal/repositories/FinancialStatementRepository.ts:170–253`). SOFP supports prior-date comparison, integrity checks for assets/bank/FX, and PDF/XBRL (`src/components/reports/StatementOfFinancialPosition.tsx:101–155,202–260` and export sections). | Overlaps new Balance Sheet. Legacy has explicit statement integrity checks and XBRL; P4 has Growth gate, branch filters and CSV/PDF, and uses the shared trial-balance RPC. New page does not expose the old comparative date control in inspected source. | Do not delete until balance, opening balance, integrity findings, comparison and export behavior are reconciled. Then make one canonical Balance Sheet route; preserve legacy integrity checks or extract them. |
+| P&L (IFRS) | Repository computes period balances directly from GL, includes prior period comparison and PDF/XBRL; uses posted/reversed lines, `amount_base`, business/date filters but no branch (`src/dal/repositories/FinancialStatementRepository.ts:187–263`; `src/components/reports/StatementOfProfitOrLoss.tsx:115–132,214–273`; hub supplies date/comparative values at `src/pages/ReportsPage.tsx:444–450`). | Overlaps new `/reports/profit-loss`; new page is branch-aware, derives from Trial Balance RPC and has a CSV/PDF path after #252. Old XBRL and period semantics remain distinct. | Consolidate after output-level comparison; retain XBRL/notes if still a product requirement. |
+| Cash Flow (IFRS) | Reads `v_cash_flow` by business and month range; it is a separate precomputed view path (`src/components/reports/CashFlowStatement.tsx:19–43,110–175`). No branch filter is passed in the shown query. | Overlaps new indirect-method `/reports/cash-flow`, which derives period/cumulative balance data from three trial-balance calls and supports branch (`src/pages/reports/CashFlowPage.tsx:70–120`). Formulas/data models are not a one-for-one replacement. | Keep both until opening/closing cash and operating/investing/financing reconciliation are proven equivalent; then retire/redirect the legacy tab. |
+| Changes in Equity | Repository-backed roll-forward; exports PDF and XBRL; report displays opening equity, net profit allocation, contributions, drawings/dividends, other movements and closing equity (`src/components/reports/StatementOfChangesInEquity.tsx:53–70,72–172`). The inspected function accepts business/date only and hardcodes MWK formatting (`:53–70`). | No standalone P4 route replaces it. | Keep; improve currency/branch scope as needed and assess as a separate future report rather than removing it as duplicate. |
+| Revenue Breakdown | Queries invoices, invoice lines, products and accounts by issue date and business; no branch filter; PDF; explicit loading/error/empty states (`src/components/reports/RevenueBreakdownReport.tsx:34–103,110–160`). | No equivalent P4 report; it is product/service invoice revenue attribution, not P&L. | Keep as a distinct report; later extract shared date/branch scope and localization. |
+| Branch Performance | Fetches all branches and dated posted journal lines, shows all-branch totals/chart and a selected-branch detail table; table selection does not narrow the query; hard-coded English labels (`src/components/reports/BranchPerformanceReport.tsx:230–297,299–388`). | P4 reports can filter to a branch but do not reproduce this branch-comparison dashboard. | Keep as distinct until an explicit branch-consolidation replacement exists; localize. |
+| Multi-currency | Reads the newest 200 posted journal lines for the business; no date filter in the query, excludes a date filter in hub; PDF and load/error states; no direct i18n hook (`src/pages/ReportsPage.tsx:238–261,263–304,413–415`). | No P4 equivalent. | Keep only if operationally required; otherwise rebuild with explicit date/branch/pagination and a documented FX basis before deciding retirement. |
+
+**Important qualification:** labels such as “IFRS” in the legacy UI are labels, not independent evidence of compliance with a reporting standard. Standards compliance is **Requires runtime and accounting review**.
+
+### Old `/bank-reconcile` vs new `/bank-reconciliation/*`
+
+| Criterion | Legacy `/bank-reconcile` | New P4B workspace |
+|---|---|---|
+| Entry points | Single page at `/bank-reconcile`; nav item remains under Accounting | Account list/setup, statements list/import, statement detail, and `/reconcile/:statementId` are separate routes (`src/App.tsx:566–582`) |
+| Data/write path | Direct journal entry/line insert and statement/line/lock writes; optional Edge Function suggestions (`src/components/bank/BankReconciliation.tsx:211–238,240–299,302–399`) | Direct bank-account CRUD plus RPC-backed statement import/delete, match and status changes (`src/dal/repositories/BankReconciliationRepository.ts:286–312,399–530`) |
+| Import | `parseBankStatement(file)` call; legacy UI mentions common formats, but exact OFX/MT940 parser behavior is **Unknown** (`src/components/bank/BankReconciliation.tsx:130–145`) | Validated CSV import with recognized amount or debit/credit columns, period metadata and preview (`src/lib/bankReconciliation/statementCsv.ts:44–232+`; PR #253 scope). New OFX/MT940 support is not verified |
+| Matching | Confidence score and optional AI/Edge suggestions; save requires all lines matched and zero difference (`src/components/bank/BankReconciliation.tsx:117–127,211–238,302–320`) | Prioritized auto-match, ambiguity-safe suggestions, manual partial/one-to-many matching, unmatch, lock/unlock, report and export (`src/pages/bank-reconciliation/ReconcilePage.tsx:308–337,339–458`; `src/lib/reconciliation/matcher.ts`; `src/lib/reconciliation/reconciliationReport.ts:73–134`) |
+| Lifecycle / safeguards | User-driven save and lock through multiple direct writes | Draft/reconciled status, guarded transition RPCs, lock and admin-only unreconcile are in the #254 source scope; runtime behavior **Requires runtime verification** |
+| Localization / plan | Hard-coded English; Growth+ plus partner feature | i18n-backed pages; Growth+ bank capability gate (no partner feature in the new route wrapper) |
+| Duplication finding | Same business objective, but single-page model and data paths differ | Not a mere renamed route: adds account/statement lifecycle and different matching model. Both are still routable and linked from nav |
+
+**Recommendation:** treat new routes as the target workflow, but do not delete/redirect the legacy page until data compatibility and user migration are verified. Then retire the old page or keep a deliberate redirect. Fix the sidebar “Reconcile” link to point to a real next step or remove it; currently it duplicates `/bank-reconciliation/statements`.
+
+## 6. Vertical gap analysis
 
 ### Construction
 
-| Need | Current state | Evidence / gap |
-|---|---|---|
-| Multi-level BOM | Not applicable to current construction UI | No operational construction workspace in this checkout; construction is not a BOM feature here. |
-| Subcontractor management | Missing in current UI | No subcontractor workflow/route found. Supplier references in live schema are procurement evidence, not a subcontractor management module. |
-| Retention tracking | Backend/schema present in live DB; no current frontend workflow | `project_retention_ledger` and retention RPCs exist in live DB, but the checkout routes `/construction` to a local draft page and has no project retention UI. Live exact project count is 5; retention-ledger rows are estimated 0~. |
-| Project cash-flow forecasting | Missing | No forecast or project cashflow UI/report found. Existing project portfolio/P&L RPC metadata in the live DB is not surfaced by this checkout. |
-| Health & safety compliance | Missing | No safety register, incident, permit, or compliance workflow/table/route found. |
+**Implemented:** project lifecycle (`tender`, `active`, `practical_completion`, `defect_liability`, `closed`), client linkage, flat BOQ, valuations, retention ledger/release and aging report, project status, procurement sites, purchase orders, delivery notes, goods receipts, receipt inspections/holds, bill matching and cost basis, material issues/returns and capability checks. Evidence: `src/dal/repositories/ProjectRepository.ts:8–15,38–64,65–169`; table declarations in `database.generated.ts` public Tables block; workspace sections `src/pages/construction/ConstructionWorkspacePage.tsx:36–46,147–172`; retention summary/filter `src/components/construction/reports/RetentionAgingReport.tsx:99–176`.
+
+**Checklist / gaps:**
+
+- **Retention tracking/aging:** already implemented. It summarizes amount held, project count and average days, with status/sort filters (`src/components/construction/reports/RetentionAgingReport.tsx:99–176`). It is not a gap.
+- **BOQ hierarchy / multi-level construction BoM:** current `project_boq_lines` model exposes line number, description, quantity, unit, rate, value and sort order, but no parent/child item field in the app-facing type (`src/dal/repositories/ProjectRepository.ts:42–63`). A hierarchical BOQ or construction “BOM tree” is **not evidenced**.
+- **Subcontractors:** source has project client contacts and supplier invoice/procurement references, but no dedicated subcontract package, subcontractor contract, certified subcontract claim or retention-by-subcontractor workflow was found in the routes/types inspected. **Requires product/runtime confirmation.**
+- **Project cash-flow forecasting:** project cost, P&L, portfolio, valuation and retention summaries exist; no forward cash-in/cash-out forecast surface or forecast table was identified in the route/type inventory. **Not evidenced; requirements confirmation needed.**
+- **Site safety / HSE:** no safety inspection, permit-to-work, incident or toolbox-talk route/table surfaced in this audit. **Not evidenced; not a statement that no external process exists.**
+- **Document control / site diary / RFIs / change orders:** no dedicated route was identified. **Unknown / requires product confirmation.**
+- **Draft setup route:** `/projects-funding-sources/construction-draft` is browser component state and is not the backed construction-project repository. It should not be presented as saved project data (`src/pages/ConstructionProjectSetupDraftPage.tsx:25–37,89–109`).
 
 ### Manufacturing
 
-| Need | Current state | Evidence / gap |
-|---|---|---|
-| Multi-level BOM | Single-level schema shape in live DB; not surfaced in current source | Live `manufacturing_bom_lines` has `bom_id`, `component_product_id`, quantity and scrap percent, but no child-BOM/component-BOM reference. Live DB has 8 BOM headers. This checkout has no manufacturing pages/routes. |
-| MRP / production planning | Missing from current UI | No MRP or material-demand planning route. Live DB work-order tables/RPCs exist; 7 work orders are present, but not integrated by this frontend snapshot. |
-| Quality control / inspection | Backend objects only in live DB | A construction receipt inspection table exists; no manufacturing inspection UI/route or quality release workflow found in this checkout. |
-| Work-centre scheduling | Missing | No work-centre entity or schedule UI found in source or inspected live schema fields. |
-| Scrap and rework tracking | Partial backend data only | Live manufacturing work orders have `scrapped_quantity`, BOM lines `scrap_pct`, but no frontend workflow, rework disposition or operational reporting in this source branch. |
+**Implemented:** versioned BOM records with component lines, quantity/UOM/scrap percent; costing; work-order create/release/start/complete/close/cancel; material consumption/returns; production run output/scrap; dashboard metrics for throughput, yield, WIP aging and cost variance. Evidence: `src/pages/manufacturing/BomEditorPage.tsx:220–319,339–400`; `src/pages/manufacturing/WorkOrderDetailPage.tsx:210–247,329–360,810–880`; `src/dal/repositories/ManufacturingDashboardRepository.ts`; `src/dal/types/database.generated.ts:6723–6773,6775–6843,7059–7097`.
 
-### Retail
+**Checklist / gaps:**
 
-| Need | Current state | Evidence / gap |
+- **Multi-level BOM:** not represented by current BOM line model; each row points to a component product, not another BOM (`src/dal/types/database.generated.ts:6723–6773`). The editor filters the output product from the component list (`src/pages/manufacturing/BomEditorPage.tsx:339–343`). Treat current BOM as one-level unless a recursive composition path is demonstrated.
+- **Routings / work centres / capacity scheduling / MRP:** no routed operation/work-centre/calendar demand model or scheduling surface was found in the audited routes/types. **Not evidenced; verify against product requirements.**
+- **Quality inspection, non-conformance and rework:** production runs record output and scrap, but the inspected run form has output quantity, scrap quantity and notes only (`src/pages/manufacturing/WorkOrderDetailPage.tsx:810–880`). A quality/rework lifecycle is **not evidenced**.
+- **Lot/batch/serial genealogy and traceability:** no dedicated lot/serial genealogy surface/table was found in the generated type inventory. **Not evidenced; runtime confirmation needed.**
+- **Labor/machine time and maintenance:** no explicit labor booking, machine scheduling or maintenance route/table was found. **Not evidenced.**
+- **Actual cost/yield/WIP:** dashboard and repository summaries exist, so these are present at a basic analytic level; cost model correctness and inventory/GL reconciliation are **Requires runtime verification**.
+
+## 7. Explicit disposition decisions
+
+| Decision | Areas | Rationale / condition |
 |---|---|---|
-| POS returns, discounts, split payments | **Present** | POS supports discounts, split tenders, returns/refunds, manager approval, shifts and receipts. Server command paths and POS-focused tests are present. Live operational POS table estimates are sparse/unknown. |
-| Loyalty program | Missing | No loyalty points, rewards, customer tier or redemption workflow found. |
-| Multi-store inventory transfers | **Partial/present** | Stock transfer route and branch/location fields exist; exact live counts: 53 transfer headers, 85 lines. Confirm location/branch authorization for all write paths. |
-| E-commerce integration hooks | Missing | Zapier/webhooks exist generally; no commerce order/catalog sync or e-commerce adapter contract found. |
+| **Keep** | P4 report pages and shared report helpers; VAT/WHT schedules; new bank statement/reconciliation workspace; P4C approvals; backed construction project/procurement/retention workflow; manufacturing BOM/work-order foundation; distinct Revenue Breakdown, Branch Performance, Changes in Equity and Multi-currency reports pending product decision | These are implemented surfaces with distinct capabilities. Keep each until there is verified parity or a deliberate scope decision. Preserve old report capabilities (integrity checks, XBRL, notes) if still required. |
+| **Replace** | Legacy Trial Balance, SOFP, P&L and Cash Flow tabs with canonical P4 destinations, **only after** line-by-line output, sign, opening balance, branch, date and export parity checks | Current duplicates use different data paths and may differ materially. Keep compatibility redirects during cutover; do not silently remove XBRL or SOFP integrity checks. |
+| **Replace** | Legacy `/bank-reconcile` with new account/statement/match workflow after data and user migration | New route is structurally richer, but legacy writes directly and has an existing nav link. Migrate/verify first; then redirect or retire intentionally. |
+| **Rebuild** | Common reporting query/calculation contract spanning new RPC reports and old repository/view-backed tabs | Align date semantics, branch visibility, posted/reversed treatment, currency, pagination, errors and exports. Keep accounting formulas pure and centrally tested; require accounting sign-off. |
+| **Rebuild / complete** | Manufacturing BOM/production if roadmap needs full production planning | Current one-level BOM and run/scrap capture are a foundation, not multi-stage planning. Define routings, quality, traceability, capacity and costing before extending schema/UI. |
+| **Retire** | `/projects-funding-sources/construction-draft` local-only surface after the backed project-creation flow is confirmed usable | Route stores drafts only in component memory and is not a durable project system. Retire/redirect only after product owner approval; do not imply current draft state migrates. |
+| **Retire** | Old duplicate bank page and replaced legacy report tabs after parity and user cutover | Avoid two write paths/reporting definitions after the replacement is verified. Preserve useful integrity/export functions by extracting them first. |
+| **Extract** | Shared report scope/filter, date-period helpers, branch access, typed query adapter, calculation helpers and export controls | P4 already extracts Trial Balance repository, period/branch controls and CSV/PDF utilities; the older repository/view reports still diverge. Extend the shared layer rather than duplicating another report stack. |
+| **Extract** | Bank CSV validation/matcher/reconciliation report as independent tested modules | Already partly extracted (`statementCsv.ts`, `src/lib/reconciliation/matcher.ts`, `reconciliationReport.ts`); preserve these as the canonical reusable components and remove duplicate legacy logic only at cutover. |
+| **Extract** | Approval state/actions from page-level UI into shared document integration | `ApprovalRepository` and `ApprovalBanner` already provide the base. Extend supported document types only through explicit policy and server-side transition design. |
+
+## 8. Prioritized roadmap
+
+1. **P0 — Review and approve this audit; keep Track A deferred until approval.** Resolve any scope, reporting-standard, construction and manufacturing assumptions before implementation. This audit did not test or query the live database.
+2. **P1 — Close generated-type/RPC drift.** Reconcile the 11 source-invoked functions absent from generated `Functions`, especially `get_trial_balance` and the bank reconciliation RPCs; regenerate or deliberately type the client boundary. Align generated table declarations with bank account/match writes. Verify against migration source in a separate approved task; this audit did not inspect live schema.
+3. **P1 — Establish the canonical reporting contract.** Compare legacy and P4 outputs on representative posted/reversed, opening-balance, multi-currency, branch and long-history cases. Document date inclusivity, natural-balance signs, retained-earnings calculation and account classifiers. Preserve/export XBRL and integrity checks where required. Then redirect duplicate Trial Balance/SOFP/P&L/Cash Flow tabs.
+4. **P1 — Finish bank cutover deliberately.** Compare legacy import and matching to P4B, verify statement locking/unlocking and partial-match behavior, confirm file formats, migrate users/data, and remove duplicate nav destinations. Retain legacy route until acceptance; point “Reconcile” to a useful destination.
+5. **P2 — Define construction product gaps.** Confirm need for subcontractors, project cash forecasts, hierarchical BOQ, HSE, RFIs/change control and durable draft migration. Use existing project/BOQ/valuation/retention command paths as the base; do not count retention aging as missing.
+6. **P2 — Define manufacturing target scope.** If full manufacturing is intended, prioritize recursive/multi-level BOM/version effectivity, routings/work centres, demand/capacity planning, quality/rework, batch/serial genealogy and labor/machine capture. First validate current inventory and GL costing/reconciliation.
+7. **P2 — Extend approvals by document only when policy is approved.** Current source supports PO and journal entries. Decide whether invoice/expense or other workflows are required; preserve direct authorization behavior when no workflow applies and verify rejection/resubmission server safeguards.
+8. **P3 — Remove local-only and localization debt.** After product approval, retire or redirect the construction draft prototype; localize legacy report/bank/organisation pages; keep route/nav aliases only where backward compatibility is intentional.
+9. **Release gate — Runtime verification is separate.** Once authorized, use a disposable/test environment to verify route guards, plan/profile/role outcomes, RPC signatures, statement formats, accounting outputs, exports, migrations, and concurrent approval/reconciliation transitions. No such checks were run for this audit.
 
 ---
 
-## 7. Replace vs Rebuild vs Keep Decisions
+## Citation index and source scope
 
-| Feature | Current quality | Overlap with | Recommendation | Rationale |
-|---|---|---|---|---|
-| Combined `/reports` page | Mixed; statement tabs are materially stronger than the Trial Balance and Multi-currency tabs | No separate report routes in this checkout | **Keep** the single surface, **rebuild** weak report data contracts | Avoid duplicate report navigation. Keep typed statement repository/components; fix TB period/branch scoping and Multi-currency filters before route splitting. |
-| Trial Balance tab | Weak for period reporting | The `v_trial_balance` view is only implementation | **Rebuild** | Query does not consume selected period or branch and bypasses the typed report repository contract. This undermines period comparison and branch reporting. |
-| `/inventory` page | Placeholder (“Coming soon”) | Products, Warehouse, Transfers are working routes | **Retire** or redirect to `/products` after link/deep-link review | Keeping a prominent route that renders no functionality is confusing; do not rebuild a second inventory surface when operational screens already exist. |
-| `/construction` alias | Local-only draft; no server-side project path | `ConstructionProjectSetupDraftPage` is also aliased under `/projects-funding-sources/construction-draft` | **Replace** only after the operational construction workspace is ready; until then classify as draft, not launched feature | Route is auth-only and explicitly bypasses role/plan/vertical gates. Do not present it as a live construction module. Preserve existing draft data during any retirement decision. |
-| `WarehousePage` | UI exists, but `STOCK_SYNC_SUSPENDED = true` | Products and inventory balances | **Rebuild/fix before marketing as operational** | User-visible warehouse workflows are undermined by explicit stock-sync suspension. Resolve stock truth/command semantics and add end-to-end tests. |
-| Bank reconciliation | One route; mixed direct queries/writes | No duplicate bank subroutes | **Keep** the single route; **rebuild** the write boundary incrementally | Existing match/reconcile backend functions are available in live DB, but current component still writes journal data directly. Move money/ledger mutations behind validated RPCs and test branch constraints. |
-| Tax configuration | Functional configuration UI, hardcoded copy | No VAT/WHT report routes in this checkout | **Keep** configuration; build reports as new features | Configuration and filing/schedule reporting are different capabilities, not duplicates. |
-| Multi-currency report | Partial and unfiltered by reporting period/branch | Currency-aware forms/journal lines | **Rebuild** report query/filters | Current report is not a complete scoped report. Reuse transaction snapshots and add branch/date filtering before presenting totals. |
-| CSV import flow | Useful, but mixed direct writes and page-only validation | No competing import page | **Keep**, then strengthen | Supports required entities, but needs import preview, per-row validation, durable failure report and transactional/rollback semantics. |
-| Recurring invoices | No user-facing feature | `recurring_invoices` table only | **Rebuild** if product requirement remains; otherwise **retire unused schema only in a separately approved migration** | Table exists with 0 rows but no setup/scheduler UI surfaced. Audit makes no schema recommendation to execute now. |
-| Construction/manufacturing backend surfaces | Live DB tables/RPCs exist; current frontend source has no routes | Draft construction route; no manufacturing navigation | **Rebuild/integrate** | Avoid claiming DB-backed workflows as launched product functionality. Match frontend scope and route gates to existing server-side commands. |
+All source references in this document are to the audited current-main snapshot `a5360fb`, not the pre-audit branch contents. Core locations:
 
----
+- Router/lazy component map and report wrappers: `src/App.tsx:58–147,160–254,322–655`.
+- Guards and plan layers: `src/routes/ProtectedRoute.tsx:8–80`; `src/components/billing/CapabilityGate.tsx:23–52`; `src/components/billing/PlanGate.tsx:25–60`; `src/hooks/useCapability.ts:14–43,60–85`; `src/lib/billing/plans.ts:8–19,32–109`.
+- Sidebar and plan/visibility construction: `src/components/layout/navConfig.ts:70–189,288–378`; `src/components/layout/Sidebar.tsx:116–191,193–249`.
+- Generated public schema and function declarations: `src/dal/types/database.generated.ts:36–13239`.
+- Reporting: `src/dal/repositories/ReportRepository.ts:22–36`; `src/pages/reports/TrialBalancePage.tsx:45–120,123+`; `src/pages/reports/ProfitLossPage.tsx:151–190,206–230,320–333`; `src/pages/reports/BalanceSheetPage.tsx:101–193,250–255`; `src/pages/reports/CashFlowPage.tsx:57–204`; `src/pages/reports/VatReturnPage.tsx:105–195`; `src/pages/reports/WhtSchedulePage.tsx:93–193`; `src/lib/tax-accounts.ts:20–42`.
+- Legacy reports and bank comparison: `src/pages/ReportsPage.tsx:101–181,238–304,370–450`; `src/dal/repositories/FinancialStatementRepository.ts:170–275`; `src/components/reports/StatementOfFinancialPosition.tsx:101–155,202–260`; `src/components/reports/StatementOfProfitOrLoss.tsx:115–132,214–273`; `src/components/reports/CashFlowStatement.tsx:19–43,110–175`; `src/components/reports/StatementOfChangesInEquity.tsx:53–172`; `src/components/reports/RevenueBreakdownReport.tsx:34–160`; `src/components/reports/BranchPerformanceReport.tsx:230–350`; `src/components/bank/BankReconciliation.tsx:117–145,211–238,240–399`.
+- New bank and approval: `src/dal/repositories/BankReconciliationRepository.ts:286–312,399–530`; `src/lib/bankReconciliation/statementCsv.ts:44–232+`; `src/pages/bank-reconciliation/ReconcilePage.tsx:300–458`; `src/pages/settings/ApprovalsTab.tsx:50–299`; `src/dal/repositories/ApprovalRepository.ts:85–177`; `src/components/approvals/ApprovalBanner.tsx:8–200+`.
+- Construction/manufacturing: `src/pages/construction/ConstructionWorkspacePage.tsx:22–46,55–79,89–172`; `src/dal/repositories/ProjectRepository.ts:8–15,38–64,65–169`; `src/components/construction/reports/RetentionAgingReport.tsx:19–24,99–176`; `src/pages/ConstructionProjectSetupDraftPage.tsx:25–37,89–109`; `src/pages/manufacturing/BomEditorPage.tsx:220–319,339–400`; `src/pages/manufacturing/WorkOrderDetailPage.tsx:210–247,329–360,810–880`; generated BOM schema `src/dal/types/database.generated.ts:6723–6773`.
 
-## 8. Prioritized Roadmap Recommendation
-
-Estimates are engineering days for a small team, excluding customer rollout/support; ranges are intentionally approximate. This is a recommendation only, not an implementation plan.
-
-| Phase | Suggested scope | Effort | User impact | Why / exit criteria |
-|---|---|---:|---|---|
-| **Phase 5A — Quick wins** | Audit-informed nav regrouping; keep exact URLs; remove/redirect the dead `/inventory` placeholder only after a link scan; correct report duplicate assumptions; add date/branch scoping to Trial Balance and Multi-currency tabs; translate Reports and key report empty/error states; restore or clearly disable Warehouse workflows; add route/nav smoke tests. | **6–10 days** | **High** | Fixes navigation trust and report correctness without schema work. Exit when every visible nav item lands on functional or clearly gated UI, reports reflect selected period/branch, and stale routes are explicitly handled. |
-| **Phase 5B — Vertical deepening** | Integrate live construction project/retention/procurement capabilities into protected routes; complete subcontractor/forecast/H&S product decisions; manufacturing workspace with multi-level BOM design, MRP, inspection, work-centre scheduling and scrap/rework; reconcile frontend permissions with database command gates. | **25–40 days** | **High** | Vertical schemas/RPCs are ahead of this source tree. Scope should begin with UX/service contracts and vertical access tests, then build workflows against proven command APIs. Multi-level BOM and scheduling require domain decisions, so estimate is larger. |
-| **Phase 6 — Platform infrastructure** | Common attachment/storage contract for invoices/expenses/journals; multi-currency rate lifecycle and complete date/branch reports; import preview/validation/rollback; recurring transaction lifecycle; budget-vs-actual reporting; audit-event coverage and evidence retention. | **20–35 days** | **High** | Closes cross-vertical capabilities. Existing currency, budget, recurring, receipt and audit schema provides a starting point, but live row counts and current UI integration are uneven. Prioritize transaction integrity and attachment authorization before expanding exports. |
-
-**Recommended sequencing:** review and approve this audit first. Then turn Phase 5A into a separate navigation/report-quality PR based on the actual route inventory above. Do not use the supplied assumed `/reports/*` destinations or bank subroutes until they exist and are explicitly approved; this checkout currently has one `/reports` surface and one `/bank-reconcile` surface.
+Unknown or not established by source is deliberately left as **Unknown** / **Requires runtime verification**. This document does not assert production migration status, live table contents, actual tenant entitlements, or accounting-standard compliance.
