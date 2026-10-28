@@ -14,6 +14,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { PlanGuard } from '@/routes/PlanGuard';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
@@ -55,9 +56,17 @@ const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPag
 const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
-const ConstructionProjectSetupDraftPage = lazyPage(
-  () => import('@/pages/ConstructionProjectSetupDraftPage'),
-  'ConstructionProjectSetupDraftPage',
+const ConstructionProjectsPage = lazyPage(
+  () => import('@/pages/construction/ConstructionProjectsPage'),
+  'ConstructionProjectsPage',
+);
+const ConstructionProjectDetailPage = lazyPage(
+  () => import('@/pages/construction/ConstructionProjectDetailPage'),
+  'ConstructionProjectDetailPage',
+);
+const SubcontractorsPage = lazyPage(
+  () => import('@/pages/construction/SubcontractorsPage'),
+  'SubcontractorsPage',
 );
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
@@ -242,12 +251,17 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/* Local draft only; no repository call, backend request, or project authorization path. */}
-                <Route
-                  path="/projects-funding-sources/construction-draft"
-                  element={<ConstructionProjectSetupDraftPage />}
-                />
-                <Route path="/construction" element={<ConstructionProjectSetupDraftPage />} />
+                <Route element={<PlanGuard minPlan="enterprise" />}>
+                  {/* Keep the historical deep link, but never reopen its volatile in-memory draft UI. */}
+                  <Route
+                    path="/projects-funding-sources/construction-draft"
+                    element={<Navigate to="/construction" replace />}
+                  />
+                  <Route path="/construction" element={<ConstructionProjectsPage />} />
+                  <Route path="/construction/projects/:projectId" element={<ConstructionProjectDetailPage />} />
+                  <Route path="/construction/subcontractors" element={<SubcontractorsPage />} />
+                  <Route path="/construction/*" element={<Navigate to="/construction" replace />} />
+                </Route>
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={

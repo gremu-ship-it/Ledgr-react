@@ -1236,6 +1236,290 @@ export type Database = {
           },
         ]
       }
+      construction_projects: {
+        Row: {
+          boq_locked_at: string | null
+          budget: number
+          business_id: string
+          client_id: string | null
+          client_name: string
+          contract_sum: number
+          created_at: string
+          created_by: string
+          end_date: string | null
+          id: string
+          name: string
+          retention_pct: number
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          boq_locked_at?: string | null
+          budget?: number
+          business_id: string
+          client_id?: string | null
+          client_name?: string
+          contract_sum?: number
+          created_at?: string
+          created_by: string
+          end_date?: string | null
+          id?: string
+          name: string
+          retention_pct?: number
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          boq_locked_at?: string | null
+          budget?: number
+          business_id?: string
+          client_id?: string | null
+          client_name?: string
+          contract_sum?: number
+          created_at?: string
+          created_by?: string
+          end_date?: string | null
+          id?: string
+          name?: string
+          retention_pct?: number
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      construction_sites: {
+        Row: {
+          address: string | null
+          business_id: string
+          created_at: string
+          id: string
+          location_id: string | null
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          business_id: string
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          business_id?: string
+          created_at?: string
+          id?: string
+          location_id?: string | null
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_sites_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_sites_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_sites_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subcontractor_profiles: {
+        Row: {
+          business_id: string
+          compliance_notes: string | null
+          contact_id: string
+          created_at: string
+          id: string
+          insurance_expiry: string | null
+          insurance_policy_number: string | null
+          insurance_provider: string | null
+          is_active: boolean
+          license_expiry: string | null
+          license_number: string | null
+          preferred: boolean
+          safety_rating: string | null
+          trade: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          compliance_notes?: string | null
+          contact_id: string
+          created_at?: string
+          id?: string
+          insurance_expiry?: string | null
+          insurance_policy_number?: string | null
+          insurance_provider?: string | null
+          is_active?: boolean
+          license_expiry?: string | null
+          license_number?: string | null
+          preferred?: boolean
+          safety_rating?: string | null
+          trade: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          compliance_notes?: string | null
+          contact_id?: string
+          created_at?: string
+          id?: string
+          insurance_expiry?: string | null
+          insurance_policy_number?: string | null
+          insurance_provider?: string | null
+          is_active?: boolean
+          license_expiry?: string | null
+          license_number?: string | null
+          preferred?: boolean
+          safety_rating?: string | null
+          trade?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcontractor_profiles_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subcontractor_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subcontracts: {
+        Row: {
+          business_id: string
+          contract_value: number
+          created_at: string
+          created_by: string | null
+          currency: string
+          defects_liability_months: number | null
+          description: string | null
+          end_date: string | null
+          id: string
+          notes: string | null
+          payment_terms: string | null
+          project_id: string
+          reference: string
+          retention_percentage: number | null
+          scope_of_work: string | null
+          start_date: string | null
+          status: string
+          subcontractor_profile_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          contract_value?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          defects_liability_months?: number | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          payment_terms?: string | null
+          project_id: string
+          reference: string
+          retention_percentage?: number | null
+          scope_of_work?: string | null
+          start_date?: string | null
+          status?: string
+          subcontractor_profile_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          contract_value?: number
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          defects_liability_months?: number | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          notes?: string | null
+          payment_terms?: string | null
+          project_id?: string
+          reference?: string
+          retention_percentage?: number | null
+          scope_of_work?: string | null
+          start_date?: string | null
+          status?: string
+          subcontractor_profile_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcontracts_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subcontracts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subcontracts_subcontractor_profile_id_fkey"
+            columns: ["subcontractor_profile_id"]
+            isOneToOne: false
+            referencedRelation: "subcontractor_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           address_line1: string | null
