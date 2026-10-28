@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { X, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { repos } from '@/lib/repositories';
 import { formatMwkDetailed } from '@/lib/formatters';
@@ -35,10 +36,11 @@ function newLine(): LineDraft {
 interface Props {
   businessId: string;
   onClose: () => void;
-  onCreated?: () => void;
+  onCreated?: (result: { approvalSubmitted: boolean }) => void;
 }
 
 export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) {
+  const { t } = useTranslation();
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
@@ -185,6 +187,7 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
           reference: reference.trim() || null,
           source_type: null,
           source_id: null,
+          created_by: currentUser.id,
           currency,
           exchange_rate: rate.rate,
           status: 'draft',
@@ -198,16 +201,17 @@ export function NewJournalEntryModal({ businessId, onClose, onCreated }: Props) 
         })),
       );
 
-      await repos.journal.post(entry.id, currentUser.id);
-      return entry;
+      const approval = await repos.approval.start(businessId, 'journal_entry', entry.id);
+      if (!approval.required) await repos.journal.post(entry.id, currentUser.id);
+      return { entry, approvalSubmitted: approval.required };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['journal'] });
-      onCreated?.();
+      onCreated?.({ approvalSubmitted: result.approvalSubmitted });
       onClose();
     },
-    onError: (err) => {
-      setSubmitError(err instanceof Error ? err.message : 'Failed to post journal entry.');
+    onError: () => {
+      setSubmitError(t('approvals.errors.actionFailed'));
     },
   });
 

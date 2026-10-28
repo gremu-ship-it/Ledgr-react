@@ -1,5 +1,6 @@
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import {
@@ -23,6 +24,8 @@ import {
 } from 'recharts';
 import { repos } from '@/lib/repositories';
 import type { AccountSubtype } from '@/dal/types/database';
+import { ReportExportButtons } from './ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 import {
   buildBranchPerformance,
   UNASSIGNED_BRANCH_ID,
@@ -56,6 +59,7 @@ function periodLabel(periodStart: string, periodEnd: string): string {
 
 const SUBTYPE_LABELS: Record<AccountSubtype, string> = {
   current_asset: 'Current Assets',
+  contra_ar: 'accounting.accountSubtypes.contraAr',
   non_current_asset: 'Non-Current Assets',
   fixed_asset: 'Fixed Assets',
   current_liability: 'Current Liabilities',
@@ -171,8 +175,11 @@ function BranchPerformanceTable({ rows, selectedBranchId, onSelect }: {
 }
 
 function SelectedBranchDetails({ row }: { row: BranchPerformanceRow }) {
+  const { t } = useTranslation();
   const grouped = row.accountBreakdown.reduce<Record<string, AccountBreakdown[]>>((acc, line) => {
-    const label = SUBTYPE_LABELS[line.subtype];
+    const label = line.subtype === 'contra_ar'
+      ? t(SUBTYPE_LABELS[line.subtype])
+      : SUBTYPE_LABELS[line.subtype];
     acc[label] = acc[label] ?? [];
     acc[label].push(line);
     return acc;
@@ -226,11 +233,14 @@ export function BranchPerformanceReport({
   businessId,
   periodStart,
   periodEnd,
+  standalone = false,
 }: {
   businessId: string;
   periodStart: string;
   periodEnd: string;
+  standalone?: boolean;
 }) {
+  const { t } = useTranslation();
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
 
   const { data, isLoading, error } = useQuery({
@@ -291,6 +301,60 @@ export function BranchPerformanceReport({
     'Net Profit': row.netProfit,
   }));
 
+  const handleExportCSV = () => {
+    const headers = [
+      t('reports.branchPerformanceCsv.branch'),
+      t('reports.branchPerformanceCsv.location'),
+      t('reports.branchPerformanceCsv.revenue'),
+      t('reports.branchPerformanceCsv.otherIncome'),
+      t('reports.branchPerformanceCsv.costOfSales'),
+      t('reports.branchPerformanceCsv.grossProfit'),
+      t('reports.branchPerformanceCsv.operatingExpenses'),
+      t('reports.branchPerformanceCsv.depreciationAmortisation'),
+      t('reports.branchPerformanceCsv.financeCosts'),
+      t('reports.branchPerformanceCsv.taxExpense'),
+      t('reports.branchPerformanceCsv.netProfit'),
+      t('reports.branchPerformanceCsv.grossMarginPercent'),
+      t('reports.branchPerformanceCsv.netMarginPercent'),
+    ];
+    const csvRows: (string | number | null)[][] = rows.map((row) => [
+      row.branchName,
+      row.location,
+      row.revenue,
+      row.otherIncome,
+      row.costOfSales,
+      row.grossProfit,
+      row.operatingExpenses,
+      row.depreciationAmortisation,
+      row.financeCosts,
+      row.taxExpense,
+      row.netProfit,
+      row.grossMargin,
+      row.netMargin,
+    ]);
+    const totalIncome = rows.reduce((sum, row) => sum + row.revenue + row.otherIncome, 0);
+    csvRows.push([
+      t('reports.shared.total'),
+      null,
+      totals.revenue,
+      rows.reduce((sum, row) => sum + row.otherIncome, 0),
+      rows.reduce((sum, row) => sum + row.costOfSales, 0),
+      totals.grossProfit,
+      rows.reduce((sum, row) => sum + row.operatingExpenses, 0),
+      rows.reduce((sum, row) => sum + row.depreciationAmortisation, 0),
+      rows.reduce((sum, row) => sum + row.financeCosts, 0),
+      rows.reduce((sum, row) => sum + row.taxExpense, 0),
+      totals.netProfit,
+      totals.revenue ? (totals.grossProfit / totals.revenue) * 100 : null,
+      totalIncome ? (totals.netProfit / totalIncome) * 100 : null,
+    ]);
+    downloadFile(
+      generateCSV(headers, csvRows),
+      reportFilename('branch-performance', periodStart, periodEnd),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -304,6 +368,7 @@ export function BranchPerformanceReport({
       <div className="flex min-h-[30vh] flex-col items-center justify-center gap-2 text-center">
         <AlertTriangle className="h-8 w-8 text-red-400" />
         <p className="text-sm text-gray-500">Could not load branch performance report.</p>
+        {standalone && <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} disabled />}
       </div>
     );
   }
@@ -311,6 +376,7 @@ export function BranchPerformanceReport({
   if (!data || data.branches.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-8 text-center">
+        {standalone && <div className="mb-4 flex justify-center"><ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} disabled /></div>}
         <Building2 className="mx-auto h-10 w-10 text-gray-300" />
         <h2 className="mt-3 text-base font-semibold text-gray-900">No branches set up yet</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
@@ -323,6 +389,7 @@ export function BranchPerformanceReport({
   if (rows.length === 0 || rows.every((row) => row.accountBreakdown.length === 0)) {
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+        {standalone && <div className="mb-4 flex justify-center"><ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} /></div>}
         <BarChart3 className="mx-auto h-10 w-10 text-gray-300" />
         <h2 className="mt-3 text-base font-semibold text-gray-900">No branch activity for this period</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">
@@ -334,6 +401,7 @@ export function BranchPerformanceReport({
 
   return (
     <div className="space-y-6">
+      {standalone && <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} />}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard label="Total branch revenue" value={formatMwkDetailed(totals.revenue)} helper={periodLabel(periodStart, periodEnd)} />
         <SummaryCard label="Gross profit" value={formatMwkDetailed(totals.grossProfit)} helper={`${formatPercent(totals.revenue ? (totals.grossProfit / totals.revenue) * 100 : null)} gross margin`} tone={totals.grossProfit < 0 ? 'bad' : 'good'} />

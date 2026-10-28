@@ -13,8 +13,15 @@ import {
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { useDefaultRoute } from './hooks/useDefaultRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgradePrompt';
+import { ProfitLossUpgradePrompt } from '@/components/reports/ProfitLossUpgradePrompt';
+import { BalanceSheetUpgradePrompt } from '@/components/reports/BalanceSheetUpgradePrompt';
+import { CashFlowUpgradePrompt } from '@/components/reports/CashFlowUpgradePrompt';
+import { TaxReportUpgradePrompt } from '@/components/reports/TaxReportUpgradePrompt';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
 import {
   isChunkLoadError,
@@ -22,8 +29,8 @@ import {
   clearChunkRecovery,
 } from '@/lib/chunkRecovery';
 
-// Route-level code splitting. Every page (and the chart-heavy bank
-// reconciliation view) is loaded on demand so the initial bundle stays small
+// Route-level code splitting. Every page is loaded on demand so the initial
+// bundle stays small
 // and no single chunk can blow past the service-worker precache limit.
 // `lazyPage` adapts our named exports to the default export React.lazy wants
 // and automatically recovers from chunk load errors (e.g. after a deployment)
@@ -53,12 +60,31 @@ const RegisterPage = lazyPage(() => import('@/pages/RegisterPage'), 'RegisterPag
 const TermsAndConditionsPage = lazyPage(() => import('@/pages/TermsAndConditionsPage'), 'TermsAndConditionsPage');
 const CreateBusinessPage = lazyPage(() => import('@/pages/CreateBusinessPage'), 'CreateBusinessPage');
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage'), 'ForgotPasswordPage');
-const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
+const PasswordRecoveryPage = lazyPage(() => import('@/pages/auth/PasswordRecoveryPage'), 'PasswordRecoveryPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
-const ConstructionProjectSetupDraftPage = lazyPage(
-  () => import('@/pages/ConstructionProjectSetupDraftPage'),
-  'ConstructionProjectSetupDraftPage',
+const ConstructionWorkspacePage = lazyPage(
+  () => import('@/pages/construction/ConstructionWorkspacePage'),
+  'ConstructionWorkspacePage',
+);
+const ManufacturingDashboardPage = lazyPage(
+  () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
+  'ManufacturingDashboardPage',
+);
+const BomListPage = lazyPage(() => import('@/pages/manufacturing/BomListPage'), 'BomListPage');
+const BomEditorPage = lazyPage(() => import('@/pages/manufacturing/BomEditorPage'), 'BomEditorPage');
+const BomDetailPage = lazyPage(() => import('@/pages/manufacturing/BomDetailPage'), 'BomDetailPage');
+const WorkOrderListPage = lazyPage(
+  () => import('@/pages/manufacturing/WorkOrderListPage'),
+  'WorkOrderListPage',
+);
+const WorkOrderCreatePage = lazyPage(
+  () => import('@/pages/manufacturing/WorkOrderCreatePage'),
+  'WorkOrderCreatePage',
+);
+const WorkOrderDetailPage = lazyPage(
+  () => import('@/pages/manufacturing/WorkOrderDetailPage'),
+  'WorkOrderDetailPage',
 );
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
@@ -74,12 +100,21 @@ const TaxPage = lazyPage(() => import('@/pages/TaxPage'), 'TaxPage');
 const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage'), 'ApiDocumentationPage');
 const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
-const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
+const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
+const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
+const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
+const CashFlowPage = lazyPage(() => import('@/pages/reports/CashFlowPage'), 'CashFlowPage');
+const ChangesInEquityPage = lazyPage(() => import('@/pages/reports/ChangesInEquityPage'), 'ChangesInEquityPage');
+const RevenueBreakdownPage = lazyPage(() => import('@/pages/reports/RevenueBreakdownPage'), 'RevenueBreakdownPage');
+const BranchPerformancePage = lazyPage(() => import('@/pages/reports/BranchPerformancePage'), 'BranchPerformancePage');
+const VatReturnPage = lazyPage(() => import('@/pages/reports/VatReturnPage'), 'VatReturnPage');
+const WhtSchedulePage = lazyPage(() => import('@/pages/reports/WhtSchedulePage'), 'WhtSchedulePage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
 const TransfersPage = lazyPage(() => import('@/pages/TransfersPage'), 'TransfersPage');
 const BranchesPage = lazyPage(() => import('@/pages/BranchesPage'), 'BranchesPage');
+const LocationsPage = lazyPage(() => import('@/pages/LocationsPage'), 'LocationsPage');
 const DepartmentsPage = lazyPage(() => import('@/pages/DepartmentsPage'), 'DepartmentsPage');
 const PeriodManagementPage = lazyPage(() => import('@/pages/PeriodManagementPage'), 'PeriodManagementPage');
 const JournalsPage = lazyPage(() => import('@/pages/JournalsPage'), 'JournalsPage');
@@ -94,10 +129,10 @@ const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/Partner
 const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
 const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
 const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
-const BankReconciliation = lazyPage(
-  () => import('@/components/bank/BankReconciliation'),
-  'BankReconciliation',
-);
+const BankAccountsPage = lazyPage(() => import('@/pages/bank-reconciliation/BankAccountsPage'), 'BankAccountsPage');
+const StatementsPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementsPage'), 'StatementsPage');
+const StatementDetailPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementDetailPage'), 'StatementDetailPage');
+const ReconcilePage = lazyPage(() => import('@/pages/bank-reconciliation/ReconcilePage'), 'ReconcilePage');
 const SupportPage = lazyPage(() => import('@/pages/SupportPage'), 'SupportPage');
 const ToolsPage = lazyPage(() => import('@/pages/ToolsPage'), 'default');
 const DataImportPage = lazyPage(() => import('@/pages/DataImportPage'), 'DataImportPage');
@@ -108,6 +143,7 @@ const DemoEntryPage = lazyPage(() => import('@/pages/DemoEntryPage'), 'DemoEntry
 import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
 import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
+import { BankReconciliationPlanGate } from '@/components/bank-reconciliation/BankReconciliationPlanGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -118,13 +154,123 @@ export function RoleRoute() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
   const location = useLocation();
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
 
   if (!isPathAllowedForRole(role, location.pathname)) {
-    const fallback = getHomePathForRole(role);
+    // Capability-aware: a till role in a business without POS (e.g.
+    // construction) must not be bounced "home" to a gated /pos page.
+    const fallback = getHomePathForRole(role, isOrgCapabilityEnabled);
     return <Navigate to={fallback} replace />;
   }
 
   return <Outlet />;
+}
+
+function TrialBalanceRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.trialBalance.title')}
+      fallback={<TrialBalanceUpgradePrompt />}
+    >
+      <TrialBalancePage />
+    </PlanGate>
+  );
+}
+
+function ProfitLossRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.profitLoss.title')}
+      fallback={<ProfitLossUpgradePrompt />}
+    >
+      <ProfitLossPage />
+    </PlanGate>
+  );
+}
+
+function BalanceSheetRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.balanceSheet.title')}
+      fallback={<BalanceSheetUpgradePrompt />}
+    >
+      <BalanceSheetPage />
+    </PlanGate>
+  );
+}
+
+function CashFlowRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={t('reports.cashFlow.title')}
+      fallback={<CashFlowUpgradePrompt />}
+    >
+      <CashFlowPage />
+    </PlanGate>
+  );
+}
+
+function ChangesInEquityRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.statementOfChangesInEquity')}>
+      <ChangesInEquityPage />
+    </PlanGate>
+  );
+}
+
+function RevenueBreakdownRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.revenueBreakdown.title')}>
+      <RevenueBreakdownPage />
+    </PlanGate>
+  );
+}
+
+function BranchPerformanceRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.branchPerformance')}>
+      <BranchPerformancePage />
+    </PlanGate>
+  );
+}
+
+function VatReturnRoute() {
+  const { t } = useTranslation();
+  const title = t('reports.vatReturn.title');
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={title}
+      fallback={<TaxReportUpgradePrompt title={title} />}
+    >
+      <VatReturnPage />
+    </PlanGate>
+  );
+}
+
+function WhtScheduleRoute() {
+  const { t } = useTranslation();
+  const title = t('reports.whtSchedule.title');
+  return (
+    <PlanGate
+      capability="accounting_organisation"
+      featureName={title}
+      fallback={<TaxReportUpgradePrompt title={title} />}
+    >
+      <WhtSchedulePage />
+    </PlanGate>
+  );
 }
 
 /**
@@ -162,13 +308,14 @@ function UpdateAvailableBanner() {
   );
 }
 
+export function SmartRedirect() {
+  const route = useDefaultRoute();
+  return <Navigate to={route} replace />;
+}
+
 function App() {
   useAuthListener();
   const { t } = useTranslation();
-  const currentBusiness = useAppStore((s) => s.currentBusiness);
-  const role = currentBusiness?.role || null;
-  const roleHome = getHomePathForRole(role);
-  const homePath = isAdminPortalHost() ? '/partner-admin' : (roleHome !== '/dashboard' ? roleHome : '/dashboard');
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -212,7 +359,7 @@ function App() {
             <Route path="/demo/enter" element={<DemoEntryPage />} />
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/reset-password" element={<PasswordRecoveryPage />} />
             <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
 
             {/* Protected, no AppLayout */}
@@ -243,21 +390,90 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/* Local draft only; no repository call, backend request, or project authorization path. */}
+                {/* The Construction workspace is the command-backed route. */}
                 <Route
-                  path="/projects-funding-sources/construction-draft"
+                  path="/construction/*"
                   element={
                     <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
-                      <ConstructionProjectSetupDraftPage />
+                      <CapabilityGate capability="construction">
+                        <ConstructionWorkspacePage />
+                      </CapabilityGate>
                     </PlanGate>
                   }
                 />
+                {/* Manufacturing reporting and production remain behind the
+                    same organisation capability gate; non-manufacturers cannot
+                    reach the dashboard by URL even on Enterprise. */}
                 <Route
-                  path="/construction"
+                  path="/manufacturing"
                   element={
-                    <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
-                      <ConstructionProjectSetupDraftPage />
-                    </PlanGate>
+                    <CapabilityGate capability="manufacturing">
+                      <ManufacturingDashboardPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomListPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom/new"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomEditorPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom/:id"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomDetailPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/bom/:id/edit"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <BomEditorPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/production"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <WorkOrderListPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/production/new"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <WorkOrderCreatePage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/production/:id"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <WorkOrderDetailPage />
+                    </CapabilityGate>
+                  }
+                />
+                <Route
+                  path="/manufacturing/dashboard"
+                  element={
+                    <CapabilityGate capability="manufacturing">
+                      <ManufacturingDashboardPage />
+                    </CapabilityGate>
                   }
                 />
                 <Route element={<RoleRoute />}>
@@ -322,11 +538,15 @@ function App() {
                       <TaxPage />
                     </PlanGate>
                   } />
-                  <Route path="/reports" element={
-                    <PlanGate capability="core_accounting" featureName="Reports">
-                      <ReportsPage />
-                    </PlanGate>
-                  } />
+                  <Route path="/reports/trial-balance" element={<TrialBalanceRoute />} />
+                  <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
+                  <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
+                  <Route path="/reports/cash-flow" element={<CashFlowRoute />} />
+                  <Route path="/reports/changes-in-equity" element={<ChangesInEquityRoute />} />
+                  <Route path="/reports/revenue-breakdown" element={<RevenueBreakdownRoute />} />
+                  <Route path="/reports/branch-performance" element={<BranchPerformanceRoute />} />
+                  <Route path="/reports/vat-return" element={<VatReturnRoute />} />
+                  <Route path="/reports/wht-schedule" element={<WhtScheduleRoute />} />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />
@@ -337,10 +557,20 @@ function App() {
                       <PeriodManagementPage />
                     </PlanGate>
                   } />
-                  <Route path="/bank-reconcile" element={
-                    <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
-                      <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
-                    </PartnerPlanGate>
+                  <Route path="/bank-reconciliation/accounts" element={
+                    <BankReconciliationPlanGate><BankAccountsPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/reconcile" element={
+                    <Navigate to="/bank-reconciliation/statements" replace />
+                  } />
+                  <Route path="/bank-reconciliation/statements" element={
+                    <BankReconciliationPlanGate><StatementsPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/statements/:id" element={
+                    <BankReconciliationPlanGate><StatementDetailPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/reconcile/:statementId" element={
+                    <BankReconciliationPlanGate><ReconcilePage /></BankReconciliationPlanGate>
                   } />
                   <Route path="/audit" element={
                     <PlanGate capability="accounting_organisation" featureName="Audit Log">
@@ -357,6 +587,11 @@ function App() {
                   <Route path="/branches" element={
                     <PlanGate capability="accounting_organisation" featureName="Branches">
                       <BranchesPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/locations" element={
+                    <PlanGate capability="accounting_organisation" featureName="Locations">
+                      <LocationsPage />
                     </PlanGate>
                   } />
                   <Route path="/departments" element={
@@ -390,6 +625,7 @@ function App() {
                   } />
                   <Route path="/chat" element={<Navigate to="/ai" replace />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings/approvals" element={<SettingsPage />} />
                   <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                   <Route path="/support" element={<SupportPage />} />
                   <Route path="/tools" element={<ToolsPage />} />
@@ -401,8 +637,14 @@ function App() {
             </Route>
 
             {/* Fallbacks */}
-            <Route path="/" element={<Navigate to={homePath} replace />} />
-            <Route path="*" element={<Navigate to={homePath} replace />} />
+            <Route
+              path="/"
+              element={isAdminPortalHost() ? <Navigate to="/partner-admin" replace /> : <SmartRedirect />}
+            />
+            <Route
+              path="*"
+              element={isAdminPortalHost() ? <Navigate to="/partner-admin" replace /> : <SmartRedirect />}
+            />
           </Routes>
           </Suspense>
 

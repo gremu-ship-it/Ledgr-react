@@ -1,0 +1,45 @@
+-- ============================================================================
+-- 20261105000000_stock_movement_type_manufacturing.sql
+--
+-- Additive, single-statement migration: the three stock movement types used by
+-- the Manufacturing Phase C work-order commands in
+-- 20261105000001_manufacturing_work_orders.sql.
+--
+-- WHY A SEPARATE FILE
+--   PostgreSQL refuses to USE an enum value in the same transaction that added
+--   it, so `alter type ... add value` must live in its own migration that
+--   commits before the migration consuming the value. This file is therefore
+--   three statements of the same kind and nothing else. It repeats exactly the
+--   pattern 20261020500000 (construction `issue_out`) and 20261024000000
+--   (construction `construction_return_in`) established.
+--
+-- THE THREE LABELS AND THEIR MOVEMENT SIGN
+--   Movement quantities are signed by convention everywhere in the chain
+--   (20260928000001_r06_stock_balance_authority: inbound positive, outbound
+--   negative). The label states WHY stock moved; the sign states WHICH WAY.
+--
+--     manufacturing_issue    negative — a component leaves the Raw Materials
+--                            Store because a work order consumed it.
+--     manufacturing_return   positive — an unused component goes back to the
+--                            store, or a cancellation reverses an issue.
+--     manufacturing_receipt  positive — finished output enters the Finished
+--                            Goods Store.
+--
+-- ALIGNMENT
+--   None of the existing labels is honest for these events. `issue_out` is the
+--   construction site-issue movement and carries the construction subledger in
+--   its reporting; `adjustment_out` states a stock-count correction, which
+--   would misreport production consumption as shrinkage; `transfer_out` moves
+--   stock between locations of the same entity, which manufacturing explicitly
+--   is not (WIP is an accounting concept, not a location). Work-order
+--   consumption and finished-goods receipt need their own vocabulary so
+--   production reporting can be separated from construction and from
+--   adjustments, so they are added additively rather than reusing a movement
+--   type whose meaning would then be wrong in every existing report.
+--
+-- SCOPE: three enum labels. No table, column, policy, grant or data change.
+-- ============================================================================
+
+alter type public.stock_movement_type add value if not exists 'manufacturing_issue';
+alter type public.stock_movement_type add value if not exists 'manufacturing_return';
+alter type public.stock_movement_type add value if not exists 'manufacturing_receipt';

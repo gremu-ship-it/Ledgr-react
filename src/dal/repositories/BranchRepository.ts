@@ -82,8 +82,41 @@ export class BranchRepository extends BaseRepository<'branches'> {
     return this.create(dto as never);
   }
 
+  /**
+   * Update a branch, keeping its MIRROR location's name in sync.
+   *
+   * createWithLocation() pairs a branch with a location of the same name;
+   * before this sync, renaming the branch left the paired location behind
+   * (the name-drift bug from the construction org audit §1.1.2). The sync is
+   * mirror-guarded: only locations whose name currently equals the branch's
+   * name are renamed, so the provisioning stores that merely share a branch
+   * ("Raw Materials Store" etc. under "Main Factory") are never flattened
+   * into the branch name. LocationRepository.updateLocation() applies the
+   * same rule in the location→branch direction.
+   */
   async updateBranch(id: string, dto: UpdateDto<'branches'>): Promise<Row<'branches'>> {
-    return this.update(id, dto as never);
+    let previousName: string | null = null;
+    if (dto.name !== undefined) {
+      const { data: current } = await this.client
+        .from('branches')
+        .select('name')
+        .eq('id', id)
+        .maybeSingle();
+      previousName = current?.name ?? null;
+    }
+
+    const updated = await this.update(id, dto as never);
+
+    if (dto.name !== undefined && previousName !== null && previousName !== dto.name) {
+      const { error } = await this.client
+        .from('inventory_locations')
+        .update({ name: dto.name } as never)
+        .eq('branch_id', id)
+        .eq('name', previousName);
+      if (error) throw toRepositoryError('inventory_locations', error);
+    }
+
+    return updated;
   }
 
   async deactivateBranch(id: string): Promise<void> {
