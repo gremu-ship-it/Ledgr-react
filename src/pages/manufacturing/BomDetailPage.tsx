@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 const sb = supabase as unknown as { from: (t: string) => any; rpc: (n: string, p: unknown) => any; auth: any };
 import { useCapability } from '@/hooks/useCapability';
 import { CapabilityGate } from '@/components/billing/CapabilityGate';
+import { repos } from '@/lib/repositories';
 
 type BomRow = {
   id: string;
@@ -25,11 +26,13 @@ type BomRow = {
 type LineRow = {
   id: string;
   bom_id: string;
-  component_product_id: string;
+  component_product_id: string | null;
+  component_bom_id: string | null;
   quantity: number;
   unit_of_measure: string | null;
   scrap_pct: number;
   notes: string | null;
+  subassembly: Pick<BomRow, 'id' | 'product_id' | 'version'> | null;
 };
 
 type ProductRow = {
@@ -59,6 +62,7 @@ function BomDetailPageContent() {
   const [bom, setBom] = useState<BomRow | null>(null);
   const [lines, setLines] = useState<LineRow[]>([]);
   const [productsById, setProductsById] = useState<Record<string, ProductRow>>({});
+  const [subassemblyCosts, setSubassemblyCosts] = useState<Record<string, number>>({});
   const [versionHistory, setVersionHistory] = useState<BomRow[]>([]);
   const [totalCost, setTotalCost] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -79,26 +83,38 @@ function BomDetailPageContent() {
       const b = bomData as BomRow;
       setBom(b);
 
-      const { data: linesData, error: linesErr } = await sb
-        .from('manufacturing_bom_lines')
-        .select('*')
-        .eq('bom_id', id);
-      if (linesErr) throw linesErr;
-      const l = (linesData as LineRow[]) ?? [];
+      const tree = await repos.bom.getVersionTree(b.business_id, id);
+      const l: LineRow[] = tree.components.map((line) => ({
+        ...line,
+        subassembly: line.subassembly ? {
+          id: line.subassembly.id,
+          product_id: line.subassembly.product_id,
+          version: line.subassembly.version,
+        } : null,
+      }));
       setLines(l);
 
-      // Products for output + components
-      const productIds = [b.product_id, ...l.map((x) => x.component_product_id)];
+      // Load names and unit costs for raw products and referenced sub-assemblies.
+      const productIds = [
+        b.product_id,
+        ...l.flatMap((line) => line.component_product_id ? [line.component_product_id] : []),
+        ...l.flatMap((line) => line.subassembly ? [line.subassembly.product_id] : []),
+      ];
       const uniqueIds = [...new Set(productIds)];
       if (uniqueIds.length > 0) {
-        const { data: prodData } = await sb
+        const { data: prodData, error: productError } = await sb
           .from('products')
           .select('id,name,product_type,purchase_price,cost_price,unit_of_measure')
           .in('id', uniqueIds);
+        if (productError) throw productError;
         const map: Record<string, ProductRow> = {};
         for (const p of (prodData as ProductRow[]) ?? []) map[p.id] = p;
         setProductsById(map);
       }
+      const subassemblyCostPairs = await Promise.all(l.flatMap((line) => line.component_bom_id
+        ? [sb.rpc('manufacturing_bom_cost', { p_bom_id: line.component_bom_id }).then((result: { data: unknown }) => [line.component_bom_id!, Number(result.data ?? 0)] as const)]
+        : []));
+      setSubassemblyCosts(Object.fromEntries(subassemblyCostPairs));
 
       // Version history for this product
       const { data: historyData } = await sb
@@ -112,12 +128,12 @@ function BomDetailPageContent() {
       // Total cost via RPC
       const { data: costData } = await sb.rpc('manufacturing_bom_cost', { p_bom_id: id });
       setTotalCost(Number(costData ?? 0));
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch {
+      setError(t('manufacturing.bom.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [id, businessId]);
+  }, [id, businessId, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -131,8 +147,8 @@ function BomDetailPageContent() {
       const { error } = await sb.rpc('manufacturing_bom_activate', { p_bom_id: id });
       if (error) throw error;
       await fetchAll();
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      alert(t('manufacturing.bom.errors.activateFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -146,8 +162,8 @@ function BomDetailPageContent() {
       if (error) throw error;
       const newId = data as string;
       navigate(`/manufacturing/bom/${newId}/edit`);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      alert(t('manufacturing.bom.errors.newVersionFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -175,7 +191,7 @@ function BomDetailPageContent() {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-6">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          {error ?? 'BOM not found'}
+          {error ?? t('manufacturing.bom.errors.notFound')}
         </div>
         <Link to="/manufacturing/bom" className="mt-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
@@ -287,17 +303,30 @@ function BomDetailPageContent() {
                 </tr>
               ) : (
                 lines.map((line) => {
-                  const product = productsById[line.component_product_id];
+                  const product = line.component_product_id ? productsById[line.component_product_id] : undefined;
+                  const componentProduct = line.subassembly ? productsById[line.subassembly.product_id] : product;
                   const qty = Number(line.quantity);
                   const scrap = Number(line.scrap_pct);
-                  const unitCost = Number(product?.cost_price ?? product?.purchase_price ?? 0);
+                  const unitCost = line.component_bom_id
+                    ? subassemblyCosts[line.component_bom_id] ?? 0
+                    : Number(product?.cost_price ?? product?.purchase_price ?? 0);
                   const effectiveQty = qty * (1 + scrap / 100);
                   const lineCost = effectiveQty * unitCost;
                   return (
                     <tr key={line.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{product?.name ?? line.component_product_id.slice(0, 8)}</div>
-                        {product?.product_type && <div className="text-xs text-gray-500">{product.product_type}</div>}
+                        <div className="font-medium text-gray-900">
+                          {line.component_bom_id && line.subassembly ? (
+                            <Link to={`/manufacturing/bom/${line.component_bom_id}`} className="text-brand-700 hover:text-brand-900">
+                              {componentProduct?.name ?? t('manufacturing.bom.subAssembly')} — v{line.subassembly.version}
+                            </Link>
+                          ) : (
+                            componentProduct?.name ?? t('manufacturing.bom.rawMaterial')
+                          )}
+                        </div>
+                        {line.component_bom_id
+                          ? <div className="text-xs text-gray-500">{t('manufacturing.bom.subAssembly')}</div>
+                          : product?.product_type && <div className="text-xs text-gray-500">{product.product_type}</div>}
                       </td>
                       <td className="px-4 py-3">{qty}</td>
                       <td className="px-4 py-3">{line.unit_of_measure ?? '—'}</td>
@@ -330,7 +359,7 @@ function BomDetailPageContent() {
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">{t('manufacturing.bom.versionHistory')}</h2>
         {versionHistory.length === 0 ? (
-          <p className="text-sm text-gray-500">No history</p>
+          <p className="text-sm text-gray-500">{t('manufacturing.bom.noVersionHistory')}</p>
         ) : (
           <ul className="space-y-2">
             {versionHistory.map((v) => (
@@ -346,7 +375,7 @@ function BomDetailPageContent() {
                     {t(`manufacturing.bom.status.${v.status}`)}
                   </span>
                   {v.bom_locked_at && <Lock className="h-3 w-3 text-amber-600" aria-label={t('manufacturing.bom.locked')} />}
-                  {v.id === bom.id && <span className="text-xs text-brand-700">• current</span>}
+                  {v.id === bom.id && <span className="text-xs text-brand-700">• {t('manufacturing.bom.current')}</span>}
                 </div>
                 <Link to={`/manufacturing/bom/${v.id}`} className="text-xs text-brand-600 hover:text-brand-800">
                   {t('common.view')}

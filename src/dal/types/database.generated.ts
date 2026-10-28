@@ -6723,7 +6723,8 @@ export type Database = {
       manufacturing_bom_lines: {
         Row: {
           bom_id: string
-          component_product_id: string
+          component_bom_id: string | null
+          component_product_id: string | null
           created_at: string
           id: string
           notes: string | null
@@ -6735,7 +6736,8 @@ export type Database = {
         ComputedFields: never
         Insert: {
           bom_id: string
-          component_product_id: string
+          component_bom_id?: string | null
+          component_product_id?: string | null
           created_at?: string
           id?: string
           notes?: string | null
@@ -6746,7 +6748,8 @@ export type Database = {
         }
         Update: {
           bom_id?: string
-          component_product_id?: string
+          component_bom_id?: string | null
+          component_product_id?: string | null
           created_at?: string
           id?: string
           notes?: string | null
@@ -6759,6 +6762,13 @@ export type Database = {
           {
             foreignKeyName: "manufacturing_bom_lines_bom_id_fkey"
             columns: ["bom_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturing_boms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_bom_lines_component_bom_id_fkey"
+            columns: ["component_bom_id"]
             isOneToOne: false
             referencedRelation: "manufacturing_boms"
             referencedColumns: ["id"]
@@ -12660,6 +12670,16 @@ export type Database = {
       manufacturing_bom_cost: { Args: { p_bom_id: string }; Returns: number }
       manufacturing_bom_new_version: {
         Args: { p_bom_id: string }
+        Returns: string
+      }
+      save_bom_version: {
+        Args: {
+          p_bom_id: string | null
+          p_business_id: string
+          p_components: Json
+          p_notes: string | null
+          p_product_id: string
+        }
         Returns: string
       }
       manufacturing_cost_variance: {

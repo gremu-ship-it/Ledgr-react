@@ -157,14 +157,17 @@ describe('BOM editor page', () => {
     expect(source).toContain("t('manufacturing.bom.quantity')");
     expect(source).toContain("t('manufacturing.bom.unitOfMeasure')");
     expect(source).toContain("t('manufacturing.bom.scrapPercent')");
-    // Circular ref: component options exclude output product
-    expect(source).toContain('p.id !== outputProductId');
+    // Circular ref: raw product options exclude the selected output product.
+    expect(source).toContain('product.id !== outputProductId');
+    expect(source).toContain("t('manufacturing.bom.addSubassembly')");
+    expect(source).toContain('component_bom_id');
+    expect(source).toContain('repos.bom.saveVersion');
   });
 
   it('prevents selecting output product as component (circular ref UI)', async () => {
     // The editor should contain logic that validates circularRef
     const source = readFileSync('src/pages/manufacturing/BomEditorPage.tsx', 'utf8');
-    expect(source).toContain('component_product_id === outputProductId');
+    expect(source).toContain('componentProductId === outputProductId');
     expect(source).toContain("t('manufacturing.bom.circularRef')");
   });
 
@@ -174,7 +177,7 @@ describe('BOM editor page', () => {
     expect(source).toContain("t('manufacturing.bom.lockedMessage')");
     expect(source).toContain('data-testid="locked-banner"');
     expect(source).toContain('isLocked');
-    expect(source).toContain('disabled={isLocked}');
+    expect(source).toContain('disabled={!canEdit}');
   });
 
   it('shows live cost rollup updating as lines change', () => {
@@ -186,14 +189,14 @@ describe('BOM editor page', () => {
 
   it('validates quantity >0 and scrap 0-99 and shows noComponents warning', () => {
     const source = readFileSync('src/pages/manufacturing/BomEditorPage.tsx', 'utf8');
-    expect(source).toContain('Quantity must be > 0');
-    expect(source).toContain('Scrap % must be between 0 and 99');
+    expect(source).toContain("t('manufacturing.bom.errors.positiveQuantity')");
+    expect(source).toContain("t('manufacturing.bom.errors.invalidScrap')");
     expect(source).toContain("t('manufacturing.bom.noComponents')");
   });
 
-  it('calls manufacturing_bom_activate RPC on Activate', () => {
+  it('activates the draft through the typed repository command', () => {
     const source = readFileSync('src/pages/manufacturing/BomEditorPage.tsx', 'utf8');
-    expect(source).toContain('manufacturing_bom_activate');
+    expect(source).toContain('repos.bom.activateVersion(savedId)');
   });
 
   it('does not hardcode English strings — uses t() for all labels', () => {

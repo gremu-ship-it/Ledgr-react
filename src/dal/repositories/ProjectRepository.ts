@@ -568,4 +568,3 @@ export class ProjectRepository {
 }
 
 export class ReportingRepository extends ProjectRepository {}
-
