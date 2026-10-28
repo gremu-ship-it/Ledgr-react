@@ -478,7 +478,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
       // the same authority as the workspace itself.
       if (path.startsWith('/manufacturing')) return true;
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/manufacturing'].includes(path);
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
@@ -490,19 +490,19 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'sales_manager':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
 
     case 'customer_service_rep':
       return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/pos'].includes(path);
 
     case 'tax_compliance_officer':
-      return ['/dashboard', '/tax', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
+      return ['/dashboard', '/tax', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
 
     case 'treasury_manager':
-      return isBankReconciliationPath || ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
+      return isBankReconciliationPath || ['/dashboard', '/bank-reconcile', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
 
     case 'asset_manager':
-      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path);
+      return ['/dashboard', '/assets', '/capital', '/accounts', '/reports', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
 
     case 'board_member':
       if (path === '/payroll' || path === '/settings') return false;
@@ -521,7 +521,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'payroll_manager':
-      if (isBankReconciliationPath || ['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'].includes(path)) {
+      if (isBankReconciliationPath || ['/reports', '/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/bank-reconcile', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path)) {
         return false;
       }
       return true;

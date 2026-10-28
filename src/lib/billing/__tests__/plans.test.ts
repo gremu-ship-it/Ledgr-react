@@ -57,7 +57,15 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it.each(['/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'])(
+  it.each([
+    '/reports/trial-balance',
+    '/reports/profit-loss',
+    '/reports/balance-sheet',
+    '/reports/cash-flow',
+    '/reports/changes-in-equity',
+    '/reports/revenue-breakdown',
+    '/reports/branch-performance',
+  ])(
     'keeps %s on Growth', (path) => {
       const item = navItemForPath(path)!;
       expect(item).toBeDefined();
