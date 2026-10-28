@@ -5,12 +5,14 @@ import { ChevronsLeft, ChevronsRight, X, Lock, Building2, DollarSign } from 'luc
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
-import { isItemLocked, planRequiredForItem, visibleSectionsFor } from './navConfig';
+import { isItemLocked, planRequiredForItem, resolveNavItemLabelKey, visibleSectionsFor } from './navConfig';
 import { usePartner } from '@/partner/PartnerContext';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { useUsage } from '@/hooks/useUsage';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { pushUpgradeRequired } from '@/lib/notifications';
+
+const EMPTY_OPERATING_MODELS: readonly string[] = [];
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -22,6 +24,9 @@ export function Sidebar() {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
   const role = useAppStore((s) => s.currentBusiness?.role);
+  const operatingModels = useAppStore((s) =>
+    s.currentBusiness?.business?.operating_models ?? EMPTY_OPERATING_MODELS,
+  );
   const { logoUrl, businessName } = useBrandTheme();
   const { planTier } = useUsage();
   const { isFeatureEnabled } = usePartner();
@@ -127,11 +132,12 @@ export function Sidebar() {
                 <ul className={clsx('space-y-1', density === 'compact' && 'space-y-0.5')}>
                   {section.items.map((item) => {
                     const Icon = item.icon;
+                    const labelKey = resolveNavItemLabelKey(item, operatingModels);
                     const locked = isItemLocked(item, planTier, section.minPlan);
                     const handleClick = (e: React.MouseEvent) => {
                       if (locked) {
                         e.preventDefault();
-                        pushUpgradeRequired(t(item.labelKey), planRequiredForItem(item, section.minPlan)?.name ?? 'a higher plan', businessId);
+                        pushUpgradeRequired(t(labelKey), planRequiredForItem(item, section.minPlan)?.name ?? 'a higher plan', businessId);
                         if (window.innerWidth < 1024) setSidebarOpen(false);
                         return;
                       }
@@ -157,7 +163,7 @@ export function Sidebar() {
                               <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" />
                               {sidebarOpen ? (
                                 <span className="flex flex-1 items-center justify-between gap-2 truncate">
-                                  <span className="truncate">{t(item.labelKey)}</span>
+                                  <span className="truncate">{t(labelKey)}</span>
                                   {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Upgrade required" />}
                                 </span>
                               ) : null}
@@ -170,7 +176,7 @@ export function Sidebar() {
                         </NavLink>
                         {!sidebarOpen && (
                           <div className="pointer-events-none absolute left-[calc(100%+8px)] top-1/2 z-50 hidden -translate-y-1/2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white shadow-lg group-hover:block group-focus-within:block">
-                            {t(item.labelKey)}
+                            {t(labelKey)}
                             {locked ? ' (upgrade)' : ''}
                             <div className="absolute right-full top-1/2 h-2 w-2 -translate-y-1/2 translate-x-1/2 rotate-45 bg-gray-900" />
                           </div>

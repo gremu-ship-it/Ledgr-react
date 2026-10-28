@@ -2,11 +2,21 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { Lock, Sparkles } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
-import { hasCapability, planRequiredFor, type PlanCapability } from '@/lib/billing/plans';
+import {
+  hasCapability,
+  planRequiredFor,
+  PLAN_TIER_ORDER,
+  PLANS,
+  type PlanCapability,
+  type PlanTier,
+} from '@/lib/billing/plans';
 
 interface PlanGateProps {
   /** The plan capability required to use the feature (e.g. 'ai_insights'). */
-  capability: PlanCapability;
+  capability?: PlanCapability;
+
+  /** Minimum plan tier required when access is tier-based rather than capability-based. */
+  minPlan?: PlanTier;
 
   /** Short, human name of the feature for the lock message (e.g. "AI Insights"). */
   featureName: string;
@@ -27,14 +37,17 @@ interface PlanGateProps {
  * reachable but swaps the content out for an upgrade prompt when the
  * current business's plan doesn't include the capability.
  */
-export function PlanGate({ capability, featureName, fallback = 'lock', children }: PlanGateProps) {
+export function PlanGate({ capability, minPlan, featureName, fallback = 'lock', children }: PlanGateProps) {
   const { planTier } = useUsage();
+  const meetsMinimum = !minPlan
+    || PLAN_TIER_ORDER.indexOf(planTier) >= PLAN_TIER_ORDER.indexOf(minPlan);
+  const hasRequiredCapability = !capability || hasCapability(planTier, capability);
 
-  if (hasCapability(planTier, capability)) return <>{children}</>;
+  if (meetsMinimum && hasRequiredCapability) return <>{children}</>;
 
   if (fallback !== 'lock') return <>{fallback}</>;
 
-  const requiredPlan = planRequiredFor(capability);
+  const requiredPlan = minPlan ? PLANS[minPlan] : capability ? planRequiredFor(capability) : null;
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-6">

@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
+import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
@@ -66,7 +67,6 @@ const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPag
 const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
 const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
 const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
-const InventoryPage = lazyPage(() => import('@/pages/InventoryPage'), 'InventoryPage');
 const AccountsPage = lazyPage(() => import('@/pages/AccountsPage'), 'AccountsPage');
 const AssetsPage = lazyPage(() => import('@/pages/AssetsPage'), 'AssetsPage');
 const CapitalPage = lazyPage(() => import('@/pages/CapitalPage'), 'CapitalPage');
@@ -164,6 +164,7 @@ function UpdateAvailableBanner() {
 
 function App() {
   useAuthListener();
+  const { t } = useTranslation();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
   const roleHome = getHomePathForRole(role);
@@ -245,9 +246,20 @@ function App() {
                 {/* Local draft only; no repository call, backend request, or project authorization path. */}
                 <Route
                   path="/projects-funding-sources/construction-draft"
-                  element={<ConstructionProjectSetupDraftPage />}
+                  element={
+                    <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
+                      <ConstructionProjectSetupDraftPage />
+                    </PlanGate>
+                  }
                 />
-                <Route path="/construction" element={<ConstructionProjectSetupDraftPage />} />
+                <Route
+                  path="/construction"
+                  element={
+                    <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
+                      <ConstructionProjectSetupDraftPage />
+                    </PlanGate>
+                  }
+                />
                 <Route element={<RoleRoute />}>
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
@@ -271,13 +283,6 @@ function App() {
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Products">
                       <CapabilityGate capability="inventory">
                         <ProductsPage />
-                      </CapabilityGate>
-                    </PartnerPlanGate>
-                  } />
-                  <Route path="/inventory" element={
-                    <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Inventory">
-                      <CapabilityGate capability="inventory" rolePath="/inventory">
-                        <InventoryPage />
                       </CapabilityGate>
                     </PartnerPlanGate>
                   } />

@@ -72,7 +72,6 @@ describe('Role-Based Access Control (RBAC)', () => {
         expect(isPathAllowedForRole(role, '/products')).toBe(true);
         expect(isPathAllowedForRole(role, '/warehouse')).toBe(true);
         expect(isPathAllowedForRole(role, '/transfers')).toBe(true);
-        expect(isPathAllowedForRole(role, '/inventory')).toBe(true);
         expect(isPathAllowedForRole(role, '/payroll')).toBe(false);
       });
     });
@@ -122,7 +121,7 @@ describe('Role-Based Access Control (RBAC)', () => {
     });
 
     it('stock clerk handles stock only and gets no POS access', () => {
-      ['/products', '/warehouse', '/transfers', '/inventory'].forEach((path) => {
+      ['/products', '/warehouse', '/transfers'].forEach((path) => {
         expect(isPathAllowedForRole('stock_clerk', path)).toBe(true);
       });
       expect(isPathAllowedForRole('stock_clerk', '/pos')).toBe(false);

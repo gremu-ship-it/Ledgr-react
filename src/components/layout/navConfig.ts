@@ -40,6 +40,8 @@ export interface NavItemConfig {
   /** For authenticated, memory-only routes that expose no role-protected server data. */
   allowAllAuthenticatedRoles?: boolean;
   requiresOrgCapability?: OrganisationCapability;
+  /** Context-specific label keys, selected when the business uses a matching operating model. */
+  verticalLabelOverrides?: Record<string, string>;
 }
 
 export interface NavSectionConfig {
@@ -68,9 +70,33 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.inventory',
     items: [
-      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
-      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
-      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+      {
+        labelKey: 'navigation.items.products',
+        path: '/products',
+        icon: Package,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
+        verticalLabelOverrides: { PROJECT_BASED: 'navigation.items.materials' },
+      },
+      {
+        labelKey: 'navigation.items.warehouse',
+        path: '/warehouse',
+        icon: Warehouse,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
+        verticalLabelOverrides: { PROJECT_BASED: 'navigation.items.siteStores' },
+      },
+      {
+        labelKey: 'navigation.items.transfers',
+        path: '/transfers',
+        icon: ArrowLeftRight,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
+        verticalLabelOverrides: { PROJECT_BASED: 'navigation.items.materialsTransfer' },
+      },
     ],
   },
   {
@@ -102,7 +128,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         labelKey: 'navigation.items.constructionWorkspace',
         path: '/construction',
         icon: Building2,
-        allowAllAuthenticatedRoles: true,
+        minPlan: 'enterprise',
       },
     ],
   },
@@ -168,10 +194,20 @@ export function isItemLocked(
   return false;
 }
 
-/** Shared by alternative navigation surfaces; /inventory aliases Products. */
+/** Look up a navigation item by its configured route path. */
 export function navItemForPath(path: string): NavItemConfig | undefined {
-  const canonicalPath = path === '/inventory' ? '/products' : path;
-  return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.path === canonicalPath);
+  return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.path === path);
+}
+
+/** Resolve the label key for the selected business's operating models. */
+export function resolveNavItemLabelKey(
+  item: NavItemConfig,
+  operatingModels: readonly string[],
+): string {
+  for (const [model, labelKey] of Object.entries(item.verticalLabelOverrides ?? {})) {
+    if (operatingModels.includes(model)) return labelKey;
+  }
+  return item.labelKey;
 }
 
 export function planRequiredForItem(item: NavItemConfig, sectionMinPlan?: PlanTier) {
