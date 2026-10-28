@@ -110,6 +110,9 @@ const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
 const CashFlowPage = lazyPage(() => import('@/pages/reports/CashFlowPage'), 'CashFlowPage');
+const ChangesInEquityPage = lazyPage(() => import('@/pages/reports/ChangesInEquityPage'), 'ChangesInEquityPage');
+const RevenueBreakdownPage = lazyPage(() => import('@/pages/reports/RevenueBreakdownPage'), 'RevenueBreakdownPage');
+const BranchPerformancePage = lazyPage(() => import('@/pages/reports/BranchPerformancePage'), 'BranchPerformancePage');
 const VatReturnPage = lazyPage(() => import('@/pages/reports/VatReturnPage'), 'VatReturnPage');
 const WhtSchedulePage = lazyPage(() => import('@/pages/reports/WhtSchedulePage'), 'WhtSchedulePage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
@@ -221,6 +224,33 @@ function CashFlowRoute() {
       fallback={<CashFlowUpgradePrompt />}
     >
       <CashFlowPage />
+    </PlanGate>
+  );
+}
+
+function ChangesInEquityRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.statementOfChangesInEquity')}>
+      <ChangesInEquityPage />
+    </PlanGate>
+  );
+}
+
+function RevenueBreakdownRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.revenueBreakdown.title')}>
+      <RevenueBreakdownPage />
+    </PlanGate>
+  );
+}
+
+function BranchPerformanceRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate capability="accounting_organisation" featureName={t('reports.branchPerformance')}>
+      <BranchPerformancePage />
     </PlanGate>
   );
 }
@@ -551,6 +581,9 @@ function App() {
                   <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
                   <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
                   <Route path="/reports/cash-flow" element={<CashFlowRoute />} />
+                  <Route path="/reports/changes-in-equity" element={<ChangesInEquityRoute />} />
+                  <Route path="/reports/revenue-breakdown" element={<RevenueBreakdownRoute />} />
+                  <Route path="/reports/branch-performance" element={<BranchPerformanceRoute />} />
                   <Route path="/reports/vat-return" element={<VatReturnRoute />} />
                   <Route path="/reports/wht-schedule" element={<WhtScheduleRoute />} />
                   <Route path="/journals" element={

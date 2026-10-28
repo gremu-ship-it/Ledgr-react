@@ -45,9 +45,10 @@ describe('legacy pos pin cleanup migration contract (P3-1 audit item)', () => {
     expect(versions.indexOf('20261102000000')).toBeLessThan(
       versions.indexOf('20261103000000'),
     );
-    // No duplicate cleanup was added later; report and bank-reconciliation
-    // changes extend the migration head, followed by the additive trial-balance fix.
-    expect(versions[versions.length - 1]).toBe('20261115000000');
+    // No duplicate cleanup was added later; the additive trial-balance fix
+    // follows the prior RPC implementation as the current migration head.
+    expect(versions.indexOf('20261115000000')).toBeGreaterThan(versions.indexOf('20261110000002'));
+    expect(versions[versions.length - 1]).toBe('20261116000000');
     expect(
       files.filter((f) => f.toLowerCase().includes('pos_capability_cleanup')),
     ).toHaveLength(0);

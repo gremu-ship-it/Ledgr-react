@@ -5,6 +5,10 @@ const migration = readFileSync(
   new URL('../../../supabase/migrations/20261109000000_trial_balance_rpc.sql', import.meta.url),
   'utf8',
 );
+const openingDateCastMigration = readFileSync(
+  new URL('../../../supabase/migrations/20261116000000_fix_trial_balance_opening_date_cast.sql', import.meta.url),
+  'utf8',
+);
 
 describe('Trial Balance RPC migration', () => {
   it('uses the discovered schema and posted-only MWK amount aggregation', () => {
@@ -25,5 +29,17 @@ describe('Trial Balance RPC migration', () => {
     expect(migration).toContain('public.can_access_branch(p_business_id, je.branch_id)');
     expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.get_trial_balance');
     expect(migration).not.toMatch(/OR\s+je\.branch_id\s+IS\s+NULL/i);
+  });
+
+  it('casts the text opening-balance date before comparing it with the report date', () => {
+    expect(openingDateCastMigration).toContain(
+      'tree.opening_balance_date::date <= p_date_to',
+    );
+    expect(openingDateCastMigration).not.toContain(
+      'tree.opening_balance_date <= p_date_to',
+    );
+    expect(openingDateCastMigration).toContain(
+      'CREATE OR REPLACE FUNCTION public.get_trial_balance',
+    );
   });
 });

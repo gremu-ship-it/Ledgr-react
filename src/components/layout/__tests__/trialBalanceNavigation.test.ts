@@ -48,6 +48,31 @@ describe('Reports navigation', () => {
     expect(isItemLocked(item!, 'growth')).toBe(false);
   });
 
+  it.each([
+    ['/reports/changes-in-equity', 'navigation.items.changesInEquity'],
+    ['/reports/revenue-breakdown', 'navigation.items.revenueBreakdown'],
+    ['/reports/branch-performance', 'navigation.items.branchPerformance'],
+  ])('adds %s as a standalone Growth+ report', (path, labelKey) => {
+    const item = navItemForPath(path);
+    expect(item).toBeDefined();
+    expect(item?.labelKey).toBe(labelKey);
+    expect(item?.path).toBe(path);
+    expect(item?.minPlan).toBe('growth');
+    expect(isItemLocked(item!, 'starter')).toBe(true);
+    expect(isItemLocked(item!, 'growth')).toBe(false);
+    expect(isItemLocked(item!, 'enterprise')).toBe(false);
+  });
+
+  it('keeps the new standalone reports within the existing report role scope', () => {
+    for (const path of ['/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance']) {
+      expect(isPathAllowedForRole('owner', path)).toBe(true);
+      expect(isPathAllowedForRole('manager', path)).toBe(true);
+      expect(isPathAllowedForRole('payroll_manager', path)).toBe(false);
+      expect(isPathAllowedForRole('supervisor', path)).toBe(false);
+      expect(isPathAllowedForRole('cashier', path)).toBe(false);
+    }
+  });
+
   it('preserves report role restrictions on the new deep route', () => {
     expect(isPathAllowedForRole('owner', '/reports/trial-balance')).toBe(true);
     expect(isPathAllowedForRole('manager', '/reports/trial-balance')).toBe(true);
