@@ -24,6 +24,8 @@ import { UpgradeModal } from '@/components/billing/UpgradeModal';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { useState } from 'react';
+import { useCapability } from '@/hooks/useCapability';
+import { ConstructionDashboard } from '@/components/construction/dashboard/ConstructionDashboard';
 
 interface KpiCardProps {
   label: string;
@@ -140,6 +142,12 @@ function QuickActions() {
 }
 
 export function DashboardPage() {
+  const isConstruction = useCapability('construction');
+  if (isConstruction) return <ConstructionDashboard />;
+  return <GenericDashboard />;
+}
+
+export function GenericDashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);

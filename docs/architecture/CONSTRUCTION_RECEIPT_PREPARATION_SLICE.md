@@ -1,6 +1,39 @@
 # Construction material receipt preparation — first Phase 2 slice
 
-**Status:** Application workflow implemented as an in-memory, non-posting preparation only. This is not a saved or live-integrated receipt workflow. **ADR `INV-CM-001` remains proposed, not accepted.**
+**Status:** Application workflow implemented as an in-memory, non-posting preparation only, and reachable from the local draft route only — it is **not** the server-backed `/construction/*` workspace, which is described in the next section and in [`CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md`](CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md). This is not a saved or live-integrated receipt workflow. **ADR `INV-CM-001` remains proposed, not accepted.**
+
+## Where this fits now — the draft route vs the server-backed workspace (2026-10-16)
+
+Two different things now exist, and this document describes only the first:
+
+| Route | What it is |
+| --- | --- |
+| `/projects-funding-sources/construction-draft` | **This document's subject.** The local, in-memory preparation workflow implemented in `src/pages/ConstructionProjectSetupDraftPage.tsx`. No repository, Supabase or browser-storage call; no stock, valuation or journal effect. Unchanged by the work below. |
+| `/construction/*` | The server-backed Construction workspace (`src/pages/construction/ConstructionWorkspacePage.tsx`). It reads member-scoped data through `ConstructionProcurementRepository` and acts only by calling the authorised `public.*_construction_*` commands. |
+
+The persistent construction procurement path that this slice listed as a precondition **now exists** for
+purchase orders, delivery notes, goods receipts with five-way classification and evidenced holds,
+inspection/quality release, supplier-invoice-reference registration, receipt↔bill-line matching, receipt
+cost bases, a posting policy and material issues — see
+[`CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md`](CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md),
+which also records the mapping to the decisions below. Of the four decision groups in this document, the
+site/location/branch scope, explicit UOM conversions, actor derivation, four-eyes authorisation,
+idempotency and the cost basis (IAS 2 §11 / IAS 21 §§21, 23(b), 28) are addressed there, with evidence
+from an isolated PostgreSQL replay only.
+
+Still open, and the reasons this slice's non-posting boundary remains honest:
+
+- **GL posting is disabled by construction** for every construction command. Accepting stock records a
+  stock movement and a frozen cost basis; it never writes a journal entry.
+- **Supplier returns and accepted-stock write-downs are refused** pending an approved IAS 2 §28 basis, and
+  cost basis in a converted bill UOM is refused rather than converted by guesswork.
+- **`INV-CM-001` remains proposed, not accepted**, and no deployed Supabase authorisation,
+  RLS/ACL or Storage behaviour has been verified — the release suite's pre-existing `BLOCKED` rows still
+  need official Auth/PostgREST and the deployed policies. Isolated PostgreSQL evidence is not production
+  evidence.
+
+The draft route gains nothing from any of this: it stays a local preparation surface, it is not the
+authorised path to a persistent receipt, and nothing in the new commands is reachable from it.
 
 ## Working functionality
 

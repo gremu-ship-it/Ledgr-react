@@ -4,6 +4,8 @@ import {
   DollarSign,
   Package,
   BarChart2,
+  Scale,
+  TrendingUp,
   MoreHorizontal,
   Plus,
   Wallet,
@@ -20,10 +22,11 @@ import {
   LogOut,
   Warehouse,
   ArrowLeftRight,
+  MapPin,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -32,7 +35,7 @@ import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
-import { isItemLocked, navItemForPath, planRequiredForItem } from '@/components/layout/navConfig';
+import { isItemLocked, navItemForPath, navLabelResolver, planRequiredForItem } from '@/components/layout/navConfig';
 import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
@@ -43,7 +46,7 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
   { labelKey: 'navigation.sections.finance', path: '/income', icon: DollarSign },
   { labelKey: 'navigation.sections.inventory', path: '/products', icon: Package },
-  { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
+  { labelKey: 'navigation.items.reports', path: '/reports/trial-balance', icon: BarChart2 },
 ];
 
 /**
@@ -60,6 +63,10 @@ const ALL_MORE_MENU_ITEMS: {
   tone: IconTone;
   partnerFeature?: PartnerFeatureKey;
 }[] = [
+  { labelKey: 'nav.reports.trialBalance', path: '/reports/trial-balance', icon: Scale, tone: 'brand' },
+  { labelKey: 'nav.reports.profitLoss', path: '/reports/profit-loss', icon: TrendingUp, tone: 'info' },
+  { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, tone: 'brand' },
+  { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Wallet, tone: 'info' },
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
@@ -67,6 +74,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
   { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, tone: 'info' },
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },
+  { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, tone: 'brand' },
   { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
@@ -90,6 +98,7 @@ export function BottomNav() {
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const operatingModels = currentBusiness?.business?.operating_models ?? null;
   const businessId = currentBusiness?.business?.id;
   const { planTier } = useUsage();
 
@@ -101,32 +110,52 @@ export function BottomNav() {
   // Role filtering mirrors the desktop sidebar (navConfig.visibleSectionsFor):
   // hide what the role cannot open, instead of rendering a tab that RoleRoute
   // would immediately bounce back to the role's home page. When the role is
-  // not yet known we keep the (plan-filtered) default list.
-  const allowedForRole = (path: string) => !role || isPathAllowedForRole(role, path);
+  // not yet known we keep the (plan-filtered) default list. Memoized because
+  // the item lists below derive from it.
+  const allowedForRole = useCallback(
+    (path: string) => !role || isPathAllowedForRole(role, path),
+    [role],
+  );
 
-  // Till-centric roles get the POS tab first — it is their home route.
-  const homeIsPos = Boolean(role) && getHomePathForRole(role) === '/pos';
+  // Till-centric roles get the POS tab first — it is their home route, but
+  // only in a business that actually has POS. Without the capability
+  // predicate a construction cashier's "home" would still point at the
+  // gated till even though the POS tab itself is filtered out below.
+  const homeIsPos = Boolean(role) && getHomePathForRole(role, isOrgCapabilityEnabled) === '/pos';
   const posNavItem = navItemForPath('/pos');
-  const primaryItems = homeIsPos && posNavItem
-    ? [posNavItem, ...BOTTOM_NAV_ITEMS]
-    : BOTTOM_NAV_ITEMS;
 
-  const bottomItems = primaryItems
-    .filter((i) => {
-      const navItem = navItemForPath(i.path);
-      if (navItem?.partnerFeature && !isFeatureEnabled(navItem.partnerFeature)) return false;
-      return !navItem?.requiresOrgCapability
-        || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
-    })
-    .filter((i) => allowedForRole(i.path))
-    .slice(0, MAX_PRIMARY_TABS);
-  const moreItems = ALL_MORE_MENU_ITEMS
-    .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
-    .filter((i) => {
-      const navItem = navItemForPath(i.path);
-      return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
-    })
-    .filter((i) => allowedForRole(i.path));
+  // Both lists are derived in a memo so their identity stays stable: the
+  // left/right FAB split below memoizes on `bottomItems`. The bar keeps its own
+  // item lists rather than reading NAV_SECTIONS, so it resolves labels through
+  // the shared construction table — a construction business reads Site Stores /
+  // Material Transfers here exactly as it does in the sidebar.
+  const { bottomItems, moreItems } = useMemo(() => {
+    const navLabelFor = navLabelResolver(isOrgCapabilityEnabled, operatingModels);
+    const primaryItems = (homeIsPos && posNavItem
+      ? [posNavItem, ...BOTTOM_NAV_ITEMS]
+      : BOTTOM_NAV_ITEMS
+    ).map((item) => ({ ...item, labelKey: navLabelFor(item.labelKey) }));
+
+    return {
+      bottomItems: primaryItems
+        .filter((i) => {
+          const navItem = navItemForPath(i.path);
+          if (navItem?.partnerFeature && !isFeatureEnabled(navItem.partnerFeature)) return false;
+          return !navItem?.requiresOrgCapability
+            || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
+        })
+        .filter((i) => allowedForRole(i.path))
+        .slice(0, MAX_PRIMARY_TABS),
+      moreItems: ALL_MORE_MENU_ITEMS
+        .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
+        .filter((i) => {
+          const navItem = navItemForPath(i.path);
+          return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
+        })
+        .filter((i) => allowedForRole(i.path))
+        .map((i) => ({ ...i, labelKey: navLabelFor(i.labelKey) })),
+    };
+  }, [homeIsPos, posNavItem, isFeatureEnabled, isOrgCapabilityEnabled, operatingModels, allowedForRole]);
 
   // The FAB writes, so an action needs both gates:
   //   canWrite             — a viewer or auditor may open /income and /expenses
@@ -143,6 +172,12 @@ export function BottomNav() {
   const canRecordIncome = canQuickAdd('/income');
   const canRecordExpense = canQuickAdd('/expenses');
   const canRecordStock = canQuickAdd('/warehouse') && isOrgCapabilityEnabled('inventory');
+  // Same construction-vocabulary pattern as the nav label overrides: site
+  // staff move materials, not stock. Construction resolves from the
+  // organisation profile, so this matches the sidebar in every plan/role.
+  const stockMovementLabelKey = isOrgCapabilityEnabled('construction')
+    ? 'navigation.fab.materialMovement'
+    : 'navigation.fab.stockMovement';
   const hasFabActions = canCreateInvoice || canRecordIncome || canRecordExpense || canRecordStock;
 
   // Dynamic balanced split for FAB centering
@@ -268,7 +303,7 @@ export function BottomNav() {
               className="group flex min-h-[48px] items-center gap-3 rounded-2xl border border-gray-100 bg-white px-5 py-3 shadow-lg active:scale-95"
             >
               <IconBadge icon={Package} tone="brand" size="sm" interactive />
-              <span className="text-sm font-semibold text-gray-900">Stock movement</span>
+              <span className="text-sm font-semibold text-gray-900">{t(stockMovementLabelKey)}</span>
             </button>
             )}
             {canRecordIncome && (

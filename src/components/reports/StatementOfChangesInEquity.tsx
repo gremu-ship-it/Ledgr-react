@@ -11,6 +11,8 @@ import { exportReportAsPDF, exportReportAsXBRL } from '@/lib/reportExports';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { businessRowToBranding } from '@/lib/documents/types';
 import type { Row } from '@/dal/types/database';
+import { ReportExportButtons } from './ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 
 function formatAccounting(amount: number, formatCurrency: (value: number) => string): string {
   const formatted = formatCurrency(Math.abs(amount));
@@ -32,6 +34,7 @@ interface Props {
   periodStart: string;
   periodEnd: string;
   businessName?: string;
+  standalone?: boolean;
 }
 
 function EquityRow({ row, formatCurrency }: { row: EquityRollForwardLine; formatCurrency: (value: number) => string }) {
@@ -50,7 +53,7 @@ function EquityRow({ row, formatCurrency }: { row: EquityRollForwardLine; format
   );
 }
 
-export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd }: Props) {
+export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd, standalone = false }: Props) {
   const { t } = useTranslation();
   const format = useLocaleFormat();
   const [notes, setNotes] = useState('');
@@ -132,6 +135,43 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
     });
   };
 
+  const handleExportCSV = () => {
+    if (!soce) return;
+    const headers = [
+      t('reports.shared.accountName'),
+      t('reports.opening'),
+      t('reports.netProfit'),
+      t('reports.contributions'),
+      t('reports.drawingsDividends'),
+      t('reports.other'),
+      t('reports.closing'),
+    ];
+    const lines = [soce.shareCapital, soce.retainedEarnings, soce.reserves];
+    const rows: (string | number | null)[][] = lines.map((line) => [
+      line.label,
+      line.openingBalance,
+      line.netProfitAllocation,
+      line.contributions,
+      line.drawingsOrDividends,
+      line.otherMovements,
+      line.closingBalance,
+    ]);
+    rows.push([
+      t('reports.totalEquity'),
+      soce.totalOpeningEquity,
+      null,
+      null,
+      null,
+      null,
+      soce.totalClosingEquity,
+    ]);
+    downloadFile(
+      generateCSV(headers, rows),
+      reportFilename('changes-in-equity', periodStart, periodEnd),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   const handleExportXBRL = () => {
     if (!soce) return;
     exportReportAsXBRL({
@@ -163,14 +203,21 @@ export function StatementOfChangesInEquity({ businessId, periodStart, periodEnd 
 
   return (
     <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <ReportHeader
-        title={t('reports.statementOfChangesInEquity')}
-        subtitle={`${periodLabel} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
-        notes={notes}
-        onNotesChange={setNotes}
-        onExportPDF={handleExportPDF}
-        onExportXBRL={handleExportXBRL}
-      />
+      {standalone ? (
+        <ReportExportButtons
+          onExportCSV={handleExportCSV}
+          onExportPDF={printReport}
+        />
+      ) : (
+        <ReportHeader
+          title={t('reports.statementOfChangesInEquity')}
+          subtitle={`${periodLabel} · ${t('reports.currencyNote', { currency: 'MWK' })}`}
+          notes={notes}
+          onNotesChange={setNotes}
+          onExportPDF={handleExportPDF}
+          onExportXBRL={handleExportXBRL}
+        />
+      )}
 
       {!soce.reconciles && (
         <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">

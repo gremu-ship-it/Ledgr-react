@@ -107,7 +107,11 @@ const VALID_CATEGORIES: Category[] = ['query', 'error', 'compliance'];
 const VALID_PATHS = [
   '/dashboard', '/income', '/expenses', '/invoices', '/payroll', '/contacts',
   '/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/assets',
-  '/capital', '/tax', '/bank-reconcile', '/reports', '/journals', '/periods',
+  '/capital', '/tax', '/bank-reconciliation/accounts', '/bank-reconciliation/statements',
+  '/bank-reconciliation/reconcile', '/reports/trial-balance', '/reports/profit-loss',
+  '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity',
+  '/reports/revenue-breakdown', '/reports/branch-performance', '/reports/vat-return',
+  '/reports/wht-schedule', '/journals', '/periods',
   '/audit', '/settings', '/api-docs', '/api-keys', '/support', '/terms-and-conditions',
 ];
 

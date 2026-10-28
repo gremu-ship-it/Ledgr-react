@@ -364,6 +364,10 @@ interface ExpenseLine {
 interface ExpenseForm {
   contact_id:     string;
   expense_number: string;
+  /** The supplier's OWN invoice reference (expenses.reference). Ledgr's internal
+   *  expense_number stays separate; construction procurement duplicate prevention
+   *  registers this value against the existing supplier bill. */
+  reference:      string;
   expense_date:   string;
   due_date:       string;
   notes:          string;
@@ -371,6 +375,10 @@ interface ExpenseForm {
   department_id:  string;   // NEW
   currency:       string;
   exchange_rate:  string;
+  /** Explicit, default-off: this bill's stock is posted by an approved construction
+   *  goods-receipt command, so the legacy per-line purchase hook must not run and
+   *  create a second receipt for the same bill. */
+  construction_bill: boolean;
   lines:          ExpenseLine[];
 }
 
@@ -857,8 +865,9 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [form, setForm]   = useState<ExpenseForm>({
-    contact_id: '', expense_number: '', expense_date: today(), due_date: '', notes: '',
+    contact_id: '', expense_number: '', reference: '', expense_date: today(), due_date: '', notes: '',
     branch_id: '', department_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
+    construction_bill: false,
     lines: [{ description: '', quantity: '1', unit_price: '', discount_percent: '0', tax_code: 'vat_standard', account_id: '', product_id: '' }],
   });
 
@@ -875,6 +884,10 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   });
 
   function setField(field: keyof Omit<ExpenseForm, 'lines'>, value: string) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function setFlag(field: 'construction_bill', value: boolean) {
     setForm((f) => ({ ...f, [field]: value }));
   }
 
@@ -987,6 +1000,9 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           wht_amount:     0,
           total_amount:   total,
           amount_paid:    0,
+          // The supplier's own invoice reference, stored on the existing
+          // expenses.reference column that construction procurement registers.
+          reference:      form.reference.trim() || null,
           notes:          form.notes || null,
           branch_id:      form.branch_id || null,  // NEW: cost centre
           department_id:  form.department_id || null,  // NEW: cost centre
@@ -1049,21 +1065,27 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           form.department_id || null,
         );
 
-        // NEW: add stock for every line that has a product selected.
-        await addStockForBranchPurchase(
-          businessId,
-          form.branch_id || null,
-          validLines
-            .filter((l) => l.product_id)
-            .map((l) => ({
-              productId: l.product_id,
-              quantity: parseFloat(l.quantity) || 0,
-              unitCost: parseFloat(l.unit_price) || 0,
-            })),
-          created.id,
-          form.expense_number,
-          null,
-        );
+        // Add stock for every line that has a product selected — UNLESS this bill
+        // is declared a construction procurement bill, in which case the approved
+        // goods-receipt command is the only receipt. Posting here as well would
+        // create a second receipt for the same bill, and the construction matcher
+        // refuses a bill that has already moved stock (bill-already-inventoried).
+        if (!form.construction_bill) {
+          await addStockForBranchPurchase(
+            businessId,
+            form.branch_id || null,
+            validLines
+              .filter((l) => l.product_id)
+              .map((l) => ({
+                productId: l.product_id,
+                quantity: parseFloat(l.quantity) || 0,
+                unitCost: parseFloat(l.unit_price) || 0,
+              })),
+            created.id,
+            form.expense_number,
+            null,
+          );
+        }
       } catch (err) {
         log.error('Journal entry failed', err as Error, { expenseNumber: form.expense_number });
         throw new Error(
@@ -1110,6 +1132,29 @@ function ExpenseBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               <label className="mb-1 block text-sm font-medium text-gray-700">Expense Number</label>
               <input type="text" value={form.expense_number} onChange={(e) => setField('expense_number', e.target.value)}
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Supplier invoice reference</label>
+              <input type="text" value={form.reference} onChange={(e) => setField('reference', e.target.value)}
+                placeholder="The reference printed on the supplier's own invoice"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500" />
+              <p className="mt-1 text-xs text-gray-500">
+                Recorded as the supplier's reference for this bill (Ledgr's Expense Number stays internal). A duplicate
+                reference for the same supplier is refused by construction procurement; it needs an evidenced exception.
+              </p>
+            </div>
+            <div className="flex items-start gap-2 rounded-lg bg-gray-50 p-3">
+              <input type="checkbox" id="construction_bill" checked={form.construction_bill}
+                onChange={(e) => setFlag('construction_bill', e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              <label htmlFor="construction_bill" className="text-xs text-gray-700">
+                <span className="block text-sm font-medium text-gray-700">Construction procurement bill</span>
+                Do not post stock from this bill. Stock is posted only by an approved construction goods-receipt
+                command, so the bill can be matched to its receipts without a second receipt.
+              </label>
             </div>
           </div>
 
