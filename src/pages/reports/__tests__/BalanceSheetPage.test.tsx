@@ -4,10 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BalanceSheetPage } from '../BalanceSheetPage';
 import type { TrialBalanceParams, TrialBalanceRow } from '@/dal/repositories/ReportRepository';
-import { balanceSheetDateForPreset } from '@/lib/reports/balanceSheet';
+import { balanceSheetDateForPreset, priorYearAsOfDate } from '@/lib/reports/balanceSheet';
 
 const mocks = vi.hoisted(() => ({
   getTrialBalance: vi.fn(),
+  auditStatementIntegrity: vi.fn(),
   downloadFile: vi.fn(),
   printReport: vi.fn(),
 }));
@@ -18,6 +19,11 @@ vi.mock('@/lib/reports/export', async (importOriginal) => {
 });
 vi.mock('@/dal/repositories/ReportRepository', () => ({
   ReportRepository: { getTrialBalance: mocks.getTrialBalance },
+}));
+vi.mock('@/dal/repositories/FinancialStatementRepository', () => ({
+  FinancialStatementRepository: class {
+    auditStatementIntegrity = mocks.auditStatementIntegrity;
+  },
 }));
 vi.mock('@/hooks/useAccessibleReportBranches', () => ({
   useAccessibleReportBranches: () => ({
@@ -61,8 +67,19 @@ const currentRows: TrialBalanceRow[] = [
   row('4110', 'income', -20, 'Sales'),
   row('6100', 'expense', 10, 'Operating Expenses'),
 ];
+const priorRows: TrialBalanceRow[] = [
+  row('1110', 'asset', 80, 'Cash on Hand'),
+  row('2110', 'liability', -25, 'Accounts Payable'),
+  row('3110', 'equity', -45, "Owner's Capital"),
+  row('3200', 'equity', 0, 'Retained Earnings'),
+  row('4110', 'income', -16, 'Sales'),
+  row('6100', 'expense', 8, 'Operating Expenses'),
+];
 
 function renderPage() {
+  if (!mocks.auditStatementIntegrity.getMockImplementation()) {
+    mocks.auditStatementIntegrity.mockResolvedValue({ checks: [] });
+  }
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   return render(
     <QueryClientProvider client={queryClient}>
@@ -74,6 +91,7 @@ function renderPage() {
 afterEach(() => {
   cleanup();
   mocks.getTrialBalance.mockReset();
+  mocks.auditStatementIntegrity.mockReset();
   mocks.downloadFile.mockReset();
   mocks.printReport.mockReset();
 });
@@ -103,6 +121,59 @@ describe('BalanceSheetPage', () => {
       dateTo: balanceSheetDateForPreset('thisMonth'),
       branchId: null,
     }));
+    expect(mocks.getTrialBalance).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('checkbox', { name: 'reports.bs.comparePriorYear' }) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('fetches a cumulative prior-year balance and exports prior-year and variance columns when enabled', async () => {
+    const asOfDate = balanceSheetDateForPreset('thisMonth');
+    const priorDate = priorYearAsOfDate(asOfDate);
+    mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => (
+      params.dateTo === priorDate ? priorRows : currentRows
+    ));
+    renderPage();
+    await screen.findByText('reports.balanceSheet.balanced');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'reports.bs.comparePriorYear' }));
+
+    await waitFor(() => {
+      expect(mocks.getTrialBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        businessId: 'business-1',
+        dateFrom: '0001-01-01',
+        dateTo: priorDate,
+        branchId: null,
+      }));
+    });
+    expect((await screen.findAllByText(/MWK\s*80\.00/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('reports.bs.priorYear')).toHaveLength(2);
+    expect(screen.getAllByText(/MWK\s*8\.00/).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
+    const csv = mocks.downloadFile.mock.calls[0][0] as string;
+    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.bs.current,reports.bs.priorYear,reports.bs.variance');
+    expect(csv).toContain('reports.balanceSheet.currentAssets,1110,Cash on Hand,100.00,80.00,20.00');
+    expect(csv).toContain(',,reports.balanceSheet.retainedEarnings,10.00,8.00,2.00');
+  });
+
+  it('shows localized nonblocking warnings for unclosed cumulative profit and bank reconciliation', async () => {
+    const rowsWithActiveRetainedEarnings = [
+      row('1110', 'asset', 100, 'Cash on Hand'),
+      row('2110', 'liability', -30, 'Accounts Payable'),
+      row('3110', 'equity', -55, "Owner's Capital"),
+      row('3200', 'equity', -5, 'Retained Earnings'),
+      row('4110', 'income', -20, 'Sales'),
+      row('6100', 'expense', 10, 'Operating Expenses'),
+    ];
+    mocks.getTrialBalance.mockResolvedValue(rowsWithActiveRetainedEarnings);
+    mocks.auditStatementIntegrity.mockResolvedValue({
+      checks: [{ key: 'bank-reconciliation', ok: false, summary: 'untranslated summary', findings: ['raw finding'] }],
+    });
+    renderPage();
+
+    const warning = await screen.findByRole('status', { name: 'reports.bs.integrityTitle' });
+    expect(within(warning).getByText('reports.bs.retainedEarningsProfitWarning')).toBeTruthy();
+    expect(within(warning).getByText('reports.bs.bankReconciliationWarning')).toBeTruthy();
+    expect(within(warning).queryByText('raw finding')).toBeNull();
+    expect(screen.getByText('Cash on Hand')).toBeTruthy();
   });
 
   it('exports the flattened sections and reflects the selected branch data', async () => {

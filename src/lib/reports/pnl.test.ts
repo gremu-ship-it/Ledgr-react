@@ -23,66 +23,76 @@ function row(
 }
 
 describe('computePnl', () => {
-  it('flips credit-normal revenue balances to positive amounts and preserves debit contra-revenue', () => {
+  it('classifies the IFRS presentation lines using specific code/name rules before broad types', () => {
     const report = computePnl([
-      row('4114', 'income', -1250, 'Contract Revenue'),
+      row('4114', 'income', -1000, 'Contract Revenue'),
       row('4120', 'income', 50, 'Sales Returns'),
+      row('5100', 'expense', 300, 'Cost of Goods Sold'),
+      row('5180', 'expense', -50, 'Inventory adjustment'),
+      row('6100', 'expense', 100, 'Salaries'),
+      row('6801', 'expense', 30, 'Depreciation — Buildings'),
+      row('4230', 'income', -25, 'FX Gains'),
+      row('7101', 'expense', 10, 'Interest on Loans'),
+      row('7500', 'expense', 15, 'Income Tax Expense'),
+      // Code/name-specific classification takes precedence over broad types.
+      row('6999', 'expense', 7, 'Amortisation — Software'),
+      row('7990', 'expense', 9, 'Income Tax Expense'),
+      row('6901', 'expense', 4, 'Bank Charges'),
     ]);
-    const revenue = report.sections.find((section) => section.key === 'revenue')!;
-    expect(revenue.accounts.map((account) => account.amount)).toEqual([1250, -50]);
-    expect(revenue.total).toBe(1200);
+
+    expect(report.sections.map((section) => section.key)).toEqual([
+      'revenue', 'costOfSales', 'otherIncome', 'operatingExpenses',
+      'depreciationAmortisation', 'financeCosts', 'taxExpense',
+    ]);
+    expect(report.sections.map((section) => section.total)).toEqual([
+      950, 250, 25, 100, 37, 14, 24,
+    ]);
+    expect(report.computedLines.map((line) => [line.key, line.amount])).toEqual([
+      ['grossProfit', 700],
+      ['operatingProfit', 588],
+      ['profitBeforeTax', 574],
+      ['netProfit', 550],
+    ]);
+    expect(report.netIncome).toBe(550);
   });
 
-  it('shows debit expense and COGS balances as positive, while credit adjustments reduce those totals', () => {
-    const report = computePnl([
-      row('5100', 'expense', 300),
-      row('5180', 'expense', -75),
-      row('6100', 'expense', 125),
-    ]);
-    expect(report.sections.find((section) => section.key === 'cogs')?.total).toBe(225);
-    expect(report.sections.find((section) => section.key === 'operatingExpenses')?.total).toBe(125);
-  });
-
-  it('computes gross profit, operating income, and net income from actual account types and prefixes', () => {
-    const report = computePnl([
-      row('4114', 'income', -1000),
-      row('5100', 'expense', 300),
-      row('5180', 'expense', -50),
-      row('6100', 'expense', 100),
-      row('4210', 'income', -25),
-      row('7192', 'expense', 10),
-    ]);
-    expect(report.sections.find((section) => section.key === 'revenue')?.total).toBe(1000);
-    expect(report.sections.find((section) => section.key === 'cogs')?.total).toBe(250);
-    expect(report.sections.find((section) => section.key === 'operatingExpenses')?.total).toBe(100);
-    expect(report.sections.find((section) => section.key === 'otherIncome')?.total).toBe(25);
-    expect(report.sections.find((section) => section.key === 'otherExpenses')?.total).toBe(10);
-    expect(report.computedLines.map((line) => line.amount)).toEqual([750, 650, 665]);
-    expect(report.netIncome).toBe(665);
-  });
-
-  it('uses account-code fallback for legacy rows with unknown account types', () => {
+  it('uses documented code-range and name fallback for unknown account types', () => {
     const report = computePnl([
       row('4000', 'unknown', -40),
+      row('4201', 'unknown', -5),
       row('5000', 'unknown', 20),
-      row('6000', 'unknown', 8),
-      row('7000', 'unknown', -7),
-      row('8000', 'unknown', 3),
+      row('6806', 'unknown', 3),
+      row('6300', 'unknown', 8),
+      row('7200', 'unknown', 7),
+      row('7500', 'unknown', 2),
       row('1000', 'asset', 500),
       row('4110', 'asset', 700),
     ]);
-    expect(report.sections.map((section) => section.total)).toEqual([40, 20, 8, 7, 3]);
+    expect(report.sections.map((section) => section.total)).toEqual([40, 20, 5, 8, 3, 7, 2]);
     const includedCodes = report.sections.flatMap((section) => section.accounts).map((account) => account.accountCode);
     expect(includedCodes).not.toContain('1000');
     expect(includedCodes).not.toContain('4110');
   });
 
-  it('returns a zero-valued statement for empty input', () => {
+  it('preserves credit-normal income and contra-account signs', () => {
+    const report = computePnl([
+      row('4114', 'income', -1250, 'Contract Revenue'),
+      row('4120', 'income', 50, 'Sales Returns'),
+      row('5100', 'expense', 300),
+      row('5175', 'expense', -75, 'Purchase Discounts'),
+    ]);
+    expect(report.sections.find((section) => section.key === 'revenue')?.accounts.map((account) => account.amount))
+      .toEqual([1250, -50]);
+    expect(report.sections.find((section) => section.key === 'revenue')?.total).toBe(1200);
+    expect(report.sections.find((section) => section.key === 'costOfSales')?.total).toBe(225);
+  });
+
+  it('returns all seven zero-valued sections and four zero subtotals for empty input', () => {
     const report = computePnl([]);
-    expect(report.sections).toHaveLength(5);
+    expect(report.sections).toHaveLength(7);
     expect(report.sections.every((section) => section.total === 0 && section.accounts.length === 0)).toBe(true);
     expect(report.netIncome).toBe(0);
-    expect(report.computedLines.map((line) => line.amount)).toEqual([0, 0, 0]);
+    expect(report.computedLines.map((line) => line.amount)).toEqual([0, 0, 0, 0]);
   });
 });
 

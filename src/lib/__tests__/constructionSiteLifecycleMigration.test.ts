@@ -31,12 +31,12 @@ const code = sql
   .join('\n');
 
 describe('construction site lifecycle migration contract', () => {
-  it('is uniquely versioned after client linkage, before the next additive report migration', () => {
+  it('is uniquely versioned after client linkage and before later report/banking migrations', () => {
     const files = readdirSync('supabase/migrations')
       .filter((f) => f.endsWith('.sql'))
       .sort();
     const versions = files.map((f) => f.split('_')[0]);
-    expect(versions[versions.length - 1]).toBe('20261110000002');
+    expect(versions[versions.length - 1]).toBe('20261115000000');
     expect(versions.filter((v) => v === '20261108000000')).toHaveLength(1);
     expect(versions.indexOf('20261108000000')).toBe(
       versions.indexOf('20261107000000') + 1,
@@ -44,6 +44,8 @@ describe('construction site lifecycle migration contract', () => {
     expect(versions.indexOf('20261109000000')).toBe(
       versions.indexOf('20261108000000') + 1,
     );
+    expect(versions.indexOf('20261110000000')).toBeGreaterThan(versions.indexOf('20261109000000'));
+    expect(versions.indexOf('20261115000000')).toBeGreaterThan(versions.indexOf('20261110000002'));
   });
 
   it('adds a nullable project FK with ON DELETE SET NULL, indexed and commented', () => {

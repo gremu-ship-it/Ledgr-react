@@ -243,7 +243,13 @@ export function computeCashFlow(
 ): CashFlowReport {
   const pnlLines = signedPnlLines(pnlCurrent, tbCurrent);
   const expenseLines = pnlLines.filter(({ sourceType, sectionKey }) =>
-    isPnlExpenseType(sourceType) && ['cogs', 'operatingExpenses', 'otherExpenses'].includes(sectionKey),
+    isPnlExpenseType(sourceType) && [
+      'costOfSales',
+      'operatingExpenses',
+      'depreciationAmortisation',
+      'financeCosts',
+      'taxExpense',
+    ].includes(sectionKey),
   );
   const depreciation = sum(expenseLines
     .filter(({ account }) => DEPRECIATION_NAME.test(account.accountName))

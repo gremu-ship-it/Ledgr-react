@@ -4,7 +4,9 @@ import {
   balanceSheetDateForPreset,
   computeBalanceSheet,
   hasActiveRetainedEarningsBalance,
+  hasUnclosedProfitVariance,
   isValidAsOfDate,
+  priorYearAsOfDate,
 } from './balanceSheet';
 
 function row(
@@ -143,6 +145,24 @@ describe('balanceSheetDateForPreset', () => {
     expect(balanceSheetDateForPreset('lastMonth', now)).toBe('2026-09-30');
     expect(balanceSheetDateForPreset('thisQuarter', now)).toBe('2026-12-31');
     expect(balanceSheetDateForPreset('lastYear', now)).toBe('2025-12-31');
+  });
+});
+
+describe('priorYearAsOfDate', () => {
+  it('returns the matching date in the prior year and clamps leap day to February 28', () => {
+    expect(priorYearAsOfDate('2026-10-31')).toBe('2025-10-31');
+    expect(priorYearAsOfDate('2024-02-29')).toBe('2023-02-28');
+    expect(priorYearAsOfDate('invalid')).toBe('');
+  });
+});
+
+describe('hasUnclosedProfitVariance', () => {
+  it('flags a balance-sheet discrepancy matching active cumulative profit only', () => {
+    expect(hasUnclosedProfitVariance(10, 10, true)).toBe(true);
+    expect(hasUnclosedProfitVariance(-10, -10, true)).toBe(true);
+    expect(hasUnclosedProfitVariance(10.5, 10, true)).toBe(false);
+    expect(hasUnclosedProfitVariance(10, 10, false)).toBe(false);
+    expect(hasUnclosedProfitVariance(0, 0, true)).toBe(false);
   });
 });
 

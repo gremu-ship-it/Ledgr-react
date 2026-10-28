@@ -56,7 +56,8 @@ describe('manufacturing BOM navigation', () => {
       requiresOrgCapability: 'manufacturing',
       minPlan: 'enterprise',
     });
-    expect(bomNav?.labelKey).toBe('manufacturing.bom.title');
+    expect(bomNav?.labelKey).toBe('navigation.items.manufacturingBom');
+    expect(en.navigation.items.manufacturingBom).toBe('BOM');
     expect(en.manufacturing.bom.title).toBe('Bill of Materials');
   });
 
