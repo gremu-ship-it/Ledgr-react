@@ -3,6 +3,16 @@ import type { Database, Row, InsertDto, UpdateDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 
+/** The projection the ClientPicker needs — no addresses, no banking detail. */
+export interface ClientContact {
+  id: string;
+  name: string;
+  tpin: string | null;
+  vat_number: string | null;
+  contact_type: string;
+  is_active: boolean;
+}
+
 export class ContactRepository extends BaseRepository<'contacts'> {
   constructor(client: SupabaseClient<Database>) {
     super(client, 'contacts');
@@ -23,6 +33,58 @@ export class ContactRepository extends BaseRepository<'contacts'> {
     if (type) query = query.eq('contact_type', type);
 
     const { data, error } = await query;
+    if (error) throw toRepositoryError('contacts', error);
+    return data ?? [];
+  }
+
+  /**
+   * Billing-eligible clients for the construction ClientPicker (P2-3):
+   * contacts that can appear on an AR invoice — `customer` or `both` —
+   * excluding soft-deleted rows. `term` (>= 2 chars) narrows by name ILIKE;
+   * without it the first 50 by name are returned.
+   */
+  async findClientContacts(
+    businessId: string,
+    term?: string,
+  ): Promise<ClientContact[]> {
+    let query = this.client
+      .from('contacts')
+      .select('id,name,tpin,vat_number,contact_type,is_active')
+      .eq('business_id', businessId)
+      .in('contact_type', ['customer', 'both'])
+      .is('deleted_at', null)
+      .order('name', { ascending: true })
+      .limit(50);
+
+    const trimmed = term?.trim();
+    if (trimmed && trimmed.length >= 2) {
+      query = query.ilike('name', `%${trimmed}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw toRepositoryError('contacts', error);
+    return (data ?? []) as ClientContact[];
+  }
+
+  /**
+   * ContactsPage tab listing (P2-3): the customer tab must also show
+   * `both` contacts (they ARE customers), and the supplier tab likewise —
+   * otherwise a contact saved as "Customer & Supplier" disappears from
+   * both lists.
+   */
+  async findByBusinessIncludingBoth(
+    businessId: string,
+    primaryType: 'customer' | 'supplier',
+  ): Promise<Row<'contacts'>[]> {
+    const types = primaryType === 'customer' ? ['customer', 'both'] : ['supplier', 'both'];
+    const { data, error } = await this.client
+      .from('contacts')
+      .select('*')
+      .eq('business_id', businessId)
+      .in('contact_type', types)
+      .eq('is_active', true)
+      .is('deleted_at', null)
+      .order('name', { ascending: true });
     if (error) throw toRepositoryError('contacts', error);
     return data ?? [];
   }

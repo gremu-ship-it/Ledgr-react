@@ -4,14 +4,13 @@ import type { Database, Row } from '../../types/database';
 import { BomRepository } from '../BomRepository';
 
 interface Store {
-  boms: Row<'boms'>[];
-  bom_versions: Row<'bom_versions'>[];
-  bom_components: Row<'bom_components'>[];
+  manufacturing_boms: Row<'manufacturing_boms'>[];
+  manufacturing_bom_lines: Row<'manufacturing_bom_lines'>[];
   products: Row<'products'>[];
 }
 
-function makeClient(store: Store, rpcResult: unknown = null, rpcError: unknown = null) {
-  const rpc = vi.fn(async () => ({ data: rpcResult, error: rpcError }));
+function makeClient(store: Store, rpcData: unknown = null, rpcError: unknown = null) {
+  const rpc = vi.fn(async () => ({ data: rpcData, error: rpcError }));
   const from = vi.fn((table: keyof Store) => {
     const filters: Array<(row: Record<string, unknown>) => boolean> = [];
     const builder: Record<string, unknown> = {};
@@ -35,82 +34,82 @@ function makeClient(store: Store, rpcResult: unknown = null, rpcError: unknown =
   return { client: { from, rpc } as unknown as SupabaseClient<Database>, rpc };
 }
 
-const bomRow = (id: string, productId: string, code: string): Row<'boms'> => ({
-  id, business_id: 'business-1', product_id: productId, code, name: `${code} assembly`,
-  description: null, unit_of_measure: 'ea', is_active: true, created_by: null,
+const bomRow = (id: string, productId: string, version: number): Row<'manufacturing_boms'> => ({
+  id, business_id: 'business-1', product_id: productId, version, status: 'active',
+  bom_locked_at: null, notes: null, created_by: 'user-1',
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 });
-const versionRow = (id: string, bomId: string, number: number): Row<'bom_versions'> => ({
-  id, business_id: 'business-1', bom_id: bomId, version_number: number, version_label: null,
-  status: 'active', effective_from: '2026-01-01', effective_to: null, notes: null,
-  created_by: null, created_at: '2026-01-01T00:00:00Z',
+const componentRow = (
+  id: string,
+  bomId: string,
+  productId: string | null,
+  subassemblyId: string | null,
+  quantity: number,
+): Row<'manufacturing_bom_lines'> => ({
+  id, bom_id: bomId, component_product_id: productId, component_bom_id: subassemblyId,
+  quantity, unit_of_measure: 'ea', scrap_pct: 0, notes: null,
+  created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 });
-const componentRow = (id: string, versionId: string, productId: string | null, subassemblyId: string | null, quantity: number): Row<'bom_components'> => ({
-  id, business_id: 'business-1', bom_version_id: versionId,
-  component_product_id: productId, component_bom_version_id: subassemblyId,
-  quantity, unit_of_measure: 'ea', scrap_percentage: 0, sort_order: 0, notes: null,
-  created_at: '2026-01-01T00:00:00Z',
-});
+const productRow = (id: string, name: string): Row<'products'> => ({
+  id, business_id: 'business-1', name, sku: null, unit_of_measure: 'ea',
+  product_type: 'product', purchase_price: 10, cost_price: 10,
+} as Row<'products'>);
+const emptyStore = (): Store => ({ manufacturing_boms: [], manufacturing_bom_lines: [], products: [] });
 
 describe('BomRepository', () => {
-  it('saves a version through the typed RPC with per-unit component quantities', async () => {
-    const { client, rpc } = makeClient({ boms: [], bom_versions: [], bom_components: [], products: [] }, 'version-1');
+  it('saves component quantities for one output unit through the version RPC', async () => {
+    const { client, rpc } = makeClient(emptyStore(), 'bom-version-2');
     const repository = new BomRepository(client);
-    const id = await repository.saveVersion({
-      businessId: 'business-1', bomId: null, code: 'FG-1', name: 'Finished good',
-      productId: 'product-fg', versionLabel: '1', components: [{
-        component_product_id: 'product-mat', component_bom_version_id: null, quantity: 2.5,
-        unit_of_measure: 'kg', scrap_percentage: 0, sort_order: 0, notes: null,
-      }],
+    const components = [{
+      component_product_id: 'material-1', component_bom_id: null, quantity: 2.5,
+      unit_of_measure: 'kg', scrap_pct: 3, notes: null,
+    }];
+    await expect(repository.saveVersion({
+      businessId: 'business-1', bomId: null, productId: 'finished-1', notes: null, components,
+    })).resolves.toBe('bom-version-2');
+    expect(rpc).toHaveBeenCalledWith('save_bom_version', {
+      p_business_id: 'business-1', p_bom_id: null, p_product_id: 'finished-1',
+      p_notes: null, p_components: components,
     });
-    expect(id).toBe('version-1');
-    expect(rpc).toHaveBeenCalledWith('save_bom_version', expect.objectContaining({
-      p_business_id: 'business-1', p_bom_id: null, p_code: 'FG-1',
-      p_components: [{
-        component_product_id: 'product-mat', component_bom_version_id: null, quantity: 2.5,
-        unit_of_measure: 'kg', scrap_percentage: 0, sort_order: 0, notes: null,
-      }],
-    }));
   });
 
-  it('propagates the database cycle rejection rather than swallowing it', async () => {
-    const cycleError = { message: 'BOM cycle detected: version references itself', code: '23514' };
-    const { client } = makeClient({ boms: [], bom_versions: [], bom_components: [], products: [] }, null, cycleError);
+  it('propagates the database cycle rejection', async () => {
+    const cycleError = { message: 'BOM cycle detected: sub-assembly would create a circular reference', code: '23514' };
+    const { client } = makeClient(emptyStore(), null, cycleError);
     const repository = new BomRepository(client);
     await expect(repository.saveVersion({
-      businessId: 'business-1', bomId: 'bom-1', code: 'FG-1', name: 'Finished good',
-      productId: 'product-fg', versionLabel: '2', components: [],
+      businessId: 'business-1', bomId: 'bom-a', productId: 'product-a', notes: null,
+      components: [{ component_product_id: null, component_bom_id: 'bom-b', quantity: 1, unit_of_measure: 'ea', scrap_pct: 0, notes: null }],
     })).rejects.toMatchObject({ code: '23514', message: expect.stringContaining('BOM cycle detected') });
   });
 
-  it('activates a version through the archive-on-activation RPC', async () => {
-    const active = versionRow('version-2', 'bom-1', 2);
-    const { client, rpc } = makeClient({ boms: [], bom_versions: [], bom_components: [], products: [] }, active);
+  it('activates and creates versions through the manufacturing commands', async () => {
+    const active = bomRow('bom-2', 'product-1', 2);
+    const store = emptyStore();
+    store.manufacturing_boms.push(active);
+    const { client, rpc } = makeClient(store, active.id);
     const repository = new BomRepository(client);
-    await expect(repository.activateVersion('business-1', active.id)).resolves.toEqual(active);
-    expect(rpc).toHaveBeenCalledWith('activate_bom_version', {
-      p_business_id: 'business-1', p_bom_version_id: active.id,
-    });
+    await expect(repository.activateVersion(active.id)).resolves.toEqual(active);
+    await expect(repository.newVersion(active.id)).resolves.toBe(active.id);
+    expect(rpc).toHaveBeenNthCalledWith(1, 'manufacturing_bom_activate', { p_bom_id: active.id });
+    expect(rpc).toHaveBeenNthCalledWith(2, 'manufacturing_bom_new_version', { p_bom_id: active.id });
   });
 
-  it('loads nested sub-assembly components for expandable trees', async () => {
+  it('loads recursively nested sub-assemblies and their raw materials', async () => {
     const store: Store = {
-      boms: [bomRow('bom-root', 'product-fg', 'FG-1'), bomRow('bom-sub', 'product-sub', 'SUB-1')],
-      bom_versions: [versionRow('version-root', 'bom-root', 1), versionRow('version-sub', 'bom-sub', 1)],
-      bom_components: [
-        componentRow('component-root', 'version-root', null, 'version-sub', 1),
-        componentRow('component-sub', 'version-sub', 'product-leaf', null, 3),
+      manufacturing_boms: [bomRow('bom-root', 'finished-1', 1), bomRow('bom-sub', 'wip-1', 3)],
+      manufacturing_bom_lines: [
+        componentRow('line-root', 'bom-root', null, 'bom-sub', 2),
+        componentRow('line-sub', 'bom-sub', 'material-1', null, 4),
       ],
-      products: [{
-        id: 'product-leaf', business_id: 'business-1', name: 'Steel sheet', sku: 'MAT-1', unit_of_measure: 'kg',
-      } as Row<'products'>],
+      products: [productRow('finished-1', 'Finished pack'), productRow('wip-1', 'Inner assembly'), productRow('material-1', 'Steel sheet')],
     };
     const repository = new BomRepository(makeClient(store).client);
-    const tree = await repository.getVersionTree('business-1', 'version-root');
-    expect(tree.bom.code).toBe('FG-1');
-    expect(tree.components[0].subassembly?.bom.code).toBe('SUB-1');
+    const tree = await repository.getVersionTree('business-1', 'bom-root');
+    expect(tree.product?.name).toBe('Finished pack');
+    expect(tree.components[0].subassembly?.product?.name).toBe('Inner assembly');
     expect(tree.components[0].subassembly?.components[0]).toMatchObject({
-      quantity: 3, product: { id: 'product-leaf', name: 'Steel sheet', sku: 'MAT-1' },
+      quantity: 4, product: { id: 'material-1', name: 'Steel sheet' },
     });
   });
 });

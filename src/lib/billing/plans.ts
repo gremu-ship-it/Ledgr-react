@@ -13,7 +13,10 @@ export type PlanCapability =
   | 'custom_branding'
   | 'inventory'
   | 'core_accounting'          // Accounts, Tax, Assets, Capital and Reports (Starter+)
-  | 'accounting_organisation';   // Accounting + Organisation modules (Growth+)
+  | 'accounting_organisation'  // Accounting + Organisation modules (Growth+)
+  | 'construction'             // Construction workspace + procurement commands (Enterprise)
+  | 'manufacturing'            // Manufacturing workspace + BOM commands (Enterprise)
+  | 'approval_workflows';      // Linear document approvals (Enterprise)
 
 export interface Plan {
   tier: PlanTier;
@@ -94,7 +97,7 @@ export const PLANS: Record<PlanTier, Plan> = {
     priceMWK: 500000,
     annualDiscount: 25,
     transactionLimit: null,
-    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding'],
+    capabilities: ['inventory', 'core_accounting', 'bank_reconciliation', 'accounting_organisation', 'ai_insights', 'api_access', 'webhooks', 'custom_branding', 'construction', 'manufacturing', 'approval_workflows'],
     features: [
       'Everything in Pro',
       'Unlimited transactions',
@@ -108,6 +111,12 @@ export const PLANS: Record<PlanTier, Plan> = {
 
 /** Ordered lowest → highest, used for "next tier up" style logic. */
 export const PLAN_TIER_ORDER: PlanTier[] = ['free', 'starter', 'growth', 'pro', 'enterprise'];
+
+/** True when an actual tier meets a feature's minimum plan requirement. */
+export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
+  if (!required) return true;
+  return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
+}
 
 export function getPlan(tier: PlanTier): Plan {
   return PLANS[tier];

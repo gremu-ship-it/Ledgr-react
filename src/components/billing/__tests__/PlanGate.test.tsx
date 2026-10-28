@@ -15,7 +15,7 @@ vi.mock('@/partner/PartnerContext', () => ({
     isFeatureEnabled: () => state.partnerEnabled,
   }),
 }));
-afterEach(() => { cleanup(); state.partnerEnabled = true; state.tier = 'free'; });
+afterEach(() => { cleanup(); state.tier = 'free'; state.partnerEnabled = true; });
 
 describe('subscription page gates', () => {
   it.each<[PlanTier, PlanCapability, boolean]>([
@@ -31,15 +31,35 @@ describe('subscription page gates', () => {
     expect(screen.queryByRole('link', { name: 'View plans' }) !== null).toBe(!allowed);
   });
 
-  it('gates a minimum-tier feature on Enterprise without inventing a capability', () => {
-    state.tier = 'pro';
-    const { rerender } = render(<MemoryRouter><PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title"><div>Manufacturing content</div></PlanGate></MemoryRouter>);
-    expect(screen.queryByText('Manufacturing content')).toBeNull();
-    expect(screen.getByText('Bill of Materials requires an upgrade')).toBeTruthy();
-    expect(screen.getByText('This feature is available on the Enterprise plan and above.')).toBeTruthy();
+  it.each<PlanTier>(['free', 'starter', 'growth', 'pro'])(
+    'blocks Construction page content and offers Enterprise when the plan is %s',
+    (tier) => {
+      state.tier = tier;
+      render(
+        <MemoryRouter>
+          <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">
+            <div>Construction page content</div>
+          </PlanGate>
+        </MemoryRouter>,
+      );
+      expect(screen.queryByText('Construction page content')).toBeNull();
+      expect(screen.getByText('Construction requires an upgrade')).toBeTruthy();
+      expect(screen.getByText('This feature is available on the Enterprise plan and above.')).toBeTruthy();
+      expect(screen.getByRole('link', { name: 'View plans' })).toBeTruthy();
+    },
+  );
+
+  it('renders Construction page content for an Enterprise plan', () => {
     state.tier = 'enterprise';
-    rerender(<MemoryRouter><PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title"><div>Manufacturing content</div></PlanGate></MemoryRouter>);
-    expect(screen.getByText('Manufacturing content')).toBeTruthy();
+    render(
+      <MemoryRouter>
+        <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">
+          <div>Construction page content</div>
+        </PlanGate>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Construction page content')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'View plans' })).toBeNull();
   });
 
   it('advertises Starter rather than Growth for Free inventory', () => {
@@ -60,5 +80,17 @@ describe('subscription page gates', () => {
     state.tier = 'free';
     render(<MemoryRouter><PartnerPlanGate featureKey="payroll" featureName="Payroll"><div>Payroll content</div></PartnerPlanGate></MemoryRouter>);
     expect(screen.getByText('Payroll content')).toBeTruthy();
+  });
+
+  it('supports minimum-tier gates for Enterprise-only workspaces', () => {
+    state.tier = 'pro';
+    render(<MemoryRouter><PlanGate minPlan="enterprise" featureName="Construction workspace"><div>Construction content</div></PlanGate></MemoryRouter>);
+    expect(screen.queryByText('Construction content')).toBeNull();
+    expect(screen.getByText('This feature is available on the Enterprise plan and above.')).toBeTruthy();
+
+    cleanup();
+    state.tier = 'enterprise';
+    render(<MemoryRouter><PlanGate minPlan="enterprise" featureName="Construction workspace"><div>Construction content</div></PlanGate></MemoryRouter>);
+    expect(screen.getByText('Construction content')).toBeTruthy();
   });
 });

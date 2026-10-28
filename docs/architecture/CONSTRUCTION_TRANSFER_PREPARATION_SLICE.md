@@ -1,6 +1,41 @@
 # Construction store-to-site transfer preparation — local workflow slice
 
-**Status:** Working in-app preparation and observation workflow implemented in React memory only. It is **not** a saved, authorized, or live inventory transfer. Dispatch and receipt observations do not post stock movements. `INV-CM-001` remains proposed, not accepted.
+**Status:** Working in-app preparation and observation workflow implemented in React memory only, and reachable from the local draft route only — it is **not** the server-backed `/construction/*` workspace, which is described in the next section. It is **not** a saved, authorized, or live inventory transfer. Dispatch and receipt observations do not post stock movements. `INV-CM-001` remains proposed, not accepted.
+
+## Where this fits now — the draft route vs the server-backed workspace (2026-10-16)
+
+Two different things now exist, and this document describes only the first:
+
+| Route | What it is |
+| --- | --- |
+| `/projects-funding-sources/construction-draft` | **This document's subject.** The local, in-memory preparation and observation workflow implemented in `src/pages/ConstructionProjectSetupDraftPage.tsx`. No repository, Supabase or browser-storage call; it does not reserve, move or value stock. Unchanged by the work below. |
+| `/construction/*` | The server-backed Construction workspace (`src/pages/construction/ConstructionWorkspacePage.tsx`). It reads member-scoped data through `ConstructionProcurementRepository` and acts only by calling the authorised `public.*_construction_*` commands. |
+
+The persistent alternative this slice asked for **now exists** for construction procurement site
+registration, explicit product UOM conversions, authorised purchase orders, goods receipts with
+five-way classification and evidenced holds, receipt cost bases under an approved posting policy, and
+material issues that draw the pool weighted-average cost — see
+[`CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md`](CONSTRUCTION_INVENTORY_DECISION_MATRIX_2026-10-16.md).
+It is deliberately narrower than the generic transfer this document describes: it is tied to a registered
+construction site (which is what supplies the branch, the location and the project reference), it resolves
+products and units against master data rather than free text, and it refuses anything the policy does not
+support.
+
+Still open, and why the local slice's non-posting boundary remains honest:
+
+- **GL posting is disabled by construction** for every construction command; a material issue writes one
+  `issue_out` stock movement at the pool's weighted-average cost and no journal entry.
+- **Dispatch/receipt differences, in-transit custody, returns and write-downs are not modelled.** Accepted
+  stock cannot be released back out (`accepted-release-unsupported`), rejected stock cannot be released
+  onward (`rejected-release-unsupported`), and an accepted-stock write-down needs an approved IAS 2 §28
+  basis that does not exist yet. The draft's review-only difference observation therefore has no
+  persistent counterpart, by design.
+- **`INV-CM-001` remains proposed, not accepted.** No deployed Supabase authorisation, RLS/ACL or Storage
+  behaviour has been verified; the release suite's pre-existing `BLOCKED` rows still need official
+  Auth/PostgREST and the deployed policies. Isolated PostgreSQL evidence is not production evidence.
+
+The draft route gains nothing from any of this: it remains a local preparation surface, its free-text
+store/site/material values are still not resolved to Ledgr records, and it cannot reach the new commands.
 
 ## Working functionality
 

@@ -37,15 +37,17 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
-      const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
+      // Construction moved into the Supply Chain (inventory) section and is now an
+      // Enterprise module (minPlan), so nothing is unlocked on Free except the
+      // Overview, Finance and Support sections.
+      const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
         expect(isItemLocked(item, 'free'), item.path).toBe(!available);
       }
     }
   });
 
-  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports'])(
+  it.each(['/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital'])(
     'unlocks %s starting at Starter', (path) => {
       const item = navItemForPath(path)!;
       expect(item).toBeDefined();
@@ -55,25 +57,41 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it.each(['/journals', '/periods', '/audit', '/bank-reconcile', '/contacts', '/branches', '/departments', '/ai'])(
+  it.each([
+    '/reports/trial-balance',
+    '/reports/profit-loss',
+    '/reports/balance-sheet',
+    '/reports/cash-flow',
+    '/reports/changes-in-equity',
+    '/reports/revenue-breakdown',
+    '/reports/branch-performance',
+  ])(
+    'keeps %s on Growth', (path) => {
+      const item = navItemForPath(path)!;
+      expect(item).toBeDefined();
+      expect(isItemLocked(item, 'starter')).toBe(true);
+      expect(isItemLocked(item, 'growth')).toBe(false);
+      expect(planRequiredForItem(item)?.tier).toBe('growth');
+    },
+  );
+
+  it.each(['/journals', '/periods', '/audit', '/bank-reconciliation/accounts', '/bank-reconciliation/statements', '/contacts', '/branches', '/departments', '/ai'])(
     'keeps %s on its existing higher tier', (path) => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },
   );
 
-  it('gates the BOM navigation item and route at Enterprise without adding a capability', () => {
-    const section = NAV_SECTIONS.find((item) => item.labelKey === 'navigation.sections.manufacturing');
-    const bom = navItemForPath('/manufacturing/bom');
-    expect(section?.minPlan).toBe('enterprise');
-    expect(bom?.minPlan).toBe('enterprise');
-    expect(isItemLocked(bom!, 'pro')).toBe(true);
-    expect(isItemLocked(bom!, 'enterprise')).toBe(false);
-    const app = source('src/App.tsx');
-    expect(app).toContain('<Route path="/manufacturing/bom"');
-    expect(app).toContain('<PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title">');
-    const english = JSON.parse(source('src/i18n/locales/en.json')) as { manufacturing?: { bom?: { title?: string } }; navigation?: { sections?: { manufacturing?: string } } };
-    expect(english.manufacturing?.bom?.title).toBe('Bill of Materials');
-    expect(english.navigation?.sections?.manufacturing).toBe('Manufacturing');
+  it('is binary for Construction: Free/Trial locks it, Enterprise unlocks it', () => {
+    const item = navItemForPath('/construction')!;
+    expect(item).toBeDefined();
+    // Construction has no intermediate tiers: Free/Trial is the locked upsell
+    // state and Enterprise is the only unlock.
+    expect(isItemLocked(item, 'free')).toBe(true);
+    expect(hasCapability('free', 'construction')).toBe(false);
+    expect(isItemLocked(item, 'enterprise')).toBe(false);
+    expect(hasCapability('enterprise', 'construction')).toBe(true);
+    expect(planRequiredFor('construction')?.tier).toBe('enterprise');
+    expect(planRequiredForItem(item)?.tier).toBe('enterprise');
   });
 
   it('recommends the cheapest eligible tier for locked features', () => {
@@ -139,15 +157,96 @@ describe('plan catalogue integration parity', () => {
     expect(usage).toContain('set search_path = public');
   });
 
-  it('gates all inventory URLs and precisely the five core-accounting pages', () => {
+  it('gates the remaining inventory URLs and the four core-accounting pages', () => {
     const app = source('src/App.tsx');
-    expect(app.match(/featureKey="inventory" capability="inventory"/g)).toHaveLength(4);
-    for (const name of ['Chart of Accounts', 'Tax', 'Assets', 'Capital', 'Reports']) {
+    expect(app.match(/featureKey="inventory" capability="inventory"/g)).toHaveLength(3);
+    for (const name of ['Chart of Accounts', 'Tax', 'Assets', 'Capital']) {
       expect(app).toContain(`capability="core_accounting" featureName="${name}"`);
+    }
+    for (const path of [
+      '/reports/trial-balance',
+      '/reports/profit-loss',
+      '/reports/balance-sheet',
+      '/reports/cash-flow',
+      '/reports/changes-in-equity',
+      '/reports/revenue-breakdown',
+      '/reports/branch-performance',
+    ]) {
+      expect(app).toContain(`path="${path}"`);
     }
     for (const name of ['Journals', 'Period Management', 'Audit Log', 'Contacts', 'Branches', 'Departments']) {
       expect(app).toContain(`capability="accounting_organisation" featureName="${name}"`);
     }
     expect(app).toContain('<PartnerPlanGate featureKey="payroll" featureName="Payroll">');
+  });
+
+  it('keeps Construction Enterprise-gated and removes the obsolete inventory page route', () => {
+    const app = source('src/App.tsx');
+    const navigation = source('src/components/layout/navConfig.ts');
+
+    expect(app).not.toContain('InventoryPage');
+    expect(app).toContain('path="/construction/*"');
+    expect(app).toContain('minPlan="enterprise" featureName={t(\'navigation.items.constructionWorkspace\')}');
+    expect(app).toContain('<CapabilityGate capability="construction">');
+    expect(navigation).toContain("path: '/construction'");
+    expect(navItemForPath('/construction')?.minPlan).toBe('enterprise');
+    expect(navItemForPath('/construction')?.requiresOrgCapability).toBe('construction');
+  });
+
+  it('requires Enterprise for every current vertical nav item, route, and page', () => {
+    const app = source('src/App.tsx');
+    const construction = NAV_SECTIONS.find((section) => section.labelKey === 'navigation.sections.construction')!;
+    const manufacturing = NAV_SECTIONS.find((section) => section.labelKey === 'navigation.sections.manufacturing')!;
+    const verticalSections = [construction, manufacturing];
+
+    for (const section of verticalSections) {
+      expect(section.minPlan).toBe('enterprise');
+      for (const item of section.items) {
+        expect(item.minPlan).toBe('enterprise');
+        for (const tier of ['free', 'starter', 'growth', 'pro'] as const) {
+          expect(isItemLocked(item, tier, section.minPlan)).toBe(true);
+        }
+        expect(isItemLocked(item, 'enterprise', section.minPlan)).toBe(false);
+      }
+    }
+
+    const routePaths = [
+      '/construction/*',
+      '/manufacturing',
+      '/manufacturing/bom',
+      '/manufacturing/bom/new',
+      '/manufacturing/bom/:id',
+      '/manufacturing/bom/:id/edit',
+      '/manufacturing/production',
+      '/manufacturing/production/new',
+      '/manufacturing/production/:id',
+      '/manufacturing/dashboard',
+    ];
+    for (const path of routePaths) {
+      const start = app.indexOf(`path="${path}"`);
+      expect(start, `${path} route exists`).toBeGreaterThanOrEqual(0);
+      const route = app.slice(start, app.indexOf('/>', start));
+      expect(route).toContain('PlanGate minPlan="enterprise"');
+      expect(route).toContain('CapabilityGate');
+    }
+
+    // The outer RoleRoute encloses both vertical route sets; PlanGate is also
+    // inside each page component so direct component rendering stays protected.
+    const roleGate = app.indexOf('<Route element={<RoleRoute />}>');
+    const constructionRoute = app.indexOf('path="/construction/*"');
+    expect(roleGate).toBeGreaterThanOrEqual(0);
+    expect(roleGate).toBeLessThan(constructionRoute);
+    for (const filename of [
+      'src/pages/construction/ConstructionWorkspacePage.tsx',
+      'src/pages/manufacturing/ManufacturingDashboardPage.tsx',
+      'src/pages/manufacturing/BomListPage.tsx',
+      'src/pages/manufacturing/BomEditorPage.tsx',
+      'src/pages/manufacturing/BomDetailPage.tsx',
+      'src/pages/manufacturing/WorkOrderListPage.tsx',
+      'src/pages/manufacturing/WorkOrderCreatePage.tsx',
+      'src/pages/manufacturing/WorkOrderDetailPage.tsx',
+    ]) {
+      expect(source(filename)).toContain('<PlanGate minPlan="enterprise"');
+    }
   });
 });

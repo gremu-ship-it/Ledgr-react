@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { buildPosSaleQueuePayload, commitPosSaleDocuments } from '../posService';
+import { createInvoiceReceivableEntry } from '../journalService';
 import { repos } from '@/lib/repositories';
 import { realSupabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
@@ -36,6 +37,7 @@ const ACCOUNTS: Record<string, { id: string; code: string; name: string }> = {
   '1110': { id: 'acc-1110', code: '1110', name: 'Cash on Hand' },
   '1125': { id: 'acc-1125', code: '1125', name: 'Mobile Money — Airtel Money' },
   '1131': { id: 'acc-1131', code: '1131', name: 'Trade Debtors' },
+  '1138': { id: 'acc-retention', code: '1138', name: 'Retention Receivable' },
   '2121': { id: 'acc-2121', code: '2121', name: 'VAT Payable' },
   '4112': { id: 'acc-rev', code: '4112', name: 'Service Revenue' },
   '4130': { id: 'acc-4130', code: '4130', name: 'Sales Discounts' },
@@ -223,6 +225,124 @@ describe('POS sale posting integrity', () => {
     // receivable for the full total.
     expect(lineFor(receiptEntry, 'acc-1110', true)?.amount_base).toBe(900);
     expect(lineFor(receiptEntry, 'acc-1131', false)?.amount_base).toBe(900);
+  });
+
+  it('posts a signed credit note as a balanced reversal with non-negative journal amounts', async () => {
+    const creditNote = {
+      id: 'credit-note-1',
+      invoice_type: 'credit_note',
+      invoice_number: 'CN-2026-0001',
+      issue_date: '2026-10-17',
+      currency: 'MWK',
+      original_currency: 'MWK',
+      exchange_rate: 1,
+      functional_amount: -915,
+      subtotal: -900,
+      discount_amount: 100,
+      vat_amount: -15,
+      total_amount: -915,
+      revenue_account_id: 'acc-rev',
+    } as never;
+
+    await createInvoiceReceivableEntry('biz-1', creditNote);
+
+    const call = vi.mocked(repos.journal.createBalancedEntry).mock.calls[0]!;
+    const entry = {
+      header: call[0],
+      lines: call[1] as unknown as CapturedEntry['lines'],
+    } as CapturedEntry;
+    const { debits, credits } = totalsOf(entry);
+
+    expect(entry.header.description).toBe('Credit note CN-2026-0001');
+    expect(debits).toBe(1015);
+    expect(credits).toBe(1015);
+    expect(lineFor(entry, 'acc-1131', false)?.amount_base).toBe(915); // credit receivable
+    expect(lineFor(entry, 'acc-rev', true)?.amount_base).toBe(1000); // debit revenue
+    expect(lineFor(entry, 'acc-4130', false)?.amount_base).toBe(100); // reverse discount
+    expect(lineFor(entry, 'acc-2121', true)?.amount_base).toBe(15); // debit VAT payable
+    expect(entry.lines.every((line) => Number(line.amount) >= 0 && line.amount_base >= 0)).toBe(true);
+  });
+
+  it('posts a construction retention line to Retention Receivable instead of revenue', async () => {
+    const projectInvoice = {
+      id: 'project-invoice-1',
+      invoice_type: 'invoice',
+      invoice_number: 'INV-PROJ-001',
+      issue_date: '2026-10-17',
+      currency: 'MWK',
+      original_currency: 'MWK',
+      exchange_rate: 1,
+      functional_amount: 90,
+      subtotal: 90,
+      discount_amount: 0,
+      vat_amount: 0,
+      total_amount: 90,
+      revenue_account_id: 'acc-rev',
+      project_code: '10000000-0000-4000-8000-000000000001',
+    } as never;
+    vi.spyOn(repos.invoice, 'findByIdWithLines').mockResolvedValue({
+      invoice: projectInvoice,
+      lines: [
+        { account_id: 'acc-rev', description: 'Certified work', line_subtotal: 100, line_total: 100, tax_amount: 0 },
+        { account_id: 'acc-retention', description: 'Retention withheld', line_subtotal: -10, line_total: -10, tax_amount: 0 },
+      ],
+    } as never);
+
+    await createInvoiceReceivableEntry('biz-1', projectInvoice);
+
+    const call = vi.mocked(repos.journal.createBalancedEntry).mock.calls[0]!;
+    const entry = {
+      header: call[0],
+      lines: call[1] as unknown as CapturedEntry['lines'],
+    } as CapturedEntry;
+    const { debits, credits } = totalsOf(entry);
+
+    expect(debits).toBe(100);
+    expect(credits).toBe(100);
+    expect(lineFor(entry, 'acc-1131', true)?.amount_base).toBe(90);
+    expect(lineFor(entry, 'acc-rev', false)?.amount_base).toBe(100);
+    expect(lineFor(entry, 'acc-retention', true)?.amount_base).toBe(10);
+  });
+
+  it('posts a construction credit note with the retention asset reversal intact', async () => {
+    const projectCreditNote = {
+      id: 'project-credit-note-1',
+      invoice_type: 'credit_note',
+      invoice_number: 'CN-PROJ-001',
+      issue_date: '2026-10-17',
+      currency: 'MWK',
+      original_currency: 'MWK',
+      exchange_rate: 1,
+      functional_amount: -90,
+      subtotal: -90,
+      discount_amount: 0,
+      vat_amount: 0,
+      total_amount: -90,
+      revenue_account_id: 'acc-rev',
+      project_code: '10000000-0000-4000-8000-000000000001',
+    } as never;
+    vi.spyOn(repos.invoice, 'findByIdWithLines').mockResolvedValue({
+      invoice: projectCreditNote,
+      lines: [
+        { account_id: 'acc-rev', description: 'Correction to certified work', line_subtotal: 100, line_total: 100, tax_amount: 0 },
+        { account_id: 'acc-retention', description: 'Retention released on correction', line_subtotal: -10, line_total: -10, tax_amount: 0 },
+      ],
+    } as never);
+
+    await createInvoiceReceivableEntry('biz-1', projectCreditNote);
+
+    const call = vi.mocked(repos.journal.createBalancedEntry).mock.calls[0]!;
+    const entry = {
+      header: call[0],
+      lines: call[1] as unknown as CapturedEntry['lines'],
+    } as CapturedEntry;
+    const { debits, credits } = totalsOf(entry);
+
+    expect(debits).toBe(100);
+    expect(credits).toBe(100);
+    expect(lineFor(entry, 'acc-1131', false)?.amount_base).toBe(90);
+    expect(lineFor(entry, 'acc-rev', true)?.amount_base).toBe(100);
+    expect(lineFor(entry, 'acc-retention', false)?.amount_base).toBe(10);
   });
 
   it('posts a credit sale as a receivable, with no cash line and no receipt', async () => {

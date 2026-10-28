@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { ProjectRepository, ReportingRepository } from '@/dal/repositories/ProjectRepository';
 
 import { BusinessRepository } from '@/dal/repositories/BusinessRepository';
 import { JournalRepository } from '@/dal/repositories/JournalRepository';
@@ -16,14 +17,27 @@ import { InventoryRepository } from '@/dal/repositories/InventoryRepository';
 import { IncomeRepository } from '@/dal/repositories/IncomeRepository';
 import { ContactRepository } from '@/dal/repositories/ContactRepository';
 import { BranchRepository } from '@/dal/repositories/BranchRepository';
+import { LocationRepository } from '@/dal/repositories/LocationRepository';
 import { DepartmentRepository } from '@/dal/repositories/DepartmentRepository';
 import { TransferRepository } from '@/dal/repositories/TransferRepository';
 import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PosRepository } from '@/dal/repositories/PosRepository';
+import { constructionProcurementRepository } from '@/dal/repositories/ConstructionProcurementRepository';
+import { ApprovalRepository } from '@/dal/repositories/ApprovalRepository';
 import { BomRepository } from '@/dal/repositories/BomRepository';
 
 export const repos = {
+  projects: new ProjectRepository(),
+  reporting: new ReportingRepository(),
+  /**
+   * Construction procurement: a typed adapter over the construction command
+   * layer (migration 20261021000000). Reads are member-scoped SELECTs; every
+   * write goes through a construction command that authorizes internally.
+   */
+  construction: constructionProcurementRepository,
+  approval: ApprovalRepository,
+  bom: new BomRepository(supabase),
   business:   new BusinessRepository(supabase),
   journal:    new JournalRepository(supabase),
   invoice:    new InvoiceRepository(supabase),
@@ -41,12 +55,17 @@ export const repos = {
   income:     new IncomeRepository(supabase),
   contact:    new ContactRepository(supabase),
   branch:     new BranchRepository(supabase),
+  /**
+   * Inventory locations master data (Settings → Locations, P2-1). Direct
+   * writes under the existing role-aware RLS tier; deactivation carries the
+   * four safety checks and never deletes.
+   */
+  location:   new LocationRepository(supabase),
   department: new DepartmentRepository(supabase),
   transfer:   new TransferRepository(supabase),
   period: new PeriodRepository(supabase),
   auditLog: new AuditLogRepository(supabase),
   pos: new PosRepository(supabase),
-  bom: new BomRepository(supabase),
 };
 
 export type Repositories = typeof repos;

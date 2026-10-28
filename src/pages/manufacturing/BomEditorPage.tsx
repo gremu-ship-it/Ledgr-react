@@ -1,736 +1,401 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronRight, Layers3, LoaderCircle, PackagePlus, Plus, Save, Wrench, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { Lock, Play, Plus, Save, Trash2 } from 'lucide-react';
+import { PlanGate } from '@/components/billing/PlanGate';
+import { CapabilityGate } from '@/components/billing/CapabilityGate';
+import { useCapability } from '@/hooks/useCapability';
 import { useAppStore } from '@/store/useAppStore';
-import { usePermissions } from '@/hooks/usePermissions';
 import { repos } from '@/lib/repositories';
-import type { BomComponentDraft, BomComponentTree, BomVersionTree } from '@/dal/repositories/BomRepository';
+import { supabase } from '@/lib/supabase';
+import type { BomComponentDraft } from '@/dal/repositories/BomRepository';
 import type { Row } from '@/dal/types/database';
 
-interface BomListItem extends Row<'boms'> {
-  versions: Row<'bom_versions'>[];
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const sb = supabase as unknown as { from: (table: string) => any; rpc: (name: string, args: unknown) => any };
 
-interface BomCandidate {
-  bom: Row<'boms'>;
-  versions: Row<'bom_versions'>[];
-}
+type ProductRow = Pick<Row<'products'>, 'id' | 'name' | 'product_type' | 'unit_of_measure' | 'purchase_price'> & {
+  cost_price?: number | null;
+};
+type BomRow = Pick<Row<'manufacturing_boms'>, 'id' | 'business_id' | 'product_id' | 'version' | 'status' | 'bom_locked_at' | 'notes'>;
+type LineForm = {
+  kind: 'product' | 'subassembly';
+  component_product_id: string;
+  component_bom_id: string;
+  quantity: string;
+  unit_of_measure: string;
+  scrap_pct: string;
+  notes: string;
+};
 
-interface EditorComponent extends BomComponentDraft {
-  localId: string;
-  productName?: string;
-  subassemblyName?: string;
-  subassembly?: BomVersionTree | null;
-  product?: BomComponentTree['product'];
-}
+const emptyLine = (kind: LineForm['kind'] = 'product'): LineForm => ({
+  kind, component_product_id: '', component_bom_id: '', quantity: '1', unit_of_measure: '', scrap_pct: '0', notes: '',
+});
 
-type AddMode = 'product' | 'subassembly';
-
-let nextLocalId = 1;
-const localId = () => `bom-component-${nextLocalId++}`;
-const EMPTY_PRODUCTS: Row<'products'>[] = [];
-
-function messageOf(error: unknown): string {
+function getErrorMessage(error: unknown): string {
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return String(error);
 }
 
-function editorComponentFromTree(component: BomComponentTree): EditorComponent {
-  return {
-    localId: localId(),
-    component_product_id: component.component_product_id,
-    component_bom_version_id: component.component_bom_version_id,
-    quantity: component.quantity,
-    unit_of_measure: component.unit_of_measure,
-    scrap_percentage: component.scrap_percentage,
-    sort_order: component.sort_order,
-    notes: component.notes,
-    product: component.product,
-    productName: component.product?.name,
-    subassembly: component.subassembly,
-    subassemblyName: component.subassembly?.bom.name,
-  };
-}
-
-function displayComponentFromTree(component: BomComponentTree): EditorComponent {
-  return {
-    ...editorComponentFromTree(component),
-    subassembly: component.subassembly,
-  };
-}
-
-function ComponentRows({
-  components,
-  businessId,
-  editable,
-  onQuantityChange,
-  onRemove,
-  t,
-}: {
-  components: EditorComponent[];
-  businessId: string;
-  editable: boolean;
-  onQuantityChange?: (id: string, quantity: string) => void;
-  onRemove?: (id: string) => void;
-  t: ReturnType<typeof useTranslation>['t'];
-}) {
-  if (!components.length) {
-    return <p className="px-4 py-5 text-sm text-gray-500">{t('manufacturing.bom.noComponents')}</p>;
-  }
-
-  return (
-    <div className="divide-y divide-gray-100">
-      {components.map((component) => (
-        <ComponentRow
-          key={component.localId}
-          component={component}
-          businessId={businessId}
-          editable={editable}
-          onQuantityChange={onQuantityChange}
-          onRemove={onRemove}
-          t={t}
-          depth={0}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ComponentRow({
-  component,
-  businessId,
-  editable,
-  onQuantityChange,
-  onRemove,
-  t,
-  depth,
-}: {
-  component: EditorComponent;
-  businessId: string;
-  editable: boolean;
-  onQuantityChange?: (id: string, quantity: string) => void;
-  onRemove?: (id: string) => void;
-  t: ReturnType<typeof useTranslation>['t'];
-  depth: number;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasSubassembly = Boolean(component.component_bom_version_id);
-  const nestedTree = useQuery({
-    queryKey: ['manufacturing', 'bom-version-tree', businessId, component.component_bom_version_id],
-    queryFn: () => repos.bom.getVersionTree(businessId, component.component_bom_version_id!),
-    enabled: expanded && hasSubassembly && !component.subassembly,
-  });
-  const subassembly = component.subassembly ?? nestedTree.data ?? null;
-  const childRows = subassembly?.components.map(displayComponentFromTree) ?? [];
-  const title = hasSubassembly
-    ? component.subassemblyName ?? subassembly?.bom.name ?? t('manufacturing.bom.subAssembly')
-    : component.productName ?? component.product?.name ?? t('manufacturing.bom.rawMaterial');
-  const rowLabel = hasSubassembly ? t('manufacturing.bom.subAssembly') : t('manufacturing.bom.rawMaterial');
-
-  return (
-    <div className="bg-white">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3" style={{ paddingInlineStart: `${16 + depth * 18}px` }}>
-        {hasSubassembly ? (
-          <button
-            type="button"
-            aria-label={t(expanded ? 'manufacturing.bom.collapseSubassembly' : 'manufacturing.bom.expandSubassembly')}
-            aria-expanded={expanded}
-            onClick={() => setExpanded((value) => !value)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
-          >
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </button>
-        ) : (
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-50 text-gray-400">
-            <Wrench className="h-4 w-4" aria-hidden="true" />
-          </span>
-        )}
-        <div className="min-w-[140px] flex-1">
-          <p className="font-medium text-gray-900">{title}</p>
-          <p className="text-xs text-gray-500">{rowLabel}{component.product?.sku ? ` · ${component.product.sku}` : ''}</p>
-        </div>
-        <label className="flex items-center gap-2 text-xs text-gray-500">
-          <span>{t('manufacturing.bom.quantityPerUnit')}</span>
-          <input
-            aria-label={`${t('manufacturing.bom.quantityPerUnit')}: ${title}`}
-            type="number"
-            min="0.000001"
-            step="any"
-            value={component.quantity}
-            disabled={!editable}
-            onChange={(event) => onQuantityChange?.(component.localId, event.target.value)}
-            className="w-24 rounded-lg border border-gray-200 px-2.5 py-2 text-sm text-gray-900 disabled:bg-gray-50 disabled:text-gray-600"
-          />
-        </label>
-        <span className="min-w-12 text-sm text-gray-500">{component.unit_of_measure}</span>
-        {editable && onRemove && (
-          <button
-            type="button"
-            aria-label={t('manufacturing.bom.removeComponent')}
-            onClick={() => onRemove(component.localId)}
-            className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600"
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
-      </div>
-      {expanded && hasSubassembly && (
-        <div className="border-s-2 border-brand-100 bg-gray-50/70" style={{ marginInlineStart: `${24 + depth * 18}px` }}>
-          {nestedTree.isLoading ? (
-            <p className="px-4 py-3 text-sm text-gray-500">{t('common.loading')}</p>
-          ) : nestedTree.error ? (
-            <p className="px-4 py-3 text-sm text-red-600">{t('manufacturing.bom.errors.loadFailed')}</p>
-          ) : !childRows.length ? (
-            <p className="px-4 py-3 text-sm text-gray-500">{t('manufacturing.bom.noComponents')}</p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {childRows.map((child) => (
-                <ComponentRow
-                  key={child.localId}
-                  component={child}
-                  businessId={businessId}
-                  editable={false}
-                  t={t}
-                  depth={depth + 1}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AddComponentDialog({
-  mode,
-  products,
-  candidates,
-  currentBomId,
-  onClose,
-  onAdd,
-}: {
-  mode: AddMode;
-  products: Row<'products'>[];
-  candidates: BomCandidate[];
-  currentBomId: string | null;
-  onClose: () => void;
-  onAdd: (component: EditorComponent) => void;
-}) {
-  const { t } = useTranslation();
-  const [productId, setProductId] = useState('');
-  const [bomId, setBomId] = useState('');
-  const [versionId, setVersionId] = useState('');
-  const [quantity, setQuantity] = useState('1');
-  const [unit, setUnit] = useState('ea');
-  const [scrap, setScrap] = useState('0');
-  const [error, setError] = useState('');
-  const selectableBoms = candidates.filter((candidate) => candidate.bom.id !== currentBomId);
-  const selectedCandidate = selectableBoms.find((candidate) => candidate.bom.id === bomId);
-  const preferredVersion = selectedCandidate?.versions.find((version) => version.status === 'active') ?? selectedCandidate?.versions[0];
-  const effectiveVersionId = versionId || preferredVersion?.id || '';
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const parsedQuantity = Number(quantity);
-    const parsedScrap = Number(scrap);
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      setError(t('manufacturing.bom.errors.positiveQuantity'));
-      return;
-    }
-    if (!Number.isFinite(parsedScrap) || parsedScrap < 0 || parsedScrap >= 100) {
-      setError(t('manufacturing.bom.errors.invalidScrap'));
-      return;
-    }
-    if (mode === 'product') {
-      const product = products.find((item) => item.id === productId);
-      if (!product) {
-        setError(t('manufacturing.bom.errors.requiredComponent'));
-        return;
-      }
-      onAdd({
-        localId: localId(), component_product_id: product.id, component_bom_version_id: null,
-        quantity: parsedQuantity, unit_of_measure: unit || product.unit_of_measure || 'ea',
-        scrap_percentage: Number.isFinite(parsedScrap) ? parsedScrap : 0,
-        sort_order: 0, notes: null, product, productName: product.name,
-      });
-      return;
-    }
-    if (!selectedCandidate) {
-      setError(t('manufacturing.bom.errors.requiredComponent'));
-      return;
-    }
-    if (!effectiveVersionId) {
-      setError(t('manufacturing.bom.errors.requiredVersion'));
-      return;
-    }
-    onAdd({
-      localId: localId(), component_product_id: null, component_bom_version_id: effectiveVersionId,
-      quantity: parsedQuantity, unit_of_measure: unit || selectedCandidate.bom.unit_of_measure || 'ea',
-      scrap_percentage: Number.isFinite(parsedScrap) ? parsedScrap : 0,
-      sort_order: 0, notes: null,
-      subassemblyName: selectedCandidate.bom.name,
-      subassembly: null,
-    });
-  }
-
-  const label = mode === 'product' ? t('manufacturing.bom.addComponent') : t('manufacturing.bom.addSubassembly');
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-gray-950/40 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <form onSubmit={submit} className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl sm:p-6" aria-label={label}>
-        <div className="mb-5 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
-            <p className="mt-1 text-sm text-gray-500">{t('manufacturing.bom.quantityPerUnit')}</p>
-          </div>
-          <button type="button" onClick={onClose} aria-label={t('common.close')} className="rounded-lg p-2 text-gray-400 hover:bg-gray-100">
-            <X className="h-5 w-5" aria-hidden="true" />
-          </button>
-        </div>
-
-        {mode === 'product' ? (
-          <label className="mb-4 block text-sm font-medium text-gray-700">
-            {t('manufacturing.bom.selectProduct')}
-            <select value={productId} onChange={(event) => { const id = event.target.value; setProductId(id); setUnit(products.find((product) => product.id === id)?.unit_of_measure || 'ea'); }} className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-normal">
-              <option value="">{t('manufacturing.bom.selectProduct')}</option>
-              {products.map((product) => <option key={product.id} value={product.id}>{product.name}{product.sku ? ` · ${product.sku}` : ''}</option>)}
-            </select>
-          </label>
-        ) : (
-          <>
-            <label className="mb-4 block text-sm font-medium text-gray-700">
-              {t('manufacturing.bom.selectSubassembly')}
-              <select value={bomId} onChange={(event) => { setBomId(event.target.value); setVersionId(''); }} className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-normal">
-                <option value="">{t('manufacturing.bom.selectSubassembly')}</option>
-                {selectableBoms.map(({ bom }) => <option key={bom.id} value={bom.id}>{bom.code} — {bom.name}</option>)}
-              </select>
-            </label>
-            <label className="mb-4 block text-sm font-medium text-gray-700">
-              {t('manufacturing.bom.selectSubassemblyVersion')}
-              <select value={effectiveVersionId} onChange={(event) => setVersionId(event.target.value)} disabled={!selectedCandidate} className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 font-normal disabled:bg-gray-50">
-                <option value="">{t('manufacturing.bom.selectVersion')}</option>
-                {selectedCandidate?.versions.map((version) => <option key={version.id} value={version.id}>{t('manufacturing.bom.versionNumber', { number: version.version_number })}{version.version_label ? ` · ${version.version_label}` : ''} · {t(`manufacturing.bom.${version.status}`)}</option>)}
-              </select>
-            </label>
-          </>
-        )}
-
-        <div className="grid grid-cols-2 gap-3">
-          <label className="text-sm font-medium text-gray-700">
-            {t('manufacturing.bom.quantityPerUnit')}
-            <input type="number" min="0.000001" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 font-normal" />
-          </label>
-          <label className="text-sm font-medium text-gray-700">
-            {t('manufacturing.bom.unit')}
-            <input value={unit} onChange={(event) => setUnit(event.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 font-normal" />
-          </label>
-        </div>
-        <label className="mt-3 block text-sm font-medium text-gray-700">
-          {t('manufacturing.bom.scrapPercentage')}
-          <input type="number" min="0" max="99.999" step="any" value={scrap} onChange={(event) => setScrap(event.target.value)} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 font-normal" />
-        </label>
-        {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
-        <div className="mt-6 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100">{t('common.cancel')}</button>
-          <button type="submit" className="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">{t('manufacturing.bom.addToBom')}</button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 export function BomEditorPage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.manufacturing">
+      <BomEditorPageContent />
+    </PlanGate>
+  );
+}
+
+function BomEditorPageContent() {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const currentBusiness = useAppStore((state) => state.currentBusiness);
-  const businessId = currentBusiness?.business?.id ?? '';
-  const { canWrite } = usePermissions();
-  const [selectedBomId, setSelectedBomId] = useState<string | null>(null);
-  const [selectedVersionId, setSelectedVersionId] = useState('');
-  const [header, setHeader] = useState({ code: '', name: '', productId: '', versionLabel: '1' });
-  const [draftComponents, setDraftComponents] = useState<EditorComponent[]>([]);
-  const [editing, setEditing] = useState(false);
-  const editorEnabled = canWrite && editing;
-  const [isNewBom, setIsNewBom] = useState(false);
-  const [addMode, setAddMode] = useState<AddMode | null>(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const loadedVersionId = useRef('');
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEdit = Boolean(id);
+  const businessId = useAppStore((state) => state.currentBusiness?.business?.id);
+  const hasManufacturing = useCapability('manufacturing');
 
-  const bomsQuery = useQuery({
-    queryKey: ['manufacturing', 'boms', businessId],
-    queryFn: async (): Promise<BomListItem[]> => {
-      const boms = await repos.bom.listBoms(businessId);
-      return Promise.all(boms.map(async (bom) => ({ ...bom, versions: await repos.bom.listVersions(businessId, bom.id) })));
-    },
-    enabled: Boolean(businessId),
-  });
-  const productsQuery = useQuery({
-    queryKey: ['manufacturing', 'products', businessId],
-    queryFn: () => repos.inventory.findAllProducts(businessId),
-    enabled: Boolean(businessId),
-  });
-  const candidatesQuery = useQuery({
-    queryKey: ['manufacturing', 'subassembly-candidates', businessId],
-    queryFn: async (): Promise<BomCandidate[]> => {
-      const boms = await repos.bom.listBoms(businessId);
-      return Promise.all(boms.map(async (bom) => ({ bom, versions: await repos.bom.listVersions(businessId, bom.id) })));
-    },
-    enabled: Boolean(businessId),
-  });
-  const selectedTreeQuery = useQuery({
-    queryKey: ['manufacturing', 'bom-version-tree', businessId, selectedVersionId],
-    queryFn: () => repos.bom.getVersionTree(businessId, selectedVersionId),
-    enabled: Boolean(businessId && selectedVersionId),
-  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [outputProductId, setOutputProductId] = useState('');
+  const [notes, setNotes] = useState('');
+  const [version, setVersion] = useState(1);
+  const [status, setStatus] = useState('draft');
+  const [lockedAt, setLockedAt] = useState<string | null>(null);
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [boms, setBoms] = useState<BomRow[]>([]);
+  const [subassemblyCosts, setSubassemblyCosts] = useState<Record<string, number>>({});
+  const [lines, setLines] = useState<LineForm[]>([]);
 
-  const boms = bomsQuery.data ?? [];
-  const products = productsQuery.data ?? EMPTY_PRODUCTS;
-  const candidates = candidatesQuery.data ?? [];
-  const selectedBom = boms.find((bom) => bom.id === selectedBomId) ?? null;
-  const selectedTree = selectedTreeQuery.data;
-  const activeVersionId = selectedBom?.versions.find((version) => version.status === 'active')?.id ?? '';
-  const activeTreeQuery = useQuery({
-    queryKey: ['manufacturing', 'bom-version-tree', businessId, activeVersionId],
-    queryFn: () => repos.bom.getVersionTree(businessId, activeVersionId),
-    enabled: Boolean(businessId && activeVersionId && selectedBomId),
-  });
-  const productById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
-  const currentVersion = selectedTree;
+  const productsById = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const bomsById = useMemo(() => new Map(boms.map((bom) => [bom.id, bom])), [boms]);
+  const isLocked = Boolean(lockedAt);
+  const canEdit = !isLocked && (!isEdit || status === 'draft');
+
+  const totalCost = useMemo(() => lines.reduce((total, line) => {
+    const quantity = Number(line.quantity);
+    const scrap = Number(line.scrap_pct || 0);
+    if (!Number.isFinite(quantity) || !Number.isFinite(scrap)) return total;
+    const unitCost = line.kind === 'subassembly'
+      ? subassemblyCosts[line.component_bom_id] ?? 0
+      : Number(productsById.get(line.component_product_id)?.cost_price ?? productsById.get(line.component_product_id)?.purchase_price ?? 0);
+    return total + quantity * (1 + scrap / 100) * unitCost;
+  }, 0), [lines, productsById, subassemblyCosts]);
 
   useEffect(() => {
-    if (!selectedTree || loadedVersionId.current === selectedVersionId) return;
-    loadedVersionId.current = selectedVersionId;
-    setSelectedBomId(selectedTree.bom_id);
-    setHeader({
-      code: selectedTree.bom.code,
-      name: selectedTree.bom.name,
-      productId: selectedTree.bom.product_id,
-      versionLabel: selectedTree.version_label ?? String(selectedTree.version_number),
-    });
-    setDraftComponents(selectedTree.components.map(editorComponentFromTree));
-    setEditing(false);
-    setIsNewBom(false);
-    setError('');
-  }, [selectedTree, selectedVersionId]);
+    if (!businessId) return;
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const [productsResult, bomsResult] = await Promise.all([
+          sb.from('products')
+            .select('id,name,product_type,unit_of_measure,purchase_price,cost_price')
+            .eq('business_id', businessId)
+            .neq('product_type', 'service')
+            .order('name'),
+          sb.from('manufacturing_boms')
+            .select('id,business_id,product_id,version,status,bom_locked_at,notes')
+            .eq('business_id', businessId)
+            .order('version', { ascending: false }),
+        ]);
+        if (productsResult.error) throw productsResult.error;
+        if (bomsResult.error) throw bomsResult.error;
+        if (cancelled) return;
+        const loadedProducts = (productsResult.data ?? []) as ProductRow[];
+        const loadedBoms = (bomsResult.data ?? []) as BomRow[];
+        setProducts(loadedProducts);
+        setBoms(loadedBoms);
+        const costPairs = await Promise.all(loadedBoms.map(async (bom) => {
+          const result = await sb.rpc('manufacturing_bom_cost', { p_bom_id: bom.id });
+          return [bom.id, result.error ? 0 : Number(result.data ?? 0)] as const;
+        }));
+        if (cancelled) return;
+        setSubassemblyCosts(Object.fromEntries(costPairs));
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!businessId) throw new Error('Missing business');
-      if (!header.code.trim()) throw new Error('requiredCode');
-      if (!header.name.trim()) throw new Error('requiredName');
-      if (!header.productId) throw new Error('requiredProduct');
-      const components: BomComponentDraft[] = draftComponents.map((component, index) => {
-        const quantity = Number(component.quantity);
-        if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('positiveQuantity');
-        return {
-          component_product_id: component.component_product_id,
-          component_bom_version_id: component.component_bom_version_id,
-          quantity,
-          unit_of_measure: component.unit_of_measure || 'ea',
-          scrap_percentage: Number(component.scrap_percentage) || 0,
-          sort_order: index,
-          notes: component.notes,
-        };
-      });
-      return repos.bom.saveVersion({
+        if (id) {
+          const tree = await repos.bom.getVersionTree(businessId!, id);
+          if (cancelled) return;
+          setOutputProductId(tree.product_id);
+          setNotes(tree.notes ?? '');
+          setVersion(tree.version);
+          setStatus(tree.status);
+          setLockedAt(tree.bom_locked_at);
+          setLines(tree.components.map((line) => ({
+            kind: line.component_bom_id ? 'subassembly' : 'product',
+            component_product_id: line.component_product_id ?? '',
+            component_bom_id: line.component_bom_id ?? '',
+            quantity: String(line.quantity),
+            unit_of_measure: line.unit_of_measure ?? '',
+            scrap_pct: String(line.scrap_pct ?? 0),
+            notes: line.notes ?? '',
+          })));
+        } else {
+          setLines([]);
+        }
+      } catch {
+        if (!cancelled) setError(t('manufacturing.bom.errors.loadFailed'));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [businessId, id, t]);
+
+  function updateLine(index: number, patch: Partial<LineForm>) {
+    if (!canEdit) return;
+    setLines((current) => current.map((line, lineIndex) => {
+      if (lineIndex !== index) return line;
+      const next = { ...line, ...patch };
+      if (patch.kind === 'product') next.component_bom_id = '';
+      if (patch.kind === 'subassembly') next.component_product_id = '';
+      if (patch.component_product_id) {
+        next.kind = 'product';
+        next.component_bom_id = '';
+        const product = productsById.get(patch.component_product_id);
+        if (!line.unit_of_measure && product?.unit_of_measure) next.unit_of_measure = product.unit_of_measure;
+      }
+      if (patch.component_bom_id) {
+        next.kind = 'subassembly';
+        next.component_product_id = '';
+      }
+      return next;
+    }));
+  }
+
+  function validate(): string | null {
+    if (!outputProductId) return t('manufacturing.bom.errors.requiredProduct');
+    const seen = new Set<string>();
+    for (const line of lines) {
+      const productId = line.kind === 'product' ? line.component_product_id || null : null;
+      const componentBomId = line.kind === 'subassembly' ? line.component_bom_id || null : null;
+      if ((!productId && !componentBomId) || (productId && componentBomId)) {
+        return t('manufacturing.bom.errors.requiredComponent');
+      }
+      const componentProductId = productId ?? bomsById.get(componentBomId!)?.product_id;
+      if (componentProductId === outputProductId) return t('manufacturing.bom.circularRef');
+      const identity = productId ? `product:${productId}` : `bom:${componentBomId}`;
+      if (seen.has(identity)) return t('manufacturing.bom.errors.duplicateComponent');
+      seen.add(identity);
+      const quantity = Number(line.quantity);
+      const scrap = Number(line.scrap_pct || 0);
+      if (!Number.isFinite(quantity) || quantity <= 0) return t('manufacturing.bom.errors.positiveQuantity');
+      if (!Number.isFinite(scrap) || scrap < 0 || scrap >= 100) return t('manufacturing.bom.errors.invalidScrap');
+    }
+    return null;
+  }
+
+  async function handleSave() {
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (!businessId) {
+      setError(t('manufacturing.bom.errors.noBusiness'));
+      return;
+    }
+    if (isEdit && !canEdit) {
+      setError(isLocked ? t('manufacturing.bom.lockedMessage') : t('manufacturing.bom.readOnlyVersion'));
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const components: BomComponentDraft[] = lines.map((line) => ({
+        component_product_id: line.kind === 'product' ? line.component_product_id || null : null,
+        component_bom_id: line.kind === 'subassembly' ? line.component_bom_id || null : null,
+        quantity: Number(line.quantity),
+        unit_of_measure: line.unit_of_measure || null,
+        scrap_pct: Number(line.scrap_pct || 0),
+        notes: line.notes || null,
+      }));
+      const savedId = await repos.bom.saveVersion({
         businessId,
-        bomId: selectedBomId,
-        code: header.code.trim(),
-        name: header.name.trim(),
-        productId: header.productId,
-        versionLabel: header.versionLabel.trim() || null,
+        bomId: isEdit ? id! : null,
+        productId: outputProductId,
+        notes: notes || null,
         components,
       });
-    },
-    onSuccess: async (versionId) => {
-      setSuccess(t('manufacturing.bom.saved'));
-      setError('');
-      setEditing(false);
-      setIsNewBom(false);
-      setSelectedVersionId(versionId);
-      loadedVersionId.current = '';
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['manufacturing', 'boms', businessId] }),
-        queryClient.invalidateQueries({ queryKey: ['manufacturing', 'subassembly-candidates', businessId] }),
-      ]);
-    },
-    onError: (cause) => {
-      const reason = messageOf(cause);
-      const validationKey = ['requiredCode', 'requiredName', 'requiredProduct', 'positiveQuantity'].find((key) => reason === key);
-      if (validationKey) {
-        setError(t(`manufacturing.bom.errors.${validationKey}`));
-      } else if (/BOM cycle detected/i.test(reason)) {
-        const candidate = draftComponents.find((component) => component.component_bom_version_id);
-        const candidateName = candidate?.subassemblyName
-          ?? candidates.find((option) => option.versions.some((version) => version.id === candidate?.component_bom_version_id))?.bom.name
-          ?? t('manufacturing.bom.errors.unknownSubassembly');
-        setError(t('manufacturing.bom.errors.cycleError', { bomName: candidateName }));
-      } else {
-        setError(t('manufacturing.bom.errors.saveFailed'));
-      }
-      setSuccess('');
-    },
-  });
-
-  const activateMutation = useMutation({
-    mutationFn: () => {
-      if (!businessId || !selectedVersionId) throw new Error('Missing BOM version');
-      return repos.bom.activateVersion(businessId, selectedVersionId);
-    },
-    onSuccess: async () => {
-      setError('');
-      setSuccess(t('manufacturing.bom.activated'));
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['manufacturing', 'boms', businessId] }),
-        queryClient.invalidateQueries({ queryKey: ['manufacturing', 'subassembly-candidates', businessId] }),
-        queryClient.invalidateQueries({ queryKey: ['manufacturing', 'bom-version-tree', businessId] }),
-      ]);
-      loadedVersionId.current = '';
-      await selectedTreeQuery.refetch();
-    },
-    onError: () => {
-      setError(t('manufacturing.bom.errors.activateFailed'));
-      setSuccess('');
-    },
-  });
-
-  function openBom(bom: BomListItem) {
-    loadedVersionId.current = '';
-    setError('');
-    setSuccess('');
-    setIsNewBom(false);
-    setSelectedBomId(bom.id);
-    const version = bom.versions.find((candidate) => candidate.status === 'active') ?? bom.versions[0];
-    setSelectedVersionId(version?.id ?? '');
-    if (!version) {
-      setHeader({ code: bom.code, name: bom.name, productId: bom.product_id, versionLabel: '1' });
-      setDraftComponents([]);
-      setEditing(canWrite);
+      navigate(`/manufacturing/bom/${savedId}`);
+    } catch (saveError: unknown) {
+      const message = getErrorMessage(saveError);
+      setError(/cycle|circular/i.test(message) ? t('manufacturing.bom.errors.cycleDetected') : t('manufacturing.bom.errors.saveFailed'));
+    } finally {
+      setSaving(false);
     }
   }
 
-  function startNewBom() {
-    loadedVersionId.current = '';
-    setSelectedBomId(null);
-    setSelectedVersionId('');
-    setHeader({ code: '', name: '', productId: '', versionLabel: '1' });
-    setDraftComponents([]);
-    setIsNewBom(true);
-    setEditing(true);
-    setError('');
-    setSuccess('');
+  async function handleActivate() {
+    if (!id) return;
+    if (!businessId) {
+      setError(t('manufacturing.bom.errors.noBusiness'));
+      return;
+    }
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setActivating(true);
+    setError(null);
+    try {
+      const savedId = await repos.bom.saveVersion({
+        businessId,
+        bomId: id,
+        productId: outputProductId,
+        notes: notes || null,
+        components: lines.map((line) => ({
+          component_product_id: line.kind === 'product' ? line.component_product_id || null : null,
+          component_bom_id: line.kind === 'subassembly' ? line.component_bom_id || null : null,
+          quantity: Number(line.quantity),
+          unit_of_measure: line.unit_of_measure || null,
+          scrap_pct: Number(line.scrap_pct || 0),
+          notes: line.notes || null,
+        })),
+      });
+      await repos.bom.activateVersion(savedId);
+      navigate(`/manufacturing/bom/${savedId}`);
+    } catch (activateError: unknown) {
+      const message = getErrorMessage(activateError);
+      setError(/cycle|circular/i.test(message) ? t('manufacturing.bom.errors.cycleDetected') : t('manufacturing.bom.errors.activateFailed'));
+    } finally {
+      setActivating(false);
+    }
   }
 
-  function startNewVersion() {
-    const base = activeTreeQuery.data ?? (!activeVersionId ? selectedTree : currentVersion?.status === 'active' ? currentVersion : null);
-    if (!base) return;
-    setDraftComponents(base.components.map(editorComponentFromTree));
-    setHeader((value) => ({
-      ...value,
-      versionLabel: String(Math.max(...(selectedBom?.versions.map((version) => version.version_number) ?? [base.version_number])) + 1),
-    }));
-    setEditing(true);
-    setError('');
-    setSuccess('');
+  if (!hasManufacturing) {
+    return <CapabilityGate capability="manufacturing"><div /></CapabilityGate>;
   }
 
-  function addComponent(component: EditorComponent) {
-    setDraftComponents((items) => [...items, { ...component, sort_order: items.length }]);
-    setAddMode(null);
-    setError('');
+  if (loading && businessId) {
+    return <div className="mx-auto max-w-[1200px] px-4 py-6"><div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">{t('common.loading')}</div></div>;
   }
 
-  const outputProducts = products.filter((product) => product.product_type !== 'service');
-  const selectedProductName = productById.get(header.productId)?.name;
-  const currentStatus = currentVersion?.status;
-  const canActivate = Boolean(canWrite && currentVersion?.status === 'draft' && !editing);
-  const canCloneVersion = Boolean(canWrite && selectedBomId && currentVersion && (!activeVersionId || activeTreeQuery.data || currentVersion.status === 'active'));
+  const selectedBomIds = new Set(lines.map((line) => line.component_bom_id).filter(Boolean));
+  const subassemblyOptions = boms.filter((bom) =>
+    (bom.product_id !== outputProductId || selectedBomIds.has(bom.id))
+      && (bom.status === 'active' || selectedBomIds.has(bom.id)),
+  );
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
-            <Layers3 className="h-4 w-4" aria-hidden="true" />
-            {t('navigation.sections.manufacturing')}
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('manufacturing.bom.title')}</h1>
-          <p className="mt-1 text-sm text-gray-500">{t('manufacturing.bom.subtitle')}</p>
+    <div className="mx-auto max-w-[1200px] px-4 py-6">
+      <header className="mb-5">
+        <div className="flex items-center gap-2">
+          <Link to="/manufacturing/bom" className="text-sm text-gray-500 hover:text-gray-700">{t('manufacturing.bom.title')}</Link>
+          <span className="text-gray-300">/</span>
+          <h1 className="text-xl font-semibold text-gray-900">{isEdit ? t('manufacturing.bom.edit') : t('manufacturing.bom.create')}</h1>
         </div>
-        {canWrite && <button type="button" onClick={startNewBom} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
-          <Plus className="h-4 w-4" aria-hidden="true" />{t('manufacturing.bom.newBom')}
-        </button>}
-      </div>
-
-      {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-      {success && <div role="status" className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.8fr)_minmax(0,1.7fr)]">
-        <aside className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 px-4 py-4">
-            <h2 className="font-semibold text-gray-900">{t('manufacturing.bom.title')}</h2>
+        {isLocked && (
+          <div role="alert" className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" data-testid="locked-banner">
+            <Lock className="h-4 w-4" />{t('manufacturing.bom.lockedMessage')}
           </div>
-          {bomsQuery.isLoading ? (
-            <p className="px-4 py-6 text-sm text-gray-500">{t('manufacturing.bom.loading')}</p>
-          ) : bomsQuery.error ? (
-            <p className="px-4 py-6 text-sm text-red-600">{t('manufacturing.bom.errors.loadFailed')}</p>
-          ) : !boms.length ? (
-            <div className="p-5">
-              <p className="text-sm text-gray-500">{t('manufacturing.bom.noBoms')}</p>
-              {canWrite && <button type="button" onClick={startNewBom} className="mt-3 text-sm font-semibold text-brand-700 hover:text-brand-800">{t('manufacturing.bom.createFirst')}</button>}
+        )}
+        {isEdit && status !== 'draft' && !isLocked && (
+          <p className="mt-3 text-sm text-gray-600">{t('manufacturing.bom.readOnlyVersion')}</p>
+        )}
+      </header>
+
+      {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{error}</div>}
+
+      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="bom-output-product">{t('manufacturing.bom.outputProduct')} *</label>
+            <select id="bom-output-product" value={outputProductId} onChange={(event) => setOutputProductId(event.target.value)} disabled={!canEdit || isEdit} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100" data-testid="output-product-select">
+              <option value="">{t('common.none')}</option>
+              {products.map((product) => <option key={product.id} value={product.id}>{product.name} — {product.product_type}</option>)}
+            </select>
+            {isEdit && <p className="mt-1 text-xs text-gray-500">{t('manufacturing.bom.version')}: v{version} ({t(`manufacturing.bom.status.${status}`)})</p>}
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="bom-notes">{t('common.details')}</label>
+            <textarea id="bom-notes" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={!canEdit} rows={3} placeholder={t('manufacturing.bom.notesPlaceholder')} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100" />
+          </div>
+        </div>
+
+        <section className="mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">{t('manufacturing.bom.component')}</h2>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setLines((current) => [...current, emptyLine()])} disabled={!canEdit} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" data-testid="add-component-button"><Plus className="h-4 w-4" />{t('manufacturing.bom.addComponent')}</button>
+              <button type="button" onClick={() => setLines((current) => [...current, emptyLine('subassembly')])} disabled={!canEdit || !subassemblyOptions.length} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50" data-testid="add-subassembly-button"><Plus className="h-4 w-4" />{t('manufacturing.bom.addSubassembly')}</button>
             </div>
+          </div>
+
+          {!lines.length ? (
+            <p className="rounded-lg border border-dashed border-gray-300 px-4 py-6 text-center text-sm text-gray-500">{t('manufacturing.bom.noComponents')}</p>
           ) : (
-            <ul className="max-h-[70vh] divide-y divide-gray-100 overflow-y-auto">
-              {boms.map((bom) => {
-                const activeVersion = bom.versions.find((version) => version.status === 'active');
-                const product = productById.get(bom.product_id);
+            <div className="space-y-3">
+              {lines.map((line, index) => {
+                const isSubassembly = line.kind === 'subassembly';
+                const selectedBom = bomsById.get(line.component_bom_id);
+                const selectedProduct = productsById.get(line.component_product_id);
+                const componentProduct = selectedBom ? productsById.get(selectedBom.product_id) : selectedProduct;
                 return (
-                  <li key={bom.id}>
-                    <button
-                      type="button"
-                      onClick={() => openBom(bom)}
-                      aria-current={selectedBomId === bom.id ? 'page' : undefined}
-                      className={`w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 ${selectedBomId === bom.id ? 'bg-brand-50' : ''}`}
-                    >
-                      <span className="flex items-center justify-between gap-2">
-                        <span className="truncate font-semibold text-gray-900">{bom.code} · {bom.name}</span>
-                        <span className="shrink-0 text-xs text-gray-500">{activeVersion ? t('manufacturing.bom.versionNumber', { number: activeVersion.version_number }) : t('manufacturing.bom.noVersion')}</span>
-                      </span>
-                      <span className="mt-1 block truncate text-xs text-gray-500">{product?.name ?? ''}</span>
-                    </button>
-                  </li>
+                  <div key={`${index}-${isSubassembly ? 'bom' : 'product'}`} className="grid grid-cols-12 gap-3 rounded-xl border border-gray-200 p-3" data-testid={`bom-line-${index}`}>
+                    <div className="col-span-12 md:col-span-2">
+                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`line-${index}-kind`}>{t('manufacturing.bom.componentType')}</label>
+                      <select id={`line-${index}-kind`} value={line.kind} onChange={(event) => updateLine(index, { kind: event.target.value as LineForm['kind'], component_product_id: '', component_bom_id: '' })} disabled={!canEdit} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100" data-testid={`line-${index}-kind`}>
+                        <option value="product">{t('manufacturing.bom.rawMaterial')}</option>
+                        <option value="subassembly">{t('manufacturing.bom.subAssembly')}</option>
+                      </select>
+                    </div>
+                    <div className="col-span-12 md:col-span-4">
+                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`line-${index}-component`}>{t('manufacturing.bom.component')} *</label>
+                      {isSubassembly ? (
+                        <select id={`line-${index}-component`} value={line.component_bom_id} onChange={(event) => updateLine(index, { component_bom_id: event.target.value })} disabled={!canEdit} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100" data-testid={`line-${index}-component`}>
+                          <option value="">{t('manufacturing.bom.selectSubassembly')}</option>
+                          {subassemblyOptions.map((bom) => <option key={bom.id} value={bom.id}>{productsById.get(bom.product_id)?.name ?? bom.product_id} — v{bom.version}</option>)}
+                        </select>
+                      ) : (
+                        <select id={`line-${index}-component`} value={line.component_product_id} onChange={(event) => updateLine(index, { component_product_id: event.target.value })} disabled={!canEdit} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100" data-testid={`line-${index}-component`}>
+                          <option value="">{t('common.none')}</option>
+                          {products.filter((product) => product.id !== outputProductId).map((product) => <option key={product.id} value={product.id}>{product.name} — {product.product_type}</option>)}
+                        </select>
+                      )}
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`line-${index}-quantity`}>{t('manufacturing.bom.quantity')} *</label>
+                      <input id={`line-${index}-quantity`} type="number" min="0" step="any" value={line.quantity} onChange={(event) => updateLine(index, { quantity: event.target.value })} disabled={!canEdit} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100" data-testid={`line-${index}-quantity`} />
+                    </div>
+                    <div className="col-span-4 md:col-span-2">
+                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`line-${index}-uom`}>{t('manufacturing.bom.unitOfMeasure')}</label>
+                      <input id={`line-${index}-uom`} type="text" value={line.unit_of_measure} onChange={(event) => updateLine(index, { unit_of_measure: event.target.value })} disabled={!canEdit} placeholder={componentProduct?.unit_of_measure ?? ''} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100" data-testid={`line-${index}-uom`} />
+                    </div>
+                    <div className="col-span-4 md:col-span-1">
+                      <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor={`line-${index}-scrap`}>{t('manufacturing.bom.scrapPercent')}</label>
+                      <input id={`line-${index}-scrap`} type="number" min="0" max="99" step="any" value={line.scrap_pct} onChange={(event) => updateLine(index, { scrap_pct: event.target.value })} disabled={!canEdit} className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100" data-testid={`line-${index}-scrap`} />
+                    </div>
+                    <div className="col-span-12 flex items-center justify-between gap-2">
+                      <input type="text" aria-label={t('manufacturing.bom.notes')} value={line.notes} onChange={(event) => updateLine(index, { notes: event.target.value })} disabled={!canEdit} placeholder={t('manufacturing.bom.notesPlaceholder')} className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-1.5 text-sm disabled:bg-gray-100" />
+                      <button type="button" onClick={() => setLines((current) => current.filter((_, i) => i !== index))} disabled={!canEdit} className="inline-flex items-center justify-center rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50 disabled:opacity-50" aria-label={t('manufacturing.bom.removeComponent')}><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  </div>
                 );
               })}
-            </ul>
-          )}
-        </aside>
-
-        <section className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {!selectedBomId && !isNewBom ? (
-            <div className="flex min-h-72 flex-col items-center justify-center p-8 text-center">
-              <PackagePlus className="mb-3 h-9 w-9 text-gray-300" aria-hidden="true" />
-              <p className="text-sm text-gray-500">{t('manufacturing.bom.noBoms')}</p>
-              {canWrite && <button type="button" onClick={startNewBom} className="mt-4 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white">{t('manufacturing.bom.createFirst')}</button>}
             </div>
-          ) : (
-            <>
-              <div className="border-b border-gray-100 p-4 sm:p-5">
-                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{t('manufacturing.bom.title')}</p>
-                    <h2 className="mt-1 text-lg font-semibold text-gray-900">{header.name || t('manufacturing.bom.newBom')}</h2>
-                  </div>
-                  {selectedBomId && selectedBom && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="sr-only" htmlFor="bom-version-select">{t('manufacturing.bom.selectVersion')}</label>
-                      <select
-                        id="bom-version-select"
-                        value={selectedVersionId}
-                        onChange={(event) => { loadedVersionId.current = ''; setSelectedVersionId(event.target.value); setError(''); setSuccess(''); }}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-                      >
-                        <option value="">{t('manufacturing.bom.selectVersion')}</option>
-                        {selectedBom.versions.map((version) => <option key={version.id} value={version.id}>{t('manufacturing.bom.versionNumber', { number: version.version_number })}{version.version_label ? ` · ${version.version_label}` : ''} · {t(`manufacturing.bom.${version.status}`)}</option>)}
-                      </select>
-                      {currentStatus && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${currentStatus === 'active' ? 'bg-green-50 text-green-700' : currentStatus === 'draft' ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-600'}`}>{t(`manufacturing.bom.${currentStatus}`)}</span>}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <label className="text-xs font-semibold text-gray-500">
-                    {t('manufacturing.bom.code')}
-                    <input value={header.code} disabled={!editorEnabled} onChange={(event) => setHeader((value) => ({ ...value, code: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-normal text-gray-900 disabled:bg-gray-50 disabled:text-gray-600" />
-                  </label>
-                  <label className="text-xs font-semibold text-gray-500">
-                    {t('manufacturing.bom.name')}
-                    <input value={header.name} disabled={!editorEnabled} onChange={(event) => setHeader((value) => ({ ...value, name: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-normal text-gray-900 disabled:bg-gray-50 disabled:text-gray-600" />
-                  </label>
-                  <label className="text-xs font-semibold text-gray-500">
-                    {t('manufacturing.bom.outputProduct')}
-                    <select value={header.productId} disabled={!editorEnabled || Boolean(selectedBomId)} onChange={(event) => setHeader((value) => ({ ...value, productId: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-normal text-gray-900 disabled:bg-gray-50 disabled:text-gray-600">
-                      <option value="">{t('manufacturing.bom.selectOutputProduct')}</option>
-                      {outputProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
-                    </select>
-                  </label>
-                  <label className="text-xs font-semibold text-gray-500">
-                    {t('manufacturing.bom.versionLabel')}
-                    <input value={header.versionLabel} disabled={!editorEnabled} onChange={(event) => setHeader((value) => ({ ...value, versionLabel: event.target.value }))} className="mt-1.5 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-normal text-gray-900 disabled:bg-gray-50 disabled:text-gray-600" />
-                  </label>
-                </div>
-                {selectedProductName && <p className="mt-2 text-xs text-gray-400">{t('manufacturing.bom.listProduct')}: {selectedProductName}</p>}
-              </div>
-
-              <div>
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 sm:px-5">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{t('manufacturing.bom.component')}</h3>
-                    <p className="mt-0.5 text-xs text-gray-500">{t('manufacturing.bom.quantityPerUnit')}</p>
-                  </div>
-                  {editorEnabled && (
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => setAddMode('product')} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
-                        <Plus className="h-3.5 w-3.5" aria-hidden="true" />{t('manufacturing.bom.addComponent')}
-                      </button>
-                      <button type="button" onClick={() => setAddMode('subassembly')} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
-                        <Layers3 className="h-3.5 w-3.5" aria-hidden="true" />{t('manufacturing.bom.addSubassembly')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {selectedTreeQuery.isLoading && !editing ? (
-                  <div className="flex items-center gap-2 px-4 py-8 text-sm text-gray-500"><LoaderCircle className="h-4 w-4 animate-spin" />{t('manufacturing.bom.loading')}</div>
-                ) : (
-                  <ComponentRows
-                    components={draftComponents}
-                    businessId={businessId}
-                    editable={editorEnabled}
-                    t={t}
-                    onQuantityChange={(id, quantity) => setDraftComponents((items) => items.map((item) => item.localId === id ? { ...item, quantity: Number(quantity) || 0 } : item))}
-                    onRemove={(id) => setDraftComponents((items) => items.filter((item) => item.localId !== id))}
-                  />
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 p-4 sm:p-5">
-                <div className="flex flex-wrap gap-2">
-                  {canWrite && selectedBomId && currentVersion && !editing && (
-                    <button type="button" onClick={startNewVersion} disabled={!canCloneVersion} className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">{t('manufacturing.bom.newVersion')}</button>
-                  )}
-                  {canActivate && (
-                    <button
-                      type="button"
-                      onClick={() => { if (window.confirm(t('manufacturing.bom.confirmActivate'))) activateMutation.mutate(); }}
-                      disabled={activateMutation.isPending}
-                      className="rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 hover:bg-green-100 disabled:opacity-50"
-                    >{t('manufacturing.bom.activateVersion')}</button>
-                  )}
-                </div>
-                {editorEnabled && (
-                  <button type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60">
-                    {saveMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
-                    {t('manufacturing.bom.saveVersion')}
-                  </button>
-                )}
-              </div>
-            </>
           )}
         </section>
-      </div>
 
-      {addMode && canWrite && (
-        <AddComponentDialog
-          mode={addMode}
-          products={products}
-          candidates={candidates}
-          currentBomId={selectedBomId}
-          onClose={() => setAddMode(null)}
-          onAdd={addComponent}
-        />
-      )}
+        <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3">
+          <div className="flex items-center justify-between"><span className="text-sm font-medium text-gray-700">{t('manufacturing.bom.totalCost')}</span><span className="text-sm font-semibold text-gray-900" data-testid="total-cost">{totalCost.toFixed(2)} MWK</span></div>
+          <p className="mt-1 text-xs text-gray-500">{t('manufacturing.bom.costPerUnitNote')}</p>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          {canEdit ? <>
+            <button type="button" onClick={() => void handleSave()} disabled={saving || activating} className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50" data-testid="save-bom-button"><Save className="h-4 w-4" />{saving ? t('common.loading') : t('manufacturing.bom.saveVersion')}</button>
+            {isEdit && status === 'draft' && <button type="button" onClick={() => void handleActivate()} disabled={saving || activating || !lines.length} className="inline-flex items-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50" data-testid="activate-bom-button"><Play className="h-4 w-4" />{activating ? t('common.loading') : t('manufacturing.bom.activate')}</button>}
+          </> : <p className="text-sm text-amber-700">{t(isLocked ? 'manufacturing.bom.lockedMessage' : 'manufacturing.bom.readOnlyVersion')}</p>}
+          <Link to={isEdit ? `/manufacturing/bom/${id}` : '/manufacturing/bom'} className="inline-flex items-center gap-2 rounded-xl border border-gray-300 px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">{t('common.back')}</Link>
+        </div>
+      </div>
     </div>
   );
 }
+
+export default BomEditorPage;

@@ -6,6 +6,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 import { getHomePathForRole } from '@/hooks/usePermissions';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 
 /** Chrome for the partner admin portal (admin.ledgr.com). */
 export function PartnerAdminLayout() {
@@ -19,7 +20,8 @@ export function PartnerAdminLayout() {
   // back to. When the portal is opened from the main app (via the user menu)
   // the user must be able to return without closing the app.
   const showBackToApp = !isAdminPortalHost() && Boolean(currentBusiness);
-  const backPath = getHomePathForRole(currentBusiness?.role || null);
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
+  const backPath = getHomePathForRole(currentBusiness?.role || null, isOrgCapabilityEnabled);
 
   const links = id
     ? [

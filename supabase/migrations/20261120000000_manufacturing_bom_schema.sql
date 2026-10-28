@@ -1,174 +1,54 @@
--- Versioned, tenant-scoped bill of materials with nested sub-assemblies.
-CREATE TABLE public.boms (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
-  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
-  code text NOT NULL,
-  name text NOT NULL,
-  description text,
-  unit_of_measure text NOT NULL DEFAULT 'ea',
-  is_active boolean NOT NULL DEFAULT true,
-  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT boms_business_code_unique UNIQUE (business_id, code),
-  CONSTRAINT boms_code_not_blank CHECK (length(btrim(code)) > 0),
-  CONSTRAINT boms_name_not_blank CHECK (length(btrim(name)) > 0)
-);
+-- Extend the versioned Manufacturing BOM schema introduced in
+-- 20261104000000_manufacturing_bom.sql with version-specific sub-assemblies.
+-- BOM line quantities always mean the quantity required for exactly ONE unit
+-- of the parent BOM output.
 
-CREATE INDEX boms_business_product_idx ON public.boms (business_id, product_id);
+ALTER TABLE public.manufacturing_bom_lines
+  ADD COLUMN IF NOT EXISTS component_bom_id uuid
+    REFERENCES public.manufacturing_boms(id) ON DELETE RESTRICT;
 
-CREATE TABLE public.bom_versions (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
-  bom_id uuid NOT NULL REFERENCES public.boms(id) ON DELETE CASCADE,
-  version_number integer NOT NULL CHECK (version_number > 0),
-  version_label text,
-  status text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
-  effective_from date,
-  effective_to date,
-  notes text,
-  created_by uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT bom_versions_bom_number_unique UNIQUE (bom_id, version_number),
-  CONSTRAINT bom_versions_effective_dates_check CHECK (
-    effective_from IS NULL OR effective_to IS NULL OR effective_to >= effective_from
-  )
-);
+ALTER TABLE public.manufacturing_bom_lines
+  ALTER COLUMN component_product_id DROP NOT NULL;
 
-CREATE INDEX bom_versions_business_bom_idx ON public.bom_versions (business_id, bom_id, version_number DESC);
-CREATE UNIQUE INDEX bom_versions_one_active_per_bom_idx
-  ON public.bom_versions (bom_id) WHERE status = 'active';
+ALTER TABLE public.manufacturing_bom_lines
+  DROP CONSTRAINT IF EXISTS manufacturing_bom_lines_exactly_one_component;
 
-CREATE TABLE public.bom_components (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  business_id uuid NOT NULL REFERENCES public.businesses(id) ON DELETE CASCADE,
-  bom_version_id uuid NOT NULL REFERENCES public.bom_versions(id) ON DELETE CASCADE,
-  component_product_id uuid REFERENCES public.products(id) ON DELETE RESTRICT,
-  component_bom_version_id uuid REFERENCES public.bom_versions(id) ON DELETE RESTRICT,
-  quantity numeric NOT NULL CHECK (quantity > 0),
-  unit_of_measure text NOT NULL DEFAULT 'ea',
-  scrap_percentage numeric NOT NULL DEFAULT 0 CHECK (scrap_percentage >= 0 AND scrap_percentage < 100),
-  sort_order integer NOT NULL DEFAULT 0,
-  notes text,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT bom_components_exactly_one_reference CHECK (
-    (component_product_id IS NOT NULL AND component_bom_version_id IS NULL)
-    OR (component_product_id IS NULL AND component_bom_version_id IS NOT NULL)
-  )
-);
+ALTER TABLE public.manufacturing_bom_lines
+  ADD CONSTRAINT manufacturing_bom_lines_exactly_one_component CHECK (
+    (component_product_id IS NOT NULL AND component_bom_id IS NULL)
+    OR (component_product_id IS NULL AND component_bom_id IS NOT NULL)
+  );
 
-CREATE INDEX bom_components_version_order_idx ON public.bom_components (bom_version_id, sort_order, id);
-CREATE INDEX bom_components_product_idx ON public.bom_components (business_id, component_product_id) WHERE component_product_id IS NOT NULL;
-CREATE INDEX bom_components_subassembly_idx ON public.bom_components (business_id, component_bom_version_id) WHERE component_bom_version_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_manufacturing_bom_lines_subassembly
+  ON public.manufacturing_bom_lines(component_bom_id)
+  WHERE component_bom_id IS NOT NULL;
 
-COMMENT ON COLUMN public.bom_components.quantity IS
-  'Component quantity required to produce exactly one output unit of the parent BOM.';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_manufacturing_bom_lines_unique_subassembly
+  ON public.manufacturing_bom_lines(bom_id, component_bom_id)
+  WHERE component_bom_id IS NOT NULL;
 
-ALTER TABLE public.boms ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bom_versions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.bom_components ENABLE ROW LEVEL SECURITY;
+COMMENT ON COLUMN public.manufacturing_bom_lines.component_bom_id IS
+  'Specific BOM version used as a sub-assembly; quantities are per one parent output unit.';
 
-CREATE POLICY "boms_select_member" ON public.boms
-  FOR SELECT USING (public.is_business_member(business_id));
-CREATE POLICY "boms_insert_member" ON public.boms
-  FOR INSERT WITH CHECK (public.is_business_member(business_id));
-CREATE POLICY "boms_update_member" ON public.boms
-  FOR UPDATE USING (public.is_business_member(business_id))
-  WITH CHECK (public.is_business_member(business_id));
-CREATE POLICY "boms_delete_member" ON public.boms
-  FOR DELETE USING (public.is_business_member(business_id));
-
-CREATE POLICY "bom_versions_select_member" ON public.bom_versions
-  FOR SELECT USING (public.is_business_member(business_id));
-CREATE POLICY "bom_versions_insert_member" ON public.bom_versions
-  FOR INSERT WITH CHECK (public.is_business_member(business_id));
-CREATE POLICY "bom_versions_update_member" ON public.bom_versions
-  FOR UPDATE USING (public.is_business_member(business_id))
-  WITH CHECK (public.is_business_member(business_id));
-CREATE POLICY "bom_versions_delete_member" ON public.bom_versions
-  FOR DELETE USING (public.is_business_member(business_id));
-
-CREATE POLICY "bom_components_select_member" ON public.bom_components
-  FOR SELECT USING (public.is_business_member(business_id));
-CREATE POLICY "bom_components_insert_member" ON public.bom_components
-  FOR INSERT WITH CHECK (public.is_business_member(business_id));
-CREATE POLICY "bom_components_update_member" ON public.bom_components
-  FOR UPDATE USING (public.is_business_member(business_id))
-  WITH CHECK (public.is_business_member(business_id));
-CREATE POLICY "bom_components_delete_member" ON public.bom_components
-  FOR DELETE USING (public.is_business_member(business_id));
-
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.boms TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.bom_versions TO authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.bom_components TO authenticated;
-
-CREATE OR REPLACE FUNCTION public.validate_bom_business_product()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM public.products p
-    WHERE p.id = NEW.product_id AND p.business_id = NEW.business_id
-  ) THEN
-    RAISE EXCEPTION 'BOM output product must belong to the same business'
-      USING ERRCODE = '23514';
-  END IF;
-  IF TG_OP = 'UPDATE' AND NEW.product_id IS DISTINCT FROM OLD.product_id AND EXISTS (
-    SELECT 1 FROM public.bom_versions v WHERE v.bom_id = OLD.id
-  ) THEN
-    RAISE EXCEPTION 'The output product cannot be changed after BOM versions exist'
-      USING ERRCODE = '55000';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER boms_validate_business_product
-  BEFORE INSERT OR UPDATE OF business_id, product_id ON public.boms
-  FOR EACH ROW EXECUTE FUNCTION public.validate_bom_business_product();
-
-CREATE OR REPLACE FUNCTION public.validate_bom_version_business()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM public.boms b
-    WHERE b.id = NEW.bom_id AND b.business_id = NEW.business_id
-  ) THEN
-    RAISE EXCEPTION 'BOM version must belong to the same business as its BOM'
-      USING ERRCODE = '23514';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-CREATE TRIGGER bom_versions_validate_business
-  BEFORE INSERT OR UPDATE OF business_id, bom_id ON public.bom_versions
-  FOR EACH ROW EXECUTE FUNCTION public.validate_bom_version_business();
-
-CREATE OR REPLACE FUNCTION public.validate_bom_component()
+CREATE OR REPLACE FUNCTION public.validate_manufacturing_bom_line()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_parent_bom_id uuid;
+  v_parent_business_id uuid;
+  v_parent_product_id uuid;
   v_parent_status text;
-  v_child_bom_id uuid;
-  v_cycle_found boolean;
+  v_old_parent_status text;
+  v_child_business_id uuid;
+  v_child_product_id uuid;
+  v_cycle_found boolean := false;
 BEGIN
   IF TG_OP = 'DELETE' THEN
-    SELECT v.status INTO v_parent_status
-    FROM public.bom_versions v
-    WHERE v.id = OLD.bom_version_id AND v.business_id = OLD.business_id;
+    SELECT b.status INTO v_parent_status
+    FROM public.manufacturing_boms b
+    WHERE b.id = OLD.bom_id;
     IF v_parent_status IS DISTINCT FROM 'draft' THEN
       RAISE EXCEPTION 'Components can only be changed on draft BOM versions'
         USING ERRCODE = '55000';
@@ -176,23 +56,28 @@ BEGIN
     RETURN OLD;
   END IF;
 
-  SELECT v.bom_id, v.status INTO v_parent_bom_id, v_parent_status
-  FROM public.bom_versions v
-  WHERE v.id = NEW.bom_version_id AND v.business_id = NEW.business_id;
-  IF v_parent_bom_id IS NULL THEN
-    RAISE EXCEPTION 'BOM component version must belong to the same business'
-      USING ERRCODE = '23514';
+  SELECT b.business_id, b.product_id, b.status
+    INTO v_parent_business_id, v_parent_product_id, v_parent_status
+  FROM public.manufacturing_boms b
+  WHERE b.id = NEW.bom_id;
+  IF v_parent_business_id IS NULL THEN
+    RAISE EXCEPTION 'BOM line must reference a valid BOM version'
+      USING ERRCODE = '23503';
   END IF;
   IF v_parent_status IS DISTINCT FROM 'draft' THEN
     RAISE EXCEPTION 'Components can only be changed on draft BOM versions'
       USING ERRCODE = '55000';
   END IF;
 
-  IF TG_OP = 'UPDATE' THEN
-    SELECT v.status INTO v_parent_status
-    FROM public.bom_versions v
-    WHERE v.id = OLD.bom_version_id AND v.business_id = OLD.business_id;
-    IF v_parent_status IS DISTINCT FROM 'draft' THEN
+  -- Serialize graph edits per business so concurrent writes cannot each pass
+  -- a cycle check against an incomplete view of the other transaction.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_parent_business_id::text, 0));
+
+  IF TG_OP = 'UPDATE' AND OLD.bom_id IS DISTINCT FROM NEW.bom_id THEN
+    SELECT b.status INTO v_old_parent_status
+    FROM public.manufacturing_boms b
+    WHERE b.id = OLD.bom_id;
+    IF v_old_parent_status IS DISTINCT FROM 'draft' THEN
       RAISE EXCEPTION 'Components can only be changed on draft BOM versions'
         USING ERRCODE = '55000';
     END IF;
@@ -200,39 +85,57 @@ BEGIN
 
   IF NEW.component_product_id IS NOT NULL AND NOT EXISTS (
     SELECT 1 FROM public.products p
-    WHERE p.id = NEW.component_product_id AND p.business_id = NEW.business_id
+    WHERE p.id = NEW.component_product_id
+      AND p.business_id = v_parent_business_id
   ) THEN
     RAISE EXCEPTION 'BOM component product must belong to the same business'
       USING ERRCODE = '23514';
   END IF;
+  IF NEW.component_product_id = v_parent_product_id THEN
+    RAISE EXCEPTION 'BOM cycle detected: a product cannot contain itself'
+      USING ERRCODE = '23514';
+  END IF;
 
-  IF NEW.component_bom_version_id IS NOT NULL THEN
-    SELECT v.bom_id INTO v_child_bom_id
-    FROM public.bom_versions v
-    WHERE v.id = NEW.component_bom_version_id AND v.business_id = NEW.business_id;
-    IF v_child_bom_id IS NULL THEN
-      RAISE EXCEPTION 'Sub-assembly version must belong to the same business'
+  IF NEW.component_bom_id IS NOT NULL THEN
+    SELECT b.business_id, b.product_id
+      INTO v_child_business_id, v_child_product_id
+    FROM public.manufacturing_boms b
+    WHERE b.id = NEW.component_bom_id;
+
+    IF v_child_business_id IS NULL OR v_child_business_id <> v_parent_business_id THEN
+      RAISE EXCEPTION 'Sub-assembly BOM must belong to the same business'
         USING ERRCODE = '23514';
     END IF;
 
-    WITH RECURSIVE subassembly_versions(version_id, bom_id, path) AS (
-      SELECT v.id, v.bom_id, ARRAY[v.id]
-      FROM public.bom_versions v
-      WHERE v.id = NEW.component_bom_version_id AND v.business_id = NEW.business_id
+    -- Compare output products (not version IDs), so an earlier version of the
+    -- same product cannot be used to bypass self-reference protection.
+    IF v_child_product_id = v_parent_product_id THEN
+      RAISE EXCEPTION 'BOM cycle detected: a product cannot contain itself'
+        USING ERRCODE = '23514';
+    END IF;
+
+    WITH RECURSIVE reachable(product_id, bom_id, path) AS (
+      SELECT child.product_id, child.id, ARRAY[child.product_id]::uuid[]
+      FROM public.manufacturing_boms child
+      WHERE child.id = NEW.component_bom_id
+        AND child.business_id = v_parent_business_id
       UNION ALL
-      SELECT child.id, child.bom_id, graph.path || child.id
-      FROM subassembly_versions graph
-      JOIN public.bom_components c ON c.bom_version_id = graph.version_id
-      JOIN public.bom_versions child ON child.id = c.component_bom_version_id
-        AND child.business_id = NEW.business_id
-      WHERE NOT child.id = ANY(graph.path)
+      SELECT next_bom.product_id, next_bom.id, reachable.path || next_bom.product_id
+      FROM reachable
+      JOIN public.manufacturing_bom_lines line
+        ON line.bom_id = reachable.bom_id
+       AND line.component_bom_id IS NOT NULL
+      JOIN public.manufacturing_boms next_bom
+        ON next_bom.id = line.component_bom_id
+       AND next_bom.business_id = v_parent_business_id
+      WHERE NOT next_bom.product_id = ANY(reachable.path)
     )
     SELECT EXISTS (
-      SELECT 1 FROM subassembly_versions graph WHERE graph.bom_id = v_parent_bom_id
+      SELECT 1 FROM reachable WHERE product_id = v_parent_product_id
     ) INTO v_cycle_found;
 
     IF v_cycle_found THEN
-      RAISE EXCEPTION 'BOM cycle detected: version % references itself through sub-assemblies', NEW.bom_version_id
+      RAISE EXCEPTION 'BOM cycle detected: sub-assembly would create a circular reference'
         USING ERRCODE = '23514';
     END IF;
   END IF;
@@ -241,10 +144,95 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER bom_components_validate_integrity
-  BEFORE INSERT OR UPDATE OR DELETE ON public.bom_components
-  FOR EACH ROW EXECUTE FUNCTION public.validate_bom_component();
+DROP TRIGGER IF EXISTS trg_manufacturing_bom_lines_validate ON public.manufacturing_bom_lines;
+CREATE TRIGGER trg_manufacturing_bom_lines_validate
+  BEFORE INSERT OR UPDATE OR DELETE ON public.manufacturing_bom_lines
+  FOR EACH ROW EXECUTE FUNCTION public.validate_manufacturing_bom_line();
 
-CREATE TRIGGER boms_set_updated_at
-  BEFORE UPDATE ON public.boms
-  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+REVOKE ALL ON FUNCTION public.validate_manufacturing_bom_line() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.validate_manufacturing_bom_line() TO authenticated;
+
+-- The upstream BOM policies query business_members directly, but that view is
+-- intentionally not granted to authenticated. Use definer-only membership
+-- predicates instead of exposing the membership view/table to browser roles.
+CREATE OR REPLACE FUNCTION public._manufacturing_bom_member(p_business_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT public.is_business_member(p_business_id);
+$$;
+
+CREATE OR REPLACE FUNCTION public._manufacturing_bom_writer(p_business_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.business_users bu
+    WHERE bu.business_id = p_business_id
+      AND bu.user_id = auth.uid()
+      AND bu.is_active IS TRUE
+      AND bu.role::text IN ('owner', 'admin', 'manager')
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public._manufacturing_bom_member(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public._manufacturing_bom_writer(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public._manufacturing_bom_member(uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public._manufacturing_bom_writer(uuid) TO authenticated, service_role;
+
+DROP POLICY IF EXISTS manufacturing_boms_member_read ON public.manufacturing_boms;
+CREATE POLICY manufacturing_boms_member_read
+  ON public.manufacturing_boms FOR SELECT TO authenticated
+  USING (public._manufacturing_bom_member(business_id));
+
+DROP POLICY IF EXISTS manufacturing_boms_member_write ON public.manufacturing_boms;
+CREATE POLICY manufacturing_boms_member_write
+  ON public.manufacturing_boms FOR ALL TO authenticated
+  USING (public._manufacturing_bom_writer(business_id))
+  WITH CHECK (public._manufacturing_bom_writer(business_id));
+
+DROP POLICY IF EXISTS manufacturing_bom_lines_member_read ON public.manufacturing_bom_lines;
+CREATE POLICY manufacturing_bom_lines_member_read
+  ON public.manufacturing_bom_lines FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.manufacturing_boms b
+    WHERE b.id = bom_id AND public._manufacturing_bom_member(b.business_id)
+  ));
+
+DROP POLICY IF EXISTS manufacturing_bom_lines_member_write ON public.manufacturing_bom_lines;
+CREATE POLICY manufacturing_bom_lines_member_write
+  ON public.manufacturing_bom_lines FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.manufacturing_boms b
+    WHERE b.id = bom_id AND public._manufacturing_bom_writer(b.business_id)
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.manufacturing_boms b
+    WHERE b.id = bom_id AND public._manufacturing_bom_writer(b.business_id)
+  ));
+
+DO $verify$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'manufacturing_bom_lines'
+      AND column_name = 'component_bom_id'
+  ) THEN
+    RAISE EXCEPTION 'Manufacturing BOM sub-assembly column is missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'public.manufacturing_bom_lines'::regclass
+      AND conname = 'manufacturing_bom_lines_exactly_one_component'
+  ) THEN
+    RAISE EXCEPTION 'Manufacturing BOM component reference constraint is missing';
+  END IF;
+END
+$verify$;
