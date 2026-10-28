@@ -136,7 +136,7 @@ function ComputedLineRow({
   locale: string;
   label: string;
 }) {
-  const emphasis = line.key === 'netIncome';
+  const emphasis = line.key === 'netProfit';
   const tone = emphasis
     ? line.amount > 0 ? 'bg-emerald-50 text-emerald-900' : line.amount < 0 ? 'bg-red-50 text-red-900' : 'bg-gray-50 text-gray-900'
     : 'bg-white text-gray-900';
@@ -208,11 +208,11 @@ export function ProfitLossPage() {
       t('reports.shared.section'),
       t('reports.shared.accountCode'),
       t('reports.shared.accountName'),
-      t('reports.profitLoss.current'),
+      t('reports.pnl.current'),
       ...(comparePrior ? [
-        t('reports.profitLoss.prior'),
-        t('reports.profitLoss.variance'),
-        t('reports.profitLoss.variancePct'),
+        t('reports.pnl.prior'),
+        t('reports.pnl.variance'),
+        t('reports.pnl.variancePct'),
       ] : []),
     ];
     const csvRows: (string | number | null)[][] = [];
@@ -238,18 +238,20 @@ export function ProfitLossPage() {
         ]);
       }
 
-      const computedKey = section.key === 'cogs'
+      const computedKey = section.key === 'costOfSales'
         ? 'grossProfit'
-        : section.key === 'operatingExpenses'
-          ? 'operatingIncome'
-          : section.key === 'otherExpenses'
-            ? 'netIncome'
-            : null;
+        : section.key === 'depreciationAmortisation'
+          ? 'operatingProfit'
+          : section.key === 'financeCosts'
+            ? 'profitBeforeTax'
+            : section.key === 'taxExpense'
+              ? 'netProfit'
+              : null;
       if (computedKey !== null) {
         const computedLine = currentLines.get(computedKey);
         if (computedLine) {
-          const label = computedKey === 'netIncome' && computedLine.amount < 0
-            ? t('reports.profitLoss.netLoss')
+          const label = computedKey === 'netProfit' && computedLine.amount < 0
+            ? t('reports.pnl.netLoss')
             : t(computedLine.labelKey);
           csvRows.push([
             '',
@@ -271,8 +273,8 @@ export function ProfitLossPage() {
   const renderComputedLine = (key: PnlComputedLine['key']) => {
     const line = currentLines.get(key);
     if (!line) return null;
-    const label = key === 'netIncome' && line.amount < 0
-      ? t('reports.profitLoss.netLoss')
+    const label = key === 'netProfit' && line.amount < 0
+      ? t('reports.pnl.netLoss')
       : t(line.labelKey);
     return (
       <ComputedLineRow
@@ -312,7 +314,7 @@ export function ProfitLossPage() {
                 onChange={(event) => setComparePrior(event.target.checked)}
                 className="h-4 w-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
               />
-              {t('reports.profitLoss.comparePrior')}
+              {t('reports.pnl.comparePrior')}
             </label>
             <button
               type="button"
@@ -363,13 +365,13 @@ export function ProfitLossPage() {
             <table className="report-table w-full min-w-[640px] border-collapse text-sm">
               <thead className="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
                 <tr>
-                  <th scope="col" className="px-4 py-3 text-left">{t('reports.profitLoss.account')}</th>
-                  <th scope="col" className="px-3 py-3 text-right">{t('reports.profitLoss.current')}</th>
+                  <th scope="col" className="px-4 py-3 text-left">{t('reports.pnl.account')}</th>
+                  <th scope="col" className="px-3 py-3 text-right">{t('reports.pnl.current')}</th>
                   {comparePrior && (
                     <>
-                      <th scope="col" className="px-3 py-3 text-right">{t('reports.profitLoss.prior')}</th>
-                      <th scope="col" className="px-3 py-3 text-right">{t('reports.profitLoss.variance')}</th>
-                      <th scope="col" className="px-3 py-3 text-right">{t('reports.profitLoss.variancePct')}</th>
+                      <th scope="col" className="px-3 py-3 text-right">{t('reports.pnl.prior')}</th>
+                      <th scope="col" className="px-3 py-3 text-right">{t('reports.pnl.variance')}</th>
+                      <th scope="col" className="px-3 py-3 text-right">{t('reports.pnl.variancePct')}</th>
                     </>
                   )}
                 </tr>
@@ -380,9 +382,10 @@ export function ProfitLossPage() {
                   return (
                     <Fragment key={section.key}>
                       <SectionRows section={section} priorSection={priorSection} comparePrior={comparePrior} locale={i18n.language} />
-                      {section.key === 'cogs' && renderComputedLine('grossProfit')}
-                      {section.key === 'operatingExpenses' && renderComputedLine('operatingIncome')}
-                      {section.key === 'otherExpenses' && renderComputedLine('netIncome')}
+                      {section.key === 'costOfSales' && renderComputedLine('grossProfit')}
+                      {section.key === 'depreciationAmortisation' && renderComputedLine('operatingProfit')}
+                      {section.key === 'financeCosts' && renderComputedLine('profitBeforeTax')}
+                      {section.key === 'taxExpense' && renderComputedLine('netProfit')}
                     </Fragment>
                   );
                 })}

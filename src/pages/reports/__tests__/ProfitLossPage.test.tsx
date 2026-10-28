@@ -97,13 +97,28 @@ describe('ProfitLossPage', () => {
     mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => reportRows(params));
     renderPage();
 
-    const netIncomeRow = (await screen.findByText('reports.profitLoss.netIncome')).closest('tr');
+    const netIncomeRow = (await screen.findByText('reports.pnl.netProfit')).closest('tr');
     expect(netIncomeRow).not.toBeNull();
     const cells = within(netIncomeRow!).getAllByRole('cell');
     expect(cells.map((cell) => cell.textContent)).toEqual(['615.00', '625.00', '(10.00)', '(1.6%)']);
-    expect(screen.getByText('reports.profitLoss.revenue')).toBeTruthy();
-    expect(screen.getByText('reports.profitLoss.lessCogs')).toBeTruthy();
+    expect(screen.getByText('reports.pnl.revenue')).toBeTruthy();
+    expect(screen.getByText('reports.pnl.costOfSales')).toBeTruthy();
     expect(screen.getByText('Contract Revenue')).toBeTruthy();
+    const presentationLines = [...screen.getByRole('table').querySelectorAll('tbody tr.section-header, tbody tr.computed-line')]
+      .map((element) => element.querySelector('th')?.textContent);
+    expect(presentationLines).toEqual([
+      'reports.pnl.revenue',
+      'reports.pnl.costOfSales',
+      'reports.pnl.grossProfit',
+      'reports.pnl.otherIncome',
+      'reports.pnl.operatingExpenses',
+      'reports.pnl.depreciationAmortisation',
+      'reports.pnl.operatingProfit',
+      'reports.pnl.financeCosts',
+      'reports.pnl.profitBeforeTax',
+      'reports.pnl.taxExpense',
+      'reports.pnl.netProfit',
+    ]);
     expect(mocks.getTrialBalance).toHaveBeenCalledTimes(2);
     expect(mocks.getTrialBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       businessId: 'business-1',
@@ -122,7 +137,7 @@ describe('ProfitLossPage', () => {
   it('uses the matching prior calendar quarter when the quarter preset is selected', async () => {
     mocks.getTrialBalance.mockImplementation(async () => currentRows);
     renderPage();
-    await screen.findByText('reports.profitLoss.netIncome');
+    await screen.findByText('reports.pnl.netProfit');
 
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.thisQuarter' }));
     const quarter = periodForPreset('thisQuarter');
@@ -155,11 +170,11 @@ describe('ProfitLossPage', () => {
   it('hides comparison columns when the toggle is turned off', async () => {
     mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => reportRows(params));
     renderPage();
-    await screen.findByText('reports.profitLoss.netIncome');
+    await screen.findByText('reports.pnl.netProfit');
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'reports.profitLoss.comparePrior' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'reports.pnl.comparePrior' }));
     await waitFor(() => {
-      expect(screen.queryByRole('columnheader', { name: 'reports.profitLoss.prior' })).toBeNull();
+      expect(screen.queryByRole('columnheader', { name: 'reports.pnl.prior' })).toBeNull();
       expect(screen.getAllByRole('columnheader')).toHaveLength(2);
     });
   });
@@ -170,7 +185,7 @@ describe('ProfitLossPage', () => {
       params.branchId ? branchRows : reportRows(params)
     ));
     renderPage();
-    await screen.findByText('reports.profitLoss.netIncome');
+    await screen.findByText('reports.pnl.netProfit');
     fireEvent.change(screen.getByLabelText('reports.shared.branch'), { target: { value: 'branch-1' } });
 
     await waitFor(() => {
@@ -180,28 +195,28 @@ describe('ProfitLossPage', () => {
     await screen.findByText('Branch Sales');
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
     const csv = mocks.downloadFile.mock.calls[0][0] as string;
-    expect(csv).toContain('reports.profitLoss.revenue,4114,Branch Sales,77.00,77.00,0.00,0.00');
+    expect(csv).toContain('reports.pnl.revenue,4114,Branch Sales,77.00,77.00,0.00,0.00');
     expect(csv).not.toContain('Contract Revenue');
   });
 
   it('exports section totals, accounts, computed lines, and the enabled comparison columns', async () => {
     mocks.getTrialBalance.mockImplementation(async (_client: unknown, params: TrialBalanceParams) => reportRows(params));
     renderPage();
-    await screen.findByText('reports.profitLoss.netIncome');
+    await screen.findByText('reports.pnl.netProfit');
 
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
     let csv = mocks.downloadFile.mock.calls[0][0] as string;
-    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.profitLoss.current,reports.profitLoss.prior,reports.profitLoss.variance,reports.profitLoss.variancePct');
-    expect(csv).toContain('reports.profitLoss.revenue,,,950.00,900.00,50.00,5.56');
-    expect(csv).toContain('reports.profitLoss.revenue,4114,Contract Revenue,1000.00,900.00,100.00,11.11');
-    expect(csv).toContain(',,reports.profitLoss.grossProfit,700.00,700.00,0.00,0.00');
-    expect(csv).toContain(',,reports.profitLoss.netIncome,615.00,625.00,-10.00,-1.60');
+    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.pnl.current,reports.pnl.prior,reports.pnl.variance,reports.pnl.variancePct');
+    expect(csv).toContain('reports.pnl.revenue,,,950.00,900.00,50.00,5.56');
+    expect(csv).toContain('reports.pnl.revenue,4114,Contract Revenue,1000.00,900.00,100.00,11.11');
+    expect(csv).toContain(',,reports.pnl.grossProfit,700.00,700.00,0.00,0.00');
+    expect(csv).toContain(',,reports.pnl.profitBeforeTax,615.00,625.00,-10.00,-1.60');
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'reports.profitLoss.comparePrior' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'reports.pnl.comparePrior' }));
     await waitFor(() => expect(screen.getAllByRole('columnheader')).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: 'reports.shared.exportCSV' }));
     csv = mocks.downloadFile.mock.calls[1][0] as string;
-    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.profitLoss.current');
+    expect(csv.split('\n')[0]).toBe('reports.shared.section,reports.shared.accountCode,reports.shared.accountName,reports.pnl.current');
     expect(csv).not.toContain('Variance %');
   });
 

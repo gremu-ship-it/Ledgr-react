@@ -1,7 +1,14 @@
 import type { TrialBalanceRow } from '@/dal/repositories/ReportRepository';
 
-export type PnlSectionKey = 'revenue' | 'cogs' | 'operatingExpenses' | 'otherIncome' | 'otherExpenses';
-export type PnlComputedLineKey = 'grossProfit' | 'operatingIncome' | 'netIncome';
+export type PnlSectionKey =
+  | 'revenue'
+  | 'costOfSales'
+  | 'otherIncome'
+  | 'operatingExpenses'
+  | 'depreciationAmortisation'
+  | 'financeCosts'
+  | 'taxExpense';
+export type PnlComputedLineKey = 'grossProfit' | 'operatingProfit' | 'profitBeforeTax' | 'netProfit';
 
 export interface PnlAccountLine {
   accountId: string;
@@ -33,53 +40,77 @@ export interface PnlReport {
 }
 
 const SECTION_LABELS: Record<PnlSectionKey, string> = {
-  revenue: 'reports.profitLoss.revenue',
-  cogs: 'reports.profitLoss.lessCogs',
-  operatingExpenses: 'reports.profitLoss.lessOperatingExpenses',
-  otherIncome: 'reports.profitLoss.otherIncome',
-  otherExpenses: 'reports.profitLoss.lessOtherExpenses',
+  revenue: 'reports.pnl.revenue',
+  costOfSales: 'reports.pnl.costOfSales',
+  otherIncome: 'reports.pnl.otherIncome',
+  operatingExpenses: 'reports.pnl.operatingExpenses',
+  depreciationAmortisation: 'reports.pnl.depreciationAmortisation',
+  financeCosts: 'reports.pnl.financeCosts',
+  taxExpense: 'reports.pnl.taxExpense',
 };
 
 const SECTION_ORDER: PnlSectionKey[] = [
   'revenue',
-  'cogs',
-  'operatingExpenses',
+  'costOfSales',
   'otherIncome',
-  'otherExpenses',
+  'operatingExpenses',
+  'depreciationAmortisation',
+  'financeCosts',
+  'taxExpense',
 ];
 
-// The active chart contains operating accounts in both the 6xxx and 7xxx
-// ranges. These account codes are the chart's finance costs; other 7xxx
-// accounts (rent, utilities, depreciation, etc.) remain operating expenses.
-const FINANCE_COST_CODES = new Set(['7101', '7102', '7103', '7190', '7191', '7192', '7193']);
+const DEPRECIATION_CODE_PREFIX = '68';
+const TAX_CODE_PREFIX = '75';
+const FINANCE_CODE_PREFIXES = ['70', '71', '72', '73', '74'];
+const DEPRECIATION_NAME = /\b(depreciation|amorti[sz]ation)\b/i;
+const TAX_NAME = /\b(income tax|corporate tax|corporation tax|tax expense|taxation)\b/i;
+const FINANCE_NAME = /\b(finance costs?|interest expense|interest on|bank charges?|fx losses?|foreign exchange losses?|loss on disposal)\b/i;
+const OTHER_INCOME_NAME = /\b(other income|interest income|fx gain|foreign exchange gain|gain on disposal|discount received|miscellaneous income)\b/i;
+const COST_OF_SALES_NAME = /\b(cost of sales|cost of goods sold|direct (materials|labour|labor|costs?)|purchases|inventory adjustment)\b/i;
 
+function startsWithAny(code: string, prefixes: string[]): boolean {
+  return prefixes.some((prefix) => code.startsWith(prefix));
+}
+
+/**
+ * IFRS statement classification for the current Ledgr chart, whose standard
+ * ranges are 4xxx revenue/other income, 5xxx cost of sales, 6xxx operating
+ * expenses, 68xx depreciation/amortisation, 70xx–74xx finance costs and 75xx
+ * income tax. Specific account types and name/code matches intentionally win
+ * before broad account-type and range fallbacks so custom charts are handled
+ * without letting a generic "expense" type swallow more specific categories.
+ */
 function sectionForAccount(row: TrialBalanceRow): PnlSectionKey | null {
   const type = String(row.account_type ?? '').trim().toLowerCase();
   const code = String(row.account_code ?? '').trim();
+  const name = String(row.account_name ?? '').trim();
   const hasPrefix = (prefix: string) => code.startsWith(prefix);
 
-  if (type === 'other_income') return 'otherIncome';
-  if (type === 'other_expense' || type === 'finance_cost') return 'otherExpenses';
-  if (type === 'cogs' || type === 'cost_of_sales') return 'cogs';
-  if (type === 'revenue' || type === 'income') {
-    return hasPrefix('42') || hasPrefix('7') ? 'otherIncome' : 'revenue';
+  // Specific account name/range heuristics precede broad type fallback.
+  if (hasPrefix(TAX_CODE_PREFIX) || TAX_NAME.test(name) || type === 'tax_expense') return 'taxExpense';
+  if (hasPrefix(DEPRECIATION_CODE_PREFIX) || DEPRECIATION_NAME.test(name) || type === 'depreciation_amortisation') {
+    return 'depreciationAmortisation';
   }
-  if (type === 'expense' || type === 'operating_expense') {
-    if (hasPrefix('5')) return 'cogs';
-    if (hasPrefix('8') || FINANCE_COST_CODES.has(code) || hasPrefix('73') || hasPrefix('75')) {
-      return 'otherExpenses';
-    }
-    return 'operatingExpenses';
+  if (startsWithAny(code, FINANCE_CODE_PREFIXES) || FINANCE_NAME.test(name)
+    || type === 'finance_cost' || type === 'other_expense') return 'financeCosts';
+  if (hasPrefix('5') || COST_OF_SALES_NAME.test(name) || type === 'cogs' || type === 'cost_of_sales') {
+    return 'costOfSales';
   }
-  if (type && type !== 'unknown') return null;
+  if (hasPrefix('42') || OTHER_INCOME_NAME.test(name) || type === 'other_income') return 'otherIncome';
 
-  // Prefix fallback supports legacy/untyped accounts while never pulling
-  // balance-sheet accounts (1xxx–3xxx) into the income statement.
-  if (hasPrefix('4')) return hasPrefix('42') ? 'otherIncome' : 'revenue';
-  if (hasPrefix('5')) return 'cogs';
+  if (type === 'revenue' || type === 'income') {
+    // Code 42 and specific income names were captured above. Legacy 7xxx
+    // income accounts are also non-operating income; remaining 4xxx is revenue.
+    return hasPrefix('7') ? 'otherIncome' : 'revenue';
+  }
+  if (type === 'expense' || type === 'operating_expense') return 'operatingExpenses';
+
+  // Narrow fallback is reserved for legacy/untyped rows; never include BS codes.
+  if (type && type !== 'unknown') return null;
+  if (hasPrefix('4')) return 'revenue';
+  if (hasPrefix('5')) return 'costOfSales';
   if (hasPrefix('6')) return 'operatingExpenses';
-  if (hasPrefix('7')) return 'otherIncome';
-  if (hasPrefix('8')) return 'otherExpenses';
+  if (hasPrefix('7')) return 'financeCosts';
   return null;
 }
 
@@ -103,9 +134,8 @@ export function computePnl(tbRows: TrialBalanceRow[]): PnlReport {
 
     const balance = finiteAmount(row.balance ?? finiteAmount(row.total_debit) - finiteAmount(row.total_credit));
     const isIncome = key === 'revenue' || key === 'otherIncome';
-    // Trial-balance balance is debit minus credit. Income is presented as
-    // credit-positive; expense accounts are debit-positive. Preserve the
-    // opposite-side sign for contra accounts (returns, credits, adjustments).
+    // Trial-balance balance is debit minus credit. Income is credit-positive;
+    // expense accounts are debit-positive; contra balances retain their sign.
     const amount = isIncome ? -balance : balance;
     const section = sectionsByKey.get(key)!;
     section.accounts.push({
@@ -122,21 +152,20 @@ export function computePnl(tbRows: TrialBalanceRow[]): PnlReport {
     section.accounts.sort((a, b) => a.accountCode.localeCompare(b.accountCode, undefined, { numeric: true }));
   }
 
-  const totalRevenue = sectionsByKey.get('revenue')!.total;
-  const totalCogs = sectionsByKey.get('cogs')!.total;
-  const totalOperatingExpenses = sectionsByKey.get('operatingExpenses')!.total;
-  const totalOtherIncome = sectionsByKey.get('otherIncome')!.total;
-  const totalOtherExpenses = sectionsByKey.get('otherExpenses')!.total;
-  const grossProfit = totalRevenue - totalCogs;
-  const operatingIncome = grossProfit - totalOperatingExpenses;
-  const netIncome = operatingIncome + totalOtherIncome - totalOtherExpenses;
+  const total = (key: PnlSectionKey) => sectionsByKey.get(key)!.total;
+  const grossProfit = total('revenue') - total('costOfSales');
+  const operatingProfit = grossProfit + total('otherIncome')
+    - total('operatingExpenses') - total('depreciationAmortisation');
+  const profitBeforeTax = operatingProfit - total('financeCosts');
+  const netIncome = profitBeforeTax - total('taxExpense');
 
   return {
     sections,
     computedLines: [
-      { key: 'grossProfit', labelKey: 'reports.profitLoss.grossProfit', amount: grossProfit, isSubtotal: true },
-      { key: 'operatingIncome', labelKey: 'reports.profitLoss.operatingIncome', amount: operatingIncome, isSubtotal: true },
-      { key: 'netIncome', labelKey: 'reports.profitLoss.netIncome', amount: netIncome, isSubtotal: true },
+      { key: 'grossProfit', labelKey: 'reports.pnl.grossProfit', amount: grossProfit, isSubtotal: true },
+      { key: 'operatingProfit', labelKey: 'reports.pnl.operatingProfit', amount: operatingProfit, isSubtotal: true },
+      { key: 'profitBeforeTax', labelKey: 'reports.pnl.profitBeforeTax', amount: profitBeforeTax, isSubtotal: true },
+      { key: 'netProfit', labelKey: 'reports.pnl.netProfit', amount: netIncome, isSubtotal: true },
     ],
     netIncome,
   };

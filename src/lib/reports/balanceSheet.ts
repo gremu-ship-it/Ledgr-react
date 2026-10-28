@@ -183,6 +183,26 @@ export function balanceSheetDateForPreset(
   return `${dateYear}-${dateMonth}-${dateDay}`;
 }
 
+export function priorYearAsOfDate(value: string): string {
+  if (!isValidAsOfDate(value)) return '';
+  const [year, month, day] = value.split('-').map(Number);
+  const priorYear = year - 1;
+  const lastDayOfPriorMonth = new Date(priorYear, month, 0).getDate();
+  return `${priorYear}-${String(month).padStart(2, '0')}-${String(Math.min(day, lastDayOfPriorMonth)).padStart(2, '0')}`;
+}
+
+/** Detects an out-of-balance amount that matches the unclosed cumulative P&L. */
+export function hasUnclosedProfitVariance(
+  discrepancy: number,
+  cumulativeProfit: number,
+  hasActiveRetainedEarnings: boolean,
+  tolerance = BALANCE_TOLERANCE,
+): boolean {
+  return hasActiveRetainedEarnings
+    && Math.abs(cumulativeProfit) > tolerance
+    && Math.abs(Math.abs(discrepancy) - Math.abs(cumulativeProfit)) <= tolerance;
+}
+
 export function isValidAsOfDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split('-').map(Number);

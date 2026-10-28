@@ -702,7 +702,7 @@
     },
     "whtSchedule": {
       "title": "WHT Schedule",
-      "description": "Withholding tax payable transactions for the selected month and branch.",
+      "description": "Description",
       "subtitle": "{{from}} to {{to}} · {{branch}}",
       "period": "Reporting month",
       "month": "Month",
@@ -716,7 +716,6 @@
       "unknownTaxCode": "Unknown tax code",
       "date": "Date",
       "reference": "Reference",
-      "description": "Description",
       "noReference": "No reference",
       "noDescription": "No description",
       "transactionCount": "Transactions",
@@ -724,6 +723,39 @@
       "totalWithheld": "Total withheld",
       "noData": "No withholding tax transactions were recorded for the selected period and branch.",
       "error": "Could not load the withholding tax schedule. Check your access and try again."
+    },
+    "pnl": {
+      "revenue": "Revenue",
+      "costOfSales": "Cost of Sales",
+      "grossProfit": "Gross Profit",
+      "otherIncome": "Other Income",
+      "operatingExpenses": "Operating Expenses",
+      "depreciationAmortisation": "Depreciation & Amortisation",
+      "operatingProfit": "Operating Profit / EBIT",
+      "financeCosts": "Finance Costs",
+      "profitBeforeTax": "Profit Before Tax",
+      "taxExpense": "Tax Expense",
+      "netProfit": "Net Profit",
+      "netLoss": "Net Loss",
+      "comparePrior": "Compare to prior period",
+      "current": "Current",
+      "prior": "Prior",
+      "variance": "Variance",
+      "variancePct": "Variance %",
+      "account": "Account"
+    },
+    "bs": {
+      "comparePriorYear": "Compare with prior year",
+      "current": "Current",
+      "priorYear": "Prior Year",
+      "variance": "Variance",
+      "integrityTitle": "Data integrity checks · All branches",
+      "integrityWarningTitle": "Data integrity warnings · All branches",
+      "retainedEarningsProfitWarning": "Warning: Retained earnings may not include the cumulative profit or loss through this date.",
+      "bankReconciliationWarning": "Warning: Bank accounts are unreconciled or their general-ledger balances do not agree with their latest locked statements."
+      "fixedAssetWarning": "Warning: Fixed-asset register balances do not fully agree with the general ledger.",
+      "integrityUnavailable": "Some integrity checks could not be completed. The report remains available for review.",
+      "integrityClear": "No retained-earnings, bank-reconciliation, or fixed-asset warnings were found."
     }
   },
   "ai": {
