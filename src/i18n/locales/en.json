@@ -752,7 +752,7 @@
       "integrityTitle": "Data integrity checks · All branches",
       "integrityWarningTitle": "Data integrity warnings · All branches",
       "retainedEarningsProfitWarning": "Warning: Retained earnings may not include the cumulative profit or loss through this date.",
-      "bankReconciliationWarning": "Warning: Bank accounts are unreconciled or their general-ledger balances do not agree with their latest locked statements."
+      "bankReconciliationWarning": "Warning: Bank accounts are unreconciled or their general-ledger balances do not agree with their latest locked statements.",
       "fixedAssetWarning": "Warning: Fixed-asset register balances do not fully agree with the general ledger.",
       "integrityUnavailable": "Some integrity checks could not be completed. The report remains available for review.",
       "integrityClear": "No retained-earnings, bank-reconciliation, or fixed-asset warnings were found."
