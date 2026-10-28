@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { PlanGate } from '@/components/billing/PlanGate';
 import {
   Bar,
   BarChart,
@@ -134,6 +135,14 @@ function Section({ title, children, id }: { title: string; children: ReactNode; 
 }
 
 export function ManufacturingDashboardPage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.manufacturing">
+      <ManufacturingDashboardPageContent />
+    </PlanGate>
+  );
+}
+
+function ManufacturingDashboardPageContent() {
   const { t } = useTranslation();
   const business = useAppStore((state) => state.currentBusiness?.business);
   const businessId = business?.id ?? '';

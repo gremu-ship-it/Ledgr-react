@@ -25,6 +25,8 @@ vi.mock('react-i18next', async () => {
   return { useTranslation: () => ({ t }) };
 });
 
+vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: 'enterprise' }) }));
+
 // Mock supabase to avoid network; pages do their own supabase calls inside effects
 vi.mock('@/hooks/useCapability', () => ({
   useCapability: () => true,

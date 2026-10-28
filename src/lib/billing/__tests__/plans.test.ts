@@ -192,4 +192,61 @@ describe('plan catalogue integration parity', () => {
     expect(navItemForPath('/construction')?.minPlan).toBe('enterprise');
     expect(navItemForPath('/construction')?.requiresOrgCapability).toBe('construction');
   });
+
+  it('requires Enterprise for every current vertical nav item, route, and page', () => {
+    const app = source('src/App.tsx');
+    const construction = NAV_SECTIONS.find((section) => section.labelKey === 'navigation.sections.construction')!;
+    const manufacturing = NAV_SECTIONS.find((section) => section.labelKey === 'navigation.sections.manufacturing')!;
+    const verticalSections = [construction, manufacturing];
+
+    for (const section of verticalSections) {
+      expect(section.minPlan).toBe('enterprise');
+      for (const item of section.items) {
+        expect(item.minPlan).toBe('enterprise');
+        for (const tier of ['free', 'starter', 'growth', 'pro'] as const) {
+          expect(isItemLocked(item, tier, section.minPlan)).toBe(true);
+        }
+        expect(isItemLocked(item, 'enterprise', section.minPlan)).toBe(false);
+      }
+    }
+
+    const routePaths = [
+      '/construction/*',
+      '/manufacturing',
+      '/manufacturing/bom',
+      '/manufacturing/bom/new',
+      '/manufacturing/bom/:id',
+      '/manufacturing/bom/:id/edit',
+      '/manufacturing/production',
+      '/manufacturing/production/new',
+      '/manufacturing/production/:id',
+      '/manufacturing/dashboard',
+    ];
+    for (const path of routePaths) {
+      const start = app.indexOf(`path="${path}"`);
+      expect(start, `${path} route exists`).toBeGreaterThanOrEqual(0);
+      const route = app.slice(start, app.indexOf('/>', start));
+      expect(route).toContain('PlanGate minPlan="enterprise"');
+      expect(route).toContain('CapabilityGate');
+    }
+
+    // The outer RoleRoute encloses both vertical route sets; PlanGate is also
+    // inside each page component so direct component rendering stays protected.
+    const roleGate = app.indexOf('<Route element={<RoleRoute />}>');
+    const constructionRoute = app.indexOf('path="/construction/*"');
+    expect(roleGate).toBeGreaterThanOrEqual(0);
+    expect(roleGate).toBeLessThan(constructionRoute);
+    for (const filename of [
+      'src/pages/construction/ConstructionWorkspacePage.tsx',
+      'src/pages/manufacturing/ManufacturingDashboardPage.tsx',
+      'src/pages/manufacturing/BomListPage.tsx',
+      'src/pages/manufacturing/BomEditorPage.tsx',
+      'src/pages/manufacturing/BomDetailPage.tsx',
+      'src/pages/manufacturing/WorkOrderListPage.tsx',
+      'src/pages/manufacturing/WorkOrderCreatePage.tsx',
+      'src/pages/manufacturing/WorkOrderDetailPage.tsx',
+    ]) {
+      expect(source(filename)).toContain('<PlanGate minPlan="enterprise"');
+    }
+  });
 });

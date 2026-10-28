@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { PlanGate } from '@/components/billing/PlanGate';
 import {
   ArrowLeft,
   Play,
@@ -113,6 +114,14 @@ function formatDate(value: string | null | undefined): string {
 }
 
 export function WorkOrderDetailPage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.manufacturing">
+      <WorkOrderDetailPageContent />
+    </PlanGate>
+  );
+}
+
+function WorkOrderDetailPageContent() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { PlanGate } from '@/components/billing/PlanGate';
 import { Plus, Trash2, Lock, Save, Play } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -38,6 +39,14 @@ type LineForm = {
 };
 
 export function BomEditorPage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.manufacturing">
+      <BomEditorPageContent />
+    </PlanGate>
+  );
+}
+
+function BomEditorPageContent() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();

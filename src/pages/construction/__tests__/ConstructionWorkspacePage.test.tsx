@@ -18,6 +18,8 @@ import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import { i18n } from '@/i18n';
+vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: 'enterprise' }) }));
+
 
 const construction = vi.hoisted(() => ({
   findCapabilities: vi.fn(),

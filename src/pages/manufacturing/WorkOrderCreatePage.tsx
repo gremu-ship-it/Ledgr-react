@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { PlanGate } from '@/components/billing/PlanGate';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +34,14 @@ function pickDefault(locations: LocationRow[], locationType: string): string {
 }
 
 export function WorkOrderCreatePage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.manufacturing">
+      <WorkOrderCreatePageContent />
+    </PlanGate>
+  );
+}
+
+function WorkOrderCreatePageContent() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);

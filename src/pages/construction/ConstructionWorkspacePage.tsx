@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PlanGate } from '@/components/billing/PlanGate';
 import { ProjectsSection } from '@/components/construction/projects/ProjectsSection';
 import { ProjectDetail } from '@/components/construction/projects/ProjectDetail';
 import { RetentionAgingReport } from '@/components/construction/reports/RetentionAgingReport';
@@ -46,6 +47,14 @@ const SECTIONS = [
 ] as const;
 
 export function ConstructionWorkspacePage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">
+      <ConstructionWorkspacePageContent />
+    </PlanGate>
+  );
+}
+
+function ConstructionWorkspacePageContent() {
   const { t } = useTranslation();
   const location = useLocation();
   const currentBusiness = useAppStore((state) => state.currentBusiness);

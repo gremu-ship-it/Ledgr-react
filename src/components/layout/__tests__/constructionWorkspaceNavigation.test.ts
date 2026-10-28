@@ -46,6 +46,8 @@ describe('construction workspace navigation', () => {
     expect(en.navigation.sections.construction).toBe('Construction');
     expect(en.navigation.items.constructionWorkspace).toBe('Workspace');
     expect(section?.items.map((item) => item.path)).toEqual(['/construction']);
+    expect(section?.minPlan).toBe('enterprise');
+    expect(section?.items[0]?.minPlan).toBe('enterprise');
 
     const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');
     const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.construction');

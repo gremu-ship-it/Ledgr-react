@@ -93,6 +93,8 @@ vi.mock('@/lib/supabase', () => {
   };
 });
 
+vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: 'enterprise' }) }));
+
 import { WorkOrderListPage } from '@/pages/manufacturing/WorkOrderListPage';
 import { WorkOrderCreatePage } from '@/pages/manufacturing/WorkOrderCreatePage';
 import { WorkOrderDetailPage } from '@/pages/manufacturing/WorkOrderDetailPage';

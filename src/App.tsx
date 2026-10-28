@@ -390,93 +390,109 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/* The Construction workspace is the command-backed route. */}
-                <Route
-                  path="/construction/*"
-                  element={
-                    <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
-                      <CapabilityGate capability="construction">
-                        <ConstructionWorkspacePage />
-                      </CapabilityGate>
-                    </PlanGate>
-                  }
-                />
-                {/* Manufacturing reporting and production remain behind the
-                    same organisation capability gate; non-manufacturers cannot
-                    reach the dashboard by URL even on Enterprise. */}
-                <Route
-                  path="/manufacturing"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <ManufacturingDashboardPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/bom"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <BomListPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/bom/new"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <BomEditorPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/bom/:id"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <BomDetailPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/bom/:id/edit"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <BomEditorPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/production"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <WorkOrderListPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/production/new"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <WorkOrderCreatePage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/production/:id"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <WorkOrderDetailPage />
-                    </CapabilityGate>
-                  }
-                />
-                <Route
-                  path="/manufacturing/dashboard"
-                  element={
-                    <CapabilityGate capability="manufacturing">
-                      <ManufacturingDashboardPage />
-                    </CapabilityGate>
-                  }
-                />
                 <Route element={<RoleRoute />}>
+                  {/* The Construction workspace is gated at route and page level. */}
+                  <Route
+                    path="/construction/*"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
+                        <CapabilityGate capability="construction">
+                          <ConstructionWorkspacePage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  {/* Every Manufacturing URL is Enterprise-only, business-capability gated, and role checked. */}
+                  <Route
+                    path="/manufacturing"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <ManufacturingDashboardPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/bom"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <BomListPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/bom/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <BomEditorPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/bom/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <BomDetailPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/bom/:id/edit"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <BomEditorPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/production"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <WorkOrderListPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/production/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <WorkOrderCreatePage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/production/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <WorkOrderDetailPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/dashboard"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <ManufacturingDashboardPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
                     <CapabilityGate capability="pos">

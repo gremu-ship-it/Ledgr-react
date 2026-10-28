@@ -22,6 +22,8 @@ vi.mock('react-i18next', async () => {
   } }) };
 });
 
+vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: 'enterprise' }) }));
+
 import { ManufacturingDashboardPage } from '@/pages/manufacturing/ManufacturingDashboardPage';
 
 const business = {

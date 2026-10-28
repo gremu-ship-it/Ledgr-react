@@ -29,7 +29,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
-import { hasCapability, PLAN_TIER_ORDER, PLANS } from '@/lib/billing/plans';
+import { hasCapability, PLAN_TIER_ORDER, PLANS, planMeetsMin } from '@/lib/billing/plans';
+export { planMeetsMin } from '@/lib/billing/plans';
 import type { PartnerFeatureKey } from '@/types/partners';
 import type { OrganisationCapability } from '@/lib/capabilities/profile';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
@@ -120,6 +121,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   },
   {
     labelKey: 'navigation.sections.construction',
+    minPlan: 'enterprise',
     items: [
       {
         labelKey: 'navigation.items.constructionWorkspace',
@@ -132,6 +134,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   },
   {
     labelKey: 'navigation.sections.manufacturing',
+    minPlan: 'enterprise',
     items: [
       {
         labelKey: 'manufacturing.bom.dashboard',
@@ -229,11 +232,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
-  if (!required) return true;
-  return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
-}
 
 // ── Vertical navigation vocabulary ─────────────────────────────────────────
 

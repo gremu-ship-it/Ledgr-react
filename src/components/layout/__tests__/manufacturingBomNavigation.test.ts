@@ -49,6 +49,8 @@ describe('manufacturing BOM navigation', () => {
   it('adds Bill of Materials item under Manufacturing section', () => {
     const section = NAV_SECTIONS.find((s) => s.labelKey === 'navigation.sections.manufacturing');
     expect(section).toBeDefined();
+    expect(section?.minPlan).toBe('enterprise');
+    expect(section?.items.every((item) => item.minPlan === 'enterprise')).toBe(true);
     expect(section?.items.map((i) => i.path)).toContain('/manufacturing/bom');
     const bomNav = navItemForPath('/manufacturing/bom');
     expect(bomNav).toMatchObject({

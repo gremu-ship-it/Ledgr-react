@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { PlanGate } from '@/components/billing/PlanGate';
 import { Plus, Eye, Play, CheckCircle2, Lock, XCircle, ClipboardList } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
@@ -65,6 +66,14 @@ function formatDate(value: string | null | undefined): string {
 }
 
 export function WorkOrderListPage() {
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.manufacturing">
+      <WorkOrderListPageContent />
+    </PlanGate>
+  );
+}
+
+function WorkOrderListPageContent() {
   const { t } = useTranslation();
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
   const hasManufacturing = useCapability('manufacturing');
