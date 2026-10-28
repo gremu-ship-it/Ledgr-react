@@ -60,7 +60,7 @@ const RegisterPage = lazyPage(() => import('@/pages/RegisterPage'), 'RegisterPag
 const TermsAndConditionsPage = lazyPage(() => import('@/pages/TermsAndConditionsPage'), 'TermsAndConditionsPage');
 const CreateBusinessPage = lazyPage(() => import('@/pages/CreateBusinessPage'), 'CreateBusinessPage');
 const ForgotPasswordPage = lazyPage(() => import('@/pages/auth/ForgotPasswordPage'), 'ForgotPasswordPage');
-const ResetPasswordPage = lazyPage(() => import('@/pages/auth/ResetPasswordPage'), 'ResetPasswordPage');
+const PasswordRecoveryPage = lazyPage(() => import('@/pages/auth/PasswordRecoveryPage'), 'PasswordRecoveryPage');
 const AcceptInvitationPage = lazyPage(() => import('@/pages/AcceptInvitationPage'), 'AcceptInvitationPage');
 const DashboardPage = lazyPage(() => import('@/pages/DashboardPage'), 'DashboardPage');
 const ConstructionWorkspacePage = lazyPage(
@@ -86,10 +86,6 @@ const WorkOrderDetailPage = lazyPage(
   () => import('@/pages/manufacturing/WorkOrderDetailPage'),
   'WorkOrderDetailPage',
 );
-const ConstructionProjectSetupDraftPage = lazyPage(
-  () => import('@/pages/ConstructionProjectSetupDraftPage'),
-  'ConstructionProjectSetupDraftPage',
-);
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
@@ -97,7 +93,6 @@ const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPag
 const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
 const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
 const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
-const InventoryPage = lazyPage(() => import('@/pages/InventoryPage'), 'InventoryPage');
 const AccountsPage = lazyPage(() => import('@/pages/AccountsPage'), 'AccountsPage');
 const AssetsPage = lazyPage(() => import('@/pages/AssetsPage'), 'AssetsPage');
 const CapitalPage = lazyPage(() => import('@/pages/CapitalPage'), 'CapitalPage');
@@ -363,7 +358,7 @@ function App() {
             <Route path="/demo/enter" element={<DemoEntryPage />} />
 
             {/* Standalone — accessible during PASSWORD_RECOVERY regardless of auth state */}
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/reset-password" element={<PasswordRecoveryPage />} />
             <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
 
             {/* Protected, no AppLayout */}
@@ -394,26 +389,7 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/*
-                  Local draft only; no repository call, backend request, or
-                  project authorization path. Still a construction surface,
-                  so it sits behind the same construction capability gate as
-                  /construction/* — any authenticated user could previously
-                  reach it by URL.
-                */}
-                <Route
-                  path="/projects-funding-sources/construction-draft"
-                  element={
-                    <CapabilityGate capability="construction">
-                      <ConstructionProjectSetupDraftPage />
-                    </CapabilityGate>
-                  }
-                />
-                {/*
-                  The Construction workspace is the real, command-backed workspace.
-                  The local-only project draft keeps its own path so that work is
-                  preserved and unchanged.
-                */}
+                {/* The Construction workspace is the command-backed route. */}
                 <Route
                   path="/construction/*"
                   element={
@@ -520,13 +496,6 @@ function App() {
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Products">
                       <CapabilityGate capability="inventory">
                         <ProductsPage />
-                      </CapabilityGate>
-                    </PartnerPlanGate>
-                  } />
-                  <Route path="/inventory" element={
-                    <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Inventory">
-                      <CapabilityGate capability="inventory" rolePath="/inventory">
-                        <InventoryPage />
                       </CapabilityGate>
                     </PartnerPlanGate>
                   } />

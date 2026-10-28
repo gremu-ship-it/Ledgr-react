@@ -47,7 +47,7 @@ describe('Starter pricing and access', () => {
     }
   });
 
-  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital'])(
+  it.each(['/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital'])(
     'unlocks %s starting at Starter', (path) => {
       const item = navItemForPath(path)!;
       expect(item).toBeDefined();
@@ -157,9 +157,9 @@ describe('plan catalogue integration parity', () => {
     expect(usage).toContain('set search_path = public');
   });
 
-  it('gates all inventory URLs and the four core-accounting pages', () => {
+  it('gates the remaining inventory URLs and the four core-accounting pages', () => {
     const app = source('src/App.tsx');
-    expect(app.match(/featureKey="inventory" capability="inventory"/g)).toHaveLength(4);
+    expect(app.match(/featureKey="inventory" capability="inventory"/g)).toHaveLength(3);
     for (const name of ['Chart of Accounts', 'Tax', 'Assets', 'Capital']) {
       expect(app).toContain(`capability="core_accounting" featureName="${name}"`);
     }

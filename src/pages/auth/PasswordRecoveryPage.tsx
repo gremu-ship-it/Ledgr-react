@@ -7,7 +7,7 @@ import { PasswordInput, PasswordStrengthMeter, measureStrength, FormField, AuthA
 
 type ResetState = 'awaiting_session' | 'form' | 'success' | 'invalid_link';
 
-export function ResetPasswordPage() {
+export function PasswordRecoveryPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [pageState, setPageState] = useState<ResetState>('awaiting_session');

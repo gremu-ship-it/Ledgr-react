@@ -479,19 +479,19 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
       // the same authority as the workspace itself.
       if (path.startsWith('/manufacturing')) return true;
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
-      return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
+      return ['/products', '/warehouse', '/transfers'].includes(path);
 
     case 'purchasing_officer':
-      return ['/expenses', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/dashboard'].includes(path);
+      return ['/expenses', '/contacts', '/products', '/warehouse', '/transfers', '/dashboard'].includes(path);
 
     case 'warehouse_worker':
-      return ['/dashboard', '/products', '/warehouse', '/transfers', '/inventory'].includes(path);
+      return ['/dashboard', '/products', '/warehouse', '/transfers'].includes(path);
 
     case 'sales_manager':
-      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
+      return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
 
     case 'customer_service_rep':
       return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/pos'].includes(path);
@@ -510,7 +510,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'inventory_manager':
-      return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
+      return ['/products', '/warehouse', '/transfers'].includes(path);
 
     case 'supervisor':
       if (path === '/payroll' || path.startsWith('/reports/')) return false;

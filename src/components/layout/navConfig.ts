@@ -391,10 +391,9 @@ export function isItemLocked(
   return false;
 }
 
-/** Shared by alternative navigation surfaces; /inventory aliases Products. */
+/** Shared by alternative navigation surfaces. */
 export function navItemForPath(path: string): NavItemConfig | undefined {
-  const canonicalPath = path === '/inventory' ? '/products' : path;
-  return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.path === canonicalPath);
+  return NAV_SECTIONS.flatMap((section) => section.items).find((item) => item.path === path);
 }
 
 export function planRequiredForItem(item: NavItemConfig, sectionMinPlan?: PlanTier) {

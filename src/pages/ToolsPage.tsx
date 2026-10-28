@@ -36,7 +36,7 @@ const ALL_TOOLS: Tool[] = [
   { id: 'periods', label: 'Financial Periods', description: 'Manage accounting periods', icon: Calendar, path: '/periods', category: 'accounting' },
 
   // Advanced tools (access comes from the shared navigation configuration)
-  { id: 'inventory', label: 'Inventory', description: 'Stock & product management', icon: Package, path: '/inventory', category: 'advanced' },
+  { id: 'inventory', label: 'Inventory', description: 'Stock & product management', icon: Package, path: '/products', category: 'advanced' },
   { id: 'payroll', label: 'Payroll', description: 'Employee salary management', icon: Users, path: '/payroll', category: 'advanced' },
   { id: 'assets', label: 'Fixed Assets', description: 'Track company assets', icon: Package, path: '/assets', category: 'advanced' },
   { id: 'bank', label: 'Bank Reconciliation', description: 'Reconcile bank statements', icon: CreditCard, path: '/bank-reconciliation/accounts', category: 'advanced' },
