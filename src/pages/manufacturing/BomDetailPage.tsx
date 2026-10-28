@@ -128,12 +128,12 @@ function BomDetailPageContent() {
       // Total cost via RPC
       const { data: costData } = await sb.rpc('manufacturing_bom_cost', { p_bom_id: id });
       setTotalCost(Number(costData ?? 0));
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
+    } catch {
+      setError(t('manufacturing.bom.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [id, businessId]);
+  }, [id, businessId, t]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -147,8 +147,8 @@ function BomDetailPageContent() {
       const { error } = await sb.rpc('manufacturing_bom_activate', { p_bom_id: id });
       if (error) throw error;
       await fetchAll();
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      alert(t('manufacturing.bom.errors.activateFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -162,8 +162,8 @@ function BomDetailPageContent() {
       if (error) throw error;
       const newId = data as string;
       navigate(`/manufacturing/bom/${newId}/edit`);
-    } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : String(e));
+    } catch {
+      alert(t('manufacturing.bom.errors.newVersionFailed'));
     } finally {
       setActionLoading(false);
     }
@@ -191,7 +191,7 @@ function BomDetailPageContent() {
     return (
       <div className="mx-auto max-w-[1200px] px-4 py-6">
         <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          {error ?? 'BOM not found'}
+          {error ?? t('manufacturing.bom.errors.notFound')}
         </div>
         <Link to="/manufacturing/bom" className="mt-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900">
           <ArrowLeft className="h-4 w-4" />
@@ -359,7 +359,7 @@ function BomDetailPageContent() {
       <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold text-gray-900">{t('manufacturing.bom.versionHistory')}</h2>
         {versionHistory.length === 0 ? (
-          <p className="text-sm text-gray-500">No history</p>
+          <p className="text-sm text-gray-500">{t('manufacturing.bom.noVersionHistory')}</p>
         ) : (
           <ul className="space-y-2">
             {versionHistory.map((v) => (
@@ -375,7 +375,7 @@ function BomDetailPageContent() {
                     {t(`manufacturing.bom.status.${v.status}`)}
                   </span>
                   {v.bom_locked_at && <Lock className="h-3 w-3 text-amber-600" aria-label={t('manufacturing.bom.locked')} />}
-                  {v.id === bom.id && <span className="text-xs text-brand-700">• current</span>}
+                  {v.id === bom.id && <span className="text-xs text-brand-700">• {t('manufacturing.bom.current')}</span>}
                 </div>
                 <Link to={`/manufacturing/bom/${v.id}`} className="text-xs text-brand-600 hover:text-brand-800">
                   {t('common.view')}

@@ -2402,6 +2402,8 @@
       "activate": "Activate",
       "newVersion": "New Version",
       "versionHistory": "Version History",
+      "noVersionHistory": "No version history yet.",
+      "current": "Current",
       "emptyState": "No bills of materials yet. Create your first BOM to define how your products are assembled.",
       "noComponents": "Add at least one component to activate this BOM.",
       "circularRef": "A product cannot be a component of itself.",
@@ -2428,7 +2430,9 @@
         "cycleDetected": "Adding this sub-assembly would create a circular BOM reference.",
         "saveFailed": "Could not save this BOM version. Try again.",
         "activateFailed": "Could not activate this BOM version. Try again.",
-        "loadFailed": "Could not load BOM data. Try again."
+        "newVersionFailed": "Could not create a new BOM version. Try again.",
+        "loadFailed": "Could not load BOM data. Try again.",
+        "notFound": "BOM not found."
       },
       "readOnlyVersion": "Only draft BOM versions can be edited. Create a new version to make changes."
     },
