@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { AlertCircle, PackageOpen } from 'lucide-react';
 import { useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -8,6 +9,8 @@ import { generateProfessionalReportDocument } from '@/lib/documents/documentGene
 import { businessRowToBranding } from '@/lib/documents/types';
 import { buildRevenueBreakdown, type RevenueInvoice, type RevenueInvoiceLine } from '@/lib/revenueBreakdown';
 import type { Row } from '@/dal/types/database';
+import { ReportExportButtons } from './ReportExportButtons';
+import { downloadFile, generateCSV, printReport, reportFilename } from '@/lib/reports/export';
 
 const REVENUE_INVOICE_TYPES = ['invoice', 'credit_note', 'debit_note'];
 
@@ -15,12 +18,14 @@ interface Props {
   businessId: string;
   periodStart: string;
   periodEnd: string;
+  standalone?: boolean;
 }
 
 interface BreakdownData {
   invoices: RevenueInvoice[];
   lines: RevenueInvoiceLine[];
   productNames: Map<string, string>;
+  accountTypes: Map<string, string>;
 }
 
 function escapeHtml(value: string): string {
@@ -30,7 +35,8 @@ function escapeHtml(value: string): string {
 }
 
 /** Revenue earned from invoice lines, grouped by the product or service sold. */
-export function RevenueBreakdownReport({ businessId, periodStart, periodEnd }: Props) {
+export function RevenueBreakdownReport({ businessId, periodStart, periodEnd, standalone = false }: Props) {
+  const { t } = useTranslation();
   const { business: brandBusiness, businessName, logoUrl, brandColor } = useBrandTheme();
   const functionalCurrency = (brandBusiness as Row<'businesses'> | undefined)?.base_currency || 'MWK';
   const formatCurrency = (value: number) => new Intl.NumberFormat(undefined, {
@@ -47,17 +53,20 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd }: P
         .eq('business_id', businessId)
         .in('invoice_type', REVENUE_INVOICE_TYPES)
         .neq('status', 'void')
+        .neq('status', 'draft')
         .gte('issue_date', periodStart)
         .lte('issue_date', periodEnd)
         .is('deleted_at', null);
       if (invoiceError) throw invoiceError;
 
       const invoices = (invoiceRows ?? []) as RevenueInvoice[];
-      if (invoices.length === 0) return { invoices, lines: [], productNames: new Map() };
+      if (invoices.length === 0) {
+        return { invoices, lines: [], productNames: new Map(), accountTypes: new Map() };
+      }
 
       const { data: lineRows, error: lineError } = await supabase
         .from('invoice_lines')
-        .select('invoice_id, product_id, description, quantity, line_subtotal, line_total, tax_amount')
+        .select('invoice_id, product_id, account_id, description, quantity, line_subtotal, line_total, tax_amount')
         .eq('business_id', businessId)
         .in('invoice_id', invoices.map((invoice) => invoice.id));
       if (lineError) throw lineError;
@@ -76,12 +85,25 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd }: P
         for (const product of products ?? []) productNames.set(product.id, product.name);
       }
 
-      return { invoices, lines, productNames };
+      const accountIds = [...new Set(lines.map((line) => line.account_id).filter((id): id is string => Boolean(id)))];
+      const accountTypes = new Map<string, string>();
+      if (accountIds.length > 0) {
+        const { data: accounts, error: accountError } = await supabase
+          .from('accounts')
+          .select('id, account_type')
+          .eq('business_id', businessId)
+          .in('id', accountIds)
+          .is('deleted_at', null);
+        if (accountError) throw accountError;
+        for (const account of accounts ?? []) accountTypes.set(account.id, account.account_type);
+      }
+
+      return { invoices, lines, productNames, accountTypes };
     },
   });
 
   const rows = useMemo(
-    () => data ? buildRevenueBreakdown(data.invoices, data.lines, data.productNames) : [],
+    () => data ? buildRevenueBreakdown(data.invoices, data.lines, data.productNames, data.accountTypes) : [],
     [data],
   );
   const totalRevenue = rows.reduce((total, row) => total + row.amount, 0);
@@ -108,16 +130,41 @@ export function RevenueBreakdownReport({ businessId, periodStart, periodEnd }: P
     });
   };
 
+  const handleExportCSV = () => {
+    const headers = [
+      t('reports.revenueBreakdown.productService'),
+      t('reports.revenueBreakdown.invoices'),
+      t('reports.revenueBreakdown.netRevenue', { currency: functionalCurrency }),
+      t('reports.revenueBreakdown.sharePercent'),
+    ];
+    const csvRows: (string | number | null)[][] = rows.map((row) => [
+      row.name,
+      row.invoiceCount,
+      row.amount,
+      totalRevenue ? (row.amount / totalRevenue) * 100 : 0,
+    ]);
+    csvRows.push([t('reports.revenueBreakdown.totalNetRevenue'), null, totalRevenue, totalRevenue ? 100 : 0]);
+    downloadFile(
+      generateCSV(headers, csvRows),
+      reportFilename('revenue-breakdown', periodStart, periodEnd),
+      'text/csv;charset=utf-8',
+    );
+  };
+
   if (isLoading) return <div className="space-y-3">{[...Array(6)].map((_, index) => <div key={index} className="h-12 animate-pulse rounded-xl bg-gray-100" />)}</div>;
   if (isError) return <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">Could not load the revenue breakdown.</div>;
 
   return (
     <div className="max-w-4xl rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <ReportHeader
-        title="Revenue by Product & Service"
-        subtitle={`Invoice-based net revenue for ${periodLabel}. VAT is excluded.`}
-        onExportPDF={handleExport}
-      />
+      {standalone ? (
+        <ReportExportButtons onExportCSV={handleExportCSV} onExportPDF={printReport} />
+      ) : (
+        <ReportHeader
+          title="Revenue by Product & Service"
+          subtitle={`Invoice-based net revenue for ${periodLabel}. VAT is excluded.`}
+          onExportPDF={handleExport}
+        />
+      )}
       {rows.length === 0 ? (
         <div className="flex min-h-48 flex-col items-center justify-center gap-2 text-center">
           <PackageOpen className="h-8 w-8 text-gray-300" />

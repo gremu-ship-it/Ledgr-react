@@ -1,40 +1,58 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { Lock, Sparkles } from 'lucide-react';
 import { useUsage } from '@/hooks/useUsage';
-import { hasCapability, planRequiredFor, type PlanCapability } from '@/lib/billing/plans';
+import { getPlan, hasCapability, planMeetsMin, planRequiredFor, type PlanCapability, type PlanTier } from '@/lib/billing/plans';
 
-interface PlanGateProps {
-  /** The plan capability required to use the feature (e.g. 'ai_insights'). */
-  capability: PlanCapability;
+type GateRequirement =
+  | { capability: PlanCapability; minPlan?: PlanTier }
+  | { capability?: never; minPlan: PlanTier };
 
-  /** Short, human name of the feature for the lock message (e.g. "AI Insights"). */
-  featureName: string;
-
+interface PlanGateOptions {
+  /** Existing discrete capability gates (e.g. `ai_insights`). */
+  featureName?: string;
+  /** Translation key for the feature name when the caller must localize it. */
+  featureNameKey?: string;
   /**
-   * 'lock' (default): keep the feature visible/navigable but replace its
-   * content with an "Upgrade required" banner (soft gating — user can see
-   * the feature exists as an upsell, but can't use it).
-   * ReactNode: fully custom fallback.
+   * 'lock' (default): keep the route reachable but replace its content with an
+   * upgrade prompt. A ReactNode supplies a fully custom fallback.
    */
   fallback?: 'lock' | ReactNode;
-
   children: ReactNode;
 }
 
+export type PlanGateProps = GateRequirement & PlanGateOptions;
+
 /**
- * Soft feature gate based on subscription plan: keeps the page/nav item
- * reachable but swaps the content out for an upgrade prompt when the
- * current business's plan doesn't include the capability.
+ * Soft plan gate: checks capability and/or minimum tier, then shows a lock
+ * screen instead of rendering protected page content when the plan is short.
+ * Route callers should compose this with authentication and role gates.
  */
-export function PlanGate({ capability, featureName, fallback = 'lock', children }: PlanGateProps) {
+export function PlanGate({
+  capability,
+  minPlan,
+  featureName,
+  featureNameKey,
+  fallback = 'lock',
+  children,
+}: PlanGateProps) {
+  const { t } = useTranslation();
   const { planTier } = useUsage();
+  const meetsCapability = capability ? hasCapability(planTier, capability) : true;
+  const meetsMinimum = minPlan ? planMeetsMin(planTier, minPlan) : true;
 
-  if (hasCapability(planTier, capability)) return <>{children}</>;
-
+  if (meetsCapability && meetsMinimum) return <>{children}</>;
   if (fallback !== 'lock') return <>{fallback}</>;
 
-  const requiredPlan = planRequiredFor(capability);
+  const requiredPlan = minPlan
+    ? getPlan(minPlan)
+    : capability
+      ? planRequiredFor(capability)
+      : null;
+  const featureLabel = featureNameKey
+    ? t(featureNameKey)
+    : featureName ?? t('planGate.defaultFeature');
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center p-6">
@@ -42,18 +60,20 @@ export function PlanGate({ capability, featureName, fallback = 'lock', children 
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
           <Lock className="h-6 w-6" />
         </div>
-        <h2 className="text-lg font-semibold text-gray-900">{featureName} requires an upgrade</h2>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {t('planGate.upgradeRequired', { feature: featureLabel })}
+        </h2>
         <p className="mt-2 text-sm text-gray-500">
           {requiredPlan
-            ? `This feature is available on the ${requiredPlan.name} plan and above.`
-            : 'This feature isn\u2019t available on your current plan.'}
+            ? t('planGate.availableOnPlan', { plan: requiredPlan.name })
+            : t('planGate.unavailable')}
         </p>
         <Link
           to="/settings?tab=billing"
           className="mt-6 inline-flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
         >
           <Sparkles className="h-4 w-4" />
-          View plans
+          {t('planGate.viewPlans')}
         </Link>
       </div>
     </div>

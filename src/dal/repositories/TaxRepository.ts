@@ -31,10 +31,38 @@ export class TaxRepository extends BaseRepository<'tax_configurations'> {
   }
 
   /**
+   * Fetch a business's whole tax schedule: every stored period, including
+   * future-dated and closed ones, oldest first per tax code.
+   *
+   * This is the read the tax-configuration screen needs (a schedule is not
+   * visible through findActiveByBusiness, which answers only for one date), and
+   * the read src/lib/tax/taxConfiguration.ts resolves a single date from. It is
+   * not filtered by `is_active`: a period a business has switched off is still
+   * something it must be able to see and correct.
+   */
+  async findScheduleByBusiness(businessId: string): Promise<Row<'tax_configurations'>[]> {
+    const { data, error } = await this.client
+      .from('tax_configurations')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('tax_code', { ascending: true })
+      .order('effective_from', { ascending: true });
+    if (error) throw toRepositoryError('tax_configurations', error);
+    return data ?? [];
+  }
+
+  /**
    * Fetch the active, currently effective tax configuration for a specific
    * tax code.
    *
    * FIX [effective_to date filter]: same as findActiveByBusiness.
+   *
+   * `maybeSingle` is deliberate: from migration 20261022000000 a business
+   * cannot hold two periods of one tax code covering the same date, so a single
+   * answer is the only possible one. A schedule stored before that migration can
+   * still be ambiguous, and then this call fails loudly rather than picking one
+   * of the two rates — resolve it with src/lib/tax/taxConfiguration.ts, which
+   * reports that state as `ambiguous`.
    */
   async findByCode(
     businessId: string,
@@ -55,6 +83,18 @@ export class TaxRepository extends BaseRepository<'tax_configurations'> {
     return data ?? null;
   }
 
+  /**
+   * The stored standard VAT rate for a date, as a PERCENTAGE (17.5), or null
+   * when this business has no stored period for it.
+   *
+   * Note for callers: null means "this business has not configured a rate for
+   * that date" — it does not mean the rate is zero, and it does not say what a
+   * NEW document should use. Use `src/lib/tax/taxConfiguration.ts`
+   * (`findScheduleByBusiness` + `resolveTaxRate`) when the caller needs to know
+   * whether the rate came from the business, from the supported schedule, or
+   * from nowhere at all; that is also the only path that reports an ambiguous
+   * stored schedule rather than throwing.
+   */
   async getVatRate(businessId: string, asOf?: string): Promise<number | null> {
     const config = await this.findByCode(businessId, 'vat_standard', asOf);
     return config ? Number(config.rate) : null;

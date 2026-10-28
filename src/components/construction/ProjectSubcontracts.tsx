@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { FileText, Plus, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { subcontractRepository } from '@/dal/repositories/SubcontractRepository';
-import type { SubcontractSummary, SubcontractStatus } from '@/dal/types/construction';
-import { SUBCONTRACT_STATUS_TRANSITIONS } from '@/dal/types/construction';
-import type { SubcontractorProfileWithContact } from '@/dal/types/construction';
+import type { SubcontractSummary, SubcontractStatus } from '@/dal/types/subcontracts';
+import { SUBCONTRACT_STATUS_TRANSITIONS } from '@/dal/types/subcontracts';
+import type { SubcontractorProfileWithContact } from '@/dal/types/subcontracts';
 
 const FIELD_CLASS = 'mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100';
 interface AgreementDraft {

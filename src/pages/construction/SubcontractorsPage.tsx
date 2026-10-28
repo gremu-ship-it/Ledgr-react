@@ -8,7 +8,7 @@ import type {
   SubcontractorProfileWithContact,
   SubcontractorSafetyRating,
   UpdateSubcontractorProfileInput,
-} from '@/dal/types/construction';
+} from '@/dal/types/subcontracts';
 import { useAppStore } from '@/store/useAppStore';
 
 const TRADE_OPTIONS = [

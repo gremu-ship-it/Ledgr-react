@@ -10,7 +10,7 @@ import type {
   SubcontractorProfileWithContact,
   UpdateSubcontractInput,
   UpdateSubcontractorProfileInput,
-} from '../types/construction';
+} from '../types/subcontracts';
 import { NotFoundError, toRepositoryError } from '../errors/RepositoryError';
 
 export interface SubcontractorProfileFilters {

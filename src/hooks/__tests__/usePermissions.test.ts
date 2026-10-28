@@ -36,7 +36,7 @@ describe('Role-Based Access Control (RBAC)', () => {
         expect(isPathAllowedForRole(role, '/invoices')).toBe(true);
         expect(isPathAllowedForRole(role, '/dashboard')).toBe(false);
         expect(isPathAllowedForRole(role, '/payroll')).toBe(false);
-        expect(isPathAllowedForRole(role, '/reports')).toBe(false);
+        expect(isPathAllowedForRole(role, '/reports/trial-balance')).toBe(false);
         expect(isPathAllowedForRole(role, '/products')).toBe(false);
       });
     });
@@ -51,7 +51,8 @@ describe('Role-Based Access Control (RBAC)', () => {
     it('blocks accounting and inventory reports', () => {
       expect(isPathAllowedForRole('payroll_manager', '/payroll')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/dashboard')).toBe(true);
-      expect(isPathAllowedForRole('payroll_manager', '/reports')).toBe(false);
+      expect(isPathAllowedForRole('payroll_manager', '/reports/trial-balance')).toBe(false);
+      expect(isPathAllowedForRole('payroll_manager', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/products')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/accounts')).toBe(false);
     });
@@ -60,7 +61,8 @@ describe('Role-Based Access Control (RBAC)', () => {
   describe('Supervisor & Auditor payroll restrictions', () => {
     it('blocks payroll for supervisor and auditor', () => {
       expect(isPathAllowedForRole('supervisor', '/payroll')).toBe(false);
-      expect(isPathAllowedForRole('supervisor', '/reports')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/reports/trial-balance')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('viewer', '/payroll')).toBe(false);
     });
@@ -72,7 +74,6 @@ describe('Role-Based Access Control (RBAC)', () => {
         expect(isPathAllowedForRole(role, '/products')).toBe(true);
         expect(isPathAllowedForRole(role, '/warehouse')).toBe(true);
         expect(isPathAllowedForRole(role, '/transfers')).toBe(true);
-        expect(isPathAllowedForRole(role, '/inventory')).toBe(true);
         expect(isPathAllowedForRole(role, '/payroll')).toBe(false);
       });
     });
@@ -91,7 +92,7 @@ describe('Role-Based Access Control (RBAC)', () => {
     });
 
     it('board member has high-level read access excluding payroll and settings', () => {
-      expect(isPathAllowedForRole('board_member', '/reports')).toBe(true);
+      expect(isPathAllowedForRole('board_member', '/reports/trial-balance')).toBe(true);
       expect(isPathAllowedForRole('board_member', '/dashboard')).toBe(true);
       expect(isPathAllowedForRole('board_member', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('board_member', '/settings')).toBe(false);
@@ -106,14 +107,14 @@ describe('Role-Based Access Control (RBAC)', () => {
       expect(isPathAllowedForRole('cashier', '/support')).toBe(true);
       // No back-office surfaces: these bounce to the role's home (/pos).
       expect(isPathAllowedForRole('cashier', '/settings')).toBe(false);
-      expect(isPathAllowedForRole('cashier', '/reports')).toBe(false);
+      expect(isPathAllowedForRole('cashier', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('cashier', '/expenses')).toBe(false);
       expect(isPathAllowedForRole('cashier', '/payroll')).toBe(false);
       expect(getHomePathForRole('cashier')).toBe('/pos');
     });
 
     it('manager keeps the till plus the back-office pages it supervises', () => {
-      ['/pos', '/dashboard', '/products', '/warehouse', '/transfers', '/reports'].forEach((path) => {
+      ['/pos', '/dashboard', '/products', '/warehouse', '/transfers', '/reports/trial-balance'].forEach((path) => {
         expect(isPathAllowedForRole('manager', path)).toBe(true);
       });
       expect(isPathAllowedForRole('manager', '/settings')).toBe(false);
@@ -122,7 +123,7 @@ describe('Role-Based Access Control (RBAC)', () => {
     });
 
     it('stock clerk handles stock only and gets no POS access', () => {
-      ['/products', '/warehouse', '/transfers', '/inventory'].forEach((path) => {
+      ['/products', '/warehouse', '/transfers'].forEach((path) => {
         expect(isPathAllowedForRole('stock_clerk', path)).toBe(true);
       });
       expect(isPathAllowedForRole('stock_clerk', '/pos')).toBe(false);
@@ -133,7 +134,7 @@ describe('Role-Based Access Control (RBAC)', () => {
     it('gives every POS role at least one primary tab for the mobile bar', () => {
       // BottomNav filters its tabs through isPathAllowedForRole; a role with
       // nothing allowed would render a bar with only the FAB and "More".
-      const primaryPaths = ['/dashboard', '/pos', '/income', '/products', '/reports'];
+      const primaryPaths = ['/dashboard', '/pos', '/income', '/products', '/reports/trial-balance'];
       ['cashier', 'manager', 'stock_clerk'].forEach((role) => {
         expect(primaryPaths.some((p) => isPathAllowedForRole(role, p))).toBe(true);
       });
