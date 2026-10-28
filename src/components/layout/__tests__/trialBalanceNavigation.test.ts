@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { isItemLocked, navItemForPath } from '../navConfig';
+import { isItemLocked, navItemForPath, NAV_SECTIONS } from '../navConfig';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 describe('Reports navigation', () => {
+  it('lists only the seven standalone P4 reports in the Reports section', () => {
+    const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.reports');
+    expect(section?.items.map((item) => item.path)).toEqual([
+      '/reports/trial-balance',
+      '/reports/profit-loss',
+      '/reports/balance-sheet',
+      '/reports/cash-flow',
+      '/reports/revenue-breakdown',
+      '/reports/changes-in-equity',
+      '/reports/branch-performance',
+    ]);
+  });
+
   it('is visible across verticals and gated to Growth+', () => {
     const item = navItemForPath('/reports/trial-balance');
     expect(item).toBeDefined();

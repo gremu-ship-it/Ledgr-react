@@ -148,7 +148,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.revenueBreakdown', path: '/reports/revenue-breakdown', icon: BarChart2, minPlan: 'growth' },
       { labelKey: 'navigation.items.changesInEquity', path: '/reports/changes-in-equity', icon: Scale, minPlan: 'growth' },
       { labelKey: 'navigation.items.branchPerformance', path: '/reports/branch-performance', icon: Building2, minPlan: 'growth' },
-      { labelKey: 'navigation.items.reportsMultiCurrency', path: '/reports?tab=multi-currency', icon: Coins, minPlan: 'growth' },
     ],
   },
   {
@@ -164,7 +163,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     items: [
       { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
-      { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/statements', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/reconcile', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
     ],
   },
   {
