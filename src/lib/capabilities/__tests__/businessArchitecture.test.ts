@@ -210,12 +210,13 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
     expect(paths).toContain('/products');
   });
 
-  it('T — moves Construction under the renamed Supply Chain section as an Enterprise child', () => {
+  it('T — keeps Construction in a dedicated section immediately after Inventory', () => {
     const section = NAV_SECTIONS.find((candidate) => candidate.items.some((item) => item.path === '/construction'));
-    expect(section?.labelKey).toBe('navigation.sections.inventory');
-    const sectionPaths = section?.items.map((item) => item.path) ?? [];
-    expect(sectionPaths.indexOf('/construction')).toBe(sectionPaths.indexOf('/transfers') + 1);
-    expect(NAV_SECTIONS.some((candidate) => candidate.labelKey === 'navigation.sections.construction')).toBe(false);
+    expect(section?.labelKey).toBe('navigation.sections.construction');
+    expect(section?.items.map((item) => item.path)).toEqual(['/construction']);
+    const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');
+    const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.construction');
+    expect(constructionIndex).toBe(inventoryIndex + 1);
 
     const item = navItemForPath('/construction');
     expect(item).toMatchObject({

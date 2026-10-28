@@ -47,7 +47,7 @@ describe('Starter pricing and access', () => {
     }
   });
 
-  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports'])(
+  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital'])(
     'unlocks %s starting at Starter', (path) => {
       const item = navItemForPath(path)!;
       expect(item).toBeDefined();
@@ -57,7 +57,17 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it.each(['/journals', '/periods', '/audit', '/bank-reconcile', '/contacts', '/branches', '/departments', '/ai'])(
+  it.each(['/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow'])(
+    'keeps %s on Growth', (path) => {
+      const item = navItemForPath(path)!;
+      expect(item).toBeDefined();
+      expect(isItemLocked(item, 'starter')).toBe(true);
+      expect(isItemLocked(item, 'growth')).toBe(false);
+      expect(planRequiredForItem(item)?.tier).toBe('growth');
+    },
+  );
+
+  it.each(['/journals', '/periods', '/audit', '/bank-reconciliation/accounts', '/bank-reconciliation/statements', '/contacts', '/branches', '/departments', '/ai'])(
     'keeps %s on its existing higher tier', (path) => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },

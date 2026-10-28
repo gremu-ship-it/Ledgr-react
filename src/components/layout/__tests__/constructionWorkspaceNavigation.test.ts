@@ -38,17 +38,17 @@ const constructionItem = (businessType: BusinessType, planTier: PlanTier, role =
   navFor(businessType, planTier, role).find((item) => item.path === '/construction');
 
 describe('construction workspace navigation', () => {
-  it('sits under the renamed Supply Chain section, directly after Transfers', () => {
+  it('keeps Construction in its own section after Inventory', () => {
     const section = NAV_SECTIONS.find((candidate) =>
       candidate.items.some((item) => item.path === '/construction'));
-    expect(section?.labelKey).toBe('navigation.sections.inventory');
-    expect(en.navigation.sections.inventory).toBe('Supply Chain');
-    expect(en.navigation.items.constructionWorkspace).toBe('Construction');
+    expect(section?.labelKey).toBe('navigation.sections.construction');
+    expect(en.navigation.sections.construction).toBe('Construction');
+    expect(en.navigation.items.constructionWorkspace).toBe('Workspace');
+    expect(section?.items.map((item) => item.path)).toEqual(['/construction']);
 
-    const paths = section?.items.map((item) => item.path) ?? [];
-    expect(paths.indexOf('/construction')).toBe(paths.indexOf('/transfers') + 1);
-    // The standalone Construction section is gone.
-    expect(NAV_SECTIONS.some((candidate) => candidate.labelKey === 'navigation.sections.construction')).toBe(false);
+    const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');
+    const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.construction');
+    expect(constructionIndex).toBe(inventoryIndex + 1);
   });
 
   it('is an Enterprise child gated by the business type, not a role-free link', () => {
@@ -265,7 +265,8 @@ describe('construction vertical navigation cleanup', () => {
         const items = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(profile), 'enterprise')
           .flatMap((section) => section.items);
         expect(items.find((item) => item.path === '/income')?.labelKey).toBe('navigation.items.income');
-        expect(items.find((item) => item.path === '/reports')?.labelKey).toBe('navigation.items.reports');
+        expect(items.find((item) => item.path === '/reports/profit-loss')?.labelKey).toBe('nav.reports.profitLoss');
+        expect(items.find((item) => item.path === '/reports/balance-sheet')?.labelKey).toBe('nav.reports.balanceSheet');
         expect(items.find((item) => item.path === '/dashboard')?.labelKey).toBe('navigation.items.dashboard');
       }
 
