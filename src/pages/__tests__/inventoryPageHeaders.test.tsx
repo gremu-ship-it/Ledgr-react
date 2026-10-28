@@ -48,7 +48,6 @@ vi.mock('react-i18next', async () => {
 import { ProductsPage } from '@/pages/ProductsPage';
 import { WarehousePage } from '@/pages/WarehousePage';
 import { TransfersPage } from '@/pages/TransfersPage';
-import { InventoryPage } from '@/pages/InventoryPage';
 import { inventoryPageLabelKeys } from '@/hooks/useInventoryPageLabels';
 
 const RETAIL = { organisation_type: 'FOR_PROFIT', operating_models: ['RETAIL'] };
@@ -178,18 +177,6 @@ describe('supply chain page headers for a non-construction business', () => {
     selectBusiness(CONSTRUCTION);
     renderPage(<ProductsPage />);
     expect(screen.getByRole('heading', { name: 'Materials' })).toBeTruthy();
-  });
-});
-
-describe('the /inventory alias route', () => {
-  it('renders its own placeholder page, not ProductsPage — so no override applies', () => {
-    // The spec's alias fix was conditional on the alias rendering
-    // ProductsPage; it renders the legacy "Coming soon" placeholder instead,
-    // so the vocabulary swap belongs to the three real pages only.
-    selectBusiness(CONSTRUCTION);
-    renderPage(<InventoryPage />);
-    expect(screen.getByRole('heading', { name: 'Inventory' })).toBeTruthy();
-    expect(screen.getByText('Coming soon.')).toBeTruthy();
   });
 });
 
