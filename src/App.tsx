@@ -242,13 +242,30 @@ function App() {
             {/* Protected with AppLayout & RoleRoute — single source of truth, no duplicate paths */}
             <Route element={<ProtectedRoute />}>
               <Route element={<AppLayout />}>
-                {/* Local draft only; no repository call, backend request, or project authorization path. */}
-                <Route
-                  path="/projects-funding-sources/construction-draft"
-                  element={<ConstructionProjectSetupDraftPage />}
-                />
-                <Route path="/construction" element={<ConstructionProjectSetupDraftPage />} />
                 <Route element={<RoleRoute />}>
+                  {/* Both existing Construction URLs are authenticated, role-scoped,
+                      and Enterprise-gated. Keep these URLs stable. */}
+                  <Route
+                    path="/projects-funding-sources/construction-draft"
+                    element={
+                      <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">
+                        <ConstructionProjectSetupDraftPage />
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction"
+                    element={
+                      <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">
+                        <ConstructionProjectSetupDraftPage />
+                      </PlanGate>
+                    }
+                  />
+                  {/* TODO(operating-model cleanup): no Manufacturing route exists yet.
+                      Add future /manufacturing/* routes inside RoleRoute and wrap
+                      each route in PlanGate minPlan="enterprise". Until the
+                      operating-model vocabulary is revised, PRODUCT_SALES is the
+                      temporary model filter; MANUFACTURING is not a current value. */}
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
                     <CapabilityGate capability="pos">

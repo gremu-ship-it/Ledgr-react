@@ -2,8 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import '@/i18n';
 import { ConstructionProjectSetupDraftPage } from '@/pages/ConstructionProjectSetupDraftPage';
 import { useAppStore } from '@/store/useAppStore';
+
+const planState = vi.hoisted(() => ({ tier: 'enterprise' }));
+vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: planState.tier }) }));
 
 const BUSINESS_A = {
   role: 'owner',
@@ -72,6 +76,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  planState.tier = 'enterprise';
   useAppStore.setState({ currentBusiness: BUSINESS_A });
   vi.stubGlobal('fetch', fetchMock);
 });

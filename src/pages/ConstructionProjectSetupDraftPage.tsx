@@ -3,6 +3,7 @@ import type { Business } from '@/types';
 import { MaterialReceiptPreparationSection } from '@/components/construction/MaterialReceiptPreparationSection';
 import { MaterialTransferPreparationSection } from '@/components/construction/MaterialTransferPreparationSection';
 import { useAppStore } from '@/store/useAppStore';
+import { PlanGate } from '@/components/billing/PlanGate';
 import type {
   LocalMaterialReceiptPreparation,
   MaterialReceiptPreparationFields,
@@ -88,7 +89,11 @@ function fieldsFromDraft(draft: LocalConstructionProjectDraft): ConstructionWork
 
 export function ConstructionProjectSetupDraftPage() {
   const business = useAppStore((state) => state.currentBusiness?.business ?? null);
-  return <ConstructionWorkspace key={business?.id ?? 'no-business'} business={business} />;
+  return (
+    <PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">
+      <ConstructionWorkspace key={business?.id ?? 'no-business'} business={business} />
+    </PlanGate>
+  );
 }
 
 export const ConstructionProjectWorkspacePage = ConstructionProjectSetupDraftPage;

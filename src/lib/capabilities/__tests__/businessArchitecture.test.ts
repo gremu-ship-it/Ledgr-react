@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import { visibleSectionsFor, navItemForPath } from '@/components/layout/navConfig';
+import { planMeetsMin, visibleSectionsFor, navItemForPath } from '@/components/layout/navConfig';
 import { resolveBusinessCapability } from '@/hooks/useCapability';
 import {
   deriveOrganisationCapabilityDefaults,
   organisationCapabilityDecision,
+  ORGANISATION_CAPABILITIES,
   type BusinessOrganisationProfile,
 } from '../profile';
 
@@ -81,6 +82,18 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
       ...fullAccess,
       subscription: false,
     })).toBe(false);
+  });
+
+  it('keeps Construction and Manufacturing Enterprise-only and outside self-grant capabilities', () => {
+    for (const vertical of ['Construction', 'Manufacturing']) {
+      expect(planMeetsMin('free', 'enterprise'), vertical).toBe(false);
+      expect(planMeetsMin('starter', 'enterprise'), vertical).toBe(false);
+      expect(planMeetsMin('growth', 'enterprise'), vertical).toBe(false);
+      expect(planMeetsMin('pro', 'enterprise'), vertical).toBe(false);
+      expect(planMeetsMin('enterprise', 'enterprise'), vertical).toBe(true);
+    }
+    expect(ORGANISATION_CAPABILITIES as readonly string[]).not.toContain('construction');
+    expect(ORGANISATION_CAPABILITIES as readonly string[]).not.toContain('manufacturing');
   });
 
   it('L — organisation settings cannot exceed a partner feature flag', () => {

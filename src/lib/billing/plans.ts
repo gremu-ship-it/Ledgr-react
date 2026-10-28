@@ -109,6 +109,12 @@ export const PLANS: Record<PlanTier, Plan> = {
 /** Ordered lowest → highest, used for "next tier up" style logic. */
 export const PLAN_TIER_ORDER: PlanTier[] = ['free', 'starter', 'growth', 'pro', 'enterprise'];
 
+/** True when an actual tier meets a feature's minimum plan requirement. */
+export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
+  if (!required) return true;
+  return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
+}
+
 export function getPlan(tier: PlanTier): Plan {
   return PLANS[tier];
 }

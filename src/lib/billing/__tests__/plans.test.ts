@@ -37,12 +37,42 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
-      const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
+      const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
-        expect(isItemLocked(item, 'free'), item.path).toBe(!available);
+        expect(isItemLocked(item, 'free', section.minPlan), item.path).toBe(!available);
       }
     }
+  });
+
+  it('locks Construction paths for every lower tier and unlocks them only for Enterprise', () => {
+    const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.construction');
+    const item = navItemForPath('/construction');
+    expect(section?.minPlan).toBe('enterprise');
+    expect(item?.minPlan).toBe('enterprise');
+    expect(planRequiredForItem(item!, section?.minPlan)?.tier).toBe('enterprise');
+
+    for (const tier of PLAN_TIER_ORDER) {
+      expect(isItemLocked(item!, tier, section?.minPlan)).toBe(tier !== 'enterprise');
+    }
+  });
+
+  it('wraps both existing Construction URLs in an Enterprise gate inside RoleRoute', () => {
+    const app = source('src/App.tsx');
+    const roleRouteStart = app.indexOf('<Route element={<RoleRoute />}>');
+    expect(roleRouteStart).toBeGreaterThanOrEqual(0);
+
+    for (const path of ['/projects-funding-sources/construction-draft', '/construction']) {
+      const routeStart = app.indexOf(`path="${path}"`);
+      const routeEnd = app.indexOf('</PlanGate>', routeStart);
+      expect(routeStart).toBeGreaterThan(roleRouteStart);
+      expect(routeEnd).toBeGreaterThan(routeStart);
+      const gatedRoute = app.slice(routeStart, routeEnd);
+      expect(gatedRoute).toContain('<PlanGate minPlan="enterprise"');
+      expect(gatedRoute).toContain('<ConstructionProjectSetupDraftPage />');
+    }
+
+    expect(source('src/pages/ConstructionProjectSetupDraftPage.tsx'))
+      .toContain('<PlanGate minPlan="enterprise" featureNameKey="navigation.sections.construction">');
   });
 
   it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports'])(

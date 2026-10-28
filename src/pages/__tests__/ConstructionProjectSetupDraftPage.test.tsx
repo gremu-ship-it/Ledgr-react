@@ -2,8 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import '@/i18n';
 import { ConstructionProjectSetupDraftPage } from '@/pages/ConstructionProjectSetupDraftPage';
 import { useAppStore } from '@/store/useAppStore';
+
+const planState = vi.hoisted(() => ({
+  tier: 'enterprise' as 'free' | 'starter' | 'growth' | 'pro' | 'enterprise',
+}));
+vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: planState.tier }) }));
 
 const BUSINESS_A = {
   role: 'owner',
@@ -63,6 +69,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  planState.tier = 'enterprise';
   useAppStore.setState({ currentBusiness: BUSINESS_A });
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -79,6 +86,16 @@ describe('ConstructionProjectSetupDraftPage', () => {
     expect(screen.getByRole('button', { name: 'Create the first project draft' })).toBeTruthy();
     expect(storageSnapshot()).toEqual(storageBefore);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('blocks a Pro plan at the page boundary before rendering Construction content', () => {
+    planState.tier = 'pro';
+    renderWorkspace();
+
+    expect(screen.queryByRole('heading', { name: 'Construction workspace' })).toBeNull();
+    expect(screen.getByText('Construction requires an upgrade')).toBeTruthy();
+    expect(screen.getByText('This feature is available on the Enterprise plan and above.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View plans' })).toBeTruthy();
   });
 
   it('validates, creates, inspects, edits, searches, and filters local drafts', async () => {

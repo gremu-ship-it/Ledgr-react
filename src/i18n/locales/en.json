@@ -574,6 +574,13 @@
     "contactBody": "The assistant handles most questions. For billing disputes, legal, or urgent issues, email our team.",
     "disclaimer": "The assistant uses AI and may make mistakes. Verify important financial or compliance details. Conversations are not used to train models without your consent."
   },
+  "planGate": {
+    "defaultFeature": "This feature",
+    "upgradeRequired": "{{feature}} requires an upgrade",
+    "availableOnPlan": "This feature is available on the {{plan}} plan and above.",
+    "unavailable": "This feature isn’t available on your current plan.",
+    "viewPlans": "View plans"
+  },
   "demo": {
     "bannerLabel": "Demo account — sample data, not your books",
     "bannerShort": "Demo mode",

@@ -25,7 +25,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
-import { hasCapability, PLAN_TIER_ORDER, PLANS } from '@/lib/billing/plans';
+import { hasCapability, PLAN_TIER_ORDER, PLANS, planMeetsMin } from '@/lib/billing/plans';
+export { planMeetsMin };
 import type { PartnerFeatureKey } from '@/types/partners';
 import type { OrganisationCapability } from '@/lib/capabilities/profile';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
@@ -97,15 +98,20 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   },
   {
     labelKey: 'navigation.sections.construction',
+    minPlan: 'enterprise',
     items: [
       {
         labelKey: 'navigation.items.constructionWorkspace',
         path: '/construction',
         icon: Building2,
-        allowAllAuthenticatedRoles: true,
+        minPlan: 'enterprise',
       },
     ],
   },
+  // Manufacturing navigation has not been added on this branch. When its
+  // items are introduced, require Enterprise on the section and every item;
+  // use PRODUCT_SALES as a temporary vertical filter until operating-model
+  // vocabulary is revisited (there is no MANUFACTURING model today).
   {
     labelKey: 'navigation.sections.ai',
     items: [
@@ -121,11 +127,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
-  if (!required) return true;
-  return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
-}
 
 export function visibleSectionsFor(
   isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
