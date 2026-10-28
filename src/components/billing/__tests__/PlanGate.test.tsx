@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import '@/i18n';
 import { PlanGate } from '../PlanGate';
 import { PartnerPlanGate } from '../PartnerPlanGate';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -14,7 +15,7 @@ vi.mock('@/partner/PartnerContext', () => ({
     isFeatureEnabled: () => state.partnerEnabled,
   }),
 }));
-afterEach(() => { cleanup(); state.partnerEnabled = true; });
+afterEach(() => { cleanup(); state.partnerEnabled = true; state.tier = 'free'; });
 
 describe('subscription page gates', () => {
   it.each<[PlanTier, PlanCapability, boolean]>([
@@ -28,6 +29,17 @@ describe('subscription page gates', () => {
     render(<MemoryRouter><PlanGate capability={capability} featureName="Module"><div>Module content</div></PlanGate></MemoryRouter>);
     expect(screen.queryByText('Module content') !== null).toBe(allowed);
     expect(screen.queryByRole('link', { name: 'View plans' }) !== null).toBe(!allowed);
+  });
+
+  it('gates a minimum-tier feature on Enterprise without inventing a capability', () => {
+    state.tier = 'pro';
+    const { rerender } = render(<MemoryRouter><PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title"><div>Manufacturing content</div></PlanGate></MemoryRouter>);
+    expect(screen.queryByText('Manufacturing content')).toBeNull();
+    expect(screen.getByText('Bill of Materials requires an upgrade')).toBeTruthy();
+    expect(screen.getByText('This feature is available on the Enterprise plan and above.')).toBeTruthy();
+    state.tier = 'enterprise';
+    rerender(<MemoryRouter><PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title"><div>Manufacturing content</div></PlanGate></MemoryRouter>);
+    expect(screen.getByText('Manufacturing content')).toBeTruthy();
   });
 
   it('advertises Starter rather than Growth for Free inventory', () => {

@@ -67,6 +67,11 @@ describe('Role-Based Access Control (RBAC)', () => {
   });
 
   describe('Inventory Manager & Warehouse Worker', () => {
+    it('allows inventory managers to access BOMs but keeps warehouse-worker scope unchanged', () => {
+      expect(isPathAllowedForRole('inventory_manager', '/manufacturing/bom')).toBe(true);
+      expect(isPathAllowedForRole('warehouse_worker', '/manufacturing/bom')).toBe(false);
+    });
+
     it('restricts to inventory and products', () => {
       ['inventory_manager', 'warehouse_worker'].forEach((role) => {
         expect(isPathAllowedForRole(role, '/products')).toBe(true);
@@ -113,7 +118,7 @@ describe('Role-Based Access Control (RBAC)', () => {
     });
 
     it('manager keeps the till plus the back-office pages it supervises', () => {
-      ['/pos', '/dashboard', '/products', '/warehouse', '/transfers', '/reports'].forEach((path) => {
+      ['/pos', '/dashboard', '/products', '/warehouse', '/transfers', '/reports', '/manufacturing/bom'].forEach((path) => {
         expect(isPathAllowedForRole('manager', path)).toBe(true);
       });
       expect(isPathAllowedForRole('manager', '/settings')).toBe(false);

@@ -82,7 +82,8 @@
       "organisation": "Organisation",
       "construction": "Construction",
       "support": "Help",
-      "admin": "Admin"
+      "admin": "Admin",
+      "manufacturing": "Manufacturing"
     },
     "items": {
       "ledgrAi": "Ledgr AI",
@@ -618,6 +619,81 @@
         "title": "Not available in the demo",
         "body": "This feature acts on a live Ledgr account. Create a free account to use it with your own books."
       }
+    }
+  },
+  "manufacturing": {
+    "bom": {
+      "title": "Bill of Materials",
+      "subtitle": "Define versioned component lists for one finished unit.",
+      "newBom": "New BOM",
+      "createFirst": "Create your first BOM",
+      "code": "BOM code",
+      "name": "BOM name",
+      "outputProduct": "Output product",
+      "selectOutputProduct": "Select an output product",
+      "version": "Version",
+      "versions": "Versions",
+      "versionLabel": "Version label",
+      "status": "Status",
+      "draft": "Draft",
+      "active": "Active",
+      "archived": "Archived",
+      "noVersion": "No version saved",
+      "activeVersion": "Active version",
+      "selectVersion": "Select a version",
+      "newVersion": "New version",
+      "saveVersion": "Save draft version",
+      "activateVersion": "Activate version",
+      "confirmActivate": "Activate this version? The current active version will be archived.",
+      "addComponent": "Add component",
+      "addSubassembly": "Add sub-assembly",
+      "rawMaterial": "Raw material",
+      "subAssembly": "Sub-assembly",
+      "component": "Component",
+      "quantityPerUnit": "Quantity per output unit",
+      "unit": "Unit of measure",
+      "scrapPercentage": "Scrap %",
+      "notes": "Notes",
+      "noComponents": "No components in this version yet.",
+      "noBoms": "No bills of materials yet.",
+      "selectComponent": "Select a component",
+      "selectProduct": "Select a product",
+      "selectSubassembly": "Select a sub-assembly BOM",
+      "selectSubassemblyVersion": "Select the sub-assembly version",
+      "addToBom": "Add to BOM",
+      "removeComponent": "Remove component",
+      "expandSubassembly": "Expand sub-assembly",
+      "collapseSubassembly": "Collapse sub-assembly",
+      "loading": "Loading BOMs…",
+      "listCode": "Code",
+      "listName": "Name",
+      "listProduct": "Output product",
+      "listVersion": "Active version",
+      "errors": {
+        "requiredCode": "Enter a BOM code.",
+        "requiredName": "Enter a BOM name.",
+        "requiredProduct": "Select an output product.",
+        "requiredComponent": "Select a product or sub-assembly.",
+        "requiredVersion": "Select a sub-assembly version.",
+        "positiveQuantity": "Enter a quantity greater than zero.",
+        "cycleError": "Cannot add {{bomName}} as a sub-assembly: it would create a circular reference.",
+        "unknownSubassembly": "the selected sub-assembly",
+        "saveFailed": "Could not save this BOM version. Try again.",
+        "activateFailed": "Could not activate this BOM version. Try again.",
+        "loadFailed": "Could not load BOM data. Try again.",
+        "invalidScrap": "Scrap percentage must be at least zero and less than 100."
+      },
+      "versionNumber": "Version {{number}}",
+      "saved": "Draft version saved.",
+      "activated": "BOM version activated."
+    }
+  },
+  "billing": {
+    "planGate": {
+      "upgradeRequired": "{{feature}} requires an upgrade",
+      "availableOnPlan": "This feature is available on the {{plan}} plan and above.",
+      "unavailable": "This feature isn't available on your current plan.",
+      "viewPlans": "View plans"
     }
   }
 }

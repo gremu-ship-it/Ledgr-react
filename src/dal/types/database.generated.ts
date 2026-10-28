@@ -674,6 +674,191 @@ export type Database = {
           },
         ]
       }
+      bom_components: {
+        Row: {
+          bom_version_id: string
+          business_id: string
+          component_bom_version_id: string | null
+          component_product_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          quantity: number
+          scrap_percentage: number
+          sort_order: number
+          unit_of_measure: string
+        }
+        Insert: {
+          bom_version_id: string
+          business_id: string
+          component_bom_version_id?: string | null
+          component_product_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          quantity: number
+          scrap_percentage?: number
+          sort_order?: number
+          unit_of_measure?: string
+        }
+        Update: {
+          bom_version_id?: string
+          business_id?: string
+          component_bom_version_id?: string | null
+          component_product_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          quantity?: number
+          scrap_percentage?: number
+          sort_order?: number
+          unit_of_measure?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_components_bom_version_id_fkey"
+            columns: ["bom_version_id"]
+            isOneToOne: false
+            referencedRelation: "bom_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_components_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_components_component_bom_version_id_fkey"
+            columns: ["component_bom_version_id"]
+            isOneToOne: false
+            referencedRelation: "bom_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_components_component_product_id_fkey"
+            columns: ["component_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bom_versions: {
+        Row: {
+          bom_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          effective_from: string | null
+          effective_to: string | null
+          id: string
+          notes: string | null
+          status: string
+          version_label: string | null
+          version_number: number
+        }
+        Insert: {
+          bom_id: string
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string | null
+          effective_to?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          version_label?: string | null
+          version_number: number
+        }
+        Update: {
+          bom_id?: string
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string | null
+          effective_to?: string | null
+          id?: string
+          notes?: string | null
+          status?: string
+          version_label?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bom_versions_bom_id_fkey"
+            columns: ["bom_id"]
+            isOneToOne: false
+            referencedRelation: "boms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bom_versions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      boms: {
+        Row: {
+          business_id: string
+          code: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          product_id: string
+          unit_of_measure: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          code: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          product_id: string
+          unit_of_measure?: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          product_id?: string
+          unit_of_measure?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boms_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boms_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branches: {
         Row: {
           business_id: string
@@ -6161,6 +6346,22 @@ export type Database = {
         }
         Returns: undefined
       }
+      activate_bom_version: {
+        Args: { p_bom_version_id: string; p_business_id: string }
+        Returns: {
+          bom_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          effective_from: string | null
+          effective_to: string | null
+          id: string
+          notes: string | null
+          status: string
+          version_label: string | null
+          version_number: number
+        }
+      }
       apply_subscription_payment: {
         Args: {
           p_gateway_reference: string
@@ -6371,6 +6572,18 @@ export type Database = {
       }
       reserve_next_document_number: {
         Args: { p_business_id: string; p_kind: string }
+        Returns: string
+      }
+      save_bom_version: {
+        Args: {
+          p_bom_id: string | null
+          p_business_id: string
+          p_code: string
+          p_components: Json
+          p_name: string
+          p_product_id: string
+          p_version_label: string | null
+        }
         Returns: string
       }
       seed_new_business: { Args: { p_biz: Json }; Returns: undefined }

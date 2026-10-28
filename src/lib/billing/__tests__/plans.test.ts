@@ -61,6 +61,21 @@ describe('Starter pricing and access', () => {
     },
   );
 
+  it('gates the BOM navigation item and route at Enterprise without adding a capability', () => {
+    const section = NAV_SECTIONS.find((item) => item.labelKey === 'navigation.sections.manufacturing');
+    const bom = navItemForPath('/manufacturing/bom');
+    expect(section?.minPlan).toBe('enterprise');
+    expect(bom?.minPlan).toBe('enterprise');
+    expect(isItemLocked(bom!, 'pro')).toBe(true);
+    expect(isItemLocked(bom!, 'enterprise')).toBe(false);
+    const app = source('src/App.tsx');
+    expect(app).toContain('<Route path="/manufacturing/bom"');
+    expect(app).toContain('<PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title">');
+    const english = JSON.parse(source('src/i18n/locales/en.json')) as { manufacturing?: { bom?: { title?: string } }; navigation?: { sections?: { manufacturing?: string } } };
+    expect(english.manufacturing?.bom?.title).toBe('Bill of Materials');
+    expect(english.navigation?.sections?.manufacturing).toBe('Manufacturing');
+  });
+
   it('recommends the cheapest eligible tier for locked features', () => {
     expect(planRequiredFor('inventory')?.tier).toBe('starter');
     expect(planRequiredFor('core_accounting')?.tier).toBe('starter');

@@ -79,6 +79,7 @@ const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsig
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
 const TransfersPage = lazyPage(() => import('@/pages/TransfersPage'), 'TransfersPage');
+const BomEditorPage = lazyPage(() => import('@/pages/manufacturing/BomEditorPage'), 'BomEditorPage');
 const BranchesPage = lazyPage(() => import('@/pages/BranchesPage'), 'BranchesPage');
 const DepartmentsPage = lazyPage(() => import('@/pages/DepartmentsPage'), 'DepartmentsPage');
 const PeriodManagementPage = lazyPage(() => import('@/pages/PeriodManagementPage'), 'PeriodManagementPage');
@@ -273,6 +274,11 @@ function App() {
                         <ProductsPage />
                       </CapabilityGate>
                     </PartnerPlanGate>
+                  } />
+                  <Route path="/manufacturing/bom" element={
+                    <PlanGate minPlan="enterprise" featureNameKey="manufacturing.bom.title">
+                      <BomEditorPage />
+                    </PlanGate>
                   } />
                   <Route path="/inventory" element={
                     <PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Inventory">

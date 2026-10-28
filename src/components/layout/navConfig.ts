@@ -21,6 +21,7 @@ import {
   ShieldCheck,
   LifeBuoy,
   Building2,
+  Boxes,
   ShoppingBag,
   type LucideIcon,
 } from 'lucide-react';
@@ -104,6 +105,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         icon: Building2,
         allowAllAuthenticatedRoles: true,
       },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.manufacturing',
+    minPlan: 'enterprise',
+    items: [
+      { labelKey: 'manufacturing.bom.title', path: '/manufacturing/bom', icon: Boxes, minPlan: 'enterprise' },
     ],
   },
   {

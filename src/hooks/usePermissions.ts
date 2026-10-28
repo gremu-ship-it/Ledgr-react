@@ -467,7 +467,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/income', '/expenses', '/invoices', '/pos', '/pos/shifts'].includes(path);
 
     case 'manager':
-      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports'].includes(path);
+      return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/inventory', '/reports', '/manufacturing/bom'].includes(path);
 
     case 'stock_clerk':
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
@@ -498,7 +498,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'inventory_manager':
-      return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
+      return ['/products', '/warehouse', '/transfers', '/inventory', '/manufacturing/bom'].includes(path);
 
     case 'supervisor':
       if (path === '/payroll' || path === '/reports') return false;
