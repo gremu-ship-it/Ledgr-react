@@ -98,6 +98,7 @@ export function BottomNav() {
   const [showExpense, setShowExpense] = useState(false);
   const [showIncome, setShowIncome] = useState(false);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const operatingModels = currentBusiness?.business?.operating_models ?? null;
   const businessId = currentBusiness?.business?.id;
   const { planTier } = useUsage();
 
@@ -129,7 +130,7 @@ export function BottomNav() {
   // the shared construction table — a construction business reads Site Stores /
   // Material Transfers here exactly as it does in the sidebar.
   const { bottomItems, moreItems } = useMemo(() => {
-    const navLabelFor = navLabelResolver(isOrgCapabilityEnabled);
+    const navLabelFor = navLabelResolver(isOrgCapabilityEnabled, operatingModels);
     const primaryItems = (homeIsPos && posNavItem
       ? [posNavItem, ...BOTTOM_NAV_ITEMS]
       : BOTTOM_NAV_ITEMS
@@ -154,7 +155,7 @@ export function BottomNav() {
         .filter((i) => allowedForRole(i.path))
         .map((i) => ({ ...i, labelKey: navLabelFor(i.labelKey) })),
     };
-  }, [homeIsPos, posNavItem, isFeatureEnabled, isOrgCapabilityEnabled, allowedForRole]);
+  }, [homeIsPos, posNavItem, isFeatureEnabled, isOrgCapabilityEnabled, operatingModels, allowedForRole]);
 
   // The FAB writes, so an action needs both gates:
   //   canWrite             — a viewer or auditor may open /income and /expenses

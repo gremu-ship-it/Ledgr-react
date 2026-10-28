@@ -44,6 +44,8 @@ export interface NavItemConfig {
   /** For authenticated, memory-only routes that expose no role-protected server data. */
   allowAllAuthenticatedRoles?: boolean;
   requiresOrgCapability?: OrganisationCapability;
+  /** Per-operating-model label keys; paths and access gates remain unchanged. */
+  verticalLabelOverrides?: Readonly<Record<string, string>>;
   /**
    * Pass-1 removal for the sites vocabulary: a pure construction or
    * manufacturing business manages its branch mirrors under Organisation →
@@ -87,9 +89,33 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.inventory',
     items: [
-      { labelKey: 'navigation.items.products', path: '/products', icon: Package, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
-      { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
-      { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, partnerFeature: 'inventory', requiresCapability: 'inventory', requiresOrgCapability: 'inventory' },
+      {
+        labelKey: 'navigation.items.products',
+        path: '/products',
+        icon: Package,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
+        verticalLabelOverrides: { PROJECT_BASED: 'navigation.items.materials' },
+      },
+      {
+        labelKey: 'navigation.items.warehouse',
+        path: '/warehouse',
+        icon: Warehouse,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
+        verticalLabelOverrides: { PROJECT_BASED: 'navigation.items.siteStores' },
+      },
+      {
+        labelKey: 'navigation.items.transfers',
+        path: '/transfers',
+        icon: ArrowLeftRight,
+        partnerFeature: 'inventory',
+        requiresCapability: 'inventory',
+        requiresOrgCapability: 'inventory',
+        verticalLabelOverrides: { PROJECT_BASED: 'navigation.items.materialTransfer' },
+      },
     ],
   },
   {
@@ -209,35 +235,41 @@ export function planMeetsMin(actual: PlanTier, required?: PlanTier): boolean {
   return PLAN_TIER_ORDER.indexOf(actual) >= PLAN_TIER_ORDER.indexOf(required);
 }
 
-// ── Materials label vocabulary (construction and manufacturing) ──────────────
+// ── Vertical navigation vocabulary ─────────────────────────────────────────
 
 /**
- * A construction business buys its materials, stores them on site and moves
- * them between sites, so the Supply Chain children read in site language
- * instead of retail language. The routes, icons and gates are identical — only
- * the label key changes — so this is a vocabulary swap, never a second set of
- * nav items: `/products` must not appear twice under two names, and a
- * Construction + Retail business (both capabilities on) keeps one Materials
- * entry rather than a Materials/Products pair.
+ * Construction/manufacturing capabilities use Sites for the existing
+ * Locations entry. Inventory vocabulary is a separate, operating-model-based
+ * decision: only PROJECT_BASED rewrites Products, Warehouse, and Transfers.
+ * Routes, icons, and gates stay unchanged; no duplicate nav items are created.
  *
- * A manufacturing business reads exactly the same vocabulary: it also buys
- * materials, holds them in stores and moves them through production, so the
- * same three keys are rewritten and MANUFACTURING_LABEL_OVERRIDES is an alias
- * of this table rather than a second one that could drift from it.
- *
- * Keyed by the default label key so any surface holding a nav label — the
- * sidebar, the mobile workspace list, the bottom bar's own More menu — resolves
- * through one table.
+ * Keyed by the default label so navigation surfaces that hold their own items
+ * can use the same translation mapping.
  */
 export const CONSTRUCTION_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
-  'navigation.items.products': 'navigation.items.materials',
-  'navigation.items.warehouse': 'navigation.items.siteStores',
-  'navigation.items.transfers': 'navigation.items.materialTransfers',
-  // A construction business runs sites, and a manufacturer runs its factory
-  // and stores as sites too, so the locations master-data entry reads in the
-  // same vocabulary ("Sites") for both — one shared table, no drift.
+  // Construction and manufacturing businesses manage branch mirrors under
+  // Sites/Locations; this capability-based label does not affect inventory
+  // vocabulary, which is selected only by the PROJECT_BASED operating model.
   'navigation.items.locations': 'navigation.items.sites',
 };
+
+/** PROJECT_BASED changes only the three existing Supply Chain labels. */
+export const PROJECT_BASED_LABEL_OVERRIDES: Readonly<Record<string, string>> = {
+  'navigation.items.products': 'navigation.items.materials',
+  'navigation.items.warehouse': 'navigation.items.siteStores',
+  'navigation.items.transfers': 'navigation.items.materialTransfer',
+};
+
+/** Resolve an item label using the selected model without changing its route. */
+export function resolveNavItemLabelKey(
+  item: NavItemConfig,
+  operatingModels: readonly string[] | null | undefined,
+): string {
+  for (const [model, labelKey] of Object.entries(item.verticalLabelOverrides ?? {})) {
+    if (operatingModels?.includes(model)) return labelKey;
+  }
+  return item.labelKey;
+}
 
 /**
  * Operating models whose daily surface is the retail till and its branch
@@ -266,22 +298,25 @@ export function sitesVocabularyReplacesBranches(
   return !(operatingModels ?? []).some((model) => RETAIL_FAMILY_MODELS.has(model));
 }
 
-/** A manufacturing business uses the same materials vocabulary as construction. */
+/** Construction and manufacturing share the existing Sites label override. */
 export const MANUFACTURING_LABEL_OVERRIDES: Readonly<Record<string, string>> =
   CONSTRUCTION_LABEL_OVERRIDES;
 
 /**
  * Resolve one nav label key for a business.
  *
- * `useMaterialsVocabulary` is true for a construction or a manufacturing
- * business; every other business gets the key back untouched, so the default
- * vocabulary can never drift.
+ * `useSitesVocabulary` is true for a construction or manufacturing business;
+ * inventory labels are resolved separately from the selected operating model.
  */
 export function resolveNavLabelKey(
   labelKey: string,
-  useMaterialsVocabulary: boolean,
+  useSitesVocabulary: boolean,
+  operatingModels?: readonly string[] | null,
 ): string {
-  if (!useMaterialsVocabulary) return labelKey;
+  if (operatingModels?.includes('PROJECT_BASED')) {
+    return PROJECT_BASED_LABEL_OVERRIDES[labelKey] ?? labelKey;
+  }
+  if (!useSitesVocabulary) return labelKey;
   return CONSTRUCTION_LABEL_OVERRIDES[labelKey] ?? labelKey;
 }
 
@@ -293,10 +328,11 @@ export function resolveNavLabelKey(
  */
 export function navLabelResolver(
   isOrgCapabilityEnabled: (capability: OrganisationCapability) => boolean,
+  operatingModels?: readonly string[] | null,
 ): (labelKey: string) => string {
-  const useMaterialsVocabulary = isOrgCapabilityEnabled('construction')
+  const useSitesVocabulary = isOrgCapabilityEnabled('construction')
     || isOrgCapabilityEnabled('manufacturing');
-  return (labelKey: string) => resolveNavLabelKey(labelKey, useMaterialsVocabulary);
+  return (labelKey: string) => resolveNavLabelKey(labelKey, useSitesVocabulary, operatingModels);
 }
 
 /**
@@ -319,11 +355,10 @@ export function navLabelResolver(
  * A section disappears only when pass 1 leaves it with no items, so a heading
  * can never outlive its entire contents.
  *
- * Pass 3 — vocabulary. A construction or manufacturing business reads the Supply
- * Chain children as Materials / Site Stores / Material Transfers (see
- * CONSTRUCTION_LABEL_OVERRIDES, aliased by MANUFACTURING_LABEL_OVERRIDES). Only
- * `labelKey` is rewritten: paths, icons and both gates above are untouched, and a
- * business with neither capability gets the default keys back unchanged.
+ * Pass 3 — vocabulary. PROJECT_BASED businesses read the existing Supply Chain
+ * children as Materials / Site Stores / Materials Transfer. Only `labelKey` is
+ * rewritten: routes, icons, and both gates above are untouched. Other operating
+ * models keep Products / Warehouse / Transfers.
  *
  * `isOrgCapabilityEnabled` is required: without a business-type decision there
  * is nothing to filter on, and silently skipping the type gate is exactly how
@@ -336,7 +371,8 @@ export function visibleSectionsFor(
   currentTier?: PlanTier,
   operatingModels?: readonly string[] | null,
 ): NavSectionConfig[] {
-  const resolveLabelKey = navLabelResolver(isOrgCapabilityEnabled);
+  const useSitesVocabulary = isOrgCapabilityEnabled('construction')
+    || isOrgCapabilityEnabled('manufacturing');
   const sitesReplaceBranches = sitesVocabularyReplacesBranches(isOrgCapabilityEnabled, operatingModels);
 
   return NAV_SECTIONS
@@ -356,7 +392,13 @@ export function visibleSectionsFor(
       // Pass 3 — rewrite the label for a construction business.
       const items: NavItemConfig[] = reachable.map((item) => ({
         ...item,
-        labelKey: resolveLabelKey(item.labelKey),
+        labelKey: resolveNavItemLabelKey(
+          {
+            ...item,
+            labelKey: resolveNavLabelKey(item.labelKey, useSitesVocabulary),
+          },
+          operatingModels,
+        ),
         ...(currentTier === undefined
           ? {}
           : { locked: isItemLocked(item, currentTier, section.minPlan) }),

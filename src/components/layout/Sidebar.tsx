@@ -30,10 +30,9 @@ export function Sidebar() {
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const isPlatformAdmin = useIsPlatformAdmin();
   const visibleSections = visibleSectionsFor(isFeatureEnabled, role, isOrgCapabilityEnabled, planTier, operatingModels);
-  // `visibleSectionsFor` already rewrote each item's labelKey for a
-  // construction business; the resolver keeps the collapsed-rail tooltip and
-  // the upgrade prompt on the same vocabulary as the link text.
-  const labelKeyFor = navLabelResolver(isOrgCapabilityEnabled);
+  // `visibleSectionsFor` already applies business labels; the resolver keeps
+  // the collapsed-rail tooltip and upgrade prompt aligned with the link text.
+  const labelKeyFor = navLabelResolver(isOrgCapabilityEnabled, operatingModels);
 
   const [isResizing, setIsResizing] = useState(false);
   const startX = useRef(0);

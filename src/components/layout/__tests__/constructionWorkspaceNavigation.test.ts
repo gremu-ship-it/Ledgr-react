@@ -6,6 +6,7 @@ import {
   NAV_SECTIONS,
   isItemLocked,
   navItemForPath,
+  resolveNavItemLabelKey,
   resolveNavLabelKey,
   visibleSectionsFor,
 } from '@/components/layout/navConfig';
@@ -127,6 +128,11 @@ const retailBusiness: BusinessOrganisationProfile = {
   operating_models: ['RETAIL'],
 };
 
+const projectBasedBusiness: BusinessOrganisationProfile = {
+  organisation_type: 'FOR_PROFIT',
+  operating_models: ['PROJECT_BASED'],
+};
+
 const fullAccess = { subscription: true, partner: true, role: true };
 
 /**
@@ -151,6 +157,7 @@ function supplyChainFor(profile: BusinessOrganisationProfile, planTier: PlanTier
     role,
     orgCapabilitiesFor(profile),
     planTier,
+    profile.operating_models,
   ).find((candidate) => candidate.labelKey === 'navigation.sections.inventory');
 
   return (section?.items ?? [])
@@ -217,20 +224,38 @@ describe('construction vertical navigation cleanup', () => {
     });
   });
 
-  describe('construction label overrides', () => {
-    it('labels the Supply Chain children Materials / Site Stores / Material Transfers for a construction business', () => {
-      expect(supplyChainFor(constructionBusiness, 'enterprise')).toEqual([
+  describe('PROJECT_BASED inventory labels', () => {
+    it('uses Materials / Site Stores / Materials Transfer for PROJECT_BASED businesses', () => {
+      expect(supplyChainFor(projectBasedBusiness, 'enterprise')).toEqual([
         { labelKey: 'navigation.items.materials', label: 'Materials' },
         { labelKey: 'navigation.items.siteStores', label: 'Site Stores' },
-        { labelKey: 'navigation.items.materialTransfers', label: 'Material Transfers' },
+        { labelKey: 'navigation.items.materialTransfer', label: 'Materials Transfer' },
       ]);
     });
 
-    it('labels them Products / Warehouse / Transfers for a retail business (no regression)', () => {
-      expect(supplyChainFor(retailBusiness, 'enterprise')).toEqual([
-        { labelKey: 'navigation.items.products', label: 'Products' },
-        { labelKey: 'navigation.items.warehouse', label: 'Warehouse' },
-        { labelKey: 'navigation.items.transfers', label: 'Transfers' },
+    it('retains Products / Warehouse / Transfers for every other model', () => {
+      const manufacturingBusiness: BusinessOrganisationProfile = {
+        organisation_type: 'FOR_PROFIT',
+        operating_models: ['MANUFACTURING'],
+      };
+      for (const profile of [constructionBusiness, retailBusiness, manufacturingBusiness]) {
+        expect(supplyChainFor(profile, 'enterprise')).toEqual([
+          { labelKey: 'navigation.items.products', label: 'Products' },
+          { labelKey: 'navigation.items.warehouse', label: 'Warehouse' },
+          { labelKey: 'navigation.items.transfers', label: 'Transfers' },
+        ]);
+      }
+    });
+
+    it('uses construction labels for a multi-type business containing PROJECT_BASED', () => {
+      const mixed: BusinessOrganisationProfile = {
+        organisation_type: 'FOR_PROFIT',
+        operating_models: ['RETAIL', 'PROJECT_BASED'],
+      };
+      expect(supplyChainFor(mixed, 'enterprise')).toEqual([
+        { labelKey: 'navigation.items.materials', label: 'Materials' },
+        { labelKey: 'navigation.items.siteStores', label: 'Site Stores' },
+        { labelKey: 'navigation.items.materialTransfer', label: 'Materials Transfer' },
       ]);
     });
 
@@ -238,8 +263,9 @@ describe('construction vertical navigation cleanup', () => {
       const constructionItems = visibleSectionsFor(
         () => true,
         'owner',
-        orgCapabilitiesFor(constructionBusiness),
+        orgCapabilitiesFor(projectBasedBusiness),
         'enterprise',
+        projectBasedBusiness.operating_models,
       )
         .flatMap((section) => section.items)
         .filter((item) => ['/products', '/warehouse', '/transfers'].includes(item.path));
@@ -282,18 +308,16 @@ describe('construction vertical navigation cleanup', () => {
 
     it('exposes one override table for the surfaces that keep their own item lists', () => {
       expect(CONSTRUCTION_LABEL_OVERRIDES).toEqual({
-        'navigation.items.products': 'navigation.items.materials',
-        'navigation.items.warehouse': 'navigation.items.siteStores',
-        'navigation.items.transfers': 'navigation.items.materialTransfers',
         'navigation.items.locations': 'navigation.items.sites',
       });
-      // Non-construction resolves to itself; unknown keys pass through.
-      expect(resolveNavLabelKey('navigation.items.products', false)).toBe('navigation.items.products');
+      const products = navItemForPath('/products')!;
+      expect(resolveNavItemLabelKey(products, ['PROJECT_BASED'])).toBe('navigation.items.materials');
+      expect(resolveNavItemLabelKey(products, ['RETAIL'])).toBe('navigation.items.products');
+      // Other vertical resolvers retain only the separate Sites vocabulary.
+      expect(resolveNavLabelKey('navigation.items.products', true, ['CONSTRUCTION']))
+        .toBe('navigation.items.products');
       expect(resolveNavLabelKey('navigation.items.income', true)).toBe('navigation.items.income');
-      // The resolver is idempotent, so a surface may apply it to an already
-      // resolved key without double-mapping.
-      expect(resolveNavLabelKey(resolveNavLabelKey('navigation.items.products', true), true))
-        .toBe('navigation.items.materials');
+      expect(resolveNavLabelKey('navigation.items.locations', true)).toBe('navigation.items.sites');
     });
 
     it('carries the override into the mobile workspace list, which renders the same sections', () => {
@@ -302,8 +326,9 @@ describe('construction vertical navigation cleanup', () => {
       const sections = visibleSectionsFor(
         () => true,
         'stock_clerk',
-        orgCapabilitiesFor(constructionBusiness),
+        orgCapabilitiesFor(projectBasedBusiness),
         'enterprise',
+        projectBasedBusiness.operating_models,
       ).filter((section) => section.labelKey !== 'navigation.sections.overview');
 
       const labels = sections
@@ -316,7 +341,7 @@ describe('construction vertical navigation cleanup', () => {
     it('publishes the three construction labels in en.json', () => {
       expect(en.navigation.items.materials).toBe('Materials');
       expect(en.navigation.items.siteStores).toBe('Site Stores');
-      expect(en.navigation.items.materialTransfers).toBe('Material Transfers');
+      expect(en.navigation.items.materialTransfer).toBe('Materials Transfer');
       // The defaults they replace are still there for every other vertical.
       expect(en.navigation.items.products).toBe('Products');
       expect(en.navigation.items.warehouse).toBe('Warehouse');

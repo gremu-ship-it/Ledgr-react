@@ -143,24 +143,21 @@ describe('manufacturing label vocabulary', () => {
       .map((item) => ({ labelKey: item.labelKey, label: en.navigation.items[item.labelKey.split('.').pop()!] }));
   }
 
-  it('labels the Supply Chain children Materials / Site Stores / Material Transfers for a manufacturer', () => {
+  it('retains Products / Warehouse / Transfers for a manufacturer without PROJECT_BASED', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
     expect(supplyChainLabels(manufacturingBusiness, 'enterprise')).toEqual([
-      { labelKey: 'navigation.items.materials', label: 'Materials' },
-      { labelKey: 'navigation.items.siteStores', label: 'Site Stores' },
-      { labelKey: 'navigation.items.materialTransfers', label: 'Material Transfers' },
+      { labelKey: 'navigation.items.products', label: 'Products' },
+      { labelKey: 'navigation.items.warehouse', label: 'Warehouse' },
+      { labelKey: 'navigation.items.transfers', label: 'Transfers' },
     ]);
   });
 
   it('shares one override table with construction, so the two cannot drift', () => {
     expect(MANUFACTURING_LABEL_OVERRIDES).toEqual({
-      'navigation.items.products': 'navigation.items.materials',
-      'navigation.items.warehouse': 'navigation.items.siteStores',
-      'navigation.items.transfers': 'navigation.items.materialTransfers',
       'navigation.items.locations': 'navigation.items.sites',
     });
-    expect(MANUFACTURING_LABEL_OVERRIDES['navigation.items.products'])
-      .toBe(MANUFACTURING_LABEL_OVERRIDES['navigation.items.products']);
+    expect(MANUFACTURING_LABEL_OVERRIDES['navigation.items.locations'])
+      .toBe(MANUFACTURING_LABEL_OVERRIDES['navigation.items.locations']);
   });
 
   it('overrides the vocabulary only — routes, icons and gates are untouched', () => {

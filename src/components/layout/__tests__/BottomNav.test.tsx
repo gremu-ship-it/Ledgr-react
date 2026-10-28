@@ -188,21 +188,21 @@ describe('mobile bottom navigation', () => {
   });
 
   // The bar keeps its own item lists instead of reading NAV_SECTIONS, so it
-  // resolves the construction vocabulary through the shared table. `t` is
+  // resolves the PROJECT_BASED vocabulary through the shared table. `t` is
   // mocked to return the key, which is what makes the swap observable here.
-  it('reads Site Stores and Material Transfers in the More menu for a construction business', () => {
+  it('reads Site Stores and Materials Transfer in the More menu for PROJECT_BASED businesses', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
     state.role = 'owner';
     state.organisationProfile = {
       organisation_type: 'FOR_PROFIT',
-      operating_models: ['CONSTRUCTION'],
+      operating_models: ['RETAIL', 'PROJECT_BASED'],
     };
     renderNav();
 
     fireEvent.click(screen.getByRole('button', { name: 'common.more' }));
 
     expect(screen.getByText('navigation.items.siteStores')).toBeTruthy();
-    expect(screen.getByText('navigation.items.materialTransfers')).toBeTruthy();
+    expect(screen.getByText('navigation.items.materialTransfer')).toBeTruthy();
     expect(screen.queryByText('navigation.items.warehouse')).toBeNull();
     expect(screen.queryByText('navigation.items.transfers')).toBeNull();
   });

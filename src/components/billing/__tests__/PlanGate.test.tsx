@@ -49,4 +49,16 @@ describe('subscription page gates', () => {
     render(<MemoryRouter><PartnerPlanGate featureKey="payroll" featureName="Payroll"><div>Payroll content</div></PartnerPlanGate></MemoryRouter>);
     expect(screen.getByText('Payroll content')).toBeTruthy();
   });
+
+  it('supports minimum-tier gates for Enterprise-only workspaces', () => {
+    state.tier = 'pro';
+    render(<MemoryRouter><PlanGate minPlan="enterprise" featureName="Construction workspace"><div>Construction content</div></PlanGate></MemoryRouter>);
+    expect(screen.queryByText('Construction content')).toBeNull();
+    expect(screen.getByText('This feature is available on the Enterprise plan and above.')).toBeTruthy();
+
+    cleanup();
+    state.tier = 'enterprise';
+    render(<MemoryRouter><PlanGate minPlan="enterprise" featureName="Construction workspace"><div>Construction content</div></PlanGate></MemoryRouter>);
+    expect(screen.getByText('Construction content')).toBeTruthy();
+  });
 });

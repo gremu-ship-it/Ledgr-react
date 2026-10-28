@@ -179,4 +179,17 @@ describe('plan catalogue integration parity', () => {
     }
     expect(app).toContain('<PartnerPlanGate featureKey="payroll" featureName="Payroll">');
   });
+
+  it('keeps Construction Enterprise-gated and removes the obsolete inventory page route', () => {
+    const app = source('src/App.tsx');
+    const navigation = source('src/components/layout/navConfig.ts');
+
+    expect(app).not.toContain('InventoryPage');
+    expect(app).toContain('path="/construction/*"');
+    expect(app).toContain('minPlan="enterprise" featureName={t(\'navigation.items.constructionWorkspace\')}');
+    expect(app).toContain('<CapabilityGate capability="construction">');
+    expect(navigation).toContain("path: '/construction'");
+    expect(navItemForPath('/construction')?.minPlan).toBe('enterprise');
+    expect(navItemForPath('/construction')?.requiresOrgCapability).toBe('construction');
+  });
 });

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
-// Bug A regression tests: the three Supply Chain page headers were hardcoded
-// English, so a construction business that clicked "Materials" in the sidebar
+// Regression tests: the three Supply Chain page headers were hardcoded
+// English, so a PROJECT_BASED business that clicked "Materials" in the sidebar
 // landed on a page titled "Products & Inventory". The pages now resolve their
 // headers through useInventoryPageLabels, the same organisation predicate the
 // sidebar override uses.
@@ -52,6 +52,7 @@ import { inventoryPageLabelKeys } from '@/hooks/useInventoryPageLabels';
 
 const RETAIL = { organisation_type: 'FOR_PROFIT', operating_models: ['RETAIL'] };
 const CONSTRUCTION = { organisation_type: 'FOR_PROFIT', operating_models: ['CONSTRUCTION'] };
+const PROJECT_BASED = { organisation_type: 'FOR_PROFIT', operating_models: ['PROJECT_BASED'] };
 const MANUFACTURING = { organisation_type: 'FOR_PROFIT', operating_models: ['MANUFACTURING'] };
 
 const BUSINESS_NAME = 'Chirwa Build';
@@ -86,9 +87,9 @@ afterEach(() => {
   useAppStore.setState({ currentBusiness: null as never });
 });
 
-describe('supply chain page headers for a construction business', () => {
+describe('supply chain page headers for PROJECT_BASED businesses', () => {
   it('titles the products page "Materials" and uses the site subtitle', () => {
-    selectBusiness(CONSTRUCTION);
+    selectBusiness(PROJECT_BASED);
     renderPage(<ProductsPage />);
     expect(screen.getByRole('heading', { name: 'Materials' })).toBeTruthy();
     expect(screen.getByText('Materials and supplies across all sites')).toBeTruthy();
@@ -96,43 +97,43 @@ describe('supply chain page headers for a construction business', () => {
   });
 
   it('titles the warehouse page "Site Stores"', () => {
-    selectBusiness(CONSTRUCTION);
+    selectBusiness(PROJECT_BASED);
     renderPage(<WarehousePage />);
     expect(screen.getByRole('heading', { name: 'Site Stores' })).toBeTruthy();
     expect(screen.getByText('Stock levels across all sites')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Warehouse' })).toBeNull();
   });
 
-  it('titles the transfers page "Material Transfers"', () => {
-    selectBusiness(CONSTRUCTION);
+  it('titles the transfers page "Materials Transfer"', () => {
+    selectBusiness(PROJECT_BASED);
     renderPage(<TransfersPage />);
-    expect(screen.getByRole('heading', { name: 'Material Transfers' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Materials Transfer' })).toBeTruthy();
     expect(screen.getByText('Material movements between sites')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Stock Transfers' })).toBeNull();
   });
 
-  it('does not leak the business name into the construction subtitle', () => {
+  it('does not leak the business name into the PROJECT_BASED subtitle', () => {
     // The {{businessName}} interpolation belongs to the retail products
     // subtitle only; the site-language subtitles are static strings.
-    selectBusiness(CONSTRUCTION);
+    selectBusiness(PROJECT_BASED);
     renderPage(<ProductsPage />);
     expect(screen.queryByText(new RegExp(BUSINESS_NAME))).toBeNull();
   });
 });
 
 describe('supply chain page headers for a manufacturing business', () => {
-  it('uses the same Materials, Site Stores and Material Transfers vocabulary as the sidebar', () => {
+  it('retains Products, Warehouse and Stock Transfers without PROJECT_BASED', () => {
     selectBusiness(MANUFACTURING);
     const products = renderPage(<ProductsPage />);
-    expect(screen.getByRole('heading', { name: 'Materials' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Products & Inventory' })).toBeTruthy();
     products.unmount();
 
     renderPage(<WarehousePage />);
-    expect(screen.getByRole('heading', { name: 'Site Stores' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Warehouse' })).toBeTruthy();
     cleanup();
 
     renderPage(<TransfersPage />);
-    expect(screen.getByRole('heading', { name: 'Material Transfers' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Stock Transfers' })).toBeTruthy();
   });
 });
 
@@ -172,9 +173,17 @@ describe('supply chain page headers for a non-construction business', () => {
     expect(screen.getByRole('heading', { name: 'Products & Inventory' })).toBeTruthy();
   });
 
-  it('still swaps to site language for construction with the layer off', () => {
-    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
+
+  it('retains the default headers for CONSTRUCTION when PROJECT_BASED is not selected', () => {
     selectBusiness(CONSTRUCTION);
+    renderPage(<ProductsPage />);
+    expect(screen.getByRole('heading', { name: 'Products & Inventory' })).toBeTruthy();
+    expect(screen.getByText('Manage products, stock levels, and movements for Chirwa Build')).toBeTruthy();
+  });
+
+  it('still swaps to site language for PROJECT_BASED with the layer off', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', '');
+    selectBusiness(PROJECT_BASED);
     renderPage(<ProductsPage />);
     expect(screen.getByRole('heading', { name: 'Materials' })).toBeTruthy();
   });
@@ -213,17 +222,17 @@ describe('inventory page label key resolution', () => {
     expect(pages.materials.subtitle).toBe('Materials and supplies across all sites');
     expect(pages.siteStores.title).toBe('Site Stores');
     expect(pages.siteStores.subtitle).toBe('Stock levels across all sites');
-    expect(pages.materialTransfers.title).toBe('Material Transfers');
+    expect(pages.materialTransfers.title).toBe('Materials Transfer');
     expect(pages.materialTransfers.subtitle).toBe('Material movements between sites');
     expect(en.navigation.fab.stockMovement).toBe('Stock movement');
     expect(en.navigation.fab.materialMovement).toBe('Material movement');
   });
 
-  it('keeps the construction subtitles in step with the sidebar vocabulary', () => {
+  it('keeps the PROJECT_BASED subtitles in step with the navigation vocabulary', () => {
     // The page subtitles reuse the sidebar's own words so the two surfaces
     // can never disagree about what a business calls its stock locations.
     expect(en.pages.inventory.materials.title).toBe(en.navigation.items.materials);
     expect(en.pages.inventory.siteStores.title).toBe(en.navigation.items.siteStores);
-    expect(en.pages.inventory.materialTransfers.title).toBe(en.navigation.items.materialTransfers);
+    expect(en.pages.inventory.materialTransfers.title).toBe(en.navigation.items.materialTransfer);
   });
 });

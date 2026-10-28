@@ -106,6 +106,7 @@
       "transfers": "Transfers",
       "materials": "Materials",
       "siteStores": "Site Stores",
+      "materialTransfer": "Materials Transfer",
       "materialTransfers": "Material Transfers",
       "accounts": "Chart of Accounts",
       "tax": "Tax",
@@ -185,7 +186,7 @@
         "subtitle": "Stock levels across all sites"
       },
       "materialTransfers": {
-        "title": "Material Transfers",
+        "title": "Materials Transfer",
         "subtitle": "Material movements between sites"
       },
       "noLocationsMessage": "No locations found.",

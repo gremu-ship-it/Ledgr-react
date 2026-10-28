@@ -1,17 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { useAppStore } from '@/store/useAppStore';
 
 /**
  * Supply Chain page vocabulary.
  *
- * The sidebar already speaks site language to a construction business —
- * Materials / Site Stores / Material Transfers instead of Products /
- * Warehouse / Transfers (see `CONSTRUCTION_LABEL_OVERRIDES` in
- * `src/components/layout/navConfig.ts`). The page headers were hardcoded
- * English, so a construction user who clicked "Materials" landed on a page
- * titled "Products & Inventory". This hook is the one place that resolves
- * the header title/subtitle keys so the pages and the sidebar can never
- * drift apart again.
+ * PROJECT_BASED businesses use Materials / Site Stores / Materials Transfer
+ * instead of Products / Warehouse / Transfers. The header keys follow that
+ * operating model (via `operating_models.includes('PROJECT_BASED')`) so the
+ * pages and navigation stay aligned; other models retain their defaults.
  */
 export type InventoryPageSlug = 'products' | 'warehouse' | 'transfers';
 
@@ -32,10 +28,10 @@ const PAGE_LABEL_KEYS: Record<
  */
 export function inventoryPageLabelKeys(
   page: InventoryPageSlug,
-  isConstruction: boolean,
+  isProjectBased: boolean,
 ): { titleKey: string; subtitleKey: string } {
   const entry = PAGE_LABEL_KEYS[page];
-  const base = `pages.inventory.${isConstruction ? entry.constructionKey : entry.defaultKey}`;
+  const base = `pages.inventory.${isProjectBased ? entry.constructionKey : entry.defaultKey}`;
   return { titleKey: `${base}.title`, subtitleKey: `${base}.subtitle` };
 }
 
@@ -45,32 +41,22 @@ export interface InventoryPageLabels {
 }
 
 /**
- * Translated header labels for a Supply Chain page.
+ * Translated header labels for a Supply Chain page. Only PROJECT_BASED
+ * changes the inventory vocabulary; other models keep the existing headers.
+ * The selection is taken directly from the active business profile and is
+ * independent of plan, role, and capability gates.
  *
- * Construction and manufacturing are detected through the organisation-only
- * predicate (`useOrganisationCapabilityVisibility`) — the same predicate the
- * sidebar override uses — rather than the full plan/role capability gate.
- * Vocabulary follows the business profile; plan/role gates stay where they
- * already are. Both operating models use the sidebar's Materials / Site Stores
- * / Material Transfers terminology on these page headers.
- *
- * These operating models are profile-gated (`ALWAYS_PROFILE_GATED` in
- * `src/lib/capabilities/resolve.ts`), so the labels follow the profile whether
- * or not the organisation-layer kill switch is on — exactly like the sidebar.
- *
- * `interpolation` is forwarded to both strings (the products subtitle
- * names the business: "…for {{businessName}}").
+ * `interpolation` is forwarded to both strings (the products subtitle names
+ * the business: "…for {{businessName}}").
  */
 export function useInventoryPageLabels(
   page: InventoryPageSlug,
   interpolation?: Record<string, string>,
 ): InventoryPageLabels {
   const { t } = useTranslation();
-  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
-
-  const usesMaterialsVocabulary =
-    isOrgCapabilityEnabled('construction') || isOrgCapabilityEnabled('manufacturing');
-  const { titleKey, subtitleKey } = inventoryPageLabelKeys(page, usesMaterialsVocabulary);
+  const operatingModels = useAppStore((state) => state.currentBusiness?.business?.operating_models ?? []);
+  const usesProjectBasedVocabulary = operatingModels.includes('PROJECT_BASED');
+  const { titleKey, subtitleKey } = inventoryPageLabelKeys(page, usesProjectBasedVocabulary);
 
   return {
     title: t(titleKey, interpolation),

@@ -315,6 +315,7 @@ export function SmartRedirect() {
 
 function App() {
   useAuthListener();
+  const { t } = useTranslation();
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -393,9 +394,11 @@ function App() {
                 <Route
                   path="/construction/*"
                   element={
-                    <CapabilityGate capability="construction">
-                      <ConstructionWorkspacePage />
-                    </CapabilityGate>
+                    <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionWorkspace')}>
+                      <CapabilityGate capability="construction">
+                        <ConstructionWorkspacePage />
+                      </CapabilityGate>
+                    </PlanGate>
                   }
                 />
                 {/* Manufacturing reporting and production remain behind the
