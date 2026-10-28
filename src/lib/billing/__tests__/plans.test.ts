@@ -157,11 +157,22 @@ describe('plan catalogue integration parity', () => {
     expect(usage).toContain('set search_path = public');
   });
 
-  it('gates all inventory URLs and precisely the five core-accounting pages', () => {
+  it('gates all inventory URLs and the four core-accounting pages', () => {
     const app = source('src/App.tsx');
     expect(app.match(/featureKey="inventory" capability="inventory"/g)).toHaveLength(4);
-    for (const name of ['Chart of Accounts', 'Tax', 'Assets', 'Capital', 'Reports']) {
+    for (const name of ['Chart of Accounts', 'Tax', 'Assets', 'Capital']) {
       expect(app).toContain(`capability="core_accounting" featureName="${name}"`);
+    }
+    for (const path of [
+      '/reports/trial-balance',
+      '/reports/profit-loss',
+      '/reports/balance-sheet',
+      '/reports/cash-flow',
+      '/reports/changes-in-equity',
+      '/reports/revenue-breakdown',
+      '/reports/branch-performance',
+    ]) {
+      expect(app).toContain(`path="${path}"`);
     }
     for (const name of ['Journals', 'Period Management', 'Audit Log', 'Contacts', 'Branches', 'Departments']) {
       expect(app).toContain(`capability="accounting_organisation" featureName="${name}"`);

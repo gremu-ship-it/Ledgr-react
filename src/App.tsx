@@ -29,8 +29,8 @@ import {
   clearChunkRecovery,
 } from '@/lib/chunkRecovery';
 
-// Route-level code splitting. Every page (and the chart-heavy bank
-// reconciliation view) is loaded on demand so the initial bundle stays small
+// Route-level code splitting. Every page is loaded on demand so the initial
+// bundle stays small
 // and no single chunk can blow past the service-worker precache limit.
 // `lazyPage` adapts our named exports to the default export React.lazy wants
 // and automatically recovers from chunk load errors (e.g. after a deployment)
@@ -105,7 +105,6 @@ const TaxPage = lazyPage(() => import('@/pages/TaxPage'), 'TaxPage');
 const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage'), 'ApiDocumentationPage');
 const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
-const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
@@ -135,10 +134,6 @@ const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/Partner
 const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
 const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
 const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
-const BankReconciliation = lazyPage(
-  () => import('@/components/bank/BankReconciliation'),
-  'BankReconciliation',
-);
 const BankAccountsPage = lazyPage(() => import('@/pages/bank-reconciliation/BankAccountsPage'), 'BankAccountsPage');
 const StatementsPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementsPage'), 'StatementsPage');
 const StatementDetailPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementDetailPage'), 'StatementDetailPage');
@@ -325,7 +320,6 @@ export function SmartRedirect() {
 
 function App() {
   useAuthListener();
-  const currentBusiness = useAppStore((s) => s.currentBusiness);
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -572,11 +566,6 @@ function App() {
                       <TaxPage />
                     </PlanGate>
                   } />
-                  <Route path="/reports" element={
-                    <PlanGate capability="core_accounting" featureName="Reports">
-                      <ReportsPage />
-                    </PlanGate>
-                  } />
                   <Route path="/reports/trial-balance" element={<TrialBalanceRoute />} />
                   <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
                   <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
@@ -596,13 +585,11 @@ function App() {
                       <PeriodManagementPage />
                     </PlanGate>
                   } />
-                  <Route path="/bank-reconcile" element={
-                    <PartnerPlanGate featureKey="bank_reconciliation" capability="bank_reconciliation" featureName="Bank Reconciliation">
-                      <BankReconciliation businessId={currentBusiness?.business?.id || ''} />
-                    </PartnerPlanGate>
-                  } />
                   <Route path="/bank-reconciliation/accounts" element={
                     <BankReconciliationPlanGate><BankAccountsPage /></BankReconciliationPlanGate>
+                  } />
+                  <Route path="/bank-reconciliation/reconcile" element={
+                    <Navigate to="/bank-reconciliation/statements" replace />
                   } />
                   <Route path="/bank-reconciliation/statements" element={
                     <BankReconciliationPlanGate><StatementsPage /></BankReconciliationPlanGate>

@@ -90,7 +90,6 @@
       "assetsCapital": "Assets & Capital",
       "organisation": "Organisation",
       "audit": "Audit",
-      "bankReconciliation": "Bank reconciliation",
       "support": "Support",
       "admin": "Admin"
     },
@@ -114,7 +113,6 @@
       "capital": "Capital",
       "reports": "Reports",
       "journals": "Journals",
-      "bankReconciliation": "Bank Reconciliation",
       "bankAccounts": "Bank Accounts",
       "bankStatements": "Bank Statements",
       "bankReconciliationReconcile": "Reconcile",
@@ -124,7 +122,6 @@
       "revenueBreakdown": "Revenue Breakdown",
       "changesInEquity": "Changes in Equity",
       "branchPerformance": "Branch Performance",
-      "reportsMultiCurrency": "Multi-Currency",
       "taxConfiguration": "Tax Configuration",
       "fixedAssets": "Fixed Assets",
       "capitalEquity": "Capital & Equity",

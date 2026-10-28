@@ -356,7 +356,7 @@ export function MobileDashboard() {
                     <p className="text-xs font-black text-white mt-0.5">{isProfitPositive ? 'Surplus' : 'Deficit'}</p>
                   </div>
                 </div>
-                <button onClick={() => navigate('/reports')} className="rounded-xl bg-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white active:scale-95">
+                <button onClick={() => navigate('/reports/profit-loss')} className="rounded-xl bg-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white active:scale-95">
                   Insights
                 </button>
               </div>

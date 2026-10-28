@@ -46,7 +46,7 @@ const BOTTOM_NAV_ITEMS = [
   { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
   { labelKey: 'navigation.sections.finance', path: '/income', icon: DollarSign },
   { labelKey: 'navigation.sections.inventory', path: '/products', icon: Package },
-  { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2 },
+  { labelKey: 'navigation.items.reports', path: '/reports/trial-balance', icon: BarChart2 },
 ];
 
 /**

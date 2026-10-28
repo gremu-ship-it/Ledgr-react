@@ -88,7 +88,7 @@ describe('mobile bottom navigation', () => {
     state.role = 'owner';
     renderNav();
     const paths = tabPaths();
-    expect(paths).toEqual(['/dashboard', '/income', '/products', '/reports']);
+    expect(paths).toEqual(['/dashboard', '/income', '/products', '/reports/trial-balance']);
   });
 
   it('gives a cashier a POS tab and hides back-office tabs', () => {
@@ -106,7 +106,7 @@ describe('mobile bottom navigation', () => {
     expect(paths).toContain('/income');
     expect(paths).not.toContain('/dashboard');
     expect(paths).not.toContain('/products');
-    expect(paths).not.toContain('/reports');
+    expect(paths).not.toContain('/reports/trial-balance');
   });
 
   it('hides POS and stock tabs for a service-only profile when the org layer is enabled', () => {
@@ -184,7 +184,7 @@ describe('mobile bottom navigation', () => {
   it('falls back to the unfiltered list before the role has loaded', () => {
     state.hasBusiness = false;
     renderNav();
-    expect(tabPaths()).toEqual(['/dashboard', '/income', '/products', '/reports']);
+    expect(tabPaths()).toEqual(['/dashboard', '/income', '/products', '/reports/trial-balance']);
   });
 
   // The bar keeps its own item lists instead of reading NAV_SECTIONS, so it

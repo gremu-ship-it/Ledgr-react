@@ -1,10 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { navItemForPath, planMeetsMin } from '@/components/layout/navConfig';
+import { NAV_SECTIONS, navItemForPath, planMeetsMin } from '@/components/layout/navConfig';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 describe('bank reconciliation routes and navigation', () => {
+  it('keeps Banking to the three standalone bank reconciliation entry points', () => {
+    const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.banking');
+    expect(section?.items.map((item) => item.path)).toEqual([
+      '/bank-reconciliation/accounts',
+      '/bank-reconciliation/statements',
+      '/bank-reconciliation/reconcile',
+    ]);
+  });
+
   it('advertises the setup and statements pages behind the Growth capability', () => {
-    for (const path of ['/bank-reconciliation/accounts', '/bank-reconciliation/statements']) {
+    for (const path of [
+      '/bank-reconciliation/accounts',
+      '/bank-reconciliation/statements',
+      '/bank-reconciliation/reconcile',
+    ]) {
       const item = navItemForPath(path);
       expect(item).toMatchObject({ path, minPlan: 'growth', requiresCapability: 'bank_reconciliation' });
     }
@@ -17,6 +30,7 @@ describe('bank reconciliation routes and navigation', () => {
     const paths = [
       '/bank-reconciliation/accounts',
       '/bank-reconciliation/statements',
+      '/bank-reconciliation/reconcile',
       '/bank-reconciliation/statements/statement-1',
       '/bank-reconciliation/reconcile/statement-1',
     ];
