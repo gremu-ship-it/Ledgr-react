@@ -164,6 +164,27 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         minPlan: 'enterprise',
         requiresOrgCapability: 'manufacturing',
       },
+      {
+        labelKey: 'navigation.items.manufacturingRuns',
+        path: '/manufacturing/runs',
+        icon: Factory,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
+        labelKey: 'navigation.items.manufacturingRoutings',
+        path: '/manufacturing/routings',
+        icon: GitBranch,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
+        labelKey: 'navigation.items.manufacturingWorkCentres',
+        path: '/manufacturing/work-centres',
+        icon: MapPin,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
     ],
   },
   {

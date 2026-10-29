@@ -7022,6 +7022,7 @@ export type Database = {
           created_by: string
           id: string
           notes: string | null
+          output_location_id: string | null
           output_quantity: number
           run_number: number
           scrap_quantity: number
@@ -7036,6 +7037,7 @@ export type Database = {
           created_by: string
           id?: string
           notes?: string | null
+          output_location_id?: string | null
           output_quantity: number
           run_number: number
           scrap_quantity?: number
@@ -7049,6 +7051,7 @@ export type Database = {
           created_by?: string
           id?: string
           notes?: string | null
+          output_location_id?: string | null
           output_quantity?: number
           run_number?: number
           scrap_quantity?: number
@@ -7062,6 +7065,66 @@ export type Database = {
             columns: ["work_order_id"]
             isOneToOne: false
             referencedRelation: "manufacturing_work_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_production_runs_output_location_id_fkey"
+            columns: ["output_location_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      manufacturing_production_run_lines: {
+        Row: {
+          business_id: string
+          component_product_id: string
+          id: string
+          production_run_id: string
+          quantity_consumed: number
+          quantity_expected: number
+          unit_of_measure: string
+        }
+        ComputedFields: never
+        Insert: {
+          business_id: string
+          component_product_id: string
+          id?: string
+          production_run_id: string
+          quantity_consumed?: number
+          quantity_expected?: number
+          unit_of_measure?: string
+        }
+        Update: {
+          business_id?: string
+          component_product_id?: string
+          id?: string
+          production_run_id?: string
+          quantity_consumed?: number
+          quantity_expected?: number
+          unit_of_measure?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manufacturing_production_run_lines_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_production_run_lines_component_product_id_fkey"
+            columns: ["component_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_production_run_lines_production_run_id_fkey"
+            columns: ["production_run_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturing_production_runs"
             referencedColumns: ["id"]
           },
         ]
@@ -7137,6 +7200,8 @@ export type Database = {
           planned_quantity: number
           planned_start_date: string | null
           product_id: string
+          priority: string
+          routing_id: string | null
           scrapped_quantity: number
           status: string
           to_location_id: string | null
@@ -7159,6 +7224,8 @@ export type Database = {
           planned_quantity: number
           planned_start_date?: string | null
           product_id: string
+          priority?: string
+          routing_id?: string | null
           scrapped_quantity?: number
           status?: string
           to_location_id?: string | null
@@ -7180,6 +7247,8 @@ export type Database = {
           planned_quantity?: number
           planned_start_date?: string | null
           product_id?: string
+          priority?: string
+          routing_id?: string | null
           scrapped_quantity?: number
           status?: string
           to_location_id?: string | null
@@ -7223,6 +7292,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "manufacturing_work_orders_routing_id_fkey"
+            columns: ["routing_id"]
+            isOneToOne: false
+            referencedRelation: "routings"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "manufacturing_work_orders_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
@@ -7234,6 +7310,196 @@ export type Database = {
             columns: ["to_location_id"]
             isOneToOne: false
             referencedRelation: "inventory_locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_centres: {
+        Row: {
+          business_id: string
+          capacity_hours_per_day: number
+          centre_type: string
+          code: string
+          cost_rate_per_hour: number
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          updated_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          business_id: string
+          capacity_hours_per_day?: number
+          centre_type?: string
+          code: string
+          cost_rate_per_hour?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          capacity_hours_per_day?: number
+          centre_type?: string
+          code?: string
+          cost_rate_per_hour?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_centres_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routings: {
+        Row: {
+          bom_version_id: string | null
+          business_id: string
+          code: string
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          product_id: string
+          status: string
+          total_run_minutes_per_unit: number
+          total_setup_minutes: number
+          updated_at: string
+          version_number: number
+        }
+        ComputedFields: never
+        Insert: {
+          bom_version_id?: string | null
+          business_id: string
+          code: string
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          product_id: string
+          status?: string
+          total_run_minutes_per_unit?: number
+          total_setup_minutes?: number
+          updated_at?: string
+          version_number?: number
+        }
+        Update: {
+          bom_version_id?: string | null
+          business_id?: string
+          code?: string
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          product_id?: string
+          status?: string
+          total_run_minutes_per_unit?: number
+          total_setup_minutes?: number
+          updated_at?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routings_bom_version_id_fkey"
+            columns: ["bom_version_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturing_boms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routings_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routings_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      routing_steps: {
+        Row: {
+          business_id: string
+          id: string
+          is_quality_checkpoint: boolean
+          notes: string | null
+          operation_name: string
+          queue_time_minutes: number
+          routing_id: string
+          run_time_per_unit_minutes: number
+          sequence: number
+          setup_time_minutes: number
+          work_centre_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          business_id: string
+          id?: string
+          is_quality_checkpoint?: boolean
+          notes?: string | null
+          operation_name: string
+          queue_time_minutes?: number
+          routing_id: string
+          run_time_per_unit_minutes?: number
+          sequence: number
+          setup_time_minutes?: number
+          work_centre_id: string
+        }
+        Update: {
+          business_id?: string
+          id?: string
+          is_quality_checkpoint?: boolean
+          notes?: string | null
+          operation_name?: string
+          queue_time_minutes?: number
+          routing_id?: string
+          run_time_per_unit_minutes?: number
+          sequence?: number
+          setup_time_minutes?: number
+          work_centre_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "routing_steps_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routing_steps_routing_id_fkey"
+            columns: ["routing_id"]
+            isOneToOne: false
+            referencedRelation: "routings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "routing_steps_work_centre_id_fkey"
+            columns: ["work_centre_id"]
+            isOneToOne: false
+            referencedRelation: "work_centres"
             referencedColumns: ["id"]
           },
         ]
@@ -12913,6 +13179,34 @@ export type Database = {
           work_order_id: string
           work_order_number: string
         }[]
+      }
+      complete_production_run: {
+        Args: {
+          p_business_id: string
+          p_output_location_id: string | null
+          p_quantity_produced: number
+          p_quantity_scrapped: number
+          p_run_id: string
+          p_scrap_reason: string | null
+        }
+        Returns: Json
+      }
+      create_work_order_from_bom: {
+        Args: {
+          p_bom_version_id: string
+          p_business_id: string
+          p_planned_end: string | null
+          p_planned_start: string | null
+          p_priority: string
+          p_from_location_id: string | null
+          p_to_location_id: string | null
+          p_notes: string | null
+          p_product_id: string
+          p_quantity: number
+          p_reference: string | null
+          p_routing_id: string | null
+        }
+        Returns: string
       }
       manufacturing_wo_cancel: {
         Args: { p_work_order_id: string }

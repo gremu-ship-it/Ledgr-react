@@ -227,6 +227,9 @@ describe('plan catalogue integration parity', () => {
       '/manufacturing/production',
       '/manufacturing/production/new',
       '/manufacturing/production/:id',
+      '/manufacturing/runs',
+      '/manufacturing/routings',
+      '/manufacturing/work-centres',
       '/manufacturing/dashboard',
     ];
     for (const path of routePaths) {
@@ -252,6 +255,9 @@ describe('plan catalogue integration parity', () => {
       'src/pages/manufacturing/WorkOrderListPage.tsx',
       'src/pages/manufacturing/WorkOrderCreatePage.tsx',
       'src/pages/manufacturing/WorkOrderDetailPage.tsx',
+      'src/pages/manufacturing/WorkCentresPage.tsx',
+      'src/pages/manufacturing/RoutingsPage.tsx',
+      'src/pages/manufacturing/ProductionRunsPage.tsx',
     ]) {
       expect(source(filename)).toContain('<PlanGate minPlan="enterprise"');
     }
