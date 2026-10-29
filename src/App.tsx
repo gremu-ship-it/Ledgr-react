@@ -71,6 +71,14 @@ const SubcontractorsPage = lazyPage(
   () => import('@/pages/construction/SubcontractorsPage'),
   'SubcontractorsPage',
 );
+const PaymentCertificatesPage = lazyPage(
+  () => import('@/pages/construction/PaymentCertificatesPage'),
+  'PaymentCertificatesPage',
+);
+const RetentionRegisterPage = lazyPage(
+  () => import('@/pages/construction/RetentionRegisterPage'),
+  'RetentionRegisterPage',
+);
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -408,6 +416,30 @@ function App() {
                         <CapabilityGate capability="construction">
                           <SubcontractorsPage />
                         </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/certificates"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.paymentCertificates')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction">
+                            <PaymentCertificatesPage />
+                          </CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/retention-register"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.retentionRegister')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction">
+                            <RetentionRegisterPage />
+                          </CapabilityGate>
+                        </OperatingModelGate>
                       </PlanGate>
                     }
                   />

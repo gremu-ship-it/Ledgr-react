@@ -48,7 +48,7 @@ describe('legacy pos pin cleanup migration contract (P3-1 audit item)', () => {
     // No duplicate cleanup was added later. Trial-balance, BOM, manufacturing
     // execution, construction BOQ, and MRP migrations remain in the ordered chain.
     expect(versions.indexOf('20261115000000')).toBeGreaterThan(versions.indexOf('20261110000002'));
-    expect(versions[versions.length - 1]).toBe('20261124000000');
+    expect(versions[versions.length - 1]).toBe('20261125000000');
     expect(
       files.filter((f) => f.toLowerCase().includes('pos_capability_cleanup')),
     ).toHaveLength(0);

@@ -224,7 +224,12 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
   it('T — keeps Construction in a dedicated section immediately after Inventory', () => {
     const section = NAV_SECTIONS.find((candidate) => candidate.items.some((item) => item.path === '/construction'));
     expect(section?.labelKey).toBe('navigation.sections.construction');
-    expect(section?.items.map((item) => item.path)).toEqual(['/construction', '/construction/subcontractors']);
+    expect(section?.items.map((item) => item.path)).toEqual([
+      '/construction',
+      '/construction/subcontractors',
+      '/construction/certificates',
+      '/construction/retention-register',
+    ]);
     const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');
     const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.construction');
     expect(constructionIndex).toBe(inventoryIndex + 1);

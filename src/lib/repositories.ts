@@ -24,6 +24,7 @@ import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PosRepository } from '@/dal/repositories/PosRepository';
 import { constructionProcurementRepository } from '@/dal/repositories/ConstructionProcurementRepository';
+import { constructionCertificatesRepository } from '@/dal/repositories/ConstructionCertificatesRepository';
 import { ApprovalRepository } from '@/dal/repositories/ApprovalRepository';
 import { BomRepository } from '@/dal/repositories/BomRepository';
 import { ManufacturingRepository } from '@/dal/repositories/ManufacturingRepository';
@@ -37,6 +38,7 @@ export const repos = {
    * write goes through a construction command that authorizes internally.
    */
   construction: constructionProcurementRepository,
+  certificates: constructionCertificatesRepository,
   approval: ApprovalRepository,
   bom: new BomRepository(supabase),
   manufacturing: new ManufacturingRepository(supabase),

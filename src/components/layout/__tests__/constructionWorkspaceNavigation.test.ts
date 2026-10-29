@@ -52,6 +52,8 @@ describe('construction workspace navigation', () => {
     expect(section?.items.map((item) => item.path)).toEqual([
       '/construction',
       '/construction/subcontractors',
+      '/construction/certificates',
+      '/construction/retention-register',
     ]);
     expect(section?.minPlan).toBe('enterprise');
     expect(section?.items.every((item) => item.minPlan === 'enterprise')).toBe(true);
@@ -72,6 +74,27 @@ describe('construction workspace navigation', () => {
     expect(navItemForPath('/construction')?.allowAllAuthenticatedRoles).toBeUndefined();
     expect(navItemForPath('/construction')?.partnerFeature).toBeUndefined();
     expect(navItemForPath('/construction')?.requiresCapability).toBeUndefined();
+  });
+
+  it('gates payment certificates and retention register to Enterprise PROJECT_BASED construction businesses', () => {
+    const paths = (operatingModels: string[]) => visibleSectionsFor(
+      () => true,
+      'owner',
+      orgCapabilities('construction'),
+      'enterprise',
+      operatingModels,
+    ).flatMap((section) => section.items.map((item) => item.path));
+
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/certificates');
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/retention-register');
+    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/certificates');
+    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/retention-register');
+    expect(navItemForPath('/construction/certificates')).toMatchObject({
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+    });
+    expect(navItemForPath('/construction/retention-register')).toMatchObject({
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+    });
   });
 
   it('exposes Subcontractors only for Enterprise construction businesses', () => {

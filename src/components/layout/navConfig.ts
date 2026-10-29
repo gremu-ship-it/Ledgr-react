@@ -27,6 +27,8 @@ import {
   Factory,
   ClipboardList,
   MapPin,
+  FileCheck2,
+  WalletCards,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -139,6 +141,22 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         icon: Users,
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
+      },
+      {
+        labelKey: 'navigation.items.paymentCertificates',
+        path: '/construction/certificates',
+        icon: FileCheck2,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
+      },
+      {
+        labelKey: 'navigation.items.retentionRegister',
+        path: '/construction/retention-register',
+        icon: WalletCards,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
       },
     ],
   },
