@@ -179,6 +179,8 @@ export type ConstructionPurchaseOrderLine = Pick<
   | 'line_note'
 >;
 
+export type ProjectPurchaseOrderBoqLink = Tables['project_purchase_order_boq_links']['Row'];
+
 export type ConstructionPurchaseOrderEvent = Pick<
   Tables['construction_purchase_order_events']['Row'],
   'id' | 'po_id' | 'action' | 'actor' | 'detail' | 'created_at'
@@ -805,6 +807,32 @@ export class ConstructionProcurementRepository {
     );
   }
 
+  async findProjectPurchaseOrderBoqLinks(businessId: string, projectId: string): Promise<ProjectPurchaseOrderBoqLink[]> {
+    return this.rows<ProjectPurchaseOrderBoqLink>(
+      'project_purchase_order_boq_links',
+      (b) => b.eq('business_id', businessId).eq('project_id', projectId).order('created_at'),
+      'Could not load purchase-order BOQ links.',
+    );
+  }
+
+  async setProjectPurchaseOrderBoqLink(input: {
+    businessId: string;
+    projectId: string;
+    purchaseOrderLineId: string;
+    boqItemId: string | null;
+  }): Promise<ProjectPurchaseOrderBoqLink | null> {
+    const { data, error } = await client.rpc('set_project_purchase_order_boq_link', {
+      p_business_id: input.businessId,
+      p_project_id: input.projectId,
+      p_purchase_order_line_id: input.purchaseOrderLineId,
+      p_boq_item_id: input.boqItemId,
+    });
+    if (error) fail(error, 'Could not update the purchase-order BOQ link.');
+    return data && typeof data === 'object' && 'id' in data && data.id
+      ? data as ProjectPurchaseOrderBoqLink
+      : null;
+  }
+
   async findPurchaseOrderEvents(poId: string): Promise<ConstructionPurchaseOrderEvent[]> {
     return this.rows<ConstructionPurchaseOrderEvent>(
       'construction_purchase_order_events',
@@ -829,12 +857,15 @@ export class ConstructionProcurementRepository {
     );
   }
 
-  async findReceipts(businessId: string): Promise<ConstructionGoodsReceipt[]> {
-    return this.rows<ConstructionGoodsReceipt>(
+  async findReceipts(businessId: string, projectId?: string): Promise<ConstructionGoodsReceipt[]> {
+    const receipts = await this.rows<ConstructionGoodsReceipt>(
       'construction_goods_receipt_notes',
       (b) => b.eq('business_id', businessId).order('created_at', { ascending: false }),
       'Could not load goods receipts.',
     );
+    if (!projectId) return receipts;
+    const projectOrderIds = new Set((await this.findPurchaseOrders(businessId, projectId)).map((po) => po.id));
+    return receipts.filter((receipt) => projectOrderIds.has(receipt.po_id));
   }
 
   async findReceiptLines(grnId: string): Promise<ConstructionGoodsReceiptLine[]> {
@@ -845,13 +876,16 @@ export class ConstructionProcurementRepository {
     );
   }
 
-  /** Receipt lines across a whole business (used by the cost-basis review). */
-  async findReceiptLinesForBusiness(businessId: string): Promise<ConstructionGoodsReceiptLine[]> {
-    return this.rows<ConstructionGoodsReceiptLine>(
+  /** Receipt lines across a business, optionally scoped through its project POs. */
+  async findReceiptLinesForBusiness(businessId: string, projectId?: string): Promise<ConstructionGoodsReceiptLine[]> {
+    const lines = await this.rows<ConstructionGoodsReceiptLine>(
       'construction_goods_receipt_lines',
       (b) => b.eq('business_id', businessId).order('line_number'),
       'Could not load receipt lines for this business.',
     );
+    if (!projectId) return lines;
+    const receiptIds = new Set((await this.findReceipts(businessId, projectId)).map((receipt) => receipt.id));
+    return lines.filter((line) => receiptIds.has(line.grn_id));
   }
 
   async findReceiptHolds(grnLineId: string): Promise<ConstructionGoodsReceiptHold[]> {
@@ -894,12 +928,15 @@ export class ConstructionProcurementRepository {
     );
   }
 
-  async findAllocationsForBusiness(businessId: string): Promise<ConstructionReceiptBillAllocation[]> {
-    return this.rows<ConstructionReceiptBillAllocation>(
+  async findAllocationsForBusiness(businessId: string, projectId?: string): Promise<ConstructionReceiptBillAllocation[]> {
+    const allocations = await this.rows<ConstructionReceiptBillAllocation>(
       'construction_receipt_bill_allocations',
       (b) => b.eq('business_id', businessId).order('matched_at', { ascending: false }),
       'Could not load bill matches.',
     );
+    if (!projectId) return allocations;
+    const projectLineIds = new Set((await this.findReceiptLinesForBusiness(businessId, projectId)).map((line) => line.id));
+    return allocations.filter((allocation) => projectLineIds.has(allocation.grn_line_id));
   }
 
   async findCostBasesForReceiptLine(grnLineId: string): Promise<ConstructionReceiptCostBasis[]> {

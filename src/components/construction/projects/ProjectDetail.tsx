@@ -16,9 +16,7 @@ import {
   SectionCard,
   StatusPill,
 } from '../constructionUi';
-import { ConstructionPurchaseOrdersSection } from '../ConstructionPurchaseOrdersSection';
-import { ConstructionMaterialIssuesSection } from '../ConstructionMaterialIssuesSection';
-import { ConstructionReturnsSection } from '../ConstructionReturnsSection';
+import { ProjectProcurementSection, ProjectMaterialsSection } from './ProjectProcurementSection';
 import { ProjectForm, PROJECT_BUTTON } from './ProjectForm';
 import { ClientPicker } from './ClientPicker';
 import { ProjectStatusBadge } from './ProjectsSection';
@@ -29,7 +27,7 @@ import { ProjectSubcontracts } from '@/components/construction/ProjectSubcontrac
 import { useAppStore } from '@/store/useAppStore';
 
 const k = 'construction.projects';
-const TABS = ['overview', 'sites', 'procurement', 'subcontracts', 'boq', 'valuations'] as const;
+const TABS = ['overview', 'sites', 'procurement', 'materials', 'subcontracts', 'boq', 'valuations'] as const;
 export function ProjectDetail({
   businessId,
   projectId,
@@ -206,26 +204,20 @@ function ProjectDetailContent({
               onNotice={setNotice}
             />
           )}
-          {tab === 'procurement' && (
-            <div className="space-y-5">
-              <p className="text-sm text-gray-600">{t(`${k}.tagHint`)}</p>
-              <ConstructionPurchaseOrdersSection
-                businessId={project.business_id}
-                capabilities={capabilities}
-                projectId={project.id}
-              />
-              <ConstructionMaterialIssuesSection
-                businessId={project.business_id}
-                capabilities={capabilities}
-                projectId={project.id}
-              />
-              <ConstructionReturnsSection
-                businessId={project.business_id}
-                capabilities={capabilities}
-                projectId={project.id}
-              />
-            </div>
-          )}
+          {tab === 'procurement' ? (
+            <ProjectProcurementSection
+              businessId={project.business_id}
+              projectId={project.id}
+              capabilities={capabilities}
+            />
+          ) : null}
+          {tab === 'materials' ? (
+            <ProjectMaterialsSection
+              businessId={project.business_id}
+              projectId={project.id}
+              capabilities={capabilities}
+            />
+          ) : null}
           {tab === 'subcontracts' && (
             <ProjectSubcontracts businessId={project.business_id} projectId={project.id} currency={currency} />
           )}

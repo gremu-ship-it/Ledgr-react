@@ -48,9 +48,11 @@ import {
 export function ConstructionReceiptsSection({
   businessId,
   capabilities,
+  projectId,
 }: {
   businessId: string;
   capabilities: string[];
+  projectId?: string;
 }) {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,12 +60,12 @@ export function ConstructionReceiptsSection({
   const [search, setSearch] = useState('');
 
   const listQuery = useQuery({
-    queryKey: ['construction', 'receipts', businessId],
+    queryKey: ['construction', 'receipts', businessId, ...(projectId ? [projectId] : [])],
     queryFn: async () => {
       const [receipts, sites, purchaseOrders] = await Promise.all([
-        repos.construction.findReceipts(businessId),
+        repos.construction.findReceipts(businessId, projectId),
         repos.construction.findSites(businessId),
-        repos.construction.findPurchaseOrders(businessId),
+        repos.construction.findPurchaseOrders(businessId, projectId),
       ]);
       return { receipts, sites, purchaseOrders };
     },
@@ -81,6 +83,7 @@ export function ConstructionReceiptsSection({
   }
 
   const { receipts, sites, purchaseOrders } = listQuery.data!;
+  const selectedReceiptId = receipts.some((receipt) => receipt.id === selectedId) ? selectedId : null;
   const sitesById = new Map(sites.map((site) => [site.id, site]));
   const posById = new Map(purchaseOrders.map((po) => [po.id, po]));
 
@@ -146,10 +149,10 @@ export function ConstructionReceiptsSection({
                     <td className="px-2 py-2 text-right">
                       <button
                         type="button"
-                        onClick={() => select(receipt.id === selectedId ? null : receipt.id)}
+                        onClick={() => select(receipt.id === selectedReceiptId ? null : receipt.id)}
                         className="text-sm font-medium text-brand-700 hover:underline"
                       >
-                        {receipt.id === selectedId ? t('construction.procurement.receipts.hide') : t('construction.procurement.receipts.review')}
+                        {receipt.id === selectedReceiptId ? t('construction.procurement.receipts.hide') : t('construction.procurement.receipts.review')}
                       </button>
                     </td>
                   </tr>
@@ -160,7 +163,7 @@ export function ConstructionReceiptsSection({
         )}
       </SectionCard>
 
-      {selectedId ? <ReceiptReview businessId={businessId} grnId={selectedId} capabilities={capabilities} /> : null}
+      {selectedReceiptId ? <ReceiptReview businessId={businessId} grnId={selectedReceiptId} capabilities={capabilities} /> : null}
     </div>
   );
 }

@@ -313,8 +313,13 @@ describe('project detail', () => {
       await screen.findByText('No progress valuations have been created for this project.'),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Procurement' }));
-    for (const id of ['project-orders', 'project-issues', 'project-returns'])
-      expect(screen.getByTestId(id).textContent).toBe('p1');
+    expect(screen.getByTestId('project-orders').textContent).toBe('p1');
+    expect(screen.getByRole('tab', { name: 'Receipts' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Bill matching' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Materials' }));
+    expect(screen.getByTestId('project-issues').textContent).toBe('p1');
+    fireEvent.click(screen.getByRole('tab', { name: 'Returns' }));
+    expect(screen.getByTestId('project-returns').textContent).toBe('p1');
   });
   it('shows subcontract agreements within the existing project detail workspace', async () => {
     mount(<ProjectDetail businessId="b1" projectId="p1" capabilities={grants} />);
