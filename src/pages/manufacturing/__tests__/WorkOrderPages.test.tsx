@@ -63,7 +63,7 @@ vi.mock('@/lib/supabase', () => {
           table === 'products'
             ? products
             : table === 'manufacturing_boms'
-              ? activeBomProductIds.map((product_id) => ({ product_id, status: 'active' }))
+              ? activeBomProductIds.map((product_id, index) => ({ id: `bom-${index + 1}`, product_id, version: 1, status: 'active' }))
               : table === 'inventory_locations'
                 ? locations
                 : table === 'manufacturing_work_orders'
@@ -311,7 +311,7 @@ describe('work order create page', () => {
     expect(Array.from(from.options).map((o) => o.value)).toContain('loc-floor');
   });
 
-  it('calls manufacturing_wo_create with the form values on save', async () => {
+  it('calls create_work_order_from_bom with the form values on save', async () => {
     render(withProviders(<WorkOrderCreatePage />));
     await waitFor(() => expect(screen.getByTestId('output-product-select')).toBeTruthy());
     fireEvent.change(screen.getByTestId('output-product-select'), { target: { value: 'prod-frame' } });
@@ -320,15 +320,17 @@ describe('work order create page', () => {
     fireEvent.change(screen.getByTestId('planned-end-input'), { target: { value: '2026-11-20' } });
     fireEvent.click(screen.getByTestId('save-work-order-button'));
     await waitFor(() => expect(rpcCalls.length).toBeGreaterThan(0));
-    expect(rpcCalls[0].name).toBe('manufacturing_wo_create');
+    expect(rpcCalls[0].name).toBe('create_work_order_from_bom');
     expect(rpcCalls[0].params).toMatchObject({
       p_business_id: BUSINESS_ID,
       p_product_id: 'prod-frame',
-      p_planned_qty: 25,
+      p_bom_version_id: 'bom-1',
+      p_quantity: 25,
       p_planned_start: '2026-11-03',
       p_planned_end: '2026-11-20',
       p_from_location_id: 'loc-raw',
       p_to_location_id: 'loc-fg',
+      p_priority: 'normal',
     });
   });
 });

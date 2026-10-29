@@ -90,6 +90,9 @@ const WorkOrderDetailPage = lazyPage(
   () => import('@/pages/manufacturing/WorkOrderDetailPage'),
   'WorkOrderDetailPage',
 );
+const WorkCentresPage = lazyPage(() => import('@/pages/manufacturing/WorkCentresPage'), 'WorkCentresPage');
+const RoutingsPage = lazyPage(() => import('@/pages/manufacturing/RoutingsPage'), 'RoutingsPage');
+const ProductionRunsPage = lazyPage(() => import('@/pages/manufacturing/ProductionRunsPage'), 'ProductionRunsPage');
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
@@ -493,6 +496,36 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
                         <CapabilityGate capability="manufacturing">
                           <WorkOrderDetailPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/runs"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <ProductionRunsPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/routings"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <RoutingsPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/work-centres"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <WorkCentresPage />
                         </CapabilityGate>
                       </PlanGate>
                     }

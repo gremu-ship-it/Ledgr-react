@@ -29,6 +29,7 @@ type WorkOrderRow = {
   completed_quantity: number;
   scrapped_quantity: number;
   status: WorkOrderStatus;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
   planned_start_date: string | null;
   planned_end_date: string | null;
   actual_start_date: string | null;
@@ -86,6 +87,7 @@ function WorkOrderListPageContent() {
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [productSearch, setProductSearch] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -146,6 +148,7 @@ function WorkOrderListPageContent() {
     const needle = productSearch.trim().toLowerCase();
     return workOrders.filter((wo) => {
       if (statusFilter !== 'all' && wo.status !== statusFilter) return false;
+      if (priorityFilter !== 'all' && wo.priority !== priorityFilter) return false;
       if (needle) {
         const name = productsById[wo.product_id]?.name ?? '';
         if (
@@ -162,7 +165,7 @@ function WorkOrderListPageContent() {
       if (toDate && start > toDate) return false;
       return true;
     });
-  }, [workOrders, productsById, statusFilter, productSearch, fromDate, toDate]);
+  }, [workOrders, productsById, statusFilter, priorityFilter, productSearch, fromDate, toDate]);
 
   if (!hasManufacturing) {
     return (
@@ -204,6 +207,13 @@ function WorkOrderListPageContent() {
                 {t(`manufacturing.wo.status.${workOrderStatusKey(status)}`)}
               </option>
             ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs font-medium text-gray-600">
+          {t('manufacturing.execution.priority')}
+          <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800" data-testid="priority-filter">
+            <option value="all">{t('common.all')}</option>
+            {(['low', 'normal', 'high', 'urgent'] as const).map((priority) => <option key={priority} value={priority}>{t(`manufacturing.execution.priorityValues.${priority}`)}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-xs font-medium text-gray-600">
@@ -269,6 +279,7 @@ function WorkOrderListPageContent() {
                   <th className="px-4 py-3">{t('manufacturing.wo.workOrderNumber')}</th>
                   <th className="px-4 py-3">{t('manufacturing.wo.outputProduct')}</th>
                   <th className="px-4 py-3">{t('common.status')}</th>
+                  <th className="px-4 py-3">{t('manufacturing.execution.priority')}</th>
                   <th className="px-4 py-3">{t('manufacturing.wo.progress')}</th>
                   <th className="px-4 py-3">{t('manufacturing.wo.yield')}</th>
                   <th className="px-4 py-3">
@@ -305,6 +316,7 @@ function WorkOrderListPageContent() {
                           {t(`manufacturing.wo.status.${workOrderStatusKey(wo.status)}`)}
                         </span>
                       </td>
+                      <td className="px-4 py-3">{t(`manufacturing.execution.priorityValues.${wo.priority ?? 'normal'}`)}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <div

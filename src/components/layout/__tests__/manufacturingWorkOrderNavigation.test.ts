@@ -49,6 +49,9 @@ describe('manufacturing work order navigation', () => {
       '/manufacturing',
       '/manufacturing/bom',
       '/manufacturing/production',
+      '/manufacturing/runs',
+      '/manufacturing/routings',
+      '/manufacturing/work-centres',
     ]);
     // Every entry stays gated by the operating model and sold on Enterprise.
     for (const item of section?.items ?? []) {
@@ -66,6 +69,13 @@ describe('manufacturing work order navigation', () => {
     });
     expect(item?.labelKey).toBe('manufacturing.bom.production');
     expect(en.manufacturing.bom.production).toBe('Production');
+    for (const [path, labelKey] of [
+      ['/manufacturing/runs', 'navigation.items.manufacturingRuns'],
+      ['/manufacturing/routings', 'navigation.items.manufacturingRoutings'],
+      ['/manufacturing/work-centres', 'navigation.items.manufacturingWorkCentres'],
+    ]) {
+      expect(navItemForPath(path)).toMatchObject({ path, labelKey, minPlan: 'enterprise', requiresOrgCapability: 'manufacturing' });
+    }
   });
 
   it('activates Dashboard at the manufacturing root route', () => {
@@ -118,13 +128,16 @@ describe('manufacturing work order navigation', () => {
       '/manufacturing/production',
       '/manufacturing/production/new',
       '/manufacturing/production/:id',
+      '/manufacturing/runs',
+      '/manufacturing/routings',
+      '/manufacturing/work-centres',
     ]) {
       const route = app.slice(app.indexOf(`path="${path}"`));
       expect(route, `route ${path} must exist`).not.toBe(app);
       // The gate must wrap the page, and the page must be the work order page —
       // not the Phase A "coming soon" dashboard.
       expect(route.slice(0, 400)).toContain('<CapabilityGate capability="manufacturing">');
-      expect(route.slice(0, 400)).toMatch(/WorkOrder(List|Create|Detail)Page/);
+      expect(route.slice(0, 400)).toMatch(/WorkOrder(List|Create|Detail)Page|ProductionRunsPage|RoutingsPage|WorkCentresPage/);
       expect(route.slice(0, 400)).not.toContain('ManufacturingDashboardPage');
     }
   });

@@ -1,10 +1,13 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate, Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { PlanGate } from '@/components/billing/PlanGate';
 import { ArrowLeft, ClipboardList } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { supabase } from '@/lib/supabase';
+import { repos } from '@/lib/repositories';
+import { manufacturingErrorMessage } from './manufacturingErrorMessage';
+import type { RoutingSummary } from '@/dal/repositories/ManufacturingRepository';
 import type { Database } from '@/dal/types/database';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const sb = supabase as unknown as { from: (t: string) => any; rpc: (n: string, p: unknown) => any; auth: any };
@@ -43,12 +46,15 @@ export function WorkOrderCreatePage() {
 
 function WorkOrderCreatePageContent() {
   const { t } = useTranslation();
+  const translateRef = useRef(t);
+  useEffect(() => { translateRef.current = t; }, [t]);
   const navigate = useNavigate();
   const businessId = useAppStore((s) => s.currentBusiness?.business?.id);
   const hasManufacturing = useCapability('manufacturing');
 
   const [products, setProducts] = useState<ProductRow[]>([]);
-  const [bomProductIds, setBomProductIds] = useState<Set<string>>(new Set());
+  const [bomIdByProduct, setBomIdByProduct] = useState<Record<string, string>>({});
+  const [routings, setRoutings] = useState<RoutingSummary[]>([]);
   const [locations, setLocations] = useState<LocationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -61,26 +67,34 @@ function WorkOrderCreatePageContent() {
   const [fromLocationId, setFromLocationId] = useState('');
   const [toLocationId, setToLocationId] = useState('');
   const [notes, setNotes] = useState('');
+  const [priority, setPriority] = useState('normal');
+  const [routingId, setRoutingId] = useState('');
 
   useEffect(() => {
     void (async () => {
       if (!businessId) return;
       setLoading(true);
       try {
-        const [{ data: prodData }, { data: bomData }, { data: locData }] = await Promise.all([
+        const [{ data: prodData }, { data: bomData }, { data: locData }, routes] = await Promise.all([
           sb.from('products').select('id,name,product_type,unit_of_measure').eq('business_id', businessId).order('name'),
-          sb.from('manufacturing_boms').select('product_id,status').eq('business_id', businessId).eq('status', 'active'),
+          sb.from('manufacturing_boms').select('id,product_id,version').eq('business_id', businessId).eq('status', 'active').order('version', { ascending: false }),
           sb.from('inventory_locations').select('id,name,location_type,is_default').eq('business_id', businessId).order('name'),
+          repos.manufacturing.listRoutings(businessId),
         ]);
         const rows = (prodData as ProductRow[]) ?? [];
         setProducts(rows);
-        setBomProductIds(new Set(((bomData as { product_id: string }[]) ?? []).map((b) => b.product_id)));
+        const bomMap: Record<string, string> = {};
+        for (const bom of ((bomData as { id: string; product_id: string; version: number }[]) ?? [])) {
+          if (!bomMap[bom.product_id]) bomMap[bom.product_id] = bom.id;
+        }
+        setBomIdByProduct(bomMap);
+        setRoutings(routes.filter((route) => route.status === 'active'));
         const locs = (locData as LocationRow[]) ?? [];
         setLocations(locs);
         setFromLocationId(pickDefault(locs, DEFAULT_SOURCE_TYPE));
         setToLocationId(pickDefault(locs, DEFAULT_DESTINATION_TYPE));
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(manufacturingErrorMessage(e, (key) => translateRef.current(key)));
       } finally {
         setLoading(false);
       }
@@ -94,24 +108,28 @@ function WorkOrderCreatePageContent() {
       setSaving(true);
       setError(null);
       try {
-        const { data, error: rpcError } = await sb.rpc('manufacturing_wo_create', {
-          p_business_id: businessId,
-          p_product_id: productId,
-          p_planned_qty: Number(plannedQty),
-          p_planned_start: plannedStart || null,
-          p_planned_end: plannedEnd || null,
-          p_from_location_id: fromLocationId || null,
-          p_to_location_id: toLocationId || null,
-          p_notes: notes || null,
+        const bomId = bomIdByProduct[productId];
+        if (!bomId) throw new Error(t('manufacturing.wo.noActiveBom'));
+        const id = await repos.manufacturing.createWorkOrder(businessId, {
+          product_id: productId,
+          bom_version_id: bomId,
+          routing_id: routingId || null,
+          quantity: Number(plannedQty),
+          reference: null,
+          planned_start: plannedStart || null,
+          planned_end: plannedEnd || null,
+          from_location_id: fromLocationId || null,
+          to_location_id: toLocationId || null,
+          notes: notes || null,
+          priority: priority as 'low' | 'normal' | 'high' | 'urgent',
         });
-        if (rpcError) throw rpcError;
-        navigate(`/manufacturing/production/${data as string}`);
+        navigate(`/manufacturing/production/${id}`);
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(manufacturingErrorMessage(e, t));
         setSaving(false);
       }
     },
-    [businessId, productId, plannedQty, plannedStart, plannedEnd, fromLocationId, toLocationId, notes, navigate],
+    [businessId, productId, bomIdByProduct, routingId, plannedQty, plannedStart, plannedEnd, fromLocationId, toLocationId, notes, priority, navigate, t],
   );
 
   if (!hasManufacturing) {
@@ -154,14 +172,14 @@ function WorkOrderCreatePageContent() {
             </span>
             <select
               value={productId}
-              onChange={(e) => setProductId(e.target.value)}
+              onChange={(e) => { setProductId(e.target.value); setRoutingId(''); }}
               required
               className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-900"
               data-testid="output-product-select"
             >
               <option value="">{t('manufacturing.wo.outputProduct')}</option>
               {products.map((p) => {
-                const hasBom = bomProductIds.has(p.id);
+                const hasBom = !!bomIdByProduct[p.id];
                 return (
                   <option
                     key={p.id}
@@ -176,7 +194,7 @@ function WorkOrderCreatePageContent() {
                 );
               })}
             </select>
-            {products.length > 0 && bomProductIds.size === 0 ? (
+            {products.length > 0 && Object.keys(bomIdByProduct).length === 0 ? (
               <p className="mt-1 text-xs text-amber-700">{t('manufacturing.wo.noActiveBom')}</p>
             ) : null}
           </label>
@@ -199,6 +217,22 @@ function WorkOrderCreatePageContent() {
               <p className="mt-1 text-xs text-red-600">{t('manufacturing.wo.plannedQuantity')}</p>
             ) : null}
           </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">{t('manufacturing.execution.priority')}</span>
+              <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                {(['low', 'normal', 'high', 'urgent'] as const).map((value) => <option key={value} value={value}>{t(`manufacturing.execution.priorityValues.${value}`)}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">{t('manufacturing.routing.title')}</span>
+              <select value={routingId} onChange={(e) => setRoutingId(e.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm">
+                <option value="">{t('manufacturing.execution.noRouting')}</option>
+                {routings.filter((route) => route.product_id === productId && (!route.bom_version_id || route.bom_version_id === bomIdByProduct[productId])).map((route) => <option key={route.id} value={route.id}>{route.code} — {route.name} ({t('manufacturing.routing.versionTag', { version: route.version_number })})</option>)}
+              </select>
+            </label>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">

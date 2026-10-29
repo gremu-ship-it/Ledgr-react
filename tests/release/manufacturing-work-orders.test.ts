@@ -1314,3 +1314,141 @@ async () => {
   // Closing is final: the order can no longer be changed.
   expect(await attemptAs(owner, 'select public.manufacturing_wo_record_run($1,1,0,null)', [wo])).toBe('22023');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 5B-2a: routing, recursive order requirements, and production runs
+// ─────────────────────────────────────────────────────────────────────────────
+const executionMeta = (id: string, expected: string) => ({
+  id,
+  expected,
+  remediation: 'Phase 5B-2a',
+  source: 'supabase/migrations/20261121000000_manufacturing_execution_routings_and_runs.sql',
+  layer: 'Isolated PostgreSQL 17 full migration replay; synthetic tenants; authenticated RPCs; existing stock-movement trigger.',
+});
+
+async function makeActiveBom(
+  productId: string,
+  components: Array<{ component_product_id: string | null; component_bom_id: string | null; quantity: number; scrap_pct: number }>,
+) {
+  const owner = identities.A_owner.id;
+  const bomId = (await commitScalar(owner,
+    'select public.save_bom_version($1::uuid,null,$2::uuid,null,$3::jsonb) as id',
+    [M.id, productId, JSON.stringify(components.map((component) => ({ ...component, unit_of_measure: 'ea', notes: null })))],
+  )) as string;
+  await commitScalar(owner, 'select public.manufacturing_bom_activate($1::uuid)', [bomId]);
+  return bomId;
+}
+
+async function createExecutionWorkOrder({ productId, bomId, quantity, priority = 'normal', routingId = null }:
+  { productId: string; bomId: string; quantity: number; priority?: string; routingId?: string | null }) {
+  return (await commitScalar(identities.A_owner.id,
+    `select public.create_work_order_from_bom($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::numeric,$6::text,$7::date,$8::date,$9::text,$10::uuid,$11::uuid,$12::text) as id`,
+    [M.id, productId, bomId, routingId, quantity, null, null, null, priority, M.raw, M.fg, 'Phase 5B-2a execution evidence'],
+  )) as string;
+}
+
+test(executionMeta('MFG.EXECUTION.BOM-EXPLOSION.QUANTITY',
+  'Creating an order multiplies nested per-unit component usage and scrap factors by planned quantity, then release preserves the frozen leaf requirements.'), async () => {
+  ready();
+  const subassembly = await newProduct('Nested assembly', 'wip', 0);
+  const output = await newProduct('Nested output', 'finished_good', 0);
+  const childBom = await makeActiveBom(subassembly, [
+    { component_product_id: M.steel, component_bom_id: null, quantity: 2, scrap_pct: 10 },
+  ]);
+  const rootBom = await makeActiveBom(output, [
+    { component_product_id: null, component_bom_id: childBom, quantity: 3, scrap_pct: 20 },
+    { component_product_id: M.bolt, component_bom_id: null, quantity: 4, scrap_pct: 0 },
+  ]);
+  const workOrderId = await createExecutionWorkOrder({ productId: output, bomId: rootBom, quantity: 5, priority: 'high' });
+  expect(await num('select planned_quantity n from public.manufacturing_work_orders where id=$1', [workOrderId])).toBe(5);
+  expect(await num('select count(*)::int n from public.manufacturing_work_order_lines where work_order_id=$1', [workOrderId])).toBe(2);
+  expect(await num('select planned_quantity n from public.manufacturing_work_order_lines where work_order_id=$1 and component_product_id=$2', [workOrderId, M.steel])).toBe(39.6);
+  expect(await num('select planned_quantity n from public.manufacturing_work_order_lines where work_order_id=$1 and component_product_id=$2', [workOrderId, M.bolt])).toBe(20);
+  expect(await scalar('select priority from public.manufacturing_work_orders where id=$1', [workOrderId])).toBe('high');
+  await commitScalar(identities.A_owner.id, 'select public.manufacturing_wo_release($1::uuid)', [workOrderId]);
+  expect(await num('select planned_quantity n from public.manufacturing_work_order_lines where work_order_id=$1 and component_product_id=$2', [workOrderId, M.steel])).toBe(39.6);
+});
+
+test(executionMeta('MFG.EXECUTION.ROUTING.ACTIVATE',
+  'A routing with a same-business active work centre can be saved and activated; its versioned steps and computed time totals are persisted.'), async () => {
+  ready();
+  const output = await newProduct('Routed output', 'finished_good', 0);
+  const bomId = await makeActiveBom(output, [
+    { component_product_id: M.steel, component_bom_id: null, quantity: 1, scrap_pct: 0 },
+  ]);
+  const centreId = (await commitScalar(identities.A_owner.id,
+    `insert into public.work_centres(business_id,code,name,centre_type,capacity_hours_per_day,cost_rate_per_hour)
+     values($1,'CUT-01','Cutting cell','cell',8,12.5) returning id`, [M.id])) as string;
+  const routingId = (await commitScalar(identities.A_owner.id,
+    `insert into public.routings(business_id,product_id,bom_version_id,code,name,version_number,status)
+     values($1,$2,$3,'ROUTE-01','Cut and inspect',1,'draft') returning id`, [M.id, output, bomId])) as string;
+  await commitRows(identities.A_owner.id,
+    `insert into public.routing_steps(routing_id,business_id,sequence,work_centre_id,operation_name,setup_time_minutes,run_time_per_unit_minutes,queue_time_minutes,is_quality_checkpoint)
+     values($1,$2,1,$3,'Cut',5,2.5,1,true) returning id`, [routingId, M.id, centreId]);
+  await commitScalar(identities.A_owner.id,
+    `update public.routings set total_setup_minutes=5,total_run_minutes_per_unit=2.5 where id=$1`, [routingId]);
+  await commitScalar(identities.A_owner.id, `update public.routings set status='active' where id=$1`, [routingId]);
+  expect(await scalar('select status from public.routings where id=$1', [routingId])).toBe('active');
+  expect(await num('select total_setup_minutes n from public.routings where id=$1', [routingId])).toBe(5);
+  expect(await num('select total_run_minutes_per_unit n from public.routings where id=$1', [routingId])).toBe(2.5);
+  expect(await num('select count(*)::int n from public.routing_steps where routing_id=$1 and is_quality_checkpoint', [routingId])).toBe(1);
+});
+
+test(executionMeta('MFG.EXECUTION.RUN.ATOMIC-INVENTORY',
+  'Completing a run consumes materials for good plus scrapped units and receives good output only through stock_movements, atomically updating inventory balances.'), async () => {
+  ready();
+  const output = await newProduct('Run output', 'finished_good', 0);
+  const bomId = await makeActiveBom(output, [
+    { component_product_id: M.steel, component_bom_id: null, quantity: 2, scrap_pct: 10 },
+  ]);
+  const workOrderId = await createExecutionWorkOrder({ productId: output, bomId, quantity: 10 });
+  await commitScalar(identities.A_owner.id, 'select public.manufacturing_wo_release($1::uuid)', [workOrderId]);
+  const runId = (await commitScalar(identities.A_owner.id,
+    `insert into public.manufacturing_production_runs(work_order_id,run_number,output_quantity,scrap_quantity,status,created_by,output_location_id)
+     values($1,0,0,0,'in_progress',$2,$3) returning id`, [workOrderId, identities.A_owner.id, M.fg])) as string;
+  const otherLocation = (await scalar("select id from public.inventory_locations where business_id <> $1 and is_active limit 1", [M.id])) as string;
+  const rejected = await attemptAs(identities.A_owner.id,
+    'select public.complete_production_run($1::uuid,$2::uuid,4,1,$3::text,$4::uuid)', [M.id, runId, 'Quality defect', otherLocation]);
+  expect(rejected).toBe('23514');
+  expect(await scalar('select status from public.manufacturing_production_runs where id=$1', [runId])).toBe('in_progress');
+  expect(await num("select count(*)::int n from public.stock_movements where source_type='production_run' and source_id::text=$1", [runId])).toBe(0);
+
+  const steelBefore = await num('select quantity_on_hand n from public.inventory_balances where business_id=$1 and product_id=$2 and location_id=$3', [M.id, M.steel, M.raw]);
+  await commitScalar(identities.A_owner.id,
+    'select public.complete_production_run($1::uuid,$2::uuid,4,1,$3::text,$4::uuid)', [M.id, runId, 'Quality defect', M.fg]);
+  expect(await scalar('select status from public.manufacturing_production_runs where id=$1', [runId])).toBe('completed');
+  expect(await num('select quantity_consumed n from public.manufacturing_production_run_lines where production_run_id=$1 and component_product_id=$2', [runId, M.steel])).toBe(11);
+  expect(await num('select actual_quantity_consumed n from public.manufacturing_work_order_lines where work_order_id=$1 and component_product_id=$2', [workOrderId, M.steel])).toBe(11);
+  expect(await num('select quantity_on_hand n from public.inventory_balances where business_id=$1 and product_id=$2 and location_id=$3', [M.id, M.steel, M.raw])).toBe(steelBefore - 11);
+  expect(await num('select quantity_on_hand n from public.inventory_balances where business_id=$1 and product_id=$2 and location_id=$3', [M.id, output, M.fg])).toBe(4);
+  expect(await num("select count(*)::int n from public.stock_movements where business_id=$1 and source_type='production_run' and source_id::text=$2 and movement_type::text='manufacturing_issue' and quantity<0", [M.id, runId])).toBe(1);
+  expect(await num("select count(*)::int n from public.stock_movements where business_id=$1 and source_type='production_run' and source_id::text=$2 and movement_type::text='manufacturing_receipt' and quantity>0", [M.id, runId])).toBe(1);
+  expect(await num('select count(*)::int n from public.manufacturing_material_transactions where run_id=$1 and transaction_type=\'consume\'', [runId])).toBe(1);
+});
+
+test(executionMeta('MFG.EXECUTION.RUN.ABORT',
+  'Aborting an in-progress run is an authorized table transition and creates no stock movements.'), async () => {
+  ready();
+  const output = await newProduct('Aborted run output', 'finished_good', 0);
+  const bomId = await makeActiveBom(output, [
+    { component_product_id: M.steel, component_bom_id: null, quantity: 1, scrap_pct: 0 },
+  ]);
+  const workOrderId = await createExecutionWorkOrder({ productId: output, bomId, quantity: 3 });
+  await commitScalar(identities.A_owner.id, 'select public.manufacturing_wo_release($1::uuid)', [workOrderId]);
+  const runId = (await commitScalar(identities.A_owner.id,
+    `insert into public.manufacturing_production_runs(work_order_id,run_number,output_quantity,scrap_quantity,status,created_by,output_location_id)
+     values($1,0,0,0,'in_progress',$2,$3) returning id`, [workOrderId, identities.A_owner.id, M.fg])) as string;
+  await commitScalar(identities.A_owner.id,
+    `update public.manufacturing_production_runs set status='aborted',completed_at=now() where id=$1`, [runId]);
+  expect(await scalar('select status from public.manufacturing_production_runs where id=$1', [runId])).toBe('aborted');
+  expect(await scalar('select status from public.manufacturing_work_orders where id=$1', [workOrderId])).toBe('in_progress');
+  expect(await num("select count(*)::int n from public.stock_movements where source_type='production_run' and source_id::text=$1", [runId])).toBe(0);
+});
+
+test(executionMeta('MFG.EXECUTION.RLS.MEMBER-READ-MANAGER-WRITE',
+  'Manufacturing members may read execution master data, while a viewer cannot create a work centre.'), async () => {
+  ready();
+  expect(await rowsAs(identities.A_viewer.id, 'select id from public.work_centres where business_id=$1', [M.id])).toHaveLength(1);
+  expect(await attemptAs(identities.A_viewer.id,
+    `insert into public.work_centres(business_id,code,name) values($1,'VIEWER-01','Denied')`, [M.id])).toBe('42501');
+});
