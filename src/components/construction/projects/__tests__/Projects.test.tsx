@@ -31,6 +31,8 @@ const mock = vi.hoisted(() => ({
     getBoqLines: vi.fn(),
     getBoqSummary: vi.fn(),
     bulkUpsertBoqLines: vi.fn(),
+    listBoqVersions: vi.fn(),
+    getBoqVersion: vi.fn(),
     getValuationHistory: vi.fn(),
     getRetentionSummary: vi.fn(),
     createValuation: vi.fn(),
@@ -156,6 +158,7 @@ beforeEach(() => {
   mock.projects.getById.mockResolvedValue(detail());
   mock.projects.getBoqLines.mockResolvedValue([]);
   mock.projects.getBoqSummary.mockResolvedValue({ total_boq_value: 0, contract_sum: 1000, variance: 1000, line_count: 0, is_locked: false });
+  mock.projects.listBoqVersions.mockResolvedValue([]);
   mock.projects.getValuationHistory.mockResolvedValue({ valuations: [], retention_entries: [] });
   mock.projects.getRetentionSummary.mockResolvedValue({ total_withheld: 0, total_released: 0, balance_held: 0, retention_pct: 10, can_release: false });
   mock.projects.createValuation.mockResolvedValue(valuationDocument());
@@ -304,7 +307,7 @@ describe('project detail', () => {
     expect(screen.getByText('350')).toBeTruthy();
     expect(screen.getByText('Number of sites')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'BOQ' }));
-    expect(await screen.findByText('Add your first BOQ line to define the schedule of values for this project.')).toBeTruthy();
+    expect(await screen.findByText('Create a BOQ version to define the project\'s scope, quantities, and costs.')).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Valuations' }));
     expect(
       await screen.findByText('No progress valuations have been created for this project.'),
@@ -462,7 +465,7 @@ describe('project detail', () => {
       notes: null,
     })));
     fireEvent.click(screen.getByRole('tab', { name: 'BOQ' }));
-    expect(await screen.findByText('This BOQ is locked because a valuation has been created. To make changes, contact your project administrator.')).toBeTruthy();
+    expect(await screen.findByText('This BOQ is locked because a progress valuation has been created. Versions and BOQ lines can no longer be changed.')).toBeTruthy();
   });
   it('requires a correction reason for negative period values before saving', async () => {
     mock.projects.getById.mockResolvedValue(detail('active'));

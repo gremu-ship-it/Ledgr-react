@@ -22,7 +22,7 @@ import { ConstructionReturnsSection } from '../ConstructionReturnsSection';
 import { ProjectForm, PROJECT_BUTTON } from './ProjectForm';
 import { ClientPicker } from './ClientPicker';
 import { ProjectStatusBadge } from './ProjectsSection';
-import { ProjectBoqEditor } from './ProjectBoqEditor';
+import { ProjectBoqVersionEditor } from './ProjectBoqVersionEditor';
 import { ProjectValuationsPanel } from './ProjectValuationsPanel';
 import { ProjectPnlOverview } from './ProjectPnlOverview';
 import { ProjectSubcontracts } from '@/components/construction/ProjectSubcontracts';
@@ -229,7 +229,7 @@ function ProjectDetailContent({
           {tab === 'subcontracts' && (
             <ProjectSubcontracts businessId={project.business_id} projectId={project.id} currency={currency} />
           )}
-          {tab === 'boq' && <ProjectBoqEditor project={project} canManage={canManage} onNotice={setNotice} />}
+          {tab === 'boq' && <ProjectBoqVersionEditor project={project} canManage={canManage} currency={currency} onNotice={setNotice} />}
           {tab === 'valuations' && (
             <ProjectValuationsPanel
               project={project}

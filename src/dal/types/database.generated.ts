@@ -9263,6 +9263,218 @@ export type Database = {
         }
         Relationships: []
       }
+      boq_versions: {
+        Row: {
+          business_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          id: string
+          notes: string | null
+          project_id: string
+          status: string
+          total_value: number
+          version_label: string | null
+          version_number: number
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          status?: string
+          total_value?: number
+          version_label?: string | null
+          version_number: number
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          status?: string
+          total_value?: number
+          version_label?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_versions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      boq_sections: {
+        Row: {
+          boq_version_id: string
+          business_id: string
+          code: string
+          description: string | null
+          id: string
+          level: number
+          parent_section_id: string | null
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          boq_version_id: string
+          business_id: string
+          code: string
+          description?: string | null
+          id?: string
+          level?: number
+          parent_section_id?: string | null
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          boq_version_id?: string
+          business_id?: string
+          code?: string
+          description?: string | null
+          id?: string
+          level?: number
+          parent_section_id?: string | null
+          sort_order?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_sections_boq_version_id_fkey"
+            columns: ["boq_version_id"]
+            isOneToOne: false
+            referencedRelation: "boq_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_sections_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_sections_parent_section_id_fkey"
+            columns: ["parent_section_id"]
+            isOneToOne: false
+            referencedRelation: "boq_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_sections_parent_section_id_boq_version_id_business_id_fkey"
+            columns: ["parent_section_id", "boq_version_id", "business_id"]
+            isOneToOne: false
+            referencedRelation: "boq_sections"
+            referencedColumns: ["id", "boq_version_id", "business_id"]
+          },
+        ]
+      }
+      boq_items: {
+        Row: {
+          amount: number
+          boq_version_id: string
+          business_id: string
+          cost_code: string | null
+          description: string
+          id: string
+          is_provisional: boolean
+          item_number: string
+          notes: string | null
+          product_id: string | null
+          quantity: number
+          rate: number
+          section_id: string
+          sort_order: number
+          unit_of_measure: string
+        }
+        Insert: {
+          amount?: number
+          boq_version_id: string
+          business_id: string
+          cost_code?: string | null
+          description: string
+          id?: string
+          is_provisional?: boolean
+          item_number: string
+          notes?: string | null
+          product_id?: string | null
+          quantity?: number
+          rate?: number
+          section_id: string
+          sort_order?: number
+          unit_of_measure?: string
+        }
+        Update: {
+          amount?: number
+          boq_version_id?: string
+          business_id?: string
+          cost_code?: string | null
+          description?: string
+          id?: string
+          is_provisional?: boolean
+          item_number?: string
+          notes?: string | null
+          product_id?: string | null
+          quantity?: number
+          rate?: number
+          section_id?: string
+          sort_order?: number
+          unit_of_measure?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "boq_items_boq_version_id_fkey"
+            columns: ["boq_version_id"]
+            isOneToOne: false
+            referencedRelation: "boq_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_items_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "boq_items_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "boq_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_boq_lines: {
         Row: {
           created_at: string
@@ -13447,6 +13659,7 @@ export type Database = {
         Args: { p_period_id: string; p_reason: string }
         Returns: Json
       }
+      recalculate_boq_total: { Args: { p_boq_version_id: string }; Returns: number }
       reorder_boq_lines: {
         Args: { p_line_ids: string[]; p_project_id: string }
         Returns: {
