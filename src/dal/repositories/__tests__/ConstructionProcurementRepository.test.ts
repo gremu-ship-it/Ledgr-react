@@ -314,18 +314,66 @@ describe('ConstructionProcurementRepository — reads', () => {
     const repository = new ConstructionProcurementRepository();
 
     await repository.findPurchaseOrders('biz');
+    await repository.findProjectPurchaseOrderBoqLinks('biz', 'project-1');
     await repository.findReceiptLines('grn-1');
     await repository.findSupplierBillLines('biz');
     await repository.findPostingPolicy('biz');
 
     expect(tables).toEqual([
       'construction_purchase_orders',
+      'project_purchase_order_boq_links',
       'construction_goods_receipt_lines',
       'expense_lines',
       'construction_receipt_posting_policies',
     ]);
     // Reads never go through rpc, and no insert/update/delete exists on this path.
     expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('scopes project receipts and receipt lines through purchase orders', async () => {
+    const responses = [
+      builder([
+        { id: 'grn-project', po_id: 'po-project' },
+        { id: 'grn-other', po_id: 'po-other' },
+      ]),
+      builder([{ id: 'po-project' }]),
+      builder([
+        { id: 'line-project', grn_id: 'grn-project' },
+        { id: 'line-other', grn_id: 'grn-other' },
+      ]),
+      builder([{ id: 'grn-project', po_id: 'po-project' }]),
+      builder([{ id: 'po-project' }]),
+    ];
+    mocks.from.mockImplementation(() => responses.shift() as never);
+    const repository = new ConstructionProcurementRepository();
+
+    await expect(repository.findReceipts('biz', 'project')).resolves.toEqual([
+      { id: 'grn-project', po_id: 'po-project' },
+    ]);
+    await expect(repository.findReceiptLinesForBusiness('biz', 'project')).resolves.toEqual([
+      { id: 'line-project', grn_id: 'grn-project' },
+    ]);
+  });
+
+  it('scopes recent bill allocations to the receipt lines for the project', async () => {
+    const responses = [
+      builder([
+        { id: 'allocation-project', grn_line_id: 'line-project' },
+        { id: 'allocation-other', grn_line_id: 'line-other' },
+      ]),
+      builder([
+        { id: 'line-project', grn_id: 'grn-project' },
+        { id: 'line-other', grn_id: 'grn-other' },
+      ]),
+      builder([{ id: 'grn-project', po_id: 'po-project' }]),
+      builder([{ id: 'po-project' }]),
+    ];
+    mocks.from.mockImplementation(() => responses.shift() as never);
+    const repository = new ConstructionProcurementRepository();
+
+    await expect(repository.findAllocationsForBusiness('biz', 'project')).resolves.toEqual([
+      { id: 'allocation-project', grn_line_id: 'line-project' },
+    ]);
   });
 
   it('parses the capability array the server command returns', async () => {
@@ -345,6 +393,42 @@ describe('ConstructionProcurementRepository — reads', () => {
     mocks.rpc.mockResolvedValueOnce({ data: null, error: null });
     const repository = new ConstructionProcurementRepository();
     await expect(repository.findCapabilities('biz')).resolves.toEqual([]);
+  });
+});
+
+describe('ConstructionProcurementRepository — project BOQ links', () => {
+  it('sets or clears the BOQ link through the scoped command RPC', async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: {
+        id: 'link-1',
+        business_id: 'biz-1',
+        project_id: 'project-1',
+        purchase_order_line_id: 'line-1',
+        boq_item_id: 'item-1',
+      },
+      error: null,
+    });
+    const repository = new ConstructionProcurementRepository();
+    await expect(repository.setProjectPurchaseOrderBoqLink({
+      businessId: 'biz-1',
+      projectId: 'project-1',
+      purchaseOrderLineId: 'line-1',
+      boqItemId: 'item-1',
+    })).resolves.toMatchObject({ id: 'link-1', boq_item_id: 'item-1' });
+    expect(mocks.rpc).toHaveBeenLastCalledWith('set_project_purchase_order_boq_link', {
+      p_business_id: 'biz-1',
+      p_project_id: 'project-1',
+      p_purchase_order_line_id: 'line-1',
+      p_boq_item_id: 'item-1',
+    });
+
+    mocks.rpc.mockResolvedValueOnce({ data: { id: null, boq_item_id: null }, error: null });
+    await expect(repository.setProjectPurchaseOrderBoqLink({
+      businessId: 'biz-1',
+      projectId: 'project-1',
+      purchaseOrderLineId: 'line-1',
+      boqItemId: null,
+    })).resolves.toBeNull();
   });
 });
 

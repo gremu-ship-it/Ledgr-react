@@ -51,6 +51,7 @@ vi.mock('@/lib/repositories', () => ({
 }));
 
 import { ConstructionWorkspacePage } from '@/pages/construction/ConstructionWorkspacePage';
+import { ConstructionBillMatchingSection } from '@/components/construction/ConstructionBillMatchingSection';
 import { useAppStore } from '@/store/useAppStore';
 import { ConstructionCommandError } from '@/dal/repositories/ConstructionProcurementRepository';
 
@@ -177,6 +178,23 @@ function renderWorkspace(entry = '/construction/bill-matching') {
     );
   }
   return render(<ConstructionWorkspacePage />, { wrapper: Wrapper });
+}
+
+function renderProjectBillMatching(projectId: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 }, mutations: { retry: false } },
+  });
+  function Wrapper({ children }: PropsWithChildren) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>{children}</MemoryRouter>
+      </QueryClientProvider>
+    );
+  }
+  return render(
+    <ConstructionBillMatchingSection businessId={BUSINESS_ID} capabilities={['procurement.bill.match']} projectId={projectId} />,
+    { wrapper: Wrapper },
+  );
 }
 
 beforeEach(() => {
@@ -327,5 +345,12 @@ describe('Construction workspace — supplier bill matching', () => {
     expect(submit.disabled).toBe(true);
     expect(submit.getAttribute('title')).toMatch(/nothing accepted yet|no accepted quantity/i);
     expect(within(form).getByText(/nothing accepted yet/i)).toBeTruthy();
+  });
+
+  it('limits receipt choices to the project context while retaining the existing bill allocation flow', async () => {
+    renderProjectBillMatching('project-1');
+    expect(await screen.findByText(/This view is limited to receipts from this project/i)).toBeTruthy();
+    await waitFor(() => expect(construction.findReceipts).toHaveBeenCalledWith(BUSINESS_ID, 'project-1'));
+    expect(await screen.findByLabelText('Goods receipt')).toBeTruthy();
   });
 });

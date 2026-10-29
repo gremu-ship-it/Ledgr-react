@@ -9533,6 +9533,65 @@ export type Database = {
           },
         ]
       }
+      project_purchase_order_boq_links: {
+        Row: {
+          id: string
+          business_id: string
+          project_id: string
+          purchase_order_line_id: string
+          boq_item_id: string
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          project_id: string
+          purchase_order_line_id: string
+          boq_item_id: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          project_id?: string
+          purchase_order_line_id?: string
+          boq_item_id?: string
+          created_at?: string
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_purchase_order_boq_links_boq_item_id_fkey"
+            columns: ["boq_item_id"]
+            isOneToOne: false
+            referencedRelation: "boq_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_purchase_order_boq_links_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_purchase_order_boq_links_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_purchase_order_boq_links_purchase_order_line_id_fkey"
+            columns: ["purchase_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "construction_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_retention_ledger: {
         Row: {
           amount: number
@@ -12992,6 +13051,15 @@ export type Database = {
       }
       create_project_purchase_order: {
         Args: { p_client_key: string; p_payload: Json; p_project_id: string }
+        Returns: Json
+      }
+      set_project_purchase_order_boq_link: {
+        Args: {
+          p_business_id: string
+          p_project_id: string
+          p_purchase_order_line_id: string
+          p_boq_item_id?: string | null
+        }
         Returns: Json
       }
       create_valuation: {

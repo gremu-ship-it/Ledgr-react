@@ -47,22 +47,24 @@ import {
 export function ConstructionBillMatchingSection({
   businessId,
   capabilities,
+  projectId,
 }: {
   businessId: string;
   capabilities: string[];
+  projectId?: string;
 }) {
   const { t } = useTranslation();
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
   const dataQuery = useQuery({
-    queryKey: ['construction', 'bill-matching', businessId],
+    queryKey: ['construction', 'bill-matching', businessId, ...(projectId ? [projectId] : [])],
     queryFn: async () => {
       const [bills, billLines, references, receipts, sites, products, contacts] = await Promise.all([
         repos.expense.findByBusiness(businessId),
         repos.construction.findSupplierBillLines(businessId),
         repos.construction.findSupplierInvoiceReferences(businessId),
-        repos.construction.findReceipts(businessId),
+        repos.construction.findReceipts(businessId, projectId),
         repos.construction.findSites(businessId),
         repos.inventory.findAllProducts(businessId),
         repos.contact.findByBusiness(businessId),
@@ -97,7 +99,9 @@ export function ConstructionBillMatchingSection({
 
       <InfoNote>
         <p>
-          {t('construction.procurement.billMatching.infoNote')}
+          {projectId
+            ? t('construction.procurement.billMatching.projectContextInfo')
+            : t('construction.procurement.billMatching.infoNote')}
         </p>
       </InfoNote>
 
@@ -198,6 +202,7 @@ export function ConstructionBillMatchingSection({
 
       <MatchForm
         businessId={businessId}
+        projectId={projectId}
         capabilities={capabilities}
         receipts={receipts}
         sites={sites}
@@ -513,6 +518,7 @@ function SupplierReferenceExceptionPanel({
 
 function MatchForm({
   businessId,
+  projectId,
   capabilities,
   receipts,
   sites,
@@ -522,6 +528,7 @@ function MatchForm({
   onDone,
 }: {
   businessId: string;
+  projectId?: string;
   capabilities: string[];
   receipts: Array<{ id: string; grn_number: string; receipt_date: string; site_id: string; project_ref: string; po_id: string }>;
   sites: Array<{ id: string; site_code: string }>;
@@ -808,17 +815,17 @@ function MatchForm({
 
       <div className="mt-4">
         <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{t('construction.procurement.billMatching.recentMatchesHeading')}</h4>
-        <RecentMatches businessId={businessId} />
+        <RecentMatches businessId={businessId} projectId={projectId} />
       </div>
     </SectionCard>
   );
 }
 
-function RecentMatches({ businessId }: { businessId: string }) {
+function RecentMatches({ businessId, projectId }: { businessId: string; projectId?: string }) {
   const { t } = useTranslation();
   const allocationsQuery = useQuery({
-    queryKey: ['construction', 'allocations', businessId],
-    queryFn: () => repos.construction.findAllocationsForBusiness(businessId),
+    queryKey: ['construction', 'allocations', businessId, ...(projectId ? [projectId] : [])],
+    queryFn: () => repos.construction.findAllocationsForBusiness(businessId, projectId),
   });
 
   if (allocationsQuery.isLoading) return <LoadingBlock label={t('construction.procurement.billMatching.matchesLoading')} />;

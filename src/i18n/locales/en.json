@@ -1392,9 +1392,22 @@
         "overview": "Overview",
         "sites": "Sites",
         "procurement": "Procurement",
+        "materials": "Materials",
         "boq": "BOQ",
         "valuations": "Valuations",
         "subcontracts": "Subcontracts"
+      },
+      "procurementTabsAria": "Project procurement sections",
+      "procurementTabs": {
+        "orders": "Purchase orders",
+        "receipts": "Receipts",
+        "billMatching": "Bill matching",
+        "boqLinks": "BOQ links"
+      },
+      "materialTabsAria": "Project materials sections",
+      "materialTabs": {
+        "issues": "Issues",
+        "returns": "Returns"
       },
       "boqPlaceholder": "Schedule of Values will be available in the next update.",
       "valuationsPlaceholder": "Progress billing will be available in the next update.",
@@ -2248,6 +2261,7 @@
         "loading": "Loading supplier bills and receipts…",
         "loadError": "Bill matching could not be loaded: {{detail}}",
         "infoNote": "One supplier reference can only be registered once per supplier. A genuine duplicate (for example a re-issued invoice number) needs an evidenced exception that names the conflicting registration. Matching is exact: same product, same supplier, same currency, explicit unit conversion — no tolerance is applied automatically.",
+        "projectContextInfo": "This view is limited to receipts from this project’s purchase orders. Supplier bills remain in the existing bill register; allocations are recorded against the selected project receipt lines.",
         "title": "Supplier bills and their registered references",
         "description": "The supplier's own invoice reference lives on the existing bill (expenses.reference). Registration is the duplicate guard that matching depends on.",
         "searchPlaceholder": "Search bill, reference, supplier…",
@@ -2350,6 +2364,24 @@
         "noMatchesTitle": "No bill line has been matched yet",
         "matchLine": "{{bill}} matched to {{receipt}} on {{date}}",
         "authorizedExceptionSuffix": " · authorized exception"
+      },
+      "projectBoqLinks": {
+        "loading": "Loading purchase-order BOQ links…",
+        "loadError": "Purchase-order BOQ links could not be loaded: {{detail}}",
+        "title": "Purchase-order lines to BOQ items",
+        "description": "Connect existing project purchase-order lines to the active BOQ without creating another purchasing document.",
+        "info": "Links are available for draft purchase orders and are checked against the project and product by the server. Purchase receipts and bill allocations continue through the existing construction workflow.",
+        "saveError": "The BOQ link could not be saved: {{detail}}",
+        "noActiveTitle": "No active BOQ version",
+        "noActiveDetail": "Activate a project BOQ version before linking purchase-order lines.",
+        "noLinesTitle": "No purchase-order lines yet",
+        "noLinesDetail": "Create a project purchase order first. Its existing lines will appear here.",
+        "lineLabel": "Line {{number}}",
+        "linkedTo": "Linked to BOQ item {{item}}",
+        "selectLabel": "BOQ item for purchase-order line {{number}}",
+        "unnamedProduct": "Unlabelled product",
+        "noLinkOption": "No BOQ item linked",
+        "archivedLinkOption": "Linked to older BOQ item {{item}}; choose an item from the active version to remap"
       },
       "setup": {
         "loading": "Loading construction master data…",
