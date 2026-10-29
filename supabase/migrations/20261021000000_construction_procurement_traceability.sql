@@ -4238,26 +4238,11 @@ begin
     v_missing := array_append(v_missing, 'receipt GL posting guard constraint missing');
   end if;
 
-  -- 12.5 This migration created no posting policy and posted nothing.
-  select count(*) into v_count from public.construction_receipt_posting_policies;
-  if v_count <> 0 then
-    v_missing := array_append(v_missing, 'a receipt posting policy row exists');
-  end if;
-  -- 12.3b The consumption surface: no material issue and no inspection exists at
-  --       migration time, the movement type it needs is present, and the append-only
-  --       guard for a receipt line lists BOTH commands that may update it.
-  select count(*) into v_count from public.construction_material_issues;
-  if v_count <> 0 then
-    v_missing := array_append(v_missing, 'construction material issues exist before any approval');
-  end if;
-  select count(*) into v_count from public.construction_receipt_inspections;
-  if v_count <> 0 then
-    v_missing := array_append(v_missing, 'receipt inspections exist before any approval');
-  end if;
-  select count(*) into v_count from public.construction_receipt_line_reclassifications;
-  if v_count <> 0 then
-    v_missing := array_append(v_missing, 'receipt line reclassifications exist before any approval');
-  end if;
+  -- Existing business rows are valid on an already-used deployment. This
+  -- migration defines schema and commands but must not reject or remove rows
+  -- merely because these tables are nonempty; verify structural safeguards here.
+  -- The migration contains no inserts into posting policies, material issues,
+  -- inspections, or receipt reclassifications.
   if not exists (
     select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
      where t.typname = 'stock_movement_type' and e.enumlabel = 'issue_out'
@@ -4281,21 +4266,11 @@ begin
     v_missing := array_append(v_missing, 'receipt line has no posted-quantity column');
   end if;
 
-  select count(*) into v_count from public.stock_movements where source_type = 'construction_grn';
-  if v_count <> 0 then
-    v_missing := array_append(v_missing, 'a construction receipt stock movement exists');
-  end if;
-  select count(*) into v_count from public.journal_entries
-   where source_type in ('construction_grn', 'construction_purchase_order', 'construction_bill_match');
-  if v_count <> 0 then
-    v_missing := array_append(v_missing, 'a construction procurement journal entry exists');
-  end if;
-
   if array_length(v_missing, 1) > 0 then
     raise exception 'Construction procurement verification failed: %', array_to_string(v_missing, '; ')
       using errcode = 'check_violation';
   end if;
 
-  raise notice 'Construction procurement traceability installed: 16 tables, member-read RLS, explicit capability grants, receipt posting closed (no policy row).';
+  raise notice 'Construction procurement traceability installed: 16 tables, member-read RLS, explicit capability grants, and receipt posting guarded by per-business policy.';
 end
 $verify$;
