@@ -10030,6 +10030,121 @@ export type Database = {
           },
         ]
       }
+      payment_certificates: {
+        Row: {
+          advance_recovery: number
+          business_id: string
+          certificate_date: string
+          certificate_number: number
+          created_at: string
+          created_by: string
+          gross_amount: number
+          id: string
+          issued_to_contact_id: string | null
+          net_amount: number
+          notes: string | null
+          other_deductions: number
+          paid_amount: number
+          paid_date: string | null
+          payment_due_date: string | null
+          penalty_deductions: number
+          project_id: string
+          retention_amount: number
+          retention_percentage: number
+          status: string
+          total_retention_held: number
+          updated_at: string
+          valuation_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          advance_recovery?: number
+          business_id: string
+          certificate_date: string
+          certificate_number: number
+          created_at?: string
+          created_by: string
+          gross_amount?: number
+          id?: string
+          issued_to_contact_id?: string | null
+          net_amount?: number
+          notes?: string | null
+          other_deductions?: number
+          paid_amount?: number
+          paid_date?: string | null
+          payment_due_date?: string | null
+          penalty_deductions?: number
+          project_id: string
+          retention_amount?: number
+          retention_percentage?: number
+          status?: string
+          total_retention_held?: number
+          updated_at?: string
+          valuation_id: string
+        }
+        Update: {
+          advance_recovery?: number
+          business_id?: string
+          certificate_date?: string
+          certificate_number?: number
+          created_at?: string
+          created_by?: string
+          gross_amount?: number
+          id?: string
+          issued_to_contact_id?: string | null
+          net_amount?: number
+          notes?: string | null
+          other_deductions?: number
+          paid_amount?: number
+          paid_date?: string | null
+          payment_due_date?: string | null
+          penalty_deductions?: number
+          project_id?: string
+          retention_amount?: number
+          retention_percentage?: number
+          status?: string
+          total_retention_held?: number
+          updated_at?: string
+          valuation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_certificates_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_certificates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_certificates_issued_to_contact_id_fkey"
+            columns: ["issued_to_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_certificates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_certificates_valuation_id_fkey"
+            columns: ["valuation_id"]
+            isOneToOne: false
+            referencedRelation: "project_valuations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recurring_invoices: {
         Row: {
           active: boolean
@@ -13203,6 +13318,16 @@ export type Database = {
         }
         Returns: Json
       }
+      create_certificate_from_valuation: {
+        Args: {
+          p_advance_recovery?: number
+          p_other_deductions?: number
+          p_penalty_deductions?: number
+          p_retention_percentage?: number
+          p_valuation_id: string
+        }
+        Returns: string
+      }
       create_valuation: {
         Args: {
           p_lines: Json
@@ -13427,6 +13552,10 @@ export type Database = {
       is_partner_admin: { Args: { pid: string; uid: string }; Returns: boolean }
       is_partner_business_admin: { Args: { bid: string }; Returns: boolean }
       is_platform_admin: { Args: { uid: string }; Returns: boolean }
+      issue_payment_certificate: {
+        Args: { p_certificate_id: string; p_payment_due_date?: string | null }
+        Returns: string
+      }
       issue_construction_materials_to_project: {
         Args: { p_client_key: string; p_payload: Json }
         Returns: Json
@@ -13851,6 +13980,14 @@ export type Database = {
           p_to_uom: string
         }
         Returns: Json
+      }
+      record_payment_certificate_payment: {
+        Args: { p_amount: number; p_certificate_id: string; p_paid_date?: string | null }
+        Returns: string
+      }
+      cancel_payment_certificate: {
+        Args: { p_certificate_id: string }
+        Returns: string
       }
       register_construction_supplier_invoice_reference: {
         Args: { p_expense_id: string }
