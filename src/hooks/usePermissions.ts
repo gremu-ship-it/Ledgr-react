@@ -478,17 +478,17 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       // though they keep the Supply Chain children they already had.
       // BOM routes (/manufacturing/bom, /manufacturing/production, etc.) share
       // the same authority as the workspace itself.
-      if (path.startsWith('/manufacturing')) return true;
+      if (path.startsWith('/manufacturing') || path.startsWith('/construction')) return true;
       return ['/pos', '/pos/shifts', '/pos/reports', '/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/manufacturing'].includes(path);
 
     case 'stock_clerk':
-      return ['/products', '/warehouse', '/transfers'].includes(path);
+      return path.startsWith('/construction') || ['/products', '/warehouse', '/transfers'].includes(path);
 
     case 'purchasing_officer':
-      return ['/expenses', '/contacts', '/products', '/warehouse', '/transfers', '/dashboard'].includes(path);
+      return path.startsWith('/construction') || ['/expenses', '/contacts', '/products', '/warehouse', '/transfers', '/dashboard'].includes(path);
 
     case 'warehouse_worker':
-      return ['/dashboard', '/products', '/warehouse', '/transfers'].includes(path);
+      return path.startsWith('/construction') || ['/dashboard', '/products', '/warehouse', '/transfers'].includes(path);
 
     case 'sales_manager':
       return ['/dashboard', '/income', '/expenses', '/invoices', '/contacts', '/products', '/warehouse', '/transfers', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/pos', '/pos/shifts', '/pos/reports'].includes(path);
@@ -510,7 +510,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'inventory_manager':
-      return ['/products', '/warehouse', '/transfers'].includes(path);
+      return path.startsWith('/construction') || ['/products', '/warehouse', '/transfers'].includes(path);
 
     case 'supervisor':
       if (path === '/payroll' || path.startsWith('/reports/')) return false;

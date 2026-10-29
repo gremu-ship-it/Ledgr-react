@@ -152,6 +152,7 @@ import { PartnerAdminRoute } from '@/routes/PartnerAdminRoute';
 import { PartnerProvider } from '@/partner/PartnerProvider';
 import { PartnerPlanGate } from '@/components/billing/PartnerPlanGate';
 import { BankReconciliationPlanGate } from '@/components/bank-reconciliation/BankReconciliationPlanGate';
+import { OperatingModelGate } from '@/components/billing/OperatingModelGate';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -553,9 +554,11 @@ function App() {
                   />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
-                    <CapabilityGate capability="pos">
-                      <PosPage />
-                    </CapabilityGate>
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <CapabilityGate capability="pos">
+                        <PosPage />
+                      </CapabilityGate>
+                    </OperatingModelGate>
                   } />
 
                   {/* Finance */}

@@ -24,24 +24,27 @@ const pinnedExisting: BusinessOrganisationProfile = {
   },
 };
 
-function visiblePaths(isOrgEnabled: (capability: OrganisationCapability) => boolean) {
-  return visibleSectionsFor(() => true, 'owner', isOrgEnabled)
+function visiblePaths(isOrgEnabled: (capability: OrganisationCapability) => boolean, operatingModels?: readonly string[]) {
+  return visibleSectionsFor(() => true, 'owner', isOrgEnabled, undefined, operatingModels)
     .flatMap((section) => section.items.map((item) => item.path));
 }
 
 describe('frozen Phase 1 capability acceptance matrix', () => {
-  it('A — preserves the existing retail surface and central POS navigation', () => {
+  it('A — preserves core navigation while a POS override cannot bypass the RETAIL model gate', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
     expect(resolveBusinessCapability('pos', pinnedExisting, fullAccess)).toBe(true);
     expect(resolveBusinessCapability('inventory', pinnedExisting, fullAccess)).toBe(true);
     expect(resolveBusinessCapability('services', pinnedExisting, fullAccess)).toBe(true);
     const paths = visiblePaths(() => true);
-    expect(paths).toContain('/pos');
+    expect(paths).not.toContain('/pos');
     expect(paths).toContain('/products');
     expect(navItemForPath('/pos')?.requiresOrgCapability).toBe('pos');
+    expect(navItemForPath('/pos')?.requiredOperatingModels).toEqual(['RETAIL']);
+    expect(visiblePaths(() => true, ['RETAIL'])).toContain('/pos');
 
     const app = readFileSync(fileURLToPath(new URL('../../../../src/App.tsx', import.meta.url)), 'utf8');
-    const posRoute = app.match(/<Route path="\/pos" element=\{[\s\S]*?<\/CapabilityGate>\s*\} \/>/);
+    const posRoute = app.match(/<Route path="\/pos" element=\{[\s\S]*?<\/OperatingModelGate>\s*\} \/>/);
+    expect(posRoute?.[0]).toContain(`<OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">`);
     expect(posRoute?.[0]).toContain('<CapabilityGate capability="pos">');
     expect(posRoute?.[0]).toContain('<PosPage />');
   });
@@ -74,6 +77,14 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
     expect(migration).not.toMatch(/\b(?:CREATE|ALTER|DROP)\s+POLICY\b/i);
     expect(migration).not.toMatch(/\bENABLE\s+ROW\s+LEVEL\s+SECURITY\b/i);
     expect(migration).not.toMatch(/\b(?:journal_entries|journal_lines)\b/i);
+  });
+
+  it('keeps Construction routes inside RoleRoute without changing their paths', () => {
+    const app = readFileSync(fileURLToPath(new URL('../../../../src/App.tsx', import.meta.url)), 'utf8');
+    const roleRouteBlock = app.match(/<Route element={<RoleRoute \/>}>([\s\S]*?)<Route path="\/dashboard"/);
+    expect(roleRouteBlock?.[1]).toContain('path="/construction/subcontractors"');
+    expect(roleRouteBlock?.[1]).toContain('path="/construction/*"');
+    expect(roleRouteBlock?.[1]).toContain('<CapabilityGate capability="construction">');
   });
 
   it('K — organisation settings cannot exceed a subscription entitlement', () => {
@@ -233,12 +244,12 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
   });
 
   it('U — keeps Construction visible for every role that may enter the workspace', () => {
-    const ownerPaths = visibleSectionsFor(() => true, 'owner', (capability) => capability === 'construction')
+    const ownerPaths = visibleSectionsFor(() => true, 'owner', (capability) => capability === 'construction', undefined, ['CONSTRUCTION'])
       .flatMap((entry) => entry.items.map((item) => item.path));
     expect(ownerPaths).toContain('/construction');
     // The role filter now applies (no allowAllAuthenticatedRoles): a cashier's
     // path list does not include the workspace, so their sidebar does not either.
-    const cashierPaths = visibleSectionsFor(() => true, 'cashier', (capability) => capability === 'construction')
+    const cashierPaths = visibleSectionsFor(() => true, 'cashier', (capability) => capability === 'construction', undefined, ['CONSTRUCTION'])
       .flatMap((entry) => entry.items.map((item) => item.path));
     expect(cashierPaths).not.toContain('/construction');
   });

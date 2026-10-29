@@ -83,37 +83,47 @@ export class BranchRepository extends BaseRepository<'branches'> {
   }
 
   /**
-   * Update a branch, keeping its MIRROR location's name in sync.
-   *
-   * createWithLocation() pairs a branch with a location of the same name;
-   * before this sync, renaming the branch left the paired location behind
-   * (the name-drift bug from the construction org audit §1.1.2). The sync is
-   * mirror-guarded: only locations whose name currently equals the branch's
-   * name are renamed, so the provisioning stores that merely share a branch
-   * ("Raw Materials Store" etc. under "Main Factory") are never flattened
-   * into the branch name. LocationRepository.updateLocation() applies the
-   * same rule in the location→branch direction.
+   * Update a branch, keeping its mirrored inventory location name and code in
+   * sync. Each field is guarded independently against the old branch value so
+   * custom site/store names and codes are never overwritten.
    */
   async updateBranch(id: string, dto: UpdateDto<'branches'>): Promise<Row<'branches'>> {
-    let previousName: string | null = null;
-    if (dto.name !== undefined) {
-      const { data: current } = await this.client
+    let previous: Pick<Row<'branches'>, 'name' | 'code' | 'business_id'> | null = null;
+    if (dto.name !== undefined || dto.code !== undefined) {
+      const { data: current, error } = await this.client
         .from('branches')
-        .select('name')
+        .select('name, code, business_id')
         .eq('id', id)
         .maybeSingle();
-      previousName = current?.name ?? null;
+      if (error) throw toRepositoryError('branches', error);
+      previous = current;
     }
 
     const updated = await this.update(id, dto as never);
 
-    if (dto.name !== undefined && previousName !== null && previousName !== dto.name) {
-      const { error } = await this.client
-        .from('inventory_locations')
-        .update({ name: dto.name } as never)
-        .eq('branch_id', id)
-        .eq('name', previousName);
-      if (error) throw toRepositoryError('inventory_locations', error);
+    if (previous && (dto.name !== undefined || dto.code !== undefined)) {
+      const previousMirrorCode = previous.code ?? previous.name.slice(0, 6).toUpperCase();
+      const updatedMirrorCode = updated.code ?? updated.name.slice(0, 6).toUpperCase();
+
+      if (dto.name !== undefined && previous.name !== dto.name) {
+        const { error } = await this.client
+          .from('inventory_locations')
+          .update({ name: dto.name } as never)
+          .eq('business_id', previous.business_id)
+          .eq('branch_id', id)
+          .eq('name', previous.name);
+        if (error) throw toRepositoryError('inventory_locations', error);
+      }
+
+      if ((dto.name !== undefined || dto.code !== undefined) && previousMirrorCode !== updatedMirrorCode) {
+        const { error } = await this.client
+          .from('inventory_locations')
+          .update({ code: updatedMirrorCode } as never)
+          .eq('business_id', previous.business_id)
+          .eq('branch_id', id)
+          .eq('code', previousMirrorCode);
+        if (error) throw toRepositoryError('inventory_locations', error);
+      }
     }
 
     return updated;

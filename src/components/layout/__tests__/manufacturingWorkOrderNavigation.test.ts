@@ -31,7 +31,7 @@ const orgCapabilitiesFor = (profile: BusinessOrganisationProfile) => (capability
   resolveBusinessCapability(capability, profile, fullAccess);
 
 function navFor(profile: BusinessOrganisationProfile, planTier: PlanTier, role = 'owner') {
-  return visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier).flatMap(
+  return visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier, profile.operating_models).flatMap(
     (section) => section.items,
   );
 }
