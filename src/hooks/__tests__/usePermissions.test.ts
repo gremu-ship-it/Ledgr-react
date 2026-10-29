@@ -47,6 +47,18 @@ describe('Role-Based Access Control (RBAC)', () => {
     });
   });
 
+  describe('Construction workspace routing', () => {
+    it('allows operational and supervisory roles while excluding sales-only roles', () => {
+      for (const role of ['owner', 'admin', 'manager', 'stock_clerk', 'inventory_manager', 'warehouse_worker', 'purchasing_officer']) {
+        expect(isPathAllowedForRole(role, '/construction')).toBe(true);
+        expect(isPathAllowedForRole(role, '/construction/subcontractors')).toBe(true);
+      }
+      for (const role of ['cashier', 'sales_clerk', 'data_entry', 'sales_manager', 'customer_service_rep']) {
+        expect(isPathAllowedForRole(role, '/construction')).toBe(false);
+      }
+    });
+  });
+
   describe('Payroll Manager restrictions', () => {
     it('blocks accounting and inventory reports', () => {
       expect(isPathAllowedForRole('payroll_manager', '/payroll')).toBe(true);

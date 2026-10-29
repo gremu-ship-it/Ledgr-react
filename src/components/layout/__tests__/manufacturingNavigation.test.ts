@@ -45,7 +45,7 @@ const orgCapabilitiesFor = (profile: BusinessOrganisationProfile) =>
     resolveBusinessCapability(capability, profile, fullAccess);
 
 function navFor(profile: BusinessOrganisationProfile, planTier: PlanTier, role = 'owner') {
-  return visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier)
+  return visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier, profile.operating_models)
     .flatMap((section) => section.items);
 }
 
@@ -153,7 +153,7 @@ describe('manufacturing label vocabulary', () => {
 
   /** The resolved label key and the string en.json publishes for it. */
   function supplyChainLabels(profile: BusinessOrganisationProfile, planTier: PlanTier, role = 'owner') {
-    const section = visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier)
+    const section = visibleSectionsFor(() => true, role, orgCapabilitiesFor(profile), planTier, profile.operating_models)
       .find((candidate) => candidate.labelKey === 'navigation.sections.inventory');
     return (section?.items ?? [])
       .filter((item) => ['/products', '/warehouse', '/transfers'].includes(item.path))

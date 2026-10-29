@@ -33,7 +33,7 @@ import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
 import { hasCapability, PLAN_TIER_ORDER, PLANS, planMeetsMin } from '@/lib/billing/plans';
 export { planMeetsMin } from '@/lib/billing/plans';
 import type { PartnerFeatureKey } from '@/types/partners';
-import type { OrganisationCapability } from '@/lib/capabilities/profile';
+import type { OperatingModel, OrganisationCapability } from '@/lib/capabilities/profile';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 export interface NavItemConfig {
@@ -46,6 +46,8 @@ export interface NavItemConfig {
   /** For authenticated, memory-only routes that expose no role-protected server data. */
   allowAllAuthenticatedRoles?: boolean;
   requiresOrgCapability?: OrganisationCapability;
+  /** The item is available only when at least one of these business models is selected. */
+  requiredOperatingModels?: readonly OperatingModel[];
   /** Per-operating-model label keys; paths and access gates remain unchanged. */
   verticalLabelOverrides?: Readonly<Record<string, string>>;
   /**
@@ -76,7 +78,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.overview',
     items: [
       { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag, requiresOrgCapability: 'pos' },
+      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag, requiresOrgCapability: 'pos', requiredOperatingModels: ['RETAIL'] },
     ],
   },
   {
@@ -398,6 +400,15 @@ export function navLabelResolver(
  * is nothing to filter on, and silently skipping the type gate is exactly how
  * a retail business would end up seeing another vertical's modules.
  */
+export function isOperatingModelEligible(
+  item: Pick<NavItemConfig, 'requiredOperatingModels'>,
+  operatingModels?: readonly string[] | null,
+): boolean {
+  const requiredModels = item.requiredOperatingModels;
+  if (!requiredModels) return true;
+  return requiredModels.some((model) => operatingModels?.includes(model));
+}
+
 export function visibleSectionsFor(
   isFeatureEnabled: (key: PartnerFeatureKey) => boolean,
   role: string | null | undefined,
@@ -413,6 +424,9 @@ export function visibleSectionsFor(
     .map((section) => {
       // Pass 1 — remove. Nothing plan-related is decided here.
       const reachable = section.items.filter((item) => {
+        // This vertical boundary is independent of capability overrides: an
+        // explicit POS override must never expose POS outside RETAIL.
+        if (!isOperatingModelEligible(item, operatingModels)) return false;
         if (item.requiresOrgCapability && !isOrgCapabilityEnabled(item.requiresOrgCapability)) return false;
         if (item.hiddenWhenSitesReplaceBranches && sitesReplaceBranches) return false;
         if (item.partnerFeature && !isFeatureEnabled(item.partnerFeature)) return false;
@@ -447,7 +461,7 @@ export function visibleSectionsFor(
 export const GATED_PATHS: Set<string> = new Set(
   NAV_SECTIONS.flatMap((s) =>
     s.items
-      .filter((i) => i.minPlan || i.requiresCapability || i.requiresOrgCapability)
+      .filter((i) => i.minPlan || i.requiresCapability || i.requiresOrgCapability || i.requiredOperatingModels)
       .map((i) => i.path)
   ),
 );

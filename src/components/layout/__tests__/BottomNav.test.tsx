@@ -224,6 +224,19 @@ describe('mobile bottom navigation', () => {
     expect(screen.queryByText('navigation.items.materialTransfers')).toBeNull();
   });
 
+  it('keeps POS hidden when a non-retail capability override tries to expose it', () => {
+    vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
+    state.role = 'cashier';
+    state.organisationProfile = {
+      organisation_type: 'FOR_PROFIT',
+      operating_models: ['CONSTRUCTION'],
+      capability_overrides: { pos: true },
+    };
+    renderNav();
+
+    expect(tabPaths()).not.toContain('/pos');
+  });
+
   it('drops the POS tab for a construction till role, whose profile has no pos capability', () => {
     vi.stubEnv('VITE_FEATURE_CAPABILITY_ORG_LAYER', 'true');
     state.role = 'cashier';

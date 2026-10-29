@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Users2, Plus, MoreVertical,
@@ -36,6 +37,7 @@ function DepartmentModal({
   onSubmit: (data: DepartmentFormData) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const [form, setForm] = useState<DepartmentFormData>(initial ?? EMPTY_FORM);
 
   if (!open) return null;
@@ -49,55 +51,55 @@ function DepartmentModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <h2 className="mb-4 text-base font-semibold text-gray-900">
-          {initial ? 'Edit Department' : 'New Department'}
+          {initial ? t('pages.departments.editTitle') : t('pages.departments.newTitle')}
         </h2>
 
         <div className="space-y-4">
           <div>
             <label className="mb-1 block text-xs font-medium text-gray-600">
-              Department Name <span className="text-red-500">*</span>
+              {t('pages.departments.name')} <span className="text-red-500">*</span>
             </label>
             <input
               value={form.name}
               onChange={set('name')}
-              placeholder="e.g. Sales & Marketing"
+              placeholder={t('pages.departments.namePlaceholder')}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Department Code</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">{t('pages.departments.code')}</label>
             <input
               value={form.code}
               onChange={set('code')}
-              placeholder="e.g. SALES"
+              placeholder={t('pages.departments.codePlaceholder')}
               maxLength={10}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
-            <p className="mt-1 text-xs text-gray-600">Up to 10 characters. Auto-generated if blank.</p>
+            <p className="mt-1 text-xs text-gray-600">{t('pages.departments.codeHelp')}</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Cost Centre</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">{t('pages.departments.costCentre')}</label>
             <input
               value={form.cost_centre}
               onChange={set('cost_centre')}
-              placeholder="e.g. CC-100"
+              placeholder={t('pages.departments.costCentrePlaceholder')}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             />
-            <p className="mt-1 text-xs text-gray-600">Optional reference code used in ledger reporting.</p>
+            <p className="mt-1 text-xs text-gray-600">{t('pages.departments.costCentreHelp')}</p>
           </div>
           <div>
-            <label className="mb-1 block text-xs font-medium text-gray-600">Branch (optional)</label>
+            <label className="mb-1 block text-xs font-medium text-gray-600">{t('pages.departments.branchOptional')}</label>
             <select
               value={form.branch_id}
               onChange={set('branch_id')}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
             >
-              <option value="">No specific branch</option>
+              <option value="">{t('pages.departments.noSpecificBranch')}</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
-            <p className="mt-1 text-xs text-gray-600">Link this department to a branch, or leave unassigned for a company-wide department.</p>
+            <p className="mt-1 text-xs text-gray-600">{t('pages.departments.branchHelp')}</p>
           </div>
         </div>
 
@@ -106,7 +108,7 @@ function DepartmentModal({
             onClick={onClose}
             className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             onClick={() => onSubmit(form)}
@@ -114,7 +116,7 @@ function DepartmentModal({
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
           >
             {isLoading && <Loader2 size={14} className="animate-spin" />}
-            {initial ? 'Save Changes' : 'Create Department'}
+            {initial ? t('common.save') : t('pages.departments.create')}
           </button>
         </div>
       </div>
@@ -125,6 +127,7 @@ function DepartmentModal({
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function DepartmentsPage() {
+  const { t } = useTranslation();
   const businessId  = useAppStore((s) => s.currentBusiness?.business.id);
   const queryClient = useQueryClient();
 
@@ -190,9 +193,9 @@ export function DepartmentsPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Departments</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">{t('pages.departments.title')}</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Manage departments so income and expenses can be allocated for reporting
+            {t('pages.departments.description')}
           </p>
         </div>
         <button
@@ -200,7 +203,7 @@ export function DepartmentsPage() {
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
         >
           <Plus size={16} />
-          New Department
+          {t('pages.departments.create')}
         </button>
       </div>
 
@@ -214,22 +217,22 @@ export function DepartmentsPage() {
       ) : isError ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-100 bg-red-50 p-5">
           <AlertCircle size={18} className="text-red-500" />
-          <p className="text-sm text-red-600">Failed to load departments.</p>
+          <p className="text-sm text-red-600">{t('pages.departments.loadError')}</p>
         </div>
       ) : departments?.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-gray-200 py-16 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-50">
             <Users2 size={22} className="text-gray-300" />
           </div>
-          <p className="text-sm font-medium text-gray-500">No departments yet</p>
+          <p className="text-sm font-medium text-gray-500">{t('pages.departments.emptyTitle')}</p>
           <p className="text-xs text-gray-600">
-            Create a department to start allocating income and expenses to it
+            {t('pages.departments.emptyDescription')}
           </p>
           <button
             onClick={() => setModalOpen(true)}
             className="mt-1 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-600"
           >
-            <Plus size={13} /> New Department
+            <Plus size={13} /> {t('pages.departments.create')}
           </button>
         </div>
       ) : (
@@ -244,6 +247,7 @@ export function DepartmentsPage() {
                 {/* Menu */}
                 <div className="absolute right-3 top-3">
                   <button
+                    aria-label={t('pages.departments.moreActions', { name: dept.name })}
                     onClick={() => setMenuOpen(menuOpen === dept.id ? null : dept.id)}
                     className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
                   >
@@ -266,7 +270,7 @@ export function DepartmentsPage() {
                         }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                       >
-                        <Pencil size={13} /> Edit
+                        <Pencil size={13} /> {t('common.edit')}
                       </button>
                       <button
                         onClick={() => {
@@ -275,7 +279,7 @@ export function DepartmentsPage() {
                         }}
                         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                       >
-                        <XCircle size={13} /> Deactivate
+                        <XCircle size={13} /> {t('pages.departments.deactivate')}
                       </button>
                     </div>
                   )}
@@ -295,12 +299,12 @@ export function DepartmentsPage() {
                 <div className="space-y-1.5">
                   {dept.cost_centre && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
-                      Cost centre: {dept.cost_centre}
+                      {t('pages.departments.costCentreValue', { value: dept.cost_centre })}
                     </div>
                   )}
                   {branch && (
                     <div className="flex items-center gap-2 text-xs text-gray-500">
-                      Branch: {branch.name}
+                      {t('pages.departments.branchValue', { name: branch.name })}
                     </div>
                   )}
                 </div>
@@ -313,7 +317,7 @@ export function DepartmentsPage() {
                         : 'bg-gray-100 text-gray-400'
                     }`}
                   >
-                    {dept.is_active ? 'Active' : 'Inactive'}
+                    {dept.is_active ? t('common.active') : t('common.inactive')}
                   </span>
                 </div>
               </div>

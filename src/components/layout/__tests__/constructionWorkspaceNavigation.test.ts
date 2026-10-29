@@ -31,7 +31,10 @@ const orgCapabilities = (businessType: BusinessType) =>
 
 /** Visible nav items for one business, with the same call shape the app uses. */
 function navFor(businessType: BusinessType, planTier: PlanTier, role = 'owner') {
-  return visibleSectionsFor(() => true, role, orgCapabilities(businessType), planTier)
+  const models: Record<BusinessType, string[]> = {
+    construction: ['CONSTRUCTION'], retail: ['RETAIL'], service: ['SERVICE_SALES'], ngo: ['GRANT_FUNDED'],
+  };
+  return visibleSectionsFor(() => true, role, orgCapabilities(businessType), planTier, models[businessType])
     .flatMap((section) => section.items);
 }
 
@@ -126,11 +129,11 @@ describe('construction workspace navigation', () => {
     expect(sections.some((section) => section.labelKey === 'navigation.sections.inventory')).toBe(false);
   });
 
-  it('removes the previous sales_clerk visibility', () => {
-    // The item used to be role-free. The role filter now applies, so a sales
-    // clerk does not see a construction business's workspace.
+  it('applies construction role access: supervisors can enter, sales clerks cannot', () => {
+    expect(constructionItem('construction', 'enterprise', 'manager')).toBeDefined();
+    expect(constructionItem('construction', 'enterprise', 'stock_clerk')).toBeDefined();
+    expect(constructionItem('construction', 'enterprise', 'purchasing_officer')).toBeDefined();
     expect(constructionItem('construction', 'enterprise', 'sales_clerk')).toBeUndefined();
-    expect(constructionItem('construction', 'enterprise', 'stock_clerk')).toBeUndefined();
     expect(navItemForPath('/construction')?.allowAllAuthenticatedRoles).not.toBe(true);
   });
 });
@@ -195,7 +198,7 @@ describe('construction vertical navigation cleanup', () => {
       expect(resolveBusinessCapability('pos', constructionBusiness, fullAccess)).toBe(false);
       expect(navItemForPath('/pos')?.requiresOrgCapability).toBe('pos');
 
-      const paths = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(constructionBusiness), 'enterprise')
+      const paths = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(constructionBusiness), 'enterprise', constructionBusiness.operating_models)
         .flatMap((section) => section.items.map((item) => item.path));
       expect(paths).not.toContain('/pos');
       // The rest of the construction surface is untouched by the POS gate.
@@ -223,7 +226,7 @@ describe('construction vertical navigation cleanup', () => {
       expect(resolveBusinessCapability('pos', retailBusiness, fullAccess)).toBe(true);
 
       for (const planTier of ['starter', 'growth', 'pro', 'enterprise'] as PlanTier[]) {
-        const paths = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(retailBusiness), planTier)
+        const paths = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(retailBusiness), planTier, retailBusiness.operating_models)
           .flatMap((section) => section.items.map((item) => item.path));
         expect(paths).toContain('/pos');
       }
@@ -237,7 +240,7 @@ describe('construction vertical navigation cleanup', () => {
       };
       expect(resolveBusinessCapability('pos', both, fullAccess)).toBe(true);
 
-      const paths = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(both), 'enterprise')
+      const paths = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(both), 'enterprise', both.operating_models)
         .flatMap((section) => section.items.map((item) => item.path));
       expect(paths).toContain('/pos');
       expect(paths).toContain('/construction');
@@ -308,7 +311,7 @@ describe('construction vertical navigation cleanup', () => {
 
     it('leaves every other nav label alone, for construction and retail alike', () => {
       for (const profile of [constructionBusiness, retailBusiness]) {
-        const items = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(profile), 'enterprise')
+        const items = visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(profile), 'enterprise', profile.operating_models)
           .flatMap((section) => section.items);
         expect(items.find((item) => item.path === '/income')?.labelKey).toBe('navigation.items.income');
         expect(items.find((item) => item.path === '/reports/profit-loss')?.labelKey).toBe('nav.reports.profitLoss');
@@ -319,7 +322,7 @@ describe('construction vertical navigation cleanup', () => {
       // The Construction child keeps its own label — and stays out of a retail
       // business's nav entirely, so there is nothing to override there.
       const itemsFor = (profile: BusinessOrganisationProfile) =>
-        visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(profile), 'enterprise')
+        visibleSectionsFor(() => true, 'owner', orgCapabilitiesFor(profile), 'enterprise', profile.operating_models)
           .flatMap((section) => section.items);
       expect(itemsFor(constructionBusiness).find((item) => item.path === '/construction')?.labelKey)
         .toBe('navigation.items.constructionWorkspace');

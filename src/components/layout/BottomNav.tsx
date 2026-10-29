@@ -35,7 +35,7 @@ import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { QuickExpenseMobile } from '@/components/mobile/QuickExpenseMobile';
 import { QuickIncomeMobile } from '@/components/mobile/QuickIncomeMobile';
 import { useUsage } from '@/hooks/useUsage';
-import { isItemLocked, navItemForPath, navLabelResolver, planRequiredForItem } from '@/components/layout/navConfig';
+import { isItemLocked, isOperatingModelEligible, navItemForPath, navLabelResolver, planRequiredForItem } from '@/components/layout/navConfig';
 import { getHomePathForRole, isPathAllowedForRole, usePermissions } from '@/hooks/usePermissions';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PartnerFeatureKey } from '@/types/partners';
@@ -121,8 +121,10 @@ export function BottomNav() {
   // only in a business that actually has POS. Without the capability
   // predicate a construction cashier's "home" would still point at the
   // gated till even though the POS tab itself is filtered out below.
-  const homeIsPos = Boolean(role) && getHomePathForRole(role, isOrgCapabilityEnabled) === '/pos';
   const posNavItem = navItemForPath('/pos');
+  const homeIsPos = Boolean(role)
+    && getHomePathForRole(role, isOrgCapabilityEnabled) === '/pos'
+    && Boolean(posNavItem && isOperatingModelEligible(posNavItem, operatingModels));
 
   // Both lists are derived in a memo so their identity stays stable: the
   // left/right FAB split below memoizes on `bottomItems`. The bar keeps its own
@@ -141,6 +143,7 @@ export function BottomNav() {
         .filter((i) => {
           const navItem = navItemForPath(i.path);
           if (navItem?.partnerFeature && !isFeatureEnabled(navItem.partnerFeature)) return false;
+          if (navItem && !isOperatingModelEligible(navItem, operatingModels)) return false;
           return !navItem?.requiresOrgCapability
             || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
         })
@@ -150,6 +153,7 @@ export function BottomNav() {
         .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
         .filter((i) => {
           const navItem = navItemForPath(i.path);
+          if (navItem && !isOperatingModelEligible(navItem, operatingModels)) return false;
           return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
         })
         .filter((i) => allowedForRole(i.path))
