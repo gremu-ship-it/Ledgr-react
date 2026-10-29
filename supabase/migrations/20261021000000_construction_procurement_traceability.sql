@@ -90,7 +90,7 @@ begin
     'public.expenses', 'public.expense_lines', 'public.stock_movements',
     'public.inventory_balances', 'public.accounting_periods', 'public.currencies'
   ] loop
-    if to_regclass(v_item) is null then v_missing := v_missing || v_item; end if;
+    if to_regclass(v_item) is null then v_missing := array_append(v_missing, v_item); end if;
   end loop;
 
   foreach v_item in array array[
@@ -100,7 +100,7 @@ begin
     'public._ledgr_member_role(uuid, uuid)',
     'public._ledgr_assert_period_open(uuid, date, text)'
   ] loop
-    if to_regprocedure(v_item) is null then v_missing := v_missing || v_item; end if;
+    if to_regprocedure(v_item) is null then v_missing := array_append(v_missing, v_item); end if;
   end loop;
 
   if array_length(v_missing, 1) > 0 then
@@ -4186,12 +4186,12 @@ begin
       select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace
        where n.nspname = 'public' and c.relname = v_table and c.relrowsecurity
     ) then
-      v_missing := v_missing || (v_table || ' (RLS)');
+      v_missing := array_append(v_missing, (v_table || ' (RLS)'));
     end if;
     if not exists (
       select 1 from pg_policies where schemaname = 'public' and tablename = v_table and cmd = 'SELECT'
     ) then
-      v_missing := v_missing || (v_table || ' (read policy)');
+      v_missing := array_append(v_missing, (v_table || ' (read policy)'));
     end if;
   end loop;
 
@@ -4211,12 +4211,12 @@ begin
   ] loop
     for v_priv in select unnest(array['insert', 'update', 'delete']) loop
       if has_table_privilege('authenticated', 'public.' || v_table, v_priv) then
-        v_missing := v_missing || (v_table || ' (authenticated ' || v_priv || ' privilege)');
+        v_missing := array_append(v_missing, (v_table || ' (authenticated ' || v_priv || ' privilege)'));
       end if;
     end loop;
   end loop;
   if has_table_privilege('anon', 'public.construction_purchase_orders', 'select') then
-    v_missing := v_missing || 'anon can read construction purchase orders';
+    v_missing := array_append(v_missing, 'anon can read construction purchase orders');
   end if;
 
   -- 12.3 The single stock balance writer is still the only one.
@@ -4226,7 +4226,7 @@ begin
      and (t.tgname ilike '%balance%' or p.proname ilike '%balance%'
           or p.prosrc ~* '(insert\s+into|update)\s+(public\.)?inventory_balances\M');
   if v_count <> 1 then
-    v_missing := v_missing || format('stock balance writer count is % (expected 1)', v_count);
+    v_missing := array_append(v_missing, format('stock balance writer count is % (expected 1)', v_count));
   end if;
 
   -- 12.4 GL posting from a receipt is structurally impossible.
@@ -4235,34 +4235,34 @@ begin
      where conrelid = 'public.construction_receipt_posting_policies'::regclass
        and conname = 'chk_crpp_gl'
   ) then
-    v_missing := v_missing || 'receipt GL posting guard constraint missing';
+    v_missing := array_append(v_missing, 'receipt GL posting guard constraint missing');
   end if;
 
   -- 12.5 This migration created no posting policy and posted nothing.
   select count(*) into v_count from public.construction_receipt_posting_policies;
   if v_count <> 0 then
-    v_missing := v_missing || 'a receipt posting policy row exists';
+    v_missing := array_append(v_missing, 'a receipt posting policy row exists');
   end if;
   -- 12.3b The consumption surface: no material issue and no inspection exists at
   --       migration time, the movement type it needs is present, and the append-only
   --       guard for a receipt line lists BOTH commands that may update it.
   select count(*) into v_count from public.construction_material_issues;
   if v_count <> 0 then
-    v_missing := v_missing || 'construction material issues exist before any approval';
+    v_missing := array_append(v_missing, 'construction material issues exist before any approval');
   end if;
   select count(*) into v_count from public.construction_receipt_inspections;
   if v_count <> 0 then
-    v_missing := v_missing || 'receipt inspections exist before any approval';
+    v_missing := array_append(v_missing, 'receipt inspections exist before any approval');
   end if;
   select count(*) into v_count from public.construction_receipt_line_reclassifications;
   if v_count <> 0 then
-    v_missing := v_missing || 'receipt line reclassifications exist before any approval';
+    v_missing := array_append(v_missing, 'receipt line reclassifications exist before any approval');
   end if;
   if not exists (
     select 1 from pg_enum e join pg_type t on t.oid = e.enumtypid
      where t.typname = 'stock_movement_type' and e.enumlabel = 'issue_out'
   ) then
-    v_missing := v_missing || 'stock_movement_type has no issue_out label';
+    v_missing := array_append(v_missing, 'stock_movement_type has no issue_out label');
   end if;
   if not exists (
     select 1 from pg_trigger
@@ -4271,24 +4271,24 @@ begin
        and pg_get_triggerdef(oid) like '%receipt_post%'
        and pg_get_triggerdef(oid) like '%grn_reclassify%'
   ) then
-    v_missing := v_missing || 'receipt line append-only guard does not list both updating commands';
+    v_missing := array_append(v_missing, 'receipt line append-only guard does not list both updating commands');
   end if;
   if not exists (
     select 1 from information_schema.columns
      where table_schema = 'public' and table_name = 'construction_goods_receipt_lines'
        and column_name = 'quantity_posted_base'
   ) then
-    v_missing := v_missing || 'receipt line has no posted-quantity column';
+    v_missing := array_append(v_missing, 'receipt line has no posted-quantity column');
   end if;
 
   select count(*) into v_count from public.stock_movements where source_type = 'construction_grn';
   if v_count <> 0 then
-    v_missing := v_missing || 'a construction receipt stock movement exists';
+    v_missing := array_append(v_missing, 'a construction receipt stock movement exists');
   end if;
   select count(*) into v_count from public.journal_entries
    where source_type in ('construction_grn', 'construction_purchase_order', 'construction_bill_match');
   if v_count <> 0 then
-    v_missing := v_missing || 'a construction procurement journal entry exists';
+    v_missing := array_append(v_missing, 'a construction procurement journal entry exists');
   end if;
 
   if array_length(v_missing, 1) > 0 then
