@@ -1,9 +1,64 @@
 import { supabase } from '@/lib/supabase';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database } from '../types/database';
 
 type Tables = Database['public']['Tables'];
 type PublicFunctions = Database['public']['Functions'];
+type BoqVersionRow = Tables['boq_versions']['Row'];
+type BoqSectionRow = Tables['boq_sections']['Row'];
+export type BoqItem = Tables['boq_items']['Row'];
+
+export type BoqVersionSummary = BoqVersionRow;
+export interface BoqSectionWithItems extends BoqSectionRow {
+  items: BoqItem[];
+  children: BoqSectionWithItems[];
+  sectionTotal: number;
+}
+export interface BoqVersionWithTree extends BoqVersionSummary {
+  sections: BoqSectionWithItems[];
+}
+export interface CreateBoqVersionInput {
+  project_id: string;
+  version_label?: string | null;
+  currency?: string;
+  notes?: string | null;
+  clone_from_active?: boolean;
+}
+export interface UpdateBoqVersionInput {
+  version_label?: string | null;
+  currency?: string;
+  notes?: string | null;
+}
+export interface CreateBoqSectionInput {
+  boq_version_id: string;
+  parent_section_id?: string | null;
+  code: string;
+  title: string;
+  description?: string | null;
+  sort_order?: number;
+}
+export interface UpdateBoqSectionInput {
+  code?: string;
+  title?: string;
+  description?: string | null;
+  sort_order?: number;
+}
+export interface CreateBoqItemInput {
+  item_number: string;
+  description: string;
+  unit_of_measure?: string;
+  quantity?: number;
+  rate?: number;
+  product_id?: string | null;
+  cost_code?: string | null;
+  is_provisional?: boolean;
+  notes?: string | null;
+  sort_order?: number;
+}
+export type UpdateBoqItemInput = Partial<CreateBoqItemInput>;
+
+const boqClient = supabase as unknown as SupabaseClient<Database>;
 
 export const PROJECT_STATUSES = [
   'tender',
@@ -335,6 +390,256 @@ export class ProjectRepository {
   }
   async bulkUpsertBoqLines(projectId: string, lines: BoqLineInput[]): Promise<ProjectBoqLine[]> {
     return unwrap<ProjectBoqLine[]>(await client.rpc('bulk_upsert_boq_lines', { p_project_id: projectId, p_lines: lines })) ?? [];
+  }
+
+  // Versioned construction BOQ operations. These tables are separate from
+  // manufacturing BOMs; the database triggers enforce project scope, draft
+  // immutability, totals, actor capabilities, and activation compatibility.
+  async listBoqVersions(businessId: string, projectId: string): Promise<BoqVersionSummary[]> {
+    const { data, error } = await boqClient.from('boq_versions').select('*')
+      .eq('business_id', businessId).eq('project_id', projectId)
+      .order('version_number', { ascending: false });
+    if (error) throw new Error('construction.boq.errors.loadFailed');
+    return data ?? [];
+  }
+
+  async getBoqVersion(businessId: string, versionId: string): Promise<BoqVersionWithTree> {
+    const { data: version, error: versionError } = await boqClient.from('boq_versions').select('*')
+      .eq('business_id', businessId).eq('id', versionId).maybeSingle();
+    if (versionError) throw new Error('construction.boq.errors.loadFailed');
+    if (!version) throw new Error('construction.boq.errors.versionNotFound');
+    const [sectionResult, itemResult] = await Promise.all([
+      boqClient.from('boq_sections').select('*').eq('business_id', businessId)
+        .eq('boq_version_id', versionId).order('sort_order').order('code'),
+      boqClient.from('boq_items').select('*').eq('business_id', businessId)
+        .eq('boq_version_id', versionId).order('sort_order').order('item_number'),
+    ]);
+    if (sectionResult.error || itemResult.error) throw new Error('construction.boq.errors.loadFailed');
+
+    const nodes = new Map<string, BoqSectionWithItems>();
+    for (const section of sectionResult.data ?? []) {
+      nodes.set(section.id, { ...section, items: [], children: [], sectionTotal: 0 });
+    }
+    for (const item of itemResult.data ?? []) {
+      nodes.get(item.section_id)?.items.push(item);
+    }
+    const roots: BoqSectionWithItems[] = [];
+    for (const section of nodes.values()) {
+      if (section.parent_section_id) nodes.get(section.parent_section_id)?.children.push(section);
+      else roots.push(section);
+    }
+    const orderTree = (sections: BoqSectionWithItems[]): number => {
+      sections.sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code));
+      let total = 0;
+      for (const section of sections) {
+        section.items.sort((a, b) => a.sort_order - b.sort_order || a.item_number.localeCompare(b.item_number));
+        const childTotal = orderTree(section.children);
+        section.sectionTotal = section.items.reduce((sum, item) => sum + Number(item.amount), 0) + childTotal;
+        total += section.sectionTotal;
+      }
+      return total;
+    };
+    orderTree(roots);
+    return { ...version, sections: roots };
+  }
+
+  async createBoqVersion(businessId: string, input: CreateBoqVersionInput): Promise<string> {
+    const { data: latest, error: latestError } = await boqClient.from('boq_versions')
+      .select('version_number').eq('business_id', businessId).eq('project_id', input.project_id)
+      .order('version_number', { ascending: false }).limit(1).maybeSingle();
+    if (latestError) throw new Error('construction.boq.errors.saveFailed');
+    const versionNumber = (latest?.version_number ?? 0) + 1;
+    const { data: created, error } = await boqClient.from('boq_versions').insert({
+      business_id: businessId,
+      project_id: input.project_id,
+      version_number: versionNumber,
+      version_label: input.version_label?.trim() || null,
+      currency: input.currency || 'MWK',
+      notes: input.notes?.trim() || null,
+      status: 'draft',
+    }).select('id').single();
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    const versionId = created.id;
+    if (!input.clone_from_active) return versionId;
+
+    try {
+      const versions = await this.listBoqVersions(businessId, input.project_id);
+      const active = versions.find((version) => version.status === 'active');
+      if (!active) return versionId;
+      const source = await this.getBoqVersion(businessId, active.id);
+      const orderedSections: BoqSectionWithItems[] = [];
+      const visit = (sections: BoqSectionWithItems[]) => {
+        for (const section of sections) { orderedSections.push(section); visit(section.children); }
+      };
+      visit(source.sections);
+      const sectionIds = new Map<string, string>();
+      for (const section of orderedSections) {
+        const { data: clonedSection, error: sectionError } = await boqClient.from('boq_sections').insert({
+          boq_version_id: versionId,
+          business_id: businessId,
+          parent_section_id: section.parent_section_id ? sectionIds.get(section.parent_section_id) ?? null : null,
+          code: section.code,
+          title: section.title,
+          description: section.description,
+          sort_order: section.sort_order,
+        }).select('id').single();
+        if (sectionError) throw new Error('construction.boq.errors.cloneFailed');
+        sectionIds.set(section.id, clonedSection.id);
+      }
+      const clonedItems = orderedSections.flatMap((section) => section.items.map((item) => ({
+        boq_version_id: versionId,
+        business_id: businessId,
+        section_id: sectionIds.get(section.id)!,
+        item_number: item.item_number,
+        description: item.description,
+        unit_of_measure: item.unit_of_measure,
+        quantity: item.quantity,
+        rate: item.rate,
+        product_id: item.product_id,
+        cost_code: item.cost_code,
+        is_provisional: item.is_provisional,
+        notes: item.notes,
+        sort_order: item.sort_order,
+      })));
+      if (clonedItems.length) {
+        const { error: itemError } = await boqClient.from('boq_items').insert(clonedItems);
+        if (itemError) throw new Error('construction.boq.errors.cloneFailed');
+      }
+      return versionId;
+    } catch (error) {
+      await boqClient.from('boq_versions').delete().eq('business_id', businessId).eq('id', versionId);
+      throw error;
+    }
+  }
+
+  async updateBoqVersion(businessId: string, versionId: string, input: UpdateBoqVersionInput): Promise<void> {
+    const payload: UpdateBoqVersionInput = { ...input };
+    if (input.version_label !== undefined) payload.version_label = input.version_label?.trim() || null;
+    if (input.notes !== undefined) payload.notes = input.notes?.trim() || null;
+    const { data, error } = await boqClient.from('boq_versions').update(payload)
+      .eq('business_id', businessId).eq('id', versionId).eq('status', 'draft').select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    if (!data) throw new Error('construction.boq.errors.draftOnly');
+  }
+
+  async deleteBoqVersion(businessId: string, versionId: string): Promise<void> {
+    const { data, error } = await boqClient.from('boq_versions').delete()
+      .eq('business_id', businessId).eq('id', versionId).eq('status', 'draft').select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.deleteFailed');
+    if (!data) throw new Error('construction.boq.errors.draftOnly');
+  }
+
+  async activateBoqVersion(businessId: string, versionId: string): Promise<void> {
+    const { data, error } = await boqClient.from('boq_versions').update({ status: 'active' })
+      .eq('business_id', businessId).eq('id', versionId).eq('status', 'draft')
+      .select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.activateFailed');
+    if (!data) throw new Error('construction.boq.errors.draftOnly');
+  }
+
+  async createSection(businessId: string, input: CreateBoqSectionInput): Promise<string> {
+    const { data, error } = await boqClient.from('boq_sections').insert({
+      business_id: businessId,
+      boq_version_id: input.boq_version_id,
+      parent_section_id: input.parent_section_id ?? null,
+      code: input.code.trim(),
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      sort_order: input.sort_order ?? 0,
+    }).select('id').single();
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    return data.id;
+  }
+
+  async updateSection(businessId: string, sectionId: string, input: UpdateBoqSectionInput): Promise<void> {
+    const payload: UpdateBoqSectionInput = { ...input };
+    if (input.code !== undefined) payload.code = input.code.trim();
+    if (input.title !== undefined) payload.title = input.title.trim();
+    if (input.description !== undefined) payload.description = input.description?.trim() || null;
+    const { data, error } = await boqClient.from('boq_sections').update(payload)
+      .eq('business_id', businessId).eq('id', sectionId).select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    if (!data) throw new Error('construction.boq.errors.sectionNotFound');
+  }
+
+  async deleteSection(businessId: string, sectionId: string): Promise<void> {
+    const { data, error } = await boqClient.from('boq_sections').delete()
+      .eq('business_id', businessId).eq('id', sectionId).select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.deleteFailed');
+    if (!data) throw new Error('construction.boq.errors.sectionNotFound');
+  }
+
+  async reorderSections(businessId: string, versionId: string, sectionIds: string[]): Promise<void> {
+    const { data: current, error } = await boqClient.from('boq_sections').select('id')
+      .eq('business_id', businessId).eq('boq_version_id', versionId);
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    const expected = new Set((current ?? []).map((section) => section.id));
+    if (new Set(sectionIds).size !== sectionIds.length || expected.size !== sectionIds.length || sectionIds.some((id) => !expected.has(id))) {
+      throw new Error('construction.boq.errors.reorderMismatch');
+    }
+    for (const [sortOrder, sectionId] of sectionIds.entries()) {
+      const { error: updateError } = await boqClient.from('boq_sections').update({ sort_order: sortOrder })
+        .eq('business_id', businessId).eq('boq_version_id', versionId).eq('id', sectionId);
+      if (updateError) throw new Error('construction.boq.errors.saveFailed');
+    }
+  }
+
+  async reorderItems(businessId: string, versionId: string, sectionId: string, itemIds: string[]): Promise<void> {
+    const { data: current, error } = await boqClient.from('boq_items').select('id')
+      .eq('business_id', businessId).eq('boq_version_id', versionId).eq('section_id', sectionId);
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    const expected = new Set((current ?? []).map((item) => item.id));
+    if (new Set(itemIds).size !== itemIds.length || expected.size !== itemIds.length || itemIds.some((id) => !expected.has(id))) {
+      throw new Error('construction.boq.errors.reorderMismatch');
+    }
+    for (const [sortOrder, itemId] of itemIds.entries()) {
+      const { error: updateError } = await boqClient.from('boq_items').update({ sort_order: sortOrder })
+        .eq('business_id', businessId).eq('boq_version_id', versionId).eq('section_id', sectionId).eq('id', itemId);
+      if (updateError) throw new Error('construction.boq.errors.saveFailed');
+    }
+  }
+
+  async createItem(businessId: string, versionId: string, sectionId: string, input: CreateBoqItemInput): Promise<string> {
+    const { data, error } = await boqClient.from('boq_items').insert({
+      ...input,
+      business_id: businessId,
+      boq_version_id: versionId,
+      section_id: sectionId,
+      item_number: input.item_number.trim(),
+      description: input.description.trim(),
+    }).select('id').single();
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    return data.id;
+  }
+
+  async updateItem(businessId: string, itemId: string, input: UpdateBoqItemInput): Promise<void> {
+    const payload = { ...input, item_number: input.item_number?.trim(), description: input.description?.trim() };
+    const { data, error } = await boqClient.from('boq_items').update(payload)
+      .eq('business_id', businessId).eq('id', itemId).select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.saveFailed');
+    if (!data) throw new Error('construction.boq.errors.itemNotFound');
+  }
+
+  async deleteItem(businessId: string, itemId: string): Promise<void> {
+    const { data, error } = await boqClient.from('boq_items').delete()
+      .eq('business_id', businessId).eq('id', itemId).select('id').maybeSingle();
+    if (error) throw new Error('construction.boq.errors.deleteFailed');
+    if (!data) throw new Error('construction.boq.errors.itemNotFound');
+  }
+
+  async bulkImportItems(businessId: string, versionId: string, sectionId: string, items: CreateBoqItemInput[]): Promise<number> {
+    if (!items.length) return 0;
+    const rows = items.map((item) => ({
+      ...item,
+      business_id: businessId,
+      boq_version_id: versionId,
+      section_id: sectionId,
+      item_number: item.item_number.trim(),
+      description: item.description.trim(),
+    }));
+    const { data, error } = await boqClient.from('boq_items').insert(rows).select('id');
+    if (error) throw new Error('construction.boq.errors.importFailed');
+    return data?.length ?? 0;
   }
 
   private async projectBusinessId(projectId: string): Promise<string> {

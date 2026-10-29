@@ -45,7 +45,7 @@ describe('manufacturing foundation migration contract', () => {
       '20261120000000',
       '20261120000001',
       '20261120000002',
-      '20261121000000',
+      '20261122000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);
