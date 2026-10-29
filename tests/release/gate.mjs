@@ -11,6 +11,7 @@ export const suites = {
   'construction-projects.test.ts': 'construction-projects.json',
   'construction-project-audit-ownership.test.ts': 'construction-project-audit-ownership.json',
   'construction-project-existing-chain.test.ts': 'construction-project-existing-chain.json',
+  'cash-forecast.test.ts': 'cash-forecast.json',
   'construction-multilevel-boq.test.ts': 'construction-multilevel-boq.json',
   'construction-project-namespace.test.ts': 'construction-project-namespace.json',
   'construction-project-namespace-legacy.test.ts': 'construction-project-namespace-legacy.json',
