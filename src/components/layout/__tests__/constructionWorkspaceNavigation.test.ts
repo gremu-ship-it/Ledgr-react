@@ -45,9 +45,14 @@ describe('construction workspace navigation', () => {
     expect(section?.labelKey).toBe('navigation.sections.construction');
     expect(en.navigation.sections.construction).toBe('Construction');
     expect(en.navigation.items.constructionWorkspace).toBe('Workspace');
-    expect(section?.items.map((item) => item.path)).toEqual(['/construction']);
+    expect(en.navigation.items.constructionSubcontractors).toBe('Subcontractors');
+    expect(section?.items.map((item) => item.path)).toEqual([
+      '/construction',
+      '/construction/subcontractors',
+    ]);
     expect(section?.minPlan).toBe('enterprise');
-    expect(section?.items[0]?.minPlan).toBe('enterprise');
+    expect(section?.items.every((item) => item.minPlan === 'enterprise')).toBe(true);
+    expect(section?.items.every((item) => item.requiresOrgCapability === 'construction')).toBe(true);
 
     const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');
     const constructionIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.construction');
@@ -64,6 +69,19 @@ describe('construction workspace navigation', () => {
     expect(navItemForPath('/construction')?.allowAllAuthenticatedRoles).toBeUndefined();
     expect(navItemForPath('/construction')?.partnerFeature).toBeUndefined();
     expect(navItemForPath('/construction')?.requiresCapability).toBeUndefined();
+  });
+
+  it('exposes Subcontractors only for Enterprise construction businesses', () => {
+    const item = navItemForPath('/construction/subcontractors');
+    expect(item).toMatchObject({
+      labelKey: 'navigation.items.constructionSubcontractors',
+      path: '/construction/subcontractors',
+      minPlan: 'enterprise',
+      requiresOrgCapability: 'construction',
+    });
+    expect(navFor('construction', 'enterprise').map((entry) => entry.path)).toContain('/construction/subcontractors');
+    expect(navFor('construction', 'free').find((entry) => entry.path === '/construction/subcontractors')?.locked).toBe(true);
+    expect(navFor('retail', 'enterprise').map((entry) => entry.path)).not.toContain('/construction/subcontractors');
   });
 
   it('is completely absent for a retail business on Enterprise — no lock, no placeholder', () => {

@@ -67,6 +67,10 @@ const ConstructionWorkspacePage = lazyPage(
   () => import('@/pages/construction/ConstructionWorkspacePage'),
   'ConstructionWorkspacePage',
 );
+const SubcontractorsPage = lazyPage(
+  () => import('@/pages/construction/SubcontractorsPage'),
+  'SubcontractorsPage',
+);
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -392,6 +396,16 @@ function App() {
               <Route element={<AppLayout />}>
                 <Route element={<RoleRoute />}>
                   {/* The Construction workspace is gated at route and page level. */}
+                  <Route
+                    path="/construction/subcontractors"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.constructionSubcontractors')}>
+                        <CapabilityGate capability="construction">
+                          <SubcontractorsPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
                   <Route
                     path="/construction/*"
                     element={

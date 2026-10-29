@@ -25,9 +25,11 @@ import { ProjectStatusBadge } from './ProjectsSection';
 import { ProjectBoqEditor } from './ProjectBoqEditor';
 import { ProjectValuationsPanel } from './ProjectValuationsPanel';
 import { ProjectPnlOverview } from './ProjectPnlOverview';
+import { ProjectSubcontracts } from '@/components/construction/ProjectSubcontracts';
+import { useAppStore } from '@/store/useAppStore';
 
 const k = 'construction.projects';
-const TABS = ['overview', 'sites', 'procurement', 'boq', 'valuations'] as const;
+const TABS = ['overview', 'sites', 'procurement', 'subcontracts', 'boq', 'valuations'] as const;
 export function ProjectDetail({
   businessId,
   projectId,
@@ -63,6 +65,7 @@ function ProjectDetailContent({
   const { t } = useTranslation();
   const location = useLocation();
   const cache = useQueryClient();
+  const currency = useAppStore((state) => state.currentBusiness?.business?.base_currency?.trim().toUpperCase() || 'MWK');
   const [tab, setTab] = useState<(typeof TABS)[number]>('overview');
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -222,6 +225,9 @@ function ProjectDetailContent({
                 projectId={project.id}
               />
             </div>
+          )}
+          {tab === 'subcontracts' && (
+            <ProjectSubcontracts businessId={project.business_id} projectId={project.id} currency={currency} />
           )}
           {tab === 'boq' && <ProjectBoqEditor project={project} canManage={canManage} onNotice={setNotice} />}
           {tab === 'valuations' && (

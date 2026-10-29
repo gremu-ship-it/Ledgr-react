@@ -65,6 +65,11 @@ vi.mock('../../ConstructionReturnsSection', () => ({
     <div data-testid="project-returns">{projectId}</div>
   ),
 }));
+vi.mock('@/components/construction/ProjectSubcontracts', () => ({
+  ProjectSubcontracts: ({ businessId, projectId, currency }: { businessId: string; projectId: string; currency: string }) => (
+    <div data-testid="project-subcontracts">{businessId}:{projectId}:{currency}</div>
+  ),
+}));
 import { ProjectsSection } from '../ProjectsSection';
 import { ProjectForm } from '../ProjectForm';
 import { validateProject } from '@/lib/construction/projectValidation';
@@ -308,6 +313,13 @@ describe('project detail', () => {
     for (const id of ['project-orders', 'project-issues', 'project-returns'])
       expect(screen.getByTestId(id).textContent).toBe('p1');
   });
+  it('shows subcontract agreements within the existing project detail workspace', async () => {
+    mount(<ProjectDetail businessId="b1" projectId="p1" capabilities={grants} />);
+    await screen.findByText('Hospital');
+    fireEvent.click(screen.getByRole('tab', { name: 'Subcontracts' }));
+    expect((await screen.findByTestId('project-subcontracts')).textContent).toBe('b1:p1:MWK');
+  });
+
   it.each([
     ['tender', 'Activate Project', 'active'],
     ['active', 'Mark Practical Completion', 'practical_completion'],

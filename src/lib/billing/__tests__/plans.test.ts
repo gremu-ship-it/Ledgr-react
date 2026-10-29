@@ -92,6 +92,12 @@ describe('Starter pricing and access', () => {
     expect(hasCapability('enterprise', 'construction')).toBe(true);
     expect(planRequiredFor('construction')?.tier).toBe('enterprise');
     expect(planRequiredForItem(item)?.tier).toBe('enterprise');
+
+    const subcontractors = navItemForPath('/construction/subcontractors')!;
+    expect(subcontractors).toBeDefined();
+    expect(isItemLocked(subcontractors, 'free')).toBe(true);
+    expect(isItemLocked(subcontractors, 'enterprise')).toBe(false);
+    expect(planRequiredForItem(subcontractors)?.tier).toBe('enterprise');
   });
 
   it('recommends the cheapest eligible tier for locked features', () => {
@@ -211,6 +217,7 @@ describe('plan catalogue integration parity', () => {
     }
 
     const routePaths = [
+      '/construction/subcontractors',
       '/construction/*',
       '/manufacturing',
       '/manufacturing/bom',

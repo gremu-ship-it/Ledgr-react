@@ -130,6 +130,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
       },
+      {
+        labelKey: 'navigation.items.constructionSubcontractors',
+        path: '/construction/subcontractors',
+        icon: Users,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+      },
     ],
   },
   {
