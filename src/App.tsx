@@ -120,6 +120,7 @@ const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
 const CashFlowPage = lazyPage(() => import('@/pages/reports/CashFlowPage'), 'CashFlowPage');
+const CashForecastPage = lazyPage(() => import('@/pages/reports/CashForecastPage'), 'CashForecastPage');
 const ChangesInEquityPage = lazyPage(() => import('@/pages/reports/ChangesInEquityPage'), 'ChangesInEquityPage');
 const RevenueBreakdownPage = lazyPage(() => import('@/pages/reports/RevenueBreakdownPage'), 'RevenueBreakdownPage');
 const BranchPerformancePage = lazyPage(() => import('@/pages/reports/BranchPerformancePage'), 'BranchPerformancePage');
@@ -231,6 +232,15 @@ function CashFlowRoute() {
       fallback={<CashFlowUpgradePrompt />}
     >
       <CashFlowPage />
+    </PlanGate>
+  );
+}
+
+function CashForecastRoute() {
+  const { t } = useTranslation();
+  return (
+    <PlanGate minPlan="growth" featureName={t('reports.cashForecast.title')}>
+      <CashForecastPage />
     </PlanGate>
   );
 }
@@ -651,6 +661,7 @@ function App() {
                   <Route path="/reports/profit-loss" element={<ProfitLossRoute />} />
                   <Route path="/reports/balance-sheet" element={<BalanceSheetRoute />} />
                   <Route path="/reports/cash-flow" element={<CashFlowRoute />} />
+                  <Route path="/cash-forecast" element={<CashForecastRoute />} />
                   <Route path="/reports/changes-in-equity" element={<ChangesInEquityRoute />} />
                   <Route path="/reports/revenue-breakdown" element={<RevenueBreakdownRoute />} />
                   <Route path="/reports/branch-performance" element={<BranchPerformanceRoute />} />

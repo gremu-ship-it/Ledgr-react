@@ -1541,6 +1541,63 @@ export type Database = {
           },
         ]
       }
+      cash_forecast_scenarios: {
+        Row: {
+          business_id: string
+          created_at: string
+          created_by: string
+          horizon_months: number
+          id: string
+          include_construction: boolean
+          name: string
+          payable_delay_days: number
+          payroll_growth_percent: number
+          receivable_delay_days: number
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          created_by: string
+          horizon_months?: number
+          id?: string
+          include_construction?: boolean
+          name: string
+          payable_delay_days?: number
+          payroll_growth_percent?: number
+          receivable_delay_days?: number
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          created_by?: string
+          horizon_months?: number
+          id?: string
+          include_construction?: boolean
+          name?: string
+          payable_delay_days?: number
+          payroll_growth_percent?: number
+          receivable_delay_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_forecast_scenarios_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_forecast_scenarios_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       construction_delivery_note_lines: {
         Row: {
           business_id: string
@@ -13414,6 +13471,17 @@ export type Database = {
               total_retention_held: number
             }[]
           }
+      generate_cash_forecast: {
+        Args: {
+          p_business_id: string
+          p_horizon_months?: number
+          p_receivable_delay_days?: number
+          p_payable_delay_days?: number
+          p_payroll_growth_percent?: number
+          p_include_construction?: boolean
+        }
+        Returns: Json
+      }
       get_enum_values: { Args: { p_enum_name: string }; Returns: string[] }
       get_portfolio_summary: {
         Args: { p_business_id: string }

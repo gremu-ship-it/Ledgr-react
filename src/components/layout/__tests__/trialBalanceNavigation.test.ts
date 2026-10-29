@@ -3,13 +3,14 @@ import { isItemLocked, navItemForPath, NAV_SECTIONS } from '../navConfig';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 describe('Reports navigation', () => {
-  it('lists only the seven standalone P4 reports in the Reports section', () => {
+  it('lists the seven P4 reports and the standalone cash forecast in the Reports section', () => {
     const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.reports');
     expect(section?.items.map((item) => item.path)).toEqual([
       '/reports/trial-balance',
       '/reports/profit-loss',
       '/reports/balance-sheet',
       '/reports/cash-flow',
+      '/cash-forecast',
       '/reports/revenue-breakdown',
       '/reports/changes-in-equity',
       '/reports/branch-performance',
@@ -61,8 +62,21 @@ describe('Reports navigation', () => {
     expect(isItemLocked(item!, 'growth')).toBe(false);
   });
 
+  it('adds Cash Forecast as a cross-vertical Growth+ report', () => {
+    const item = navItemForPath('/cash-forecast');
+    expect(item).toBeDefined();
+    expect(item?.labelKey).toBe('nav.reports.cashForecast');
+    expect(item?.minPlan).toBe('growth');
+    expect(item?.requiresOrgCapability).toBeUndefined();
+    expect(item?.requiredOperatingModels).toBeUndefined();
+    expect(isItemLocked(item!, 'starter')).toBe(true);
+    expect(isItemLocked(item!, 'growth')).toBe(false);
+    expect(isItemLocked(item!, 'enterprise')).toBe(false);
+  });
+
   it.each([
     ['/reports/changes-in-equity', 'navigation.items.changesInEquity'],
+
     ['/reports/revenue-breakdown', 'navigation.items.revenueBreakdown'],
     ['/reports/branch-performance', 'navigation.items.branchPerformance'],
   ])('adds %s as a standalone Growth+ report', (path, labelKey) => {
@@ -107,5 +121,10 @@ describe('Reports navigation', () => {
     expect(isPathAllowedForRole('payroll_manager', '/reports/cash-flow')).toBe(false);
     expect(isPathAllowedForRole('supervisor', '/reports/cash-flow')).toBe(false);
     expect(isPathAllowedForRole('cashier', '/reports/cash-flow')).toBe(false);
+    expect(isPathAllowedForRole('owner', '/cash-forecast')).toBe(true);
+    expect(isPathAllowedForRole('manager', '/cash-forecast')).toBe(true);
+    expect(isPathAllowedForRole('payroll_manager', '/cash-forecast')).toBe(false);
+    expect(isPathAllowedForRole('supervisor', '/cash-forecast')).toBe(false);
+    expect(isPathAllowedForRole('cashier', '/cash-forecast')).toBe(false);
   });
 });

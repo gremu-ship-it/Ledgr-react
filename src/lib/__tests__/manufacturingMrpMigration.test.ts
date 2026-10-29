@@ -10,7 +10,7 @@ describe('manufacturing MRP migration', () => {
       .filter((file) => file.endsWith('.sql'))
       .map((file) => file.split('_')[0])
       .sort();
-    expect(versions.at(-1)).toBe('20261125000000');
+    expect(versions.at(-1)).toBe('20261126000000');
     expect(migration.match(/CREATE TABLE IF NOT EXISTS public\.manufacturing_mrp_/g)).toHaveLength(2);
     expect(migration).toContain('public.manufacturing_mrp_runs');
     expect(migration).toContain('public.manufacturing_mrp_recommendations');
