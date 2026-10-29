@@ -7015,6 +7015,147 @@ export type Database = {
           },
         ]
       }
+      manufacturing_mrp_recommendations: {
+        Row: {
+          active_production_quantity: number
+          approved_supply_quantity: number
+          bom_id: string | null
+          business_id: string
+          converted_work_order_id: string | null
+          created_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          gross_requirement: number
+          id: string
+          net_requirement: number
+          on_hand_quantity: number
+          product_id: string
+          recommendation_type: string
+          required_date: string
+          run_id: string
+          status: string
+        }
+        ComputedFields: never
+        Insert: {
+          active_production_quantity?: number
+          approved_supply_quantity?: number
+          bom_id?: string | null
+          business_id: string
+          converted_work_order_id?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          gross_requirement: number
+          id?: string
+          net_requirement: number
+          on_hand_quantity?: number
+          product_id: string
+          recommendation_type: string
+          required_date: string
+          run_id: string
+          status?: string
+        }
+        Update: {
+          active_production_quantity?: number
+          approved_supply_quantity?: number
+          bom_id?: string | null
+          business_id?: string
+          converted_work_order_id?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          gross_requirement?: number
+          id?: string
+          net_requirement?: number
+          on_hand_quantity?: number
+          product_id?: string
+          recommendation_type?: string
+          required_date?: string
+          run_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manufacturing_mrp_recommendations_bom_id_fkey"
+            columns: ["bom_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturing_boms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_mrp_recommendations_converted_work_order_id_fkey"
+            columns: ["converted_work_order_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturing_work_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_mrp_recommendations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manufacturing_mrp_recommendations_scope_fkey"
+            columns: ["business_id", "run_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturing_mrp_runs"
+            referencedColumns: ["business_id", "id"]
+          },
+        ]
+      }
+      manufacturing_mrp_runs: {
+        Row: {
+          business_id: string
+          buy_count: number
+          created_at: string
+          created_by: string
+          demand_inputs: Json
+          horizon_end: string
+          horizon_start: string
+          id: string
+          make_count: number
+          recommendation_count: number
+          run_number: number
+        }
+        ComputedFields: never
+        Insert: {
+          business_id: string
+          buy_count?: number
+          created_at?: string
+          created_by: string
+          demand_inputs?: Json
+          horizon_end: string
+          horizon_start: string
+          id?: string
+          make_count?: number
+          recommendation_count?: number
+          run_number: number
+        }
+        Update: {
+          business_id?: string
+          buy_count?: number
+          created_at?: string
+          created_by?: string
+          demand_inputs?: Json
+          horizon_end?: string
+          horizon_start?: string
+          id?: string
+          make_count?: number
+          recommendation_count?: number
+          run_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manufacturing_mrp_runs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manufacturing_production_runs: {
         Row: {
           completed_at: string | null
@@ -13379,6 +13520,15 @@ export type Database = {
         Args: { p_bom_id: string }
         Returns: string
       }
+      run_mrp: {
+        Args: {
+          p_business_id: string
+          p_demand_inputs?: Json
+          p_horizon_end: string
+          p_horizon_start: string
+        }
+        Returns: string
+      }
       save_bom_version: {
         Args: {
           p_bom_id: string | null
@@ -13470,6 +13620,10 @@ export type Database = {
           p_scrap_reason: string | null
         }
         Returns: Json
+      }
+      convert_mrp_recommendation: {
+        Args: { p_recommendation_id: string }
+        Returns: string
       }
       create_work_order_from_bom: {
         Args: {

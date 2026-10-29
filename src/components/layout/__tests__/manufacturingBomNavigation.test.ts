@@ -66,7 +66,7 @@ describe('manufacturing BOM navigation', () => {
   it('puts the active Dashboard first in Manufacturing and keeps BOM and Production', () => {
     const section = NAV_SECTIONS.find((s) => s.labelKey === 'navigation.sections.manufacturing');
     expect(section?.items.map((i) => i.path)).toEqual([
-      '/manufacturing', '/manufacturing/bom', '/manufacturing/production',
+      '/manufacturing', '/manufacturing/bom', '/manufacturing/mrp', '/manufacturing/production',
       '/manufacturing/runs', '/manufacturing/routings', '/manufacturing/work-centres',
     ]);
     expect(navItemForPath('/manufacturing')?.labelKey).toBe('manufacturing.bom.dashboard');

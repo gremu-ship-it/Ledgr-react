@@ -25,6 +25,7 @@ import {
   Building2,
   ShoppingBag,
   Factory,
+  ClipboardList,
   MapPin,
   type LucideIcon,
 } from 'lucide-react';
@@ -154,6 +155,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         labelKey: 'navigation.items.manufacturingBom',
         path: '/manufacturing/bom',
         icon: Package,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'manufacturing',
+      },
+      {
+        labelKey: 'navigation.items.manufacturingMrp',
+        path: '/manufacturing/mrp',
+        icon: ClipboardList,
         minPlan: 'enterprise',
         requiresOrgCapability: 'manufacturing',
       },

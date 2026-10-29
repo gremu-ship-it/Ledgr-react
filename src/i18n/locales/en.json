@@ -130,6 +130,7 @@
       "manufacturingRuns": "Production Runs",
       "manufacturingRoutings": "Routings",
       "manufacturingWorkCentres": "Work Centres",
+      "manufacturingMrp": "MRP Workbench",
       "periods": "Periods",
       "auditLog": "Audit Log",
       "contacts": "Contacts",
@@ -2572,6 +2573,71 @@
   },
   "manufacturing": {
     "title": "Manufacturing",
+    "mrp": {
+      "title": "MRP Workbench",
+      "description": "Time-phase demand, net available supply, and review make-or-buy suggestions.",
+      "errors": {
+        "runFailed": "The MRP run could not be completed. Check the planning horizon and demand lines, then try again.",
+        "invalidHorizon": "Enter a valid planning horizon with an end date on or after the start date.",
+        "invalidDemand": "Complete each demand line with a product, positive quantity, and required date inside the planning horizon.",
+        "convertFailed": "The make suggestion could not be converted. Its BOM may have changed; run MRP again and retry.",
+        "dismissFailed": "The suggestion could not be dismissed. Refresh and try again.",
+        "loadFailed": "MRP data could not be loaded. Refresh and try again."
+      },
+      "newRun": {
+        "title": "Plan a new run",
+        "explanation": "Enter forecast or planned demand. MRP nets each dated requirement against available stock and released production, then recursively explodes shortages through the active BOM. With no product lead-time field, component needs inherit the parent requirement date.",
+        "horizonStart": "Horizon start",
+        "horizonEnd": "Horizon end",
+        "demandLines": "Planned demand",
+        "addDemand": "Add demand line",
+        "product": "Product",
+        "selectProduct": "Select a product",
+        "quantity": "Quantity",
+        "requiredDate": "Required date",
+        "removeDemand": "Remove demand line",
+        "run": "Run MRP",
+        "running": "Planning…",
+        "automaticWorkOrderDemand": "Remaining material needs from released production orders are included. Recommendations never create orders automatically; approved-PO supply is zero until a generic source exists."
+      },
+      "history": {
+        "title": "Run history",
+        "selectRun": "Selected run",
+        "empty": "No runs",
+        "runLabel": "Run #{{number}} · {{date}}",
+        "emptyState": "No MRP runs yet. Add planned demand and run MRP to create suggestions."
+      },
+      "summary": {
+        "recommendations": "Suggestions",
+        "make": "Make",
+        "buy": "Buy",
+        "netQuantity": "Total net quantity"
+      },
+      "recommendations": {
+        "title": "Make / buy suggestions",
+        "horizon": "Planning horizon: {{start}} to {{end}}",
+        "filterType": "Filter by recommendation type",
+        "filterStatus": "Filter by status",
+        "types": { "all": "All types", "make": "Make", "buy": "Buy" },
+        "statuses": { "all": "All statuses", "open": "Open", "dismissed": "Dismissed", "converted": "Converted" },
+        "product": "Product",
+        "type": "Type",
+        "requiredDate": "Required date",
+        "gross": "Gross requirement",
+        "onHand": "Available stock",
+        "productionSupply": "Active production",
+        "approvedSupply": "Approved PO supply",
+        "net": "Net shortage",
+        "status": "Status",
+        "actions": "Actions",
+        "convertToWorkOrder": "Create draft work order",
+        "dismiss": "Dismiss",
+        "viewWorkOrder": "View work order",
+        "unknownProduct": "Unknown product",
+        "empty": "This run has no shortages to recommend.",
+        "noMatches": "No suggestions match these filters."
+      }
+    },
     "comingSoon": "Manufacturing features coming soon",
     "accounts": {
       "ownerRequired": "You must be signed in to set up the Manufacturing workspace.",

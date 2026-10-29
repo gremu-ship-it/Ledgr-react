@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, InsertDto, Row } from '../types/database';
+import type { Database, InsertDto, Json, Row } from '../types/database';
 
 export type WorkCentreType = 'machine' | 'labor' | 'cell' | 'outsourced';
 export type RoutingStatus = 'draft' | 'active' | 'archived';
@@ -83,6 +83,18 @@ export interface CompleteRunInput {
 export interface WorkOrderFilters {
   status?: ManufacturingWorkOrderStatus;
   priority?: WorkOrderPriority;
+}
+
+export interface MrpDemandInput {
+  product_id: string;
+  quantity: number;
+  required_date: string;
+}
+
+export type MrpRun = Row<'manufacturing_mrp_runs'>;
+export type MrpRecommendation = Row<'manufacturing_mrp_recommendations'>;
+export interface MrpRecommendationSummary extends MrpRecommendation {
+  product: Pick<Row<'products'>, 'id' | 'name' | 'sku' | 'unit_of_measure'> | null;
 }
 
 export class ManufacturingRepository {
@@ -314,6 +326,83 @@ export class ManufacturingRepository {
     if (!command) throw new Error('manufacturing.errors.unsupportedWorkOrderStatus');
     const { error } = await this.client.rpc(command as never, { p_work_order_id: orderId } as never);
     if (error) throw error;
+  }
+
+  async listMrpRuns(businessId: string): Promise<MrpRun[]> {
+    const { data, error } = await this.client
+      .from('manufacturing_mrp_runs')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  }
+
+  async listMrpRecommendations(
+    businessId: string,
+    runId: string,
+  ): Promise<MrpRecommendationSummary[]> {
+    const { data, error } = await this.client
+      .from('manufacturing_mrp_recommendations')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('run_id', runId)
+      .order('required_date', { ascending: true })
+      .order('recommendation_type', { ascending: true });
+    if (error) throw error;
+    const rows = data ?? [];
+    const productIds = [...new Set(rows.map((row) => row.product_id))];
+    const products = productIds.length
+      ? await this.client.from('products')
+        .select('id,name,sku,unit_of_measure')
+        .eq('business_id', businessId)
+        .in('id', productIds)
+      : { data: [], error: null };
+    if (products.error) throw products.error;
+    const productById = new Map((products.data ?? []).map((product) => [product.id, product]));
+    return rows.map((row) => ({ ...row, product: productById.get(row.product_id) ?? null }));
+  }
+
+  async runMrp(
+    businessId: string,
+    horizonStart: string,
+    horizonEnd: string,
+    demandInputs: MrpDemandInput[],
+  ): Promise<string> {
+    const { data, error } = await this.client.rpc('run_mrp', {
+      p_business_id: businessId,
+      p_horizon_start: horizonStart,
+      p_horizon_end: horizonEnd,
+      p_demand_inputs: demandInputs as unknown as Json,
+    });
+    if (error) throw error;
+    if (!data) throw new Error('manufacturing.mrp.errors.runMissingId');
+    return data;
+  }
+
+  async convertMrpRecommendation(recommendationId: string): Promise<string> {
+    const { data, error } = await this.client.rpc('convert_mrp_recommendation', {
+      p_recommendation_id: recommendationId,
+    });
+    if (error) throw error;
+    if (!data) throw new Error('manufacturing.mrp.errors.conversionMissingId');
+    return data;
+  }
+
+  async dismissMrpRecommendation(businessId: string, recommendationId: string): Promise<void> {
+    const { data: authData, error: authError } = await this.client.auth.getUser();
+    if (authError) throw authError;
+    if (!authData.user) throw new Error('manufacturing.mrp.errors.signInToDismiss');
+    const { data, error } = await this.client
+      .from('manufacturing_mrp_recommendations')
+      .update({ status: 'dismissed', dismissed_at: new Date().toISOString(), dismissed_by: authData.user.id })
+      .eq('business_id', businessId)
+      .eq('id', recommendationId)
+      .eq('status', 'open')
+      .select('id')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error('manufacturing.mrp.errors.recommendationNotOpen');
   }
 
   async listRuns(businessId: string, workOrderId: string): Promise<ProductionRun[]> {

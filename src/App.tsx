@@ -93,6 +93,7 @@ const WorkOrderDetailPage = lazyPage(
 const WorkCentresPage = lazyPage(() => import('@/pages/manufacturing/WorkCentresPage'), 'WorkCentresPage');
 const RoutingsPage = lazyPage(() => import('@/pages/manufacturing/RoutingsPage'), 'RoutingsPage');
 const ProductionRunsPage = lazyPage(() => import('@/pages/manufacturing/ProductionRunsPage'), 'ProductionRunsPage');
+const MrpWorkbenchPage = lazyPage(() => import('@/pages/manufacturing/MrpWorkbenchPage'), 'MrpWorkbenchPage');
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
@@ -466,6 +467,16 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
                         <CapabilityGate capability="manufacturing">
                           <BomEditorPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/manufacturing/mrp"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
+                        <CapabilityGate capability="manufacturing">
+                          <MrpWorkbenchPage />
                         </CapabilityGate>
                       </PlanGate>
                     }

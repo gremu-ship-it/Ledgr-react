@@ -19,6 +19,7 @@ export const suites = {
   'offline.test.ts': 'offline-indexeddb-postgres.json',
   'safety.test.ts': 'harness-safety.json',
   'manufacturing-bom.test.ts': 'r13-manufacturing-bom.json',
+  'manufacturing-mrp.test.ts': 'r13-manufacturing-mrp.json',
   'r01-security.test.ts': 'r01-security.json',
   'r02-recovery.test.ts': 'r02-recovery.json',
   'r03-ai.test.ts': 'r03-ai.json',
