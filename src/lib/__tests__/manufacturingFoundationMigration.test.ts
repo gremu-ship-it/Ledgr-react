@@ -28,7 +28,8 @@ describe('manufacturing foundation migration contract', () => {
     // reporting follows the Phase C work-order migrations; construction site
     // lifecycle, trial-balance and bank-reconciliation migrations follow, then
     // the additive trial-balance date-cast correction and Phase 5B-2a execution
-    // migration become the current head.
+    // migration, then construction procurement links and Phase 5B-3a MRP, become
+    // the current head.
     expect([
       '20261103000000',
       '20261104000000',
@@ -47,6 +48,7 @@ describe('manufacturing foundation migration contract', () => {
       '20261120000002',
       '20261122000000',
       '20261123000000',
+      '20261124000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);

@@ -48,6 +48,7 @@ describe('manufacturing work order navigation', () => {
     expect(section?.items.map((i) => i.path)).toEqual([
       '/manufacturing',
       '/manufacturing/bom',
+      '/manufacturing/mrp',
       '/manufacturing/production',
       '/manufacturing/runs',
       '/manufacturing/routings',

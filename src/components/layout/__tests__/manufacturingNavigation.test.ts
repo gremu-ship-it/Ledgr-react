@@ -55,6 +55,23 @@ const manufacturingItem = (profile: BusinessOrganisationProfile, planTier: PlanT
 describe('manufacturing workspace navigation', () => {
   afterEach(() => vi.unstubAllEnvs());
 
+  it('adds the Enterprise-only MRP workbench without changing existing Manufacturing paths', () => {
+    const item = navItemForPath('/manufacturing/mrp');
+    expect(item).toMatchObject({
+      labelKey: 'navigation.items.manufacturingMrp',
+      path: '/manufacturing/mrp',
+      minPlan: 'enterprise',
+      requiresOrgCapability: 'manufacturing',
+    });
+    expect(navItemForPath('/manufacturing/bom')?.path).toBe('/manufacturing/bom');
+    expect(navItemForPath('/manufacturing/production')?.path).toBe('/manufacturing/production');
+    expect(isPathAllowedForRole('manager', '/manufacturing/mrp')).toBe(true);
+    expect(isPathAllowedForRole('stock_clerk', '/manufacturing/mrp')).toBe(false);
+    expect(navFor(manufacturingBusiness, 'free').find((entry) => entry.path === '/manufacturing/mrp')?.locked).toBe(true);
+    expect(navFor(manufacturingBusiness, 'enterprise').find((entry) => entry.path === '/manufacturing/mrp')?.locked).toBe(false);
+    expect(navFor(retailBusiness, 'enterprise').map((entry) => entry.path)).not.toContain('/manufacturing/mrp');
+  });
+
   it('places the manufacturing dashboard in the dedicated Manufacturing section', () => {
     const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.manufacturing');
     expect(section?.items[0]).toMatchObject({
