@@ -13,10 +13,15 @@ const rfi = {
   question: 'Please confirm the specified finish.',
   response: null,
   evidence: 'Drawing A-12, revision 3',
+  proposed_solution: null,
+  boq_item_id: null,
+  subcontract_id: null,
+  drawing_reference: 'A-12 Rev 3',
   status: 'draft',
   priority: 'normal',
   due_date: null,
   answered_at: null,
+  answered_by: null,
   closed_at: null,
   created_by: 'user-1',
   updated_by: 'user-1',
@@ -57,6 +62,15 @@ describe('ConstructionRfiRepository', () => {
     );
   });
 
+  it('lists RFIs for a business in reverse-created order', async () => {
+    readChain.order.mockResolvedValue({ data: [rfi], error: null });
+
+    await expect(repository.listByBusiness('business-1')).resolves.toEqual([rfi]);
+    expect(mockClient.from).toHaveBeenCalledWith('construction_rfis');
+    expect(readChain.eq).toHaveBeenCalledWith('business_id', 'business-1');
+    expect(readChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
   it('lists RFIs for a project in reverse-created order', async () => {
     readChain.order.mockResolvedValue({ data: [rfi], error: null });
 
@@ -82,7 +96,7 @@ describe('ConstructionRfiRepository', () => {
       .resolves.toEqual([overdueRfi]);
     expect(readChain.eq).toHaveBeenCalledWith('project_id', 'project-1');
     expect(readChain.lt).toHaveBeenCalledWith('due_date', '2026-11-28');
-    expect(readChain.in).toHaveBeenCalledWith('status', ['open', 'answered']);
+    expect(readChain.in).toHaveBeenCalledWith('status', ['open', 'submitted', 'answered']);
     expect(readChain.order).toHaveBeenCalledWith('due_date', { ascending: true });
   });
 
@@ -97,6 +111,10 @@ describe('ConstructionRfiRepository', () => {
       title: rfi.title,
       question: rfi.question,
       evidence: 'Drawing A-12, revision 3',
+      proposed_solution: 'Use the revised detail.',
+      boq_item_id: 'boq-item-1',
+      subcontract_id: 'subcontract-1',
+      drawing_reference: 'A-12 Rev 3',
     })).resolves.toEqual(rfi);
 
     expect(mockClient.rpc).toHaveBeenCalledWith('create_construction_rfi', expect.objectContaining({
@@ -104,6 +122,10 @@ describe('ConstructionRfiRepository', () => {
       p_project_id: 'project-1',
       p_site_id: 'site-1',
       p_evidence: 'Drawing A-12, revision 3',
+      p_proposed_solution: 'Use the revised detail.',
+      p_boq_item_id: 'boq-item-1',
+      p_subcontract_id: 'subcontract-1',
+      p_drawing_reference: 'A-12 Rev 3',
       p_priority: 'normal',
     }));
     expect(mockClient.from).not.toHaveBeenCalled();

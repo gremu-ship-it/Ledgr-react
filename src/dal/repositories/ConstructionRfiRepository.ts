@@ -4,7 +4,7 @@ import type { Json } from '../types/database.generated';
 import { DatabaseError, NotFoundError, toRepositoryError } from '../errors/RepositoryError';
 
 export type ConstructionRfiRow = Database['public']['Tables']['construction_rfis']['Row'];
-export type ConstructionRfiStatus = 'draft' | 'open' | 'answered' | 'closed';
+export type ConstructionRfiStatus = 'draft' | 'open' | 'submitted' | 'answered' | 'closed' | 'cancelled';
 export type ConstructionRfiPriority = 'low' | 'normal' | 'high' | 'urgent';
 
 export interface CreateConstructionRfiInput {
@@ -18,6 +18,10 @@ export interface CreateConstructionRfiInput {
   due_date?: string | null;
   /** Evidence reference or notes stored as text; this is not a Storage path. */
   evidence?: string | null;
+  proposed_solution?: string | null;
+  boq_item_id?: string | null;
+  subcontract_id?: string | null;
+  drawing_reference?: string | null;
 }
 
 export interface UpdateConstructionRfiInput {
@@ -27,6 +31,10 @@ export interface UpdateConstructionRfiInput {
   due_date?: string | null;
   /** Evidence reference or notes stored as text; this is not a Storage path. */
   evidence?: string | null;
+  proposed_solution?: string | null;
+  boq_item_id?: string | null;
+  subcontract_id?: string | null;
+  drawing_reference?: string | null;
 }
 
 /**
@@ -41,6 +49,17 @@ export class ConstructionRfiRepository {
 
   constructor(client: SupabaseClient<Database>) {
     this.client = client;
+  }
+
+  async listByBusiness(businessId: string): Promise<ConstructionRfiRow[]> {
+    const { data, error } = await this.client
+      .from('construction_rfis')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw toRepositoryError(this.resource, error);
+    return data ?? [];
   }
 
   async listByProject(projectId: string): Promise<ConstructionRfiRow[]> {
@@ -73,7 +92,7 @@ export class ConstructionRfiRepository {
       .select('*')
       .eq('project_id', projectId)
       .lt('due_date', asOfDate)
-      .in('status', ['open', 'answered'])
+      .in('status', ['open', 'submitted', 'answered'])
       .order('due_date', { ascending: true });
 
     if (error) throw toRepositoryError(this.resource, error);
@@ -91,6 +110,10 @@ export class ConstructionRfiRepository {
       p_priority: input.priority ?? 'normal',
       p_due_date: input.due_date ?? null,
       p_evidence: input.evidence ?? null,
+      p_proposed_solution: input.proposed_solution ?? null,
+      p_boq_item_id: input.boq_item_id ?? null,
+      p_subcontract_id: input.subcontract_id ?? null,
+      p_drawing_reference: input.drawing_reference ?? null,
     });
 
     if (error) throw toRepositoryError(this.resource, error);

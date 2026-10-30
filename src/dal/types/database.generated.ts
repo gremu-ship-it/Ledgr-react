@@ -2753,60 +2753,75 @@ export type Database = {
       construction_rfis: {
         Row: {
           answered_at: string | null
+          answered_by: string | null
           business_id: string
+          boq_item_id: string | null
           closed_at: string | null
           created_at: string
           created_by: string
+          drawing_reference: string | null
           due_date: string | null
           evidence: string | null
           id: string
           priority: string
+          proposed_solution: string | null
           project_id: string
           question: string
           response: string | null
           rfi_number: string
           site_id: string | null
           status: string
+          subcontract_id: string | null
           title: string
           updated_at: string
           updated_by: string
         }
         Insert: {
           answered_at?: string | null
+          answered_by?: string | null
           business_id: string
+          boq_item_id?: string | null
           closed_at?: string | null
           created_at?: string
           created_by?: string
+          drawing_reference?: string | null
           due_date?: string | null
           evidence?: string | null
           id?: string
           priority?: string
+          proposed_solution?: string | null
           project_id: string
           question: string
           response?: string | null
           rfi_number: string
           site_id?: string | null
           status?: string
+          subcontract_id?: string | null
           title: string
           updated_at?: string
           updated_by?: string
         }
         Update: {
           answered_at?: string | null
+          answered_by?: string | null
           business_id?: string
+          boq_item_id?: string | null
           closed_at?: string | null
           created_at?: string
           created_by?: string
+          drawing_reference?: string | null
           due_date?: string | null
           evidence?: string | null
           id?: string
           priority?: string
+          proposed_solution?: string | null
           project_id?: string
           question?: string
           response?: string | null
           rfi_number?: string
           site_id?: string | null
           status?: string
+          subcontract_id?: string | null
           title?: string
           updated_at?: string
           updated_by?: string
@@ -2831,6 +2846,27 @@ export type Database = {
             columns: ["site_id"]
             isOneToOne: false
             referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_boq_item_id_fkey"
+            columns: ["boq_item_id"]
+            isOneToOne: false
+            referencedRelation: "boq_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_subcontract_id_fkey"
+            columns: ["subcontract_id"]
+            isOneToOne: false
+            referencedRelation: "subcontracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_answered_by_fkey"
+            columns: ["answered_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -14448,6 +14484,10 @@ export type Database = {
           p_rfi_number: string
           p_site_id: string | null
           p_title: string
+          p_proposed_solution?: string | null
+          p_boq_item_id?: string | null
+          p_subcontract_id?: string | null
+          p_drawing_reference?: string | null
         }
         Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
       }

@@ -19,7 +19,7 @@ describe('versioned multi-level manufacturing BOM migrations', () => {
     expect(versions.filter((version) => version === '20261120000000')).toHaveLength(1);
     expect(versions.filter((version) => version === '20261120000001')).toHaveLength(1);
     expect(versions.filter((version) => version === '20261120000002')).toHaveLength(1);
-    expect(versions[versions.length - 1]).toBe('20261128000000');
+    expect(versions[versions.length - 1]).toBe('20261129000000');
   });
 
   it('extends the existing manufacturing BOM model with an exclusive sub-assembly reference', () => {
