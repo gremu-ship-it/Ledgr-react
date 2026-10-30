@@ -65,21 +65,32 @@ SELECT n.nspname AS schema_name,
  ORDER BY t.typname, e.enumsortorder;
 
 -- 4. Foreign-key relationships needed for generated `Relationships` entries.
-SELECT tc.table_name AS source_table,
-       kcu.column_name AS source_column,
-       ccu.table_schema AS target_schema,
-       ccu.table_name AS target_table,
-       ccu.column_name AS target_column,
-       tc.constraint_name
-  FROM information_schema.table_constraints tc
-  JOIN information_schema.key_column_usage kcu
-    ON kcu.constraint_schema = tc.constraint_schema
-   AND kcu.constraint_name = tc.constraint_name
-   AND kcu.table_schema = tc.table_schema
-   AND kcu.table_name = tc.table_name
-  JOIN information_schema.constraint_column_usage ccu
-    ON ccu.constraint_schema = tc.constraint_schema
-   AND ccu.constraint_name = tc.constraint_name
- WHERE tc.constraint_type = 'FOREIGN KEY'
-   AND tc.table_schema = 'public'
- ORDER BY tc.table_name, tc.constraint_name, kcu.ordinal_position;
+-- Pair source and target columns by array ordinality so composite FKs are not
+-- expanded into an incorrect N-by-N cross product.
+SELECT src_ns.nspname AS source_schema,
+       src.relname AS source_table,
+       src_col.attname AS source_column,
+       tgt_ns.nspname AS target_schema,
+       tgt.relname AS target_table,
+       tgt_col.attname AS target_column,
+       con.conname AS constraint_name,
+       src_key.ordinality AS key_position
+  FROM pg_constraint con
+  JOIN pg_class src ON src.oid = con.conrelid
+  JOIN pg_namespace src_ns ON src_ns.oid = src.relnamespace
+  JOIN pg_class tgt ON tgt.oid = con.confrelid
+  JOIN pg_namespace tgt_ns ON tgt_ns.oid = tgt.relnamespace
+  CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS src_key(attnum, ordinality)
+  JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS tgt_key(attnum, ordinality)
+    ON tgt_key.ordinality = src_key.ordinality
+  JOIN pg_attribute src_col
+    ON src_col.attrelid = src.oid
+   AND src_col.attnum = src_key.attnum
+   AND NOT src_col.attisdropped
+  JOIN pg_attribute tgt_col
+    ON tgt_col.attrelid = tgt.oid
+   AND tgt_col.attnum = tgt_key.attnum
+   AND NOT tgt_col.attisdropped
+ WHERE con.contype = 'f'
+   AND src_ns.nspname = 'public'
+ ORDER BY source_table, constraint_name, key_position;
