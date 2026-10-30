@@ -32,14 +32,14 @@ const ALL_TOOLS: Tool[] = [
   // Accounting tools
   { id: 'accounts', label: 'Chart of Accounts', description: 'Manage your account structure', icon: Settings, path: '/accounts', category: 'accounting' },
   { id: 'journals', label: 'Journal Entries', description: 'Manual accounting entries', icon: FileText, path: '/journals', category: 'accounting' },
-  { id: 'reports', label: 'Reports', description: 'Financial reports & insights', icon: BarChart3, path: '/reports', category: 'accounting' },
+  { id: 'reports', label: 'Reports', description: 'Financial reports & insights', icon: BarChart3, path: '/reports/trial-balance', category: 'accounting' },
   { id: 'periods', label: 'Financial Periods', description: 'Manage accounting periods', icon: Calendar, path: '/periods', category: 'accounting' },
 
   // Advanced tools (access comes from the shared navigation configuration)
-  { id: 'inventory', label: 'Inventory', description: 'Stock & product management', icon: Package, path: '/inventory', category: 'advanced' },
+  { id: 'inventory', label: 'Inventory', description: 'Stock & product management', icon: Package, path: '/products', category: 'advanced' },
   { id: 'payroll', label: 'Payroll', description: 'Employee salary management', icon: Users, path: '/payroll', category: 'advanced' },
   { id: 'assets', label: 'Fixed Assets', description: 'Track company assets', icon: Package, path: '/assets', category: 'advanced' },
-  { id: 'bank', label: 'Bank Reconciliation', description: 'Reconcile bank statements', icon: CreditCard, path: '/bank-reconcile', category: 'advanced' },
+  { id: 'bank', label: 'Bank Reconciliation', description: 'Reconcile bank statements', icon: CreditCard, path: '/bank-reconciliation/accounts', category: 'advanced' },
   { id: 'import', label: 'Data Import', description: 'Migrate from QuickBooks, Xero, Sage, Excel', icon: FileSpreadsheet, path: '/import', category: 'accounting' },
 ];
 

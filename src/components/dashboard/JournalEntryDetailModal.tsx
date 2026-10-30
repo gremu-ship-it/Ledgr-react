@@ -5,6 +5,7 @@ import { repos } from '@/lib/repositories';
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { nextEntryNumber } from '@/services/journalService';
+import { ApprovalBanner } from '@/components/approvals/ApprovalBanner';
 
 
 interface JournalEntryDetailModalProps {
@@ -165,6 +166,23 @@ export function JournalEntryDetailModal({ entryId, onClose }: JournalEntryDetail
                   )}
                 </div>
               </div>
+
+              {data.entry.source_type === null && (
+                <div className="mb-4">
+                  <ApprovalBanner
+                    businessId={data.entry.business_id}
+                    documentId={data.entry.id}
+                    documentType="journal_entry"
+                    documentStatus={data.entry.status}
+                    onSubmitted={() => queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] })}
+                    onApproved={() => {
+                      queryClient.invalidateQueries({ queryKey: ['journal'] });
+                      queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] });
+                    }}
+                    onRejected={() => queryClient.invalidateQueries({ queryKey: ['journal_entry_detail', entryId] })}
+                  />
+                </div>
+              )}
 
               <div className="overflow-hidden rounded-xl border border-gray-100">
                 <table className="w-full text-sm">

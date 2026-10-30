@@ -774,193 +774,6 @@ export type Database = {
         }
         Relationships: []
       }
-      bank_accounts: {
-        Row: {
-          account_id: string
-          account_number: string
-          bank_name: string
-          branch_name: string | null
-          business_id: string
-          created_at: string
-          currency: string
-          id: string
-          is_active: boolean
-          updated_at: string
-        }
-        Insert: {
-          account_id: string
-          account_number: string
-          bank_name: string
-          branch_name?: string | null
-          business_id: string
-          created_at?: string
-          currency?: string
-          id?: string
-          is_active?: boolean
-          updated_at?: string
-        }
-        Update: {
-          account_id?: string
-          account_number?: string
-          bank_name?: string
-          branch_name?: string | null
-          business_id?: string
-          created_at?: string
-          currency?: string
-          id?: string
-          is_active?: boolean
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_accounts_account_id_fkey"
-            columns: ["account_id"]
-            isOneToOne: false
-            referencedRelation: "accounts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_accounts_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_accounts_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bank_accounts_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-        ]
-      }
-      bank_reconciliation_matches: {
-        Row: {
-          business_id: string
-          id: string
-          is_auto_match: boolean
-          journal_line_id: string
-          matched_amount: number
-          matched_at: string
-          matched_by: string
-          statement_line_id: string
-        }
-        Insert: {
-          business_id: string
-          id?: string
-          is_auto_match?: boolean
-          journal_line_id: string
-          matched_amount: number
-          matched_at?: string
-          matched_by: string
-          statement_line_id: string
-        }
-        Update: {
-          business_id?: string
-          id?: string
-          is_auto_match?: boolean
-          journal_line_id?: string
-          matched_amount?: number
-          matched_at?: string
-          matched_by?: string
-          statement_line_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_reconciliation_matches_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_reconciliation_matches_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bank_reconciliation_matches_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bank_reconciliation_matches_journal_line_id_fkey"
-            columns: ["journal_line_id"]
-            isOneToOne: false
-            referencedRelation: "journal_lines"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_reconciliation_matches_statement_line_id_fkey"
-            columns: ["statement_line_id"]
-            isOneToOne: false
-            referencedRelation: "bank_statement_lines"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bank_statement_import_metadata: {
-        Row: {
-          business_id: string
-          created_at: string
-          period_start: string
-          statement_id: string
-        }
-        Insert: {
-          business_id: string
-          created_at?: string
-          period_start: string
-          statement_id: string
-        }
-        Update: {
-          business_id?: string
-          created_at?: string
-          period_start?: string
-          statement_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_statement_import_metadata_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_statement_import_metadata_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bank_statement_import_metadata_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bank_statement_import_metadata_statement_id_fkey"
-            columns: ["statement_id"]
-            isOneToOne: true
-            referencedRelation: "bank_statements"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       bank_statement_lines: {
         Row: {
           balance: number | null
@@ -1134,205 +947,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_partner_client_usage"
             referencedColumns: ["business_id"]
-          },
-        ]
-      }
-      bom_components: {
-        Row: {
-          bom_version_id: string
-          business_id: string | null
-          component_product_id: string
-          created_at: string
-          id: string
-          level: number
-          notes: string | null
-          quantity_per_unit: number
-          scrap_percentage: number
-          sort_order: number
-        }
-        Insert: {
-          bom_version_id: string
-          business_id?: string | null
-          component_product_id: string
-          created_at?: string
-          id?: string
-          level?: number
-          notes?: string | null
-          quantity_per_unit?: number
-          scrap_percentage?: number
-          sort_order?: number
-        }
-        Update: {
-          bom_version_id?: string
-          business_id?: string | null
-          component_product_id?: string
-          created_at?: string
-          id?: string
-          level?: number
-          notes?: string | null
-          quantity_per_unit?: number
-          scrap_percentage?: number
-          sort_order?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bom_components_bom_version_id_fkey"
-            columns: ["bom_version_id"]
-            isOneToOne: false
-            referencedRelation: "bom_versions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bom_components_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bom_components_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bom_components_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bom_components_component_product_id_fkey"
-            columns: ["component_product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bom_versions: {
-        Row: {
-          bom_id: string
-          business_id: string | null
-          created_at: string
-          effective_from: string | null
-          effective_to: string | null
-          id: string
-          notes: string | null
-          status: string
-          version_number: number
-        }
-        Insert: {
-          bom_id: string
-          business_id?: string | null
-          created_at?: string
-          effective_from?: string | null
-          effective_to?: string | null
-          id?: string
-          notes?: string | null
-          status?: string
-          version_number?: number
-        }
-        Update: {
-          bom_id?: string
-          business_id?: string | null
-          created_at?: string
-          effective_from?: string | null
-          effective_to?: string | null
-          id?: string
-          notes?: string | null
-          status?: string
-          version_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bom_versions_bom_id_fkey"
-            columns: ["bom_id"]
-            isOneToOne: false
-            referencedRelation: "boms"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bom_versions_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bom_versions_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "bom_versions_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-        ]
-      }
-      boms: {
-        Row: {
-          business_id: string
-          created_at: string
-          description: string | null
-          id: string
-          name: string
-          product_id: string
-          updated_at: string
-        }
-        Insert: {
-          business_id: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          name: string
-          product_id: string
-          updated_at?: string
-        }
-        Update: {
-          business_id?: string
-          created_at?: string
-          description?: string | null
-          id?: string
-          name?: string
-          product_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "boms_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "boms_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "boms_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "boms_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -3136,6 +2750,91 @@ export type Database = {
           },
         ]
       }
+      construction_rfis: {
+        Row: {
+          answered_at: string | null
+          business_id: string
+          closed_at: string | null
+          created_at: string
+          created_by: string
+          due_date: string | null
+          evidence: string | null
+          id: string
+          priority: string
+          project_id: string
+          question: string
+          response: string | null
+          rfi_number: string
+          site_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          answered_at?: string | null
+          business_id: string
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          evidence?: string | null
+          id?: string
+          priority?: string
+          project_id: string
+          question: string
+          response?: string | null
+          rfi_number: string
+          site_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Update: {
+          answered_at?: string | null
+          business_id?: string
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          evidence?: string | null
+          id?: string
+          priority?: string
+          project_id?: string
+          question?: string
+          response?: string | null
+          rfi_number?: string
+          site_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_rfis_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       construction_purchase_order_events: {
         Row: {
           action: string
@@ -3855,81 +3554,6 @@ export type Database = {
           },
         ]
       }
-      construction_sites: {
-        Row: {
-          address: string | null
-          business_id: string
-          code: string | null
-          created_at: string
-          id: string
-          inventory_location_id: string | null
-          name: string
-          project_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          address?: string | null
-          business_id: string
-          code?: string | null
-          created_at?: string
-          id?: string
-          inventory_location_id?: string | null
-          name: string
-          project_id: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          address?: string | null
-          business_id?: string
-          code?: string | null
-          created_at?: string
-          id?: string
-          inventory_location_id?: string | null
-          name?: string
-          project_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "construction_sites_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "construction_sites_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "construction_sites_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "construction_sites_inventory_location_id_fkey"
-            columns: ["inventory_location_id"]
-            isOneToOne: false
-            referencedRelation: "inventory_locations"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "construction_sites_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "construction_projects"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       construction_supplier_invoice_references: {
         Row: {
           business_id: string
@@ -4167,91 +3791,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_partner_client_usage"
             referencedColumns: ["business_id"]
-          },
-        ]
-      }
-      construction_rfis: {
-        Row: {
-          answered_at: string | null
-          business_id: string
-          closed_at: string | null
-          created_at: string
-          created_by: string
-          due_date: string | null
-          evidence: string | null
-          id: string
-          priority: string
-          project_id: string
-          question: string
-          response: string | null
-          rfi_number: string
-          site_id: string | null
-          status: string
-          title: string
-          updated_at: string
-          updated_by: string
-        }
-        Insert: {
-          answered_at?: string | null
-          business_id: string
-          closed_at?: string | null
-          created_at?: string
-          created_by?: string
-          due_date?: string | null
-          evidence?: string | null
-          id?: string
-          priority?: string
-          project_id: string
-          question: string
-          response?: string | null
-          rfi_number: string
-          site_id?: string | null
-          status?: string
-          title: string
-          updated_at?: string
-          updated_by?: string
-        }
-        Update: {
-          answered_at?: string | null
-          business_id?: string
-          closed_at?: string | null
-          created_at?: string
-          created_by?: string
-          due_date?: string | null
-          evidence?: string | null
-          id?: string
-          priority?: string
-          project_id?: string
-          question?: string
-          response?: string | null
-          rfi_number?: string
-          site_id?: string | null
-          status?: string
-          title?: string
-          updated_at?: string
-          updated_by?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "construction_rfis_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "construction_rfis_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "construction_projects"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "construction_rfis_site_id_fkey"
-            columns: ["site_id"]
-            isOneToOne: false
-            referencedRelation: "construction_procurement_sites"
-            referencedColumns: ["id"]
           },
         ]
       }
@@ -8054,301 +7593,6 @@ export type Database = {
             columns: ["to_location_id"]
             isOneToOne: false
             referencedRelation: "inventory_locations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mrp_recommendations: {
-        Row: {
-          business_id: string
-          converted_to_id: string | null
-          converted_to_type: string | null
-          created_at: string
-          due_date: string
-          id: string
-          lead_time_days: number
-          mrp_run_id: string
-          net_requirement: number
-          order_date: string
-          product_id: string
-          quantity_needed: number
-          quantity_on_hand: number
-          quantity_on_order: number
-          recommendation_type: string
-          source_demand: string | null
-          source_work_order_id: string | null
-          status: string
-        }
-        Insert: {
-          business_id: string
-          converted_to_id?: string | null
-          converted_to_type?: string | null
-          created_at?: string
-          due_date: string
-          id?: string
-          lead_time_days?: number
-          mrp_run_id: string
-          net_requirement: number
-          order_date: string
-          product_id: string
-          quantity_needed: number
-          quantity_on_hand?: number
-          quantity_on_order?: number
-          recommendation_type: string
-          source_demand?: string | null
-          source_work_order_id?: string | null
-          status?: string
-        }
-        Update: {
-          business_id?: string
-          converted_to_id?: string | null
-          converted_to_type?: string | null
-          created_at?: string
-          due_date?: string
-          id?: string
-          lead_time_days?: number
-          mrp_run_id?: string
-          net_requirement?: number
-          order_date?: string
-          product_id?: string
-          quantity_needed?: number
-          quantity_on_hand?: number
-          quantity_on_order?: number
-          recommendation_type?: string
-          source_demand?: string | null
-          source_work_order_id?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mrp_recommendations_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mrp_recommendations_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "mrp_recommendations_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "mrp_recommendations_mrp_run_id_fkey"
-            columns: ["mrp_run_id"]
-            isOneToOne: false
-            referencedRelation: "mrp_runs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mrp_recommendations_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mrp_recommendations_source_work_order_id_fkey"
-            columns: ["source_work_order_id"]
-            isOneToOne: false
-            referencedRelation: "work_orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mrp_runs: {
-        Row: {
-          business_id: string
-          created_at: string
-          created_by: string | null
-          error_message: string | null
-          id: string
-          planning_horizon_days: number
-          run_at: string
-          status: string
-          total_demand_items: number
-          total_recommendations: number
-        }
-        Insert: {
-          business_id: string
-          created_at?: string
-          created_by?: string | null
-          error_message?: string | null
-          id?: string
-          planning_horizon_days?: number
-          run_at?: string
-          status?: string
-          total_demand_items?: number
-          total_recommendations?: number
-        }
-        Update: {
-          business_id?: string
-          created_at?: string
-          created_by?: string | null
-          error_message?: string | null
-          id?: string
-          planning_horizon_days?: number
-          run_at?: string
-          status?: string
-          total_demand_items?: number
-          total_recommendations?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mrp_runs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mrp_runs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "mrp_runs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-        ]
-      }
-      production_run_lines: {
-        Row: {
-          business_id: string | null
-          created_at: string
-          id: string
-          line_type: string
-          product_id: string
-          production_run_id: string
-          quantity: number
-        }
-        Insert: {
-          business_id?: string | null
-          created_at?: string
-          id?: string
-          line_type?: string
-          product_id: string
-          production_run_id: string
-          quantity: number
-        }
-        Update: {
-          business_id?: string | null
-          created_at?: string
-          id?: string
-          line_type?: string
-          product_id?: string
-          production_run_id?: string
-          quantity?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "production_run_lines_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "production_run_lines_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "production_run_lines_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "production_run_lines_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "production_run_lines_production_run_id_fkey"
-            columns: ["production_run_id"]
-            isOneToOne: false
-            referencedRelation: "production_runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      production_runs: {
-        Row: {
-          business_id: string
-          completed_at: string | null
-          created_at: string
-          id: string
-          notes: string | null
-          started_at: string | null
-          status: string
-          work_order_id: string | null
-        }
-        Insert: {
-          business_id: string
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          notes?: string | null
-          started_at?: string | null
-          status?: string
-          work_order_id?: string | null
-        }
-        Update: {
-          business_id?: string
-          completed_at?: string | null
-          created_at?: string
-          id?: string
-          notes?: string | null
-          started_at?: string | null
-          status?: string
-          work_order_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "production_runs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "production_runs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "production_runs_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "production_runs_work_order_id_fkey"
-            columns: ["work_order_id"]
-            isOneToOne: false
-            referencedRelation: "work_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -12496,143 +11740,6 @@ export type Database = {
         ]
       }
 
-      work_order_lines: {
-        Row: {
-          business_id: string | null
-          created_at: string
-          id: string
-          product_id: string
-          quantity_issued: number
-          quantity_required: number
-          work_order_id: string
-        }
-        Insert: {
-          business_id?: string | null
-          created_at?: string
-          id?: string
-          product_id: string
-          quantity_issued?: number
-          quantity_required: number
-          work_order_id: string
-        }
-        Update: {
-          business_id?: string | null
-          created_at?: string
-          id?: string
-          product_id?: string
-          quantity_issued?: number
-          quantity_required?: number
-          work_order_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "work_order_lines_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_order_lines_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "work_order_lines_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "work_order_lines_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_order_lines_work_order_id_fkey"
-            columns: ["work_order_id"]
-            isOneToOne: false
-            referencedRelation: "work_orders"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      work_orders: {
-        Row: {
-          business_id: string
-          completed_at: string | null
-          created_at: string
-          due_date: string | null
-          id: string
-          notes: string | null
-          product_id: string
-          quantity: number
-          started_at: string | null
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          business_id: string
-          completed_at?: string | null
-          created_at?: string
-          due_date?: string | null
-          id?: string
-          notes?: string | null
-          product_id: string
-          quantity: number
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          business_id?: string
-          completed_at?: string | null
-          created_at?: string
-          due_date?: string | null
-          id?: string
-          notes?: string | null
-          product_id?: string
-          quantity?: number
-          started_at?: string | null
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "work_orders_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "businesses"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "work_orders_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_inventory_ledger_variance"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "work_orders_business_id_fkey"
-            columns: ["business_id"]
-            isOneToOne: false
-            referencedRelation: "v_partner_client_usage"
-            referencedColumns: ["business_id"]
-          },
-          {
-            foreignKeyName: "work_orders_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
     }
     Views: {
       business_members: {
@@ -13538,84 +12645,8 @@ export type Database = {
         Args: { p_request_id: string; p_user_id: string }
         Returns: boolean
       }
-      create_bank_reconciliation_matches: {
-        Args: { p_business_id: string; p_matches: Json; p_statement_id: string }
-        Returns: number
-      }
-      delete_bank_reconciliation_match: {
-        Args: { p_business_id: string; p_match_id: string }
-        Returns: undefined
-      }
-      delete_draft_bank_statement: {
-        Args: { p_business_id: string; p_statement_id: string }
-        Returns: undefined
-      }
       get_approval_state: {
         Args: { p_business_id: string; p_document_id: string; p_document_type: string }
-        Returns: Json
-      }
-      get_bank_gl_book_balance: {
-        Args: { p_as_of_date: string; p_bank_account_id: string; p_business_id: string }
-        Returns: number
-      }
-      get_bank_reconciliation_gl_lines: {
-        Args: { p_bank_account_id: string; p_business_id: string; p_date_from: string; p_date_to: string }
-        Returns: {
-          account_id: string
-          amount: number
-          description: string
-          entry_date: string
-          entry_number: string
-          is_debit: boolean
-          journal_line_id: string
-          matched_amount: number
-        }[]
-      }
-      get_trial_balance: {
-        Args: {
-          p_business_id: string
-          p_date_from: string
-          p_date_to: string
-          p_branch_id?: string | null
-        }
-        Returns: {
-          account_code: string
-          account_id: string
-          account_name: string
-          account_type: string
-          balance: number
-          level: number
-          parent_account_id: string
-          total_credit: number
-          total_debit: number
-        }[]
-      }
-      get_unreconciled_gl_lines: {
-        Args: { p_bank_account_id: string; p_business_id: string; p_date_from: string; p_date_to: string }
-        Returns: {
-          account_id: string
-          amount: number
-          description: string
-          entry_date: string
-          entry_number: string
-          is_debit: boolean
-          journal_line_id: string
-        }[]
-      }
-      import_bank_statement: {
-        Args: {
-          p_bank_account_id: string
-          p_business_id: string
-          p_closing_balance: number
-          p_lines: Json
-          p_opening_balance: number
-          p_period_start: string
-          p_statement_date: string
-        }
-        Returns: string
-      }
-      reconcile_bank_statement: {
-        Args: { p_business_id: string; p_statement_id: string }
         Returns: Json
       }
       requires_approval: {
@@ -14536,29 +13567,6 @@ export type Database = {
         }
         Returns: Json
       }
-      create_construction_rfi: {
-        Args: {
-          p_business_id: string
-          p_due_date?: string | null
-          p_evidence?: string | null
-          p_priority?: string
-          p_project_id: string
-          p_question: string
-          p_rfi_number: string
-          p_site_id: string | null
-          p_title: string
-        }
-        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
-      }
-      delete_construction_rfi: { Args: { p_rfi_id: string }; Returns: boolean }
-      transition_construction_rfi: {
-        Args: { p_new_status: string; p_response?: string | null; p_rfi_id: string }
-        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
-      }
-      update_construction_rfi: {
-        Args: { p_payload: Json; p_rfi_id: string }
-        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
-      }
       get_enum_values: { Args: { p_enum_name: string }; Returns: string[] }
       get_portfolio_summary: {
         Args: { p_business_id: string }
@@ -15317,10 +14325,6 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      unreconcile_bank_statement: {
-        Args: { p_business_id: string; p_statement_id: string }
-        Returns: Json
-      }
       update_boq_line: {
         Args: {
           p_description: string
@@ -15433,6 +14437,29 @@ export type Database = {
         }[]
       }
       void_pos_sale_command: { Args: { p_payload: Json }; Returns: Json }
+      create_construction_rfi: {
+        Args: {
+          p_business_id: string
+          p_due_date?: string | null
+          p_evidence?: string | null
+          p_priority?: string
+          p_project_id: string
+          p_question: string
+          p_rfi_number: string
+          p_site_id: string | null
+          p_title: string
+        }
+        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
+      delete_construction_rfi: { Args: { p_rfi_id: string }; Returns: boolean }
+      transition_construction_rfi: {
+        Args: { p_new_status: string; p_response?: string | null; p_rfi_id: string }
+        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
+      update_construction_rfi: {
+        Args: { p_payload: Json; p_rfi_id: string }
+        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
     }
     Enums: {
       account_subtype:

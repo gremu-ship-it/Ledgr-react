@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import type { BusinessMembership } from '@/types';
 import type { Database, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { NotFoundError, toRepositoryError } from '../errors/RepositoryError';
@@ -122,6 +123,100 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
     return data as string;
   }
 
+  /**
+   * Replace the business operating-model selection.
+   *
+   * Goes through a SECURITY DEFINER RPC rather than a table UPDATE because the
+   * RPC validates the vocabulary, restricts the write to an owner/admin and
+   * writes the audit entry with the old and new selection. The generated
+   * Database types predate migration 20261027000000, so the adapter is typed
+   * explicitly here instead of being cast to `any`.
+   */
+  async updateOperatingModels(
+    businessId: string,
+    operatingModels: readonly string[],
+  ): Promise<string[]> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'update_business_operating_models',
+        args: { p_business_id: string; p_operating_models: string[] },
+      ) => Promise<{ data: string[] | null; error: { message?: string } | null }>;
+    };
+    const { data, error } = await client.rpc('update_business_operating_models', {
+      p_business_id: businessId,
+      p_operating_models: [...operatingModels],
+    });
+    if (error) throw toRepositoryError('businesses', error);
+    return data ?? [];
+  }
+
+  /**
+   * One-time, idempotent Construction bootstrap: "Main Site" branch, its stock
+   * location and the twelve procurement capability grants for the nominated
+   * owner. Safe to call again; a second call inserts nothing.
+   */
+  async provisionConstructionDefaults(businessId: string, ownerUserId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_construction_defaults',
+        args: { p_business_id: string; p_owner_user_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_construction_defaults', {
+      p_business_id: businessId,
+      p_owner_user_id: ownerUserId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
+  /**
+   * One-time, idempotent Manufacturing bootstrap: the production branch, its
+   * three typed stores (Raw Materials Store, Production Floor, Finished Goods
+   * Store) and the manufacturing.bom.manage grant for the nominated owner. Safe
+   * to call again; a second call inserts nothing.
+   */
+  async provisionManufacturingDefaults(businessId: string, ownerUserId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_manufacturing_defaults',
+        args: { p_business_id: string; p_owner_user_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_manufacturing_defaults', {
+      p_business_id: businessId,
+      p_owner_user_id: ownerUserId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
+  /** Idempotently provisions the Manufacturing-only WIP Inventory account. */
+  async provisionManufacturingCoaAccounts(businessId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_manufacturing_coa_accounts',
+        args: { p_business_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_manufacturing_coa_accounts', {
+      p_business_id: businessId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
+  /** Idempotently provisions the Construction-only Retention Receivable account. */
+  async provisionConstructionCoaAccounts(businessId: string): Promise<void> {
+    const client = this.client as unknown as {
+      rpc: (
+        fn: 'provision_construction_coa_accounts',
+        args: { p_business_id: string },
+      ) => Promise<{ error: { message?: string } | null }>;
+    };
+    const { error } = await client.rpc('provision_construction_coa_accounts', {
+      p_business_id: businessId,
+    });
+    if (error) throw toRepositoryError('businesses', error);
+  }
+
   async reserveNextInvoiceNumber(businessId: string): Promise<string> {
     return this.reserveDocumentNumber(businessId, 'invoice');
   }
@@ -153,7 +248,7 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
    * and filters deleted/inactive businesses DB-side to avoid RLS circular
    * dependency issues where only id+name were previously selected.
    */
-  async findMembershipsWithRole(userId: string) {
+  async findMembershipsWithRole(userId: string): Promise<BusinessMembership[]> {
     const { data, error } = await this.client
       .from('business_users')
       .select(`
@@ -182,6 +277,12 @@ export class BusinessRepository extends BaseRepository<'businesses'> {
         Boolean(m.business?.id && m.business.name),
       );
 
-    return memberships;
+    // Boundary refinement: `Business` (src/types) narrows generated columns
+    // that the live schema constrains at the DB level (e.g.
+    // organisation_type text + CHECK IN ('FOR_PROFIT','NON_PROFIT',
+    // 'GOVERNMENT','OTHER'), jsonb profile columns backed by app shapes).
+    // The regenerated Row<'businesses'> now includes those columns as
+    // `string`/`Json`, so the assignment needs one explicit cast here.
+    return memberships as unknown as BusinessMembership[];
   }
 }
