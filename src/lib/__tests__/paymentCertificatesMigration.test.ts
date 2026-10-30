@@ -10,7 +10,7 @@ describe('construction payment certificates migration', () => {
       .filter((file) => file.endsWith('.sql'))
       .map((file) => file.split('_')[0])
       .sort();
-    expect(versions.at(-1)).toBe('20261128000000');
+    expect(versions.at(-1)).toBe('20261129000000');
     expect(migration.match(/CREATE TABLE IF NOT EXISTS public\./g)).toHaveLength(1);
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS public.payment_certificates');
     expect(migration).not.toContain('CREATE TABLE IF NOT EXISTS public.project_valuations');

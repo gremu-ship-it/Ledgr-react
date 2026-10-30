@@ -28,6 +28,7 @@ import { constructionCertificatesRepository } from '@/dal/repositories/Construct
 import { ApprovalRepository } from '@/dal/repositories/ApprovalRepository';
 import { BomRepository } from '@/dal/repositories/BomRepository';
 import { ManufacturingRepository } from '@/dal/repositories/ManufacturingRepository';
+import { ConstructionRfiRepository } from '@/dal/repositories/ConstructionRfiRepository';
 
 export const repos = {
   projects: new ProjectRepository(),
@@ -39,6 +40,7 @@ export const repos = {
    */
   construction: constructionProcurementRepository,
   certificates: constructionCertificatesRepository,
+  rfi: new ConstructionRfiRepository(supabase),
   approval: ApprovalRepository,
   bom: new BomRepository(supabase),
   manufacturing: new ManufacturingRepository(supabase),

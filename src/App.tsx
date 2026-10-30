@@ -79,6 +79,9 @@ const RetentionRegisterPage = lazyPage(
   () => import('@/pages/construction/RetentionRegisterPage'),
   'RetentionRegisterPage',
 );
+const RfiListPage = lazyPage(() => import('@/pages/construction/RfiListPage'), 'RfiListPage');
+const RfiNewPage = lazyPage(() => import('@/pages/construction/RfiNewPage'), 'RfiNewPage');
+const RfiDetailPage = lazyPage(() => import('@/pages/construction/RfiDetailPage'), 'RfiDetailPage');
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -449,6 +452,36 @@ function App() {
                           <CapabilityGate capability="construction">
                             <RetentionRegisterPage />
                           </CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/rfis"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><RfiListPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/rfis/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><RfiNewPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/rfis/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><RfiDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
                     }

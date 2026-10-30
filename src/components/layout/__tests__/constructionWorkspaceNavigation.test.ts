@@ -53,6 +53,7 @@ describe('construction workspace navigation', () => {
       '/construction',
       '/construction/subcontractors',
       '/construction/certificates',
+      '/construction/rfis',
       '/construction/retention-register',
     ]);
     expect(section?.minPlan).toBe('enterprise');
@@ -86,8 +87,10 @@ describe('construction workspace navigation', () => {
     ).flatMap((section) => section.items.map((item) => item.path));
 
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/certificates');
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/rfis');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/retention-register');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/certificates');
+    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/rfis');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/retention-register');
     expect(navItemForPath('/construction/certificates')).toMatchObject({
       minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],

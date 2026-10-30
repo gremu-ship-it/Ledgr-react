@@ -28,6 +28,7 @@ import {
   ClipboardList,
   MapPin,
   FileCheck2,
+  MessageSquare,
   WalletCards,
   type LucideIcon,
 } from 'lucide-react';
@@ -146,6 +147,14 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         labelKey: 'navigation.items.paymentCertificates',
         path: '/construction/certificates',
         icon: FileCheck2,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
+      },
+      {
+        labelKey: 'navigation.items.rfis',
+        path: '/construction/rfis',
+        icon: MessageSquare,
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
         requiredOperatingModels: ['PROJECT_BASED'],

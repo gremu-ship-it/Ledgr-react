@@ -148,7 +148,8 @@
       "adminBilling": "Admin Billing",
       "constructionSubcontractors": "Subcontractors",
       "paymentCertificates": "Payment Certificates",
-      "retentionRegister": "Retention Register"
+      "retentionRegister": "Retention Register",
+      "rfis": "RFIs"
     },
     "accessibility": {
       "currentPage": "current page",
@@ -2775,6 +2776,107 @@
         "on_hold": "On hold",
         "completed": "Completed",
         "terminated": "Terminated"
+      }
+    },
+    "rfis": {
+      "title": "Requests for Information",
+      "description": "Create, review, and track project questions and responses.",
+      "newTitle": "New request for information",
+      "newDescription": "Record a project question and its supporting references.",
+      "backToList": "Back to RFIs",
+      "filters": {
+        "title": "Filters",
+        "allProjects": "All projects",
+        "allStatuses": "All statuses",
+        "allPriorities": "All priorities"
+      },
+      "loading": "Loading RFIs…",
+      "overdue": "Overdue",
+      "notAvailable": "Not available",
+      "openRfi": "Open RFI {{number}}",
+      "responseDate": "Response date",
+      "responder": "Responded by",
+      "responseRecordedByTeamMember": "Project team member",
+      "responsePending": "No response has been recorded.",
+      "openEvidenceReference": "Open evidence reference",
+      "columns": {
+        "number": "RFI number",
+        "subject": "Subject",
+        "project": "Project",
+        "status": "Status",
+        "priority": "Priority",
+        "dueDate": "Due date"
+      },
+      "fields": {
+        "project": "Project",
+        "number": "RFI number",
+        "subject": "Subject",
+        "site": "Site",
+        "status": "Status",
+        "priority": "Priority",
+        "dueDate": "Response due date",
+        "boqItem": "BOQ item",
+        "subcontract": "Subcontract",
+        "drawingReference": "Drawing reference",
+        "question": "Question",
+        "proposedSolution": "Proposed solution",
+        "evidenceReference": "Evidence reference",
+        "response": "Response"
+      },
+      "placeholders": {
+        "project": "Select a project",
+        "optional": "Optional"
+      },
+      "statuses": {
+        "draft": "Draft",
+        "open": "Open",
+        "submitted": "Submitted",
+        "answered": "Answered",
+        "closed": "Closed",
+        "cancelled": "Cancelled"
+      },
+      "priorities": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "sections": {
+        "details": "RFI details",
+        "question": "Question",
+        "proposedSolution": "Proposed solution",
+        "response": "Response",
+        "evidence": "Evidence reference"
+      },
+      "actions": {
+        "new": "New RFI",
+        "create": "Create RFI",
+        "edit": "Edit",
+        "submit": "Submit",
+        "answer": "Answer",
+        "close": "Close RFI",
+        "cancelRfi": "Cancel RFI",
+        "saveResponse": "Save response",
+        "closeDialog": "Close dialog"
+      },
+      "dialog": {
+        "answerTitle": "Record a response",
+        "editTitle": "Edit draft RFI"
+      },
+      "confirmSubmit": "Submit this RFI for response?",
+      "confirmClose": "Close this RFI?",
+      "confirmCancel": "Cancel this RFI? This action cannot be undone.",
+      "empty": {
+        "title": "No RFIs found",
+        "description": "Create an RFI to record a project question and follow its response."
+      },
+      "errors": {
+        "load": "RFIs could not be loaded. Try again.",
+        "detail": "This RFI could not be loaded.",
+        "create": "The RFI could not be created. Check the details and try again.",
+        "action": "The requested RFI action could not be completed.",
+        "references": "Project reference data could not be loaded.",
+        "projects": "Projects could not be loaded."
       }
     }
   },

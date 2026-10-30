@@ -9,6 +9,9 @@ describe('construction certificate and retention register routes', () => {
     for (const [path, page] of [
       ['/construction/certificates', '<PaymentCertificatesPage />'],
       ['/construction/retention-register', '<RetentionRegisterPage />'],
+      ['/construction/rfis', '<RfiListPage />'],
+      ['/construction/rfis/new', '<RfiNewPage />'],
+      ['/construction/rfis/:id', '<RfiDetailPage />'],
     ]) {
       const route = app.split(`path="${path}"`)[1]?.split('</Route>')[0] ?? '';
       expect(route).toContain('PlanGate minPlan="enterprise"');
