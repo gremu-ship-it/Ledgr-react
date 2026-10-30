@@ -10,7 +10,7 @@ describe('construction multi-level BOQ migration contract', () => {
       .filter((file) => file.endsWith('.sql'))
       .map((file) => file.split('_')[0])
       .sort();
-    expect(versions.at(-1)).toBe('20261126000000');
+    expect(versions.at(-1)).toBe('20261128000000');
     expect(versions.indexOf('20261122000000')).toBe(versions.indexOf('20261121000000') + 1);
     expect(versions.indexOf('20261123000000')).toBe(versions.indexOf('20261122000000') + 1);
     expect(versions.indexOf('20261124000000')).toBe(versions.indexOf('20261123000000') + 1);

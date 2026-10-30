@@ -2750,6 +2750,91 @@ export type Database = {
           },
         ]
       }
+      construction_rfis: {
+        Row: {
+          answered_at: string | null
+          business_id: string
+          closed_at: string | null
+          created_at: string
+          created_by: string
+          due_date: string | null
+          evidence: string | null
+          id: string
+          priority: string
+          project_id: string
+          question: string
+          response: string | null
+          rfi_number: string
+          site_id: string | null
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          answered_at?: string | null
+          business_id: string
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          evidence?: string | null
+          id?: string
+          priority?: string
+          project_id: string
+          question: string
+          response?: string | null
+          rfi_number: string
+          site_id?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Update: {
+          answered_at?: string | null
+          business_id?: string
+          closed_at?: string | null
+          created_at?: string
+          created_by?: string
+          due_date?: string | null
+          evidence?: string | null
+          id?: string
+          priority?: string
+          project_id?: string
+          question?: string
+          response?: string | null
+          rfi_number?: string
+          site_id?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_rfis_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_rfis_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       construction_purchase_order_events: {
         Row: {
           action: string
@@ -14352,6 +14437,29 @@ export type Database = {
         }[]
       }
       void_pos_sale_command: { Args: { p_payload: Json }; Returns: Json }
+      create_construction_rfi: {
+        Args: {
+          p_business_id: string
+          p_due_date?: string | null
+          p_evidence?: string | null
+          p_priority?: string
+          p_project_id: string
+          p_question: string
+          p_rfi_number: string
+          p_site_id: string | null
+          p_title: string
+        }
+        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
+      delete_construction_rfi: { Args: { p_rfi_id: string }; Returns: boolean }
+      transition_construction_rfi: {
+        Args: { p_new_status: string; p_response?: string | null; p_rfi_id: string }
+        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
+      update_construction_rfi: {
+        Args: { p_payload: Json; p_rfi_id: string }
+        Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
     }
     Enums: {
       account_subtype:
