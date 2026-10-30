@@ -6,8 +6,12 @@
 
 - Parsed 109 public relation names from literal `.from(...)` calls plus construction repository table names passed through its typed generic reader. All 109 SQL relation references exist on the inspected live schema. The one non-relation `.from()` match, `business-logos`, is a Supabase Storage bucket name, not a PostgreSQL table.
 - Missing public table/view references: **0**. No app query uses `project_purchase_orders`, `project_goods_receipts`, `project_material_issues`, or `project_material_returns` (or their lines).
-- Generated table/view types: 135 table entries and 23 view entries. Every generated table type has a live relation; all generated view names are live. 3 app-used relations have no generated type.
+- At the audited `origin/main` baseline, generated table/view types had 135 table entries and 23 view entries. Every generated table type had a live relation; all generated view names were live. Three app-used relations lacked generated types.
 - RPC audit: 136 current app-called function names were compared against the live catalog; none is missing. Authenticated execute is present for app RPCs except `backfill_and_recalculate_inventory`, which is intentionally service_role-only. See `LIVE_RPCS.sql`.
+
+## Generated type gap resolution (2026-10-30)
+
+The active branch's generated file was older than the audited `origin/main` baseline. With approval, `src/dal/types/database.generated.ts` was aligned to that audited generated-file baseline, then completed from the verified live catalog: all 13 live base tables absent at the baseline are now typed, and the app RPC type gaps are closed. A parser false positive had counted two existing overloaded RPCs (`ai_context` and `get_dashboard_metrics`) as missing; those were already represented as overload unions. Ten missing RPC entries were added. The resulting file has 148 public table entries and retains the 23 audited view entries. No migration or live database schema was changed.
 
 ## Complete app relation reconciliation matrix
 

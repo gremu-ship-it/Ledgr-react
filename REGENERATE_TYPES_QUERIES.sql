@@ -8,17 +8,19 @@
 -- A) Prefer official CLI generation after confirming the target project and CLI version:
 --      supabase gen types typescript --project-id hsuhuvuxfuufrlejsatw --schema public > /tmp/database.generated.ts
 --    Compare that output with src/dal/types/database.generated.ts and review the diff before
---    replacing any tracked file. This task does not modify TypeScript.
+--    replacing any tracked file. This SQL helper remains read-only; generated types are maintained
+--    separately and should be reviewed as a code change.
 -- B) If CLI access is unavailable, save the query outputs below and use them to reconcile table
 --    Row/Insert/Update types, views, enums, function Args/Returns, and FK Relationships manually.
 --    Do not infer Postgres nullability or relationship metadata from column names alone.
 -- C) A supported Supabase Management API types-generation endpoint may be used by an authorized
 --    automation, if enabled for the project. Use the official current API documentation and keep
 --    credentials outside SQL, source files, and chat; compare the result with CLI output.
--- The repository snapshot currently has 135 public table types while the inspected live schema
--- has 148 public base tables and 23 views. The 13 live tables missing generated types are listed
--- in NAMING_AUDIT.md; the app directly queries three of those. The app also calls RPCs missing
--- from the generated Functions typing even though those functions exist in the live catalog.
+-- At the audited origin/main baseline (0e2d5a0), 135 public table types were present while the
+-- inspected live schema had 148 public base tables. The 13 missing table entries have now been
+-- added to the generated types file. Of 12 candidate RPC names, `ai_context` and
+-- `get_dashboard_metrics` were already typed as overload unions; the other 10 live RPC entries
+-- have now been added. See NAMING_AUDIT.md for scope and provenance.
 
 -- 1. Public base tables and views: exact columns, SQL types, nullability, defaults, ordinal order.
 SELECT t.table_type,
