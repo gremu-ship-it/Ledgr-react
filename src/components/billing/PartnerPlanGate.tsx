@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Lock } from 'lucide-react';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { useTranslation } from 'react-i18next';
 import { usePartner } from '@/partner/PartnerContext';
 import type { PlanCapability } from '@/lib/billing/plans';
 import type { PartnerFeatureKey } from '@/types/partners';
@@ -31,9 +33,16 @@ export function PartnerPlanGate({
   children,
   fallback = 'lock',
 }: PartnerPlanGateProps) {
+  const { t } = useTranslation();
   const { partner, branding, isFeatureEnabled, loading } = usePartner();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center" aria-busy="true">
+        <LoadingSpinner label={t('common.loading')} />
+      </div>
+    );
+  }
 
   if (partner && !isFeatureEnabled(featureKey)) {
     if (fallback !== 'lock') return <>{fallback}</>;

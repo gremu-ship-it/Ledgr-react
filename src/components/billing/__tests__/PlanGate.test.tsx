@@ -7,15 +7,15 @@ import { PlanGate } from '../PlanGate';
 import { PartnerPlanGate } from '../PartnerPlanGate';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
 
-const state = vi.hoisted(() => ({ tier: 'free' as PlanTier, partnerEnabled: true }));
+const state = vi.hoisted(() => ({ tier: 'free' as PlanTier, partnerEnabled: true, partnerLoading: false }));
 vi.mock('@/hooks/useUsage', () => ({ useUsage: () => ({ planTier: state.tier }) }));
 vi.mock('@/partner/PartnerContext', () => ({
   usePartner: () => ({
-    partner: { name: 'Test Partner' }, branding: { appName: 'Ledgr' }, loading: false,
+    partner: { name: 'Test Partner' }, branding: { appName: 'Ledgr' }, loading: state.partnerLoading,
     isFeatureEnabled: () => state.partnerEnabled,
   }),
 }));
-afterEach(() => { cleanup(); state.tier = 'free'; state.partnerEnabled = true; });
+afterEach(() => { cleanup(); state.tier = 'free'; state.partnerEnabled = true; state.partnerLoading = false; });
 
 describe('subscription page gates', () => {
   it.each<[PlanTier, PlanCapability, boolean]>([
@@ -67,6 +67,15 @@ describe('subscription page gates', () => {
     render(<MemoryRouter><PartnerPlanGate featureKey="inventory" capability="inventory" featureName="Inventory"><div>Inventory content</div></PartnerPlanGate></MemoryRouter>);
     expect(screen.queryByText('Inventory content')).toBeNull();
     expect(screen.getByText('This feature is available on the Starter plan and above.')).toBeTruthy();
+  });
+
+  it('shows an accessible loading state while partner access is being resolved', () => {
+    state.partnerLoading = true;
+    render(<MemoryRouter><PartnerPlanGate featureKey="payroll" featureName="Payroll"><div>Payroll content</div></PartnerPlanGate></MemoryRouter>);
+
+    expect(screen.getByRole('status')).toBeTruthy();
+    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(screen.queryByText('Payroll content')).toBeNull();
   });
 
   it('preserves partner restrictions even when Starter unlocks inventory', () => {
