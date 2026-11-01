@@ -198,6 +198,12 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const accountRows = (accounts.data ?? []) as Row<'accounts'>[];
     const accountMap = new Map(accountRows.map((a) => [a.id, a]));
 
+    // Include both the original entry (whose status becomes `reversed`) and
+    // its posted mirror entry. JournalRepository reverses each line by keeping
+    // its positive amount_base and flipping is_debit, so ledger signs already
+    // cancel; do not negate reversal_of rows again. Applying the date range to
+    // each entry independently also keeps cross-period reversals in their own
+    // reporting period, matching get_trial_balance's posted/reversed filter.
     let query = this.client
       .from('journal_lines')
       .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
