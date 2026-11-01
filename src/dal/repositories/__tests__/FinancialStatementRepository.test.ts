@@ -419,7 +419,7 @@ describe('getProfitOrLoss — journal reversals', () => {
     lines: { account_id: string; is_debit: boolean; amount_base: number }[];
   };
 
-  const reversalEntries: ReversalEntry[] = [
+  const crossPeriodPair: ReversalEntry[] = [
     {
       id: 'original-entry',
       entry_date: '2026-01-15',
@@ -442,12 +442,12 @@ describe('getProfitOrLoss — journal reversals', () => {
     },
   ];
 
-  function makeReversalRepo(): FinancialStatementRepository {
+  function makeReversalRepo(entries: ReversalEntry[]): FinancialStatementRepository {
     const accounts = [
       { ...ACCOUNTS[1], id: 'a-cash', code: '1110' },
       { ...ACCOUNTS[8], id: 'a-revenue', code: '4112' },
     ];
-    const lineRows = reversalEntries.flatMap((entry) => entry.lines.map((line, index) => ({
+    const lineRows = entries.flatMap((entry) => entry.lines.map((line, index) => ({
       ...line,
       id: `${entry.id}-line-${index}`,
       business_id: 'biz-1',
@@ -456,6 +456,7 @@ describe('getProfitOrLoss — journal reversals', () => {
         entry_date: entry.entry_date,
         status: entry.status,
         business_id: 'biz-1',
+        reversal_of: entry.reversal_of,
       },
     })));
 
@@ -464,7 +465,7 @@ describe('getProfitOrLoss — journal reversals', () => {
         if (table === 'accounts') return tableStub(accounts);
         if (table !== 'journal_lines') return tableStub([]);
 
-        type Filter = { operator: 'eq' | 'gte' | 'lte' | 'in'; field: string; value: unknown };
+        type Filter = { operator: 'eq' | 'gte' | 'lte' | 'in' | 'is' | 'neq'; field: string; value: unknown };
         const filters: Filter[] = [];
         const query: unknown = new Proxy({}, {
           get(_target, prop) {
@@ -472,9 +473,10 @@ describe('getProfitOrLoss — journal reversals', () => {
               return (resolve: (result: { data: unknown[]; error: null }) => unknown) => {
                 const rows = lineRows.filter((row) => filters.every((filter) => {
                   const actual = filter.field.startsWith('journal_entries.')
-                    ? row.journal_entries[filter.field.slice('journal_entries.'.length) as 'entry_date' | 'status' | 'business_id']
+                    ? row.journal_entries[filter.field.slice('journal_entries.'.length) as 'entry_date' | 'status' | 'business_id' | 'reversal_of']
                     : row[filter.field as 'business_id'];
-                  if (filter.operator === 'eq') return actual === filter.value;
+                  if (filter.operator === 'eq' || filter.operator === 'is') return actual === filter.value;
+                  if (filter.operator === 'neq') return actual !== filter.value;
                   if (filter.operator === 'gte') return String(actual) >= String(filter.value);
                   if (filter.operator === 'lte') return String(actual) <= String(filter.value);
                   return (filter.value as unknown[]).includes(actual);
@@ -483,7 +485,7 @@ describe('getProfitOrLoss — journal reversals', () => {
               };
             }
             if (prop === 'order' || prop === 'range') return () => query;
-            if (prop === 'eq' || prop === 'gte' || prop === 'lte' || prop === 'in') {
+            if (prop === 'eq' || prop === 'gte' || prop === 'lte' || prop === 'in' || prop === 'is' || prop === 'neq') {
               return (field: string, value: unknown) => {
                 filters.push({ operator: prop, field, value });
                 return query;
@@ -499,30 +501,37 @@ describe('getProfitOrLoss — journal reversals', () => {
     return new FinancialStatementRepository(client);
   }
 
-  function trialBalanceRevenueForPeriod(start: string, end: string): number {
-    return reversalEntries
-      .filter((entry) => entry.entry_date >= start && entry.entry_date <= end)
-      .flatMap((entry) => entry.lines)
-      .filter((line) => line.account_id === 'a-revenue')
-      .reduce((balance, line) => balance + (line.is_debit ? -line.amount_base : line.amount_base), 0);
-  }
-
-  it('nets a same-period reversal to zero and agrees with the trial-balance movement', async () => {
-    const start = '2026-01-01';
-    const end = '2026-02-28';
-    const pl = await makeReversalRepo().getProfitOrLoss('biz-1', start, end);
+  it('excludes both sides of a reversal pair dated within one reporting period', async () => {
+    const samePeriodPair = crossPeriodPair.map((entry) => ({
+      ...entry,
+      entry_date: entry.id === 'reversal-entry' ? '2026-01-20' : entry.entry_date,
+    }));
+    const pl = await makeReversalRepo(samePeriodPair).getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
 
     expect(pl.totalRevenue).toBe(0);
-    expect(pl.totalRevenue).toBe(trialBalanceRevenueForPeriod(start, end));
   });
 
-  it('keeps each side of a cross-period reversal in its own period', async () => {
-    const january = await makeReversalRepo().getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
-    const february = await makeReversalRepo().getProfitOrLoss('biz-1', '2026-02-01', '2026-02-28');
+  it('excludes the reversed original and mirror from both cross-period reports', async () => {
+    const january = await makeReversalRepo(crossPeriodPair).getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
+    const february = await makeReversalRepo(crossPeriodPair).getProfitOrLoss('biz-1', '2026-02-01', '2026-02-28');
 
-    expect(january.totalRevenue).toBe(1_000);
-    expect(january.totalRevenue).toBe(trialBalanceRevenueForPeriod('2026-01-01', '2026-01-31'));
-    expect(february.totalRevenue).toBe(-1_000);
-    expect(february.totalRevenue).toBe(trialBalanceRevenueForPeriod('2026-02-01', '2026-02-28'));
+    expect(january.totalRevenue).toBe(0);
+    expect(february.totalRevenue).toBe(0);
+  });
+
+  it('continues to include ordinary posted entries without reversal links', async () => {
+    const normalEntry: ReversalEntry = {
+      id: 'ordinary-entry',
+      entry_date: '2026-01-22',
+      status: 'posted',
+      reversal_of: null,
+      lines: [
+        { account_id: 'a-cash', is_debit: true, amount_base: 350 },
+        { account_id: 'a-revenue', is_debit: false, amount_base: 350 },
+      ],
+    };
+    const pl = await makeReversalRepo([normalEntry]).getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
+
+    expect(pl.totalRevenue).toBe(350);
   });
 });
