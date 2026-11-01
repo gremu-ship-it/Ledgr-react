@@ -296,7 +296,23 @@
     "stock": "Akiba",
     "quantity": "Kiasi",
     "reorderLevel": "Kiwango cha kuagiza tena",
-    "location": "Mahali"
+    "location": "Mahali",
+    "errors": {
+      "insufficientStock": "Hisa katika eneo hili haitoshi. Pokea au hamisha bidhaa kabla ya kurekodi mabadiliko haya.",
+      "adjustmentReasonRequired": "Weka kumbukumbu au maelezo yanayoeleza marekebisho haya ya bidhaa.",
+      "transferQuantityMismatch": "Kiasi kilichopokelewa lazima kilingane na kilichotumwa. Rekodi upungufu au hasara kama marekebisho tofauti ya bidhaa.",
+      "transferNotApproved": "Uhamisho ulioidhinishwa pekee ndio unaweza kutumwa.",
+      "transferNotDispatched": "Uhamisho uliotumwa pekee ndio unaweza kupokelewa.",
+      "transferLinesRequired": "Ongeza angalau mstari mmoja wa bidhaa kabla ya kutuma au kupokea.",
+      "transferLinesMismatch": "Mistari ya uhamisho imebadilika. Onyesha upya uhamisho na ujaribu tena.",
+      "transferInvalidQuantity": "Kila mstari uwe sifuri au kiasi chanya kisichozidi kilichoombwa, na angalau mstari mmoja uwe chanya.",
+      "transferDuplicateLine": "Mstari wa uhamisho umejumuishwa zaidi ya mara moja. Onyesha upya na ujaribu tena.",
+      "transferAlreadyHasMovements": "Uhamisho huu tayari una mabadiliko ya bidhaa lakini haujawekwa kuwa umetumwa. Haujabadilishwa; kagua kabla ya kujaribu tena.",
+      "transferNotFound": "Uhamisho haujapatikana au huna ruhusa ya kuutumia.",
+      "transferAuthRequired": "Ingia ukiwa na ruhusa ya kutuma au kupokea uhamisho huu.",
+      "transferEmptyResult": "Uhamisho haujathibitishwa. Onyesha upya ukurasa kabla ya kujaribu tena."
+    },
+    "transferPairNotice": "Stock ya maeneo yote mawili ilisasishwa pamoja wakati uhamisho ulipotumwa. Thibitisha kupokea ili ukamilike; rekodi upungufu au hasara kama marekebisho tofauti."
   },
   "accounting": {
     "accounts": "Akaunti",

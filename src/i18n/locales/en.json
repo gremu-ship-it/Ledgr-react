@@ -492,7 +492,23 @@
     "stock": "Stock",
     "quantity": "Quantity",
     "reorderLevel": "Reorder Level",
-    "location": "Location"
+    "location": "Location",
+    "errors": {
+      "insufficientStock": "Insufficient stock at this location. Receive or transfer stock before recording this movement.",
+      "adjustmentReasonRequired": "Enter a reference or notes to explain this stock adjustment.",
+      "transferQuantityMismatch": "Received quantities must match the quantities dispatched. Record any shortage or loss as a separate stock adjustment.",
+      "transferNotApproved": "Only an approved transfer can be dispatched.",
+      "transferNotDispatched": "Only a dispatched transfer can be received.",
+      "transferLinesRequired": "Add at least one transfer line before dispatching or receiving.",
+      "transferLinesMismatch": "The transfer lines changed. Refresh the transfer and try again.",
+      "transferInvalidQuantity": "Each line must be zero or a positive quantity no greater than requested, and at least one line must be positive.",
+      "transferDuplicateLine": "A transfer line was included more than once. Refresh the transfer and try again.",
+      "transferAlreadyHasMovements": "This transfer already has stock movements but is not marked as dispatched. It was left unchanged; review the transfer before retrying.",
+      "transferNotFound": "The transfer could not be found or you do not have permission to use it.",
+      "transferAuthRequired": "Sign in with permission to dispatch or receive this transfer.",
+      "transferEmptyResult": "The transfer was not confirmed. Refresh the page before retrying."
+    },
+    "transferPairNotice": "Both locations’ stock was updated together when this transfer was dispatched. Confirm receipt to complete it; record any shortage or loss as a separate stock adjustment."
   },
   "accounting": {
     "accounts": "Accounts",

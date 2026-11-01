@@ -296,7 +296,23 @@
     "stock": "Stock",
     "quantity": "Kuchuluka",
     "reorderLevel": "Mulingo woyitaniranso",
-    "location": "Malo"
+    "location": "Malo",
+    "errors": {
+      "insufficientStock": "Katundu m’malowa muno sakukwanira. Landirani kapena samutsani katundu musanalembe kayendedwe aka.",
+      "adjustmentReasonRequired": "Lembani nambala yotsimikizira kapena zolemba zofotokoza kusintha kwa katundu kumeneku.",
+      "transferQuantityMismatch": "Kuchuluka kolandiridwa kuyenera kufanana ndi komwe kunatumizidwa. Lembani kusowa kapena kutayika ngati kusintha kwa katundu kosiyana.",
+      "transferNotApproved": "Kusamutsa kovomerezeka kokha kungatumizidwe.",
+      "transferNotDispatched": "Kusamutsa komwe kwatumizidwa kokha kungalandiridwe.",
+      "transferLinesRequired": "Onjezani mzere umodzi wa katundu musanatumize kapena kulandira.",
+      "transferLinesMismatch": "Mizere ya kusamutsa yasintha. Tsegulaninso kusamutsa ndikuyesanso.",
+      "transferInvalidQuantity": "Mzere uliwonse uyenera kukhala ziro kapena kuchuluka koposa ziro kosapitirira komwe kunapemphedwa; mzere umodzi ukhale woposa ziro.",
+      "transferDuplicateLine": "Mzere wa kusamutsa walembedwa kangapo. Tsegulaninso ndikuyesanso.",
+      "transferAlreadyHasMovements": "Kusamutsa kumeneku kuli kale ndi kayendedwe ka katundu koma sikunasonyezedwe ngati kwatumizidwa. Sinasinthidwe; fufuzani musanayesenso.",
+      "transferNotFound": "Kusamutsa sikunapezeke kapena mulibe chilolezo chochita nacho.",
+      "transferAuthRequired": "Lowani ndi chilolezo chotumiza kapena kulandira kusamutsa kumeneku.",
+      "transferEmptyResult": "Kusamutsa sikunatsimikizidwe. Tsegulaninso tsamba musanayesenso."
+    },
+    "transferPairNotice": "Katundu wa malo onse awiri wasinthidwa limodzi pamene kusamutsa kwatumizidwa. Tsimikizirani kulandira kuti mumalize; lembani kusowa kapena kutayika ngati kusintha kosiyana."
   },
   "accounting": {
     "accounts": "Maakaunti",

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Plus, Search, X, Loader2, Truck,
@@ -268,11 +269,9 @@ function TransferDrawer({
   errorMessage?: string | null;
 }) {
   const { transfer, lines } = data;
+  const { t } = useTranslation();
   const [dispatchQtys, setDispatchQtys] = useState<Record<string, number>>(
     Object.fromEntries(lines.map((l: Row<'stock_transfer_lines'>) => [l.id, Number(l.quantity_requested)])),
-  );
-  const [receiveQtys, setReceiveQtys] = useState<Record<string, number>>(
-    Object.fromEntries(lines.map((l: Row<'stock_transfer_lines'>) => [l.id, Number(l.quantity_dispatched ?? l.quantity_requested)])),
   );
 
   const fromLoc = locations.find((l) => l.id === transfer.from_location_id)?.name ?? '—';
@@ -339,6 +338,12 @@ function TransferDrawer({
             </div>
           </div>
 
+          {transfer.status === 'dispatched' && (
+            <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              {t('inventory.transferPairNotice')}
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="mb-1 text-xs text-gray-600">Status</p>
@@ -392,16 +397,9 @@ function TransferDrawer({
                       </div>
                       <div>
                         <p className="text-gray-400">Received</p>
-                        {transfer.status === 'dispatched' ? (
-                          <input type="number" min={0} max={Number(line.quantity_dispatched ?? line.quantity_requested)}
-                            value={receiveQtys[line.id] ?? Number(line.quantity_dispatched ?? line.quantity_requested)}
-                            onChange={(e) => setReceiveQtys((q) => ({ ...q, [line.id]: Number(e.target.value) }))}
-                            className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-xs focus:border-brand-500 focus:outline-none" />
-                        ) : (
-                          <p className="font-semibold text-gray-700">
-                            {line.quantity_received != null ? Number(line.quantity_received) : '—'}
-                          </p>
-                        )}
+                        <p className="font-semibold text-gray-700">
+                          {line.quantity_received != null ? Number(line.quantity_received) : '—'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -429,7 +427,7 @@ function TransferDrawer({
             )}
             {transfer.status === 'dispatched' && (
               <button
-                onClick={() => onReceive(lines.map((l: Row<'stock_transfer_lines'>) => ({ lineId: l.id, quantityReceived: receiveQtys[l.id] ?? Number(l.quantity_dispatched ?? l.quantity_requested) })))}
+                onClick={() => onReceive(lines.map((l: Row<'stock_transfer_lines'>) => ({ lineId: l.id, quantityReceived: Number(l.quantity_dispatched ?? 0) })))}
                 disabled={isMutating}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
                 {isMutating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={16} />}
