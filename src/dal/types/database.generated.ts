@@ -1715,6 +1715,422 @@ export type Database = {
           },
         ]
       }
+      construction_itps: {
+        Row: {
+          id: string
+          business_id: string
+          project_id: string
+          site_id: string | null
+          itp_number: string
+          title: string
+          scope: string
+          status: string
+          boq_section_id: string | null
+          subcontract_id: string | null
+          evidence_reference: string | null
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          project_id: string
+          site_id?: string | null
+          itp_number: string
+          title: string
+          scope: string
+          status?: string
+          boq_section_id?: string | null
+          subcontract_id?: string | null
+          evidence_reference?: string | null
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          project_id?: string
+          site_id?: string | null
+          itp_number?: string
+          title?: string
+          scope?: string
+          status?: string
+          boq_section_id?: string | null
+          subcontract_id?: string | null
+          evidence_reference?: string | null
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_itps_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_itps_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_itps_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_itps_boq_section_id_fkey"
+            columns: ["boq_section_id"]
+            isOneToOne: false
+            referencedRelation: "boq_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_itps_subcontract_id_fkey"
+            columns: ["subcontract_id"]
+            isOneToOne: false
+            referencedRelation: "subcontracts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      construction_itp_checkpoints: {
+        Row: {
+          id: string
+          itp_id: string
+          business_id: string
+          sequence_number: number
+          activity: string
+          acceptance_criteria: string
+          hold_type: string
+          status: string
+          inspected_by: string | null
+          inspected_at: string | null
+          notes: string | null
+          evidence_reference: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          itp_id: string
+          business_id: string
+          sequence_number: number
+          activity: string
+          acceptance_criteria: string
+          hold_type?: string
+          status?: string
+          inspected_by?: string | null
+          inspected_at?: string | null
+          notes?: string | null
+          evidence_reference?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          itp_id?: string
+          business_id?: string
+          sequence_number?: number
+          activity?: string
+          acceptance_criteria?: string
+          hold_type?: string
+          status?: string
+          inspected_by?: string | null
+          inspected_at?: string | null
+          notes?: string | null
+          evidence_reference?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_itp_checkpoints_itp_id_fkey"
+            columns: ["itp_id"]
+            isOneToOne: false
+            referencedRelation: "construction_itps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_itp_checkpoints_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      construction_ncrs: {
+        Row: {
+          id: string
+          business_id: string
+          project_id: string
+          site_id: string | null
+          ncr_number: string
+          status: string
+          severity: string
+          title: string
+          description: string
+          root_cause: string | null
+          corrective_action: string | null
+          preventive_action: string | null
+          itp_checkpoint_id: string | null
+          subcontract_id: string | null
+          evidence_reference: string | null
+          raised_by: string
+          closed_by: string | null
+          closed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          project_id: string
+          site_id?: string | null
+          ncr_number: string
+          status?: string
+          severity?: string
+          title: string
+          description: string
+          root_cause?: string | null
+          corrective_action?: string | null
+          preventive_action?: string | null
+          itp_checkpoint_id?: string | null
+          subcontract_id?: string | null
+          evidence_reference?: string | null
+          raised_by: string
+          closed_by?: string | null
+          closed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          project_id?: string
+          site_id?: string | null
+          ncr_number?: string
+          status?: string
+          severity?: string
+          title?: string
+          description?: string
+          root_cause?: string | null
+          corrective_action?: string | null
+          preventive_action?: string | null
+          itp_checkpoint_id?: string | null
+          subcontract_id?: string | null
+          evidence_reference?: string | null
+          raised_by?: string
+          closed_by?: string | null
+          closed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_ncrs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_ncrs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_ncrs_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_ncrs_itp_checkpoint_id_fkey"
+            columns: ["itp_checkpoint_id"]
+            isOneToOne: false
+            referencedRelation: "construction_itp_checkpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_ncrs_subcontract_id_fkey"
+            columns: ["subcontract_id"]
+            isOneToOne: false
+            referencedRelation: "subcontracts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      construction_hse_incidents: {
+        Row: {
+          id: string
+          business_id: string
+          project_id: string
+          site_id: string | null
+          incident_number: string
+          status: string
+          severity: string
+          incident_type: string
+          title: string
+          description: string
+          incident_date: string
+          location_description: string | null
+          persons_involved: number
+          root_cause: string | null
+          corrective_action: string | null
+          evidence_reference: string | null
+          reported_by: string
+          closed_by: string | null
+          closed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          project_id: string
+          site_id?: string | null
+          incident_number: string
+          status?: string
+          severity?: string
+          incident_type?: string
+          title: string
+          description: string
+          incident_date: string
+          location_description?: string | null
+          persons_involved?: number
+          root_cause?: string | null
+          corrective_action?: string | null
+          evidence_reference?: string | null
+          reported_by: string
+          closed_by?: string | null
+          closed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          project_id?: string
+          site_id?: string | null
+          incident_number?: string
+          status?: string
+          severity?: string
+          incident_type?: string
+          title?: string
+          description?: string
+          incident_date?: string
+          location_description?: string | null
+          persons_involved?: number
+          root_cause?: string | null
+          corrective_action?: string | null
+          evidence_reference?: string | null
+          reported_by?: string
+          closed_by?: string | null
+          closed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_hse_incidents_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_hse_incidents_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_hse_incidents_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      construction_toolbox_talks: {
+        Row: {
+          id: string
+          business_id: string
+          project_id: string
+          site_id: string | null
+          talk_date: string
+          topic: string
+          presenter: string
+          attendees_count: number
+          summary: string
+          evidence_reference: string | null
+          created_by: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          project_id: string
+          site_id?: string | null
+          talk_date: string
+          topic: string
+          presenter: string
+          attendees_count?: number
+          summary: string
+          evidence_reference?: string | null
+          created_by: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          project_id?: string
+          site_id?: string | null
+          talk_date?: string
+          topic?: string
+          presenter?: string
+          attendees_count?: number
+          summary?: string
+          evidence_reference?: string | null
+          created_by?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_toolbox_talks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_toolbox_talks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_toolbox_talks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       construction_change_orders: {
         Row: {
           approved_at: string | null
@@ -14747,6 +15163,18 @@ export type Database = {
         Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
       }
       delete_construction_rfi: { Args: { p_rfi_id: string }; Returns: boolean }
+      transition_hse_incident_status: {
+        Args: { p_incident_id: string; p_new_status: string }
+        Returns: undefined
+      }
+      transition_itp_status: {
+        Args: { p_itp_id: string; p_new_status: string }
+        Returns: undefined
+      }
+      transition_ncr_status: {
+        Args: { p_ncr_id: string; p_new_status: string }
+        Returns: undefined
+      }
       transition_construction_co: {
         Args: {
           p_co_id: string
