@@ -29,6 +29,7 @@ import {
   MapPin,
   FileCheck2,
   MessageSquare,
+  GitCompare,
   WalletCards,
   type LucideIcon,
 } from 'lucide-react';
@@ -155,6 +156,14 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         labelKey: 'navigation.items.rfis',
         path: '/construction/rfis',
         icon: MessageSquare,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
+      },
+      {
+        labelKey: 'changeOrders.title',
+        path: '/construction/change-orders',
+        icon: GitCompare,
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
         requiredOperatingModels: ['PROJECT_BASED'],

@@ -82,6 +82,9 @@ const RetentionRegisterPage = lazyPage(
 const RfiListPage = lazyPage(() => import('@/pages/construction/RfiListPage'), 'RfiListPage');
 const RfiNewPage = lazyPage(() => import('@/pages/construction/RfiNewPage'), 'RfiNewPage');
 const RfiDetailPage = lazyPage(() => import('@/pages/construction/RfiDetailPage'), 'RfiDetailPage');
+const ChangeOrderListPage = lazyPage(() => import('@/pages/construction/ChangeOrderListPage'), 'ChangeOrderListPage');
+const ChangeOrderNewPage = lazyPage(() => import('@/pages/construction/ChangeOrderNewPage'), 'ChangeOrderNewPage');
+const ChangeOrderDetailPage = lazyPage(() => import('@/pages/construction/ChangeOrderDetailPage'), 'ChangeOrderDetailPage');
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -485,6 +488,36 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('navigation.items.rfis')}>
                         <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><RfiDetailPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/change-orders"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ChangeOrderListPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/change-orders/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ChangeOrderNewPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/change-orders/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ChangeOrderDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
                     }
