@@ -16,6 +16,7 @@ import type { PlanTier } from '@/lib/billing/plans';
 
 const en = JSON.parse(readFileSync(fileURLToPath(new URL('../../../i18n/locales/en.json', import.meta.url)), 'utf8')) as {
   navigation: { sections: Record<string, string>; items: Record<string, string> };
+  changeOrders: { title: string };
 };
 
 type BusinessType = 'construction' | 'retail' | 'service' | 'ngo';
@@ -54,6 +55,7 @@ describe('construction workspace navigation', () => {
       '/construction/subcontractors',
       '/construction/certificates',
       '/construction/rfis',
+      '/construction/change-orders',
       '/construction/retention-register',
     ]);
     expect(section?.minPlan).toBe('enterprise');
@@ -77,7 +79,7 @@ describe('construction workspace navigation', () => {
     expect(navItemForPath('/construction')?.requiresCapability).toBeUndefined();
   });
 
-  it('gates payment certificates and retention register to Enterprise PROJECT_BASED construction businesses', () => {
+  it('gates payment certificates, RFIs, retention, and change orders to Enterprise PROJECT_BASED construction businesses', () => {
     const paths = (operatingModels: string[]) => visibleSectionsFor(
       () => true,
       'owner',
@@ -88,9 +90,11 @@ describe('construction workspace navigation', () => {
 
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/certificates');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/rfis');
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/change-orders');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/retention-register');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/certificates');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/rfis');
+    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/change-orders');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/retention-register');
     expect(navItemForPath('/construction/certificates')).toMatchObject({
       minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
@@ -98,6 +102,11 @@ describe('construction workspace navigation', () => {
     expect(navItemForPath('/construction/retention-register')).toMatchObject({
       minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
     });
+    expect(navItemForPath('/construction/change-orders')).toMatchObject({
+      labelKey: 'changeOrders.title',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+    });
+    expect(en.changeOrders.title).toBe('Change Orders');
   });
 
   it('exposes Subcontractors only for Enterprise construction businesses', () => {
