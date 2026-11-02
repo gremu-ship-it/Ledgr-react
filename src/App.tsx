@@ -91,6 +91,11 @@ const ItpDetailPage = lazyPage(() => import('@/pages/construction/ItpDetailPage'
 const NcrListPage = lazyPage(() => import('@/pages/construction/NcrListPage'), 'NcrListPage');
 const NcrNewPage = lazyPage(() => import('@/pages/construction/NcrNewPage'), 'NcrNewPage');
 const NcrDetailPage = lazyPage(() => import('@/pages/construction/NcrDetailPage'), 'NcrDetailPage');
+const HseIncidentListPage = lazyPage(() => import('@/pages/construction/HseIncidentListPage'), 'HseIncidentListPage');
+const HseIncidentNewPage = lazyPage(() => import('@/pages/construction/HseIncidentNewPage'), 'HseIncidentNewPage');
+const HseIncidentDetailPage = lazyPage(() => import('@/pages/construction/HseIncidentDetailPage'), 'HseIncidentDetailPage');
+const ToolboxTalkListPage = lazyPage(() => import('@/pages/construction/ToolboxTalkListPage'), 'ToolboxTalkListPage');
+const ToolboxTalkNewPage = lazyPage(() => import('@/pages/construction/ToolboxTalkNewPage'), 'ToolboxTalkNewPage');
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -584,6 +589,56 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
                         <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><NcrDetailPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/hse-incidents"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.hseIncidents.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><HseIncidentListPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/hse-incidents/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.hseIncidents.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><HseIncidentNewPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/hse-incidents/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.hseIncidents.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><HseIncidentDetailPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/toolbox-talks"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.toolboxTalks.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ToolboxTalkListPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/toolbox-talks/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.toolboxTalks.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ToolboxTalkNewPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
                     }
