@@ -234,6 +234,7 @@ describe('frozen Phase 1 capability acceptance matrix', () => {
       '/construction/ncrs',
       '/construction/hse-incidents',
       '/construction/toolbox-talks',
+      '/construction/schedule',
       '/construction/retention-register',
     ]);
     const inventoryIndex = NAV_SECTIONS.findIndex((candidate) => candidate.labelKey === 'navigation.sections.inventory');

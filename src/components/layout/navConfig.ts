@@ -32,6 +32,7 @@ import {
   MessageSquare,
   GitCompare,
   WalletCards,
+  CalendarDays,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -197,6 +198,14 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         labelKey: 'navigation.items.toolboxTalks',
         path: '/construction/toolbox-talks',
         icon: Users,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
+      },
+      {
+        labelKey: 'scheduling.title',
+        path: '/construction/schedule',
+        icon: CalendarDays,
         minPlan: 'enterprise',
         requiresOrgCapability: 'construction',
         requiredOperatingModels: ['PROJECT_BASED'],

@@ -60,6 +60,7 @@ describe('construction workspace navigation', () => {
       '/construction/ncrs',
       '/construction/hse-incidents',
       '/construction/toolbox-talks',
+      '/construction/schedule',
       '/construction/retention-register',
     ]);
     expect(section?.minPlan).toBe('enterprise');

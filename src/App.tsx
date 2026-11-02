@@ -96,6 +96,7 @@ const HseIncidentNewPage = lazyPage(() => import('@/pages/construction/HseIncide
 const HseIncidentDetailPage = lazyPage(() => import('@/pages/construction/HseIncidentDetailPage'), 'HseIncidentDetailPage');
 const ToolboxTalkListPage = lazyPage(() => import('@/pages/construction/ToolboxTalkListPage'), 'ToolboxTalkListPage');
 const ToolboxTalkNewPage = lazyPage(() => import('@/pages/construction/ToolboxTalkNewPage'), 'ToolboxTalkNewPage');
+const SchedulePage = lazyPage(() => import('@/pages/construction/SchedulePage'), 'SchedulePage');
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -639,6 +640,26 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('construction.toolboxTalks.title')}>
                         <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ToolboxTalkNewPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/schedule"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('scheduling.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><SchedulePage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/schedule/:projectId"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('scheduling.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><SchedulePage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
                     }
