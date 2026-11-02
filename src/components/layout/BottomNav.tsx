@@ -20,6 +20,8 @@ import {
   LogOut,
   Warehouse,
   ArrowLeftRight,
+  Coins,
+  CircleDollarSign,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -64,6 +66,8 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
   { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, tone: 'brand' },
+  { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, tone: 'brand' },
+  { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, tone: 'brand' },
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
   { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, tone: 'info' },
   { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, tone: 'neutral' },

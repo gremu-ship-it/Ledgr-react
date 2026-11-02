@@ -38,9 +38,14 @@ describe('Starter pricing and access', () => {
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
       // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
-      const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
+      const available = ['overview', 'finance', 'construction', 'support', 'settings'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
-        expect(isItemLocked(item, 'free'), item.path).toBe(!available);
+        const expectedLocked = item.path === '/settings'
+          ? false
+          : item.path === '/reports/fx-revaluation' || item.path === '/settings/exchange-rates'
+            ? true
+            : !available;
+        expect(isItemLocked(item, 'free'), item.path).toBe(expectedLocked);
       }
     }
   });
@@ -55,7 +60,7 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it.each(['/journals', '/periods', '/audit', '/bank-reconcile', '/contacts', '/branches', '/departments', '/ai'])(
+  it.each(['/journals', '/periods', '/audit', '/bank-reconcile', '/contacts', '/branches', '/departments', '/ai', '/reports/fx-revaluation', '/settings/exchange-rates'])(
     'keeps %s on its existing higher tier', (path) => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },

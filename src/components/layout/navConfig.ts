@@ -22,6 +22,8 @@ import {
   LifeBuoy,
   Building2,
   ShoppingBag,
+  Settings,
+  CircleDollarSign,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -81,6 +83,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.assets', path: '/assets', icon: Landmark, requiresCapability: 'core_accounting' },
       { labelKey: 'navigation.items.capital', path: '/capital', icon: Coins, requiresCapability: 'core_accounting' },
       { labelKey: 'navigation.items.reports', path: '/reports', icon: BarChart2, requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, minPlan: 'growth' },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliation', path: '/bank-reconcile', icon: Building2, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth' },
@@ -93,6 +96,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.contacts', path: '/contacts', icon: BookUser, minPlan: 'growth' },
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth' },
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.settings',
+    items: [
+      { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings },
+      { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, minPlan: 'growth' },
     ],
   },
   {

@@ -19,6 +19,7 @@ import { BranchRepository } from '@/dal/repositories/BranchRepository';
 import { DepartmentRepository } from '@/dal/repositories/DepartmentRepository';
 import { TransferRepository } from '@/dal/repositories/TransferRepository';
 import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
+import { FxRevaluationRepository } from '@/dal/repositories/FxRevaluationRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PosRepository } from '@/dal/repositories/PosRepository';
 
@@ -43,6 +44,7 @@ export const repos = {
   department: new DepartmentRepository(supabase),
   transfer:   new TransferRepository(supabase),
   period: new PeriodRepository(supabase),
+  fxRevaluation: new FxRevaluationRepository(supabase),
   auditLog: new AuditLogRepository(supabase),
   pos: new PosRepository(supabase),
 };

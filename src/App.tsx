@@ -75,6 +75,8 @@ const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage
 const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
 const ReportsPage = lazyPage(() => import('@/pages/ReportsPage'), 'ReportsPage');
+const FxRevaluationPage = lazyPage(() => import('@/pages/FxRevaluationPage'), 'FxRevaluationPage');
+const ExchangeRatesPage = lazyPage(() => import('@/pages/ExchangeRatesPage'), 'ExchangeRatesPage');
 const AiInsightsPage = lazyPage(() => import('@/pages/AiInsightsPage'), 'AiInsightsPage');
 const SettingsPage = lazyPage(() => import('@/pages/SettingsPage'), 'SettingsPage');
 const WarehousePage = lazyPage(() => import('@/pages/WarehousePage'), 'WarehousePage');
@@ -322,6 +324,11 @@ function App() {
                       <ReportsPage />
                     </PlanGate>
                   } />
+                  <Route path="/reports/fx-revaluation" element={
+                    <PlanGate capability="accounting_organisation" featureName="FX revaluation">
+                      <FxRevaluationPage />
+                    </PlanGate>
+                  } />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />
@@ -385,6 +392,11 @@ function App() {
                   } />
                   <Route path="/chat" element={<Navigate to="/ai" replace />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings/exchange-rates" element={
+                    <PlanGate capability="accounting_organisation" featureName="Exchange rates">
+                      <ExchangeRatesPage />
+                    </PlanGate>
+                  } />
                   <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                   <Route path="/support" element={<SupportPage />} />
                   <Route path="/tools" element={<ToolsPage />} />
