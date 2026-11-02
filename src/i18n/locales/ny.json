@@ -547,4 +547,10 @@
       }
     }
   }
+,
+  "constructionSchedule": {
+    "errors": {
+      "invalidProgress": "Kukula kwa ntchito kuyenera kukhala nambala yonse kuyambira 0 mpaka 100."
+    }
+  }
 }

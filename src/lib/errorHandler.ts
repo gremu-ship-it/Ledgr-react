@@ -23,6 +23,13 @@ import { isChunkLoadError } from './chunkRecovery';
 
 const log = createLogger('ErrorHandler');
 
+function localizedConstructionScheduleError(error: unknown): string | null {
+  if (error instanceof ValidationError && error.message === 'construction-scheduling-invalid-progress') {
+    return i18n.t('constructionSchedule.errors.invalidProgress');
+  }
+  return null;
+}
+
 function localizedInventoryError(error: unknown): string | null {
   if (isInsufficientStockError(error)) return i18n.t('inventory.errors.insufficientStock');
 
@@ -75,6 +82,18 @@ export function classifyError(error: unknown): ErrorClassification {
       userMessage: 'A new version is available. Please refresh the page.',
       shouldRetry: false, // Chunk recovery handles this
       shouldNotify: false,
+      shouldReport: false,
+    };
+  }
+
+  const constructionScheduleMessage = localizedConstructionScheduleError(error);
+  if (constructionScheduleMessage) {
+    return {
+      severity: 'low',
+      category: 'validation',
+      userMessage: constructionScheduleMessage,
+      shouldRetry: false,
+      shouldNotify: true,
       shouldReport: false,
     };
   }

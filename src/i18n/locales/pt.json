@@ -501,4 +501,10 @@
     "theBusiness": "a empresa",
     "member": "membro"
   }
+,
+  "constructionSchedule": {
+    "errors": {
+      "invalidProgress": "O progresso deve ser um número inteiro de 0 a 100."
+    }
+  }
 }

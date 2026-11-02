@@ -2064,6 +2064,170 @@ export type Database = {
           }
         ]
       }
+      construction_schedule_tasks: {
+        Row: {
+          id: string
+          business_id: string
+          project_id: string
+          site_id: string | null
+          parent_task_id: string | null
+          wbs_code: string
+          task_name: string
+          description: string | null
+          status: string
+          planned_start: string | null
+          planned_finish: string | null
+          actual_start: string | null
+          actual_finish: string | null
+          progress_percent: number
+          boq_section_id: string | null
+          subcontract_id: string | null
+          sort_order: number
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          project_id: string
+          site_id?: string | null
+          parent_task_id?: string | null
+          wbs_code: string
+          task_name: string
+          description?: string | null
+          status?: string
+          planned_start?: string | null
+          planned_finish?: string | null
+          actual_start?: string | null
+          actual_finish?: string | null
+          progress_percent?: number
+          boq_section_id?: string | null
+          subcontract_id?: string | null
+          sort_order?: number
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          project_id?: string
+          site_id?: string | null
+          parent_task_id?: string | null
+          wbs_code?: string
+          task_name?: string
+          description?: string | null
+          status?: string
+          planned_start?: string | null
+          planned_finish?: string | null
+          actual_start?: string | null
+          actual_finish?: string | null
+          progress_percent?: number
+          boq_section_id?: string | null
+          subcontract_id?: string | null
+          sort_order?: number
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_schedule_tasks_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_schedule_tasks_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_schedule_tasks_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_schedule_tasks_parent_task_id_fkey"
+            columns: ["parent_task_id"]
+            isOneToOne: false
+            referencedRelation: "construction_schedule_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_schedule_tasks_boq_section_id_fkey"
+            columns: ["boq_section_id"]
+            isOneToOne: false
+            referencedRelation: "boq_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_schedule_tasks_subcontract_id_fkey"
+            columns: ["subcontract_id"]
+            isOneToOne: false
+            referencedRelation: "subcontracts"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      construction_task_dependencies: {
+        Row: {
+          id: string
+          business_id: string
+          predecessor_id: string
+          successor_id: string
+          dependency_type: string
+          lag_days: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          business_id: string
+          predecessor_id: string
+          successor_id: string
+          dependency_type?: string
+          lag_days?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          business_id?: string
+          predecessor_id?: string
+          successor_id?: string
+          dependency_type?: string
+          lag_days?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_task_dependencies_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_task_dependencies_predecessor_id_fkey"
+            columns: ["predecessor_id"]
+            isOneToOne: false
+            referencedRelation: "construction_schedule_tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_task_dependencies_successor_id_fkey"
+            columns: ["successor_id"]
+            isOneToOne: false
+            referencedRelation: "construction_schedule_tasks"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       construction_toolbox_talks: {
         Row: {
           id: string
@@ -15190,6 +15354,10 @@ export type Database = {
       update_construction_rfi: {
         Args: { p_payload: Json; p_rfi_id: string }
         Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
+      }
+      update_task_progress: {
+        Args: { p_progress: number; p_task_id: string }
+        Returns: undefined
       }
     }
     Enums: {
