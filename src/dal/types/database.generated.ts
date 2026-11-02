@@ -10544,6 +10544,7 @@ export type Database = {
           source_id: string | null
           source_type: string | null
           total_cost: number | null
+          transfer_id: string | null
           unit_cost: number
         }
         ComputedFields: never
@@ -10563,6 +10564,7 @@ export type Database = {
           source_id?: string | null
           source_type?: string | null
           total_cost?: never
+          transfer_id?: string | null
           unit_cost?: number
         }
         Update: {
@@ -10581,6 +10583,7 @@ export type Database = {
           source_id?: string | null
           source_type?: string | null
           total_cost?: never
+          transfer_id?: string | null
           unit_cost?: number
         }
         Relationships: [
@@ -10604,6 +10607,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_partner_client_usage"
             referencedColumns: ["business_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "stock_transfers"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "stock_movements_location_id_fkey"

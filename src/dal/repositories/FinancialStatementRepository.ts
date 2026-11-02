@@ -186,7 +186,13 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
    */
   private async computeBalances(
     businessId: string,
-    options: { asOfDate?: string; dateFrom?: string; dateTo?: string; includeOpeningBalances: boolean },
+    options: {
+      asOfDate?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      includeOpeningBalances: boolean;
+      excludeReversalPairs?: boolean;
+    },
   ): Promise<AccountBalance[]> {
     const accounts = await this.client
       .from('accounts')
@@ -198,18 +204,22 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     const accountRows = (accounts.data ?? []) as Row<'accounts'>[];
     const accountMap = new Map(accountRows.map((a) => [a.id, a]));
 
-    // Include both the original entry (whose status becomes `reversed`) and
-    // its posted mirror entry. JournalRepository reverses each line by keeping
-    // its positive amount_base and flipping is_debit, so ledger signs already
-    // cancel; do not negate reversal_of rows again. Applying the date range to
-    // each entry independently also keeps cross-period reversals in their own
-    // reporting period, matching get_trial_balance's posted/reversed filter.
     let query = this.client
       .from('journal_lines')
-      .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
+      .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id, reversal_of)')
       .eq('business_id', businessId)
       .eq('journal_entries.business_id', businessId)
       .in('journal_entries.status', ['posted', 'reversed']);
+
+    // Period-performance reports exclude both sides of a reversal pair: the
+    // original is marked `reversed`, while its mirror has `reversal_of` set.
+    // Keep the default inclusive behavior for point-in-time balances, which
+    // must continue to reflect the complete posted ledger.
+    if (options.excludeReversalPairs) {
+      query = query
+        .neq('journal_entries.status', 'reversed')
+        .is('journal_entries.reversal_of', null);
+    }
 
     if (options.asOfDate) {
       query = query.lte('journal_entries.entry_date', options.asOfDate);
@@ -680,6 +690,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       dateFrom: periodStart,
       dateTo: periodEnd,
       includeOpeningBalances: false,
+      excludeReversalPairs: true,
     });
 
     const comparativeBalances = (comparativePeriodStart && comparativePeriodEnd)
@@ -687,6 +698,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
           dateFrom: comparativePeriodStart,
           dateTo: comparativePeriodEnd,
           includeOpeningBalances: false,
+          excludeReversalPairs: true,
         })
       : null;
 

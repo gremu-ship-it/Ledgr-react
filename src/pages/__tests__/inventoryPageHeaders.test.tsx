@@ -28,7 +28,8 @@ vi.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: () => {} }),
 }));
 
-vi.mock('react-i18next', async () => {
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-i18next')>();
   const translations = (await import('@/i18n/locales/en.json')).default as unknown as Record<string, unknown>;
   const lookup = (key: string): unknown =>
     key.split('.').reduce<unknown>(
@@ -42,7 +43,7 @@ vi.mock('react-i18next', async () => {
     return value.replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
       opts[name] !== undefined ? String(opts[name]) : `{{${name}}}`);
   };
-  return { useTranslation: () => ({ t }) };
+  return { ...actual, useTranslation: () => ({ t }) };
 });
 
 import { ProductsPage } from '@/pages/ProductsPage';

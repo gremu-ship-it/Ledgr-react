@@ -256,13 +256,15 @@ export function BranchPerformanceReport({
               is_debit,
               amount_base,
               accounts!inner(id, code, name, account_subtype, normal_balance),
-              journal_entries!inner(branch_id, entry_date, status, business_id)
+              journal_entries!inner(branch_id, entry_date, status, business_id, reversal_of)
             `)
             .eq('business_id', businessId)
             .eq('journal_entries.business_id', businessId)
             .gte('journal_entries.entry_date', periodStart)
             .lte('journal_entries.entry_date', periodEnd)
-            .in('journal_entries.status', ['posted', 'reversed']),
+            .in('journal_entries.status', ['posted', 'reversed'])
+            .neq('journal_entries.status', 'reversed')
+            .is('journal_entries.reversal_of', null),
         ),
       ]);
 

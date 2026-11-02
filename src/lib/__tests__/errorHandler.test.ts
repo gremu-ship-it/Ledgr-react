@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { classifyError, getErrorMessage, withRetry } from '../errorHandler';
 import { NotFoundError, ValidationError, UnauthorizedError, DatabaseError } from '@/dal/errors/RepositoryError';
+import { i18n } from '@/i18n';
 
 // Mock pushError and pushWarning from notifications
 vi.mock('@/lib/notifications', () => ({
@@ -34,6 +35,12 @@ describe('classifyError', () => {
     expect(classification.category).toBe('not_found');
     expect(classification.shouldNotify).toBe(true);
     expect(classification.shouldReport).toBe(false);
+  });
+
+  it('classifies inventory integrity errors with a localized message', () => {
+    const classification = classifyError(new ValidationError('stock_movements', 'inventory-adjustment-reason-required'));
+    expect(classification.category).toBe('validation');
+    expect(classification.userMessage).toBe(i18n.t('inventory.errors.adjustmentReasonRequired'));
   });
 
   it('should classify ValidationError as low severity', () => {
@@ -96,8 +103,18 @@ describe('getErrorMessage', () => {
       details: 'Failing row contains (…, -90.0000, 0.0000, …)',
     };
     const message = getErrorMessage(err);
-    expect(message).toBe('Not enough stock is available for this sale or transfer.');
+    expect(message).toBe(i18n.t('inventory.errors.insufficientStock'));
     expect(message).not.toContain('inventory_balances');
+  });
+
+  it('localizes an adjustment that is missing its audit reason', () => {
+    expect(getErrorMessage(new Error('inventory-adjustment-reason-required')))
+      .toBe(i18n.t('inventory.errors.adjustmentReasonRequired'));
+  });
+
+  it('localizes transfer quantity mismatches', () => {
+    expect(getErrorMessage(new Error('inventory-transfer-quantity-mismatch')))
+      .toBe(i18n.t('inventory.errors.transferQuantityMismatch'));
   });
 
   it('should hide the inventory constraint through an Error cause chain', () => {
@@ -106,7 +123,7 @@ describe('getErrorMessage', () => {
       message: 'violates check constraint "chk_inventory_balances_on_hand_nonneg"',
     };
     const err = new Error(`Stock and cost of sale failed: ${cause.message}`, { cause });
-    expect(getErrorMessage(err)).toBe('Not enough stock is available for this sale or transfer.');
+    expect(getErrorMessage(err)).toBe(i18n.t('inventory.errors.insufficientStock'));
   });
 
   it('should handle network errors gracefully', () => {

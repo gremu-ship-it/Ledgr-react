@@ -8,6 +8,7 @@ import {
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { weightedAverageCost } from '@/services/inventoryValuation';
@@ -184,7 +185,7 @@ function ProductModal({
       // product feel much slower than it is.
       setTimeout(onClose, 400);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => setAlert({ type: 'error', message: getErrorMessage(err) }),
   });
 
   return (
@@ -771,7 +772,7 @@ function MovementsTab({ businessId }: { businessId: string }) {
       queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] });
       setTimeout(() => setAlert(null), 2000);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => setAlert({ type: 'error', message: getErrorMessage(err) }),
   });
 
   const locationMap = Object.fromEntries(locations.map((l) => [l.id, l.name]));
