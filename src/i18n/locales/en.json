@@ -150,7 +150,9 @@
       "constructionSubcontractors": "Subcontractors",
       "paymentCertificates": "Payment Certificates",
       "retentionRegister": "Retention Register",
-      "rfis": "RFIs"
+      "rfis": "RFIs",
+      "itps": "Inspection Test Plans",
+      "ncrs": "Non-Conformance Reports"
     },
     "accessibility": {
       "currentPage": "current page",
@@ -2939,6 +2941,203 @@
         "references": "Project reference data could not be loaded.",
         "projects": "Projects could not be loaded."
       }
+    },
+    "itps": {
+      "title": "Inspection Test Plans",
+      "description": "Plan, perform, and record project quality inspections against defined acceptance criteria.",
+      "newTitle": "New inspection test plan",
+      "newDescription": "Create a project inspection plan and add checkpoints for the work to be inspected.",
+      "backToList": "Back to inspection test plans",
+      "loading": "Loading inspection test plans…",
+      "loadingDetail": "Loading inspection test plan…",
+      "loadingCheckpoints": "Loading checkpoints…",
+      "notAvailable": "Not available",
+      "teamMember": "Project team member",
+      "checkpointCount": "{{count}} checkpoints",
+      "openItp": "Open inspection test plan {{number}}",
+      "confirmActivate": "Activate this inspection test plan?",
+      "confirmComplete": "Mark this inspection test plan as completed?",
+      "confirmCancel": "Cancel this inspection test plan?",
+      "filters": {
+        "title": "Filters",
+        "allProjects": "All projects",
+        "allStatuses": "All statuses"
+      },
+      "placeholders": {
+        "project": "Select a project",
+        "optional": "Optional"
+      },
+      "fields": {
+        "project": "Project",
+        "site": "Site",
+        "number": "ITP number",
+        "title": "Title",
+        "scope": "Inspection scope",
+        "status": "Status",
+        "boqSection": "BOQ section",
+        "subcontract": "Subcontract",
+        "evidenceReference": "Evidence reference",
+        "created": "Created",
+        "sequence": "Sequence",
+        "activity": "Inspection activity",
+        "acceptanceCriteria": "Acceptance criteria",
+        "holdType": "Inspection point type"
+      },
+      "statuses": {
+        "draft": "Draft",
+        "active": "Active",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "holdTypes": {
+        "hold": "Hold point",
+        "witness": "Witness point",
+        "review": "Review point",
+        "surveillance": "Surveillance"
+      },
+      "checkpointStatuses": {
+        "pending": "Pending",
+        "passed": "Passed",
+        "failed": "Failed",
+        "waived": "Waived"
+      },
+      "columns": {
+        "number": "ITP number",
+        "title": "Title",
+        "project": "Project",
+        "status": "Status",
+        "checkpoints": "Checkpoints",
+        "created": "Created",
+        "sequence": "Sequence",
+        "activity": "Activity",
+        "acceptanceCriteria": "Acceptance criteria",
+        "holdType": "Point type",
+        "inspectedBy": "Inspected by",
+        "date": "Inspection date"
+      },
+      "sections": {
+        "details": "Plan details",
+        "checkpoints": "Inspection checkpoints"
+      },
+      "actions": {
+        "new": "New ITP",
+        "create": "Create ITP",
+        "activate": "Activate",
+        "complete": "Complete plan",
+        "cancel": "Cancel plan",
+        "addCheckpoint": "Add checkpoint",
+        "saveCheckpoint": "Save checkpoint",
+        "pass": "Pass",
+        "fail": "Fail",
+        "waive": "Waive"
+      },
+      "empty": {
+        "title": "No inspection test plans found",
+        "description": "Create an inspection test plan to define and track project quality checkpoints.",
+        "checkpoints": "No checkpoints have been added to this plan."
+      },
+      "errors": {
+        "load": "Inspection test plans could not be loaded. Try again.",
+        "detail": "This inspection test plan could not be loaded.",
+        "create": "The inspection test plan could not be created. Check the details and try again.",
+        "action": "The inspection test plan action could not be completed.",
+        "checkpoint": "The checkpoint could not be saved. Try again.",
+        "references": "Project reference data could not be loaded."
+      }
+    },
+    "ncrs": {
+      "title": "Non-Conformance Reports",
+      "description": "Record construction non-conformances, investigate causes, and track corrective action to closure.",
+      "newTitle": "New non-conformance report",
+      "newDescription": "Record a project quality issue and assign its severity and project references.",
+      "backToList": "Back to non-conformance reports",
+      "loading": "Loading non-conformance reports…",
+      "loadingDetail": "Loading non-conformance report…",
+      "notAvailable": "Not available",
+      "teamMember": "Project team member",
+      "openNcr": "Open non-conformance report {{number}}",
+      "checkpointOption": "{{itpNumber}} · Checkpoint {{sequence}}: {{activity}}",
+      "confirmInvestigate": "Start investigating this non-conformance?",
+      "confirmCorrectiveAction": "Move this report to corrective action?",
+      "confirmClose": "Close this non-conformance report?",
+      "confirmCancel": "Cancel this non-conformance report?",
+      "filters": {
+        "title": "Filters",
+        "allProjects": "All projects",
+        "allStatuses": "All statuses",
+        "allSeverities": "All severities"
+      },
+      "placeholders": {
+        "project": "Select a project",
+        "optional": "Optional"
+      },
+      "fields": {
+        "project": "Project",
+        "site": "Site",
+        "number": "NCR number",
+        "title": "Title",
+        "status": "Status",
+        "severity": "Severity",
+        "checkpoint": "Related ITP checkpoint",
+        "description": "Description of non-conformance",
+        "subcontract": "Subcontract",
+        "evidenceReference": "Evidence reference",
+        "rootCause": "Root cause",
+        "correctiveAction": "Corrective action"
+      },
+      "statuses": {
+        "open": "Open",
+        "investigating": "Investigating",
+        "corrective_action": "Corrective action",
+        "closed": "Closed",
+        "cancelled": "Cancelled"
+      },
+      "severities": {
+        "minor": "Minor",
+        "major": "Major",
+        "critical": "Critical"
+      },
+      "columns": {
+        "number": "NCR number",
+        "title": "Title",
+        "project": "Project",
+        "severity": "Severity",
+        "status": "Status",
+        "raised": "Raised by",
+        "created": "Created"
+      },
+      "sections": {
+        "details": "Report details",
+        "description": "Description",
+        "rootCause": "Root cause investigation",
+        "correctiveAction": "Corrective action",
+        "preventiveAction": "Preventive action",
+        "evidenceReference": "Evidence reference"
+      },
+      "actions": {
+        "new": "New NCR",
+        "create": "Create NCR",
+        "investigate": "Start investigation",
+        "proposeCorrectiveAction": "Move to corrective action",
+        "close": "Close report",
+        "cancel": "Cancel report",
+        "saveRootCause": "Save root cause",
+        "saveCorrectiveAction": "Save corrective action"
+      },
+      "empty": {
+        "title": "No non-conformance reports found",
+        "description": "Create an NCR to record and resolve a project quality issue."
+      },
+      "errors": {
+        "load": "Non-conformance reports could not be loaded. Try again.",
+        "detail": "This non-conformance report could not be loaded.",
+        "create": "The non-conformance report could not be created. Check the details and try again.",
+        "references": "Project reference data could not be loaded.",
+    "action": "The non-conformance report action could not be completed.",
+    "update": "The report could not be updated. Try again.",
+    "rootCauseRequired": "Record and save the root cause before moving to corrective action.",
+    "correctiveActionRequired": "Record and save the corrective action before closing this report."
+      }
     }
   },
   "changeOrders": {
@@ -3094,8 +3293,17 @@
         "horizon": "Planning horizon: {{start}} to {{end}}",
         "filterType": "Filter by recommendation type",
         "filterStatus": "Filter by status",
-        "types": { "all": "All types", "make": "Make", "buy": "Buy" },
-        "statuses": { "all": "All statuses", "open": "Open", "dismissed": "Dismissed", "converted": "Converted" },
+        "types": {
+          "all": "All types",
+          "make": "Make",
+          "buy": "Buy"
+        },
+        "statuses": {
+          "all": "All statuses",
+          "open": "Open",
+          "dismissed": "Dismissed",
+          "converted": "Converted"
+        },
         "product": "Product",
         "type": "Type",
         "requiredDate": "Required date",
@@ -3198,7 +3406,7 @@
     },
     "workCentres": {
       "title": "Work Centres",
-      "description": "Manage the production resources used by routing steps.",
+      "description": "Description",
       "add": "Add Work Centre",
       "new": "New Work Centre",
       "edit": "Edit Work Centre",
@@ -3207,7 +3415,6 @@
       "type": "Type",
       "capacity": "Daily Capacity (hours)",
       "hourlyCost": "Cost per Hour",
-      "description": "Description",
       "active": "Active",
       "inactive": "Inactive",
       "hoursPerDay": "hours/day",
