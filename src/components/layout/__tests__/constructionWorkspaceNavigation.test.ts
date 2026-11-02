@@ -58,6 +58,8 @@ describe('construction workspace navigation', () => {
       '/construction/change-orders',
       '/construction/itps',
       '/construction/ncrs',
+      '/construction/hse-incidents',
+      '/construction/toolbox-talks',
       '/construction/retention-register',
     ]);
     expect(section?.minPlan).toBe('enterprise');
@@ -95,12 +97,16 @@ describe('construction workspace navigation', () => {
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/change-orders');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/itps');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/ncrs');
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/hse-incidents');
+    expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/toolbox-talks');
     expect(paths(['CONSTRUCTION', 'PROJECT_BASED'])).toContain('/construction/retention-register');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/certificates');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/rfis');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/change-orders');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/itps');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/ncrs');
+    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/hse-incidents');
+    expect(paths(['CONSTRUCTION'])).not.toContain('/construction/toolbox-talks');
     expect(paths(['CONSTRUCTION'])).not.toContain('/construction/retention-register');
     expect(navItemForPath('/construction/certificates')).toMatchObject({
       minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
@@ -120,9 +126,19 @@ describe('construction workspace navigation', () => {
       labelKey: 'navigation.items.ncrs',
       minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
     });
+    expect(navItemForPath('/construction/hse-incidents')).toMatchObject({
+      labelKey: 'navigation.items.hseIncidents',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+    });
+    expect(navItemForPath('/construction/toolbox-talks')).toMatchObject({
+      labelKey: 'navigation.items.toolboxTalks',
+      minPlan: 'enterprise', requiresOrgCapability: 'construction', requiredOperatingModels: ['PROJECT_BASED'],
+    });
     expect(en.changeOrders.title).toBe('Change Orders');
     expect(en.navigation.items.itps).toBe('Inspection Test Plans');
     expect(en.navigation.items.ncrs).toBe('Non-Conformance Reports');
+    expect(en.navigation.items.hseIncidents).toBe('HSE Incidents');
+    expect(en.navigation.items.toolboxTalks).toBe('Toolbox Talks');
   });
 
   it('exposes Subcontractors only for Enterprise construction businesses', () => {

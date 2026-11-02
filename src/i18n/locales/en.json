@@ -152,7 +152,9 @@
       "retentionRegister": "Retention Register",
       "rfis": "RFIs",
       "itps": "Inspection Test Plans",
-      "ncrs": "Non-Conformance Reports"
+      "ncrs": "Non-Conformance Reports",
+      "hseIncidents": "HSE Incidents",
+      "toolboxTalks": "Toolbox Talks"
     },
     "accessibility": {
       "currentPage": "current page",
@@ -3133,10 +3135,154 @@
         "detail": "This non-conformance report could not be loaded.",
         "create": "The non-conformance report could not be created. Check the details and try again.",
         "references": "Project reference data could not be loaded.",
-    "action": "The non-conformance report action could not be completed.",
-    "update": "The report could not be updated. Try again.",
-    "rootCauseRequired": "Record and save the root cause before moving to corrective action.",
-    "correctiveActionRequired": "Record and save the corrective action before closing this report."
+        "action": "The non-conformance report action could not be completed.",
+        "update": "The report could not be updated. Try again.",
+        "rootCauseRequired": "Record and save the root cause before moving to corrective action.",
+        "correctiveActionRequired": "Record and save the corrective action before closing this report."
+      }
+    },
+    "hseIncidents": {
+      "title": "HSE Incidents",
+      "description": "Report, investigate, and close health, safety, and environmental incidents on project sites.",
+      "newTitle": "Report an HSE incident",
+      "newDescription": "Capture incident details and the people, place, and time involved.",
+      "backToList": "Back to HSE incidents",
+      "loading": "Loading HSE incidents…",
+      "loadingDetail": "Loading incident…",
+      "notAvailable": "Not available",
+      "openIncident": "Open HSE incident {{number}}",
+      "confirmInvestigate": "Start investigating this incident?",
+      "confirmResolve": "Mark this incident as resolved?",
+      "confirmClose": "Close this incident?",
+      "filters": {
+        "title": "Filters",
+        "allProjects": "All projects",
+        "allStatuses": "All statuses",
+        "allSeverities": "All severities",
+        "allTypes": "All incident types"
+      },
+      "placeholders": {
+        "project": "Select a project",
+        "optional": "Optional"
+      },
+      "fields": {
+        "project": "Project",
+        "site": "Site",
+        "status": "Status",
+        "severity": "Severity",
+        "incidentType": "Incident type",
+        "incidentNumber": "Incident number",
+        "title": "Title",
+        "dateTime": "Incident date and time",
+        "locationDescription": "Location description",
+        "personsInvolved": "Persons involved",
+        "description": "Incident description",
+        "rootCause": "Root cause",
+        "correctiveAction": "Corrective action",
+        "evidenceReference": "Evidence reference"
+      },
+      "statuses": {
+        "reported": "Reported",
+        "investigating": "Investigating",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      },
+      "severities": {
+        "near_miss": "Near miss",
+        "minor": "Minor",
+        "major": "Major",
+        "critical": "Critical",
+        "fatality": "Fatality"
+      },
+      "types": {
+        "injury": "Injury",
+        "property_damage": "Property damage",
+        "environmental": "Environmental",
+        "near_miss": "Near miss",
+        "other": "Other"
+      },
+      "columns": {
+        "number": "Incident #",
+        "title": "Title",
+        "type": "Type",
+        "severity": "Severity",
+        "status": "Status",
+        "date": "Date and time",
+        "personsInvolved": "Persons involved"
+      },
+      "sections": {
+        "incidentInformation": "Incident information",
+        "description": "Description",
+        "rootCause": "Root cause",
+        "correctiveAction": "Corrective action",
+        "evidenceReference": "Evidence reference"
+      },
+      "actions": {
+        "report": "Report Incident",
+        "create": "Submit incident report",
+        "investigate": "Investigate",
+        "resolve": "Resolve",
+        "close": "Close incident",
+        "saveRootCause": "Save root cause",
+        "saveCorrectiveAction": "Save corrective action"
+      },
+      "empty": {
+        "title": "No HSE incidents found",
+        "description": "Report an incident to begin tracking its investigation and resolution."
+      },
+      "errors": {
+        "load": "HSE incidents could not be loaded. Try again.",
+        "detail": "This HSE incident could not be loaded.",
+        "create": "The incident could not be reported. Check the details and try again.",
+        "references": "Project reference data could not be loaded.",
+        "action": "The incident status could not be changed.",
+        "update": "The incident details could not be saved.",
+        "rootCauseRequired": "Save the root cause before resolving this incident.",
+        "correctiveActionRequired": "Save the corrective action before closing this incident."
+      }
+    },
+    "toolboxTalks": {
+      "title": "Toolbox Talks",
+      "description": "Keep a record of project safety briefings, presenters, and attendance.",
+      "newTitle": "Record a toolbox talk",
+      "newDescription": "Record the briefing topic, presenter, attendance, and summary.",
+      "backToList": "Back to toolbox talks",
+      "loading": "Loading toolbox talks…",
+      "notAvailable": "Not available",
+      "placeholders": {
+        "project": "Select a project",
+        "optional": "Optional"
+      },
+      "fields": {
+        "project": "Project",
+        "site": "Site",
+        "date": "Talk date",
+        "topic": "Topic",
+        "presenter": "Presenter",
+        "attendeesCount": "Number of attendees",
+        "summary": "Summary",
+        "evidenceReference": "Evidence reference"
+      },
+      "columns": {
+        "date": "Date",
+        "topic": "Topic",
+        "presenter": "Presenter",
+        "attendees": "Attendees",
+        "project": "Project",
+        "site": "Site"
+      },
+      "actions": {
+        "record": "Record Talk",
+        "create": "Save toolbox talk"
+      },
+      "empty": {
+        "title": "No toolbox talks recorded",
+        "description": "Record a toolbox talk to keep a project safety briefing and attendance history."
+      },
+      "errors": {
+        "load": "Toolbox talks could not be loaded. Try again.",
+        "create": "The toolbox talk could not be saved. Check the details and try again.",
+        "references": "Project reference data could not be loaded."
       }
     }
   },
