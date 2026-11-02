@@ -1715,6 +1715,117 @@ export type Database = {
           },
         ]
       }
+      construction_change_orders: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          boq_section_id: string | null
+          business_id: string
+          co_number: string
+          cost_impact: number
+          created_at: string
+          created_by: string
+          description: string
+          evidence_reference: string | null
+          id: string
+          project_id: string
+          reason: string
+          rejection_reason: string | null
+          site_id: string | null
+          status: string
+          subcontract_id: string | null
+          submitted_at: string | null
+          submitted_by: string | null
+          time_impact_days: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          boq_section_id?: string | null
+          business_id: string
+          co_number: string
+          cost_impact?: number
+          created_at?: string
+          created_by: string
+          description: string
+          evidence_reference?: string | null
+          id?: string
+          project_id: string
+          reason: string
+          rejection_reason?: string | null
+          site_id?: string | null
+          status?: string
+          subcontract_id?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          time_impact_days?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          boq_section_id?: string | null
+          business_id?: string
+          co_number?: string
+          cost_impact?: number
+          created_at?: string
+          created_by?: string
+          description?: string
+          evidence_reference?: string | null
+          id?: string
+          project_id?: string
+          reason?: string
+          rejection_reason?: string | null
+          site_id?: string | null
+          status?: string
+          subcontract_id?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
+          time_impact_days?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "construction_change_orders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_change_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "construction_projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_change_orders_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "construction_procurement_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_change_orders_boq_section_id_fkey"
+            columns: ["boq_section_id"]
+            isOneToOne: false
+            referencedRelation: "boq_sections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "construction_change_orders_subcontract_id_fkey"
+            columns: ["subcontract_id"]
+            isOneToOne: false
+            referencedRelation: "subcontracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       construction_delivery_note_lines: {
         Row: {
           business_id: string
@@ -14636,6 +14747,14 @@ export type Database = {
         Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
       }
       delete_construction_rfi: { Args: { p_rfi_id: string }; Returns: boolean }
+      transition_construction_co: {
+        Args: {
+          p_co_id: string
+          p_new_status: string
+          p_rejection_reason?: string | null
+        }
+        Returns: undefined
+      }
       transition_construction_rfi: {
         Args: { p_new_status: string; p_response?: string | null; p_rfi_id: string }
         Returns: Database["public"]["Tables"]["construction_rfis"]["Row"]
