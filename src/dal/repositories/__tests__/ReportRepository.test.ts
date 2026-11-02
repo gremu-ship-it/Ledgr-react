@@ -34,6 +34,25 @@ describe('ReportRepository.getTrialBalance', () => {
     });
   });
 
+  it('uses the P&L-only RPC when reversal pairs must be excluded', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [row], error: null });
+    const client = { rpc } as unknown as SupabaseClient;
+
+    await expect(ReportRepository.getTrialBalance(client, {
+      businessId: 'business-1',
+      dateFrom: '2026-11-01',
+      dateTo: '2026-11-30',
+      excludeReversalPairs: true,
+    })).resolves.toEqual([row]);
+
+    expect(rpc).toHaveBeenCalledWith('get_profit_loss_trial_balance', {
+      p_business_id: 'business-1',
+      p_date_from: '2026-11-01',
+      p_date_to: '2026-11-30',
+      p_branch_id: null,
+    });
+  });
+
   it('passes a null branch for all-branch reports and propagates RPC errors', async () => {
     const failure = new Error('Access denied');
     const rpc = vi.fn().mockResolvedValueOnce({ data: null, error: null }).mockResolvedValueOnce({ data: null, error: failure });
