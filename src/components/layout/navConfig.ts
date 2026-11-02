@@ -169,6 +169,22 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
         requiredOperatingModels: ['PROJECT_BASED'],
       },
       {
+        labelKey: 'navigation.items.itps',
+        path: '/construction/itps',
+        icon: ClipboardList,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
+      },
+      {
+        labelKey: 'navigation.items.ncrs',
+        path: '/construction/ncrs',
+        icon: ShieldCheck,
+        minPlan: 'enterprise',
+        requiresOrgCapability: 'construction',
+        requiredOperatingModels: ['PROJECT_BASED'],
+      },
+      {
         labelKey: 'navigation.items.retentionRegister',
         path: '/construction/retention-register',
         icon: WalletCards,

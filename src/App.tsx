@@ -85,6 +85,12 @@ const RfiDetailPage = lazyPage(() => import('@/pages/construction/RfiDetailPage'
 const ChangeOrderListPage = lazyPage(() => import('@/pages/construction/ChangeOrderListPage'), 'ChangeOrderListPage');
 const ChangeOrderNewPage = lazyPage(() => import('@/pages/construction/ChangeOrderNewPage'), 'ChangeOrderNewPage');
 const ChangeOrderDetailPage = lazyPage(() => import('@/pages/construction/ChangeOrderDetailPage'), 'ChangeOrderDetailPage');
+const ItpListPage = lazyPage(() => import('@/pages/construction/ItpListPage'), 'ItpListPage');
+const ItpNewPage = lazyPage(() => import('@/pages/construction/ItpNewPage'), 'ItpNewPage');
+const ItpDetailPage = lazyPage(() => import('@/pages/construction/ItpDetailPage'), 'ItpDetailPage');
+const NcrListPage = lazyPage(() => import('@/pages/construction/NcrListPage'), 'NcrListPage');
+const NcrNewPage = lazyPage(() => import('@/pages/construction/NcrNewPage'), 'NcrNewPage');
+const NcrDetailPage = lazyPage(() => import('@/pages/construction/NcrDetailPage'), 'NcrDetailPage');
 const ManufacturingDashboardPage = lazyPage(
   () => import('@/pages/manufacturing/ManufacturingDashboardPage'),
   'ManufacturingDashboardPage',
@@ -518,6 +524,66 @@ function App() {
                       <PlanGate minPlan="enterprise" featureName={t('changeOrders.title')}>
                         <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
                           <CapabilityGate capability="construction"><ChangeOrderDetailPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/itps"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.itps.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ItpListPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/itps/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.itps.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ItpNewPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/itps/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.itps.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><ItpDetailPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/ncrs"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><NcrListPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/ncrs/new"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><NcrNewPage /></CapabilityGate>
+                        </OperatingModelGate>
+                      </PlanGate>
+                    }
+                  />
+                  <Route
+                    path="/construction/ncrs/:id"
+                    element={
+                      <PlanGate minPlan="enterprise" featureName={t('construction.ncrs.title')}>
+                        <OperatingModelGate requiredOperatingModels={['PROJECT_BASED']}>
+                          <CapabilityGate capability="construction"><NcrDetailPage /></CapabilityGate>
                         </OperatingModelGate>
                       </PlanGate>
                     }
