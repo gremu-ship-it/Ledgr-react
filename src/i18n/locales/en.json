@@ -117,6 +117,7 @@
       "reports": "Reports",
       "journals": "Journals",
       "bankAccounts": "Bank Accounts",
+      "cashDeposits": "Cash Deposits",
       "bankStatements": "Bank Statements",
       "bankReconciliationReconcile": "Reconcile",
       "reportsRevenueBreakdown": "Revenue Breakdown",
@@ -1118,6 +1119,50 @@
         "balanced": "Balanced",
         "notBalanced": "Out of balance by {{amount}}"
       }
+    }
+  },
+  "cashDeposits": {
+    "title": "Cash Deposits",
+    "subtitle": "Transfer cash from one or more cash accounts into a bank account.",
+    "newDeposit": "New cash deposit",
+    "detailTitle": "Cash deposit details",
+    "transferExplanation": "Posting creates a balanced transfer between asset accounts. It does not affect income or expenses.",
+    "sourceLines": "Cash sources",
+    "addSource": "Add source",
+    "removeSource": "Remove source line",
+    "total": "Total deposit",
+    "search": "Search by reference",
+    "dateFrom": "From date",
+    "dateTo": "To date",
+    "status": "Status",
+    "saveDraft": "Save draft",
+    "updateDraft": "Save changes",
+    "saving": "Saving…",
+    "post": "Post deposit",
+    "void": "Void and reverse deposit",
+    "voidReason": "Reason for voiding",
+    "noReference": "Cash deposit",
+    "emptyTitle": "No cash deposits yet",
+    "emptyDescription": "Create a cash deposit to record a transfer from cash sources into a bank account.",
+    "loadFailed": "Could not load cash deposit data.",
+    "saveFailed": "Could not save the cash deposit draft.",
+    "actionFailed": "Could not complete this cash deposit action.",
+    "fields": {
+      "depositDate": "Deposit date",
+      "bankAccount": "Bank account",
+      "selectBank": "Select a bank account",
+      "reference": "Reference",
+      "notes": "Notes",
+      "sourceAccount": "Cash source account",
+      "selectSource": "Select a cash account",
+      "amount": "Amount",
+      "lineDescription": "Description"
+    },
+    "statuses": {
+      "all": "All statuses",
+      "draft": "Draft",
+      "posted": "Posted",
+      "voided": "Voided"
     }
   },
   "banking": {

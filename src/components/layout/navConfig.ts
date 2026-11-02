@@ -256,6 +256,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
   {
     labelKey: 'navigation.sections.banking',
     items: [
+      { labelKey: 'navigation.items.cashDeposits', path: '/cash-deposits', icon: ArrowLeftRight, minPlan: 'starter', requiresCapability: 'core_accounting' },
       { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/reconcile', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },

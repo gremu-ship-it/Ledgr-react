@@ -3,16 +3,19 @@ import { NAV_SECTIONS, navItemForPath, planMeetsMin } from '@/components/layout/
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 describe('bank reconciliation routes and navigation', () => {
-  it('keeps Banking to the three standalone bank reconciliation entry points', () => {
+  it('includes Cash Deposits alongside standalone bank reconciliation entry points', () => {
     const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.banking');
     expect(section?.items.map((item) => item.path)).toEqual([
+      '/cash-deposits',
       '/bank-reconciliation/accounts',
       '/bank-reconciliation/statements',
       '/bank-reconciliation/reconcile',
     ]);
   });
 
-  it('advertises the setup and statements pages behind the Growth capability', () => {
+  it('exposes Cash Deposits to Starter+ while keeping bank reconciliation on Growth+', () => {
+    expect(navItemForPath('/cash-deposits')).toMatchObject({ path: '/cash-deposits', minPlan: 'starter', requiresCapability: 'core_accounting' });
+    expect(planMeetsMin('starter', 'starter')).toBe(true);
     for (const path of [
       '/bank-reconciliation/accounts',
       '/bank-reconciliation/statements',
@@ -26,8 +29,10 @@ describe('bank reconciliation routes and navigation', () => {
     expect(planMeetsMin('pro', 'growth')).toBe(true);
   });
 
-  it('allows treasury managers and denies payroll managers on all new bank pages', () => {
+  it('allows treasury managers and denies payroll managers on cash-deposit and bank pages', () => {
     const paths = [
+      '/cash-deposits',
+      '/cash-deposits/new',
       '/bank-reconciliation/accounts',
       '/bank-reconciliation/statements',
       '/bank-reconciliation/reconcile',
