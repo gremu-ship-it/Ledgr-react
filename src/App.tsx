@@ -149,6 +149,9 @@ const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/Partner
 const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
 const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
 const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
+const CashDepositsPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositsPage');
+const NewCashDepositPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'NewCashDepositPage');
+const CashDepositDetailPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositDetailPage');
 const BankAccountsPage = lazyPage(() => import('@/pages/bank-reconciliation/BankAccountsPage'), 'BankAccountsPage');
 const StatementsPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementsPage'), 'StatementsPage');
 const StatementDetailPage = lazyPage(() => import('@/pages/bank-reconciliation/StatementDetailPage'), 'StatementDetailPage');
@@ -708,6 +711,21 @@ function App() {
                   <Route path="/periods" element={
                     <PlanGate capability="accounting_organisation" featureName="Period Management">
                       <PeriodManagementPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/cash-deposits" element={
+                    <PlanGate capability="core_accounting" featureName={t('cashDeposits.title')}>
+                      <CashDepositsPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/cash-deposits/new" element={
+                    <PlanGate capability="core_accounting" featureName={t('cashDeposits.title')}>
+                      <NewCashDepositPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/cash-deposits/:id" element={
+                    <PlanGate capability="core_accounting" featureName={t('cashDeposits.title')}>
+                      <CashDepositDetailPage />
                     </PlanGate>
                   } />
                   <Route path="/bank-reconciliation/accounts" element={

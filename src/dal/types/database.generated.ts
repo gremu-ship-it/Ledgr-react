@@ -1541,6 +1541,123 @@ export type Database = {
           },
         ]
       }
+      cash_deposit_lines: {
+        Row: {
+          amount: number
+          business_id: string
+          created_at: string
+          deposit_id: string
+          description: string | null
+          id: string
+          line_number: number
+          source_account_id: string
+        }
+        Insert: {
+          amount: number
+          business_id: string
+          created_at?: string
+          deposit_id: string
+          description?: string | null
+          id?: string
+          line_number: number
+          source_account_id: string
+        }
+        Update: {
+          amount?: number
+          business_id?: string
+          created_at?: string
+          deposit_id?: string
+          description?: string | null
+          id?: string
+          line_number?: number
+          source_account_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_deposit_lines_parent_fk"
+            columns: ["business_id", "deposit_id"]
+            isOneToOne: false
+            referencedRelation: "cash_deposits"
+            referencedColumns: ["business_id", "id"]
+          },
+          {
+            foreignKeyName: "cash_deposit_lines_source_account_id_fkey"
+            columns: ["source_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_deposits: {
+        Row: {
+          bank_account_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          deposit_date: string
+          id: string
+          journal_entry_id: string | null
+          notes: string | null
+          posted_at: string | null
+          posted_by: string | null
+          reference: string | null
+          status: string
+          updated_at: string
+          void_reason: string | null
+          voided_at: string | null
+        }
+        Insert: {
+          bank_account_id: string
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          deposit_date: string
+          id?: string
+          journal_entry_id?: string | null
+          notes?: string | null
+          posted_at?: string | null
+          posted_by?: string | null
+          reference?: string | null
+          status?: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Update: {
+          bank_account_id?: string
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          deposit_date?: string
+          id?: string
+          journal_entry_id?: string | null
+          notes?: string | null
+          posted_at?: string | null
+          posted_by?: string | null
+          reference?: string | null
+          status?: string
+          updated_at?: string
+          void_reason?: string | null
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_deposits_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_deposits_journal_entry_id_fkey"
+            columns: ["journal_entry_id"]
+            isOneToOne: false
+            referencedRelation: "journal_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cash_forecast_scenarios: {
         Row: {
           business_id: string
@@ -14080,6 +14197,23 @@ export type Database = {
       pos_stock_availability: {
         Args: { p_branch_id?: string; p_business_id: string }
         Returns: Json
+      }
+      save_cash_deposit_draft: {
+        Args: {
+          p_bank_account_id: string
+          p_business_id: string
+          p_deposit_date: string
+          p_deposit_id: string | null
+          p_lines: Json
+          p_notes: string | null
+          p_reference: string | null
+        }
+        Returns: string
+      }
+      post_cash_deposit: { Args: { p_deposit_id: string }; Returns: string }
+      void_cash_deposit: {
+        Args: { p_deposit_id: string; p_reason: string }
+        Returns: string
       }
       post_construction_receipt_movement: {
         Args: { p_grn_id: string }

@@ -28,6 +28,7 @@ import { constructionCertificatesRepository } from '@/dal/repositories/Construct
 import { ApprovalRepository } from '@/dal/repositories/ApprovalRepository';
 import { BomRepository } from '@/dal/repositories/BomRepository';
 import { ManufacturingRepository } from '@/dal/repositories/ManufacturingRepository';
+import { CashDepositRepository } from '@/dal/repositories/CashDepositRepository';
 import { ConstructionRfiRepository } from '@/dal/repositories/ConstructionRfiRepository';
 
 export const repos = {
@@ -72,6 +73,7 @@ export const repos = {
   period: new PeriodRepository(supabase),
   auditLog: new AuditLogRepository(supabase),
   pos: new PosRepository(supabase),
+  cashDeposit: new CashDepositRepository(supabase),
 };
 
 export type Repositories = typeof repos;

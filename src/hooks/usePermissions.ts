@@ -454,6 +454,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
 
   // The Support assistant is available to every authenticated role.
   if (path === '/support') return true;
+  const isCashDepositsPath = path === '/cash-deposits' || path.startsWith('/cash-deposits/');
   const isBankReconciliationPath = path === '/bank-reconciliation/accounts'
     || path === '/bank-reconciliation/reconcile'
     || path === '/bank-reconciliation/statements'
@@ -500,7 +501,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/tax', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance', '/journals', '/accounts', '/income', '/expenses', '/invoices', '/contacts'].includes(path);
 
     case 'treasury_manager':
-      return isBankReconciliationPath || ['/dashboard', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
+      return isCashDepositsPath || isBankReconciliationPath || ['/dashboard', '/accounts', '/capital', '/assets', '/income', '/expenses', '/invoices', '/contacts', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
 
     case 'asset_manager':
       return ['/dashboard', '/assets', '/capital', '/accounts', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path);
@@ -522,7 +523,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'payroll_manager':
-      if (isBankReconciliationPath || ['/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path)) {
+      if (isCashDepositsPath || isBankReconciliationPath || ['/products', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/journals', '/periods', '/audit', '/branches', '/locations', '/departments', '/reports/trial-balance', '/reports/profit-loss', '/reports/balance-sheet', '/reports/cash-flow', '/cash-forecast', '/reports/changes-in-equity', '/reports/revenue-breakdown', '/reports/branch-performance'].includes(path)) {
         return false;
       }
       return true;
