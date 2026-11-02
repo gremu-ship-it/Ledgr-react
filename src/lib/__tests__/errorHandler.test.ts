@@ -37,6 +37,18 @@ describe('classifyError', () => {
     expect(classification.shouldReport).toBe(false);
   });
 
+  it('localizes invalid construction task progress', () => {
+    const error = new ValidationError(
+      'construction_schedule_tasks',
+      'construction-scheduling-invalid-progress',
+      undefined,
+      { includeResource: false },
+    );
+    const classification = classifyError(error);
+    expect(classification.category).toBe('validation');
+    expect(classification.userMessage).toBe(i18n.t('constructionSchedule.errors.invalidProgress'));
+  });
+
   it('classifies inventory integrity errors with a localized message', () => {
     const classification = classifyError(new ValidationError('stock_movements', 'inventory-adjustment-reason-required'));
     expect(classification.category).toBe('validation');

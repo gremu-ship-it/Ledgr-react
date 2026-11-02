@@ -501,4 +501,10 @@
     "theBusiness": "biashara",
     "member": "mwanachama"
   }
+,
+  "constructionSchedule": {
+    "errors": {
+      "invalidProgress": "Maendeleo lazima yawe nambari kamili kutoka 0 hadi 100."
+    }
+  }
 }

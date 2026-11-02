@@ -33,6 +33,7 @@ import { ConstructionRfiRepository } from '@/dal/repositories/ConstructionRfiRep
 import { ConstructionChangeOrderRepository } from '@/dal/repositories/ConstructionChangeOrderRepository';
 import { ConstructionQualityRepository } from '@/dal/repositories/ConstructionQualityRepository';
 import { ConstructionHseRepository } from '@/dal/repositories/ConstructionHseRepository';
+import { ConstructionScheduleRepository } from '@/dal/repositories/ConstructionScheduleRepository';
 
 export const repos = {
   projects: new ProjectRepository(),
@@ -48,6 +49,7 @@ export const repos = {
   changeOrder: new ConstructionChangeOrderRepository(supabase),
   quality: new ConstructionQualityRepository(supabase),
   hse: new ConstructionHseRepository(supabase),
+  schedule: new ConstructionScheduleRepository(supabase),
   approval: ApprovalRepository,
   bom: new BomRepository(supabase),
   manufacturing: new ManufacturingRepository(supabase),

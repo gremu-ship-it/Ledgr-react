@@ -3858,4 +3858,10 @@
     "linearDescription": "Approvers act in order. Each step opens after the previous step is approved.",
     "adminOnly": "Only a business owner or administrator can configure approval workflows."
   }
+,
+  "constructionSchedule": {
+    "errors": {
+      "invalidProgress": "Progress must be an integer from 0 to 100."
+    }
+  }
 }
