@@ -17,6 +17,8 @@ export interface TrialBalanceParams {
   dateFrom: string;
   dateTo: string;
   branchId?: string | null;
+  /** Exclude original/reversal pairs for period P&L without changing the canonical trial balance. */
+  excludeReversalPairs?: boolean;
 }
 
 export const ReportRepository = {
@@ -24,7 +26,15 @@ export const ReportRepository = {
     supabase: SupabaseClient,
     params: TrialBalanceParams,
   ): Promise<TrialBalanceRow[]> {
-    const { data, error } = await supabase.rpc('get_trial_balance', {
+    const rpc = params.excludeReversalPairs
+      ? 'get_profit_loss_trial_balance'
+      : 'get_trial_balance';
+    const { data, error } = await (supabase as unknown as {
+      rpc: (
+        functionName: string,
+        args: { p_business_id: string; p_date_from: string; p_date_to: string; p_branch_id: string | null },
+      ) => Promise<{ data: unknown; error: Error | null }>;
+    }).rpc(rpc, {
       p_business_id: params.businessId,
       p_date_from: params.dateFrom,
       p_date_to: params.dateTo,

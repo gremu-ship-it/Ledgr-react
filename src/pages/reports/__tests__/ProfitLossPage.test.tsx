@@ -125,12 +125,14 @@ describe('ProfitLossPage', () => {
       dateFrom: activePeriod.from,
       dateTo: activePeriod.to,
       branchId: null,
+      excludeReversalPairs: true,
     }));
     expect(mocks.getTrialBalance).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       businessId: 'business-1',
       dateFrom: priorRange.from,
       dateTo: priorRange.to,
       branchId: null,
+      excludeReversalPairs: true,
     }));
   });
 

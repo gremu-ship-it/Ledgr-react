@@ -170,6 +170,7 @@ export function ProfitLossPage() {
       dateFrom: period.from,
       dateTo: period.to,
       branchId,
+      excludeReversalPairs: true,
     }),
     enabled: Boolean(businessId && validPeriod),
   });
@@ -180,6 +181,7 @@ export function ProfitLossPage() {
       dateFrom: priorPeriod.from,
       dateTo: priorPeriod.to,
       branchId,
+      excludeReversalPairs: true,
     }),
     enabled: Boolean(businessId && comparePrior && validPeriod && priorPeriod.from && priorPeriod.to),
   });
