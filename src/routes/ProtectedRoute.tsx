@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAppStore } from '@/store/useAppStore';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
+import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { NoBusinessAccess } from '@/routes/NoBusinessAccess';
 
 export function ProtectedRoute() {
@@ -35,15 +36,18 @@ export function ProtectedRoute() {
 }
 
 export function PublicOnlyRoute() {
-  const currentUser   = useAppStore((s) => s.currentUser);
-  const isAuthLoading = useAppStore((s) => s.isAuthLoading);
+  const currentUser         = useAppStore((s) => s.currentUser);
+  const isAuthLoading       = useAppStore((s) => s.isAuthLoading);
+  const isBusinessesLoading = useAppStore((s) => s.isBusinessesLoading);
+  const currentBusiness     = useAppStore((s) => s.currentBusiness);
+  const defaultRoute        = useDefaultRoute();
 
-  if (isAuthLoading) {
+  if (isAuthLoading || (currentUser && isBusinessesLoading && !currentBusiness)) {
     return <LoadingSpinner fullScreen label="Loading…" />;
   }
 
   if (currentUser) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={defaultRoute} replace />;
   }
 
   return <Outlet />;

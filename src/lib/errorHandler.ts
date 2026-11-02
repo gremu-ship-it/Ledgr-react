@@ -9,6 +9,7 @@
  */
 
 import { createLogger } from './logger';
+import { i18n } from '@/i18n';
 import { pushError, pushWarning } from './notifications';
 import {
   RepositoryError,
@@ -16,12 +17,45 @@ import {
   ValidationError,
   UnauthorizedError,
   DatabaseError,
-  INSUFFICIENT_STOCK_MESSAGE,
   isInsufficientStockError,
 } from '@/dal/errors/RepositoryError';
 import { isChunkLoadError } from './chunkRecovery';
 
 const log = createLogger('ErrorHandler');
+
+function localizedConstructionScheduleError(error: unknown): string | null {
+  if (error instanceof ValidationError && error.message === 'construction-scheduling-invalid-progress') {
+    return i18n.t('constructionSchedule.errors.invalidProgress');
+  }
+  return null;
+}
+
+function localizedInventoryError(error: unknown): string | null {
+  if (isInsufficientStockError(error)) return i18n.t('inventory.errors.insufficientStock');
+
+  const errorText = error instanceof Error
+    ? error.message
+    : typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : String(error ?? '');
+  const inventoryErrorMessages: Record<string, string> = {
+    'inventory-adjustment-reason-required': 'adjustmentReasonRequired',
+    'inventory-transfer-quantity-mismatch': 'transferQuantityMismatch',
+    'stock-transfer-not-approved': 'transferNotApproved',
+    'stock-transfer-not-dispatched': 'transferNotDispatched',
+    'stock-transfer-lines-required': 'transferLinesRequired',
+    'stock-transfer-lines-mismatch': 'transferLinesMismatch',
+    'stock-transfer-invalid-quantity': 'transferInvalidQuantity',
+    'stock-transfer-duplicate-line': 'transferDuplicateLine',
+    'stock-transfer-movements-already-exist': 'transferAlreadyHasMovements',
+    'inventory-transfer-not-found': 'transferNotFound',
+    'inventory-transfer-auth-required': 'transferAuthRequired',
+    'inventory-transfer-empty-result': 'transferEmptyResult',
+  };
+  const key = Object.entries(inventoryErrorMessages)
+    .find(([marker]) => errorText.includes(marker))?.[1];
+  return key ? i18n.t(`inventory.errors.${key}`) : null;
+}
 
 // ── Error classification ─────────────────────────────────────────────────────
 
@@ -48,6 +82,30 @@ export function classifyError(error: unknown): ErrorClassification {
       userMessage: 'A new version is available. Please refresh the page.',
       shouldRetry: false, // Chunk recovery handles this
       shouldNotify: false,
+      shouldReport: false,
+    };
+  }
+
+  const constructionScheduleMessage = localizedConstructionScheduleError(error);
+  if (constructionScheduleMessage) {
+    return {
+      severity: 'low',
+      category: 'validation',
+      userMessage: constructionScheduleMessage,
+      shouldRetry: false,
+      shouldNotify: true,
+      shouldReport: false,
+    };
+  }
+
+  const inventoryMessage = localizedInventoryError(error);
+  if (inventoryMessage) {
+    return {
+      severity: 'low',
+      category: 'validation',
+      userMessage: inventoryMessage,
+      shouldRetry: false,
+      shouldNotify: true,
       shouldReport: false,
     };
   }
@@ -322,12 +380,8 @@ export async function withRetry<T>(
  * Extract a user-friendly message from any error type.
  */
 export function getErrorMessage(error: unknown): string {
-  // Some RPC paths throw the raw PostgREST object instead of going through the
-  // repository adapter. Apply the same concise stock message there too, so a
-  // database constraint can never leak into a cashier-facing alert.
-  if (isInsufficientStockError(error)) {
-    return INSUFFICIENT_STOCK_MESSAGE;
-  }
+  const inventoryMessage = localizedInventoryError(error);
+  if (inventoryMessage) return inventoryMessage;
 
   if (error instanceof RepositoryError) {
     return error.message;

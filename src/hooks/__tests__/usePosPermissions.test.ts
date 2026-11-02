@@ -116,7 +116,7 @@ describe('usePosPermissions & Role-Based Access Control', () => {
     // Cashier routes
     expect(isPathAllowedForRole('cashier', '/pos')).toBe(true);
     expect(isPathAllowedForRole('cashier', '/accounts')).toBe(false);
-    expect(isPathAllowedForRole('cashier', '/reports')).toBe(false);
+    expect(isPathAllowedForRole('cashier', '/reports/trial-balance')).toBe(false);
     expect(isPathAllowedForRole('cashier', '/tax')).toBe(false);
     expect(getHomePathForRole('cashier')).toBe('/pos');
 

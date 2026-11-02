@@ -19,6 +19,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import type { Row } from '@/dal/types/database';
+import { useDefaultRoute } from '../../hooks/useDefaultRoute';
 import { NAV_SECTIONS } from './navConfig';
 
 interface CommandItem {
@@ -34,6 +35,7 @@ interface CommandItem {
 export function CommandPalette() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const defaultRoute = useDefaultRoute();
   const businesses = useAppStore((s) => s.businesses);
   const currentBusinessId = useAppStore((s) => s.currentBusiness?.business.id);
   const switchBusiness = useAppStore((s) => s.switchBusiness);
@@ -69,7 +71,7 @@ export function CommandPalette() {
       { id: 'qa-record-expense', label: t('dashboard.recordExpense'), keywords: 'record expense cost quick', path: '/expenses?action=record', icon: Receipt, group: 'Quick Actions' },
       { id: 'qa-new-expense', label: 'New Expense Builder', keywords: 'expense builder detailed', path: '/expenses?action=expense', icon: Receipt, group: 'Quick Actions' },
       { id: 'qa-run-payroll', label: t('dashboard.runPayroll'), keywords: 'payroll run employees', path: '/payroll?action=run', icon: Users, group: 'Quick Actions' },
-      { id: 'qa-reports', label: 'View Reports', keywords: 'reports analytics trial balance', path: '/reports', icon: BarChart2, group: 'Quick Actions' },
+      { id: 'qa-reports', label: 'View Reports', keywords: 'reports analytics trial balance', path: '/reports/trial-balance', icon: BarChart2, group: 'Quick Actions' },
       { id: 'qa-settings', label: 'Settings', keywords: 'settings configuration billing', path: '/settings', icon: Settings, group: 'Quick Actions' },
       { id: 'qa-ai', label: 'Ask Ledgr AI', keywords: 'ai assistant help insights', path: '/ai', icon: Sparkles, group: 'Quick Actions' },
       { id: 'qa-support', label: 'Support', keywords: 'help support contact', path: '/support', icon: LifeBuoy, group: 'Quick Actions' },
@@ -83,7 +85,7 @@ export function CommandPalette() {
       group: 'Businesses',
       action: () => {
         switchBusiness(m.business.id);
-        navigate('/dashboard');
+        navigate(defaultRoute);
       },
     }));
 
@@ -97,7 +99,7 @@ export function CommandPalette() {
     }));
 
     return [...productCommands, ...quickActions, ...navItems, ...businessSwitches];
-  }, [t, businesses, switchBusiness, navigate, products]);
+  }, [t, businesses, switchBusiness, navigate, products, defaultRoute]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return commands.slice(0, 20);

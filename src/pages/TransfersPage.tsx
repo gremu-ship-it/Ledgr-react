@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight, Plus, Search, X, Loader2, Truck,
@@ -7,6 +8,7 @@ import {
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useInventoryPageLabels } from '@/hooks/useInventoryPageLabels';
 import type { Row } from '@/dal/types/database';
 import type { TransferWithLines, TransferStatus } from '@/dal/repositories/TransferRepository';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -267,11 +269,9 @@ function TransferDrawer({
   errorMessage?: string | null;
 }) {
   const { transfer, lines } = data;
+  const { t } = useTranslation();
   const [dispatchQtys, setDispatchQtys] = useState<Record<string, number>>(
     Object.fromEntries(lines.map((l: Row<'stock_transfer_lines'>) => [l.id, Number(l.quantity_requested)])),
-  );
-  const [receiveQtys, setReceiveQtys] = useState<Record<string, number>>(
-    Object.fromEntries(lines.map((l: Row<'stock_transfer_lines'>) => [l.id, Number(l.quantity_dispatched ?? l.quantity_requested)])),
   );
 
   const fromLoc = locations.find((l) => l.id === transfer.from_location_id)?.name ?? '—';
@@ -338,6 +338,12 @@ function TransferDrawer({
             </div>
           </div>
 
+          {transfer.status === 'dispatched' && (
+            <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+              {t('inventory.transferPairNotice')}
+            </p>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="mb-1 text-xs text-gray-600">Status</p>
@@ -391,16 +397,9 @@ function TransferDrawer({
                       </div>
                       <div>
                         <p className="text-gray-400">Received</p>
-                        {transfer.status === 'dispatched' ? (
-                          <input type="number" min={0} max={Number(line.quantity_dispatched ?? line.quantity_requested)}
-                            value={receiveQtys[line.id] ?? Number(line.quantity_dispatched ?? line.quantity_requested)}
-                            onChange={(e) => setReceiveQtys((q) => ({ ...q, [line.id]: Number(e.target.value) }))}
-                            className="w-16 rounded border border-gray-200 px-1.5 py-0.5 text-xs focus:border-brand-500 focus:outline-none" />
-                        ) : (
-                          <p className="font-semibold text-gray-700">
-                            {line.quantity_received != null ? Number(line.quantity_received) : '—'}
-                          </p>
-                        )}
+                        <p className="font-semibold text-gray-700">
+                          {line.quantity_received != null ? Number(line.quantity_received) : '—'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -428,7 +427,7 @@ function TransferDrawer({
             )}
             {transfer.status === 'dispatched' && (
               <button
-                onClick={() => onReceive(lines.map((l: Row<'stock_transfer_lines'>) => ({ lineId: l.id, quantityReceived: receiveQtys[l.id] ?? Number(l.quantity_dispatched ?? l.quantity_requested) })))}
+                onClick={() => onReceive(lines.map((l: Row<'stock_transfer_lines'>) => ({ lineId: l.id, quantityReceived: Number(l.quantity_dispatched ?? 0) })))}
                 disabled={isMutating}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50">
                 {isMutating ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={16} />}
@@ -488,6 +487,9 @@ export function TransfersPage() {
   const businessName = useAppStore((s) => s.currentBusiness?.business.name ?? 'Business');
   const queryClient  = useQueryClient();
   const isMobile     = useIsMobile();
+  // Construction businesses read this page as "Material Transfers" (see
+  // useInventoryPageLabels); everyone else keeps "Stock Transfers".
+  const pageLabels   = useInventoryPageLabels('transfers');
 
   const membership = businesses.find((m) => m.business.id === businessId);
   const isOwner    = membership?.role === 'owner';
@@ -606,8 +608,8 @@ export function TransfersPage() {
     <div className={isMobile ? 'pb-4' : undefined}>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>Stock Transfers</h1>
-          {!isMobile && <p className="mt-1 text-sm text-gray-500">Dispatch stock between warehouse and branches</p>}
+          <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>{pageLabels.title}</h1>
+          {!isMobile && <p className="mt-1 text-sm text-gray-500">{pageLabels.subtitle}</p>}
         </div>
         <button onClick={() => setCreateOpen(true)}
           className="flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600">

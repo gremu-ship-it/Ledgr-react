@@ -10,6 +10,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, ChevronRight, ChevronDown, AlertTriangle,
@@ -44,6 +45,7 @@ const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
 // Expense covers both COGS and operating costs; subtype distinguishes them.
 const SUBTYPES: { value: AccountSubtype; label: string; for: AccountType[] }[] = [
   { value: 'current_asset',             label: 'Current Asset',                for: ['asset'] },
+  { value: 'contra_ar',                 label: 'accounting.accountSubtypes.contraAr',    for: ['asset'] },
   { value: 'fixed_asset',               label: 'Fixed Asset (PP&E)',           for: ['asset'] },
   { value: 'non_current_asset',         label: 'Non-Current Asset',            for: ['asset'] },
   { value: 'current_liability',         label: 'Current Liability',            for: ['liability'] },
@@ -131,6 +133,7 @@ interface AccountFormProps {
 }
 
 function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: AccountFormProps) {
+  const { t } = useTranslation();
   const isEdit = Boolean(initial?.id);
 
   const [form, setForm] = useState({
@@ -309,7 +312,9 @@ function AccountFormModal({ initial, accounts, businessId, onSave, onClose }: Ac
               >
                 <option value="">— None —</option>
                 {filteredSubtypes.map(s => (
-                  <option key={`${s.value}-${s.label}`} value={s.value ?? ''}>{s.label}</option>
+                  <option key={`${s.value}-${s.label}`} value={s.value ?? ''}>
+                    {s.value === 'contra_ar' ? t(s.label) : s.label}
+                  </option>
                 ))}
               </select>
             </div>

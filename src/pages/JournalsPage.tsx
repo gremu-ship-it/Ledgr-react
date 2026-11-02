@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, AlertCircle, ScrollText, Plus } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { useJournalEntries } from '@/hooks/useJournalEntries';
@@ -31,6 +32,7 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 };
 
 export function JournalsPage() {
+  const { t } = useTranslation();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
 
@@ -42,6 +44,7 @@ export function JournalsPage() {
   const [page, setPage] = useState(1);
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [showNewEntry, setShowNewEntry] = useState(false);
+  const [approvalNotice, setApprovalNotice] = useState(false);
   const pageSize = 15;
 
   const { data: entries, isLoading, isError } = useJournalEntries(businessId, range.from, range.to);
@@ -101,6 +104,12 @@ export function JournalsPage() {
           <Plus className="h-4 w-4" /> New Entry
         </button>
       </div>
+
+      {approvalNotice && (
+        <p role="status" className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-medium text-indigo-900">
+          {t('approvals.banner.submittedNotice')}
+        </p>
+      )}
 
       {/* Date range presets */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -283,6 +292,7 @@ export function JournalsPage() {
         <NewJournalEntryModal
           businessId={businessId}
           onClose={() => setShowNewEntry(false)}
+          onCreated={({ approvalSubmitted }) => setApprovalNotice(approvalSubmitted)}
         />
       )}
     </div>

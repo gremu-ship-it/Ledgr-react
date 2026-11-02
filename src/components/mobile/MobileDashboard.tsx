@@ -162,7 +162,7 @@ export function MobileDashboard() {
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
-  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled)
+  const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled, planTier, currentBusiness?.business?.operating_models ?? null)
     .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
   const [showExpense, setShowExpense] = useState(false);
@@ -356,7 +356,7 @@ export function MobileDashboard() {
                     <p className="text-xs font-black text-white mt-0.5">{isProfitPositive ? 'Surplus' : 'Deficit'}</p>
                   </div>
                 </div>
-                <button onClick={() => navigate('/reports')} className="rounded-xl bg-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white active:scale-95">
+                <button onClick={() => navigate('/reports/profit-loss')} className="rounded-xl bg-white/20 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white active:scale-95">
                   Insights
                 </button>
               </div>
@@ -468,7 +468,8 @@ export function MobileDashboard() {
               </summary>
               <div className="grid grid-cols-2 gap-2 border-t border-gray-100 p-2">
                 {section.items.map((item) => {
-                  const locked = isItemLocked(item, planTier, section.minPlan);
+                  // Pass 2 of visibleSectionsFor marks plan-locked items.
+                  const locked = item.locked ?? isItemLocked(item, planTier, section.minPlan);
                   const Icon = item.icon;
                   return (
                     <button

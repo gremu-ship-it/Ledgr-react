@@ -111,7 +111,11 @@ export class AssetRepository extends BaseRepository<'fixed_assets'> {
   const asset = await this.findById(schedule.asset_id);
   const updatedAsset = await this.update(asset.id, {
     accumulated_depreciation: schedule.accumulated_to_date,
-    net_book_value: schedule.net_book_value,
+    // net_book_value is GENERATED STORED in the live schema (regenerated
+    // types render it `?: never` for Insert/Update). Payload kept verbatim —
+    // this PR is type-only, so runtime behaviour must not change. Flagged for
+    // a follow-up runtime fix.
+    net_book_value: schedule.net_book_value as never,
     last_depreciation_date: schedule.period_end,
   });
   return { schedule: data, asset: updatedAsset };
@@ -145,7 +149,9 @@ export class AssetRepository extends BaseRepository<'fixed_assets'> {
       revaluation_date: revaluationDate,
       revalued_amount: revaluedAmount,
       revaluation_surplus_account: revaluationSurplusAccountId,
-      net_book_value: revaluedAmount,
+      // GENERATED STORED in the live schema; payload kept verbatim (type-only
+      // PR — see postDepreciation above).
+      net_book_value: revaluedAmount as never,
     });
   }
   

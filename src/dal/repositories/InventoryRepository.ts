@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
 import { fetchAllRows } from '@/lib/paginateQuery';
 import { BaseRepository } from './BaseRepository';
-import { UnsupportedOperationError, toRepositoryError } from '../errors/RepositoryError';
+import { UnsupportedOperationError, ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
 export interface BalanceWithProduct {
   id: string;
@@ -178,6 +178,22 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       }
     }
 
+    const existingSourceMovement = await this.findMovementBySourceIdentity(movement);
+    if (existingSourceMovement) {
+      const balance = await this.findBalance(
+        movement.business_id!,
+        movement.product_id!,
+        movement.location_id!,
+      );
+      if (!balance) {
+        throw toRepositoryError('inventory_balances', {
+          message: `inventory_balances not found for product ${movement.product_id}`,
+          code: 'LEDGR001',
+        });
+      }
+      return { movement: existingSourceMovement, balance };
+    }
+
     const movementRow: InsertDto<'stock_movements'> = clientKey
       ? ({ ...movement, client_key: clientKey } as InsertDto<'stock_movements'>)
       : movement;
@@ -187,7 +203,22 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       .insert(movementRow as never)
       .select('*')
       .single();
-    if (movementError) throw toRepositoryError('stock_movements', movementError);
+
+    // The database trigger is the race-safe backstop: concurrent duplicate
+    // inserts cause the later row to be skipped. Re-read that row rather than
+    // treating PostgREST's empty single-row response as a stock write failure.
+    if (movementError) {
+      const racedDuplicate = await this.findMovementBySourceIdentity(movement);
+      if (racedDuplicate && movementError.code === 'PGRST116') {
+        const balance = await this.findBalance(
+          movement.business_id!,
+          movement.product_id!,
+          movement.location_id!,
+        );
+        if (balance) return { movement: racedDuplicate, balance };
+      }
+      throw toRepositoryError('stock_movements', movementError);
+    }
 
     const balance = await this.findBalance(
       movement.business_id!,
@@ -201,6 +232,71 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       });
     }
     return { movement: createdMovement, balance };
+  }
+
+  /** Look up a movement identity used by document-backed sale/purchase writes. */
+  private async findMovementBySourceIdentity(
+    movement: Partial<InsertDto<'stock_movements'>>,
+  ): Promise<Row<'stock_movements'> | null> {
+    if (!movement.business_id || !movement.source_type || !movement.source_id
+      || !movement.product_id || !movement.location_id
+      || !['sale', 'purchase'].includes(String(movement.movement_type))) return null;
+    const { data, error } = await this.client
+      .from('stock_movements')
+      .select('*')
+      .eq('business_id', movement.business_id)
+      .eq('source_type', movement.source_type)
+      .eq('source_id', movement.source_id)
+      .eq('product_id', movement.product_id)
+      .eq('location_id', movement.location_id)
+      .limit(1);
+    if (error) throw toRepositoryError('stock_movements', error);
+    return data?.[0] ?? null;
+  }
+
+  /** Filter already-recorded identities from a movement batch before insert. */
+  private async filterExistingSourceMovements(
+    movements: InsertDto<'stock_movements'>[],
+  ): Promise<InsertDto<'stock_movements'>[]> {
+    const sourceGroups = new Map<string, InsertDto<'stock_movements'>[]>();
+    for (const movement of movements) {
+      if (!movement.business_id || !movement.source_type || !movement.source_id
+        || !['sale', 'purchase'].includes(String(movement.movement_type))) continue;
+      const groupKey = JSON.stringify([movement.business_id, movement.source_type, movement.source_id]);
+      sourceGroups.set(groupKey, [...(sourceGroups.get(groupKey) ?? []), movement]);
+    }
+
+    const existingIdentities = new Set<string>();
+    for (const group of sourceGroups.values()) {
+      const first = group[0];
+      const { data, error } = await this.client
+        .from('stock_movements')
+        .select('product_id, location_id')
+        .eq('business_id', first.business_id!)
+        .eq('source_type', first.source_type!)
+        .eq('source_id', first.source_id!)
+        .in('product_id', [...new Set(group.map((movement) => movement.product_id!))])
+        .in('location_id', [...new Set(group.map((movement) => movement.location_id!))]);
+      if (error) throw toRepositoryError('stock_movements', error);
+      for (const row of data ?? []) {
+        existingIdentities.add(JSON.stringify([
+          first.business_id, first.source_type, first.source_id, row.product_id, row.location_id,
+        ]));
+      }
+    }
+
+    const seenInBatch = new Set<string>();
+    return movements.filter((movement) => {
+      if (!movement.business_id || !movement.source_type || !movement.source_id
+        || !movement.product_id || !movement.location_id) return true;
+      const identity = JSON.stringify([
+        movement.business_id, movement.source_type, movement.source_id,
+        movement.product_id, movement.location_id,
+      ]);
+      if (existingIdentities.has(identity) || seenInBatch.has(identity)) return false;
+      seenInBatch.add(identity);
+      return true;
+    });
   }
 
   /** Idempotency lookup: find a stock movement previously recorded under a client_key. */
@@ -255,8 +351,10 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
 
       const alreadyRecorded = new Set((existing ?? []).map((row) => row.client_key));
       toInsert = movements.filter((m) => !m.client_key || !alreadyRecorded.has(m.client_key));
-      if (toInsert.length === 0) return [];
     }
+
+    toInsert = await this.filterExistingSourceMovements(toInsert);
+    if (toInsert.length === 0) return [];
 
     const query = this.client.from('stock_movements');
     const { data, error } = keys.length > 0
@@ -315,6 +413,24 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
    * journal.
    */
   async recordInventoryJournalMovement(input: InventoryJournalMovementInput): Promise<InventoryJournalMovementResult> {
+    if (input.kind === 'adjustment' && !input.reference?.trim() && !input.notes?.trim()) {
+      throw new ValidationError(
+        'stock_movements',
+        'inventory-adjustment-reason-required',
+        undefined,
+        { includeResource: false },
+      );
+    }
+    const lineTotals = new Map<string, { quantity: number; totalCost: number }>();
+    for (const line of input.lines) {
+      const quantity = Math.abs(Number(line.quantity));
+      const unitCost = Number(line.unitCost) || 0;
+      const current = lineTotals.get(line.productId) ?? { quantity: 0, totalCost: 0 };
+      current.quantity += quantity;
+      current.totalCost += quantity * unitCost;
+      lineTotals.set(line.productId, current);
+    }
+
     const { data, error } = await (this.client as unknown as {
       rpc: (fn: 'record_inventory_journal_movement', args: { p_payload: Record<string, unknown> }) =>
         Promise<{ data: InventoryJournalMovementResult | null; error: { code?: string; message?: string } | null }>;
@@ -328,7 +444,11 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
         movement_type: input.movementType ?? null,
         reference: input.reference ?? null,
         notes: input.notes ?? null,
-        lines: input.lines.map((l) => ({ product_id: l.productId, quantity: Math.abs(Number(l.quantity)), unit_cost: Number(l.unitCost) || 0 })),
+        lines: [...lineTotals].map(([productId, total]) => ({
+          product_id: productId,
+          quantity: total.quantity,
+          unit_cost: total.quantity ? total.totalCost / total.quantity : 0,
+        })),
       },
     });
     if (error) throw toRepositoryError('stock_movements', error);
