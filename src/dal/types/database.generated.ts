@@ -1154,6 +1154,7 @@ export type Database = {
           notes: string | null
           period_end: string
           period_start: string
+          status: "draft" | "active" | "closed"
           updated_at: string
         }
         ComputedFields: never
@@ -1168,6 +1169,7 @@ export type Database = {
           notes?: string | null
           period_end: string
           period_start: string
+          status?: "draft" | "active" | "closed"
           updated_at?: string
         }
         Update: {
@@ -1181,6 +1183,7 @@ export type Database = {
           notes?: string | null
           period_end?: string
           period_start?: string
+          status?: "draft" | "active" | "closed"
           updated_at?: string
         }
         Relationships: [

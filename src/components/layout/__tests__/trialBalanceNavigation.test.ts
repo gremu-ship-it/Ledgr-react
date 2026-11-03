@@ -11,6 +11,7 @@ describe('Reports navigation', () => {
       '/reports/balance-sheet',
       '/reports/cash-flow',
       '/cash-forecast',
+      '/reports/budgets',
       '/reports/revenue-breakdown',
       '/reports/changes-in-equity',
       '/reports/branch-performance',

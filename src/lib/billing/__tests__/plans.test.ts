@@ -71,6 +71,7 @@ describe('Starter pricing and access', () => {
     '/reports/revenue-breakdown',
     '/reports/branch-performance',
     '/reports/fx-revaluation',
+    '/reports/budgets',
   ])(
     'keeps %s on Growth', (path) => {
       const item = navItemForPath(path)!;

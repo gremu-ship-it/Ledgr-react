@@ -35,6 +35,7 @@ import {
   CalendarDays,
   Settings,
   CircleDollarSign,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -293,6 +294,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, minPlan: 'growth' },
       { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Coins, minPlan: 'growth' },
       { labelKey: 'nav.reports.cashForecast', path: '/cash-forecast', icon: TrendingUp, minPlan: 'growth' },
+      { labelKey: 'navigation.items.budgets', path: '/reports/budgets', icon: Target, minPlan: 'growth' },
       { labelKey: 'navigation.items.revenueBreakdown', path: '/reports/revenue-breakdown', icon: BarChart2, minPlan: 'growth' },
       { labelKey: 'navigation.items.changesInEquity', path: '/reports/changes-in-equity', icon: Scale, minPlan: 'growth' },
       { labelKey: 'navigation.items.branchPerformance', path: '/reports/branch-performance', icon: Building2, minPlan: 'growth' },
