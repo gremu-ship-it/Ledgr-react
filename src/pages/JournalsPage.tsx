@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Search, AlertCircle, ScrollText, Plus } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -33,6 +34,7 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 
 export function JournalsPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
 
@@ -42,7 +44,7 @@ export function JournalsPage() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [reversedOnly, setReversedOnly] = useState(false);
   const [page, setPage] = useState(1);
-  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
+  const [selectedEntryId, setSelectedEntryId] = useState<string | null>(() => searchParams.get('entry'));
   const [showNewEntry, setShowNewEntry] = useState(false);
   const [approvalNotice, setApprovalNotice] = useState(false);
   const pageSize = 15;

@@ -138,6 +138,7 @@ const FxRevaluationPage = lazyPage(() => import('@/pages/FxRevaluationPage'), 'F
 const BudgetListPage = lazyPage(() => import('@/pages/reports/BudgetListPage'), 'BudgetListPage');
 const BudgetNewPage = lazyPage(() => import('@/pages/reports/BudgetNewPage'), 'BudgetNewPage');
 const BudgetVsActualPage = lazyPage(() => import('@/pages/reports/BudgetVsActualPage'), 'BudgetVsActualPage');
+const DepreciationRunPage = lazyPage(() => import('@/pages/reports/DepreciationRunPage'), 'DepreciationRunPage');
 const ExchangeRatesPage = lazyPage(() => import('@/pages/ExchangeRatesPage'), 'ExchangeRatesPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
@@ -901,6 +902,11 @@ function App() {
                   <Route path="/reports/budgets/:id" element={
                     <PlanGate capability="accounting_organisation" featureName={t('budgets.title')}>
                       <BudgetVsActualPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/reports/depreciation" element={
+                    <PlanGate minPlan="growth" featureName={t('depreciation.title')}>
+                      <DepreciationRunPage />
                     </PlanGate>
                   } />
                   <Route path="/journals" element={
