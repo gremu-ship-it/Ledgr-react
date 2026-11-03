@@ -417,7 +417,7 @@ LEFT JOIN LATERAL (
   ORDER BY tc.effective_from DESC
   LIMIT 1
 ) pension ON true
-CROSS JOIN (VALUES
+CROSS JOIN LATERAL (VALUES
   ('BASIC', 'Basic Salary', 'earning', 'fixed', 0::numeric, 0::numeric, true, true, '6110', 1),
   ('HOUSING', 'Housing Allowance', 'earning', 'fixed', 0::numeric, 0::numeric, true, false, '6111', 2),
   ('TRANSPORT', 'Transport Allowance', 'earning', 'fixed', 0::numeric, 0::numeric, true, false, '6111', 3),

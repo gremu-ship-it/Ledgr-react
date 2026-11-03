@@ -36,6 +36,7 @@ describe('Phase 6D-1 payroll migration contract', () => {
     expect(sql).toContain('1570000::numeric, 0.30::numeric');
     expect(sql).toContain('10000000::numeric, 0.35::numeric');
     expect(sql).toContain('0.40::numeric');
+    expect(sql).toMatch(/pension ON true\s+CROSS JOIN LATERAL \(VALUES[\s\S]*pension\.employee_rate/i);
     expect(sql).toMatch(/last_accrued_month date/i);
     expect(sql).toMatch(/last_accrued_month IS NULL OR leave_balances\.last_accrued_month < EXCLUDED\.last_accrued_month/i);
   });
