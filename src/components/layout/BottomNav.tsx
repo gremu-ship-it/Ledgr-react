@@ -25,6 +25,7 @@ import {
   MapPin,
   CircleDollarSign,
   Coins,
+  Target,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -70,6 +71,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, tone: 'brand' },
   { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Wallet, tone: 'info' },
   { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, tone: 'brand' },
+  { labelKey: 'navigation.items.budgets', path: '/reports/budgets', icon: Target, tone: 'brand' },
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },

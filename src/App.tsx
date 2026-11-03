@@ -135,6 +135,9 @@ const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage
 const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
 const FxRevaluationPage = lazyPage(() => import('@/pages/FxRevaluationPage'), 'FxRevaluationPage');
+const BudgetListPage = lazyPage(() => import('@/pages/reports/BudgetListPage'), 'BudgetListPage');
+const BudgetNewPage = lazyPage(() => import('@/pages/reports/BudgetNewPage'), 'BudgetNewPage');
+const BudgetVsActualPage = lazyPage(() => import('@/pages/reports/BudgetVsActualPage'), 'BudgetVsActualPage');
 const ExchangeRatesPage = lazyPage(() => import('@/pages/ExchangeRatesPage'), 'ExchangeRatesPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
@@ -883,6 +886,21 @@ function App() {
                   <Route path="/reports/fx-revaluation" element={
                     <PlanGate capability="accounting_organisation" featureName="FX revaluation">
                       <FxRevaluationPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/reports/budgets" element={
+                    <PlanGate capability="accounting_organisation" featureName={t('budgets.title')}>
+                      <BudgetListPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/reports/budgets/new" element={
+                    <PlanGate capability="accounting_organisation" featureName={t('budgets.title')}>
+                      <BudgetNewPage />
+                    </PlanGate>
+                  } />
+                  <Route path="/reports/budgets/:id" element={
+                    <PlanGate capability="accounting_organisation" featureName={t('budgets.title')}>
+                      <BudgetVsActualPage />
                     </PlanGate>
                   } />
                   <Route path="/journals" element={
