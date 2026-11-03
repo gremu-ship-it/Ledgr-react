@@ -5,6 +5,7 @@ import { JournalRepository } from '@/dal/repositories/JournalRepository';
 import { InvoiceRepository } from '@/dal/repositories/InvoiceRepository';
 import { ExpenseRepository } from '@/dal/repositories/ExpenseRepository';
 import { PayrollRepository } from '@/dal/repositories/PayrollRepository';
+import { PayrollRepository as PayrollFullCycleRepository } from '@/lib/repositories/payroll.repository';
 import { TaxRepository } from '@/dal/repositories/TaxRepository';
 import { TaxReturnRepository } from '@/dal/repositories/TaxReturnRepository';
 import { TaxPaymentRepository } from '@/dal/repositories/TaxPaymentRepository';
@@ -28,6 +29,7 @@ export const repos = {
   invoice:    new InvoiceRepository(supabase),
   expense:    new ExpenseRepository(supabase),
   payroll:    new PayrollRepository(supabase),
+  payrollFullCycle: new PayrollFullCycleRepository(supabase),
   tax:        new TaxRepository(supabase),
   taxReturn:  new TaxReturnRepository(supabase),
   taxPayment: new TaxPaymentRepository(supabase),
