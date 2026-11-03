@@ -134,6 +134,8 @@ const TaxPage = lazyPage(() => import('@/pages/TaxPage'), 'TaxPage');
 const ApiDocumentationPage = lazyPage(() => import('@/pages/ApiDocumentationPage'), 'ApiDocumentationPage');
 const ApiKeysPage = lazyPage(() => import('@/pages/ApiKeysPage'), 'ApiKeysPage');
 const ZapierIntegrationPage = lazyPage(() => import('@/pages/ZapierIntegrationPage'), 'ZapierIntegrationPage');
+const FxRevaluationPage = lazyPage(() => import('@/pages/FxRevaluationPage'), 'FxRevaluationPage');
+const ExchangeRatesPage = lazyPage(() => import('@/pages/ExchangeRatesPage'), 'ExchangeRatesPage');
 const TrialBalancePage = lazyPage(() => import('@/pages/reports/TrialBalancePage'), 'TrialBalancePage');
 const ProfitLossPage = lazyPage(() => import('@/pages/reports/ProfitLossPage'), 'ProfitLossPage');
 const BalanceSheetPage = lazyPage(() => import('@/pages/reports/BalanceSheetPage'), 'BalanceSheetPage');
@@ -878,6 +880,11 @@ function App() {
                   <Route path="/reports/branch-performance" element={<BranchPerformanceRoute />} />
                   <Route path="/reports/vat-return" element={<VatReturnRoute />} />
                   <Route path="/reports/wht-schedule" element={<WhtScheduleRoute />} />
+                  <Route path="/reports/fx-revaluation" element={
+                    <PlanGate capability="accounting_organisation" featureName="FX revaluation">
+                      <FxRevaluationPage />
+                    </PlanGate>
+                  } />
                   <Route path="/journals" element={
                     <PlanGate capability="accounting_organisation" featureName="Journals">
                       <JournalsPage />
@@ -971,6 +978,11 @@ function App() {
                   } />
                   <Route path="/chat" element={<Navigate to="/ai" replace />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/settings/exchange-rates" element={
+                    <PlanGate capability="accounting_organisation" featureName="Exchange rates">
+                      <ExchangeRatesPage />
+                    </PlanGate>
+                  } />
                   <Route path="/settings/approvals" element={<SettingsPage />} />
                   <Route path="/settings/repair-coa" element={<RepairCoaPage />} />
                   <Route path="/support" element={<SupportPage />} />

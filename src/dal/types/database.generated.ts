@@ -15092,6 +15092,18 @@ export type Database = {
         Args: { p_business_id: string; p_kind: string }
         Returns: string
       }
+      run_fx_revaluation: {
+        Args: {
+          p_business_id: string
+          p_revaluation_date: string
+          p_functional_currency: string
+          p_lines: Json
+          p_total_unrealised_gain: number
+          p_total_unrealised_loss: number
+          p_closing_rate_source?: string
+        }
+        Returns: Json
+      }
       return_construction_materials_to_store: {
         Args: { p_client_key: string; p_payload: Json }
         Returns: Json

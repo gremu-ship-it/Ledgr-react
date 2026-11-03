@@ -33,6 +33,8 @@ import {
   GitCompare,
   WalletCards,
   CalendarDays,
+  Settings,
+  CircleDollarSign,
   type LucideIcon,
 } from 'lucide-react';
 import type { PlanCapability, PlanTier } from '@/lib/billing/plans';
@@ -294,6 +296,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.revenueBreakdown', path: '/reports/revenue-breakdown', icon: BarChart2, minPlan: 'growth' },
       { labelKey: 'navigation.items.changesInEquity', path: '/reports/changes-in-equity', icon: Scale, minPlan: 'growth' },
       { labelKey: 'navigation.items.branchPerformance', path: '/reports/branch-performance', icon: Building2, minPlan: 'growth' },
+      { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {
@@ -327,6 +330,13 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', requiresCapability: 'accounting_organisation', hiddenWhenSitesReplaceBranches: true },
       { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+    ],
+  },
+  {
+    labelKey: 'navigation.sections.settings',
+    items: [
+      { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings },
+      { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {

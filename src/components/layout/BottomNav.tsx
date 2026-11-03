@@ -23,6 +23,8 @@ import {
   Warehouse,
   ArrowLeftRight,
   MapPin,
+  CircleDollarSign,
+  Coins,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -67,6 +69,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'nav.reports.profitLoss', path: '/reports/profit-loss', icon: TrendingUp, tone: 'info' },
   { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, tone: 'brand' },
   { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Wallet, tone: 'info' },
+  { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, tone: 'brand' },
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
@@ -79,6 +82,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
   { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
+  { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, tone: 'brand' },
   { labelKey: 'navigation.items.tools', path: '/tools', icon: BarChart2, tone: 'brand' },
 ];
 

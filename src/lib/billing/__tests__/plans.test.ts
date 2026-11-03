@@ -38,11 +38,16 @@ describe('Starter pricing and access', () => {
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
       // Construction moved into the Supply Chain (inventory) section and is now an
-      // Enterprise module (minPlan), so nothing is unlocked on Free except the
-      // Overview, Finance and Support sections.
+      // Enterprise module. General settings remains available on Free, while the
+      // FX tools are explicitly Growth-gated.
       const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
-        expect(isItemLocked(item, 'free'), item.path).toBe(!available);
+        const expectedLocked = item.path === '/settings'
+          ? false
+          : item.path === '/settings/exchange-rates' || item.path === '/reports/fx-revaluation'
+            ? true
+            : !available;
+        expect(isItemLocked(item, 'free'), item.path).toBe(expectedLocked);
       }
     }
   });
@@ -65,6 +70,7 @@ describe('Starter pricing and access', () => {
     '/reports/changes-in-equity',
     '/reports/revenue-breakdown',
     '/reports/branch-performance',
+    '/reports/fx-revaluation',
   ])(
     'keeps %s on Growth', (path) => {
       const item = navItemForPath(path)!;
@@ -75,7 +81,7 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it.each(['/journals', '/periods', '/audit', '/bank-reconciliation/accounts', '/bank-reconciliation/statements', '/contacts', '/branches', '/departments', '/ai'])(
+  it.each(['/journals', '/periods', '/audit', '/bank-reconciliation/accounts', '/bank-reconciliation/statements', '/contacts', '/branches', '/departments', '/ai', '/settings/exchange-rates'])(
     'keeps %s on its existing higher tier', (path) => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },

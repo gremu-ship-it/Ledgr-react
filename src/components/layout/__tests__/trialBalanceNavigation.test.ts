@@ -14,6 +14,7 @@ describe('Reports navigation', () => {
       '/reports/revenue-breakdown',
       '/reports/changes-in-equity',
       '/reports/branch-performance',
+      '/reports/fx-revaluation',
     ]);
   });
 
