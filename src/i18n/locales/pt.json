@@ -296,7 +296,23 @@
     "stock": "Stock",
     "quantity": "Quantidade",
     "reorderLevel": "Nível de reposição",
-    "location": "Localização"
+    "location": "Localização",
+    "errors": {
+      "insufficientStock": "Stock insuficiente neste local. Receba ou transfira stock antes de registar este movimento.",
+      "adjustmentReasonRequired": "Introduza uma referência ou notas para explicar este ajuste de stock.",
+      "transferQuantityMismatch": "As quantidades recebidas têm de corresponder às quantidades enviadas. Registe qualquer falta ou perda como um ajuste de stock separado.",
+      "transferNotApproved": "Só é possível expedir uma transferência aprovada.",
+      "transferNotDispatched": "Só é possível receber uma transferência expedida.",
+      "transferLinesRequired": "Adicione pelo menos uma linha antes de expedir ou receber a transferência.",
+      "transferLinesMismatch": "As linhas da transferência foram alteradas. Atualize a transferência e tente novamente.",
+      "transferInvalidQuantity": "Cada linha deve ser zero ou uma quantidade positiva que não exceda a solicitada, e pelo menos uma linha tem de ser positiva.",
+      "transferDuplicateLine": "Uma linha da transferência foi incluída mais de uma vez. Atualize e tente novamente.",
+      "transferAlreadyHasMovements": "Esta transferência já tem movimentos de stock, mas não está marcada como expedida. Não foi alterada; reveja-a antes de tentar novamente.",
+      "transferNotFound": "A transferência não foi encontrada ou não tem permissão para a utilizar.",
+      "transferAuthRequired": "Inicie sessão com permissão para expedir ou receber esta transferência.",
+      "transferEmptyResult": "A transferência não foi confirmada. Atualize a página antes de tentar novamente."
+    },
+    "transferPairNotice": "O stock de ambos os locais foi atualizado em conjunto quando esta transferência foi expedida. Confirme a receção para a concluir; registe qualquer falta ou perda como um ajuste separado."
   },
   "accounting": {
     "accounts": "Contas",
@@ -484,5 +500,11 @@
     "joinedAs": "Entrou como {{role}}. A redirecionar para o painel…",
     "theBusiness": "a empresa",
     "member": "membro"
+  }
+,
+  "constructionSchedule": {
+    "errors": {
+      "invalidProgress": "O progresso deve ser um número inteiro de 0 a 100."
+    }
   }
 }

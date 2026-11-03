@@ -8,6 +8,7 @@ import {
 import { formatMwkDetailed } from '@/lib/formatters';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import type { Row, InsertDto } from '@/dal/types/database';
 import { weightedAverageCost } from '@/services/inventoryValuation';
@@ -16,6 +17,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { useDensity } from '@/hooks/useDensity';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useCapability } from '@/hooks/useCapability';
+import { useInventoryPageLabels } from '@/hooks/useInventoryPageLabels';
 import { PullToRefreshIndicator } from '@/components/mobile/PullToRefreshIndicator';
 import { SwipeableRow } from '@/components/mobile/SwipeableRow';
 import { EmptyState, InventoryEmptyState } from '@/components/ui/EmptyState';
@@ -183,7 +185,7 @@ function ProductModal({
       // product feel much slower than it is.
       setTimeout(onClose, 400);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => setAlert({ type: 'error', message: getErrorMessage(err) }),
   });
 
   return (
@@ -770,7 +772,7 @@ function MovementsTab({ businessId }: { businessId: string }) {
       queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] });
       setTimeout(() => setAlert(null), 2000);
     },
-    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+    onError: (err: Error) => setAlert({ type: 'error', message: getErrorMessage(err) }),
   });
 
   const locationMap = Object.fromEntries(locations.map((l) => [l.id, l.name]));
@@ -933,6 +935,11 @@ export function ProductsPage() {
   const businessId = currentBusiness?.business?.id;
   const [tab, setTab] = useState<Tab>('products');
   const productSearch = searchParams.get('search') ?? '';
+  // Construction businesses read this page as "Materials" (see
+  // useInventoryPageLabels); everyone else keeps "Products & Inventory".
+  const pageLabels = useInventoryPageLabels('products', {
+    businessName: currentBusiness?.business?.name ?? '',
+  });
 
   if (!businessId) {
     return (
@@ -946,8 +953,8 @@ export function ProductsPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Products & Inventory</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage products, stock levels, and movements for {currentBusiness.business.name}</p>
+          <h1 className="text-2xl font-semibold text-gray-900">{pageLabels.title}</h1>
+          <p className="mt-1 text-sm text-gray-500">{pageLabels.subtitle}</p>
         </div>
         <ImportTemplateMenu entityTypes={['products', 'inventory_opening']} />
       </div>

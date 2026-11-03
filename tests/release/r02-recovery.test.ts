@@ -178,8 +178,15 @@ for (const [source, fragment] of [
 }
 test({ ...meta('PRESERVED.EMAIL-RECOVERY-ROUTES', 'The existing provider email recovery routes are untouched and still delegate issuance/session to Supabase Auth'),
   source: 'src/pages/auth/ForgotPasswordPage.tsx', layer: 'source-preservation check; provider lifecycle verification remains BLOCKED below' }, () => {
+  // These are the canonical modules currently lazy-loaded by App.tsx. The
+  // earlier top-level auth page copies are legacy and are not the routed UI.
   const forgot = readFileSync('src/pages/auth/ForgotPasswordPage.tsx', 'utf8');
-  const reset = readFileSync('src/pages/auth/ResetPasswordPage.tsx', 'utf8');
+  const reset = readFileSync('src/pages/auth/PasswordRecoveryPage.tsx', 'utf8');
+  const app = readFileSync('src/App.tsx', 'utf8');
+  expect(app).toContain("import('@/pages/auth/ForgotPasswordPage')");
+  expect(app).toContain("import('@/pages/auth/PasswordRecoveryPage')");
+  expect(app).toContain('path="/forgot-password" element={<ForgotPasswordPage />}');
+  expect(app).toContain('path="/reset-password" element={<PasswordRecoveryPage />}');
   expect(forgot).toContain('resetPasswordForEmail');
   expect(reset).toContain('PASSWORD_RECOVERY');
   expect(reset).toMatch(/updateUser\(\{\s*password/);
@@ -190,7 +197,7 @@ test({ ...meta('PRESERVED.EMAIL-RECOVERY-ROUTES', 'The existing provider email r
 });
 for (const scenario of ['valid-own-identity', 'missing', 'malformed', 'invalid', 'expired', 'consumed', 'replay', 'substituted', 'identity-changed-after-issuance']) {
   test({ ...meta(`PROVIDER-TOKEN.${scenario}`, 'Supabase recovery proof binds mutation to its own subject and enforces lifecycle without modifying an unauthorized identity'),
-    source: 'src/pages/auth/ResetPasswordPage.tsx', layer: 'isolated Supabase Auth recovery service unavailable' }, () => {
+    source: 'src/pages/auth/PasswordRecoveryPage.tsx', layer: 'isolated Supabase Auth recovery service unavailable' }, () => {
     throw new Blocked('No isolated Supabase Auth recovery service/delivery configured. Stateful Edge adapters cannot prove provider token binding, expiry, consumption or session revocation. No real tokens used.');
   });
 }

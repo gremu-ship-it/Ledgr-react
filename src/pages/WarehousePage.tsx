@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Search, AlertTriangle, Warehouse, Loader2, X, ChevronDown, AlertCircle, CheckCircle2,
@@ -8,6 +10,7 @@ import { repos } from '@/lib/repositories';
 import { ImportTemplateMenu } from '@/components/data/ImportTemplateMenu';
 import { formatMwk } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useInventoryPageLabels } from '@/hooks/useInventoryPageLabels';
 import type { Row } from '@/dal/types/database';
 import { newSaveClientKey } from '@/services/quickSaveService';
 import {
@@ -46,6 +49,7 @@ function ReceiveStockModal({
   isLoading: boolean;
   error: string | null;
 }) {
+  const { t } = useTranslation();
   const [lines, setLines] = useState<ReceiveLineForm[]>([
     { productId: '', quantity: 1, unitCost: 0 },
   ]);
@@ -105,8 +109,16 @@ function ReceiveStockModal({
             Receive into location <span className="text-red-400">*</span>
           </label>
           {locations.length === 0 ? (
+            /* P2-1: this used to be a hardcoded dead end pointing at a tab that
+               did not exist. The Locations tab is real now — link to it. */
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              No warehouse locations found. Go to Settings → Locations to add one first.
+              {t('pages.inventory.noLocationsMessage')}{' '}
+              <Link
+                to="/locations"
+                className="font-semibold underline hover:text-amber-900"
+              >
+                {t('pages.inventory.goToLocations')}
+              </Link>
             </p>
           ) : (
             <select
@@ -544,6 +556,9 @@ export function WarehousePage() {
   const currentUser = useAppStore((s) => s.currentUser);
   const queryClient = useQueryClient();
   const isMobile    = useIsMobile();
+  // Construction businesses read this page as "Site Stores" (see
+  // useInventoryPageLabels); everyone else keeps "Warehouse".
+  const pageLabels  = useInventoryPageLabels('warehouse');
 
   const [search, setSearch]               = useState('');
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -651,9 +666,9 @@ export function WarehousePage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className={isMobile ? 'text-lg font-semibold text-gray-900' : 'text-2xl font-semibold text-gray-900'}>
-            Warehouse
+            {pageLabels.title}
           </h1>
-          {!isMobile && <p className="mt-1 text-sm text-gray-500">Stock levels across all locations</p>}
+          {!isMobile && <p className="mt-1 text-sm text-gray-500">{pageLabels.subtitle}</p>}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ImportTemplateMenu entityTypes={['inventory_opening']} />

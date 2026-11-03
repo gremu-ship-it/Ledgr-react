@@ -36,10 +36,22 @@ async function ownContact(org: string) {
   expect(r.rows).toHaveLength(1); // Positive control before every tenant-negative probe.
 }
 
-test(meta('DB.REPLAY', 'All source migrations replay with ONLY declared pg_cron/pg_net installation substitutions', 'R13'), () => {
+test(meta('DB.REPLAY', 'All source migrations replay with ONLY declared pg_cron/pg_net installation substitutions', 'R13'), async () => {
   if (!db) throw new Blocked(`Replay failed: ${replayError}`);
   expect(db.migrations.map((m: {name:string})=>m.name)).toEqual(readdirSync('supabase/migrations').filter(n=>n.endsWith('.sql')).sort());
   expect(db.version).toMatch(/^17\./);
+  const relations = await db.client.query(`
+    select c.relname, c.relkind, c.reloptions
+      from pg_class c
+     where c.oid in (to_regclass('public.construction_projects'), to_regclass('public.projects'))
+     order by c.relname
+  `);
+  expect(relations.rows.map((r: {relname:string; relkind:string}) => [r.relname, r.relkind])).toEqual([
+    ['construction_projects', 'r'],
+    ['projects', 'v'],
+  ]);
+  const compatibilityView = relations.rows.find((r: {relname:string}) => r.relname === 'projects');
+  expect(compatibilityView?.reloptions).toContain('security_invoker=true');
 });
 test(meta('DB.FIXTURE', 'Two organisations, fourteen role identities, four branches, stock and shifts seed', 'R13'), async () => {
   ready();

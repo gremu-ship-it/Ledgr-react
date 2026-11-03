@@ -1,0 +1,26 @@
+-- ============================================================================
+-- 20261024000000_stock_movement_type_construction_return.sql
+--
+-- Additive, single-statement migration: one new stock movement type used by the
+-- Phase 1 usable-material return command in
+-- 20261026000000_construction_return_command.sql.
+--
+-- WHY A SEPARATE FILE
+--   PostgreSQL refuses to USE an enum value in the same transaction that added
+--   it, so `alter type ... add value` must live in its own migration that
+--   commits before the migration consuming the value. The R13 replay harness
+--   executes each migration file as a single statement batch, so this file is a
+--   single statement and nothing else.
+--
+-- ALIGNMENT
+--   The label is the one decided by the owner on 2026-10-16 (decision A): the
+--   POS-oriented `return_in` (written only by src/services/posService.ts) is NOT
+--   reused. `construction_return_in` reads as inbound under the display rule in
+--   src/pages/ProductsPage.tsx ("movement_type.includes('in')"), and no SQL or
+--   application consumer switches on the movement type, so no existing report
+--   changes meaning. Precedent: 20261020500000 added `issue_out` this way.
+--
+-- SCOPE: one enum label. No table, column, policy, grant or data change.
+-- ============================================================================
+
+alter type public.stock_movement_type add value if not exists 'construction_return_in';

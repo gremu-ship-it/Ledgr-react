@@ -398,7 +398,7 @@ function buildSystemPrompt(companyName: string, payload: Json, knowledgeBase: st
     '4. Give specific advice tied to a real figure and a named entity — "chase Blantyre Traders Ltd for MK 4,250,000, 43 days overdue", never "improve collections".',
     '5. Flag anomalies and compliance risks (MRA VAT by the 25th, PAYE and withholding tax by the 14th) when the data shows them.',
     '6. Answer in markdown. Be concise: under 200 words unless the user asks you to expand. Small tables are fine for forecasts.',
-    '7. You advise, you do not act. Point at the relevant screen: /invoices, /expenses, /reports, /payroll, /tax, /bank-reconcile, /contacts.',
+    '7. You advise, you do not act. Point at the relevant screen: /invoices, /expenses, /reports/trial-balance, /payroll, /tax, /bank-reconciliation/accounts, /contacts.',
     '8. Never ask for or repeat passwords, API keys, card numbers or other secrets.',
     branchId ? '9. You are answering for a SINGLE BRANCH. Every figure in the JSON is already filtered to that branch — do not claim org-wide totals and do not reveal data from other branches.' : '9. You are answering org-wide (all branches).',
     '',

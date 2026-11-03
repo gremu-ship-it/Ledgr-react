@@ -29,6 +29,21 @@ describe('InventoryRepository.recordInventoryJournalMovement', () => {
     expect(r.journal_entry_id).toBe('je1');
   });
 
+  it('coalesces repeated products into one source/product movement while preserving total value', async () => {
+    const { repo, rpc } = makeRepo({ data: { idempotent: false, movement_ids: ['m1'], journal_entry_id: null }, error: null });
+    await repo.recordInventoryJournalMovement({
+      ...input,
+      kind: 'receipt',
+      reference: 'GRN-2',
+      lines: [
+        { productId: 'p1', quantity: 2, unitCost: 100 },
+        { productId: 'p1', quantity: 3, unitCost: 200 },
+      ],
+    });
+    const payload = rpc.mock.calls[0][1].p_payload as { lines: { product_id: string; quantity: number; unit_cost: number }[] };
+    expect(payload.lines).toEqual([{ product_id: 'p1', quantity: 5, unit_cost: 160 }]);
+  });
+
   it('throws when the server rejects (journal or stock failure is never swallowed)', async () => {
     const { repo } = makeRepo({ data: null, error: { code: 'P0001', message: 'Account 2114 not found' } });
     await expect(repo.recordInventoryJournalMovement(input)).rejects.toThrow();

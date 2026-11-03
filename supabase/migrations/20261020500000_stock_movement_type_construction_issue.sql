@@ -1,0 +1,26 @@
+-- ============================================================================
+-- 20261020500000_stock_movement_type_construction_issue.sql
+--
+-- Additive, single-statement migration: one new stock movement type used by the
+-- construction material issue/consumption command in
+-- 20261021000000_construction_procurement_traceability.sql.
+--
+-- WHY A SEPARATE FILE
+--   PostgreSQL refuses to USE an enum value in the same transaction that added
+--   it, so `alter type ... add value` must live in its own migration that
+--   commits before the migration consuming the value. This file is therefore a
+--   single statement and nothing else.
+--
+-- ALIGNMENT
+--   Consuming materials on a site is the moment their carrying amount is
+--   recognised as an expense / project cost (IAS 2 paragraph 34). It is NOT a
+--   write-off, a transfer or an adjustment: `write_off` states a loss, `transfer_out`
+--   moves ownership between locations of the same entity, and `adjustment_out`
+--   states a count correction. Reporting consumption against project cost needs
+--   its own movement type, so it is added additively rather than reusing a
+--   movement type whose meaning would then be wrong in every existing report.
+--
+-- SCOPE: one enum label. No table, column, policy, grant or data change.
+-- ============================================================================
+
+alter type public.stock_movement_type add value if not exists 'issue_out';

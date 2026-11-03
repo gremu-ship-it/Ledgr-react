@@ -168,7 +168,7 @@ test(meta('R05.FINANCE.VOID-EXPENSE-PAYMENT', 'Payment on a void expense is reje
   expect((await db.client.query('select count(*)::int n from public.expense_payments')).rows[0].n).toBe(0);
 });
 
-test(meta('R05.FINANCE.NONEG-LINES', 'Non-negative quantity/price/balance constraints reject bad new writes (23514); all ten phase-10 constraints are present in the catalog', M_NONEG), async () => {
+test(meta('R05.FINANCE.NONEG-LINES', 'Non-negative quantity/price/balance constraints reject bad new writes (23514); all ten phase-10 constraints are present in the catalog, plus chk_cgrl_nonneg added by the construction procurement migration', M_NONEG), async () => {
   ready();
   await db.asRole('authenticated', identities.A_owner.id, async (c: C) => {
     await c.query('reset role');
@@ -180,7 +180,12 @@ test(meta('R05.FINANCE.NONEG-LINES', 'Non-negative quantity/price/balance constr
     expect(Number((await c.query('select quantity_on_hand from public.inventory_balances where business_id=$1 and product_id=$2 and location_id=$3', [orgs.A.business, orgs.A.product, orgs.A.location])).rows[0].quantity_on_hand)).toBe(100);
   });
   const constraints = await db.client.query("select conname from pg_constraint where connamespace='public'::regnamespace and (conname like 'chk\\_%\\_nonneg' or conname='chk_stock_movements_quantity_nonzero')");
-  expect(constraints.rows.length).toBe(10);
+  // 11 since 20261021000000_construction_procurement_traceability.sql added
+  // chk_cgrl_nonneg (received/accepted/rejected/quarantined/disputed >= 0 on
+  // public.construction_goods_receipt_lines) — a new constraint in the same
+  // family, not a change to the existing ten.
+  expect(constraints.rows.map((r: { conname: string }) => r.conname)).toContain('chk_cgrl_nonneg');
+  expect(constraints.rows.length).toBe(11);
 });
 
 test(meta('R05.FINANCE.NUMBER-RESERVATION', 'Document numbers reserve atomically and distinctly per kind; viewer denied; payroll gated to payroll roles; unknown kind rejected', M_NUM), async () => {

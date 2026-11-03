@@ -42,7 +42,7 @@ export type AccountType =
   | 'income' | 'expense';
 
 export type AccountSubtype =
-  | 'current_asset' | 'non_current_asset' | 'fixed_asset'
+  | 'current_asset' | 'contra_ar' | 'non_current_asset' | 'fixed_asset'
   | 'current_liability' | 'non_current_liability'
   | 'share_capital' | 'retained_earnings' | 'reserves'
   | 'revenue' | 'other_income' | 'cost_of_sales'

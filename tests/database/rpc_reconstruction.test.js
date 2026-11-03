@@ -182,9 +182,11 @@ async function main() {
     const pinned = pinnedLegacy?.capability_overrides ?? {};
     if (pinnedLegacy?.organisation_type === 'FOR_PROFIT'
       && Array.isArray(pinnedLegacy.operating_models) && pinnedLegacy.operating_models.length === 0
-      && pinned.sales === true && pinned.pos === true
+      && pinned.sales === true && !('pos' in pinned)
       && pinned.inventory === true && pinned.services === true) {
-      ok('A/B/H Strategy-A pin preserves a pre-existing tenant with no inferred model');
+      // 20261102000000 removes the legacy pos pin from non-RETAIL tenants, so the
+      // pre-existing no-model tenant keeps sales/inventory/services but no pos key.
+      ok('A/B/H Strategy-A pin preserves a pre-existing tenant; pos pin removed for non-RETAIL');
     } else fail('pre-existing business capability pin', JSON.stringify(pinnedLegacy));
 
     const rpcContract = (await c.query(`
