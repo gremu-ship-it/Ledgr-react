@@ -1,4 +1,6 @@
 import { currentFiscalYear } from '@/lib/fiscalYear';
+import { useUsage } from '@/hooks/useUsage';
+import { hasCapability } from '@/lib/billing/plans';
 import { calculatePAYE, type PayeBand } from '@/lib/paye';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -2195,7 +2197,10 @@ export function PayrollPage() {
   // approvals in practice). Adjust if your role model intends something
   // narrower or wider for this action.
   const canApprovePayroll = role === 'owner' || role === 'admin' || role === 'accountant';
-  const [tab, setTab] = useState<MainTab>('runs');
+  const { planTier } = useUsage();
+  const canRunPayRuns = hasCapability(planTier, 'accounting_organisation');
+  const [tab, setTab] = useState<MainTab>('employees');
+  const activeTab: MainTab = canRunPayRuns ? tab : 'employees';
   const [showRunModal, setShowRunModal] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [showImportEmployeeModal, setShowImportEmployeeModal] = useState(false);
@@ -2214,7 +2219,7 @@ export function PayrollPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <ImportTemplateMenu entityTypes={['employees']} />
-          {tab === 'employees' && canEditEmployees && (
+          {activeTab === 'employees' && canEditEmployees && (
             <>
               <button
                 onClick={() => setShowImportEmployeeModal(true)}
@@ -2230,28 +2235,28 @@ export function PayrollPage() {
               </button>
             </>
           )}
-          <button
+          {canRunPayRuns && <button
             onClick={() => setShowRunModal(true)}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 transition-colors"
           >
             <Briefcase className="h-4 w-4" />Run Payroll
-          </button>
+          </button>}
         </div>
       </div>
 
       <div className="mb-6 flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1 w-fit">
-        <button
+        {canRunPayRuns && <button
           onClick={() => setTab('runs')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'runs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            activeTab === 'runs' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Briefcase className="h-4 w-4" />Payroll Runs
-        </button>
+        </button>}
         <button
           onClick={() => setTab('employees')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'employees' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            activeTab === 'employees' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Users className="h-4 w-4" />Employees
@@ -2259,15 +2264,15 @@ export function PayrollPage() {
         <button
           onClick={() => setTab('cost_centers')}
           className={`flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'cost_centers' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            activeTab === 'cost_centers' ? 'bg-white text-brand-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           <Building2 className="h-4 w-4" />Cost Centers
         </button>
       </div>
 
-      {tab === 'runs' && <PayrollRunsTab businessId={businessId} onRunPayroll={() => setShowRunModal(true)} canApprove={canApprovePayroll} />}
-      {tab === 'employees' && (
+      {activeTab === 'runs' && canRunPayRuns && <PayrollRunsTab businessId={businessId} onRunPayroll={() => setShowRunModal(true)} canApprove={canApprovePayroll} />}
+      {activeTab === 'employees' && (
         <EmployeesTab
           businessId={businessId}
           onAddEmployee={() => setShowAddEmployeeModal(true)}
@@ -2275,9 +2280,9 @@ export function PayrollPage() {
           canEdit={canEditEmployees}
         />
       )}
-      {tab === 'cost_centers' && <CostCentersTab businessId={businessId} />}
+      {activeTab === 'cost_centers' && <CostCentersTab businessId={businessId} />}
 
-      {showRunModal && (
+      {showRunModal && canRunPayRuns && (
         <RunPayrollModal
           businessId={businessId}
           onClose={() => setShowRunModal(false)}

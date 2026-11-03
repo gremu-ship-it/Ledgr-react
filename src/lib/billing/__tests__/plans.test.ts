@@ -40,12 +40,13 @@ describe('Starter pricing and access', () => {
       // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
       const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
-        expect(isItemLocked(item, 'free'), item.path).toBe(!available);
+        const payrollRequiresStarter = item.path === '/payroll' || item.path === '/payroll/tax-config';
+        expect(isItemLocked(item, 'free'), item.path).toBe(!available || payrollRequiresStarter);
       }
     }
   });
 
-  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports'])(
+  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports', '/payroll', '/payroll/tax-config'])(
     'unlocks %s starting at Starter', (path) => {
       const item = navItemForPath(path)!;
       expect(item).toBeDefined();
@@ -133,6 +134,10 @@ describe('plan catalogue integration parity', () => {
     for (const name of ['Journals', 'Period Management', 'Audit Log', 'Contacts', 'Branches', 'Departments']) {
       expect(app).toContain(`capability="accounting_organisation" featureName="${name}"`);
     }
-    expect(app).toContain('<PartnerPlanGate featureKey="payroll" featureName="Payroll">');
+    expect(app).toContain(`<PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>`);
+    expect(app).toContain('<Route path="/payroll/tax-config" element={');
+    const payrollPage = source('src/pages/PayrollPage.tsx');
+    expect(payrollPage).toContain("hasCapability(planTier, 'accounting_organisation')");
+    expect(payrollPage).toContain('canRunPayRuns &&');
   });
 });

@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -64,6 +65,7 @@ const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
 const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
+const TaxConfigPage = lazyPage(() => import('@/pages/payroll/TaxConfigPage'), 'TaxConfigPage');
 const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
 const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
 const InventoryPage = lazyPage(() => import('@/pages/InventoryPage'), 'InventoryPage');
@@ -163,6 +165,7 @@ function UpdateAvailableBanner() {
 }
 
 function App() {
+  const { t } = useTranslation();
   useAuthListener();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const role = currentBusiness?.role || null;
@@ -261,8 +264,13 @@ function App() {
                   <Route path="/expenses" element={<ExpensesPage />} />
                   <Route path="/invoices" element={<InvoicesPage />} />
                   <Route path="/payroll" element={
-                    <PartnerPlanGate featureKey="payroll" featureName="Payroll">
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>
                       <PayrollPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/tax-config" element={
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.taxConfig')}>
+                      <TaxConfigPage />
                     </PartnerPlanGate>
                   } />
 
