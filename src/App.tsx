@@ -378,7 +378,6 @@ export function SmartRedirect() {
 function App() {
   const { t } = useTranslation();
   useAuthListener();
-  const { t } = useTranslation();
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
