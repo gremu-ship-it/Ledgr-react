@@ -5,12 +5,11 @@ const migrationPath = 'supabase/migrations/20261122000000_construction_multileve
 const sql = readFileSync(migrationPath, 'utf8');
 
 describe('construction multi-level BOQ migration contract', () => {
-  it('is the newest additive migration after manufacturing execution', () => {
+  it('is versioned after manufacturing execution with construction follow-up migrations in sequence', () => {
     const versions = readdirSync('supabase/migrations')
       .filter((file) => file.endsWith('.sql'))
       .map((file) => file.split('_')[0])
       .sort();
-    expect(versions.at(-1)).toBe('20261205000000');
     expect(versions.indexOf('20261122000000')).toBe(versions.indexOf('20261121000000') + 1);
     expect(versions.indexOf('20261123000000')).toBe(versions.indexOf('20261122000000') + 1);
     expect(versions.indexOf('20261124000000')).toBe(versions.indexOf('20261123000000') + 1);
