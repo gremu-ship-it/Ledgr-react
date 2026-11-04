@@ -113,6 +113,24 @@ select cron.schedule(
 );
 
 -- ── Re-enable the jobs scheduled above ──────────────────────────────────────
+-- Daily finalize account deletions (migration 20260820000000; same schedule and
+-- command pattern as declared there). The function at
+-- supabase/functions/finalize-account-deletions is protected by the CRON_SECRET
+-- and runs on a schedule (see the pg_cron setup).
+select cron.schedule(
+  'finalize-account-deletions-daily',
+  '0 3 * * *', -- 03:00 UTC every day
+  $$
+  select net.http_post(
+    url := 'https://<PROJECT_REF>.supabase.co/functions/v1/finalize-account-deletions',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', '<CRON_SECRET>'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
 -- cron.schedule() upserts on (jobname, username) and rewrites only schedule,
 -- command and database — it never touches `active` (pg_cron
 -- src/job_metadata.c, ScheduleCronJob; unchanged through 1.6.8). A job that
