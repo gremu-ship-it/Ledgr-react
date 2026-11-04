@@ -63,6 +63,7 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
   { labelKey: 'payroll.employees', path: '/payroll/employees', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
+  { labelKey: 'payroll.payRuns', path: '/payroll/pay-runs', icon: FileText, tone: 'info', partnerFeature: 'payroll' },
   { labelKey: 'payroll.taxConfig', path: '/payroll/tax-config', icon: Percent, tone: 'brand', partnerFeature: 'payroll' },
   { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, tone: 'brand' },
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
@@ -125,6 +126,7 @@ export function BottomNav() {
     .filter((i) => !i.partnerFeature || isFeatureEnabled(i.partnerFeature))
     .filter((i) => {
       const navItem = navItemForPath(i.path);
+      if (navItem && isItemLocked(navItem, planTier)) return false;
       return !navItem?.requiresOrgCapability || isOrgCapabilityEnabled(navItem.requiresOrgCapability);
     })
     .filter((i) => allowedForRole(i.path));

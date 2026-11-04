@@ -69,6 +69,9 @@ const TaxConfigPage = lazyPage(() => import('@/pages/payroll/TaxConfigPage'), 'T
 const EmployeeListPage = lazyPage(() => import('@/pages/payroll/EmployeeListPage'), 'EmployeeListPage');
 const EmployeeNewPage = lazyPage(() => import('@/pages/payroll/EmployeeNewPage'), 'EmployeeNewPage');
 const EmployeeDetailPage = lazyPage(() => import('@/pages/payroll/EmployeeDetailPage'), 'EmployeeDetailPage');
+const PayRunListPage = lazyPage(() => import('@/pages/payroll/PayRunListPage'), 'PayRunListPage');
+const PayRunNewPage = lazyPage(() => import('@/pages/payroll/PayRunNewPage'), 'PayRunNewPage');
+const PayRunDetailPage = lazyPage(() => import('@/pages/payroll/PayRunDetailPage'), 'PayRunDetailPage');
 const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
 const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
 const InventoryPage = lazyPage(() => import('@/pages/InventoryPage'), 'InventoryPage');
@@ -279,6 +282,21 @@ function App() {
                   <Route path="/payroll/employees/:id" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
                       <EmployeeDetailPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/pay-runs" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
+                      <PayRunListPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/pay-runs/new" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
+                      <PayRunNewPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/pay-runs/:id" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
+                      <PayRunDetailPage />
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll" element={
