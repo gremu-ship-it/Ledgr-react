@@ -63,6 +63,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt },
       { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText },
       { labelKey: 'payroll.employees', path: '/payroll/employees', icon: Users, partnerFeature: 'payroll', minPlan: 'starter' },
+      { labelKey: 'payroll.payRuns', path: '/payroll/pay-runs', icon: Coins, partnerFeature: 'payroll', minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'payroll.taxConfig', path: '/payroll/tax-config', icon: Percent, partnerFeature: 'payroll', minPlan: 'starter' },
     ],
   },

@@ -367,6 +367,28 @@ export class PayrollRepository {
     return asRow(data);
   }
 
+  async getPayRunByPeriod(
+    businessId: string,
+    periodStart: string,
+    periodEnd: string,
+  ): Promise<Record<string, unknown> | null> {
+    const { data, error } = await this.client.from('pay_runs').select('*')
+      .eq('business_id', businessId).eq('period_start', periodStart).eq('period_end', periodEnd).maybeSingle();
+    throwIfError('pay_runs', error);
+    return data ? asRow(data) : null;
+  }
+
+  async approvePayRun(businessId: string, payRunId: string): Promise<Record<string, unknown>> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.client.from('pay_runs')
+      .update({ status: 'approved', approved_at: now, updated_at: now })
+      .eq('business_id', businessId).eq('id', payRunId).eq('status', 'calculated')
+      .select('*').maybeSingle();
+    throwIfError('pay_runs', error);
+    if (!data) throw new ValidationError('pay_runs', 'Only a calculated pay run can be approved.');
+    return asRow(data);
+  }
+
   async calculatePayRun(businessId: string, periodStart: string, periodEnd: string, payDate: string): Promise<Record<string, unknown>> {
     const { data, error } = await this.client.rpc('calculate_pay_run', {
       p_business_id: businessId, p_period_start: periodStart, p_period_end: periodEnd, p_pay_date: payDate,
@@ -377,6 +399,12 @@ export class PayrollRepository {
 
   async postPayRun(payRunId: string): Promise<Record<string, unknown>> {
     const { data, error } = await this.client.rpc('post_pay_run', { p_pay_run_id: payRunId });
+    throwIfError('pay_runs', error);
+    return asRow(data);
+  }
+
+  async reversePayRun(payRunId: string): Promise<Record<string, unknown>> {
+    const { data, error } = await this.client.rpc('reverse_pay_run', { p_pay_run_id: payRunId });
     throwIfError('pay_runs', error);
     return asRow(data);
   }
