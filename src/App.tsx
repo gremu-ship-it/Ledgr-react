@@ -124,7 +124,6 @@ const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
-const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
 const TaxConfigPage = lazyPage(() => import('@/pages/payroll/TaxConfigPage'), 'TaxConfigPage');
 const EmployeeListPage = lazyPage(() => import('@/pages/payroll/EmployeeListPage'), 'EmployeeListPage');
 const EmployeeNewPage = lazyPage(() => import('@/pages/payroll/EmployeeNewPage'), 'EmployeeNewPage');
@@ -867,11 +866,7 @@ function App() {
                       <LeaveRequestsPage />
                     </PartnerPlanGate>
                   } />
-                  <Route path="/payroll" element={
-                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>
-                      <PayrollPage />
-                    </PartnerPlanGate>
-                  } />
+                  <Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />
                   <Route path="/payroll/tax-config" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.taxConfig')}>
                       <TaxConfigPage />

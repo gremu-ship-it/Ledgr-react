@@ -33,7 +33,6 @@ import {
   MessageSquare,
   GitCompare,
   WalletCards,
-  Settings,
   CircleDollarSign,
   Calculator,
   Target,
@@ -100,12 +99,17 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     ],
   },
   {
+    labelKey: 'navigation.sections.planning',
+    items: [
+      { labelKey: 'navigation.items.budgets', path: '/reports/budgets', icon: Target, minPlan: 'growth' },
+    ],
+  },
+  {
     labelKey: 'payroll.title',
     items: [
       { labelKey: 'payroll.employees', path: '/payroll/employees', icon: Users, partnerFeature: 'payroll', minPlan: 'starter' },
       { labelKey: 'payroll.payRuns', path: '/payroll/pay-runs', icon: Coins, partnerFeature: 'payroll', minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'payroll.leave', path: '/payroll/leave', icon: CalendarDays, partnerFeature: 'payroll', minPlan: 'growth', requiresCapability: 'accounting_organisation' },
-      { labelKey: 'payroll.taxConfig', path: '/payroll/tax-config', icon: Percent, partnerFeature: 'payroll', minPlan: 'starter' },
     ],
   },
   {
@@ -293,6 +297,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, requiresCapability: 'core_accounting' },
       { labelKey: 'navigation.items.journals', path: '/journals', icon: ScrollText, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'navigation.items.periods', path: '/periods', icon: Lock, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {
@@ -302,13 +307,9 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'nav.reports.profitLoss', path: '/reports/profit-loss', icon: TrendingUp, minPlan: 'growth' },
       { labelKey: 'nav.reports.balanceSheet', path: '/reports/balance-sheet', icon: Landmark, minPlan: 'growth' },
       { labelKey: 'nav.reports.cashFlow', path: '/reports/cash-flow', icon: Coins, minPlan: 'growth' },
-      { labelKey: 'nav.reports.cashForecast', path: '/cash-forecast', icon: TrendingUp, minPlan: 'growth' },
-      { labelKey: 'navigation.items.budgets', path: '/reports/budgets', icon: Target, minPlan: 'growth' },
-      { labelKey: 'navigation.items.depreciation', path: '/reports/depreciation', icon: Calculator, minPlan: 'growth' },
       { labelKey: 'navigation.items.revenueBreakdown', path: '/reports/revenue-breakdown', icon: BarChart2, minPlan: 'growth' },
       { labelKey: 'navigation.items.changesInEquity', path: '/reports/changes-in-equity', icon: Scale, minPlan: 'growth' },
       { labelKey: 'navigation.items.branchPerformance', path: '/reports/branch-performance', icon: Building2, minPlan: 'growth' },
-      { labelKey: 'navigation.items.fxRevaluation', path: '/reports/fx-revaluation', icon: CircleDollarSign, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {
@@ -326,12 +327,14 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/reconcile', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'nav.reports.cashForecast', path: '/cash-forecast', icon: TrendingUp, minPlan: 'growth' },
     ],
   },
   {
     labelKey: 'navigation.sections.assetsCapital',
     items: [
       { labelKey: 'navigation.items.fixedAssets', path: '/assets', icon: Landmark, minPlan: 'starter', requiresCapability: 'core_accounting' },
+      { labelKey: 'navigation.items.depreciation', path: '/reports/depreciation', icon: Calculator, minPlan: 'growth' },
       { labelKey: 'navigation.items.capitalEquity', path: '/capital', icon: Coins, minPlan: 'starter', requiresCapability: 'core_accounting' },
     ],
   },
@@ -342,13 +345,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', requiresCapability: 'accounting_organisation', hiddenWhenSitesReplaceBranches: true },
       { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
-    ],
-  },
-  {
-    labelKey: 'navigation.sections.settings',
-    items: [
-      { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings },
-      { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {

@@ -169,9 +169,13 @@ export function PayRunDetailPage() {
                 {postMutation.isPending ? t('payroll.postingPayRun') : t('payroll.postPayRun')}
               </Button>
             )}
+            {(status === 'approved' || status === 'posted') && (
+              <Button size="lg" className="shadow-md" onClick={printRun}>
+                <Printer className="h-5 w-5" aria-hidden="true" />{t('payroll.printPayslips')}
+              </Button>
+            )}
             {status === 'posted' && (
               <>
-                <Button variant="secondary" onClick={printRun}><Printer className="h-4 w-4" aria-hidden="true" />{t('payroll.printPayslips')}</Button>
                 {originalJournalId && <Button variant="secondary" onClick={() => setSelectedJournalEntryId(originalJournalId)}>{t('payroll.viewJournalEntry')}</Button>}
                 <Button variant="destructive" onClick={() => { setReverseFeedback(''); setConfirmReverse(true); }}>
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />{t('payroll.reversePayRun')}
@@ -218,6 +222,13 @@ export function PayRunDetailPage() {
             const payComponent = asRow(component.pay_component);
             return text(payComponent.name, text(payComponent.code, t('payroll.unnamedComponent')));
           };
+          const payeAmount = numeric(line.paye_amount);
+          const pensionAmount = line.pension_employee == null
+            ? deductions.filter((component) => /pension/i.test(componentName(component)))
+              .reduce((sum, component) => sum + numeric(component.amount), 0)
+            : numeric(line.pension_employee);
+          const totalDeductions = numeric(line.total_deductions);
+          const otherDeductions = Math.max(0, totalDeductions - payeAmount - pensionAmount);
           return (
             <article key={text(line.id, `${text(line.employee_id)}-${index}`)} className="payslip-page mx-auto max-w-3xl p-8 text-gray-900">
               <header className="border-b-2 border-gray-900 pb-5">
@@ -237,7 +248,10 @@ export function PayRunDetailPage() {
               </div>
               <dl className="ml-auto max-w-sm space-y-2 border-t border-gray-300 pt-4 text-sm">
                 <div className="flex justify-between"><dt>{t('payroll.grossPay')}</dt><dd>{formatPayRunMoney(line.gross_pay, currency, i18n.language)}</dd></div>
-                <div className="flex justify-between"><dt>{t('payroll.totalDeductions')}</dt><dd>{formatPayRunMoney(line.total_deductions, currency, i18n.language)}</dd></div>
+                <div className="flex justify-between"><dt>{t('payroll.payeAmount')}</dt><dd>{formatPayRunMoney(payeAmount, currency, i18n.language)}</dd></div>
+                <div className="flex justify-between"><dt>{t('payroll.pensionEmployee')}</dt><dd>{formatPayRunMoney(pensionAmount, currency, i18n.language)}</dd></div>
+                <div className="flex justify-between"><dt>{t('payroll.otherDeductions')}</dt><dd>{formatPayRunMoney(otherDeductions, currency, i18n.language)}</dd></div>
+                <div className="flex justify-between border-t border-gray-300 pt-2 font-semibold"><dt>{t('payroll.totalDeductions')}</dt><dd>{formatPayRunMoney(totalDeductions, currency, i18n.language)}</dd></div>
                 <div className="flex justify-between border-t border-gray-400 pt-2 text-base font-bold"><dt>{t('payroll.netPay')}</dt><dd>{formatPayRunMoney(line.net_pay, currency, i18n.language)}</dd></div>
               </dl>
               <p className="mt-10 border-t border-gray-200 pt-3 text-xs text-gray-500">{t('payroll.payslipFooter')}</p>

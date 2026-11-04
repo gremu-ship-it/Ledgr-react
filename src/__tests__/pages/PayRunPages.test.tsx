@@ -243,6 +243,34 @@ describe('pay-run pages', () => {
     await waitFor(() => expect(mocks.calculatePayRun).toHaveBeenCalledTimes(1));
   });
 
+  it('prints payslips for an approved pay run with the required employee and deduction details', async () => {
+    const approvedRun = {
+      ...run,
+      status: 'approved',
+      lines: [{
+        ...run.lines[0],
+        pension_employee: 10000,
+        components: [
+          ...run.lines[0].components,
+          { id: 'pension-1', amount: 10000, is_earning: false, pay_component: { name: 'Employee pension' } },
+        ],
+      }],
+    };
+    mocks.getPayRun.mockResolvedValue(approvedRun);
+    const print = vi.fn();
+    Object.defineProperty(window, 'print', { configurable: true, value: print });
+
+    renderWithRoute(<PayRunDetailPage />, '/payroll/pay-runs/run-1');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'payroll.printPayslips' }));
+    expect(print).toHaveBeenCalledTimes(1);
+    const printable = document.querySelector('#pay-run-print-view')?.textContent ?? '';
+    for (const content of [
+      'Janet Banda', 'payroll.grossPay', 'payroll.payeAmount', 'payroll.pensionEmployee',
+      'payroll.otherDeductions', 'payroll.totalDeductions', 'payroll.netPay',
+    ]) expect(printable).toContain(content);
+  });
+
   it('prints payslips for a posted pay run', async () => {
     mocks.getPayRun.mockResolvedValue({ ...run, status: 'posted', journal_entry_id: 'journal-1' });
     const print = vi.fn();
