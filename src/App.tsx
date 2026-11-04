@@ -1,7 +1,6 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
-import { useTranslation } from 'react-i18next';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
