@@ -191,7 +191,11 @@ describe('plan catalogue integration parity', () => {
     for (const name of ['Journals', 'Period Management', 'Audit Log', 'Contacts', 'Branches', 'Departments']) {
       expect(app).toContain(`capability="accounting_organisation" featureName="${name}"`);
     }
-    expect(app).toContain('<PartnerPlanGate featureKey="payroll" featureName="Payroll">');
+    expect(app).toContain(`<PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>`);
+    expect(app).toContain('<Route path="/payroll/tax-config" element={');
+    const payrollPage = source('src/pages/PayrollPage.tsx');
+    expect(payrollPage).toContain("hasCapability(planTier, 'accounting_organisation')");
+    expect(payrollPage).toContain('canRunPayRuns &&');
   });
 
   it('keeps Construction Enterprise-gated and removes the obsolete inventory page route', () => {

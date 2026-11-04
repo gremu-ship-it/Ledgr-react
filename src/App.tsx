@@ -125,6 +125,14 @@ const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
 const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
+const TaxConfigPage = lazyPage(() => import('@/pages/payroll/TaxConfigPage'), 'TaxConfigPage');
+const EmployeeListPage = lazyPage(() => import('@/pages/payroll/EmployeeListPage'), 'EmployeeListPage');
+const EmployeeNewPage = lazyPage(() => import('@/pages/payroll/EmployeeNewPage'), 'EmployeeNewPage');
+const EmployeeDetailPage = lazyPage(() => import('@/pages/payroll/EmployeeDetailPage'), 'EmployeeDetailPage');
+const PayRunListPage = lazyPage(() => import('@/pages/payroll/PayRunListPage'), 'PayRunListPage');
+const PayRunNewPage = lazyPage(() => import('@/pages/payroll/PayRunNewPage'), 'PayRunNewPage');
+const PayRunDetailPage = lazyPage(() => import('@/pages/payroll/PayRunDetailPage'), 'PayRunDetailPage');
+const LeaveRequestsPage = lazyPage(() => import('@/pages/payroll/LeaveRequestsPage'), 'LeaveRequestsPage');
 const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
 const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
 const AccountsPage = lazyPage(() => import('@/pages/AccountsPage'), 'AccountsPage');
@@ -368,8 +376,8 @@ export function SmartRedirect() {
 }
 
 function App() {
-  useAuthListener();
   const { t } = useTranslation();
+  useAuthListener();
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -824,9 +832,49 @@ function App() {
                   <Route path="/income" element={<IncomePage />} />
                   <Route path="/expenses" element={<ExpensesPage />} />
                   <Route path="/invoices" element={<InvoicesPage />} />
+                  <Route path="/payroll/employees" element={
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
+                      <EmployeeListPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/employees/new" element={
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
+                      <EmployeeNewPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/employees/:id" element={
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.employees')}>
+                      <EmployeeDetailPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/pay-runs" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
+                      <PayRunListPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/pay-runs/new" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
+                      <PayRunNewPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/pay-runs/:id" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
+                      <PayRunDetailPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/leave" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.leaveRequests')}>
+                      <LeaveRequestsPage />
+                    </PartnerPlanGate>
+                  } />
                   <Route path="/payroll" element={
-                    <PartnerPlanGate featureKey="payroll" featureName="Payroll">
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>
                       <PayrollPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/tax-config" element={
+                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.taxConfig')}>
+                      <TaxConfigPage />
                     </PartnerPlanGate>
                   } />
 
