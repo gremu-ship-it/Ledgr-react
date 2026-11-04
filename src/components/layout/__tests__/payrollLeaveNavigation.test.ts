@@ -3,7 +3,8 @@ import { isItemLocked, navItemForPath, visibleSectionsFor } from '@/components/l
 
 describe('payroll leave navigation', () => {
   it('places Leave between Pay Runs and Tax Configuration in the Growth+ Payroll section', () => {
-    const payrollSection = visibleSectionsFor(() => true).find((section) => section.labelKey === 'payroll.title');
+    const payrollSection = visibleSectionsFor(() => true, 'owner', () => true)
+      .find((section) => section.labelKey === 'payroll.title');
     expect(payrollSection?.items.map((item) => item.path)).toEqual([
       '/payroll/employees', '/payroll/pay-runs', '/payroll/leave', '/payroll/tax-config',
     ]);
