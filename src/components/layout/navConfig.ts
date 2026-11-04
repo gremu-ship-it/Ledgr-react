@@ -10,6 +10,7 @@ import {
   Percent,
   Landmark,
   Coins,
+  CalendarDays,
   BarChart2,
   Sparkles,
   Warehouse,
@@ -62,8 +63,14 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.income', path: '/income', icon: DollarSign },
       { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt },
       { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText },
+    ],
+  },
+  {
+    labelKey: 'payroll.title',
+    items: [
       { labelKey: 'payroll.employees', path: '/payroll/employees', icon: Users, partnerFeature: 'payroll', minPlan: 'starter' },
       { labelKey: 'payroll.payRuns', path: '/payroll/pay-runs', icon: Coins, partnerFeature: 'payroll', minPlan: 'growth', requiresCapability: 'accounting_organisation' },
+      { labelKey: 'payroll.leave', path: '/payroll/leave', icon: CalendarDays, partnerFeature: 'payroll', minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'payroll.taxConfig', path: '/payroll/tax-config', icon: Percent, partnerFeature: 'payroll', minPlan: 'starter' },
     ],
   },

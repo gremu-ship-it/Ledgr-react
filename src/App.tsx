@@ -72,6 +72,7 @@ const EmployeeDetailPage = lazyPage(() => import('@/pages/payroll/EmployeeDetail
 const PayRunListPage = lazyPage(() => import('@/pages/payroll/PayRunListPage'), 'PayRunListPage');
 const PayRunNewPage = lazyPage(() => import('@/pages/payroll/PayRunNewPage'), 'PayRunNewPage');
 const PayRunDetailPage = lazyPage(() => import('@/pages/payroll/PayRunDetailPage'), 'PayRunDetailPage');
+const LeaveRequestsPage = lazyPage(() => import('@/pages/payroll/LeaveRequestsPage'), 'LeaveRequestsPage');
 const ContactsPage = lazyPage(() => import('@/pages/ContactsPage'), 'ContactsPage');
 const ProductsPage = lazyPage(() => import('@/pages/ProductsPage'), 'ProductsPage');
 const InventoryPage = lazyPage(() => import('@/pages/InventoryPage'), 'InventoryPage');
@@ -297,6 +298,11 @@ function App() {
                   <Route path="/payroll/pay-runs/:id" element={
                     <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.payRuns')}>
                       <PayRunDetailPage />
+                    </PartnerPlanGate>
+                  } />
+                  <Route path="/payroll/leave" element={
+                    <PartnerPlanGate featureKey="payroll" capability="accounting_organisation" featureName={t('payroll.leaveRequests')}>
+                      <LeaveRequestsPage />
                     </PartnerPlanGate>
                   } />
                   <Route path="/payroll" element={

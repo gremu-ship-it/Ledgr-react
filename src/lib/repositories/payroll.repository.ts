@@ -26,6 +26,24 @@ export interface PayRunFilters {
   pageSize?: number;
 }
 
+export type LeaveRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface LeaveRequestFilters {
+  employeeId?: string;
+  status?: LeaveRequestStatus;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface SubmitLeaveRequestInput {
+  employeeId: string;
+  leaveTypeId: string;
+  startDate: string;
+  endDate: string;
+  totalDays: number;
+  reason?: string;
+}
+
 export interface TaxBandInput {
   band_number: number;
   lower_bound: number;
@@ -422,6 +440,50 @@ export class PayrollRepository {
       .eq('business_id', businessId).eq('employee_id', employeeId).eq('year', year);
     throwIfError('leave_balances', error);
     return asRows(data);
+  }
+
+  async getLeaveRequests(
+    businessId: string,
+    options: LeaveRequestFilters = {},
+  ): Promise<PayrollPage<Record<string, unknown>>> {
+    const page = pagination(options.page, options.pageSize);
+    let query = this.client.from('leave_requests').select(
+      '*, employee:employees!leave_requests_employee_business_fk(id, first_name, last_name, employee_number, status), leave_type:leave_types!leave_requests_type_business_fk(id, code, name, is_paid)',
+      { count: 'exact' },
+    ).eq('business_id', businessId);
+    if (options.employeeId) query = query.eq('employee_id', options.employeeId);
+    if (options.status) query = query.eq('status', options.status);
+    const { data, error, count } = await query.order('created_at', { ascending: false }).range(page.from, page.to);
+    throwIfError('leave_requests', error);
+    return { rows: asRows(data), count: count ?? 0, page: page.page, pageSize: page.pageSize };
+  }
+
+  async submitLeaveRequest(businessId: string, data: SubmitLeaveRequestInput): Promise<Record<string, unknown>> {
+    if (!businessId || !data.employeeId || !data.leaveTypeId
+      || !isDateOnly(data.startDate) || !isDateOnly(data.endDate)
+      || data.endDate < data.startDate || !Number.isFinite(data.totalDays) || data.totalDays <= 0) {
+      throw new ValidationError('leave_requests', 'Enter an employee, leave type, valid date range, and positive business-day total.');
+    }
+    const { data: result, error } = await this.client.rpc('submit_leave_request', {
+      p_business_id: businessId,
+      p_employee_id: data.employeeId,
+      p_leave_type_id: data.leaveTypeId,
+      p_start_date: data.startDate,
+      p_end_date: data.endDate,
+      p_total_days: data.totalDays,
+      p_reason: data.reason?.trim() || null,
+    });
+    throwIfError('leave_requests', error);
+    return asRow(result);
+  }
+
+  async approveLeaveRequest(requestId: string, approved: boolean): Promise<Record<string, unknown>> {
+    const { data, error } = await this.client.rpc('approve_leave_request', {
+      p_request_id: requestId,
+      p_approved: approved,
+    });
+    throwIfError('leave_requests', error);
+    return asRow(data);
   }
 
   async accrueLeave(businessId: string, year: number, month: number): Promise<Record<string, unknown>> {
