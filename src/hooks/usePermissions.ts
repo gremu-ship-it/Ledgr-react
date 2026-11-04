@@ -453,6 +453,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
 
   // The Support assistant is available to every authenticated role.
   if (path === '/support') return true;
+  const isPayrollRoute = path === '/payroll' || path.startsWith('/payroll/');
 
   switch (role) {
     case 'owner':
@@ -494,19 +495,19 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return ['/dashboard', '/assets', '/capital', '/accounts', '/reports'].includes(path);
 
     case 'board_member':
-      if (path === '/payroll' || path === '/settings') return false;
+      if (isPayrollRoute || path === '/settings') return false;
       return true;
 
     case 'inventory_manager':
       return ['/products', '/warehouse', '/transfers', '/inventory'].includes(path);
 
     case 'supervisor':
-      if (path === '/payroll' || path === '/reports') return false;
+      if (isPayrollRoute || path === '/reports') return false;
       return true;
 
     case 'auditor':
     case 'viewer':
-      if (path === '/payroll') return false;
+      if (isPayrollRoute) return false;
       return true;
 
     case 'payroll_manager':
@@ -516,7 +517,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
       return true;
 
     case 'branch_manager':
-      if (path === '/payroll') return false;
+      if (isPayrollRoute) return false;
       return true;
 
     default:

@@ -62,7 +62,7 @@ const ALL_MORE_MENU_ITEMS: {
 }[] = [
   { labelKey: 'navigation.items.expenses', path: '/expenses', icon: Receipt, tone: 'negative' },
   { labelKey: 'navigation.items.invoices', path: '/invoices', icon: FileText, tone: 'info' },
-  { labelKey: 'navigation.items.payroll', path: '/payroll', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
+  { labelKey: 'payroll.employees', path: '/payroll/employees', icon: Users, tone: 'neutral', partnerFeature: 'payroll' },
   { labelKey: 'payroll.taxConfig', path: '/payroll/tax-config', icon: Percent, tone: 'brand', partnerFeature: 'payroll' },
   { labelKey: 'navigation.items.accounts', path: '/accounts', icon: BookOpen, tone: 'brand' },
   { labelKey: 'navigation.items.tax', path: '/tax', icon: Percent, tone: 'warning' },
