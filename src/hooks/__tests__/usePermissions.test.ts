@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { isPathAllowedForRole, getHomePathForRole } from '../usePermissions';
+import { describe, expect, it } from 'vitest';
+import { getHomePathForRole, isPathAllowedForRole } from '../usePermissions';
 
 describe('Role-Based Access Control (RBAC)', () => {
   const allRoles = [
@@ -22,15 +22,14 @@ describe('Role-Based Access Control (RBAC)', () => {
     'asset_manager',
     'board_member',
     'branch_manager',
-    // POS roles (20260920000000_pos_module.sql)
     'cashier',
     'manager',
     'stock_clerk',
   ];
 
   describe('Sales Clerk & Data Entry restrictions', () => {
-    it('only allows income, expenses, and invoices', () => {
-      ['sales_clerk', 'data_entry'].forEach((role) => {
+    it('allows sales documents and denies back-office routes', () => {
+      for (const role of ['sales_clerk', 'data_entry']) {
         expect(isPathAllowedForRole(role, '/income')).toBe(true);
         expect(isPathAllowedForRole(role, '/expenses')).toBe(true);
         expect(isPathAllowedForRole(role, '/invoices')).toBe(true);
@@ -38,45 +37,80 @@ describe('Role-Based Access Control (RBAC)', () => {
         expect(isPathAllowedForRole(role, '/payroll')).toBe(false);
         expect(isPathAllowedForRole(role, '/reports/trial-balance')).toBe(false);
         expect(isPathAllowedForRole(role, '/products')).toBe(false);
-      });
+      }
     });
 
-    it('returns correct home path', () => {
+    it('returns the correct home path', () => {
       expect(getHomePathForRole('sales_clerk')).toBe('/income');
       expect(getHomePathForRole('data_entry')).toBe('/income');
     });
   });
 
   describe('Construction workspace routing', () => {
-    it('allows operational and supervisory roles while excluding sales-only roles', () => {
-      for (const role of ['owner', 'admin', 'manager', 'stock_clerk', 'inventory_manager', 'warehouse_worker', 'purchasing_officer']) {
+    it('allows operational roles and excludes sales-only roles', () => {
+      const allowedRoles = [
+        'owner',
+        'admin',
+        'manager',
+        'stock_clerk',
+        'inventory_manager',
+        'warehouse_worker',
+        'purchasing_officer',
+      ];
+
+      for (const role of allowedRoles) {
         expect(isPathAllowedForRole(role, '/construction')).toBe(true);
         expect(isPathAllowedForRole(role, '/construction/subcontractors')).toBe(true);
       }
-      for (const role of ['cashier', 'sales_clerk', 'data_entry', 'sales_manager', 'customer_service_rep']) {
+
+      const deniedRoles = [
+        'cashier',
+        'sales_clerk',
+        'data_entry',
+        'sales_manager',
+        'customer_service_rep',
+      ];
+
+      for (const role of deniedRoles) {
         expect(isPathAllowedForRole(role, '/construction')).toBe(false);
       }
     });
   });
 
   describe('Payroll Manager restrictions', () => {
-    it('blocks accounting and inventory reports', () => {
+    it('allows payroll routes while blocking accounting and inventory routes', () => {
       expect(isPathAllowedForRole('payroll_manager', '/payroll')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/payroll/employees')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/payroll/employees/new')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/payroll/employees/employee-1')).toBe(true);
+      expect(isPathAllowedForRole('payroll_manager', '/payroll/leave')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/dashboard')).toBe(true);
-      expect(isPathAllowedForRole('payroll_manager', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/products')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/accounts')).toBe(false);
     });
   });
 
-  describe('Supervisor & Auditor payroll restrictions', () => {
-    it('blocks payroll for supervisor and auditor', () => {
+  describe('Payroll route restrictions', () => {
+    it('blocks the payroll route and its subroutes for restricted roles', () => {
+      const restrictedRoles = ['board_member', 'auditor', 'viewer', 'branch_manager'];
+      const payrollPaths = ['/payroll', '/payroll/employees', '/payroll/leave'];
+
+      for (const role of restrictedRoles) {
+        for (const path of payrollPaths) {
+          expect(isPathAllowedForRole(role, path)).toBe(false);
+        }
+      }
+    });
+
+    it('does not treat similarly prefixed non-payroll routes as payroll routes', () => {
+      expect(isPathAllowedForRole('board_member', '/payrollish')).toBe(true);
+    });
+  });
+
+  describe('Supervisor & Auditor restrictions', () => {
+    it('blocks payroll for supervisors, auditors, and viewers', () => {
       expect(isPathAllowedForRole('supervisor', '/payroll')).toBe(false);
-      expect(isPathAllowedForRole('supervisor', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('supervisor', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll/employees')).toBe(false);
@@ -86,29 +120,29 @@ describe('Role-Based Access Control (RBAC)', () => {
   });
 
   describe('Inventory Manager & Warehouse Worker', () => {
-    it('restricts to inventory and products', () => {
-      ['inventory_manager', 'warehouse_worker'].forEach((role) => {
+    it('allows inventory routes and denies payroll', () => {
+      for (const role of ['inventory_manager', 'warehouse_worker']) {
         expect(isPathAllowedForRole(role, '/products')).toBe(true);
         expect(isPathAllowedForRole(role, '/warehouse')).toBe(true);
         expect(isPathAllowedForRole(role, '/transfers')).toBe(true);
         expect(isPathAllowedForRole(role, '/payroll')).toBe(false);
-      });
+      }
     });
 
-    it('returns correct home path', () => {
+    it('returns the correct home path', () => {
       expect(getHomePathForRole('inventory_manager')).toBe('/products');
       expect(getHomePathForRole('warehouse_worker')).toBe('/products');
     });
   });
 
-  describe('Specialized Roles path validation', () => {
-    it('purchasing officer has correct access', () => {
+  describe('Specialized role path validation', () => {
+    it('gives purchasing officers the expected access', () => {
       expect(isPathAllowedForRole('purchasing_officer', '/expenses')).toBe(true);
       expect(isPathAllowedForRole('purchasing_officer', '/products')).toBe(true);
       expect(isPathAllowedForRole('purchasing_officer', '/payroll')).toBe(false);
     });
 
-    it('board member has high-level read access excluding payroll and settings', () => {
+    it('gives board members read access while excluding payroll and settings', () => {
       expect(isPathAllowedForRole('board_member', '/reports/trial-balance')).toBe(true);
       expect(isPathAllowedForRole('board_member', '/dashboard')).toBe(true);
       expect(isPathAllowedForRole('board_member', '/payroll')).toBe(false);
@@ -117,12 +151,11 @@ describe('Role-Based Access Control (RBAC)', () => {
   });
 
   describe('POS roles', () => {
-    it('cashier is confined to the till, sales documents and support', () => {
+    it('confines cashiers to the till, sales documents, and support', () => {
       expect(isPathAllowedForRole('cashier', '/pos')).toBe(true);
       expect(isPathAllowedForRole('cashier', '/income')).toBe(true);
       expect(isPathAllowedForRole('cashier', '/invoices')).toBe(true);
       expect(isPathAllowedForRole('cashier', '/support')).toBe(true);
-      // No back-office surfaces: these bounce to the role's home (/pos).
       expect(isPathAllowedForRole('cashier', '/settings')).toBe(false);
       expect(isPathAllowedForRole('cashier', '/reports/trial-balance')).toBe(false);
       expect(isPathAllowedForRole('cashier', '/expenses')).toBe(false);
@@ -130,41 +163,57 @@ describe('Role-Based Access Control (RBAC)', () => {
       expect(getHomePathForRole('cashier')).toBe('/pos');
     });
 
-    it('manager keeps the till plus the back-office pages it supervises', () => {
-      ['/pos', '/dashboard', '/products', '/warehouse', '/transfers', '/reports/trial-balance'].forEach((path) => {
+    it('allows managers the till and their supervised back-office routes', () => {
+      const allowedPaths = [
+        '/pos',
+        '/dashboard',
+        '/products',
+        '/warehouse',
+        '/transfers',
+        '/reports/trial-balance',
+      ];
+
+      for (const path of allowedPaths) {
         expect(isPathAllowedForRole('manager', path)).toBe(true);
-      });
+      }
+
       expect(isPathAllowedForRole('manager', '/settings')).toBe(false);
       expect(isPathAllowedForRole('manager', '/payroll')).toBe(false);
       expect(getHomePathForRole('manager')).toBe('/pos');
     });
 
-    it('stock clerk handles stock only and gets no POS access', () => {
-      ['/products', '/warehouse', '/transfers'].forEach((path) => {
+    it('limits stock clerks to stock routes and denies POS access', () => {
+      for (const path of ['/products', '/warehouse', '/transfers']) {
         expect(isPathAllowedForRole('stock_clerk', path)).toBe(true);
-      });
+      }
+
       expect(isPathAllowedForRole('stock_clerk', '/pos')).toBe(false);
       expect(isPathAllowedForRole('stock_clerk', '/dashboard')).toBe(false);
       expect(getHomePathForRole('stock_clerk')).toBe('/products');
     });
 
-    it('gives every POS role at least one primary tab for the mobile bar', () => {
-      // BottomNav filters its tabs through isPathAllowedForRole; a role with
-      // nothing allowed would render a bar with only the FAB and "More".
-      const primaryPaths = ['/dashboard', '/pos', '/income', '/products', '/reports/trial-balance'];
-      ['cashier', 'manager', 'stock_clerk'].forEach((role) => {
-        expect(primaryPaths.some((p) => isPathAllowedForRole(role, p))).toBe(true);
-      });
+    it('gives each POS role at least one primary mobile navigation tab', () => {
+      const primaryPaths = [
+        '/dashboard',
+        '/pos',
+        '/income',
+        '/products',
+        '/reports/trial-balance',
+      ];
+
+      for (const role of ['cashier', 'manager', 'stock_clerk']) {
+        expect(primaryPaths.some((path) => isPathAllowedForRole(role, path))).toBe(true);
+      }
     });
   });
 
-  describe('All roles have home paths defined', () => {
-    it('does not return undefined home path', () => {
-      allRoles.forEach((role) => {
+  describe('Home paths', () => {
+    it('defines a valid home path for every role', () => {
+      for (const role of allRoles) {
         const home = getHomePathForRole(role);
         expect(home).toBeTypeOf('string');
         expect(home.startsWith('/')).toBe(true);
-      });
+      }
     });
   });
 });
