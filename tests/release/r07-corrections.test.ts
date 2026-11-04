@@ -89,6 +89,7 @@ test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is serv
     '_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval',
     'refund_pos_sale_command','request_pos_approval','void_pos_sale_command',
     ...invoiceApproval, ...constructionPolicy, ...p4cWorkflows, ...phase6Allowlist,
+
   ].sort());
 });
 

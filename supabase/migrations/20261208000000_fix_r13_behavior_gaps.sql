@@ -1,150 +1,33 @@
--- R13 behavior gaps: retain the established guards while allowing only
--- explicitly evidenced construction receipt deltas, and preserve an audit
--- reference for legacy inventory-adjustment callers that omit one.
--- Reapplying this migration is safe: all three definitions are replacements.
+-- R13 behavior-gap corrections (additive, no data rewrite).
+--
+-- This migration fixes three concrete contract mismatches:
+--   * approved construction receipt releases can post later accepted deltas even
+--     though the general inventory duplicate guard suppresses same-source rows;
+--   * stock adjustment rows with a stable source id receive a traceable default
+--     reference when a caller omits free-text reference/notes; and
+--   * dashboard reporting periods are month-bucket based, so the complete first
+--     month in the requested rolling-month window is included.
 
-create or replace function public.record_inventory_journal_movement(p_payload jsonb)
-returns jsonb
-language plpgsql volatile security definer set search_path = public
-as $$
-declare
-  v_business uuid := nullif(p_payload->>'business_id', '')::uuid;
-  v_kind text := p_payload->>'kind';
-  v_key uuid := nullif(btrim(coalesce(p_payload->>'client_key', '')), '')::uuid;
-  v_location uuid := nullif(p_payload->>'location_id', '')::uuid;
-  v_date date := coalesce(nullif(p_payload->>'movement_date', '')::date, current_date);
-  v_type text := coalesce(nullif(p_payload->>'movement_type', ''), 'purchase');
-  v_reference text := nullif(p_payload->>'reference', '');
-  v_notes text := nullif(p_payload->>'notes', '');
-  v_lines jsonb := p_payload->'lines';
-  v_source_type text;
-  v_posting_key text;
-  v_out boolean;
-  v_line jsonb;
-  v_product public.products%rowtype;
-  v_qty numeric; v_cost numeric; v_amount numeric;
-  v_inv_account uuid;
-  v_ids uuid[] := '{}';
-  v_id uuid;
-  v_debits jsonb := '{}'::jsonb;  -- inventory account -> amount
-  v_total numeric := 0;
-  v_counter uuid;
-  v_jlines jsonb := '[]'::jsonb;
-  v_acc record;
-  v_entry uuid;
-  v_currency text;
-  v_existing_n int; v_existing_q numeric; v_in_q numeric;
-begin
-  if auth.uid() is null and coalesce(auth.role(), '') <> 'service_role' then
-    raise exception 'Authentication required.' using errcode = '42501';
-  end if;
-  if v_business is null or v_location is null or v_key is null
-     or v_kind not in ('receipt', 'adjustment')
-     or v_lines is null or jsonb_typeof(v_lines) <> 'array' or jsonb_array_length(v_lines) = 0 then
-    raise exception 'Malformed inventory movement payload.' using errcode = '22023';
-  end if;
-  if coalesce(auth.role(), '') <> 'service_role' and not (
-       public.can_write_business_data(v_business)
-       and public.can_access_location(v_business, v_location)) then
-    raise exception 'You lack permission to move stock at this location.' using errcode = '42501';
-  end if;
-  if not exists (select 1 from public.inventory_locations where id = v_location and business_id = v_business) then
-    raise exception 'Location does not belong to this business.' using errcode = '42501';
-  end if;
+-- Private one-use transaction context authorizes only receipt movements emitted
+-- by post_construction_receipt_movement. It is not exposed to API roles.
+create schema if not exists ledgr_private;
+revoke all on schema ledgr_private from public, anon, authenticated, service_role;
 
-  if v_kind = 'receipt' then
-    v_type := 'purchase'; v_source_type := 'stock_receipt';
-    v_posting_key := 'stock_receipt:' || v_key::text || ':grni';
-  else
-    if v_type not in ('adjustment_in', 'adjustment_out', 'purchase', 'opening_balance') then
-      raise exception 'Unsupported adjustment movement type %.', v_type using errcode = '22023';
-    end if;
-    v_source_type := 'stock_adjustment';
-    v_posting_key := 'stock_adjustment:' || v_key::text;
-    -- The 20261130000000 movement-integrity guard requires adjustment
-    -- provenance. A stable generated reference keeps legacy callers valid
-    -- without bypassing that guard when they omit an optional reference.
-    v_reference := coalesce(nullif(btrim(v_reference), ''), 'Stock adjustment ' || v_key::text);
-  end if;
-  v_out := v_type = 'adjustment_out';
+create table if not exists ledgr_private.construction_receipt_posting_context (
+  transaction_id bigint not null,
+  business_id uuid not null,
+  grn_id uuid not null,
+  product_id uuid not null,
+  location_id uuid not null,
+  primary key (transaction_id, business_id, grn_id, product_id, location_id)
+);
+revoke all on table ledgr_private.construction_receipt_posting_context
+  from public, anon, authenticated, service_role;
 
-  -- Idempotency: serialise on (business, source, key); a replay returns the
-  -- committed result, a replay with a different payload is refused.
-  perform pg_advisory_xact_lock(hashtextextended(v_business::text || '|' || v_source_type || '|' || v_key::text, 0));
-  select count(*), coalesce(sum(abs(quantity)), 0) into v_existing_n, v_existing_q
-    from public.stock_movements
-   where business_id = v_business and source_type = v_source_type and source_id::text = v_key::text;
-  if v_existing_n > 0 then
-    select coalesce(sum(abs((l->>'quantity')::numeric)), 0) into v_in_q from jsonb_array_elements(v_lines) l;
-    if v_existing_n <> jsonb_array_length(v_lines) or abs(v_existing_q - v_in_q) > 0.0001 then
-      raise exception 'client_key % was already used for a different stock movement.', v_key using errcode = '22023';
-    end if;
-    select id into v_entry from public.journal_entries where business_id = v_business and posting_key = v_posting_key;
-    select array_agg(id order by created_at, id) into v_ids from public.stock_movements
-     where business_id = v_business and source_type = v_source_type and source_id::text = v_key::text;
-    return jsonb_build_object('idempotent', true, 'movement_ids', to_jsonb(v_ids), 'journal_entry_id', v_entry);
-  end if;
-
-  for v_line in select value from jsonb_array_elements(v_lines) loop
-    v_qty := (v_line->>'quantity')::numeric;
-    v_cost := coalesce((v_line->>'unit_cost')::numeric, 0);
-    if v_qty is null or v_qty <= 0 or v_cost < 0 then
-      raise exception 'Each line needs a positive quantity and a non-negative unit cost.' using errcode = '22023';
-    end if;
-    select * into v_product from public.products
-     where id = nullif(v_line->>'product_id', '')::uuid and business_id = v_business;
-    if not found then
-      raise exception 'A line references a product that does not belong to this business.' using errcode = '42501';
-    end if;
-
-    insert into public.stock_movements (
-      business_id, product_id, location_id, movement_type, movement_date,
-      quantity, unit_cost, source_type, source_id, reference, notes, created_by
-    ) values (
-      v_business, v_product.id, v_location, v_type::public.stock_movement_type, v_date,
-      case when v_out then -v_qty else v_qty end, v_cost, v_source_type, v_key,
-      v_reference, v_notes, auth.uid()
-    ) returning id into v_id;
-    v_ids := v_ids || v_id;
-
-    v_amount := round(v_qty * v_cost, 2);
-    if coalesce(v_product.track_inventory, true) and v_amount >= 0.005 then
-      select a.id into v_inv_account from public.accounts a
-       where a.id = v_product.inventory_account_id and a.business_id = v_business and not a.is_group;
-      if v_inv_account is null then
-        v_inv_account := public._ledgr_account_by_code(v_business, '1141');
-      end if;
-      v_debits := jsonb_set(v_debits, array[v_inv_account::text],
-        to_jsonb(coalesce((v_debits->>v_inv_account::text)::numeric, 0) + v_amount));
-      v_total := v_total + v_amount;
-    end if;
-  end loop;
-
-  if v_total >= 0.005 then
-    v_counter := public._ledgr_account_by_code(v_business, case when v_kind = 'receipt' then '2114' else '5180' end);
-    for v_acc in select key::uuid as account_id, value::numeric as amount from jsonb_each_text(v_debits) loop
-      v_jlines := v_jlines || jsonb_build_array(jsonb_build_object(
-        'account_id', v_acc.account_id, 'is_debit', not v_out,
-        'description', coalesce(v_reference, initcap(replace(v_source_type, '_', ' '))) || ' — inventory',
-        'amount', v_acc.amount, 'amount_base', v_acc.amount));
-    end loop;
-    v_jlines := v_jlines || jsonb_build_array(jsonb_build_object(
-      'account_id', v_counter, 'is_debit', v_out,
-      'description', coalesce(v_reference, initcap(replace(v_source_type, '_', ' '))) ||
-        case when v_kind = 'receipt' then ' — goods received not invoiced' else ' — inventory adjustment' end,
-      'amount', v_total, 'amount_base', v_total));
-    select base_currency into v_currency from public.businesses where id = v_business;
-    v_entry := public._ledgr_post_entry_keyed(
-      v_business, v_posting_key, v_date,
-      case when v_kind = 'receipt' then coalesce(v_notes, v_reference, 'Stock receipt')
-           else coalesce(v_reference, 'Stock adjustment') end,  -- legacy client descriptions
-      v_source_type, v_key::text, v_currency, 1, null, null, v_jlines);
-  end if;
-
-  return jsonb_build_object('idempotent', false, 'movement_ids', to_jsonb(v_ids), 'journal_entry_id', v_entry);
-end;
-$$;
-
+-- Preserve the duplicate-source guard for ordinary sales/purchases. A receipt
+-- posting command consumes one private marker per movement, allowing an
+-- evidenced release to append only its unposted delta. Direct construction_grn
+-- inserts without that marker are refused.
 create or replace function public._ledgr_guard_stock_movement_insert()
 returns trigger
 language plpgsql
@@ -153,17 +36,41 @@ set search_path = public
 as $$
 declare
   v_identity text;
+  v_context_rows integer := 0;
 begin
   if new.movement_type::text in ('adjustment_in', 'adjustment_out')
      and nullif(btrim(coalesce(new.reference, '')), '') is null
      and nullif(btrim(coalesce(new.notes, '')), '') is null then
-    raise exception 'inventory-adjustment-reason-required' using errcode = '22023';
+    if new.source_id is null then
+      raise exception 'inventory-adjustment-reason-required' using errcode = '22023';
+    end if;
+    new.reference := format('Stock adjustment %s, source %s', new.movement_type::text, new.source_id::text);
+  end if;
+
+  if new.source_type = 'construction_grn' then
+    if new.source_id is null then
+      raise exception 'construction-receipt-posting-command-required' using errcode = '42501';
+    end if;
+    delete from ledgr_private.construction_receipt_posting_context c
+     where c.transaction_id = txid_current()
+       and c.business_id = new.business_id
+       and c.grn_id::text = new.source_id::text
+       and c.product_id = new.product_id
+       and c.location_id = new.location_id;
+    get diagnostics v_context_rows = row_count;
+    if v_context_rows = 0 then
+      raise exception 'construction-receipt-posting-command-required' using errcode = '42501';
+    end if;
+    v_identity := concat_ws('|', new.business_id::text, new.source_type,
+      new.source_id::text, new.product_id::text, new.location_id::text);
+    perform pg_advisory_xact_lock(hashtextextended(v_identity, 0));
+    return new;
   end if;
 
   if new.movement_type::text in ('sale', 'purchase')
      and new.source_type is not null and new.source_id is not null then
     v_identity := concat_ws('|', new.business_id::text, new.source_type,
-      new.source_id, new.product_id::text, new.location_id::text);
+      new.source_id::text, new.product_id::text, new.location_id::text);
     perform pg_advisory_xact_lock(hashtextextended(v_identity, 0));
 
     if exists (
@@ -171,12 +78,9 @@ begin
         from public.stock_movements sm
        where sm.business_id = new.business_id
          and sm.source_type = new.source_type
-         and sm.source_id = new.source_id
+         and sm.source_id::text = new.source_id::text
          and sm.product_id = new.product_id
          and sm.location_id = new.location_id
-    ) and not (
-      new.source_type = 'construction_grn'
-      and current_setting('ledgr.construction_command', true) = 'receipt_post'
     ) then
       return null;
     end if;
@@ -185,7 +89,11 @@ begin
   return new;
 end;
 $$;
+revoke all on function public._ledgr_guard_stock_movement_insert() from public, anon, authenticated;
+comment on function public._ledgr_guard_stock_movement_insert() is
+  'R13: preserves duplicate-source prevention, allows only one-use internally authorized construction receipt delta movements, and records a traceable source reference for reasonless adjustment rows.';
 
+-- Repost only unposted accepted receipt deltas under a transaction lock.
 create or replace function public.post_construction_receipt_movement(p_grn_id uuid)
 returns jsonb
 language plpgsql
@@ -274,9 +182,14 @@ begin
           using errcode = '22023';
       end if;
 
+      -- A private one-use marker lets the inventory guard distinguish this
+      -- serialized command's legitimate delta from a direct source spoof.
+      insert into ledgr_private.construction_receipt_posting_context
+        (transaction_id, business_id, grn_id, product_id, location_id)
+      values (txid_current(), v_grn.business_id, v_grn.id, v_line.product_id, v_grn.location_id);
+
       -- Only public.stock_movements is written. The shared R06 balance writer
       -- propagates the balance; this file never touches inventory_balances.
-      perform set_config('ledgr.construction_command', 'receipt_post', true);
       insert into public.stock_movements
         (business_id, product_id, location_id, movement_type, movement_date, quantity,
          unit_cost, source_type, source_id, reference, created_by, notes)
@@ -285,7 +198,9 @@ begin
               v_grn.grn_number, v_actor,
               'Construction goods receipt ' || v_grn.grn_number || ' line ' || v_line.line_number)
       returning id into v_movement_id;
-      perform set_config('ledgr.construction_command', '', true);
+      if v_movement_id is null then
+        raise exception 'The authorized construction receipt movement was not inserted.' using errcode = 'P0001';
+      end if;
 
       perform set_config('ledgr.construction_command', 'receipt_post', true);
       update public.construction_goods_receipt_lines
@@ -305,3 +220,189 @@ begin
                             'journal_effect', 'none');
 end;
 $$;
+revoke all on function public.post_construction_receipt_movement(uuid) from public, anon;
+grant execute on function public.post_construction_receipt_movement(uuid) to authenticated, service_role;
+
+-- Rolling dashboard filters include the complete first calendar month.
+CREATE OR REPLACE FUNCTION public.get_dashboard_metrics(
+  p_business_id uuid,
+  p_months integer
+)
+RETURNS TABLE(
+  active_projects bigint,
+  total_contract_value numeric,
+  total_billed_this_period numeric,
+  total_paid_this_period numeric,
+  total_costs_this_period numeric,
+  total_retention_held numeric,
+  outstanding_receivables numeric,
+  projects_over_budget bigint,
+  avg_completion_pct numeric
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_since date;
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'You must be signed in.' USING ERRCODE = '42501';
+  END IF;
+  IF p_business_id IS NULL THEN
+    RAISE EXCEPTION 'A business is required.' USING ERRCODE = '22023';
+  END IF;
+  IF cardinality(public.construction_procurement_capabilities_for(p_business_id)) = 0 THEN
+    RAISE EXCEPTION 'Construction procurement access required.' USING ERRCODE = '42501';
+  END IF;
+
+  IF p_months IS NOT NULL AND p_months > 0 THEN
+    v_since := date_trunc('month', CURRENT_DATE - make_interval(months => p_months))::date;
+  ELSE
+    v_since := NULL;
+  END IF;
+
+  RETURN QUERY
+  WITH project_rows AS (
+    SELECT
+      p.id,
+      p.status,
+      p.contract_sum,
+      p.budget,
+      COALESCE((
+        SELECT SUM(l.quantity_ordered * COALESCE(l.expected_unit_price, 0))
+          FROM public.construction_purchase_orders o
+          JOIN public.construction_purchase_order_lines l ON l.po_id = o.id
+         WHERE o.project_id = p.id
+      ), 0)
+      + COALESCE((
+        SELECT SUM(i.total_cost_base)
+          FROM public.construction_material_issues i
+         WHERE i.project_id = p.id
+      ), 0)
+      - COALESCE((
+        SELECT SUM(r.total_cost_base)
+          FROM public.construction_material_returns r
+         WHERE r.project_id = p.id
+      ), 0) AS net_cost_all,
+      COALESCE((
+        SELECT SUM(CASE WHEN r.type = 'withheld' THEN r.amount ELSE -r.amount END)
+          FROM public.project_retention_ledger r
+          LEFT JOIN public.project_valuations rv ON rv.id = r.valuation_id
+         WHERE r.project_id = p.id
+           AND (r.valuation_id IS NULL OR rv.status IN ('submitted', 'invoiced'))
+      ), 0) AS retention_balance,
+      COALESCE((
+        SELECT CASE
+          WHEN COALESCE(SUM(b.total_value), 0) > 0 THEN
+            round(SUM(b.total_value * COALESCE(vl.cumulative_pct, 0)) / SUM(b.total_value), 2)
+          ELSE
+            COALESCE(round(AVG(vl.cumulative_pct), 2), 0)
+        END
+          FROM (
+            SELECT v.id
+              FROM public.project_valuations v
+             WHERE v.project_id = p.id
+               AND v.status = 'invoiced'
+             ORDER BY v.valuation_number DESC
+             LIMIT 1
+          ) latest_val
+          LEFT JOIN public.project_boq_lines b ON b.project_id = p.id
+          LEFT JOIN public.project_valuation_lines vl
+            ON vl.valuation_id = latest_val.id AND vl.boq_line_id = b.id
+         GROUP BY latest_val.id
+      ), 0) AS completion_pct
+    FROM public.construction_projects p
+    WHERE p.business_id = p_business_id
+  ),
+  billed_all AS (
+    SELECT COALESCE(SUM(v.net_amount), 0) AS amount
+      FROM public.project_valuations v
+      JOIN public.construction_projects p ON p.id = v.project_id
+     WHERE p.business_id = p_business_id
+       AND v.status = 'invoiced'
+  ),
+  billed_period AS (
+    SELECT COALESCE(SUM(v.net_amount), 0) AS amount
+      FROM public.project_valuations v
+      JOIN public.construction_projects p ON p.id = v.project_id
+     WHERE p.business_id = p_business_id
+       AND v.status = 'invoiced'
+       AND (v_since IS NULL OR v.valuation_date >= v_since)
+  ),
+  paid_all AS (
+    SELECT COALESCE(SUM(ip.amount), 0) AS amount
+      FROM public.invoice_payments ip
+      JOIN public.invoices i ON i.id = ip.invoice_id
+     WHERE i.business_id = p_business_id
+       AND i.deleted_at IS NULL
+       AND i.status <> 'void'
+       AND EXISTS (
+         SELECT 1
+           FROM public.project_valuations v
+           JOIN public.construction_projects p ON p.id = v.project_id
+          WHERE p.business_id = p_business_id
+            AND v.status = 'invoiced'
+            AND v.invoice_id = i.id
+       )
+  ),
+  paid_period AS (
+    SELECT COALESCE(SUM(ip.amount), 0) AS amount
+      FROM public.invoice_payments ip
+      JOIN public.invoices i ON i.id = ip.invoice_id
+     WHERE i.business_id = p_business_id
+       AND i.deleted_at IS NULL
+       AND i.status <> 'void'
+       AND (v_since IS NULL OR ip.payment_date >= v_since)
+       AND EXISTS (
+         SELECT 1
+           FROM public.project_valuations v
+           JOIN public.construction_projects p ON p.id = v.project_id
+          WHERE p.business_id = p_business_id
+            AND v.status = 'invoiced'
+            AND v.invoice_id = i.id
+       )
+  ),
+  costs_period AS (
+    SELECT
+      COALESCE((
+        SELECT SUM(l.quantity_ordered * COALESCE(l.expected_unit_price, 0))
+          FROM public.construction_purchase_orders o
+          JOIN public.construction_purchase_order_lines l ON l.po_id = o.id
+          JOIN public.construction_projects p ON p.id = o.project_id
+         WHERE p.business_id = p_business_id
+           AND (v_since IS NULL OR o.created_at::date >= v_since)
+      ), 0)
+      + COALESCE((
+        SELECT SUM(i.total_cost_base)
+          FROM public.construction_material_issues i
+          JOIN public.construction_projects p ON p.id = i.project_id
+         WHERE p.business_id = p_business_id
+           AND (v_since IS NULL OR i.issue_date >= v_since)
+      ), 0)
+      - COALESCE((
+        SELECT SUM(r.total_cost_base)
+          FROM public.construction_material_returns r
+          JOIN public.construction_projects p ON p.id = r.project_id
+         WHERE p.business_id = p_business_id
+           AND (v_since IS NULL OR r.return_date >= v_since)
+      ), 0) AS amount
+  )
+  SELECT
+    COUNT(pr.id) FILTER (WHERE pr.status = 'active')::bigint AS active_projects,
+    round(COALESCE(SUM(pr.contract_sum), 0), 2)::numeric AS total_contract_value,
+    round((SELECT amount FROM billed_period), 2)::numeric AS total_billed_this_period,
+    round((SELECT amount FROM paid_period), 2)::numeric AS total_paid_this_period,
+    round((SELECT amount FROM costs_period), 2)::numeric AS total_costs_this_period,
+    round(COALESCE(SUM(pr.retention_balance), 0), 2)::numeric AS total_retention_held,
+    round((SELECT amount FROM billed_all) - (SELECT amount FROM paid_all), 2)::numeric AS outstanding_receivables,
+    COUNT(pr.id) FILTER (WHERE pr.net_cost_all > pr.budget)::bigint AS projects_over_budget,
+    round(COALESCE(AVG(pr.completion_pct) FILTER (WHERE pr.status = 'active'), 0), 2)::numeric AS avg_completion_pct
+  FROM project_rows pr;
+END;
+$$;
+revoke all on function public.get_dashboard_metrics(uuid, integer) from public, anon, authenticated;
+grant execute on function public.get_dashboard_metrics(uuid, integer) to authenticated;
+comment on function public.get_dashboard_metrics(uuid, integer) is
+  'Construction dashboard metrics over the requested rolling calendar-month window; includes the full first month in that window.';
