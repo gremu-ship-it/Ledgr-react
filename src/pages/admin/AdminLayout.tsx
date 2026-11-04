@@ -3,6 +3,7 @@ import { ArrowLeft, Building2, DollarSign, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
 import { getHomePathForRole } from '@/hooks/usePermissions';
+import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 
 /**
  * Chrome for the internal platform-admin tools (/admin/*).
@@ -18,7 +19,8 @@ export function AdminLayout() {
   const navigate = useNavigate();
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
-  const backPath = getHomePathForRole(currentBusiness?.role || null);
+  const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
+  const backPath = getHomePathForRole(currentBusiness?.role || null, isOrgCapabilityEnabled);
 
   const links = [
     { to: '/admin/businesses', label: 'Businesses', icon: Building2 },

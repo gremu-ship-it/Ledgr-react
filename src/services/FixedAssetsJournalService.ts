@@ -50,6 +50,13 @@ function monthName(dateStr: string): string {
   return new Date(dateStr).toLocaleString('en-US', { month: 'long', year: 'numeric' });
 }
 
+function calendarMonthsInPeriod(periodStart: string, periodEnd: string): number {
+  const start = new Date(`${periodStart}T00:00:00.000Z`);
+  const end = new Date(`${periodEnd}T00:00:00.000Z`);
+  return (end.getUTCFullYear() - start.getUTCFullYear()) * 12
+    + end.getUTCMonth() - start.getUTCMonth() + 1;
+}
+
 interface ResolvedAssetAccounts {
   assetAccountId: string;
   accumulatedDepAccountId: string | null;
@@ -370,11 +377,15 @@ export async function postAssetDepreciation(
       method: asset.depreciation_method,
       acquisitionCost: asset.acquisition_cost,
       residualValue: asset.residual_value,
-      usefulLifeYears: asset.useful_life_years,
-      usefulLifeMonths: asset.useful_life_months,
+      usefulLifeYears: asset.useful_life_years ?? category?.useful_life_years ?? null,
+      usefulLifeMonths: asset.useful_life_months
+        ?? ((asset.useful_life_years ?? category?.useful_life_years) == null
+          ? null
+          : Number(asset.useful_life_years ?? category?.useful_life_years) * 12),
       accumulatedDepreciation: asset.accumulated_depreciation,
-      depreciationRate: asset.depreciation_rate,
-    });
+      depreciationRate: asset.depreciation_rate ?? category?.mra_depreciation_rate ?? null,
+      netBookValue: asset.net_book_value ?? (asset.acquisition_cost - asset.accumulated_depreciation),
+    }, calendarMonthsInPeriod(period.period_start, period.period_end));
 
     if (charge <= 0) {
       results.push({
@@ -399,7 +410,7 @@ export async function postAssetDepreciation(
         entry_number: entryNumber,
         entry_date: period.period_end,
         description,
-        source_type: 'fixed_asset_depreciation',
+        source_type: 'depreciation',
         source_id: asset.id,
         currency: 'MWK',
         exchange_rate: 1,
@@ -442,7 +453,8 @@ export async function postAssetDepreciation(
     await repos.journal.post(entry.id, postedBy);
 
     const newAccumulated = asset.accumulated_depreciation + charge;
-    const newNetBookValue = asset.acquisition_cost - newAccumulated;
+    const currentNetBookValue = asset.net_book_value ?? (asset.acquisition_cost - asset.accumulated_depreciation);
+    const newNetBookValue = Math.max(asset.residual_value, currentNetBookValue - charge);
 
     await repos.asset.recordDepreciation(
       {

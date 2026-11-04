@@ -549,99 +549,173 @@ export async function createInvoiceReceivableEntry(
     nextEntryNumber(businessId),
   ]);
 
-  const currency       = invoice.original_currency ?? invoice.currency;
+  const isCreditNote    = invoice.invoice_type === 'credit_note';
+  const documentLabel   = `${isCreditNote ? 'Credit note' : 'Invoice'} ${invoice.invoice_number}`;
+  const currency        = invoice.original_currency ?? invoice.currency;
   const exchangeRate    = Number(invoice.exchange_rate);
-  const totalFunctional = Number(invoice.functional_amount ?? invoice.total_amount);
-  const subtotal        = Number(invoice.subtotal);
-  const discountAmount  = Number((invoice as unknown as { discount_amount?: number }).discount_amount ?? 0);
+  // Credit notes in the existing invoice schema store signed negative header
+  // totals. Journal lines, however, require non-negative amounts and express
+  // the reversal through debit/credit direction, not a negative amount.
+  const totalFunctional = Math.abs(Number(invoice.functional_amount ?? invoice.total_amount));
+  const subtotal        = Math.abs(Number(invoice.subtotal));
+  const discountAmount  = Math.abs(Number((invoice as unknown as { discount_amount?: number }).discount_amount ?? 0));
   const discountFunctional = discountAmount * exchangeRate;
   const grossSubtotal   = subtotal + discountAmount;
   const grossFunctional = grossSubtotal * exchangeRate;
   const subtotalFunctional = subtotal * exchangeRate;
-  const vatAmount       = Number(invoice.vat_amount);
+  const vatAmount       = Math.abs(Number(invoice.vat_amount));
   const vatFunctional   = vatAmount * exchangeRate;
 
-  const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [
-    {
-      line_number:   1,
-      account_id:    debtors.id,
-      description:   `Invoice ${invoice.invoice_number} — receivable`,
-      is_debit:      true,
-      amount:        Number(invoice.total_amount),
-      amount_base:   totalFunctional,
-      currency,
-      exchange_rate: exchangeRate,
-      tax_code:      'none',
-      tax_amount:    0,
-      reconciled:    false,
-    },
-  ];
+  const lines: Parameters<typeof repos.journal.createBalancedEntry>[1] = [];
+  let usedProjectLineAccounts = false;
+  const projectCode = (invoice as unknown as { project_code?: string | null }).project_code;
+  const isProjectUuid = typeof projectCode === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectCode);
 
-  if (discountAmount > 0.005) {
-    lines.push({
-      line_number:   2,
-      account_id:    revenue.id,
-      description:   `Invoice ${invoice.invoice_number} — revenue (gross)`,
-      is_debit:      false,
-      amount:        grossSubtotal,
-      amount_base:   grossFunctional,
-      currency,
-      exchange_rate: exchangeRate,
-      tax_code:      'none',
-      tax_amount:    0,
-      reconciled:    false,
-    });
-    try {
-      const discountAccount = await getAccountByCode(businessId, '4130');
+  // Phase C invoices use per-line accounts for both contract revenue and the
+  // Retention Receivable asset. The existing invoice posting flow normally
+  // posts one header revenue account, so honor line accounts on project-linked
+  // invoices when a retention/reclassification line is present. Discounted
+  // invoices retain the established gross-revenue/discount posting path.
+  if (isProjectUuid && discountAmount <= 0.005) {
+    const { lines: invoiceLines } = await repos.invoice.findByIdWithLines(invoice.id);
+    const hasSplitAccounts = invoiceLines.some(
+      (line) => line.account_id !== null && line.account_id !== revenue.id,
+    );
+    if (hasSplitAccounts) {
       lines.push({
-        line_number:   3,
-        account_id:    discountAccount.id,
-        description:   `Invoice ${invoice.invoice_number} — discount allowed`,
-        is_debit:      true,
-        amount:        discountAmount,
-        amount_base:   discountFunctional,
+        line_number:   1,
+        account_id:    debtors.id,
+        description:   `${documentLabel} — receivable`,
+        is_debit:      !isCreditNote,
+        amount:        Math.abs(Number(invoice.total_amount)),
+        amount_base:   totalFunctional,
         currency,
         exchange_rate: exchangeRate,
         tax_code:      'none',
         tax_amount:    0,
         reconciled:    false,
       });
-    } catch (err) {
-      // Phase 10 A-02: fall back to net posting ONLY when 4130 is genuinely
-      // missing — and log it. Any other error propagates instead of silently
-      // changing the accounting disclosure. Backfill migration
-      // 20260817000002 makes this path dead code for legacy businesses.
-      if (!isMissingAccountError(err)) throw err;
-      log.warn(
-        `Account 4130 missing for business ${businessId} — posting NET revenue for invoice ${invoice.invoice_number} (discount no longer disclosed). Run ensureChartOfAccounts / backfill migration 20260817000002 to restore gross disclosure.`,
-        { businessId, invoiceNumber: invoice.invoice_number },
-      );
-      lines[1].amount = subtotal;
-      lines[1].amount_base = subtotalFunctional;
-      lines[1].description = `Invoice ${invoice.invoice_number} — revenue`;
+
+      const accountTotals = new Map<string, { amount: number; descriptions: string[] }>();
+      for (const line of invoiceLines) {
+        const accountId = line.account_id ?? revenue.id;
+        const lineAmount = Number(
+          line.line_subtotal ?? (Number(line.line_total) - Number(line.tax_amount)),
+        );
+        if (!Number.isFinite(lineAmount) || Math.abs(lineAmount) <= 0.005) continue;
+        const aggregate = accountTotals.get(accountId) ?? { amount: 0, descriptions: [] };
+        aggregate.amount += lineAmount;
+        if (line.description && !aggregate.descriptions.includes(line.description)) {
+          aggregate.descriptions.push(line.description);
+        }
+        accountTotals.set(accountId, aggregate);
+      }
+
+      let lineNumber = 2;
+      for (const [accountId, aggregate] of accountTotals) {
+        const signedAmount = Math.round((aggregate.amount + Number.EPSILON) * 100) / 100;
+        if (Math.abs(signedAmount) <= 0.005) continue;
+        const isDebit = isCreditNote ? signedAmount > 0 : signedAmount < 0;
+        lines.push({
+          line_number:   lineNumber++,
+          account_id:    accountId,
+          description:   `${documentLabel} — ${aggregate.descriptions[0] || 'project line'}`,
+          is_debit:      isDebit,
+          amount:        Math.abs(signedAmount),
+          amount_base:   Math.abs(signedAmount * exchangeRate),
+          currency,
+          exchange_rate: exchangeRate,
+          tax_code:      'none',
+          tax_amount:    0,
+          reconciled:    false,
+        });
+      }
+      usedProjectLineAccounts = true;
     }
-  } else {
+  }
+
+  if (!usedProjectLineAccounts) {
     lines.push({
-      line_number:   2,
-      account_id:    revenue.id,
-      description:   `Invoice ${invoice.invoice_number} — revenue`,
-      is_debit:      false,
-      amount:        subtotal,
-      amount_base:   subtotalFunctional,
+      line_number:   1,
+      account_id:    debtors.id,
+      description:   `${documentLabel} — receivable`,
+      is_debit:      !isCreditNote,
+      amount:        Math.abs(Number(invoice.total_amount)),
+      amount_base:   totalFunctional,
       currency,
       exchange_rate: exchangeRate,
       tax_code:      'none',
       tax_amount:    0,
       reconciled:    false,
     });
+
+    if (discountAmount > 0.005) {
+      lines.push({
+        line_number:   2,
+        account_id:    revenue.id,
+        description:   `${documentLabel} — revenue (gross)`,
+        is_debit:      isCreditNote,
+        amount:        grossSubtotal,
+        amount_base:   grossFunctional,
+        currency,
+        exchange_rate: exchangeRate,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
+      });
+      try {
+        const discountAccount = await getAccountByCode(businessId, '4130');
+        lines.push({
+          line_number:   3,
+          account_id:    discountAccount.id,
+          description:   `${documentLabel} — discount allowed`,
+          is_debit:      !isCreditNote,
+          amount:        discountAmount,
+          amount_base:   discountFunctional,
+          currency,
+          exchange_rate: exchangeRate,
+          tax_code:      'none',
+          tax_amount:    0,
+          reconciled:    false,
+        });
+      } catch (err) {
+        // Phase 10 A-02: fall back to net posting ONLY when 4130 is genuinely
+        // missing — and log it. Any other error propagates instead of silently
+        // changing the accounting disclosure. Backfill migration
+        // 20260817000002 makes this path dead code for legacy businesses.
+        if (!isMissingAccountError(err)) throw err;
+        log.warn(
+          `Account 4130 missing for business ${businessId} — posting NET revenue for invoice ${invoice.invoice_number} (discount no longer disclosed). Run ensureChartOfAccounts / backfill migration 20260817000002 to restore gross disclosure.`,
+          { businessId, invoiceNumber: invoice.invoice_number },
+        );
+        lines[1].amount = subtotal;
+        lines[1].amount_base = subtotalFunctional;
+        lines[1].description = `${documentLabel} — revenue`;
+      }
+    } else {
+      lines.push({
+        line_number:   2,
+        account_id:    revenue.id,
+        description:   `${documentLabel} — revenue`,
+        is_debit:      isCreditNote,
+        amount:        subtotal,
+        amount_base:   subtotalFunctional,
+        currency,
+        exchange_rate: exchangeRate,
+        tax_code:      'none',
+        tax_amount:    0,
+        reconciled:    false,
+      });
+    }
   }
 
   if (vatAmount > 0) {
     lines.push({
       line_number:   lines.length + 1,
       account_id:    vatPayable.id,
-      description:   `Invoice ${invoice.invoice_number} — VAT`,
-      is_debit:      false,
+      description:   `${documentLabel} — VAT`,
+      is_debit:      isCreditNote,
       amount:        vatAmount,
       amount_base:   vatFunctional,
       currency,
@@ -657,7 +731,7 @@ export async function createInvoiceReceivableEntry(
       business_id:   businessId,
       entry_number:  entryNumber,
       entry_date:    invoice.issue_date,
-      description:   `Invoice ${invoice.invoice_number}`,
+      description:   documentLabel,
       source_type:   'invoice',
       source_id:     invoice.id,
       posting_key:   `invoice:${invoice.id}:sale`,

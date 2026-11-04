@@ -23,6 +23,30 @@ describe('buildRevenueBreakdown', () => {
     ]);
   });
 
+  it('excludes balance-sheet lines such as construction retention from revenue breakdowns', () => {
+    const rows = buildRevenueBreakdown(
+      [
+        { id: 'invoice-1', invoice_type: 'invoice', exchange_rate: 1 },
+        { id: 'credit-1', invoice_type: 'credit_note', exchange_rate: 1 },
+      ],
+      [
+        { invoice_id: 'invoice-1', product_id: null, account_id: 'revenue-account', description: 'Certified work', quantity: 1, line_subtotal: 100, line_total: 100, tax_amount: 0 },
+        { invoice_id: 'invoice-1', product_id: null, account_id: 'retention-account', description: 'Retention withheld', quantity: 1, line_subtotal: -10, line_total: -10, tax_amount: 0 },
+        { invoice_id: 'credit-1', product_id: null, account_id: 'revenue-account', description: 'Certified work', quantity: 1, line_subtotal: 100, line_total: 100, tax_amount: 0 },
+        { invoice_id: 'credit-1', product_id: null, account_id: 'retention-account', description: 'Retention release adjustment', quantity: 1, line_subtotal: -10, line_total: -10, tax_amount: 0 },
+      ],
+      new Map(),
+      new Map([
+        ['revenue-account', 'income'],
+        ['retention-account', 'asset'],
+      ]),
+    );
+
+    expect(rows).toEqual([
+      { key: 'description:certified work', name: 'Certified work', quantity: 0, invoiceCount: 2, amount: 0 },
+    ]);
+  });
+
   it('uses the after-discount line value when calculating net revenue', () => {
     const rows = buildRevenueBreakdown(
       [{ id: 'invoice-1', invoice_type: 'invoice', exchange_rate: 1 }],

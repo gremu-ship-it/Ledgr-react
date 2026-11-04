@@ -16,6 +16,7 @@ export type JournalLineForBranchReport = {
     branch_id: string | null;
     entry_date: string;
     status: string;
+    reversal_of: string | null;
   } | null;
 };
 
@@ -166,6 +167,8 @@ export function buildBranchPerformance(
   for (const line of lines) {
     const account = line.accounts;
     const subtype = account?.account_subtype;
+    const entry = line.journal_entries;
+    if (!entry || entry.status === 'reversed' || entry.reversal_of !== null) continue;
     if (!account || !subtype || !P_AND_L_SUBTYPES.has(subtype)) continue;
 
     const branchId = line.branch_id ?? line.journal_entries?.branch_id ?? UNASSIGNED_BRANCH_ID;

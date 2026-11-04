@@ -186,7 +186,13 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
    */
   private async computeBalances(
     businessId: string,
-    options: { asOfDate?: string; dateFrom?: string; dateTo?: string; includeOpeningBalances: boolean },
+    options: {
+      asOfDate?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      includeOpeningBalances: boolean;
+      excludeReversalPairs?: boolean;
+    },
   ): Promise<AccountBalance[]> {
     const accounts = await this.client
       .from('accounts')
@@ -200,10 +206,20 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
 
     let query = this.client
       .from('journal_lines')
-      .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id)')
+      .select('account_id, is_debit, amount_base, journal_entries!inner(entry_date, status, business_id, reversal_of)')
       .eq('business_id', businessId)
       .eq('journal_entries.business_id', businessId)
       .in('journal_entries.status', ['posted', 'reversed']);
+
+    // Period-performance reports exclude both sides of a reversal pair: the
+    // original is marked `reversed`, while its mirror has `reversal_of` set.
+    // Keep the default inclusive behavior for point-in-time balances, which
+    // must continue to reflect the complete posted ledger.
+    if (options.excludeReversalPairs) {
+      query = query
+        .neq('journal_entries.status', 'reversed')
+        .is('journal_entries.reversal_of', null);
+    }
 
     if (options.asOfDate) {
       query = query.lte('journal_entries.entry_date', options.asOfDate);
@@ -460,7 +476,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       // register/category lookup fails (for example in an older deployment).
     }
 
-    const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset'], 'Current Assets', 'debit', new Set(), subtypeOverrides);
+    const currentAssets = this.buildSection(balances, comparativeBalances, ['current_asset', 'contra_ar'], 'Current Assets', 'debit', new Set(), subtypeOverrides);
     const nonCurrentAssets = this.buildSection(
       balances, comparativeBalances,
       ['non_current_asset', 'fixed_asset'],
@@ -674,6 +690,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
       dateFrom: periodStart,
       dateTo: periodEnd,
       includeOpeningBalances: false,
+      excludeReversalPairs: true,
     });
 
     const comparativeBalances = (comparativePeriodStart && comparativePeriodEnd)
@@ -681,6 +698,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
           dateFrom: comparativePeriodStart,
           dateTo: comparativePeriodEnd,
           includeOpeningBalances: false,
+          excludeReversalPairs: true,
         })
       : null;
 
@@ -1034,7 +1052,7 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     // INCREASE in current assets and wrongly reduced operating cash — the
     // provision is a non-cash charge and must net the asset side down.
     const sumNonCashCurrentAssets = (balances: AccountBalance[]) => balances
-      .filter((b) => b.account.account_subtype === 'current_asset' && !this.isCashEquivalent(b.account))
+      .filter((b) => (b.account.account_subtype === 'current_asset' || b.account.account_subtype === 'contra_ar') && !this.isCashEquivalent(b.account))
       .reduce((s, b) => s + toStatementSide(b.balance, asNormalBalance(b.account.normal_balance), 'debit'), 0);
 
     const sumOperatingCurrentLiabilities = (balances: AccountBalance[]) => balances

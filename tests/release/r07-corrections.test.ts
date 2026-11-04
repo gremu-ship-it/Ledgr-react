@@ -72,7 +72,22 @@ test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is serv
   }
   // No foreign or duplicated correction-shaped entrypoints beyond the canonical six.
   const invoiceApproval = ['_ledgr_invoice_approval_guard','_ledgr_invoice_line_revokes_approval','_ledgr_invoice_needs_approval','_ledgr_revoke_invoice_approval','approve_invoice','set_invoice_approval_policy'];
-  expect(hits.sort()).toEqual(['_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval','refund_pos_sale_command','request_pos_approval','void_pos_sale_command', ...invoiceApproval].sort());
+  // P4C adds the independently-scoped Enterprise document workflow API and guards.
+  const p4cWorkflows = [
+    '_approval_business_entitled', '_approval_document_snapshot',
+    '_approval_guard_journal_transition', '_approval_guard_pending_line_edit',
+    '_approval_guard_purchase_order_transition', 'act_on_approval', 'can_approve_step',
+    'get_approval_state', 'requires_approval', 'resubmit_approval',
+    'save_approval_workflow', 'start_approval_workflow',
+  ];
+  // Construction procurement also has one separate receipt-policy command;
+  // neither additive surface is part of the POS correction/token namespace.
+  const constructionPolicy = ['approve_construction_receipt_posting_policy'];
+  expect(hits.sort()).toEqual([
+    '_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval',
+    'refund_pos_sale_command','request_pos_approval','void_pos_sale_command',
+    ...invoiceApproval, ...constructionPolicy, ...p4cWorkflows,
+  ].sort());
 });
 
 test(meta('R07.APPROVAL.SERVER-STATE', 'Minimal authoritative approval state exists server-side: pos_approvals (org/document/action/requester/approver/expiry/single-use) + pos_corrections ledger; financial documents remain untouched by approval columns; authorization never takes a PIN', 'supabase/migrations/20260928000002_r07_correction_commands.sql'), async () => {

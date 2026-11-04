@@ -31,16 +31,21 @@ export interface DepreciationCalcInput {
    * behaviour-preserving in practice — see the unit tests.
    */
   depreciationRate: number | null;
+  /** Current carrying value, preferred for reducing-balance assets after revaluation. */
+  netBookValue?: number;
 }
 
-export function calculateMonthlyDepreciation(input: DepreciationCalcInput): number {
+export function calculateMonthlyDepreciation(input: DepreciationCalcInput, monthsInPeriod = 1): number {
   const {
     method, acquisitionCost, residualValue,
-    usefulLifeYears, usefulLifeMonths, accumulatedDepreciation, depreciationRate,
+    usefulLifeYears, usefulLifeMonths, accumulatedDepreciation, depreciationRate, netBookValue,
   } = input;
+  if (!Number.isInteger(monthsInPeriod) || monthsInPeriod < 1) {
+    throw new Error('Depreciation periods must cover one or more whole months.');
+  }
 
   const depreciableAmount = acquisitionCost - residualValue;
-  const remainingBookValue = acquisitionCost - accumulatedDepreciation;
+  const remainingBookValue = netBookValue ?? (acquisitionCost - accumulatedDepreciation);
   const monthsLife = usefulLifeMonths ?? (usefulLifeYears ? usefulLifeYears * 12 : null);
 
   if (remainingBookValue <= residualValue) return 0; // fully depreciated
@@ -49,14 +54,14 @@ export function calculateMonthlyDepreciation(input: DepreciationCalcInput): numb
 
   if (method === 'straight_line') {
     if (!monthsLife) throw new Error('Straight-line depreciation requires a useful life.');
-    charge = depreciableAmount / monthsLife;
+    charge = (depreciableAmount / monthsLife) * monthsInPeriod;
   } else if (method === 'reducing_balance') {
     // Both operands are percentages: an explicit 25 means 25%/yr, and the
     // straight-line-equivalent fallback for a 10-year life is 100/10 = 10%/yr.
     const annualRatePercent = depreciationRate ?? (monthsLife ? 100 / (monthsLife / 12) : null);
     if (!annualRatePercent) throw new Error('Reducing-balance depreciation requires a rate or useful life.');
     const monthlyRate = annualRatePercent / 100 / 12;
-    charge = remainingBookValue * monthlyRate;
+    charge = remainingBookValue * monthlyRate * monthsInPeriod;
   } else {
     throw new Error(`Depreciation method '${method}' is not yet supported by the automated posting engine.`);
   }

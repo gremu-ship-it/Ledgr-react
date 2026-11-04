@@ -43,7 +43,7 @@ export function pushSofpBalanceWarning(
     type: 'warning',
     title: 'Statement of Financial Position imbalance',
     message: `Net Assets (${netAssets}) does not equal Total Equity (${totalEquity}). Run a period close or check for unposted entries.`,
-    link: '/reports',
+    link: '/reports/balance-sheet',
     businessId,
   });
 }
@@ -64,37 +64,6 @@ export function pushAuditVerified(businessId?: string | null) {
     title: 'Audit chain verified',
     message: 'Hash chain is intact. All entries are valid.',
     link: '/audit',
-    businessId,
-  });
-}
-
-// ──────────────────────────────────────────────────────────────
-// Bank Reconciliation
-// ──────────────────────────────────────────────────────────────
-export function pushBankReconciliationComplete(
-  accountName: string,
-  matchedCount: number,
-  businessId?: string | null,
-) {
-  pushNotification({
-    type: 'success',
-    title: 'Bank reconciliation completed',
-    message: `${matchedCount} transactions reconciled for ${accountName}.`,
-    link: '/bank-reconcile',
-    businessId,
-  });
-}
-
-export function pushBankStatementImported(
-  accountName: string,
-  lineCount: number,
-  businessId?: string | null,
-) {
-  pushNotification({
-    type: 'info',
-    title: 'Bank statement imported',
-    message: `${lineCount} lines imported for ${accountName}.`,
-    link: '/bank-reconcile',
     businessId,
   });
 }

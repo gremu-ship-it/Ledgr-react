@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router';
+import { Navigate, useLocation, useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { DemoNotice } from '@/components/demo/DemoNotice';
 import { useState, useRef } from 'react';
@@ -22,6 +23,7 @@ import {
   Copy,
   ExternalLink,
   Key,
+  ClipboardCheck,
   LogOut,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -37,7 +39,13 @@ import { WebhookSettings } from '@/components/settings/WebhookSettings';
 import { BusinessDataBackup } from '@/components/settings/BusinessDataBackup';
 import { BillingTab } from '@/components/billing/BillingTab';
 import { TeamManagementPage } from '@/pages/settings/TeamManagementPage';
+import { ApprovalsTab } from '@/pages/settings/ApprovalsTab';
 import { PlanGate } from '@/components/billing/PlanGate';
+import {
+  OPERATING_MODELS,
+  OPERATING_MODEL_LABELS,
+  type OperatingModel,
+} from '@/lib/capabilities/profile';
 import { handleError } from '@/lib/errorHandler';
 import { describeFunctionFailure } from '@/lib/edgeFunctionErrors';
 
@@ -110,10 +118,12 @@ function Input({
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
 
-type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance';
-const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance'];
+type Tab = 'business' | 'financial' | 'profile' | 'security' | 'team' | 'privacy' | 'api' | 'billing' | 'appearance' | 'approvals';
+const TAB_VALUES: Tab[] = ['business', 'financial', 'profile', 'security', 'team', 'privacy', 'api', 'billing', 'appearance', 'approvals'];
 
-const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
+// Legacy tabs carry hardcoded labels; new tabs MUST provide `labelKey` and
+// resolve through i18n (the renderer prefers labelKey when present).
+const TABS: { value: Tab; label: string; labelKey?: string; icon: typeof Building2 }[] = [
   { value: 'business', label: 'Business Profile', icon: Building2 },
   { value: 'financial', label: 'Financial Settings', icon: DollarSign },
   { value: 'profile', label: 'User Profile', icon: User },
@@ -123,6 +133,7 @@ const TABS: { value: Tab; label: string; icon: typeof Building2 }[] = [
   { value: 'billing', label: 'Billing & Plans', icon: DollarSign },
   { value: 'appearance', label: 'Appearance', icon: Eye },
   { value: 'privacy', label: 'Privacy', icon: Cookie },
+  { value: 'approvals', label: '', labelKey: 'settings.approvals.tabTitle', icon: ClipboardCheck },
 ];
 
 function AppearanceTab() {
@@ -223,6 +234,7 @@ function AppearanceTab() {
 // ── Business Profile Tab ──────────────────────────────────────────────────────
 
 function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -249,6 +261,100 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
   const [pendingLogoUrl, setPendingLogoUrl] = useState<string | null | undefined>(undefined);
   const logoUrl = pendingLogoUrl !== undefined ? pendingLogoUrl : (business.logo_url ?? null);
   const setLogoUrl = (next: string | null) => setPendingLogoUrl(next);
+
+  // The generated Database types predate the organisation-profile migration, so
+  // the two profile columns are read through a narrow adapter rather than by
+  // widening the shared type.
+  const profileRow = business as unknown as { operating_models?: string[] | null };
+  const savedOperatingModels = profileRow.operating_models ?? [];
+  const [operatingModels, setOperatingModels] = useState<string[]>(savedOperatingModels);
+  const currentUser = useAppStore((s) => s.currentUser);
+
+  const operatingModelsMutation = useMutation({
+    mutationFn: async () => {
+      const saved = await repos.business.updateOperatingModels(business.id, operatingModels);
+      // Provision only when Construction is newly added. Removing the model
+      // revokes nothing: the site, location and grants stay for a later re-add.
+      const constructionAdded = saved.includes('CONSTRUCTION')
+        && !savedOperatingModels.includes('CONSTRUCTION');
+      let provisionError: Error | null = null;
+      if (constructionAdded) {
+        try {
+          if (!currentUser?.id) throw new Error(t('construction.accounts.ownerRequired'));
+          await repos.business.provisionConstructionDefaults(business.id, currentUser.id);
+        } catch (err) {
+          provisionError = err instanceof Error
+            ? err
+            : new Error(t('construction.accounts.provisionError'));
+        }
+      }
+      if (saved.includes('CONSTRUCTION')) {
+        try {
+          await repos.business.provisionConstructionCoaAccounts(business.id);
+        } catch (err) {
+          provisionError ??= err instanceof Error
+            ? err
+            : new Error(t('construction.accounts.provisionError'));
+        }
+      }
+      // Manufacturing mirrors Construction exactly: provision only when the
+      // model is newly added, and always keep the WIP Inventory account present
+      // while the model is selected. Removing the model revokes nothing.
+      const manufacturingAdded = saved.includes('MANUFACTURING')
+        && !savedOperatingModels.includes('MANUFACTURING');
+      if (manufacturingAdded) {
+        try {
+          if (!currentUser?.id) throw new Error(t('manufacturing.accounts.ownerRequired'));
+          await repos.business.provisionManufacturingDefaults(business.id, currentUser.id);
+        } catch (err) {
+          provisionError ??= err instanceof Error
+            ? err
+            : new Error(t('manufacturing.accounts.provisionError'));
+        }
+      }
+      if (saved.includes('MANUFACTURING')) {
+        try {
+          await repos.business.provisionManufacturingCoaAccounts(business.id);
+        } catch (err) {
+          provisionError ??= err instanceof Error
+            ? err
+            : new Error(t('manufacturing.accounts.provisionError'));
+        }
+      }
+      return { saved, provisionError, manufacturingProvision: saved.includes('MANUFACTURING') };
+    },
+    onSuccess: ({ saved, provisionError, manufacturingProvision }) => {
+      setOperatingModels(saved);
+      // Keep the navigation's organisation-profile source in sync immediately;
+      // otherwise the sidebar would only reflect the change after a reload.
+      const store = useAppStore.getState();
+      const models = saved as OperatingModel[];
+      if (store.currentBusiness?.business.id === business.id) {
+        store.setCurrentBusiness({
+          ...store.currentBusiness,
+          business: { ...store.currentBusiness.business, operating_models: models },
+        });
+      }
+      if (store.businesses.length) {
+        store.setBusinesses(store.businesses.map((membership) => (
+          membership.business.id === business.id
+            ? { ...membership, business: { ...membership.business, operating_models: models } }
+            : membership
+        )));
+      }
+      queryClient.invalidateQueries({ queryKey: ['business', business.id] });
+      setAlert(provisionError
+        ? {
+            type: 'error',
+            message: manufacturingProvision
+              ? t('manufacturing.accounts.settingsProvisionWarning')
+              : t('construction.accounts.settingsProvisionWarning'),
+          }
+        : { type: 'success', message: 'Operating models updated.' });
+      setTimeout(() => setAlert(null), 6000);
+    },
+    onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
+  });
 
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -492,6 +598,52 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
             </div>
           </div>
         </PlanGate>
+      </div>
+
+      {/* ── Operating models ────────────────────────────────────────────────── */}
+      <div className="border-t border-gray-100 pt-6">
+        <h3 className="mb-1 text-sm font-semibold text-gray-700">Operating Model</h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Select everything the business does. Each model turns on its matching workflows.
+          Construction requires the Enterprise plan; adding it sets up a main site, its stock
+          location and the owner&apos;s procurement permissions once. Removing a model does not
+          revoke anything, so re-adding it resumes where it left off.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {OPERATING_MODELS.map((model) => (
+            <label
+              key={model}
+              className="flex cursor-pointer items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-500 focus:ring-brand-500"
+                checked={operatingModels.includes(model)}
+                onChange={(e) => setOperatingModels((current) => (
+                  e.target.checked
+                    ? [...current, model]
+                    : current.filter((selected) => selected !== model)
+                ))}
+              />
+              <span>
+                {OPERATING_MODEL_LABELS[model]}
+                {(model === 'CONSTRUCTION' || model === 'MANUFACTURING') && (
+                  <span className="ml-1 text-xs text-gray-500">(Enterprise)</span>
+                )}
+              </span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            onClick={() => operatingModelsMutation.mutate()}
+            disabled={operatingModelsMutation.isPending}
+            className="rounded-lg border border-brand-500 px-4 py-2 text-sm font-semibold text-brand-600 hover:bg-brand-50 disabled:opacity-60 transition-colors"
+          >
+            {operatingModelsMutation.isPending ? 'Saving…' : 'Save Operating Models'}
+          </button>
+        </div>
       </div>
 
       <div className="flex justify-end border-t border-gray-100 pt-4">
@@ -2003,14 +2155,18 @@ For privacy requests, email privacy@ledgr.app or use the in-app tools.
 // ── Main Settings Page ────────────────────────────────────────────────────────
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business?.id;
   const [signingOut, setSigningOut] = useState(false);
   const [searchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as Tab | null;
   const [activeTab, setActiveTab] = useState<Tab>(
-    tabParam && TAB_VALUES.includes(tabParam) ? tabParam : 'business',
+    location.pathname === '/settings/approvals'
+      ? 'approvals'
+      : tabParam && TAB_VALUES.includes(tabParam) ? tabParam : 'business',
   );
 
   // Keep the active tab in sync if the ?tab= query param changes after mount
@@ -2025,12 +2181,21 @@ export function SettingsPage() {
       setActiveTab(tabParam);
     }
   }
+  const selectedTab: Tab = location.pathname === '/settings/approvals'
+    ? 'approvals'
+    : activeTab === 'approvals' && tabParam !== 'approvals' ? 'business' : activeTab;
 
   const { data: business, isLoading } = useQuery({
     queryKey: ['business', businessId],
     queryFn: () => repos.business.findById(businessId!),
     enabled: Boolean(businessId),
   });
+
+  function handleTabSelect(tab: Tab) {
+    setActiveTab(tab);
+    if (tab === 'approvals') navigate('/settings/approvals');
+    else if (location.pathname === '/settings/approvals') navigate(`/settings?tab=${tab}`);
+  }
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -2039,6 +2204,13 @@ export function SettingsPage() {
     } finally {
       navigate('/login', { replace: true });
     }
+  }
+
+  // Locations moved out of Settings into the Organisation nav (/locations,
+  // labelled "Sites" in the construction/manufacturing vocabulary). Old links
+  // and bookmarks keep working.
+  if (searchParams.get('tab') === 'locations') {
+    return <Navigate to="/locations" replace />;
   }
 
   if (!businessId) {
@@ -2067,16 +2239,16 @@ export function SettingsPage() {
               return (
                 <button
                   key={tab.value}
-                  onClick={() => setActiveTab(tab.value)}
+                  onClick={() => handleTabSelect(tab.value)}
                   className={cls(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors text-left',
-                    activeTab === tab.value
+                    selectedTab === tab.value
                       ? 'bg-brand-50 text-brand-700'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  {tab.label}
+                  {tab.labelKey ? t(tab.labelKey) : tab.label}
                 </button>
               );
             })}
@@ -2106,23 +2278,24 @@ export function SettingsPage() {
               </div>
             ) : (
               <>
-                {activeTab === 'business' && business && (
+                {selectedTab === 'business' && business && (
                   <BusinessProfileTab business={business} />
                 )}
-                {activeTab === 'financial' && business && (
+                {selectedTab === 'financial' && business && (
                   <FinancialSettingsTab business={business} />
                 )}
-                {activeTab === 'profile' && <UserProfileTab />}
-                {activeTab === 'security' && <SecurityTab />}
-                {activeTab === 'team' && <TeamManagementPage />}
-                {activeTab === 'api' && (
+                {selectedTab === 'profile' && <UserProfileTab />}
+                {selectedTab === 'security' && <SecurityTab />}
+                {selectedTab === 'team' && <TeamManagementPage />}
+                {selectedTab === 'api' && (
                   <PlanGate capability="webhooks" featureName="API & Webhooks" fallback="lock">
                     <WebhookSettings />
                   </PlanGate>
                 )}
-                {activeTab === 'billing' && <BillingTab />}
-                {activeTab === 'appearance' && <AppearanceTab />}
-                {activeTab === 'privacy' && <PrivacyTab />}
+                {selectedTab === 'billing' && <BillingTab />}
+                {selectedTab === 'appearance' && <AppearanceTab />}
+                {selectedTab === 'privacy' && <PrivacyTab />}
+                {selectedTab === 'approvals' && <ApprovalsTab />}
               </>
             )}
           </div>

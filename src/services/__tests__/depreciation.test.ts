@@ -46,6 +46,14 @@ describe('calculateMonthlyDepreciation', () => {
       expect(result).toBeCloseTo(1_200_000 / 24, 6);
     });
 
+    it('calculates a multi-month period and caps the charge at the remaining amount above salvage', () => {
+      const result = calculateMonthlyDepreciation(
+        input({ residualValue: 200_000, accumulatedDepreciation: 999_500 }),
+        3,
+      );
+      expect(result).toBeCloseTo(500, 6);
+    });
+
     it('throws when no useful life is supplied', () => {
       expect(() =>
         calculateMonthlyDepreciation(
@@ -70,6 +78,17 @@ describe('calculateMonthlyDepreciation', () => {
         }),
       );
       expect(result).toBeCloseTo(20_000, 6);
+    });
+
+    it('uses the current net book value for reducing balance and supports quarter-length periods', () => {
+      const result = calculateMonthlyDepreciation(input({
+        method: 'reducing_balance',
+        acquisitionCost: 1_200_000,
+        accumulatedDepreciation: 100_000,
+        netBookValue: 500_000,
+        depreciationRate: 24,
+      }), 3);
+      expect(result).toBeCloseTo(30_000, 6);
     });
 
     it('accepts the category MRA rate directly, with no conversion', () => {

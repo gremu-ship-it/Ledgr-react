@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { ProjectRepository, ReportingRepository } from '@/dal/repositories/ProjectRepository';
 
 import { BusinessRepository } from '@/dal/repositories/BusinessRepository';
 import { JournalRepository } from '@/dal/repositories/JournalRepository';
@@ -17,13 +18,45 @@ import { InventoryRepository } from '@/dal/repositories/InventoryRepository';
 import { IncomeRepository } from '@/dal/repositories/IncomeRepository';
 import { ContactRepository } from '@/dal/repositories/ContactRepository';
 import { BranchRepository } from '@/dal/repositories/BranchRepository';
+import { LocationRepository } from '@/dal/repositories/LocationRepository';
 import { DepartmentRepository } from '@/dal/repositories/DepartmentRepository';
 import { TransferRepository } from '@/dal/repositories/TransferRepository';
 import { PeriodRepository } from '@/dal/repositories/PeriodRepository';
+import { FxRevaluationRepository } from '@/dal/repositories/FxRevaluationRepository';
+import { BudgetRepository } from '@/dal/repositories/BudgetRepository';
+import { DepreciationRepository } from '@/dal/repositories/DepreciationRepository';
 import { AuditLogRepository } from '@/dal/repositories/AuditLogRepository';
 import { PosRepository } from '@/dal/repositories/PosRepository';
+import { constructionProcurementRepository } from '@/dal/repositories/ConstructionProcurementRepository';
+import { constructionCertificatesRepository } from '@/dal/repositories/ConstructionCertificatesRepository';
+import { ApprovalRepository } from '@/dal/repositories/ApprovalRepository';
+import { BomRepository } from '@/dal/repositories/BomRepository';
+import { ManufacturingRepository } from '@/dal/repositories/ManufacturingRepository';
+import { CashDepositRepository } from '@/dal/repositories/CashDepositRepository';
+import { ConstructionRfiRepository } from '@/dal/repositories/ConstructionRfiRepository';
+import { ConstructionChangeOrderRepository } from '@/dal/repositories/ConstructionChangeOrderRepository';
+import { ConstructionQualityRepository } from '@/dal/repositories/ConstructionQualityRepository';
+import { ConstructionHseRepository } from '@/dal/repositories/ConstructionHseRepository';
+import { ConstructionScheduleRepository } from '@/dal/repositories/ConstructionScheduleRepository';
 
 export const repos = {
+  projects: new ProjectRepository(),
+  reporting: new ReportingRepository(),
+  /**
+   * Construction procurement: a typed adapter over the construction command
+   * layer (migration 20261021000000). Reads are member-scoped SELECTs; every
+   * write goes through a construction command that authorizes internally.
+   */
+  construction: constructionProcurementRepository,
+  certificates: constructionCertificatesRepository,
+  rfi: new ConstructionRfiRepository(supabase),
+  changeOrder: new ConstructionChangeOrderRepository(supabase),
+  quality: new ConstructionQualityRepository(supabase),
+  hse: new ConstructionHseRepository(supabase),
+  schedule: new ConstructionScheduleRepository(supabase),
+  approval: ApprovalRepository,
+  bom: new BomRepository(supabase),
+  manufacturing: new ManufacturingRepository(supabase),
   business:   new BusinessRepository(supabase),
   journal:    new JournalRepository(supabase),
   invoice:    new InvoiceRepository(supabase),
@@ -42,11 +75,21 @@ export const repos = {
   income:     new IncomeRepository(supabase),
   contact:    new ContactRepository(supabase),
   branch:     new BranchRepository(supabase),
+  /**
+   * Inventory locations master data (Settings → Locations, P2-1). Direct
+   * writes under the existing role-aware RLS tier; deactivation carries the
+   * four safety checks and never deletes.
+   */
+  location:   new LocationRepository(supabase),
   department: new DepartmentRepository(supabase),
   transfer:   new TransferRepository(supabase),
   period: new PeriodRepository(supabase),
+  fxRevaluation: new FxRevaluationRepository(supabase),
+  budget: new BudgetRepository(supabase),
+  depreciation: new DepreciationRepository(supabase),
   auditLog: new AuditLogRepository(supabase),
   pos: new PosRepository(supabase),
+  cashDeposit: new CashDepositRepository(supabase),
 };
 
 export type Repositories = typeof repos;

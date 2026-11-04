@@ -49,7 +49,10 @@ export function resolveHost(hostname: string = window.location.hostname): HostRe
     };
   }
 
-  if (host === root || host === `www.${root}`) {
+  if (host === root || host === `www.${root}` || host.endsWith('.vercel.app')) {
+    // Vercel's production alias and per-deployment preview URLs are platform
+    // hosts, not partner vanity domains. Treating them as tenants triggers an
+    // unnecessary partner lookup before partner-gated pages can render.
     return { slug: null, customDomain: null, isAdminHost: false, isPlatformHost: true };
   }
 

@@ -7,6 +7,7 @@ export interface RevenueInvoice {
 export interface RevenueInvoiceLine {
   invoice_id: string;
   product_id: string | null;
+  account_id?: string | null;
   description: string;
   quantity: number | null;
   line_subtotal: number | null;
@@ -33,6 +34,7 @@ export function buildRevenueBreakdown(
   invoices: RevenueInvoice[],
   lines: RevenueInvoiceLine[],
   productNames: ReadonlyMap<string, string> = new Map(),
+  accountTypes: ReadonlyMap<string, string> = new Map(),
 ): RevenueBreakdownRow[] {
   const invoicesById = new Map(invoices.map((invoice) => [invoice.id, invoice]));
   const grouped = new Map<string, RevenueBreakdownRow & { invoiceIds: Set<string> }>();
@@ -40,6 +42,10 @@ export function buildRevenueBreakdown(
   for (const line of lines) {
     const invoice = invoicesById.get(line.invoice_id);
     if (!invoice) continue;
+    // Balance-sheet lines such as Construction retention are financial invoice
+    // lines, but they are not revenue earned from a product or service.
+    const accountType = line.account_id ? accountTypes.get(line.account_id) : undefined;
+    if (accountType && accountType !== 'income') continue;
 
     const key = line.product_id ? `product:${line.product_id}` : `description:${line.description.trim().toLowerCase()}`;
     const name = line.product_id

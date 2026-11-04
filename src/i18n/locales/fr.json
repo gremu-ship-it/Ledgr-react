@@ -296,7 +296,23 @@
     "stock": "Stock",
     "quantity": "Quantité",
     "reorderLevel": "Seuil de réapprovisionnement",
-    "location": "Emplacement"
+    "location": "Emplacement",
+    "errors": {
+      "insufficientStock": "Stock insuffisant à cet emplacement. Réapprovisionnez ou transférez du stock avant d’enregistrer ce mouvement.",
+      "adjustmentReasonRequired": "Saisissez une référence ou une note pour expliquer cet ajustement de stock.",
+      "transferQuantityMismatch": "Les quantités reçues doivent correspondre aux quantités expédiées. Enregistrez tout manque ou perte dans un ajustement de stock séparé.",
+      "transferNotApproved": "Seul un transfert approuvé peut être expédié.",
+      "transferNotDispatched": "Seul un transfert expédié peut être réceptionné.",
+      "transferLinesRequired": "Ajoutez au moins une ligne avant d’expédier ou de réceptionner le transfert.",
+      "transferLinesMismatch": "Les lignes du transfert ont changé. Actualisez le transfert et réessayez.",
+      "transferInvalidQuantity": "Chaque ligne doit être nulle ou positive sans dépasser la quantité demandée, et au moins une ligne doit être positive.",
+      "transferDuplicateLine": "Une ligne de transfert a été incluse plusieurs fois. Actualisez le transfert et réessayez.",
+      "transferAlreadyHasMovements": "Ce transfert comporte déjà des mouvements de stock mais n’est pas marqué comme expédié. Il n’a pas été modifié ; vérifiez-le avant de réessayer.",
+      "transferNotFound": "Transfert introuvable ou vous n’avez pas l’autorisation de l’utiliser.",
+      "transferAuthRequired": "Connectez-vous avec l’autorisation d’expédier ou de réceptionner ce transfert.",
+      "transferEmptyResult": "Le transfert n’a pas été confirmé. Actualisez la page avant de réessayer."
+    },
+    "transferPairNotice": "Le stock des deux emplacements a été mis à jour ensemble lors de l’expédition. Confirmez la réception pour terminer le transfert ; enregistrez tout manque ou perte dans un ajustement séparé."
   },
   "accounting": {
     "accounts": "Comptes",
@@ -484,5 +500,11 @@
     "joinedAs": "Vous avez rejoint en tant que {{role}}. Redirection vers votre tableau de bord…",
     "theBusiness": "l’entreprise",
     "member": "membre"
+  }
+,
+  "constructionSchedule": {
+    "errors": {
+      "invalidProgress": "La progression doit être un entier compris entre 0 et 100."
+    }
   }
 }
