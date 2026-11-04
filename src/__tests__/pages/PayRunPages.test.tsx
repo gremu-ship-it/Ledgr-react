@@ -10,6 +10,7 @@ import { PayRunDetailPage } from '@/pages/payroll/PayRunDetailPage';
 
 const mocks = vi.hoisted(() => ({
   getPayRuns: vi.fn(),
+  findLegacyPayRuns: vi.fn(),
   getPayRun: vi.fn(),
   getPayRunByPeriod: vi.fn(),
   calculatePayRun: vi.fn(),
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/repositories', () => ({
   repos: {
+    payroll: { findByBusiness: mocks.findLegacyPayRuns },
     payrollFullCycle: {
       getPayRuns: mocks.getPayRuns,
       getPayRun: mocks.getPayRun,
@@ -115,6 +117,7 @@ function renderWithRoute(element: ReactNode, initialEntry = defaultRunPage) {
 }
 
 function resetRepositoryMocks() {
+  mocks.findLegacyPayRuns.mockReset().mockResolvedValue([]);
   mocks.getPayRuns.mockReset().mockResolvedValue({
     rows: [],
     count: 0,
@@ -169,6 +172,29 @@ describe('pay-run pages', () => {
         expect.objectContaining({ status: 'posted', page: 1 }),
       );
     });
+  });
+
+  it('keeps pre-update payroll runs visible when the new-cycle list has no runs', async () => {
+    mocks.findLegacyPayRuns.mockResolvedValue([{
+      id: 'legacy-run-1',
+      business_id: 'business-1',
+      run_number: 'PAY-001',
+      payroll_period: 'March 2026',
+      period_start: '2026-03-01',
+      period_end: '2026-03-31',
+      pay_date: '2026-03-31',
+      total_gross: 500000,
+      total_net: 450000,
+      status: 'paid',
+    }]);
+
+    renderWithRoute(<PayRunListPage />);
+
+    expect(await screen.findByText('payroll.legacyHistoryTitle')).toBeTruthy();
+    expect(await screen.findByText('PAY-001')).toBeTruthy();
+    expect(await screen.findByText('March 2026')).toBeTruthy();
+    expect(await screen.findByText('payroll.noNewRunsLegacyAvailable')).toBeTruthy();
+    expect(mocks.findLegacyPayRuns).toHaveBeenCalledWith('business-1');
   });
 
   it('calculates, reviews, approves, and posts a pay run through the wizard', async () => {

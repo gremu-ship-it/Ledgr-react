@@ -4456,6 +4456,17 @@
     "viewPayRun": "View pay run",
     "viewReversalEntry": "View reversal entry",
     "employeeCount_one": "{{count}} employee",
-    "employeeCount_other": "{{count}} employees"
+    "employeeCount_other": "{{count}} employees",
+    "legacyHistoryTitle": "Previous payroll history",
+    "legacyHistoryDescription": "Runs created before the payroll update are preserved below. They are read-only here.",
+    "legacyHistoryLoadFailed": "Could not load previous payroll history.",
+    "legacyHistoryRunNumber": "Run #",
+    "legacyHistoryPeriod": "Payroll period",
+    "legacyHistoryPayDate": "Pay date",
+    "legacyHistoryGross": "Total gross",
+    "legacyHistoryNet": "Total net",
+    "legacyHistoryStatus": "Status",
+    "legacyHistoryReadOnly": "Historical runs are preserved as read-only records in this list.",
+    "noNewRunsLegacyAvailable": "There are no runs in the new payroll cycle yet. Previous payroll runs are listed below."
   }
 }
