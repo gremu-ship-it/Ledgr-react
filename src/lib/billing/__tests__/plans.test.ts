@@ -40,13 +40,13 @@ describe('Starter pricing and access', () => {
       // Construction is a browser-local draft workspace only; it has no protected server data or posting path.
       const available = ['overview', 'finance', 'construction', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
-        const payrollRequiresStarter = item.path === '/payroll' || item.path === '/payroll/tax-config';
+        const payrollRequiresStarter = item.path.startsWith('/payroll/');
         expect(isItemLocked(item, 'free'), item.path).toBe(!available || payrollRequiresStarter);
       }
     }
   });
 
-  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports', '/payroll', '/payroll/tax-config'])(
+  it.each(['/products', '/inventory', '/warehouse', '/transfers', '/accounts', '/tax', '/assets', '/capital', '/reports', '/payroll/employees', '/payroll/tax-config'])(
     'unlocks %s starting at Starter', (path) => {
       const item = navItemForPath(path)!;
       expect(item).toBeDefined();

@@ -50,6 +50,9 @@ describe('Role-Based Access Control (RBAC)', () => {
   describe('Payroll Manager restrictions', () => {
     it('blocks accounting and inventory reports', () => {
       expect(isPathAllowedForRole('payroll_manager', '/payroll')).toBe(true);
+      expect(isPathAllowedForRole('payroll_manager', '/payroll/employees')).toBe(true);
+      expect(isPathAllowedForRole('payroll_manager', '/payroll/employees/new')).toBe(true);
+      expect(isPathAllowedForRole('payroll_manager', '/payroll/employees/employee-1')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/dashboard')).toBe(true);
       expect(isPathAllowedForRole('payroll_manager', '/reports')).toBe(false);
       expect(isPathAllowedForRole('payroll_manager', '/products')).toBe(false);
@@ -60,9 +63,14 @@ describe('Role-Based Access Control (RBAC)', () => {
   describe('Supervisor & Auditor payroll restrictions', () => {
     it('blocks payroll for supervisor and auditor', () => {
       expect(isPathAllowedForRole('supervisor', '/payroll')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/payroll/employees')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/payroll/employees/new')).toBe(false);
+      expect(isPathAllowedForRole('supervisor', '/payroll/employees/employee-1')).toBe(false);
       expect(isPathAllowedForRole('supervisor', '/reports')).toBe(false);
       expect(isPathAllowedForRole('auditor', '/payroll')).toBe(false);
+      expect(isPathAllowedForRole('auditor', '/payroll/employees')).toBe(false);
       expect(isPathAllowedForRole('viewer', '/payroll')).toBe(false);
+      expect(isPathAllowedForRole('viewer', '/payroll/employees')).toBe(false);
     });
   });
 

@@ -15,6 +15,7 @@ export interface PayrollPage<T> {
 export interface EmployeeFilters {
   status?: EmployeeStatus;
   department?: string;
+  search?: string;
   page?: number;
   pageSize?: number;
 }
@@ -42,7 +43,9 @@ interface DbResult {
 interface QueryBuilder extends PromiseLike<DbResult> {
   select(columns?: string, options?: Record<string, unknown>): QueryBuilder;
   eq(column: string, value: unknown): QueryBuilder;
+  or(filters: string): QueryBuilder;
   is(column: string, value: null | boolean): QueryBuilder;
+  lt(column: string, value: unknown): QueryBuilder;
   order(column: string, options?: Record<string, unknown>): QueryBuilder;
   range(from: number, to: number): QueryBuilder;
   limit(count: number): QueryBuilder;
@@ -76,6 +79,15 @@ function pagination(page = 1, pageSize = 25): { page: number; pageSize: number; 
   return { page: safePage, pageSize: safePageSize, from: (safePage - 1) * safePageSize, to: safePage * safePageSize - 1 };
 }
 
+function isDateOnly(value: string): boolean {
+  const parts = value.split('-');
+  if (parts.length !== 3 || parts.some((part) => !part || [...part].some((char) => char < '0' || char > '9'))) return false;
+  const [year, month, day] = parts.map(Number);
+  if (parts[0].length !== 4 || parts[1].length !== 2 || parts[2].length !== 2) return false;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 /**
  * Repository for Phase 6D full-cycle payroll tables. The Supabase client is
  * injected, as in the other data-access repositories. The narrow adapter is
@@ -94,6 +106,22 @@ export class PayrollRepository {
     let query = this.client.from('employees').select('*, contracts:employee_contracts(*)', { count: 'exact' }).eq('business_id', businessId);
     if (filters.status) query = query.eq('status', filters.status);
     if (filters.department) query = query.eq('department', filters.department);
+    const search = filters.search?.trim().replace(/[^\p{L}\p{N} _-]/gu, '').replace(/\s+/g, ' ').slice(0, 80);
+    if (search) {
+      const searchFilters = [
+        `first_name.ilike.%${search}%`,
+        `last_name.ilike.%${search}%`,
+        `employee_number.ilike.%${search}%`,
+      ];
+      const nameParts = search.split(' ');
+      if (nameParts.length > 1) {
+        const givenNames = nameParts[0];
+        const familyNames = nameParts.slice(1).join(' ');
+        searchFilters.push(`and(first_name.ilike.%${givenNames}%,last_name.ilike.%${familyNames}%)`);
+        searchFilters.push(`and(first_name.ilike.%${familyNames}%,last_name.ilike.%${givenNames}%)`);
+      }
+      query = query.or(searchFilters.join(','));
+    }
     const { data, error, count } = await query.order('last_name', { ascending: true }).range(page.from, page.to);
     throwIfError('employees', error);
     return { rows: asRows(data), count: count ?? 0, page: page.page, pageSize: page.pageSize };
@@ -176,12 +204,72 @@ export class PayrollRepository {
     employeeId: string,
     data: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
+    const contractEffectiveFrom = data.contract_effective_from;
+    const employeeData = { ...data };
+    delete employeeData.contract_effective_from;
+    if (contractEffectiveFrom != null && (typeof contractEffectiveFrom !== 'string' || !isDateOnly(contractEffectiveFrom))) {
+      throw new ValidationError('employee_contracts', 'Contract effective date must be a valid date.');
+    }
+    if (Object.prototype.hasOwnProperty.call(employeeData, 'gross_salary')) {
+      const salary = Number(employeeData.gross_salary);
+      if (employeeData.gross_salary == null || String(employeeData.gross_salary).trim() === '' || !Number.isFinite(salary) || salary < 0) {
+        throw new ValidationError('employees', 'Gross salary must be a valid non-negative amount.');
+      }
+    }
+    const contractFields = ['gross_salary', 'currency', 'pay_frequency', 'employment_type'];
+    const hasContractFields = contractFields.some((field) => Object.prototype.hasOwnProperty.call(employeeData, field));
+    let contractChanged = false;
+    if (hasContractFields) {
+      const { data: current, error: currentError } = await this.client.from('employees').select('*')
+        .eq('business_id', businessId).eq('id', employeeId).maybeSingle();
+      throwIfError('employees', currentError);
+      if (!current) throw new NotFoundError('employees', employeeId);
+      const currentEmployee = asRow<Record<string, unknown>>(current);
+      contractChanged = contractFields.some((field) => {
+        if (!Object.prototype.hasOwnProperty.call(employeeData, field)) return false;
+        if (field === 'gross_salary') return Number(currentEmployee[field] ?? 0) !== Number(employeeData[field] ?? 0);
+        return String(currentEmployee[field] ?? '') !== String(employeeData[field] ?? '');
+      });
+    }
     const { data: updated, error } = await this.client.from('employees')
-      .update({ ...data, updated_at: new Date().toISOString() })
+      .update({ ...employeeData, updated_at: new Date().toISOString() })
       .eq('business_id', businessId).eq('id', employeeId).select('*').maybeSingle();
     throwIfError('employees', error);
     if (!updated) throw new NotFoundError('employees', employeeId);
-    return asRow(updated);
+    const employee = asRow<Record<string, unknown>>(updated);
+    if (contractChanged) {
+      const salary = Number(employee.gross_salary ?? 0);
+      if (!Number.isFinite(salary) || salary < 0) {
+        throw new ValidationError('employees', 'Gross salary must be a valid non-negative amount.');
+      }
+      const effectiveFrom = String(contractEffectiveFrom ?? employee.hire_date ?? employee.start_date ?? '');
+      if (effectiveFrom && !isDateOnly(effectiveFrom)) {
+        throw new ValidationError('employee_contracts', 'Contract effective date must be a valid date.');
+      }
+      if (effectiveFrom) {
+        const contractType = employee.employment_type === 'contract' || employee.employment_type === 'casual'
+          ? employee.employment_type : 'permanent';
+        const { error: contractError } = await this.client.from('employee_contracts').upsert({
+          business_id: businessId,
+          employee_id: employeeId,
+          effective_from: effectiveFrom,
+          pay_frequency: employee.pay_frequency ?? 'monthly',
+          gross_salary: salary,
+          currency: employee.currency ?? await this.getBusinessCurrency(businessId),
+          contract_type: contractType,
+        }, { onConflict: 'business_id,employee_id,effective_from' });
+        throwIfError('employee_contracts', contractError);
+
+        const previousDay = new Date(`${effectiveFrom}T00:00:00Z`);
+        previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+        const { error: closeError } = await this.client.from('employee_contracts')
+          .update({ effective_to: previousDay.toISOString().slice(0, 10) })
+          .eq('business_id', businessId).eq('employee_id', employeeId)
+          .is('effective_to', null).lt('effective_from', effectiveFrom);
+        throwIfError('employee_contracts', closeError);
+      }
+    }
+    return employee;
   }
 
   async getPayComponents(businessId: string): Promise<Record<string, unknown>[]> {
@@ -189,6 +277,40 @@ export class PayrollRepository {
       .eq('business_id', businessId).eq('is_active', true).order('sort_order', { ascending: true });
     throwIfError('pay_components', error);
     return asRows(data);
+  }
+
+  async addPayComponentOverride(
+    businessId: string,
+    employeeId: string,
+    componentId: string,
+    data: {
+      override_amount?: number | null;
+      override_rate?: number | null;
+      effective_from: string;
+      effective_to?: string | null;
+    },
+  ): Promise<Record<string, unknown>> {
+    const amount = data.override_amount ?? null;
+    const rate = data.override_rate ?? null;
+    if ((amount !== null && (!Number.isFinite(amount) || amount < 0))
+      || (rate !== null && (!Number.isFinite(rate) || rate < 0))
+      || (amount === null && rate === null)
+      || !isDateOnly(data.effective_from)
+      || (data.effective_to != null && (!isDateOnly(data.effective_to) || data.effective_to < data.effective_from))) {
+      throw new ValidationError('employee_pay_components', 'Enter a valid override and effective date range.');
+    }
+    const { data: created, error } = await this.client.from('employee_pay_components')
+      .insert({
+        business_id: businessId,
+        employee_id: employeeId,
+        pay_component_id: componentId,
+        override_amount: amount,
+        override_rate: rate,
+        effective_from: data.effective_from,
+        effective_to: data.effective_to ?? null,
+      }).select('*').single();
+    throwIfError('employee_pay_components', error);
+    return asRow(created);
   }
 
   async getTaxBands(businessId: string, fiscalYear: number): Promise<Record<string, unknown>[]> {
