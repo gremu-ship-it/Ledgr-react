@@ -698,9 +698,21 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
   const selectableProducts = servicesEnabled
     ? products
     : products.filter((product) => product.product_type !== 'service');
+  // Construction projects are an optional, additive link on an invoice. The list
+  // is branch-scoped by RLS, so a site the signed-in user may not work in is never
+  // offered — which is what makes "the selection is in the list" a real
+  // authorisation check rather than a UI convenience. No construction module is
+  // required to raise an ordinary invoice.
+  const { data: constructionSites = [] } = useQuery({
+    queryKey: ['construction-sites', businessId],
+    queryFn: () => repos.construction.findSites(businessId),
+    enabled: Boolean(businessId),
+  });
+  const activeConstructionSites = constructionSites.filter((site) => site.is_active !== false);
 
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [constructionSiteId, setConstructionSiteId] = useState('');
   const [form, setForm] = useState<InvoiceForm>({
     contact_id: '', invoice_number: '', issue_date: today(), due_date: '',
     notes: '', terms: 'Payment due within 30 days.', template: 'professional', project_code: '', lpo_number: '', payment_provider: '', payment_reference: '', branch_id: '', department_id: '', currency: currentBusiness?.business?.base_currency || 'MWK', exchange_rate: '',
@@ -783,6 +795,26 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
       const validLines = form.lines.filter((l) => l.description.trim() && parseFloat(l.unit_price) > 0);
       if (validLines.length === 0) throw new Error('Add at least one line item');
 
+      // Construction project link. `invoices.project_code` is TEXT, not a foreign
+      // key: it records the site's project reference and nothing enforces it later.
+      // The three checks below are the whole guard rail — same business, still in
+      // the user's branch-scoped list, and consistent with the invoice's branch.
+      const site = constructionSiteId
+        ? constructionSites.find((candidate) => candidate.id === constructionSiteId)
+        : undefined;
+      if (constructionSiteId && !site) {
+        throw new Error('That construction project is no longer available for this business. Choose it again.');
+      }
+      if (constructionSiteId && site && site.business_id !== businessId) {
+        throw new Error('That construction project belongs to another business.');
+      }
+      if (site && site.is_active === false) {
+        throw new Error('That construction project is closed. Choose an active project.');
+      }
+      if (site && form.branch_id && site.branch_id !== form.branch_id) {
+        throw new Error('The invoice branch and the construction project\u2019s branch differ. Choose a project in the invoice\u2019s branch, or clear the branch.');
+      }
+
       const functionalCurrency = currentBusiness?.business?.base_currency || 'MWK';
       const originalCurrency = form.currency || functionalCurrency;
       const manualRate = form.exchange_rate ? parseFloat(form.exchange_rate) : null;
@@ -823,7 +855,7 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
           notes:            form.notes || null,
           terms:            form.terms || null,
           template:         form.template,
-          project_code:     form.project_code || null,
+          project_code:     site ? site.project_ref : (form.project_code || null),
           lpo_number:       form.lpo_number || null,
           payment_provider: form.payment_provider || null,
           payment_reference: form.payment_reference || null,
@@ -984,6 +1016,36 @@ function InvoiceBuilderTab({ businessId, onSuccess }: { businessId: string; onSu
               </div>
             )}
           </div>
+
+          {/* Optional construction project: sets the invoice's project reference. */}
+          {activeConstructionSites.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">
+                Construction project <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <select
+                value={constructionSiteId}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setConstructionSiteId(next);
+                  const chosen = activeConstructionSites.find((candidate) => candidate.id === next);
+                  setField('project_code', chosen ? chosen.project_ref : '');
+                }}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+              >
+                <option value="">None</option>
+                {activeConstructionSites.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>
+                    {candidate.site_code} · {candidate.site_name} ({candidate.project_ref})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Sets this invoice&rsquo;s project code to the site&rsquo;s project reference. Materials issued to the
+                site are recorded in the construction workspace; they are never added to this invoice automatically.
+              </p>
+            </div>
+          )}
 
           {/* NEW: Branch selector at invoice level */}
           {branches.length > 0 && (

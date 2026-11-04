@@ -34,6 +34,7 @@ function journalLine(
   amount: number,
   isDebit: boolean,
   lineAccount: AccountRef,
+  entryOverrides: Partial<NonNullable<JournalLineForBranchReport['journal_entries']>> = {},
 ): JournalLineForBranchReport {
   return {
     branch_id: branch.id,
@@ -44,6 +45,8 @@ function journalLine(
       branch_id: branch.id,
       entry_date: '2026-08-11',
       status: 'posted',
+      reversal_of: null,
+      ...entryOverrides,
     },
   };
 }
@@ -74,6 +77,20 @@ describe('buildBranchPerformance', () => {
       expect.objectContaining({ code: '4130', amount: -100 }),
       expect.objectContaining({ code: '5100', amount: 400 }),
       expect.objectContaining({ code: '5175', amount: -50 }),
+    ]);
+  });
+
+  it('excludes both reversed originals and their mirror entries from period performance', () => {
+    const sales = account('sales', '4112', 'Service Revenue', 'revenue', 'credit');
+    const [row] = buildBranchPerformance([branch], [
+      journalLine(2_011_000, false, sales, { status: 'reversed' }),
+      journalLine(2_011_000, true, sales, { reversal_of: 'original-entry' }),
+      journalLine(400_000, false, sales),
+    ]);
+
+    expect(row.revenue).toBe(400_000);
+    expect(row.accountBreakdown).toEqual([
+      expect.objectContaining({ code: '4112', amount: 400_000 }),
     ]);
   });
 });

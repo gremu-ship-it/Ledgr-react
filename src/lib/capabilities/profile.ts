@@ -19,15 +19,34 @@ export const OPERATING_MODELS = [
   'SERVICE_SALES',
   'PROJECT_BASED',
   'GRANT_FUNDED',
+  'CONSTRUCTION',
+  'MANUFACTURING',
 ] as const;
 
 export type OperatingModel = (typeof OPERATING_MODELS)[number];
+
+/**
+ * Display labels for the operating-model multi-select, shared by registration
+ * and Settings so the two editors can never drift apart.
+ */
+export const OPERATING_MODEL_LABELS: Readonly<Record<OperatingModel, string>> = {
+  RETAIL: 'Retail',
+  WHOLESALE: 'Wholesale / distribution',
+  PRODUCT_SALES: 'Product sales',
+  SERVICE_SALES: 'Service sales',
+  PROJECT_BASED: 'Project-based work',
+  GRANT_FUNDED: 'Grant-funded',
+  CONSTRUCTION: 'Construction',
+  MANUFACTURING: 'Manufacturing',
+};
 
 export const ORGANISATION_CAPABILITIES = [
   'sales',
   'pos',
   'inventory',
   'services',
+  'construction',
+  'manufacturing',
 ] as const;
 
 export type OrganisationCapability = (typeof ORGANISATION_CAPABILITIES)[number];
@@ -41,11 +60,35 @@ export interface BusinessOrganisationProfile {
 
 export type OrganisationCapabilityDefaults = Record<OrganisationCapability, boolean>;
 
-const INVENTORY_MODELS: ReadonlySet<string> = new Set([
-  'RETAIL',
-  'WHOLESALE',
-  'PRODUCT_SALES',
-]);
+/**
+ * Capabilities each operating model unions in. A business selects several
+ * models, so the defaults are the union of every selected model's row — never a
+ * single "winning" model. This is why a Construction + Retail business gets both
+ * the construction workspace and the retail till instead of one replacing the
+ * other.
+ *
+ * `PROJECT_BASED` is reserved and deliberately maps to nothing: selecting it
+ * changes no capability, matching its inert status in the product.
+ */
+const MODEL_CAPABILITIES: Readonly<Record<OperatingModel, readonly OrganisationCapability[]>> = {
+  RETAIL: ['sales', 'pos', 'inventory'],
+  WHOLESALE: ['sales', 'inventory'],
+  PRODUCT_SALES: ['sales', 'inventory'],
+  SERVICE_SALES: ['sales', 'services'],
+  PROJECT_BASED: [],
+  GRANT_FUNDED: [],
+  // A construction business delivers project work with materials it holds in
+  // stock, so the model unions in inventory and services while leaving POS off:
+  // POS is a retail till, not a site workflow.
+  CONSTRUCTION: ['sales', 'inventory', 'services', 'construction'],
+  // A manufacturer buys raw materials and converts them into finished goods, so
+  // the model unions in inventory and the manufacturing workspace. It is not a
+  // services business and it does not retail over a till: POS stays off, and
+  // `services` stays off so a manufacturer never inherits the service-sales
+  // vocabulary that a construction business legitimately uses for its own
+  // contracted work.
+  MANUFACTURING: ['sales', 'inventory', 'manufacturing'],
+};
 
 /**
  * Derive the profile defaults for the first business-architecture phase.
@@ -59,25 +102,42 @@ export function deriveOrganisationCapabilityDefaults(
   const models = new Set(profile.operating_models ?? []);
   const isNonCommercial = profile.organisation_type === 'NON_PROFIT'
     || profile.organisation_type === 'GOVERNMENT';
+
+  const enabled = new Set<OrganisationCapability>();
+  for (const model of models) {
+    for (const capability of MODEL_CAPABILITIES[model as OperatingModel] ?? []) {
+      enabled.add(capability);
+    }
+  }
+
+  // Sales stays on unless the profile is purely grant-funded: a non-commercial
+  // organisation whose only models are grant funding, with no operating model
+  // that implies trading. Construction counts as trading, so a construction
+  // non-profit is not "pure grant".
   const pureGrantFunded = isNonCommercial
     && models.has('GRANT_FUNDED')
     && !models.has('RETAIL')
     && !models.has('WHOLESALE')
     && !models.has('PRODUCT_SALES')
-    && !models.has('SERVICE_SALES');
+    && !models.has('SERVICE_SALES')
+    && !models.has('CONSTRUCTION')
+    && !models.has('MANUFACTURING');
 
   return {
-    sales: !pureGrantFunded,
-    pos: models.has('RETAIL'),
-    inventory: [...models].some((model) => INVENTORY_MODELS.has(model)),
-    services: models.has('SERVICE_SALES'),
+    sales: enabled.has('sales') || !pureGrantFunded,
+    pos: enabled.has('pos'),
+    inventory: enabled.has('inventory'),
+    services: enabled.has('services'),
+    construction: enabled.has('construction'),
+    manufacturing: enabled.has('manufacturing'),
   };
 }
 
 /**
  * Resolve the organisation-layer value for one capability. `undefined` means
  * there is no usable profile decision; the four-layer resolver applies its
- * compatibility semantics (notably POS fail-open) to that case.
+ * compatibility semantics (notably POS fail-open) to that case. Construction is
+ * always profile-gated, so an undefined decision there closes the surface.
  */
 export function organisationCapabilityDecision(
   capability: OrganisationCapability,

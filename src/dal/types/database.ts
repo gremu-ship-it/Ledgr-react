@@ -39,9 +39,10 @@ export type PrimaryCurrency = 'MWK' | 'ZMW' | 'TZS' | 'MZN' | 'USD' | 'EUR' | 'G
 export type Currency = PrimaryCurrency | 'KES' | 'UGX';
 /** DB: account_type */
 export type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense';
-/** DB: account_subtype — exact 15 members */
+/** DB: account_subtype — exact 16 members */
 export type AccountSubtype =
   | 'current_asset'
+  | 'contra_ar'
   | 'non_current_asset'
   | 'fixed_asset'
   | 'current_liability'
@@ -134,9 +135,13 @@ export type AssetStatus =
   | 'impaired'
   | 'under_construction';
 /**
- * DB: stock_movement_type — exact 10 members.
+ * DB: stock_movement_type — the labels the migrations actually ship.
  * 'adjustment' and 'transfer' do NOT exist.
  * Correct values use directional suffixes: _in / _out.
+ *
+ * `issue_out` (20261020500000) and `construction_return_in` (20261024000000) are
+ * additive labels; the previous comment claimed "exact 10 members" while omitting
+ * `issue_out`, so this union had already drifted from the database.
  */
 export type StockMovementType =
   | 'purchase'
@@ -148,7 +153,9 @@ export type StockMovementType =
   | 'return_in'
   | 'return_out'
   | 'opening_balance'
-  | 'write_off';
+  | 'write_off'
+  | 'issue_out'
+  | 'construction_return_in';
 /**
  * DB: payroll_status — exact 4 members.
  * 'cancelled' does NOT exist; correct value is 'void'.

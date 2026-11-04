@@ -90,6 +90,27 @@ describe('getSOFP — contra-account presentation', () => {
     expect(sofp.currentAssets.lines.find((line) => line.code === '1100')?.amount).toBe(1_500);
   });
 
+  it('classifies Retention Receivable in Current Assets without treating it as trade debtors', async () => {
+    const retention = {
+      id: 'a-retention', code: '1138', name: 'Retention Receivable',
+      account_type: 'asset', account_subtype: 'contra_ar', normal_balance: 'debit',
+      is_group: false, is_system: true, is_bank_account: false, opening_balance: 0,
+    };
+    const client = {
+      from: (table: string) => table === 'accounts'
+        ? tableStub([retention])
+        : table === 'journal_lines'
+          ? tableStub([{ account_id: 'a-retention', is_debit: true, amount_base: 12_500 }])
+          : tableStub([]),
+    } as unknown as SupabaseClient<Database>;
+    const sofp = await new FinancialStatementRepository(client).getSOFP('biz-1', '2026-06-30');
+    expect(sofp.currentAssets.subtotal).toBe(12_500);
+    expect(sofp.currentAssets.lines).toEqual([
+      expect.objectContaining({ code: '1138', amount: 12_500 }),
+    ]);
+    expect(sofp.nonCurrentAssets.subtotal).toBe(0);
+  });
+
   it('presents Drawings / Dividends as a reduction of equity', async () => {
     const sofp = await makeRepo().getSOFP('biz-1', '2026-06-30');
     expect(sofp.equity.subtotal).toBe(40_000 - 5_000);
@@ -386,5 +407,131 @@ describe('getProfitOrLoss — discount presentation', () => {
     ]);
     expect(profitOrLoss.totalCostOfSales).toBe(350);
     expect(profitOrLoss.grossProfit).toBe(550);
+  });
+});
+
+describe('getProfitOrLoss — journal reversals', () => {
+  type ReversalEntry = {
+    id: string;
+    entry_date: string;
+    status: 'posted' | 'reversed';
+    reversal_of: string | null;
+    lines: { account_id: string; is_debit: boolean; amount_base: number }[];
+  };
+
+  const crossPeriodPair: ReversalEntry[] = [
+    {
+      id: 'original-entry',
+      entry_date: '2026-01-15',
+      status: 'reversed',
+      reversal_of: null,
+      lines: [
+        { account_id: 'a-cash', is_debit: true, amount_base: 1_000 },
+        { account_id: 'a-revenue', is_debit: false, amount_base: 1_000 },
+      ],
+    },
+    {
+      id: 'reversal-entry',
+      entry_date: '2026-02-10',
+      status: 'posted',
+      reversal_of: 'original-entry',
+      lines: [
+        { account_id: 'a-cash', is_debit: false, amount_base: 1_000 },
+        { account_id: 'a-revenue', is_debit: true, amount_base: 1_000 },
+      ],
+    },
+  ];
+
+  function makeReversalRepo(entries: ReversalEntry[]): FinancialStatementRepository {
+    const accounts = [
+      { ...ACCOUNTS[1], id: 'a-cash', code: '1110' },
+      { ...ACCOUNTS[8], id: 'a-revenue', code: '4112' },
+    ];
+    const lineRows = entries.flatMap((entry) => entry.lines.map((line, index) => ({
+      ...line,
+      id: `${entry.id}-line-${index}`,
+      business_id: 'biz-1',
+      journal_entry_id: entry.id,
+      journal_entries: {
+        entry_date: entry.entry_date,
+        status: entry.status,
+        business_id: 'biz-1',
+        reversal_of: entry.reversal_of,
+      },
+    })));
+
+    const client = {
+      from: (table: string) => {
+        if (table === 'accounts') return tableStub(accounts);
+        if (table !== 'journal_lines') return tableStub([]);
+
+        type Filter = { operator: 'eq' | 'gte' | 'lte' | 'in' | 'is' | 'neq'; field: string; value: unknown };
+        const filters: Filter[] = [];
+        const query: unknown = new Proxy({}, {
+          get(_target, prop) {
+            if (prop === 'then') {
+              return (resolve: (result: { data: unknown[]; error: null }) => unknown) => {
+                const rows = lineRows.filter((row) => filters.every((filter) => {
+                  const actual = filter.field.startsWith('journal_entries.')
+                    ? row.journal_entries[filter.field.slice('journal_entries.'.length) as 'entry_date' | 'status' | 'business_id' | 'reversal_of']
+                    : row[filter.field as 'business_id'];
+                  if (filter.operator === 'eq' || filter.operator === 'is') return actual === filter.value;
+                  if (filter.operator === 'neq') return actual !== filter.value;
+                  if (filter.operator === 'gte') return String(actual) >= String(filter.value);
+                  if (filter.operator === 'lte') return String(actual) <= String(filter.value);
+                  return (filter.value as unknown[]).includes(actual);
+                }));
+                return resolve({ data: rows, error: null });
+              };
+            }
+            if (prop === 'order' || prop === 'range') return () => query;
+            if (prop === 'eq' || prop === 'gte' || prop === 'lte' || prop === 'in' || prop === 'is' || prop === 'neq') {
+              return (field: string, value: unknown) => {
+                filters.push({ operator: prop, field, value });
+                return query;
+              };
+            }
+            return () => query;
+          },
+        });
+        return query;
+      },
+    } as unknown as SupabaseClient<Database>;
+
+    return new FinancialStatementRepository(client);
+  }
+
+  it('excludes both sides of a reversal pair dated within one reporting period', async () => {
+    const samePeriodPair = crossPeriodPair.map((entry) => ({
+      ...entry,
+      entry_date: entry.id === 'reversal-entry' ? '2026-01-20' : entry.entry_date,
+    }));
+    const pl = await makeReversalRepo(samePeriodPair).getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
+
+    expect(pl.totalRevenue).toBe(0);
+  });
+
+  it('excludes the reversed original and mirror from both cross-period reports', async () => {
+    const january = await makeReversalRepo(crossPeriodPair).getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
+    const february = await makeReversalRepo(crossPeriodPair).getProfitOrLoss('biz-1', '2026-02-01', '2026-02-28');
+
+    expect(january.totalRevenue).toBe(0);
+    expect(february.totalRevenue).toBe(0);
+  });
+
+  it('continues to include ordinary posted entries without reversal links', async () => {
+    const normalEntry: ReversalEntry = {
+      id: 'ordinary-entry',
+      entry_date: '2026-01-22',
+      status: 'posted',
+      reversal_of: null,
+      lines: [
+        { account_id: 'a-cash', is_debit: true, amount_base: 350 },
+        { account_id: 'a-revenue', is_debit: false, amount_base: 350 },
+      ],
+    };
+    const pl = await makeReversalRepo([normalEntry]).getProfitOrLoss('biz-1', '2026-01-01', '2026-01-31');
+
+    expect(pl.totalRevenue).toBe(350);
   });
 });

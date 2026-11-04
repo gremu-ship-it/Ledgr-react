@@ -11,7 +11,7 @@ import type { KnowledgeArticle } from './types';
  *   Invoices /invoices            Payroll /payroll          Products /products
  *   Warehouse /warehouse          Transfers /transfers      Accounts /accounts
  *   Tax /tax                      Assets /assets            Capital /capital
- *   Reports /reports              Journals /journals        Bank /bank-reconcile
+ *   Reports /reports/trial-balance Journals /journals       Bank /bank-reconciliation/accounts
  *   Periods /periods              Audit log /audit          Contacts /contacts
  *   Branches /branches            Departments /departments  Ledgr AI /ai
  *   Support /support              Settings /settings        Data import /import
@@ -74,12 +74,12 @@ export const KNOWLEDGE_BASE: KnowledgeArticle[] = [
       'airtel money', 'mpamba', 'momo', 'mobile money', 'match transactions', 'unmatched',
     ],
     body: [
-      '**Bank Reconciliation** lives at `/bank-reconcile` (Accounting section; requires the Growth plan or above).',
+      '**Bank Reconciliation** starts at `/bank-reconciliation/accounts` (Banking section; requires the Growth plan or above).',
       '',
-      '1. Choose the **bank / mobile money account** (any account flagged *is bank account*, plus petty cash `1110`, `1115` and mobile money `1125` / `1126`).',
-      '2. **Import CSV / OFX / MT940** — Ledgr parses date, description, debit/credit and running balance.',
-      '3. Match each statement line to a ledger entry: drag a line onto an entry, press **Match** on the line, or run **AI matching** to auto-suggest pairs by amount and date proximity.',
-      '4. When every line is matched, **Save & lock**. The statement, its opening/closing balance and the matched lines are stored, and locked lines can no longer be edited.',
+      '1. Configure a bank or mobile-money account in **Bank Accounts** (`/bank-reconciliation/accounts`).',
+      '2. Open **Bank Statements** (`/bank-reconciliation/statements`) and import a CSV statement with its period and opening/closing balances.',
+      '3. Open the statement and choose **Open reconciliation**. Match statement lines to ledger lines, then reconcile when the difference is zero.',
+      '4. A reconciled statement and its matched lines remain available from the statement list and detail pages.',
       '',
       'Airtel Money and TNM Mpamba are ordinary cash-equivalent accounts: set the *mobile money type* and number on the account in **Accounts** (`/accounts`) and reconcile them the same way.',
       '',
@@ -95,7 +95,7 @@ export const KNOWLEDGE_BASE: KnowledgeArticle[] = [
       'trial balance', 'equity', 'export pdf', 'excel', 'csv',
     ],
     body: [
-      '**Reports** (`/reports`) is IFRS-for-SMEs presentation, built from posted journals only:',
+      '**Financial reports** are available on standalone pages, beginning with **Trial Balance** (`/reports/trial-balance`); the financial statements are built from posted journals only:',
       '',
       '- **Statement of Profit or Loss** — revenue, cost of sales, gross profit, other income, operating expenses, depreciation, finance costs, tax, net profit, with a comparative period.',
       '- **Statement of Financial Position** — current/non-current assets, liabilities and equity, with a balance check.',

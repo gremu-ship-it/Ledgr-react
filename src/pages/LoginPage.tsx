@@ -6,6 +6,7 @@ import { createLogger } from '@/lib/logger';
 import { phoneLoginEmail } from '@/lib/phone';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { ResendConfirmationButton } from '@/components/auth/ResendConfirmationButton';
+import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { usePartner } from '@/partner/PartnerContext';
 import {
   FormField,
@@ -77,7 +78,8 @@ export function LoginPage() {
     }
   }, [returnToParam]);
 
-  const from = safeReturnTo ?? fromState ?? '/dashboard';
+  const defaultRoute = useDefaultRoute();
+  const from = safeReturnTo ?? fromState ?? defaultRoute;
   const inactivityLogout = (location.state as { reason?: string })?.reason === 'inactivity';
 
   // Step 1: credentials. A phone-provisioned account has no real inbox — its
