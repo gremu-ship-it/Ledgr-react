@@ -454,6 +454,7 @@ export function isPathAllowedForRole(role: string | null, path: string): boolean
 
   // The Support assistant is available to every authenticated role.
   if (path === '/support') return true;
+  const isPayrollRoute = path === '/payroll' || path.startsWith('/payroll/');
   const isCashDepositsPath = path === '/cash-deposits' || path.startsWith('/cash-deposits/');
   const isBankReconciliationPath = path === '/bank-reconciliation/accounts'
     || path === '/bank-reconciliation/reconcile'
