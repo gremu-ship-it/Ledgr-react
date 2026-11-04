@@ -500,11 +500,23 @@
     "joinedAs": "Entrou como {{role}}. A redirecionar para o painel…",
     "theBusiness": "a empresa",
     "member": "membro"
-  }
-,
+  },
   "constructionSchedule": {
     "errors": {
       "invalidProgress": "O progresso deve ser um número inteiro de 0 a 100."
     }
+  },
+  "payroll": {
+    "legacyHistoryTitle": "Histórico anterior de folhas salariais",
+    "legacyHistoryDescription": "As folhas criadas antes da atualização foram preservadas abaixo. Aqui são apenas de leitura.",
+    "legacyHistoryLoadFailed": "Não foi possível carregar o histórico anterior de folhas salariais.",
+    "legacyHistoryRunNumber": "N.º da folha",
+    "legacyHistoryPeriod": "Período salarial",
+    "legacyHistoryPayDate": "Data de pagamento",
+    "legacyHistoryGross": "Total bruto",
+    "legacyHistoryNet": "Total líquido",
+    "legacyHistoryStatus": "Estado",
+    "legacyHistoryReadOnly": "As folhas históricas foram preservadas como registos apenas de leitura.",
+    "noNewRunsLegacyAvailable": "Ainda não há folhas no novo ciclo salarial. As folhas anteriores estão listadas abaixo."
   }
 }
