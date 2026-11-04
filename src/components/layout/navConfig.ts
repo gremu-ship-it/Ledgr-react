@@ -33,7 +33,6 @@ import {
   MessageSquare,
   GitCompare,
   WalletCards,
-  CalendarDays,
   Settings,
   CircleDollarSign,
   Calculator,
