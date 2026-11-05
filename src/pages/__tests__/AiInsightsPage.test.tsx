@@ -56,6 +56,8 @@ describe('/ai Enterprise diagnostics gate and dashboard', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Ledgr AI & Anomaly Diagnostics' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Anomaly Diagnostics' })).toBeTruthy();
+    expect(screen.getByRole('tab', { name: 'Financial Intelligence & Runway Forecast' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Run Diagnostic Scan' }));
 
     await waitFor(() => expect(mockAi.runDiagnosticScan).toHaveBeenCalledWith('business-1'));

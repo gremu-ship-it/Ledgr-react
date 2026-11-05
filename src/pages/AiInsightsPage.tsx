@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Activity, AlertTriangle, ArrowUpRight, CheckCircle2, CircleAlert, LoaderCircle, LockKeyhole, ScanSearch, ShieldCheck, Sparkles } from 'lucide-react';
 import { Assistant } from '@/components/ai/Assistant';
+import { FinancialIntelligence } from '@/components/ai/FinancialIntelligence';
 import { useAppStore } from '@/store/useAppStore';
 import { useUsage } from '@/hooks/useUsage';
 import { aiRepository } from '@/lib/repositories/aiRepository';
@@ -161,7 +162,7 @@ function categoryKey(category: AnomalyCategory): string {
   return names[category];
 }
 
-function EnterpriseDashboard() {
+function AnomalyDiagnosticsTab() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((state) => state.currentBusiness);
@@ -229,7 +230,7 @@ function EnterpriseDashboard() {
       {scanNotice && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{scanNotice}</p>}
       {actionError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{actionError}</p>}
 
-      <section aria-label={t('ai.summary')} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section aria-label={t('ai.anomalySummary')} className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SeverityCard title={t('ai.highSeverity')} value={highCount} tone="border-red-200 bg-red-50 text-red-900" icon={AlertTriangle} />
         <SeverityCard title={t('ai.mediumSeverity')} value={mediumCount} tone="border-amber-200 bg-amber-50 text-amber-900" icon={Activity} />
         <SeverityCard title={t('ai.lowSeverity')} value={lowCount} tone="border-sky-200 bg-sky-50 text-sky-900" icon={CircleAlert} />
@@ -279,6 +280,26 @@ function EnterpriseDashboard() {
           <Assistant variant="page" initialMode="ai" />
         </div>
       </details>
+    </div>
+  );
+}
+
+function EnterpriseDashboard() {
+  const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<'anomalies' | 'financial'>('anomalies');
+  return (
+    <div className="mx-auto max-w-6xl">
+      <div role="tablist" aria-label={t('ai.summary.moduleTabs')} className="mb-4 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2">
+        <button id="ai-anomaly-tab" type="button" role="tab" aria-selected={activeTab === 'anomalies'} aria-controls="ai-anomaly-panel" onClick={() => setActiveTab('anomalies')} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${activeTab === 'anomalies' ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+          {t('ai.summary.anomalyTab')}
+        </button>
+        <button id="ai-financial-tab" type="button" role="tab" aria-selected={activeTab === 'financial'} aria-controls="ai-financial-panel" onClick={() => setActiveTab('financial')} className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition ${activeTab === 'financial' ? 'bg-indigo-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}>
+          {t('ai.summary.tabTitle')}
+        </button>
+      </div>
+      <div id={activeTab === 'anomalies' ? 'ai-anomaly-panel' : 'ai-financial-panel'} role="tabpanel" aria-labelledby={activeTab === 'anomalies' ? 'ai-anomaly-tab' : 'ai-financial-tab'}>
+        {activeTab === 'anomalies' ? <AnomalyDiagnosticsTab /> : <FinancialIntelligence />}
+      </div>
     </div>
   );
 }

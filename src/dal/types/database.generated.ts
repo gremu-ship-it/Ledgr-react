@@ -1456,6 +1456,47 @@ export type Database = {
           { foreignKeyName: "ai_anomaly_logs_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
         ]
       }
+      ai_financial_summaries: {
+        Row: {
+          business_id: string
+          created_at: string
+          executive_summary: string
+          health_score: number
+          id: string
+          key_risks: Json
+          metrics: Json
+          period_end: string
+          period_start: string
+          recommendations: Json
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          executive_summary: string
+          health_score: number
+          id?: string
+          key_risks?: Json
+          metrics?: Json
+          period_end: string
+          period_start: string
+          recommendations?: Json
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          executive_summary?: string
+          health_score?: number
+          id?: string
+          key_risks?: Json
+          metrics?: Json
+          period_end?: string
+          period_start?: string
+          recommendations?: Json
+        }
+        Relationships: [
+          { foreignKeyName: "ai_financial_summaries_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+        ]
+      }
       businesses: {
         Row: {
           address_line1: string | null
@@ -14425,6 +14466,7 @@ export type Database = {
         }
       }
       business_partner_id: { Args: { bid: string }; Returns: string }
+      can_access_ai_financial_summaries: { Args: { p_business_id: string }; Returns: boolean }
       can_run_ai_anomaly_scan: { Args: { p_business_id: string }; Returns: boolean }
       run_ai_anomaly_scan: { Args: { p_anomalies: Json; p_business_id: string }; Returns: number }
       can_access_branch: {

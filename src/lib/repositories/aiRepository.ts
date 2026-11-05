@@ -1,8 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { Database, Json } from '@/dal/types/database';
-import type { AiAnomalyLog, DiagnosticScanResult } from '@/types/ai';
+import type { AiAnomalyLog, AiFinancialSummary, CashRunwayForecast, DiagnosticScanResult, FinancialSummaryMetrics, WorkingCapitalMetrics } from '@/types/ai';
 import { detectLedgerAnomalies, type AnomalyScanInput } from '@/lib/ai/anomalyDetection';
+import { analyzeFinancialHealth, type FinancialSummaryInput } from '@/lib/ai/financialSummary';
+import { FinancialStatementRepository } from '@/dal/repositories/FinancialStatementRepository';
+import { normaliseAiData } from '@/lib/ai/context';
 
 const PAGE_SIZE = 500;
 const PAGE_CAP = 10_000;
@@ -27,8 +30,62 @@ function chunks<T>(values: T[], size: number): T[][] {
   return result;
 }
 
-function cutoff(days: number): string {
-  return new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+function cutoff(days: number, reference = new Date()): string {
+  return new Date(reference.getTime() - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+function monthLength(month: string): number {
+  const [year, monthNumber] = month.split('-').map(Number);
+  return Number.isFinite(year) && Number.isFinite(monthNumber)
+    ? new Date(year, monthNumber, 0).getDate()
+    : 30;
+}
+
+function recentDailyCashRate(trends: Array<{ month: string; cash_in: number; cash_out: number }>, key: 'cash_in' | 'cash_out', now: Date): { daily: number; historyDays: number } {
+  const currentMonth = now.toISOString().slice(0, 7);
+  const complete = trends.filter((item) => item.month < currentMonth).sort((a, b) => a.month.localeCompare(b.month));
+  const selected = (complete.length > 0 ? complete : [...trends].sort((a, b) => a.month.localeCompare(b.month))).slice(-3);
+  const historyDays = selected.reduce((sum, item) => sum + monthLength(item.month), 0);
+  if (historyDays === 0) return { daily: 0, historyDays: 0 };
+  return { daily: selected.reduce((sum, item) => sum + Number(item[key] || 0), 0) / historyDays, historyDays };
+}
+
+function daysUntil(dateValue: string, reference: Date): number {
+  const due = new Date(`${dateValue}T00:00:00Z`).getTime();
+  const today = new Date(`${reference.toISOString().slice(0, 10)}T00:00:00Z`).getTime();
+  return Number.isFinite(due) ? Math.ceil((due - today) / 86_400_000) : 0;
+}
+
+function asJsonRecord(value: Json): Record<string, Json | undefined> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, Json | undefined>
+    : null;
+}
+
+function parseSummaryBullets(value: Json): AiFinancialSummary['key_risks'] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = asJsonRecord(item);
+    if (!record || typeof record.key !== 'string') return [];
+    const rawValues = asJsonRecord(record.values as Json);
+    const values = rawValues
+      ? Object.fromEntries(Object.entries(rawValues).filter((entry): entry is [string, string | number] => typeof entry[1] === 'string' || typeof entry[1] === 'number'))
+      : undefined;
+    return [{ key: record.key, ...(values ? { values } : {}) }];
+  });
+}
+
+function parseFinancialMetrics(value: Json): FinancialSummaryMetrics {
+  return (asJsonRecord(value) ?? {}) as unknown as FinancialSummaryMetrics;
+}
+
+function parseSummary(row: Database['public']['Tables']['ai_financial_summaries']['Row']): AiFinancialSummary {
+  return {
+    ...row,
+    key_risks: parseSummaryBullets(row.key_risks),
+    recommendations: parseSummaryBullets(row.recommendations),
+    metrics: parseFinancialMetrics(row.metrics),
+  };
 }
 
 export class AiRepository {
@@ -89,6 +146,152 @@ export class AiRepository {
     if (error) throw new Error(error.message);
     if (!data) throw new Error('The anomaly was already resolved or is not available in this business.');
     return data as AiAnomalyLog;
+  }
+
+  async getLatestFinancialSummary(businessId: string): Promise<AiFinancialSummary | null> {
+    await this.assertFinancialSummaryAccess(businessId);
+    const { data, error } = await this.client
+      .from('ai_financial_summaries')
+      .select('*')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data ? parseSummary(data) : null;
+  }
+
+  async generateFinancialSummary(businessId: string): Promise<AiFinancialSummary> {
+    await this.assertFinancialSummaryAccess(businessId);
+    const { periodStart, periodEnd, analysis } = await this.buildFinancialAnalysis(businessId);
+    const { data, error } = await this.client
+      .from('ai_financial_summaries')
+      .insert({
+        business_id: businessId,
+        period_start: periodStart,
+        period_end: periodEnd,
+        health_score: analysis.metrics.health_score,
+        executive_summary: analysis.executiveSummaryKey,
+        key_risks: analysis.keyRisks as unknown as Json,
+        recommendations: analysis.recommendations as unknown as Json,
+        metrics: analysis.metrics as unknown as Json,
+      })
+      .select('*')
+      .single();
+    if (error) throw new Error(error.message);
+    return parseSummary(data);
+  }
+
+  async calculateCashRunway(businessId: string): Promise<CashRunwayForecast> {
+    await this.assertFinancialSummaryAccess(businessId);
+    const { analysis } = await this.buildFinancialAnalysis(businessId);
+    const metrics: WorkingCapitalMetrics = {
+      cash_balance: analysis.metrics.cash_balance,
+      daily_net_burn_rate: analysis.metrics.daily_net_burn_rate,
+      runway_days: analysis.metrics.runway_days,
+      current_ratio: analysis.metrics.current_ratio,
+      quick_ratio: analysis.metrics.quick_ratio,
+      dso_days: analysis.metrics.dso_days,
+      dpo_days: analysis.metrics.dpo_days,
+      cash_history_days: analysis.metrics.cash_history_days,
+      health_score: analysis.metrics.health_score,
+    };
+    return {
+      generated_at: new Date().toISOString(),
+      currency: analysis.metrics.currency,
+      metrics,
+      projections: analysis.metrics.projections,
+    };
+  }
+
+  private async assertFinancialSummaryAccess(businessId: string): Promise<void> {
+    if (!businessId) throw new Error('A business is required for financial intelligence.');
+    const { data, error } = await this.client.rpc('can_access_ai_financial_summaries', { p_business_id: businessId });
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Financial intelligence requires an active Enterprise business membership.');
+  }
+
+  private async buildFinancialAnalysis(businessId: string): Promise<{ periodStart: string; periodEnd: string; analysis: ReturnType<typeof analyzeFinancialHealth> }> {
+    const now = new Date();
+    const periodEnd = now.toISOString().slice(0, 10);
+    const periodStart = cutoff(29, now);
+    const priorPeriodEnd = cutoff(30, now);
+    const priorPeriodStart = cutoff(59, now);
+    const trailingStart = cutoff(89, now);
+    const statements = new FinancialStatementRepository(this.client);
+
+    const [contextResult, periodProfitAndLoss, trailingProfitAndLoss, position, cashBalance] = await Promise.all([
+      this.client.rpc('ai_context', { p_business_id: businessId }),
+      statements.getProfitOrLoss(businessId, periodStart, periodEnd, priorPeriodStart, priorPeriodEnd),
+      statements.getProfitOrLoss(businessId, trailingStart, periodEnd),
+      statements.getSOFP(businessId, periodEnd),
+      statements.getCashPosition(businessId, periodEnd),
+    ]);
+    if (contextResult.error) throw new Error(contextResult.error.message);
+    const aiData = normaliseAiData(contextResult.data);
+
+    const currentAssets = position.currentAssets.subtotal;
+    const currentLiabilities = position.currentLiabilities.subtotal;
+    const nonQuickAssetAmount = position.currentAssets.lines
+      .filter((line) => /^114|^1150/.test(line.code) || /inventory|inventor|stock|work in progress|prepaid/i.test(line.name))
+      .reduce((sum, line) => sum + Math.max(0, Number(line.amount) || 0), 0);
+    const fallbackReceivables = position.currentAssets.lines
+      .filter((line) => /^113/.test(line.code) || /receivable|debtor/i.test(line.name))
+      .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+    const fallbackPayables = position.currentLiabilities.lines
+      .filter((line) => /^211/.test(line.code) || /payable|creditor/i.test(line.name))
+      .reduce((sum, line) => sum + Number(line.amount || 0), 0);
+    const receivables = aiData?.kpis?.receivables_total ?? fallbackReceivables;
+    const payables = aiData?.kpis?.payables_total ?? fallbackPayables;
+    const cashIn = recentDailyCashRate(aiData?.monthlyTrend ?? [], 'cash_in', now);
+    const cashOut = recentDailyCashRate(aiData?.monthlyTrend ?? [], 'cash_out', now);
+    const trailingSupplierSpend = trailingProfitAndLoss.totalCostOfSales + trailingProfitAndLoss.totalOperatingExpenses;
+
+    const expenseDrivers = periodProfitAndLoss.operatingExpenses.lines
+      .map((line) => ({ line, increase: line.amount - (line.comparativeAmount ?? 0) }))
+      .filter(({ increase }) => increase > 0)
+      .sort((a, b) => b.increase - a.increase);
+    const topExpenseDriver = expenseDrivers[0]?.line.name ?? null;
+    const overdueInvoices = aiData?.overdueInvoices ?? [];
+    const overdueInvoicesOver60Days = new Set(
+      overdueInvoices.filter((invoice) => invoice.days_overdue > 60).map((invoice) => invoice.customer),
+    ).size;
+
+    const input: FinancialSummaryInput = {
+      currency: aiData?.company?.currency || 'MWK',
+      periodStart,
+      periodEnd,
+      cashBalance,
+      receivables,
+      payables,
+      trailingRevenue: trailingProfitAndLoss.totalRevenue,
+      trailingSupplierSpend,
+      currentAssets,
+      currentLiabilities,
+      inventoryAndPrepaids: nonQuickAssetAmount,
+      dailyCashIn: cashIn.daily,
+      dailyCashOut: cashOut.daily,
+      cashHistoryDays: Math.max(cashIn.historyDays, cashOut.historyDays),
+      currentRevenue: periodProfitAndLoss.totalRevenue,
+      priorRevenue: periodProfitAndLoss.comparativeTotalRevenue ?? 0,
+      currentGrossProfit: periodProfitAndLoss.grossProfit,
+      priorGrossProfit: periodProfitAndLoss.comparativeGrossProfit ?? 0,
+      currentOperatingExpenses: periodProfitAndLoss.totalOperatingExpenses,
+      priorOperatingExpenses: periodProfitAndLoss.comparativeTotalOperatingExpenses ?? 0,
+      topExpenseDriver,
+      overdueInvoicesOver60Days,
+      overdueReceivables: overdueInvoices.map((invoice) => invoice.amount_outstanding),
+      upcomingReceivables: (aiData?.upcomingReceivables ?? []).map((invoice) => ({
+        amount: invoice.amount_outstanding,
+        daysUntilDue: invoice.days_until_due,
+      })),
+      upcomingPayables: (aiData?.upcomingPayables ?? []).map((payable) => ({
+        amount: payable.amount,
+        daysUntilDue: daysUntil(payable.due_date, now),
+      })),
+      now,
+    };
+    return { periodStart, periodEnd, analysis: analyzeFinancialHealth(input) };
   }
 
   private async loadScanInput(businessId: string): Promise<AnomalyScanInput> {
