@@ -1195,6 +1195,72 @@
   },
   "ai": {
     "title": "Ledgr AI",
+    "dashboardTitle": "Ledgr AI & Anomaly Diagnostics",
+    "dashboardDescription": "Automated ledger health checks, duplicate expense detection, tax-tag reviews, and payroll variance alerts.",
+    "enterpriseBadge": "Enterprise AI",
+    "enterpriseOnly": "AI Financial Intelligence is an Enterprise Feature",
+    "upgradePrompt": "Upgrade to Ledgr Enterprise to unlock statistical ledger diagnostics, automated compliance scanning, duplicate expense detection, and executive-ready anomaly summaries.",
+    "upgradeToEnterprise": "Upgrade to Enterprise for AI Insights",
+    "runScan": "Run Diagnostic Scan",
+    "scanning": "Scanning Ledger…",
+    "scanComplete": "Scan complete. {{created}} new finding(s) saved; {{skipped}} existing finding(s) left unchanged.",
+    "scanFailed": "The diagnostic scan could not be completed. Check your access and try again.",
+    "resolveFailed": "This finding could not be marked resolved. Refresh the page and try again.",
+    "highSeverity": "High Risk",
+    "mediumSeverity": "Medium Risk",
+    "lowSeverity": "Notice",
+    "resolved": "Resolved",
+    "markResolved": "Mark as Resolved",
+    "investigate": "View Record",
+    "summary": "Ledger health summary",
+    "findingsTitle": "Ledger findings",
+    "findingsDescription": "Stored findings: {{count}}",
+    "filterFindings": "Filter ledger findings",
+    "loadingFindings": "Loading ledger findings…",
+    "loadFailed": "Ledger findings could not be loaded. Verify business access and try again.",
+    "noAnomalies": "No ledger anomalies detected. Your books look clean!",
+    "noAnomaliesHint": "Run a diagnostic scan to check the latest entries, expenses, tax tags, and payroll runs.",
+    "filters": {
+      "all": "All findings"
+    },
+    "severity": {
+      "high": "High risk",
+      "medium": "Medium risk",
+      "low": "Notice"
+    },
+    "direction": {
+      "above": "above",
+      "below": "below"
+    },
+    "categories": {
+      "duplicateInvoice": "Duplicate Expenses",
+      "unallocatedCostCenter": "Missing Cost Center",
+      "missingTaxTag": "Missing Tax Tag",
+      "amountOutlier": "Amount Outlier",
+      "payrollVariance": "Payroll Variance"
+    },
+    "preview": {
+      "duplicateInvoice": "Finds similarly named suppliers with repeated expense amounts recorded within seven days.",
+      "unallocatedCostCenter": "Flags material debit entries that are missing department or cost-center allocation.",
+      "missingTaxTag": "Flags transactions that contain tax amounts but lack a specific tax code.",
+      "amountOutlier": "Uses statistical z-scores to surface posted ledger entries far above the recent average.",
+      "payrollVariance": "Compares completed payroll gross totals against the business’s recent run history."
+    },
+    "anomalyTitles": {
+      "duplicateInvoice": "Possible duplicate supplier expense",
+      "unallocatedCostCenter": "Cost-center allocation needs review",
+      "missingTaxTag": "Tax code is missing or inconsistent",
+      "amountOutlier": "Unusually large ledger entry",
+      "payrollVariance": "Payroll total differs from recent runs"
+    },
+    "anomalyDescriptions": {
+      "duplicateInvoice": "This expense for {{supplier}} closely matches {{matchedExpenseNumber}} at {{amount}}, recorded within seven days ({{similarityPercent}}% supplier-name match). Review both records.",
+      "unallocatedCostCenter": "A material debit on {{account}} for {{amount}} has no department or cost-center allocation. Confirm whether this entry should be allocated.",
+      "missingTaxTag": "This transaction records tax of {{taxAmount}} but has no specific tax code. Review the source document and tax treatment.",
+      "amountOutlier": "Posted entry {{entryNumber}} is {{zScore}} standard deviations above the recent debit average of {{average}} (entry amount {{amount}}). Review supporting documents.",
+      "payrollVariance": "Payroll run {{runNumber}} is {{zScore}} standard deviations {{direction}} the recent gross-pay average of {{average}} (run total {{amount}}). Check for unusual headcount, pay, or timing changes."
+    },
+    "askAssistant": "Ask Ledgr AI",
     "insights": "AI Insights",
     "askAssistant": "Ask Assistant",
     "suggestPerformance": "How is my business performing this month?",
