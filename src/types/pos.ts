@@ -347,6 +347,8 @@ export interface PosSaleItem {
   name?: string;
   sku?: string | null;
   quantity: number;
+  returnable_quantity?: number;
+  return_unit_price?: number;
   unit_price: number;
   unitPrice?: number;
   unit_cost?: number;
@@ -502,7 +504,13 @@ export interface PosSaleResult {
   dueDate?: string;
 }
 
+export type PosRefundMethod = 'cash' | 'original' | 'credit';
+
 export interface PosReturnItem {
+  invoiceLineId?: string;
+  invoice_line_id?: string;
+  reason?: string;
+  restock?: boolean;
   productId?: string;
   product_id?: string;
   productName?: string;
@@ -531,8 +539,8 @@ export interface PosReturnPayload {
   cashierName?: string;
   returned_by?: string;
   reason?: string;
-  refundMethod?: PosPaymentMethod;
-  refund_payment_method?: PosPaymentMethod;
+  refundMethod?: PosRefundMethod;
+  refund_payment_method?: PosRefundMethod;
   items: PosReturnItem[];
   totalRefund?: number;
   /**

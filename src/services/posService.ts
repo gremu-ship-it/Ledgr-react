@@ -5,7 +5,7 @@ import type { InsertDto, PaymentMethod, Row } from '@/dal/types/database';
 import type { PosSaleQueuePayload } from '@/offline/payloads';
 import { retryNonCritical } from '@/lib/nonCriticalRetry';
 import { postPosSaleViaRpc, type PosSaleRpcResult } from '@/services/posSaleRpc';
-import { refundPosSaleViaRpc, voidPosSaleViaRpc } from '@/services/posCorrectionRpc';
+import { processPosReturnViaRpc, voidPosSaleViaRpc } from '@/services/posCorrectionRpc';
 import { isDemoMode } from '@/lib/demo/mode';
 import type {
   PosPaymentSplit,
@@ -1186,36 +1186,54 @@ export const createSale = processSale;
 // live on exclusively for the offline demo simulator (an in-memory dataset
 // with no server boundary at all) and are unreachable for any real session.
 
+type PosReturnServiceLine = { invoiceLineId: string; quantity: number; refundAmount: number; reason: string; restock: boolean };
+type PosReturnServiceResult = {
+  returnInvoiceId: string;
+  returnNumber: string;
+  returnId: string;
+  amount: number;
+  refundMethod: 'cash' | 'original' | 'credit';
+  lines: PosReturnServiceLine[];
+};
+
 export async function processReturn(
   payload: PosReturnPayload,
   options: { isOnline?: boolean; userRole?: string } = {},
-): Promise<{ returnInvoiceId: string; returnNumber: string }> {
+): Promise<PosReturnServiceResult> {
   const businessId = payload.businessId || payload.business_id || 'biz-default';
   const originalInvoiceId = payload.originalInvoiceId || payload.sale_id || '';
   const reason = payload.reason || 'Customer return';
   const rawItems = payload.items || [];
   const lines = rawItems.map((it) => ({
-    product_id: it.productId || it.product_id || null,
+    invoice_line_id: it.invoiceLineId || it.invoice_line_id || '',
     quantity: Math.abs(Number(it.quantity) || 0),
-    amount: Math.abs(Number(it.refundAmount ?? it.refund_amount ?? ((it.unitPrice ?? it.unit_price ?? 0) * it.quantity)) || 0),
+    reason: it.reason || reason,
+    restock: it.restock !== false,
   }));
 
   if (isDemoMode()) {
     return processReturnLocal(payload, options);
   }
 
-  const result = await refundPosSaleViaRpc({
+  const shiftId = payload.shiftId || payload.shift_id || '';
+  const result = await processPosReturnViaRpc({
     businessId,
     invoiceId: originalInvoiceId,
+    shiftId,
     reason,
+    refundMethod: payload.refundMethod || payload.refund_payment_method || 'cash',
     approvalToken: payload.approvalToken ?? null,
     commandKey: payload.commandKey,
     lines,
   });
 
   return {
-    returnInvoiceId: result.journalEntryId ?? originalInvoiceId,
-    returnNumber: generateReceiptNumber('RET'),
+    returnInvoiceId: result.returnId,
+    returnId: result.returnId,
+    returnNumber: result.returnNumber,
+    amount: result.amount,
+    refundMethod: result.refundMethod,
+    lines: result.lines,
   };
 }
 
@@ -1247,7 +1265,7 @@ export async function processVoid(
 async function processReturnLocal(
   payload: PosReturnPayload,
   options: { isOnline?: boolean; userRole?: string } = {},
-): Promise<{ returnInvoiceId: string; returnNumber: string }> {
+): Promise<PosReturnServiceResult> {
   void options;
   const businessId = payload.businessId || payload.business_id || 'biz-default';
   const branchId = payload.branchId ?? payload.branch_id ?? null;
@@ -1382,7 +1400,20 @@ async function processReturnLocal(
     log.warn('Audit log failed for POS refund', { error: auditErr });
   }
 
-  return { returnInvoiceId: createdCreditNote.id, returnNumber };
+  return {
+    returnInvoiceId: createdCreditNote.id,
+    returnId: createdCreditNote.id,
+    returnNumber,
+    amount: Math.abs(totalRefund),
+    refundMethod: refundMethod === 'credit' ? 'credit' : refundMethod === 'original' ? 'original' : 'cash',
+    lines: rawItems.map((item) => ({
+      invoiceLineId: item.invoiceLineId || item.invoice_line_id || '',
+      quantity: Math.abs(Number(item.quantity) || 0),
+      refundAmount: Math.abs(Number(item.refundAmount ?? item.refund_amount ?? ((item.unitPrice ?? item.unit_price ?? 0) * item.quantity)) || 0),
+      reason: item.reason || reason,
+      restock: item.restock !== false,
+    })),
+  };
 }
 
 // ── Process POS Void ────────────────────────────────────────────────────────
