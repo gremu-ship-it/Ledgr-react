@@ -37,7 +37,6 @@ import type {
   PosSaleResult,
   PosPaymentSplit,
   PosProduct,
-  PosPaymentMethod,
   PosStockAvailability,
   PosStockStatus,
 } from '@/types/pos';
@@ -152,6 +151,28 @@ export function PosPage() {
 
   // Sales History List
   const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
+  const [returnSales, setReturnSales] = useState<PosSale[]>([]);
+  const [isSearchingReturns, setIsSearchingReturns] = useState(false);
+  const canSearchHistoricalReturns = planMeetsMin(planTier, 'growth');
+  const searchReturnSales = useCallback(async (term: string) => {
+    if (!businessId) return;
+    setIsSearchingReturns(true);
+    try {
+      const rows = await repos.invoice.findPosSalesForReturn(businessId, {
+        shiftId: currentShift?.id ?? null,
+        branchId: currentShift?.branch_id ?? null,
+        includeHistorical: canSearchHistoricalReturns,
+        search: term,
+        limit: 40,
+      });
+      setReturnSales(rows);
+    } catch (error) {
+      console.error('Failed to search POS return receipts:', error);
+      setReturnSales([]);
+    } finally {
+      setIsSearchingReturns(false);
+    }
+  }, [businessId, currentShift, canSearchHistoricalReturns]);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
 
   // VAT. The till used to total every sale at 0%, whatever the business's VAT
@@ -857,27 +878,44 @@ export function PosPage() {
       <PosSalesHistoryModal
         open={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
-        sales={salesHistory}
+        sales={returnSales}
+        currentShiftId={currentShift?.id ?? null}
+        isSearching={isSearchingReturns}
+        canSearchHistorical={canSearchHistoricalReturns}
+        canUseStoreCredit={canSearchHistoricalReturns}
         canProcessReturns={permissions.canProcessReturns}
         canVoidSales={permissions.canVoidSales}
-        onProcessReturn={async (saleId, items, refundMethod, approvalToken) => {
-          await processReturn({
+        onSearchSales={searchReturnSales}
+        onProcessReturn={async (saleId, items, refundMethod, reason, approvalToken) => {
+          const result = await processReturn({
             businessId,
             originalInvoiceId: saleId,
-            items: items.map((it) => ({
-              productId: it.product_id,
-              productName: 'Product',
-              quantity: it.quantity,
-              unitPrice: it.refund_amount / it.quantity,
-              refundAmount: it.refund_amount,
+            shiftId: currentShift?.id ?? null,
+            items: items.map((item) => ({
+              invoiceLineId: item.invoice_line_id,
+              productId: item.product_id || undefined,
+              productName: item.product_name,
+              quantity: item.quantity,
+              unitPrice: item.unit_price,
+              refundAmount: item.refund_amount,
+              reason: item.reason,
+              restock: item.restock,
             })),
-            refundMethod: refundMethod as PosPaymentMethod,
-            reason: 'Customer return',
+            refundMethod,
+            reason: reason || t('pos.returns.defaultReason'),
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
             branchId: effectiveBranchId,
             approvalToken: approvalToken ?? null,
           });
           setDataVersion((v) => v + 1);
+          await searchReturnSales('');
+          return {
+            returnId: result.returnId,
+            returnNumber: result.returnNumber,
+            amount: result.amount,
+            refundMethod: result.refundMethod,
+            lines: result.lines,
+          };
         }}
         onVoidSale={async (saleId, reason, approvalToken) => {
           await processVoid({

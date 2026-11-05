@@ -43,6 +43,7 @@ describe('Starter pricing and access', () => {
       const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
         const expectedLocked = item.path === '/reports/fx-revaluation'
+          || (item.minPlan != null && item.minPlan !== 'free')
           ? true
           : !available;
         expect(isItemLocked(item, 'free'), item.path).toBe(expectedLocked);
