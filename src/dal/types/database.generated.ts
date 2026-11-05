@@ -9841,6 +9841,106 @@ export type Database = {
           },
         ]
       }
+      pos_returns: {
+        Row: {
+          amount: number
+          business_id: string
+          command_key: string
+          correction_id: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          id: string
+          invoice_id: string
+          reason: string
+          refund_method: string
+          return_number: string
+          shift_id: string
+        }
+        Insert: {
+          amount: number
+          business_id: string
+          command_key: string
+          correction_id?: string | null
+          created_at?: string
+          created_by: string
+          currency: string
+          id?: string
+          invoice_id: string
+          reason: string
+          refund_method: string
+          return_number: string
+          shift_id: string
+        }
+        Update: {
+          amount?: number
+          business_id?: string
+          command_key?: string
+          correction_id?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          id?: string
+          invoice_id?: string
+          reason?: string
+          refund_method?: string
+          return_number?: string
+          shift_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "pos_returns_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_returns_correction_id_fkey"; columns: ["correction_id"]; isOneToOne: false; referencedRelation: "pos_corrections"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_returns_invoice_id_fkey"; columns: ["invoice_id"]; isOneToOne: false; referencedRelation: "invoices"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_returns_shift_id_fkey"; columns: ["shift_id"]; isOneToOne: false; referencedRelation: "pos_shifts"; referencedColumns: ["id"] },
+        ]
+      }
+      pos_return_lines: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          invoice_line_id: string
+          product_id: string | null
+          product_name: string
+          quantity: number
+          reason: string
+          refund_amount: number
+          restock: boolean
+          return_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          invoice_line_id: string
+          product_id?: string | null
+          product_name: string
+          quantity: number
+          reason: string
+          refund_amount: number
+          restock?: boolean
+          return_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          invoice_line_id?: string
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          reason?: string
+          refund_amount?: number
+          restock?: boolean
+          return_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "pos_return_lines_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_return_lines_invoice_line_id_fkey"; columns: ["invoice_line_id"]; isOneToOne: false; referencedRelation: "invoice_lines"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_return_lines_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_return_lines_return_id_fkey"; columns: ["return_id"]; isOneToOne: false; referencedRelation: "pos_returns"; referencedColumns: ["id"] },
+        ]
+      }
       pos_shift_closes: {
         Row: {
           actual_cash: number
@@ -15027,6 +15127,7 @@ export type Database = {
         Args: { p_grn_id: string }
         Returns: Json
       }
+      process_pos_return_command: { Args: { p_payload: Json }; Returns: Json }
       post_pos_sale: { Args: { p_payload: Json }; Returns: Json }
       provision_construction_coa_accounts: {
         Args: { p_business_id: string }

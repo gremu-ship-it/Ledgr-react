@@ -119,13 +119,20 @@ export function hasPosPermission(
 }
 
 export interface PosRegister {
+  /** The R08 pos_terminals.id; shifts remain bound to this server-registered till. */
   id: string;
-  business_id?: string;
-  branch_id?: string | null;
+  business_id: string;
+  branch_id: string;
   name: string;
-  code?: string;
-  is_active?: boolean;
+  code: string;
+  preferred_location_id?: string | null;
+  default_cash_account_id?: string | null;
+  is_active: boolean;
   created_at?: string;
+  updated_at?: string;
+  branch?: { id: string; name: string } | null;
+  location?: { id: string; name: string } | null;
+  cash_account?: { id: string; name: string; code: string | null } | null;
 }
 
 export interface PosProduct {
@@ -160,6 +167,21 @@ export interface PosProduct {
   is_active?: boolean;
 }
 
+export type PosShiftStatus = 'open' | 'closed';
+
+export interface OpenShiftParams {
+  businessId: string;
+  terminalId?: string;
+  openingFloat: number;
+  notes?: string;
+}
+
+export interface CloseShiftParams {
+  closingCash: number;
+  varianceReason?: string | null;
+  notes?: string | null;
+}
+
 export interface PosShift {
   id: string;
   business_id: string;
@@ -187,7 +209,7 @@ export interface PosShift {
   refunds_amount: number;
   cash_in_amount: number;
   cash_out_amount: number;
-  status: 'open' | 'closed';
+  status: PosShiftStatus;
   notes: string | null;
   created_at?: string;
   updated_at?: string;
@@ -377,6 +399,8 @@ export interface PosSaleItem {
   name?: string;
   sku?: string | null;
   quantity: number;
+  returnable_quantity?: number;
+  return_unit_price?: number;
   unit_price: number;
   unitPrice?: number;
   unit_cost?: number;
@@ -532,7 +556,13 @@ export interface PosSaleResult {
   dueDate?: string;
 }
 
+export type PosRefundMethod = 'cash' | 'original' | 'credit';
+
 export interface PosReturnItem {
+  invoiceLineId?: string;
+  invoice_line_id?: string;
+  reason?: string;
+  restock?: boolean;
   productId?: string;
   product_id?: string;
   productName?: string;
@@ -561,8 +591,8 @@ export interface PosReturnPayload {
   cashierName?: string;
   returned_by?: string;
   reason?: string;
-  refundMethod?: PosPaymentMethod;
-  refund_payment_method?: PosPaymentMethod;
+  refundMethod?: PosRefundMethod;
+  refund_payment_method?: PosRefundMethod;
   items: PosReturnItem[];
   totalRefund?: number;
   /**

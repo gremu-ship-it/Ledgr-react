@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   Store,
   Wifi,
@@ -13,11 +14,13 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type { PosShift, PosRegister } from '@/types/pos';
-import { useTranslation } from 'react-i18next';
 
 interface PosHeaderProps {
   currentShift: PosShift | null;
   activeRegister?: PosRegister | null;
+  registers?: PosRegister[];
+  canSwitchRegisters?: boolean;
+  onRegisterChange?: (registerId: string) => void;
   branchName?: string;
   branches?: { id: string; name: string }[];
   selectedBranchId?: string | null;
@@ -29,6 +32,8 @@ interface PosHeaderProps {
   isSyncing?: boolean;
   canViewOwnerDashboard?: boolean;
   canManageRegisters?: boolean;
+  canManageCurrentShift?: boolean;
+  canRecordCurrentCashMovement?: boolean;
   onOpenShiftModal: () => void;
   onOpenCashMovementModal: () => void;
   onOpenHistoryModal: () => void;
@@ -51,6 +56,9 @@ interface PosHeaderProps {
 export function PosHeader({
   currentShift,
   activeRegister,
+  registers = [],
+  canSwitchRegisters = false,
+  onRegisterChange,
   branchName = 'Main Branch',
   branches = [],
   selectedBranchId = null,
@@ -61,6 +69,8 @@ export function PosHeader({
   isSyncing = false,
   canViewOwnerDashboard = false,
   canManageRegisters = false,
+  canManageCurrentShift = true,
+  canRecordCurrentCashMovement = true,
   onOpenShiftModal,
   onOpenCashMovementModal,
   onOpenHistoryModal,
@@ -96,8 +106,9 @@ export function PosHeader({
               <select
                 aria-label="Shop"
                 value={selectedBranchId ?? ''}
+                disabled={Boolean(isShiftOpen)}
                 onChange={(e) => onBranchChange(e.target.value)}
-                className="max-w-[160px] rounded-md border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-gray-700"
+                className="max-w-[160px] rounded-md border border-gray-200 bg-gray-100 px-1.5 py-0.5 text-[11px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">Warehouse (default)</option>
                 {branches.map((b) => (
@@ -109,9 +120,22 @@ export function PosHeader({
                 {branchName}
               </span>
             )}
-            {activeRegister && (
+            {canSwitchRegisters && registers.length > 1 && onRegisterChange ? (
+              <select
+                id="pos-active-register"
+                aria-label={t('pos.selectRegister')}
+                value={activeRegister?.id ?? ''}
+                disabled={Boolean(isShiftOpen)}
+                onChange={(event) => onRegisterChange(event.target.value)}
+                className="max-w-[180px] rounded-md border border-brand-100 bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700 disabled:opacity-70"
+              >
+                {registers.filter((register) => register.is_active).map((register) => (
+                  <option key={register.id} value={register.id}>{register.name} · {register.code}</option>
+                ))}
+              </select>
+            ) : (
               <span className="rounded-md bg-brand-50 px-2 py-0.5 text-[11px] font-bold text-brand-700">
-                {activeRegister.name}
+                {activeRegister?.name ?? t('pos.noActiveRegister')}
               </span>
             )}
           </div>
@@ -119,17 +143,17 @@ export function PosHeader({
             {isShiftOpen ? (
               <span className="flex items-center gap-1 font-bold text-emerald-600">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                Shift Active (Opened{' '}
-                {new Date(currentShift.opened_at || currentShift.start_time || '').toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
+                {t('pos.shiftActiveSince', {
+                  time: new Date(currentShift.opened_at || currentShift.start_time || '').toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
                 })}
-                )
               </span>
             ) : (
               <span className="flex items-center gap-1 font-bold text-amber-600">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
-                Shift Closed
+                {t('pos.noActiveShift')}
               </span>
             )}
           </div>
@@ -242,7 +266,7 @@ export function PosHeader({
         )}
 
         {/* Cash In / Out Button (available when shift is active) */}
-        {isShiftOpen && (
+        {isShiftOpen && canRecordCurrentCashMovement && (
           <button
             type="button"
             onClick={onOpenCashMovementModal}
@@ -282,7 +306,9 @@ export function PosHeader({
         <button
           type="button"
           onClick={onOpenShiftModal}
-          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black shadow-2xs transition-all active:scale-95 ${
+          disabled={(!isShiftOpen && !activeRegister) || !canManageCurrentShift}
+          title={!activeRegister ? t('pos.noActiveRegister') : undefined}
+          className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black shadow-2xs transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${
             isShiftOpen
               ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200'
               : 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -291,12 +317,12 @@ export function PosHeader({
           {isShiftOpen ? (
             <>
               <Lock className="h-3.5 w-3.5" />
-              <span>Close Shift</span>
+              <span>{t('pos.closeShift')}</span>
             </>
           ) : (
             <>
               <Unlock className="h-3.5 w-3.5" />
-              <span>Open Shift</span>
+              <span>{t('pos.openShift')}</span>
             </>
           )}
         </button>

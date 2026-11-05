@@ -383,29 +383,36 @@ describe('posService', () => {
     };
     void rpcOk;
 
-    it('routes refunds exclusively through refund_pos_sale_command with line mapping and the approval token carried through', async () => {
-      const rpc = rpcSpyOk('refund_pos_sale_command', {
-        idempotent: false, amount: 6500, remaining: 0, journal_entry_id: 'je-refund-1',
+    it('routes returns through the 6E-2 command with line audit, restock choice, tender, and approval token', async () => {
+      const rpc = rpcSpyOk('process_pos_return_command', {
+        idempotent: false, amount: 6500, return_id: 'ret-1', return_number: 'RET-20261105-000001', refund_method: 'cash',
+        lines: [{ invoice_line_id: 'line-1', quantity: 1, amount: 6500, reason: 'Damaged', restock: false }],
       });
       const result = await posService.processReturn({
         businessId,
         originalInvoiceId: 'inv-orig-1',
-        reason: 'Defective product',
+        shiftId: 'shift-1',
+        reason: 'Customer return',
+        refundMethod: 'cash',
         approvalToken: 'tok-123',
         items: [
-          { productId: 'prod-001', productName: 'Whole Dressed Chicken 1.2kg', quantity: 1, unitPrice: 6500, refundAmount: 6500 },
+          { invoiceLineId: 'line-1', productId: 'prod-001', productName: 'Whole Dressed Chicken 1.2kg', quantity: 1, unitPrice: 6500, refundAmount: 6500, reason: 'Damaged', restock: false },
         ],
       });
-      expect(rpc).toHaveBeenCalledWith('refund_pos_sale_command', {
+      expect(rpc).toHaveBeenCalledWith('process_pos_return_command', {
         p_payload: expect.objectContaining({
           business_id: businessId,
           invoice_id: 'inv-orig-1',
-          reason: 'Defective product',
+          shift_id: 'shift-1',
+          reason: 'Customer return',
+          refund_method: 'cash',
           approval_token: 'tok-123',
-          lines: [{ product_id: 'prod-001', quantity: 1, amount: 6500 }],
+          lines: [{ invoice_line_id: 'line-1', quantity: 1, reason: 'Damaged', restock: false }],
         }),
       });
-      expect(result.returnInvoiceId).toBe('je-refund-1');
+      expect(result.returnId).toBe('ret-1');
+      expect(result.returnNumber).toBe('RET-20261105-000001');
+      expect(result.lines).toEqual([{ invoiceLineId: 'line-1', quantity: 1, refundAmount: 6500, reason: 'Damaged', restock: false }]);
     });
 
     it('routes voids exclusively through void_pos_sale_command and never touches raw invoice DML', async () => {
@@ -432,16 +439,29 @@ describe('posService', () => {
         .rejects.toThrow(/correction update/);
     });
 
+    it('fails closed when the 6E-2 return command is missing instead of reverting to client DML', async () => {
+      vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string) => {
+        if (name === 'process_pos_return_command') {
+          return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.process_pos_return_command in the schema cache' } });
+        }
+        return Promise.resolve({ data: null, error: null });
+      }) as never);
+      await expect(posService.processReturn({
+        businessId, originalInvoiceId: 'inv-orig-1', shiftId: 'shift-1',
+        items: [{ invoiceLineId: 'line-1', quantity: 1, reason: 'Damaged', restock: false }],
+      })).rejects.toThrow(/correction update/);
+    });
+
     it('classifies an authorized-manager-still-missing denial as a pending-approval state for the UI', async () => {
       vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string) => {
-        if (name === 'refund_pos_sale_command') {
+        if (name === 'process_pos_return_command') {
           return Promise.resolve({ data: null, error: { code: '22023', message: 'This approval has not been authorized.' } });
         }
         return Promise.resolve({ data: null, error: null });
       }) as never);
       await expect(posService.processReturn({
-        businessId, originalInvoiceId: 'inv-orig-1', reason: 'x', approvalToken: 'tok-123',
-        items: [{ productId: 'prod-001', quantity: 1, refundAmount: 100 }],
+        businessId, originalInvoiceId: 'inv-orig-1', shiftId: 'shift-1', reason: 'x', approvalToken: 'tok-123',
+        items: [{ invoiceLineId: 'line-1', productId: 'prod-001', quantity: 1, refundAmount: 100, reason: 'Damaged', restock: false }],
       })).rejects.toThrow(/still pending/);
     });
 

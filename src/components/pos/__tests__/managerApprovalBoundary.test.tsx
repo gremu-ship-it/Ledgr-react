@@ -95,7 +95,7 @@ describe('R07 approval boundary — contained state', () => {
   it('ATTACK GUARD: the service layer has exactly one correction path — the canonical commands; raw-DML bodies are demo-only', () => {
     const src = read('src/services/posService.ts');
     expect(src).toContain('voidPosSaleViaRpc(');
-    expect(src).toContain('refundPosSaleViaRpc(');
+    expect(src).toContain('processPosReturnViaRpc(');
     // The legacy raw-DML materializers are private and gated behind isDemoMode().
     expect(src).toMatch(/async function processVoidLocal\(/);
     expect(src).toMatch(/async function processReturnLocal\(/);
@@ -103,6 +103,10 @@ describe('R07 approval boundary — contained state', () => {
     expect(routerBlock).toContain('isDemoMode()');
     expect(routerBlock).toContain('voidPosSaleViaRpc({');
     expect(routerBlock).not.toContain('repos.invoice.update');
+    const returnBlock = src.match(/export async function processReturn\(([^]*?)\n}\n/)?.[0] ?? '';
+    expect(returnBlock).toContain('isDemoMode()');
+    expect(returnBlock).toContain('processPosReturnViaRpc({');
+    expect(returnBlock).not.toContain('refundPosSaleViaRpc(');
     // The correction payloads carry no approver identity anywhere.
     const types = read('src/types/pos.ts');
     const returnPayload = types.match(/export interface PosReturnPayload \{([^]*?)\n\}/)?.[1] ?? '';

@@ -70,6 +70,31 @@ describe('PosRepository', () => {
     });
   });
 
+  describe('registers (canonical pos_terminals)', () => {
+    it('lists terminals scoped to the business, including their branch and defaults', async () => {
+      const row = {
+        id: 'register-1', business_id: 'biz-001', name: 'Front till', code: 'REG-01',
+        branch_id: 'branch-001', preferred_location_id: 'location-001', default_cash_account_id: null,
+        is_active: true, created_at: '2026-11-01T00:00:00Z', updated_at: '2026-11-01T00:00:00Z',
+        branch: { id: 'branch-001', name: 'Main branch' }, location: { id: 'location-001', name: 'Shop' }, cash_account: null,
+      };
+      const result = { data: [row], error: null };
+      const chain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        order: vi.fn().mockReturnThis(),
+        then: (resolve: (value: typeof result) => unknown, reject?: (reason: unknown) => unknown) => Promise.resolve(result).then(resolve, reject),
+      };
+      mockClient.from.mockReturnValue(chain);
+
+      const registers = await repo.getRegisters('biz-001');
+
+      expect(mockClient.from).toHaveBeenCalledWith('pos_terminals');
+      expect(chain.eq).toHaveBeenCalledWith('business_id', 'biz-001');
+      expect(registers[0]).toMatchObject({ id: 'register-1', code: 'REG-01', branch: { name: 'Main branch' } });
+    });
+  });
+
   describe('openShift & closeShift (R08 command surface)', () => {
     const shiftRow = {
       id: 'shift-1',
@@ -127,6 +152,30 @@ describe('PosRepository', () => {
       expect(created.status).toBe('open');
     });
 
+    it('opens on the explicitly selected canonical register without trusting caller branch/cashier data', async () => {
+      wireTables();
+      mockClient.rpc.mockResolvedValue({ data: { result: 'open', shift_id: 'shift-1' }, error: null });
+
+      await repo.openShift({ businessId: 'biz-001', terminalId: 'selected-terminal', openingFloat: 0 });
+
+      const [, args] = mockClient.rpc.mock.calls[0];
+      const payload = (args as { p_payload: Record<string, unknown> }).p_payload;
+      expect(payload.terminal_id).toBe('selected-terminal');
+      expect(payload.opening_cash).toBe(0);
+      expect(payload).not.toHaveProperty('branch_id');
+      expect(payload).not.toHaveProperty('cashier_id');
+    });
+
+    it('leaves duplicate-open-shift rejection to the canonical server command', async () => {
+      mockClient.rpc.mockResolvedValue({
+        data: null,
+        error: { code: '23505', message: 'An open shift already exists for this register.' },
+      });
+
+      await expect(repo.openShift({ businessId: 'biz-001', terminalId: 'till-1', openingFloat: 0 })).rejects.toThrow();
+      expect(mockClient.rpc).toHaveBeenCalledWith('open_pos_shift_command', expect.anything());
+    });
+
     it('fails honestly when no active till is registered (no claim forwarded, no fallback write)', async () => {
       mockClient.from.mockImplementation(() => ({
         select: vi.fn().mockReturnThis(),
@@ -144,13 +193,15 @@ describe('PosRepository', () => {
       wireTables();
       mockClient.rpc.mockResolvedValue({ data: { result: 'close', report_number: 'Z-2026-7' }, error: null });
 
-      const closed = await repo.closeShift('shift-1', { closing_cash_actual: 75000, variance: 0 });
+      const closed = await repo.closeShift('shift-1', { closingCash: 75000, varianceReason: 'Counted at handover' });
 
       const [fn, args] = mockClient.rpc.mock.calls[0];
       expect(fn).toBe('close_pos_shift_command');
       const payload = (args as { p_payload: Record<string, unknown> }).p_payload;
       expect(Object.keys(payload).sort()).toEqual(['closing_cash', 'command_key', 'shift_id', 'variance_reason']);
       expect(payload.closing_cash).toBe(75000);
+      expect(payload.variance_reason).toBe('Counted at handover');
+      expect(payload).not.toHaveProperty('variance');
       expect(payload.shift_id).toBe('shift-1');
       expect(closed.id).toBe('shift-1');
     });
