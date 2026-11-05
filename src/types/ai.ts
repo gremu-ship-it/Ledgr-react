@@ -33,3 +33,68 @@ export interface DiagnosticScanResult {
   created: number;
   skippedExisting: number;
 }
+
+export interface WorkingCapitalMetrics {
+  cash_balance: number;
+  daily_net_burn_rate: number;
+  runway_days: number | null;
+  current_ratio: number | null;
+  quick_ratio: number | null;
+  dso_days: number | null;
+  dpo_days: number | null;
+  cash_history_days: number;
+  health_score: number;
+}
+
+export interface CashRunwayProjection {
+  days: 30 | 60 | 90;
+  starting_cash: number;
+  expected_collections: number;
+  expected_outflows: number;
+  baseline_net_cash: number;
+  projected_ending_cash: number;
+}
+
+export interface CashRunwayForecast {
+  generated_at: string;
+  currency: string;
+  metrics: WorkingCapitalMetrics;
+  projections: CashRunwayProjection[];
+}
+
+export interface FinancialSummaryMetrics extends WorkingCapitalMetrics {
+  currency: string;
+  current_revenue: number;
+  prior_revenue: number;
+  revenue_change_pct: number | null;
+  gross_margin_pct: number | null;
+  prior_gross_margin_pct: number | null;
+  gross_margin_change_pp: number | null;
+  current_operating_expenses: number;
+  prior_operating_expenses: number;
+  operating_expense_change_pct: number | null;
+  top_expense_driver: string | null;
+  projected_day_30_cash: number;
+  projected_day_60_cash: number;
+  projected_day_90_cash: number;
+  projections: CashRunwayProjection[];
+}
+
+export interface AiSummaryBullet {
+  key: string;
+  values?: Record<string, string | number>;
+}
+
+/** Persisted deterministic summary; fields hold ai.summary.* keys and JSON interpolation values. */
+export interface AiFinancialSummary {
+  id: string;
+  business_id: string;
+  period_start: string;
+  period_end: string;
+  health_score: number;
+  executive_summary: string;
+  key_risks: AiSummaryBullet[];
+  recommendations: AiSummaryBullet[];
+  metrics: FinancialSummaryMetrics;
+  created_at: string;
+}
