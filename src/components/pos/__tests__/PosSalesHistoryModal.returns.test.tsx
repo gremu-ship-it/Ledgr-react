@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import '@/i18n';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { i18n } from '@/i18n';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PosSalesHistoryModal } from '../PosSalesHistoryModal';
 import type { PosSale } from '@/types/pos';
 
 afterEach(cleanup);
+beforeEach(async () => {
+  await i18n.changeLanguage('en');
+});
 
 const sale: PosSale = {
   id: 'invoice-1',

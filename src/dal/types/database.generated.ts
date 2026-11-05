@@ -9744,6 +9744,103 @@ export type Database = {
           },
         ]
       }
+      pos_held_orders: {
+        Row: {
+          branch_id: string | null
+          business_id: string
+          cart_items: Json
+          cart_notes: string | null
+          cashier_id: string
+          cashier_name: string | null
+          created_at: string
+          customer_id: string | null
+          customer_snapshot: Json | null
+          discount_amount: number
+          expired_at: string | null
+          id: string
+          idempotency_key: string
+          order_discount: Json | null
+          reference_note: string
+          resumed_at: string | null
+          resumed_by: string | null
+          shift_id: string
+          status: string
+          subtotal: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          business_id: string
+          cart_items: Json
+          cart_notes?: string | null
+          cashier_id: string
+          cashier_name?: string | null
+          created_at?: string
+          customer_id?: string | null
+          customer_snapshot?: Json | null
+          discount_amount: number
+          expired_at?: string | null
+          id?: string
+          idempotency_key: string
+          order_discount?: Json | null
+          reference_note: string
+          resumed_at?: string | null
+          resumed_by?: string | null
+          shift_id: string
+          status?: string
+          subtotal: number
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          business_id?: string
+          cart_items?: Json
+          cart_notes?: string | null
+          cashier_id?: string
+          cashier_name?: string | null
+          created_at?: string
+          customer_id?: string | null
+          customer_snapshot?: Json | null
+          discount_amount?: number
+          expired_at?: string | null
+          id?: string
+          idempotency_key?: string
+          order_discount?: Json | null
+          reference_note?: string
+          resumed_at?: string | null
+          resumed_by?: string | null
+          shift_id?: string
+          status?: string
+          subtotal?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_held_orders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_held_orders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_held_orders_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "pos_shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pos_returns: {
         Row: {
           amount: number
@@ -14988,6 +15085,23 @@ export type Database = {
       }
       open_pos_shift_command: { Args: { p_payload: Json }; Returns: Json }
       plan_tier_rank: { Args: { tier: string }; Returns: number }
+      hold_pos_order_command: {
+        Args: { p_business_id: string; p_payload: Json; p_shift_id: string }
+        Returns: Json
+      }
+      list_pos_held_orders: {
+        Args: { p_include_history?: boolean; p_shift_id: string }
+        Returns: Json
+      }
+      list_pos_price_override_requests: {
+        Args: { p_business_id: string }
+        Returns: Json
+      }
+      resume_pos_held_order_command: {
+        Args: { p_held_order_id: string; p_shift_id: string }
+        Returns: Json
+      }
+      post_pos_sale_plan_gated: { Args: { p_payload: Json }; Returns: Json }
       pos_stock_availability: {
         Args: { p_branch_id?: string; p_business_id: string }
         Returns: Json

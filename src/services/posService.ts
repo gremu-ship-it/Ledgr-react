@@ -209,6 +209,7 @@ export function applyItemPriceOverride(
     unitPrice,
     selling_price: unitPrice,
     priceOverrideToken: token ?? null,
+    priceOverridden: true,
   });
   const item = repriced.find((it) => (it.product_id || it.productId) === productId);
   return item ? applyItemDiscount(repriced, productId, item.discount) : repriced;
@@ -625,12 +626,10 @@ export interface PosSaleCommitResult {
  * `buildPosSaleQueuePayload`. Used for online sales and for queued offline
  * sales when they sync — identical in both cases.
  *
- * Since stage 2 of docs/database/pos-sale-posting-rpc.md the sale is posted
- * server-side by `post_pos_sale`, in one transaction; the client-side path
- * below is only reached when that function does not exist yet in the
- * environment (frontend deployed ahead of `supabase db push`). Both paths are
- * idempotent on the same client key, so whichever one commits, a retry — on
- * either path — returns the committed sale instead of a second one.
+ * POS sales are posted server-side by the plan-gated wrapper and canonical
+ * `post_pos_sale` transaction. The client-side materializer is reserved for
+ * the explicit demo environment; a real backend missing the security RPC is a
+ * hard failure rather than a plan-gate bypass.
  */
 export async function commitPosSaleDocuments(
   payload: PosSaleQueuePayload,
@@ -639,20 +638,15 @@ export async function commitPosSaleDocuments(
   const businessId = options.businessId ?? payload.invoice.business_id;
   const clientKey = options.clientKey ?? payload.invoice.client_key ?? newSaveClientKey();
 
-  // Server-side posting (stage 2 of docs/database/pos-sale-posting-rpc.md).
-  // One transaction writes the invoice, its tenders, the ledger and the stock
-  // release; the RPC is idempotent on the same client key, so a replay returns
-  // the committed sale and completes it if an earlier attempt left it
-  // half-posted. Falling back to the legacy path below is required while the
-  // function may not exist yet in an environment (PGRST202) — the RPC has no
-  // other caller and stage 3's policy narrowing is only safe once every
-  // environment is on this path.
+  // One transaction writes the invoice, its tenders, the ledger and stock
+  // release. The plan-gated wrapper delegates to the canonical sale function;
+  // only the demo environment may fall back to the local materializer.
   const rpcSale = await postPosSaleViaRpc(payload, businessId, clientKey);
   if (rpcSale) {
     return loadCommittedPosSale(businessId, rpcSale);
   }
 
-  log.info('post_pos_sale unavailable — falling back to the client-side sale path', {
+  log.info('Demo POS RPC unavailable — using the local demo sale path', {
     businessId,
     receiptNumber: payload.receiptNumber,
   });

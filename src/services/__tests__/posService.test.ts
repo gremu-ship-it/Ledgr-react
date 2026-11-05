@@ -6,6 +6,7 @@ import { repos } from '@/lib/repositories';
 import { realSupabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { usageService } from '@/lib/billing/UsageService';
+import { setDemoMode } from '@/lib/demo/mode';
 import { missingPostPosSale } from './helpers/postPosSaleStub';
 
 /**
@@ -66,9 +67,9 @@ describe('posService', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    // The client-side path is the fallback: it runs when post_pos_sale is not
-    // applied yet (stage 2 of docs/database/pos-sale-posting-rpc.md). These tests
-    // are about that path, so the RPC is stubbed as missing.
+    setDemoMode(true);
+    // These tests exercise the explicitly selected demo materializer. Real
+    // backends must reject checkout until the plan-gated RPC is deployed.
     vi.spyOn(realSupabase, 'rpc').mockImplementation(
       missingPostPosSale(() => ({ data: null, error: null })) as never,
     );
@@ -362,6 +363,8 @@ describe('posService', () => {
   });
 
   describe('returns and voids (canonical correction commands, R07)', () => {
+    beforeEach(() => setDemoMode(false));
+
     const businessId = 'biz-test-07';
     const rpcOk = (fn: string, data: unknown) => {
       vi.spyOn(realSupabase, 'rpc').mockImplementation(((name: string, args: Record<string, unknown>) => {
