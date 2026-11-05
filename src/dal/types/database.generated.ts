@@ -8748,18 +8748,27 @@ export type Database = {
         Row: {
           business_id: string
           created_at: string | null
+          notes: string | null
+          onboarded_at: string
           partner_id: string
+          status: string
         }
         ComputedFields: never
         Insert: {
           business_id: string
           created_at?: string | null
+          notes?: string | null
+          onboarded_at?: string
           partner_id: string
+          status?: string
         }
         Update: {
           business_id?: string
           created_at?: string | null
+          notes?: string | null
+          onboarded_at?: string
           partner_id?: string
+          status?: string
         }
         Relationships: [
           {
@@ -13589,9 +13598,13 @@ export type Database = {
           is_active: boolean
           journal_entry_count: number | null
           last_activity_at: string | null
+          notes: string | null
           onboarded_at: string | null
           partner_id: string
+          pay_run_count: number | null
           plan_tier: string
+          status: string
+          total_activity_count: number | null
           user_count: number | null
         }
         ComputedFields: never
@@ -13604,6 +13617,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_partner_client_activity: {
+        Row: {
+          business_id: string
+          business_name: string
+          event_at: string
+          event_id: string
+          event_type: string
+          partner_id: string
+          status: string
+          title: string
+        }
+        ComputedFields: never
+        Relationships: []
       }
       v_reorder_alerts: {
         Row: {

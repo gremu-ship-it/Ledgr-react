@@ -72,7 +72,6 @@
     "yes": "Yes"
   },
   "pos": {
-
     "pointOfSale": "Point of Sale",
     "registers": "POS Registers",
     "registersDescription": "Manage checkout registers, branch assignment, and default cash accounts.",
@@ -195,7 +194,7 @@
       "voucherInstructions": "Present this voucher at the issuing business to redeem your store credit.",
       "defaultReason": "Customer return"
     },
-"checkout": {
+    "checkout": {
       "title": "Payment checkout",
       "close": "Close payment checkout",
       "totalPayable": "Total payable",
@@ -335,7 +334,7 @@
       "requirePriceApproval": "Require manager approval for manual prices",
       "priceApprovalSettingHint": "A supervisor must authorize a non-catalogue price before checkout."
     }
-},
+  },
   "language": {
     "label": "Language",
     "switcherLabel": "Choose language",
@@ -528,7 +527,6 @@
       "branchValue": "Branch: {{name}}"
     }
   },
-
   "settings": {
     "locations": {
       "title": "Inventory Locations",
@@ -4734,5 +4732,80 @@
     "legacyHistoryStatus": "Status",
     "legacyHistoryReadOnly": "Historical runs are preserved as read-only records in this list.",
     "noNewRunsLegacyAvailable": "There are no runs in the new payroll cycle yet. Previous payroll runs are listed below."
+  },
+  "partner": {
+    "title": "Partner Portal",
+    "clients": "Client Directory",
+    "clientsDescription": "Manage accounting clients, review ledger health, and assign staff.",
+    "addClient": "Add Managed Client",
+    "clientName": "Client Business",
+    "plan": "Subscription Plan",
+    "status": "Status",
+    "lastActivity": "Last Activity",
+    "entriesCount": "Journal Entries",
+    "branding": "Branding & Customization",
+    "firmName": "Firm / Practice Name",
+    "primaryColor": "Primary Brand Color",
+    "logoUrl": "Firm Logo URL",
+    "saveBranding": "Save Branding Settings",
+    "brandingUpdated": "Partner branding updated successfully.",
+    "staff": "Firm Staff",
+    "addStaff": "Add Staff Member",
+    "overview": "Portfolio Overview",
+    "activeSubscriptions": "Active Subscriptions",
+    "pendingOnboardings": "Pending Onboardings",
+    "staffCount": "Partner Staff",
+    "clientActivity": "Client Activity",
+    "noActivity": "No recent activity across this portfolio.",
+    "loading": "Loading partner data…",
+    "searchClients": "Search client businesses",
+    "filterStatus": "Filter by status",
+    "filterPlan": "Filter by plan",
+    "allStatuses": "All statuses",
+    "allPlans": "All plans",
+    "active": "Active",
+    "onboarding": "Onboarding",
+    "suspended": "Suspended",
+    "archived": "Archived",
+    "activeBusiness": "Business active",
+    "inactiveBusiness": "Business inactive",
+    "users": "Users",
+    "invoices": "Invoices",
+    "transactions": "Activity records",
+    "onboardedAt": "Onboarded",
+    "noClients": "No managed clients match these filters.",
+    "viewOnly": "Read-only client access",
+    "viewOnlyDescription": "Partner staff can review linked client health and activity but cannot edit client business records.",
+    "addClientHelp": "Link an existing client business only after the client has asked your firm to manage its account. You will need its business ID.",
+    "businessId": "Client business ID",
+    "businessIdPlaceholder": "Paste the client business ID",
+    "clientNotes": "Internal onboarding note (optional)",
+    "clientNotesPlaceholder": "For example, assigned accountant or onboarding context",
+    "linkClient": "Link client business",
+    "linkingClient": "Linking…",
+    "clientLinked": "Client business linked for onboarding.",
+    "clientLinkFailed": "Could not link this client business. Check the ID and your partner permissions.",
+    "cancel": "Cancel",
+    "requiredBusinessId": "Enter the client business ID.",
+    "statusUpdated": "Client status updated.",
+    "statusUpdateFailed": "Could not update client status.",
+    "activityTypes": {
+      "journal_entry": "Journal entry",
+      "invoice": "Invoice",
+      "pay_run": "Payroll run",
+      "payroll_run": "Payroll run"
+    },
+    "settings": {
+      "title": "Branding & features",
+      "identity": "Firm identity",
+      "identityDescription": "Customize the name, logo, colour and contact details shown to your clients.",
+      "supportEmail": "Contact email",
+      "supportPhone": "Contact phone",
+      "appName": "White-label app name",
+      "preview": "Invitation header preview",
+      "saveChanges": "Save changes",
+      "saving": "Saving…",
+      "saved": "Partner branding updated successfully."
+    }
   }
 }
