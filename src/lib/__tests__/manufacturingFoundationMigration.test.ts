@@ -28,8 +28,9 @@ describe('manufacturing foundation migration contract', () => {
     // reporting follows the Phase C work-order migrations; construction site
     // lifecycle, trial-balance and bank-reconciliation migrations follow, then
     // the additive trial-balance date-cast correction and Phase 5B-2a execution
-    // migration, then construction procurement links and Phase 5B-3a MRP. Partner
-    // Portal Phase 6F-1 adds client health and activity reporting after the POS phases.
+    // migration, then construction procurement links, Phase 5B-3a MRP, and POS
+    // register/shift, return, and Phase 6E-3 workflows. Partner Portal Phase 6F-1
+    // extends the partner health and activity reporting model after those phases.
     expect([
       '20261103000000',
       '20261104000000',
@@ -57,6 +58,11 @@ describe('manufacturing foundation migration contract', () => {
       '20261205000000',
       '20261206000000',
       '20261207000000',
+      '20261208000000',
+      '20261209000000',
+      '20261210000000',
+      '20261210000001',
+      '20261211000000',
       '20261212000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);

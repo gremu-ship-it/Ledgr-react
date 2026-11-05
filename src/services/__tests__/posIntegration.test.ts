@@ -6,6 +6,7 @@ import { realSupabase } from '@/lib/supabase';
 import { usageService } from '@/lib/billing/UsageService';
 import type { PosCartItem } from '@/types/pos';
 import { missingPostPosSale } from './helpers/postPosSaleStub';
+import { setDemoMode } from '@/lib/demo/mode';
 
 vi.mock('@/services/journalService', () => ({
   createInvoiceJournalEntry: vi.fn().mockResolvedValue({}),
@@ -46,9 +47,9 @@ describe('POS Integration & Acceptance Criteria', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    // The client-side path is the fallback: it runs when post_pos_sale is not
-    // applied yet (stage 2 of docs/database/pos-sale-posting-rpc.md). These tests
-    // are about that path, so the RPC is stubbed as missing.
+    setDemoMode(true);
+    // These tests exercise the explicit demo materializer; production checkout
+    // fails closed if the plan-gated RPC is unavailable.
     vi.spyOn(realSupabase, 'rpc').mockImplementation(
       missingPostPosSale(() => ({ data: null, error: null })) as never,
     );

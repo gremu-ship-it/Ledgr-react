@@ -3,6 +3,7 @@ import type { Database, InsertDto, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import { triggerWebhook } from '@/services/webhook/webhook-triggers';
+import type { PosSale } from '@/types/pos';
 
 export interface InvoiceWithLines {
   invoice: Row<'invoices'>;
@@ -113,6 +114,145 @@ export class InvoiceRepository extends BaseRepository<'invoices'> {
       .limit(cap);
     if (error) throw toRepositoryError('invoices', error);
     return (data ?? []) as unknown as Row<'invoices'>[];
+  }
+
+  /**
+   * Search posted POS invoices and hydrate their immutable receipt lines for
+   * the return register. Starter is limited to the current shift; Growth+
+   * callers may search across historical shifts. The write command rechecks
+   * plan, shift and line quantities server-side.
+   */
+  async findPosSalesForReturn(
+    businessId: string,
+    options: { shiftId: string | null; branchId: string | null; includeHistorical: boolean; search?: string; limit?: number },
+  ): Promise<PosSale[]> {
+    if (!options.shiftId) return [];
+    let query = this.client
+      .from('invoices')
+      .select('id, business_id, branch_id, pos_shift_id, invoice_number, payment_reference, created_at, issue_date, contact_id, subtotal, discount_amount, total_amount, amount_paid, status')
+      .eq('business_id', businessId)
+      .eq('status', 'paid')
+      .eq('invoice_type', 'invoice')
+      .not('pos_shift_id', 'is', null)
+      .is('deleted_at', null);
+    query = options.branchId
+      ? query.eq('branch_id', options.branchId)
+      : query.is('branch_id', null);
+    if (!options.includeHistorical) {
+      query = query.eq('pos_shift_id', options.shiftId);
+    }
+    const term = options.search?.trim().replace(/[%,()]/g, '').slice(0, 80);
+    if (term) {
+      query = query.or(`invoice_number.ilike.%${term}%,payment_reference.ilike.%${term}%`);
+    }
+    const { data: invoices, error } = await query
+      .order('created_at', { ascending: false })
+      .limit(Math.max(1, Math.min(options.limit ?? 30, 100)));
+    if (error) throw toRepositoryError('invoices', error);
+    let eligibleInvoices = invoices ?? [];
+    if (options.includeHistorical) {
+      const historicalShiftIds = [...new Set(eligibleInvoices
+        .map((invoice) => invoice.pos_shift_id)
+        .filter((shiftId): shiftId is string => !!shiftId && shiftId !== options.shiftId))];
+      if (historicalShiftIds.length) {
+        const { data: historicalShifts, error: shiftError } = await this.client
+          .from('pos_shifts').select('id, status').eq('business_id', businessId).in('id', historicalShiftIds);
+        if (shiftError) throw toRepositoryError('pos_shifts', shiftError);
+        const closedShiftIds = new Set((historicalShifts ?? [])
+          .filter((shift) => shift.status === 'closed').map((shift) => shift.id));
+        eligibleInvoices = eligibleInvoices.filter((invoice) =>
+          invoice.pos_shift_id === options.shiftId || closedShiftIds.has(invoice.pos_shift_id ?? ''));
+      }
+    }
+    if (!eligibleInvoices.length) return [];
+
+    const invoiceIds = eligibleInvoices.map((invoice) => invoice.id);
+    const contactIds = [...new Set(invoices.map((invoice) => invoice.contact_id).filter(Boolean))];
+    const [{ data: lines, error: lineError }, { data: contacts, error: contactError }] = await Promise.all([
+      this.client.from('invoice_lines')
+        .select('id, invoice_id, product_id, description, quantity, unit_price, line_total')
+        .eq('business_id', businessId).in('invoice_id', invoiceIds),
+      contactIds.length
+        ? this.client.from('contacts').select('id, name').eq('business_id', businessId).in('id', contactIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (lineError) throw toRepositoryError('invoice_lines', lineError);
+    if (contactError) throw toRepositoryError('contacts', contactError);
+    const lineIds = (lines ?? []).map((line) => line.id);
+    const { data: returnedLines, error: returnedError } = lineIds.length
+      ? await this.client.from('pos_return_lines').select('invoice_line_id, quantity')
+          .eq('business_id', businessId).in('invoice_line_id', lineIds)
+      : { data: [], error: null };
+    if (returnedError) throw toRepositoryError('pos_return_lines', returnedError);
+    const [{ data: returnHeaders, error: returnHeaderError }, { data: legacyCorrections, error: legacyError }] = await Promise.all([
+      this.client.from('pos_returns').select('invoice_id, command_key')
+        .eq('business_id', businessId).in('invoice_id', invoiceIds),
+      this.client.from('pos_corrections').select('document_id, command_key, lines')
+        .eq('business_id', businessId).eq('command_type', 'refund_sale').in('document_id', invoiceIds),
+    ]);
+    if (returnHeaderError) throw toRepositoryError('pos_returns', returnHeaderError);
+    if (legacyError) throw toRepositoryError('pos_corrections', legacyError);
+    const returnedQuantity = new Map<string, number>();
+    for (const returned of returnedLines ?? []) {
+      returnedQuantity.set(returned.invoice_line_id, (returnedQuantity.get(returned.invoice_line_id) ?? 0) + Number(returned.quantity));
+    }
+    const newReturnKeys = new Set((returnHeaders ?? []).map((header) => header.command_key));
+    const legacyQuantityByInvoiceProduct = new Map<string, number>();
+    for (const correction of legacyCorrections ?? []) {
+      if (newReturnKeys.has(correction.command_key) || !Array.isArray(correction.lines)) continue;
+      for (const rawLine of correction.lines) {
+        if (!rawLine || typeof rawLine !== 'object' || Array.isArray(rawLine)) continue;
+        const productId = typeof rawLine.product_id === 'string' ? rawLine.product_id : null;
+        const quantity = Number(rawLine.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0) continue;
+        const key = `${correction.document_id}:${productId ?? '__no_product__'}`;
+        legacyQuantityByInvoiceProduct.set(key, (legacyQuantityByInvoiceProduct.get(key) ?? 0) + quantity);
+      }
+    }
+    const linesByInvoice = new Map<string, NonNullable<typeof lines>>();
+    const lineTotalsByInvoice = new Map<string, number>();
+    for (const line of lines ?? []) {
+      const bucket = linesByInvoice.get(line.invoice_id) ?? [];
+      bucket.push(line);
+      linesByInvoice.set(line.invoice_id, bucket);
+      lineTotalsByInvoice.set(line.invoice_id, (lineTotalsByInvoice.get(line.invoice_id) ?? 0) + Number(line.line_total || 0));
+    }
+    const names = new Map((contacts ?? []).map((contact) => [contact.id, contact.name]));
+    return eligibleInvoices.map((invoice) => ({
+      id: invoice.id,
+      business_id: invoice.business_id,
+      branch_id: invoice.branch_id,
+      shift_id: invoice.pos_shift_id,
+      receipt_number: invoice.payment_reference || invoice.invoice_number,
+      invoice_number: invoice.invoice_number,
+      created_at: invoice.created_at || invoice.issue_date,
+      customer_id: invoice.contact_id,
+      customer_name: names.get(invoice.contact_id) || null,
+      gross_amount: Number(invoice.subtotal) + Number(invoice.discount_amount || 0),
+      discount_amount: Number(invoice.discount_amount || 0),
+      net_amount: Number(invoice.total_amount),
+      total_amount: Number(invoice.total_amount),
+      amount_paid: Number(invoice.amount_paid),
+      total_paid: Number(invoice.amount_paid),
+      payment_status: 'completed',
+      status: 'completed',
+      items: (linesByInvoice.get(invoice.id) ?? []).map((line) => ({
+        id: line.id,
+        sale_id: invoice.id,
+        product_id: line.product_id ?? '',
+        product_name: line.description,
+        name: line.description,
+        quantity: Number(line.quantity),
+        returnable_quantity: Math.max(0, Number(line.quantity)
+          - (returnedQuantity.get(line.id) ?? 0)
+          - (legacyQuantityByInvoiceProduct.get(`${invoice.id}:${line.product_id ?? '__no_product__'}`) ?? 0)),
+        return_unit_price: Number(line.quantity) > 0 && (lineTotalsByInvoice.get(invoice.id) ?? 0) > 0
+          ? Number(line.line_total) / Number(line.quantity) * (Number(invoice.total_amount) / (lineTotalsByInvoice.get(invoice.id) ?? 1))
+          : Number(line.unit_price),
+        unit_price: Number(line.unit_price),
+        line_total: Number(line.line_total),
+      })),
+    }));
   }
 
   /**
