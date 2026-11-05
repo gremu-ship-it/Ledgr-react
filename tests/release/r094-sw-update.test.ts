@@ -606,12 +606,12 @@ test(meta('R094.BROWSER.SW.QUEUE-PROVENANCE', 'Offline queue preservation across
   const page = await newAppPage(ctx);
   await waitActiveDigest(page, digestSwA);
   const seeded = await enqueueAsUser(harness, 2201);
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: seeded.clientKey, status: 200, body: { id: 'r094-inv-upd-1', number: 'R094-UPD-2201', journal_entry_id: null, idempotent: false } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey: seeded.clientKey, status: 200, body: { id: 'r094-inv-upd-1', number: 'R094-UPD-2201', journal_entry_id: null, idempotent: false } });
   await performUpdate(page);
   const post = await rereadQueueState(harness, seeded.localId);
   // Single replay authority still: one production sync pass → exactly one rpc.
   await go('post-transition sync', ev(harness, (uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A));
-  const calls = (await stub.control({ action: 'calls' })).calls.filter((c: any) => c.fn === 'post_pos_sale' && c.clientKey === seeded.clientKey);
+  const calls = (await stub.control({ action: 'calls' })).calls.filter((c: any) => c.fn === 'post_pos_sale_plan_gated' && c.clientKey === seeded.clientKey);
   const itemFinal = await rereadQueueState(harness, seeded.localId);
   await ctx.close();
   const fieldsEqual = Object.entries(seeded.snap).every(([k, v]) => (post.snap as any)?.[k] === v);
