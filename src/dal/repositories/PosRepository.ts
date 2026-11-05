@@ -7,6 +7,10 @@ import type {
   PosCashMovement,
   PosSettings,
   PosPermission,
+  PosHeldOrder,
+  PosPendingPriceOverride,
+  PosCartItem,
+  PosDiscount,
 } from '@/types/pos';
 import { DEFAULT_ROLE_PERMISSIONS } from '@/types/pos';
 import { createLogger } from '@/lib/logger';
@@ -130,13 +134,20 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
   async updateSettings(businessId: string, settings: Partial<PosSettings>): Promise<PosSettings> {
     const existing = await this.getSettings(businessId);
-    const merged = { ...existing, ...settings, business_id: businessId, updated_at: new Date().toISOString() };
+    const merged = {
+      ...existing,
+      ...settings,
+      max_cashier_discount_percent: settings.max_cashier_discount_percent ?? settings.cashier_max_discount_percent ?? existing.max_cashier_discount_percent,
+      cashier_max_discount_percent: settings.cashier_max_discount_percent ?? settings.max_cashier_discount_percent ?? existing.cashier_max_discount_percent,
+      max_manager_discount_percent: settings.max_manager_discount_percent ?? settings.manager_max_discount_percent ?? existing.max_manager_discount_percent,
+      manager_max_discount_percent: settings.manager_max_discount_percent ?? settings.max_manager_discount_percent ?? existing.manager_max_discount_percent,
+      business_id: businessId,
+      updated_at: new Date().toISOString(),
+    };
 
     const updatePayload: InsertDto<'pos_settings'> = {
       business_id: businessId,
       enabled_payment_methods: merged.enabled_payment_methods as never,
-      cashier_max_discount_percent: merged.max_cashier_discount_percent,
-      manager_max_discount_percent: merged.max_manager_discount_percent,
       require_approval_for_void: merged.require_approval_for_void ?? true,
       require_approval_for_refund: merged.require_approval_for_refund ?? true,
       require_explanation_variance_threshold: merged.cash_variance_threshold,
@@ -146,6 +157,12 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       custom_role_permissions: (merged.custom_role_permissions || DEFAULT_ROLE_PERMISSIONS) as never,
       updated_at: new Date().toISOString(),
     };
+    if (settings.max_cashier_discount_percent !== undefined || settings.cashier_max_discount_percent !== undefined) {
+      updatePayload.cashier_max_discount_percent = merged.max_cashier_discount_percent;
+    }
+    if (settings.max_manager_discount_percent !== undefined || settings.manager_max_discount_percent !== undefined) {
+      updatePayload.manager_max_discount_percent = merged.max_manager_discount_percent;
+    }
 
     const { error } = await this.client
       .from('pos_settings')
@@ -154,11 +171,77 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       .single();
 
     if (error) {
-      log.warn('Failed to upsert pos_settings, returning in-memory settings', { error });
-      return merged;
+      throw toRepositoryError('pos_settings', error);
     }
 
     return merged;
+  }
+
+  async holdOrder(input: {
+    businessId: string;
+    commandKey?: string;
+    shiftId: string;
+    referenceNote: string;
+    cartItems: PosCartItem[];
+    customerId?: string | null;
+    customerSnapshot?: PosHeldOrder['customer_snapshot'];
+    subtotal: number;
+    discountAmount: number;
+    totalAmount: number;
+    orderDiscount?: PosDiscount | null;
+    cartNotes?: string | null;
+  }): Promise<PosHeldOrder> {
+    const payload = {
+      command_key: input.commandKey ?? globalThis.crypto.randomUUID(),
+      reference_note: input.referenceNote,
+      cart_items: input.cartItems,
+      customer_id: input.customerId ?? null,
+      customer_snapshot: input.customerSnapshot ?? null,
+      subtotal: input.subtotal,
+      discount_amount: input.discountAmount,
+      total_amount: input.totalAmount,
+      order_discount: input.orderDiscount ?? null,
+      cart_notes: input.cartNotes ?? null,
+    };
+    const { data, error } = await this.client.rpc('hold_pos_order_command', {
+      p_business_id: input.businessId,
+      p_shift_id: input.shiftId,
+      p_payload: payload as never,
+    });
+    if (error) throw toRepositoryError('pos_held_orders', error);
+    return data as unknown as PosHeldOrder;
+  }
+
+  async getHeldOrders(shiftId: string, includeHistory = false): Promise<PosHeldOrder[]> {
+    const { data, error } = await this.client.rpc('list_pos_held_orders', {
+      p_shift_id: shiftId,
+      p_include_history: includeHistory,
+    });
+    if (error) throw toRepositoryError('pos_held_orders', error);
+    if (!Array.isArray(data)) return [];
+    return data as unknown as PosHeldOrder[];
+  }
+
+  async resumeHeldOrder(heldOrderId: string, shiftId: string): Promise<PosHeldOrder> {
+    const { data, error } = await this.client.rpc('resume_pos_held_order_command', {
+      p_held_order_id: heldOrderId,
+      p_shift_id: shiftId,
+    });
+    if (error) throw toRepositoryError('pos_held_orders', error);
+    return data as unknown as PosHeldOrder;
+  }
+
+  async listPendingPriceOverrides(businessId: string): Promise<PosPendingPriceOverride[]> {
+    const { data, error } = await this.client.rpc('list_pos_price_override_requests', {
+      p_business_id: businessId,
+    });
+    if (error) throw toRepositoryError('pos_price_overrides', error);
+    return Array.isArray(data) ? data as unknown as PosPendingPriceOverride[] : [];
+  }
+
+  async authorizePriceOverride(token: string): Promise<void> {
+    const { error } = await this.client.rpc('authorize_pos_price_override', { p_token: token });
+    if (error) throw toRepositoryError('pos_price_overrides', error);
   }
 
   // ── Shifts ───────────────────────────────────────────────────────────────

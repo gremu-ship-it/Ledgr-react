@@ -7,6 +7,7 @@ import { realSupabase } from '@/lib/supabase';
 import { deductStockAndPostCogs } from '@/services/inventoryJournalService';
 import { usageService } from '@/lib/billing/UsageService';
 import { webhookService } from '@/services/webhook/WebhookService';
+import { setDemoMode } from '@/lib/demo/mode';
 import type { PosCartItem } from '@/types/pos';
 import type { QueuePayloadFor } from '@/offline/payloads';
 import { missingPostPosSale } from './helpers/postPosSaleStub';
@@ -129,11 +130,11 @@ describe('POS sale posting integrity', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    setDemoMode(true);
     storedInvoiceOverrides = {};
 
-    // `next_journal_entry_number` answers with a number; post_pos_sale is stubbed
-    // as not-yet-migrated so this suite keeps testing the client-side path
-    // (its fallback) rather than the RPC.
+    // This suite exercises the explicit demo materializer. Production checkout
+    // remains plan-gated and fails closed when the RPC is unavailable.
     vi.spyOn(realSupabase, 'rpc').mockImplementation(
       missingPostPosSale(() => ({ data: 'JNL-20260919-000001', error: null })) as never,
     );

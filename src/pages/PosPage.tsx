@@ -24,6 +24,10 @@ import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { useOfflineSync } from '@/offline/offlineSyncContext';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { useUsage } from '@/hooks/useUsage';
+import { planMeetsMin } from '@/lib/billing/plans';
+import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import type {
   PosCartItem,
   PosCustomer,
@@ -37,6 +41,9 @@ import type {
   PosPaymentMethod,
   PosStockAvailability,
   PosStockStatus,
+  PosHeldOrder,
+  PosSettings,
+  PosPendingPriceOverride,
 } from '@/types/pos';
 
 // Components
@@ -53,11 +60,21 @@ import { PosManagerApprovalModal } from '@/components/pos/PosManagerApprovalModa
 import { PosOwnerAnalytics } from '@/components/pos/PosOwnerAnalytics';
 import { PosBarcodeLabelGenerator } from '@/components/pos/PosBarcodeLabelGenerator';
 import { PosZReportModal } from '@/components/pos/PosZReportModal';
+import { PosHeldOrdersModal, PosHoldOrderModal } from '@/components/pos/PosHeldOrdersModal';
+import { PosSettingsModal } from '@/components/pos/PosSettingsModal';
+import { PosManagerApprovalQueueModal } from '@/components/pos/PosManagerApprovalQueueModal';
 
 export function PosPage() {
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const { planTier } = useUsage();
+  const canUseHeldOrders = true;
+  const canViewHeldOrderHistory = planMeetsMin(planTier, 'growth');
+  const maxTenders = canViewHeldOrderHistory ? null : planMeetsMin(planTier, 'starter') ? 2 : 1;
   const permissions = usePosPermissions();
+  const canAuthorizeOverrides = permissions.isOwnerOrAdmin || permissions.isManager;
   const servicesEnabled = useCapability('services', '/pos');
 
   // Empty rather than a fabricated 'biz-default': a queued offline sale is
@@ -107,10 +124,23 @@ export function PosPage() {
 
   // Active Sale Cart
   const [cartItems, setCartItems] = useState<PosCartItem[]>([]);
+  const holdOrderCommandKeyRef = useRef<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomer | null>(null);
   const [orderDiscount, setOrderDiscount] = useState<PosDiscount | undefined>(undefined);
   const [cartNotes, setCartNotes] = useState<string>('');
-  const [parkedOrders, setParkedOrders] = useState<Array<{ id: string; timestamp: Date; items: PosCartItem[]; customer: PosCustomer | null; discount?: PosDiscount }>>([]);
+  const [heldOrders, setHeldOrders] = useState<PosHeldOrder[]>([]);
+  const [isHeldOrdersLoading, setIsHeldOrdersLoading] = useState(false);
+  const [isHeldOrdersModalOpen, setIsHeldOrdersModalOpen] = useState(false);
+  const [isHoldOrderModalOpen, setIsHoldOrderModalOpen] = useState(false);
+  const [isHoldingOrder, setIsHoldingOrder] = useState(false);
+  const [isPosSettingsModalOpen, setIsPosSettingsModalOpen] = useState(false);
+  const [isOverrideQueueOpen, setIsOverrideQueueOpen] = useState(false);
+  const [pendingPriceOverrides, setPendingPriceOverrides] = useState<PosPendingPriceOverride[]>([]);
+  const [isLoadingPriceOverrides, setIsLoadingPriceOverrides] = useState(false);
+  const [authorizingPriceOverrideId, setAuthorizingPriceOverrideId] = useState<string | null>(null);
+  const [priceOverrideQueueError, setPriceOverrideQueueError] = useState<string | null>(null);
+  const [heldOrderError, setHeldOrderError] = useState<string | null>(null);
+  const [holdOrderError, setHoldOrderError] = useState<string | null>(null);
 
   // Modals state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -171,6 +201,7 @@ export function PosPage() {
     setCartItems(clearCart());
     setSelectedCustomer(null);
     setOrderDiscount(undefined);
+    setCartNotes('');
     setDiscountOverrideToken(null);
   }, []);
 
@@ -186,27 +217,118 @@ export function PosPage() {
     setOrderDiscount(discount);
   }, []);
 
+  const loadHeldOrders = useCallback(async (includeHistory = false) => {
+    if (!currentShift?.id || !canUseHeldOrders) {
+      setHeldOrders([]);
+      return;
+    }
+    setIsHeldOrdersLoading(true);
+    setHeldOrderError(null);
+    try {
+      const data = await repos.pos.getHeldOrders(currentShift.id, includeHistory);
+      setHeldOrders(data);
+    } catch {
+      setHeldOrderError(t(includeHistory ? 'pos.hold.historyLoadFailed' : 'pos.hold.loadFailed'));
+    } finally {
+      setIsHeldOrdersLoading(false);
+    }
+  }, [currentShift, canUseHeldOrders, t]);
+
+  // Synchronize the held-order view with the active shift and plan.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadHeldOrders(false);
+  }, [loadHeldOrders]);
+
+  const loadPendingPriceOverrides = useCallback(async () => {
+    if (!businessId || !canAuthorizeOverrides) {
+      setPendingPriceOverrides([]);
+      return;
+    }
+    setIsLoadingPriceOverrides(true);
+    setPriceOverrideQueueError(null);
+    try {
+      setPendingPriceOverrides(await repos.pos.listPendingPriceOverrides(businessId));
+    } catch {
+      setPriceOverrideQueueError(t('pos.override.queueLoadFailed'));
+    } finally {
+      setIsLoadingPriceOverrides(false);
+    }
+  }, [businessId, canAuthorizeOverrides, t]);
+
+  // Load the server-owned approval queue when the authorized user/business changes.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadPendingPriceOverrides();
+  }, [loadPendingPriceOverrides]);
+
+  const handleAuthorizePriceOverride = useCallback(async (request: PosPendingPriceOverride) => {
+    setAuthorizingPriceOverrideId(request.id);
+    setPriceOverrideQueueError(null);
+    try {
+      await repos.pos.authorizePriceOverride(request.token);
+      setPendingPriceOverrides((previous) => previous.filter((item) => item.id !== request.id));
+    } catch {
+      setPriceOverrideQueueError(t('pos.override.authorizeFailed'));
+    } finally {
+      setAuthorizingPriceOverrideId(null);
+    }
+  }, [t]);
+
   const handleParkOrder = useCallback(() => {
     if (cartItems.length === 0) return;
-    const parked = {
-      id: 'PARK-' + Date.now().toString().slice(-4),
-      timestamp: new Date(),
-      items: cartItems,
-      customer: selectedCustomer,
-      discount: orderDiscount,
-    };
-    setParkedOrders((prev) => [parked, ...prev]);
-    handleClearCart();
-  }, [cartItems, selectedCustomer, orderDiscount, handleClearCart]);
+    if (!currentShift?.id || currentShift.status !== 'open') {
+      setHoldOrderError(t('pos.hold.openShiftRequired'));
+      return;
+    }
+    setHoldOrderError(null);
+    setIsHoldOrderModalOpen(true);
+  }, [cartItems.length, currentShift, t]);
 
-  const handleRestoreParkedOrder = useCallback((parkedId: string) => {
-    const found = parkedOrders.find((p) => p.id === parkedId);
-    if (!found) return;
-    setCartItems(found.items);
-    setSelectedCustomer(found.customer);
-    setOrderDiscount(found.discount);
-    setParkedOrders((prev) => prev.filter((p) => p.id !== parkedId));
-  }, [parkedOrders]);
+  const handleConfirmHoldOrder = useCallback(async (referenceNote: string) => {
+    if (!currentShift?.id || !businessId || cartItems.length === 0) return;
+    setIsHoldingOrder(true);
+    setHoldOrderError(null);
+    try {
+      holdOrderCommandKeyRef.current ??= globalThis.crypto.randomUUID();
+      await repos.pos.holdOrder({
+        businessId,
+        commandKey: holdOrderCommandKeyRef.current,
+        shiftId: currentShift.id,
+        referenceNote,
+        cartItems,
+        customerId: selectedCustomer?.id ?? null,
+        customerSnapshot: selectedCustomer,
+        subtotal: cartTotals.gross_total,
+        discountAmount: cartTotals.discount_total,
+        totalAmount: cartTotals.net_payable,
+        orderDiscount: orderDiscount ?? null,
+        cartNotes,
+      });
+      holdOrderCommandKeyRef.current = null;
+      handleClearCart();
+      setIsHoldOrderModalOpen(false);
+      await loadHeldOrders(false);
+    } catch {
+      setHoldOrderError(t('pos.hold.saveFailed'));
+    } finally {
+      setIsHoldingOrder(false);
+    }
+  }, [currentShift, businessId, cartItems, selectedCustomer, cartTotals, orderDiscount, cartNotes, handleClearCart, loadHeldOrders, t]);
+
+  const handleCloseHoldOrder = useCallback(() => {
+    if (isHoldingOrder) return;
+    holdOrderCommandKeyRef.current = null;
+    setIsHoldOrderModalOpen(false);
+    setHoldOrderError(null);
+    void loadHeldOrders(false);
+  }, [isHoldingOrder, loadHeldOrders]);
+
+  const handleSavePosSettings = useCallback(async (newSettings: Partial<PosSettings>) => {
+    if (!businessId) throw new Error(t('pos.override.settingsSaveFailed'));
+    await repos.pos.updateSettings(businessId, newSettings);
+    await queryClient.invalidateQueries({ queryKey: ['pos_settings', businessId] });
+  }, [businessId, queryClient, t]);
 
   // Keyboard Shortcuts (F4: Checkout, F8: Park)
   useEffect(() => {
@@ -451,13 +573,74 @@ export function PosPage() {
   }, []);
 
   const handleManagerApproved = useCallback((approvalToken?: string) => {
+    const callback = pendingApprovalCallback;
     setIsApprovalModalOpen(false);
-    if (pendingApprovalCallback) {
-      pendingApprovalCallback(approvalToken);
-      setPendingApprovalCallback(null);
-    }
+    setPendingApprovalCallback(null);
     setApprovalServerContext(null);
+    callback?.(approvalToken);
   }, [pendingApprovalCallback]);
+
+  const handleResumeHeldOrder = useCallback(async (order: PosHeldOrder) => {
+    if (!currentShift?.id || cartItems.length > 0) return;
+    setHeldOrderError(null);
+    try {
+      const restored = await repos.pos.resumeHeldOrder(order.id, currentShift.id);
+      setCartItems(restored.cart_items);
+      setSelectedCustomer(restored.customer_snapshot ?? null);
+      setOrderDiscount(restored.order_discount ?? undefined);
+      setCartNotes(restored.cart_notes ?? '');
+      setDiscountOverrideToken(null);
+      setIsHeldOrdersModalOpen(false);
+      await loadHeldOrders(false);
+
+      const requestPriceOverride = (index: number) => {
+        if (permissions.isManager || permissions.isOwnerOrAdmin) return;
+        const item = restored.cart_items.filter((cartItem) => cartItem.priceOverrideToken || cartItem.priceOverridden)[index];
+        if (!item) return;
+        const productId = item.product_id || item.productId || '';
+        const unitPrice = Number(item.unit_price ?? item.unitPrice ?? 0);
+        handleRequestManagerApproval(
+          t('pos.hold.reapprovePrice', { product: item.name }),
+          (token) => {
+            handleOverrideLinePrice(productId, unitPrice, token ?? null);
+            requestPriceOverride(index + 1);
+          },
+          { kind: 'price', productId, unitPrice },
+        );
+      };
+      const restoredGross = restored.cart_items.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0) * Number(item.unit_price ?? item.unitPrice ?? 0),
+        0,
+      );
+      const totalDiscountPercent = restoredGross > 0
+        ? calculateCartTotals(restored.cart_items, restored.order_discount ?? undefined).discount_total / restoredGross * 100
+        : 0;
+      const approvedDiscountPercent = Math.max(
+        totalDiscountPercent,
+        ...restored.cart_items.map((item) => {
+          const gross = (Number(item.quantity) || 0) * Number(item.unit_price ?? item.unitPrice ?? 0);
+          if (gross <= 0) return 0;
+          if (item.discount?.type === 'percent') return item.discount.value;
+          if (item.discount?.type === 'fixed') return Math.min(gross, item.discount.value) / gross * 100;
+          return Number(item.discountPercent) || 0;
+        }),
+      );
+      if (approvedDiscountPercent > permissions.maxDiscountPercent) {
+        handleRequestManagerApproval(
+          t('pos.hold.reapproveDiscount', { percent: approvedDiscountPercent }),
+          (token) => {
+            setDiscountOverrideToken(token ?? null);
+            requestPriceOverride(0);
+          },
+          { kind: 'discount', percent: approvedDiscountPercent },
+        );
+      } else {
+        requestPriceOverride(0);
+      }
+    } catch {
+      setHeldOrderError(t('pos.hold.resumeFailed'));
+    }
+  }, [currentShift, cartItems.length, loadHeldOrders, permissions.isManager, permissions.isOwnerOrAdmin, permissions.maxDiscountPercent, handleOverrideLinePrice, handleRequestManagerApproval, t]);
 
   // Checkout Execution
   const handleCompleteSale = async (
@@ -658,10 +841,18 @@ export function PosPage() {
         failedOfflineCount={failedOfflineCount}
         isSyncing={isSyncing}
         canViewOwnerDashboard={permissions.canViewOwnerDashboard}
-        canManageRegisters={permissions.canManageRegisters}
+        canManageRegisters={permissions.canManageRegisters || permissions.isManager}
+        onOpenSettingsModal={() => setIsPosSettingsModalOpen(true)}
         onOpenShiftModal={() => setIsShiftModalOpen(true)}
         onOpenCashMovementModal={() => setIsCashMovementModalOpen(true)}
         onOpenHistoryModal={() => setIsHistoryModalOpen(true)}
+        onOpenHeldOrders={() => { setHeldOrderError(null); setIsHeldOrdersModalOpen(true); }}
+        heldOrderCount={heldOrders.filter((order) => order.status === 'held').length}
+        canUseHeldOrders={canUseHeldOrders}
+        canViewHeldOrderHistory={canViewHeldOrderHistory}
+        canAuthorizeOverrides={canAuthorizeOverrides}
+        pendingOverrideCount={pendingPriceOverrides.length}
+        onOpenOverrideQueue={() => { setPriceOverrideQueueError(null); setIsOverrideQueueOpen(true); void loadPendingPriceOverrides(); }}
         onOpenOwnerAnalytics={() => setViewMode('analytics')}
         onOpenLabelGenerator={() => setIsBarcodeModalOpen(true)}
         onOpenZReport={() => setIsZReportModalOpen(true)}
@@ -697,25 +888,10 @@ export function PosPage() {
 
           {/* Right Column: Dynamic Cart & Quick Actions */}
           <div className="w-full md:w-96 lg:w-[420px] flex flex-col bg-white shrink-0 shadow-lg z-10">
-            {/* Parked orders pill if any */}
-            {parkedOrders.length > 0 && (
-              <div className="bg-amber-50 px-3 py-1.5 border-b border-amber-200 flex items-center justify-between text-xs">
-                <span className="font-bold text-amber-900">
-                  {parkedOrders.length} Parked Order(s)
-                </span>
-                <div className="flex gap-1.5">
-                  {parkedOrders.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleRestoreParkedOrder(p.id)}
-                      className="rounded bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-300"
-                    >
-                      Restore {p.id}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            {holdOrderError && !isHoldOrderModalOpen && (
+              <button type="button" onClick={() => setHoldOrderError(null)} role="alert" className="border-b border-red-200 bg-red-50 px-3 py-2 text-left text-xs font-semibold text-red-800">
+                {holdOrderError} · {t('pos.hold.dismiss')}
+              </button>
             )}
 
             <PosCart
@@ -733,7 +909,8 @@ export function PosPage() {
               onUpdateQuantity={handleUpdateQuantity}
               onRemoveItem={handleRemoveItem}
               onClearCart={handleClearCart}
-              onParkOrder={handleParkOrder}
+              onHoldOrder={handleParkOrder}
+              canHoldOrder={canUseHeldOrders && currentShift?.status === 'open'}
               onUpdateLineDiscount={handleUpdateLineDiscount}
               onUpdateOrderDiscount={handleUpdateOrderDiscount}
               onSelectCustomer={setSelectedCustomer}
@@ -757,6 +934,50 @@ export function PosPage() {
         onCompleteSale={handleCompleteSale}
         isProcessing={isProcessingSale}
         canSellOnCredit={permissions.canSellOnCredit}
+        maxTenders={maxTenders}
+      />
+
+      <PosHoldOrderModal
+        open={isHoldOrderModalOpen}
+        total={cartTotals.net_payable}
+        isSaving={isHoldingOrder}
+        error={holdOrderError}
+        onClose={handleCloseHoldOrder}
+        onConfirm={handleConfirmHoldOrder}
+      />
+
+      <PosHeldOrdersModal
+        key={`${currentShift?.id ?? 'no-shift'}:${currentShift?.status ?? 'none'}`}
+        open={isHeldOrdersModalOpen}
+        orders={heldOrders}
+        isLoading={isHeldOrdersLoading}
+        canViewHistory={canViewHeldOrderHistory}
+        initialIncludeHistory={canViewHeldOrderHistory && currentShift?.status !== 'open'}
+        currentCartIsEmpty={cartItems.length === 0}
+        error={heldOrderError}
+        onClose={() => { setIsHeldOrdersModalOpen(false); setHeldOrderError(null); }}
+        onLoadOrders={loadHeldOrders}
+        onResume={handleResumeHeldOrder}
+      />
+
+      <PosSettingsModal
+        open={isPosSettingsModalOpen}
+        onClose={() => setIsPosSettingsModalOpen(false)}
+        settings={permissions.settings}
+        onSaveSettings={handleSavePosSettings}
+        isOwnerOrManager={permissions.isOwnerOrAdmin || permissions.isManager}
+        canConfigureDiscountThresholds={canViewHeldOrderHistory}
+      />
+
+      <PosManagerApprovalQueueModal
+        open={isOverrideQueueOpen}
+        requests={pendingPriceOverrides}
+        isLoading={isLoadingPriceOverrides}
+        approvingId={authorizingPriceOverrideId}
+        error={priceOverrideQueueError}
+        onClose={() => setIsOverrideQueueOpen(false)}
+        onRefresh={() => void loadPendingPriceOverrides()}
+        onAuthorize={(request) => void handleAuthorizePriceOverride(request)}
       />
 
       <PosReceiptModal

@@ -9,8 +9,11 @@ import {
   RefreshCw,
   Barcode,
   FileSpreadsheet,
+  PauseCircle,
+  ShieldCheck,
 } from 'lucide-react';
 import type { PosShift, PosRegister } from '@/types/pos';
+import { useTranslation } from 'react-i18next';
 
 interface PosHeaderProps {
   currentShift: PosShift | null;
@@ -29,6 +32,13 @@ interface PosHeaderProps {
   onOpenShiftModal: () => void;
   onOpenCashMovementModal: () => void;
   onOpenHistoryModal: () => void;
+  onOpenHeldOrders?: () => void;
+  heldOrderCount?: number;
+  canUseHeldOrders?: boolean;
+  canViewHeldOrderHistory?: boolean;
+  canAuthorizeOverrides?: boolean;
+  pendingOverrideCount?: number;
+  onOpenOverrideQueue?: () => void;
   onOpenOwnerAnalytics?: () => void;
   onOpenSettingsModal?: () => void;
   onOpenLabelGenerator?: () => void;
@@ -54,6 +64,13 @@ export function PosHeader({
   onOpenShiftModal,
   onOpenCashMovementModal,
   onOpenHistoryModal,
+  onOpenHeldOrders,
+  heldOrderCount = 0,
+  canUseHeldOrders = false,
+  canViewHeldOrderHistory = false,
+  canAuthorizeOverrides = false,
+  pendingOverrideCount = 0,
+  onOpenOverrideQueue,
   onOpenOwnerAnalytics,
   onOpenSettingsModal,
   onOpenLabelGenerator,
@@ -62,6 +79,7 @@ export function PosHeader({
   viewMode = 'sales',
   onSelectViewMode,
 }: PosHeaderProps) {
+  const { t } = useTranslation();
   const isShiftOpen = currentShift && currentShift.status === 'open';
 
   return (
@@ -232,6 +250,31 @@ export function PosHeader({
           >
             <Coins className="h-3.5 w-3.5 text-brand-600" />
             <span className="hidden sm:inline">Cash In/Out</span>
+          </button>
+        )}
+
+        {canAuthorizeOverrides && onOpenOverrideQueue && (
+          <button
+            type="button"
+            onClick={onOpenOverrideQueue}
+            className="relative flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-800 hover:bg-violet-100"
+            aria-label={t('pos.override.openQueue', { count: pendingOverrideCount })}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>{t('pos.override.managerApprovals')}</span>
+            {pendingOverrideCount > 0 && <span className="rounded-full bg-violet-700 px-1.5 py-0.5 text-[10px] font-black text-white">{pendingOverrideCount}</span>}
+          </button>
+        )}
+        {canUseHeldOrders && (isShiftOpen || canViewHeldOrderHistory) && onOpenHeldOrders && (
+          <button
+            type="button"
+            onClick={onOpenHeldOrders}
+            className="relative flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-800 hover:bg-amber-100"
+            aria-label={t('pos.hold.openOrders', { count: heldOrderCount })}
+          >
+            <PauseCircle className="h-4 w-4" />
+            <span>{t('pos.hold.openOrders')}</span>
+            {heldOrderCount > 0 && <span className="rounded-full bg-amber-600 px-1.5 py-0.5 text-[10px] font-black text-white">{heldOrderCount}</span>}
           </button>
         )}
 

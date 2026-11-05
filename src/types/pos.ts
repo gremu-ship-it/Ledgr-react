@@ -265,6 +265,8 @@ export interface PosCartItem {
   quantity: number;
   /** Server token authorising a non-catalogue price for this line (cashier path). */
   priceOverrideToken?: string | null;
+  /** Retained on held carts so the edit is re-authorized if another cashier resumes it. */
+  priceOverridden?: boolean;
   unit_price: number;
   unitPrice?: number;
   unit_cost?: number;
@@ -302,6 +304,32 @@ export interface PosPaymentSplit {
   note?: string;
 }
 
+/** One tender row persisted through the canonical invoice_payments write path. */
+export interface PosPaymentLine extends PosPaymentSplit {
+  id?: string;
+  invoice_id?: string;
+  shift_id?: string | null;
+  created_at?: string;
+}
+
+export type ManagerOverrideRequest =
+  | { kind: 'discount'; percent: number }
+  | { kind: 'price'; productId: string; unitPrice: number };
+
+export interface PosPendingPriceOverride {
+  id: string;
+  token: string;
+  kind: 'price' | 'discount';
+  product_id: string | null;
+  product_name: string | null;
+  unit_price: number | null;
+  max_discount_percent: number | null;
+  reason: string | null;
+  requested_by: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export interface PosParkedOrder {
   id: string;
   reference: string;
@@ -314,6 +342,30 @@ export interface PosParkedOrder {
   parked_at: string;
   parkedAt?: string;
   cashier_id?: string;
+}
+
+export interface PosHeldOrder {
+  id: string;
+  business_id: string;
+  branch_id: string | null;
+  shift_id: string;
+  cashier_id: string;
+  cashier_name: string | null;
+  customer_id: string | null;
+  customer_snapshot: PosCustomer | null;
+  reference_note: string;
+  cart_items: PosCartItem[];
+  subtotal: number;
+  discount_amount: number;
+  total_amount: number;
+  order_discount: PosDiscount | null;
+  cart_notes: string | null;
+  status: 'held' | 'resumed' | 'expired';
+  resumed_at: string | null;
+  resumed_by: string | null;
+  expired_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface PosSaleItem {
