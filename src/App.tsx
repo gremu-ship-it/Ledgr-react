@@ -121,6 +121,8 @@ const RoutingsPage = lazyPage(() => import('@/pages/manufacturing/RoutingsPage')
 const ProductionRunsPage = lazyPage(() => import('@/pages/manufacturing/ProductionRunsPage'), 'ProductionRunsPage');
 const MrpWorkbenchPage = lazyPage(() => import('@/pages/manufacturing/MrpWorkbenchPage'), 'MrpWorkbenchPage');
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
+const PosRegistersPage = lazyPage(() => import('@/pages/pos/PosRegistersPage'), 'PosRegistersPage');
+const PosShiftsPage = lazyPage(() => import('@/pages/pos/PosShiftsPage'), 'PosShiftsPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
@@ -822,9 +824,29 @@ function App() {
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
                     <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
-                      <CapabilityGate capability="pos">
-                        <PosPage />
-                      </CapabilityGate>
+                      <PlanGate minPlan="starter" featureNameKey="pos.pointOfSale">
+                        <CapabilityGate capability="pos">
+                          <PosPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    </OperatingModelGate>
+                  } />
+                  <Route path="/pos/registers" element={
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <PlanGate minPlan="starter" featureNameKey="pos.registers">
+                        <CapabilityGate capability="pos" rolePath="/pos/registers">
+                          <PosRegistersPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    </OperatingModelGate>
+                  } />
+                  <Route path="/pos/shifts" element={
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <PlanGate minPlan="growth" featureNameKey="pos.shiftHistory">
+                        <CapabilityGate capability="pos" rolePath="/pos/shifts">
+                          <PosShiftsPage />
+                        </CapabilityGate>
+                      </PlanGate>
                     </OperatingModelGate>
                   } />
 

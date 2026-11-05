@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '@/store/useAppStore';
 import { usePosPermissions } from '@/hooks/usePosPermissions';
 import { useCapability } from '@/hooks/useCapability';
+import { useUsage } from '@/hooks/useUsage';
+import { planMeetsMin } from '@/lib/billing/plans';
 import {
   calculateCartTotals,
   createSale,
@@ -32,7 +36,6 @@ import type {
   PosSale,
   PosSaleResult,
   PosPaymentSplit,
-  PosRegister,
   PosProduct,
   PosPaymentMethod,
   PosStockAvailability,
@@ -55,10 +58,13 @@ import { PosBarcodeLabelGenerator } from '@/components/pos/PosBarcodeLabelGenera
 import { PosZReportModal } from '@/components/pos/PosZReportModal';
 
 export function PosPage() {
+  const { t } = useTranslation();
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const permissions = usePosPermissions();
   const servicesEnabled = useCapability('services', '/pos');
+  const { planTier } = useUsage();
+  const canSwitchRegisters = planMeetsMin(planTier, 'growth');
 
   // Empty rather than a fabricated 'biz-default': a queued offline sale is
   // filed under this id, and inventing one puts the sale in a tenant that does
@@ -74,10 +80,6 @@ export function PosPage() {
   const [assignedBranchId, setAssignedBranchId] = useState<string | null>(null);
   const assignedBranchRef = useRef<string | null>(null);
   const branchTouched = useRef(false);
-  const branchName = branches.find((b) => b.id === branchId)?.name
-    || currentBusiness?.business?.name
-    || 'Shop';
-
   // Navigation / View state
   const [viewMode, setViewMode] = useState<'sales' | 'analytics' | 'history' | 'settings'>('sales');
 
@@ -89,12 +91,28 @@ export function PosPage() {
   const { pendingCount: pendingOfflineCount, failedCount: failedOfflineCount } = useOfflineQueue();
   const { isSyncing, syncNow } = useOfflineSync();
 
-  // Shifts & Register
-  const [activeRegister] = useState<PosRegister | null>({
-    id: 'reg-01',
-    name: 'POS Register 01',
+  // Registers use the R08 pos_terminals table, which is also the identity the
+  // protected shift-open RPC binds to. Never invent a client-only till id.
+  const registersQuery = useQuery({
+    queryKey: ['pos-registers', businessId],
+    enabled: Boolean(businessId),
+    queryFn: () => repos.pos.getRegisters(businessId),
   });
+  const registers = registersQuery.data ?? [];
+  const [selectedRegisterId, setSelectedRegisterId] = useState<string | null>(null);
   const [currentShift, setCurrentShift] = useState<PosShift | null>(null);
+  const targetBranchId = assignedBranchId ?? branchId;
+  const shiftRegister = currentShift?.terminal_id
+    ? registers.find((register) => register.id === currentShift.terminal_id) ?? null
+    : null;
+  const activeRegister = (currentShift?.status === 'open' ? shiftRegister : null)
+    ?? registers.find((register) => register.id === selectedRegisterId && register.is_active && (!targetBranchId || register.branch_id === targetBranchId))
+    ?? registers.find((register) => register.is_active && (!targetBranchId || register.branch_id === targetBranchId))
+    ?? null;
+  const effectiveBranchId = targetBranchId ?? activeRegister?.branch_id ?? null;
+  const branchName = branches.find((branch) => branch.id === effectiveBranchId)?.name
+    || currentBusiness?.business?.name
+    || 'Shop';
 
   // Products & Inventory
   const [products, setProducts] = useState<PosProduct[]>([]);
@@ -229,6 +247,14 @@ export function PosPage() {
 
   // Fetch initial data: Products, Customers, Shifts, real shop stock
   const currentUserId = currentUser?.id;
+  const shiftOwnedByAnotherCashier = Boolean(
+    currentShift?.status === 'open'
+    && currentShift.cashier_id
+    && currentUserId
+    && currentShift.cashier_id !== currentUserId
+    && !permissions.isManager
+    && !permissions.isOwnerOrAdmin,
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -293,7 +319,7 @@ export function PosPage() {
           const { data, error } = await (repos.inventory['client'] as unknown as {
             rpc: (fn: 'pos_stock_availability', args: { p_business_id: string; p_branch_id: string | null }) =>
               Promise<{ data: PosStockAvailability | null; error: { message?: string } | null }>;
-          }).rpc('pos_stock_availability', { p_business_id: businessId, p_branch_id: branchId ?? null });
+          }).rpc('pos_stock_availability', { p_business_id: businessId, p_branch_id: effectiveBranchId ?? null });
           if (error) throw new Error(error.message || 'Stock levels could not be loaded.');
           if (!data) throw new Error('Stock levels could not be loaded.');
           return data;
@@ -301,7 +327,11 @@ export function PosPage() {
         const [prods, custs, shift, recentInvoices, balanceRows, availability] = await Promise.all([
           repos.inventory.findAllProducts(businessId).catch(() => []),
           repos.contact.findByBusiness(businessId, 'customer').catch(() => []),
-          currentUserId ? repos.pos.findActiveShift(businessId, currentUserId, branchId).catch(() => null) : Promise.resolve(null),
+          activeRegister?.id
+            ? repos.pos.getActiveShift(activeRegister.id).catch(() => null)
+            : currentUserId
+              ? repos.pos.findActiveShift(businessId, currentUserId, effectiveBranchId).catch(() => null)
+              : Promise.resolve(null),
           repos.invoice.findByBusiness(businessId, undefined, 30).catch(() => []),
           loadBalances().catch(() => [] as Awaited<ReturnType<typeof loadBalances>>),
           loadAvailability().then(
@@ -387,9 +417,7 @@ export function PosPage() {
           );
         }
 
-        if (shift) {
-          setCurrentShift(shift);
-        }
+        setCurrentShift(shift);
 
         if (recentInvoices && recentInvoices.length > 0) {
           setSalesHistory(
@@ -428,7 +456,7 @@ export function PosPage() {
     return () => {
       ignore = true;
     };
-  }, [businessId, currentUserId, branchId, dataVersion, servicesEnabled]);
+  }, [businessId, currentUserId, effectiveBranchId, activeRegister?.id, dataVersion, servicesEnabled]);
 
   // Approval interceptor (R07): financial corrections route through a
   // server-minted approval (workflows call with a document context); the
@@ -471,12 +499,19 @@ export function PosPage() {
     isCreditSale = false,
     dueDate?: string,
   ) => {
+    if (!currentShift || currentShift.status !== 'open' || shiftOwnedByAnotherCashier) {
+      setIsPaymentModalOpen(false);
+      alert(shiftOwnedByAnotherCashier
+        ? t('pos.shiftOwnedByAnother', { cashier: currentShift?.cashier_name || t('pos.unknownCashier') })
+        : t('pos.noActiveShift'));
+      return;
+    }
     try {
       setIsProcessingSale(true);
 
       const salePayload = {
         businessId,
-        branchId,
+        branchId: effectiveBranchId,
         shiftId: currentShift?.id,
         cashierId: currentUser?.id || 'cashier-1',
         cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
@@ -524,30 +559,33 @@ export function PosPage() {
   };
 
   // Shift Actions
-  const handleOpenShift = async (openingFloat: number, notes?: string) => {
+  const handleOpenShift = async (openingFloat: number) => {
+    if (!activeRegister) {
+      alert(t('pos.noActiveRegister'));
+      return;
+    }
     try {
       const shift = await repos.pos.openShift({
         businessId,
-        branchId,
+        terminalId: activeRegister.id,
+        branchId: effectiveBranchId,
         cashierId: currentUser?.id || 'cashier-1',
         cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
         opening_float: openingFloat,
-        notes,
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Could not open shift: ${message}`);
+      const message = err instanceof Error ? err.message : t('common.unknown');
+      alert(t('pos.openShiftFailed', { message }));
     }
   };
 
-  const handleCloseShift = async (closingCash: number, notes?: string) => {
+  const handleCloseShift = async (closingCash: number) => {
     if (!currentShift) return;
     try {
       const shift = await repos.pos.closeShift(currentShift.id, {
-        closingCashActual: closingCash,
-        notes,
+        closingCash: closingCash,
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
@@ -558,8 +596,8 @@ export function PosPage() {
       // Offer opening Z-Report
       setIsZReportModalOpen(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Could not close shift: ${message}`);
+      const message = err instanceof Error ? err.message : t('common.unknown');
+      alert(t('pos.closeShiftFailed', { message }));
     }
   };
 
@@ -582,11 +620,13 @@ export function PosPage() {
       });
       setIsCashMovementModalOpen(false);
       // Reload shift details
-      const refreshed = await repos.pos.findActiveShift(businessId, currentUser?.id, branchId);
+      const refreshed = activeRegister
+        ? await repos.pos.getActiveShift(activeRegister.id)
+        : await repos.pos.findActiveShift(businessId, currentUser?.id, effectiveBranchId);
       setCurrentShift(refreshed);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Could not record cash movement: ${message}`);
+      const message = err instanceof Error ? err.message : t('common.unknown');
+      alert(t('pos.cashMovementFailed', { message }));
     }
   };
 
@@ -646,12 +686,22 @@ export function PosPage() {
       <PosHeader
         currentShift={currentShift}
         activeRegister={activeRegister}
+        registers={registers.filter((register) => register.is_active && (!assignedBranchId || register.branch_id === assignedBranchId))}
+        canSwitchRegisters={canSwitchRegisters}
+        onRegisterChange={(registerId) => {
+          const selected = registers.find((register) => register.id === registerId) ?? null;
+          setSelectedRegisterId(selected?.id ?? null);
+          if (selected?.branch_id && !assignedBranchId) setBranchId(selected.branch_id);
+        }}
         branchName={branchName}
-        branches={assignedBranchId ? [] : branches}
-        selectedBranchId={branchId}
+        branches={assignedBranchId ? branches.filter((branch) => branch.id === assignedBranchId) : branches}
+        selectedBranchId={effectiveBranchId}
         onBranchChange={assignedBranchId ? undefined : (id) => {
+          if (currentShift?.status === 'open') return;
           branchTouched.current = true;
-          setBranchId(id || null);
+          const selectedBranchId = id || null;
+          setBranchId(selectedBranchId);
+          setSelectedRegisterId(registers.find((register) => register.is_active && register.branch_id === selectedBranchId)?.id ?? null);
         }}
         isOnline={isOnline}
         pendingOfflineCount={pendingOfflineCount}
@@ -659,6 +709,8 @@ export function PosPage() {
         isSyncing={isSyncing}
         canViewOwnerDashboard={permissions.canViewOwnerDashboard}
         canManageRegisters={permissions.canManageRegisters}
+        canManageCurrentShift={permissions.canOpenCloseShift && !shiftOwnedByAnotherCashier}
+        canRecordCurrentCashMovement={permissions.canCashDrawerMovement && !shiftOwnedByAnotherCashier}
         onOpenShiftModal={() => setIsShiftModalOpen(true)}
         onOpenCashMovementModal={() => setIsCashMovementModalOpen(true)}
         onOpenHistoryModal={() => setIsHistoryModalOpen(true)}
@@ -670,13 +722,33 @@ export function PosPage() {
         onSelectViewMode={(m) => setViewMode(m)}
       />
 
+      {shiftOwnedByAnotherCashier && (
+        <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          {t('pos.shiftOwnedByAnother', { cashier: currentShift?.cashier_name || t('pos.unknownCashier') })}
+        </div>
+      )}
+
+      {(!shiftOwnedByAnotherCashier && (!currentShift || currentShift.status !== 'open')) && (
+        <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <span>{t('pos.noActiveShift')}</span>
+          <button
+            type="button"
+            onClick={() => setIsShiftModalOpen(true)}
+            disabled={!activeRegister}
+            className="shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t('pos.openShift')}
+          </button>
+        </div>
+      )}
+
       {/* ── Main POS Workspace ── */}
       {viewMode === 'analytics' ? (
         <div className="flex-1 overflow-y-auto bg-gray-50">
           <PosOwnerAnalytics
             sales={salesHistory}
             shifts={currentShift ? [currentShift] : []}
-            currentBranchId={branchId || undefined}
+            currentBranchId={effectiveBranchId || undefined}
             branches={[]}
           />
         </div>
@@ -802,7 +874,7 @@ export function PosPage() {
             refundMethod: refundMethod as PosPaymentMethod,
             reason: 'Customer return',
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
-            branchId,
+            branchId: effectiveBranchId,
             approvalToken: approvalToken ?? null,
           });
           setDataVersion((v) => v + 1);

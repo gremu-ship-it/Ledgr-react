@@ -44,7 +44,7 @@ describe('Starter pricing and access', () => {
       for (const item of section.items) {
         const expectedLocked = item.path === '/settings'
           ? false
-          : item.path === '/settings/exchange-rates' || item.path === '/reports/fx-revaluation'
+          : item.path === '/settings/exchange-rates' || item.path === '/reports/fx-revaluation' || item.path.startsWith('/pos')
             ? true
             : !available;
         expect(isItemLocked(item, 'free'), item.path).toBe(expectedLocked);
