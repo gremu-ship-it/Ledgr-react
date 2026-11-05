@@ -3,7 +3,7 @@ import { PartnerPortalRepository, type PartnerPortalClient } from '@/dal/reposit
 
 function makeClient(result: { data?: unknown; error?: { message: string } | null }) {
   const builder: Record<string, unknown> = {};
-  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'upsert']) {
+  for (const method of ['select', 'eq', 'order', 'limit', 'update', 'upsert', 'insert', 'delete']) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = vi.fn(async () => result);
@@ -12,7 +12,8 @@ function makeClient(result: { data?: unknown; error?: { message: string } | null
     Promise.resolve(result).then(resolve, reject);
   const from = vi.fn(() => builder);
   const rpc = vi.fn(async () => result);
-  return { client: { from, rpc } as unknown as PartnerPortalClient, builder, from, rpc };
+  const auth = { getUser: vi.fn(async () => ({ data: { user: { id: 'staff-user' } }, error: null })) };
+  return { client: { from, rpc, auth } as unknown as PartnerPortalClient, builder, from, rpc, auth };
 }
 
 describe('PartnerPortalRepository', () => {
@@ -55,7 +56,7 @@ describe('PartnerPortalRepository', () => {
       partner_id: 'partner-1', business_id: 'business-1', business_name: 'Acme', plan_tier: 'growth',
       is_active: true, status: 'onboarding', notes: null, onboarded_at: '2026-12-01T00:00:00Z',
       journal_entry_count: 8, invoice_count: 3, pay_run_count: 1, total_activity_count: 12,
-      user_count: 2, last_activity_at: null,
+      user_count: 2, last_activity_at: null, plan_expires_at: null, monthly_transaction_count: 0,
     };
     const { client, from } = makeClient({ data: [row], error: null });
     const repository = new PartnerPortalRepository(client);
@@ -69,6 +70,26 @@ describe('PartnerPortalRepository', () => {
       notes: null,
       total_activity_count: 12,
     }]);
+  });
+
+  it('revalidates current-user partner authorization through the injected client before loading a client business', async () => {
+    const row = { id: 'business-1', name: 'Acme', base_currency: 'MWK', plan_tier: 'growth' };
+    const { client, from, rpc } = makeClient({ data: row, error: null });
+    const repository = new PartnerPortalRepository(client);
+
+    await expect(repository.getClientBusiness('partner-1', 'business-1')).resolves.toEqual(row);
+
+    expect(rpc).toHaveBeenCalledWith('can_current_user_access_partner_client', { p_partner_id: 'partner-1', p_business_id: 'business-1' });
+    expect(from).toHaveBeenNthCalledWith(1, 'businesses');
+    expect(from).toHaveBeenNthCalledWith(2, 'partner_clients');
+  });
+
+  it('denies context switching when the user is neither a partner manager nor assigned to the client', async () => {
+    const { client, from } = makeClient({ data: false, error: null });
+    const repository = new PartnerPortalRepository(client);
+
+    await expect(repository.getClientBusiness('partner-1', 'business-1')).rejects.toThrow('Partner client assignment is required.');
+    expect(from).not.toHaveBeenCalled();
   });
 
   it('links a client through the injected table client and leaves it onboarding', async () => {

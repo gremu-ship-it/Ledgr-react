@@ -6,12 +6,12 @@ const clients: PartnerClientUsage[] = [
   {
     partner_id: 'p-1', business_id: 'b-1', business_name: 'Acme Retail', plan_tier: 'growth', is_active: true,
     status: 'active', notes: null, onboarded_at: '2026-12-01', journal_entry_count: 10, invoice_count: 2,
-    pay_run_count: 0, total_activity_count: 12, user_count: 3, last_activity_at: null,
+    pay_run_count: 0, total_activity_count: 12, user_count: 3, last_activity_at: null, plan_expires_at: null, monthly_transaction_count: 0,
   },
   {
     partner_id: 'p-1', business_id: 'b-2', business_name: 'North Manufacturing', plan_tier: 'starter', is_active: true,
     status: 'onboarding', notes: null, onboarded_at: '2026-12-02', journal_entry_count: 0, invoice_count: 0,
-    pay_run_count: 0, total_activity_count: 0, user_count: 1, last_activity_at: null,
+    pay_run_count: 0, total_activity_count: 0, user_count: 1, last_activity_at: null, plan_expires_at: null, monthly_transaction_count: 0,
   },
 ];
 

@@ -8801,6 +8801,36 @@ export type Database = {
           },
         ]
       }
+      partner_staff_assignments: {
+        Row: {
+          assigned_by: string
+          business_id: string
+          created_at: string
+          id: string
+          partner_id: string
+          staff_user_id: string
+        }
+        Insert: {
+          assigned_by?: string
+          business_id: string
+          created_at?: string
+          id?: string
+          partner_id: string
+          staff_user_id: string
+        }
+        Update: {
+          assigned_by?: string
+          business_id?: string
+          created_at?: string
+          id?: string
+          partner_id?: string
+          staff_user_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "partner_staff_assignments_staff_fk"; columns: ["partner_id", "staff_user_id"]; isOneToOne: false; referencedRelation: "partner_admins"; referencedColumns: ["partner_id", "user_id"] },
+          { foreignKeyName: "partner_staff_assignments_client_fk"; columns: ["partner_id", "business_id"]; isOneToOne: false; referencedRelation: "partner_clients"; referencedColumns: ["partner_id", "business_id"] },
+        ]
+      }
       partner_feature_flags: {
         Row: {
           enabled: boolean | null
@@ -13605,6 +13635,8 @@ export type Database = {
           plan_tier: string
           status: string
           total_activity_count: number | null
+          monthly_transaction_count: number | null
+          plan_expires_at: string | null
           user_count: number | null
         }
         ComputedFields: never
@@ -14361,6 +14393,18 @@ export type Database = {
         Args: { bid: string; pid: string }
         Returns: boolean
       }
+      can_access_partner_client: {
+        Args: { p_business_id: string; p_partner_id: string; p_uid: string }
+        Returns: boolean
+      }
+      can_current_user_access_partner_client: {
+        Args: { p_business_id: string; p_partner_id: string }
+        Returns: boolean
+      }
+      can_manage_partner_assignment: {
+        Args: { p_business_id: string; p_partner_id: string; p_uid: string }
+        Returns: boolean
+      }
       can_read_partner_peer_business: {
         Args: { bid: string }
         Returns: boolean
@@ -14784,6 +14828,7 @@ export type Database = {
       }
       is_business_member: { Args: { p_business_id: string }; Returns: boolean }
       is_partner_admin: { Args: { pid: string; uid: string }; Returns: boolean }
+      is_partner_manager: { Args: { p_partner_id: string; p_uid: string }; Returns: boolean }
       is_partner_business_admin: { Args: { bid: string }; Returns: boolean }
       is_platform_admin: { Args: { uid: string }; Returns: boolean }
       issue_payment_certificate: {

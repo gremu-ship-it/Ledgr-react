@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Download } from 'lucide-react';
+import { partnerPortalRepository } from '@/dal/repositories/PartnerPortalRepository';
+import { PLANS, normalizePlanTier } from '@/lib/billing/plans';
+import type { PartnerClientUsage } from '@/types/partners';
 import { useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PartnerBillingRepository } from '@/dal/repositories/PartnerBillingRepository';
@@ -23,6 +28,35 @@ function formatDate(value: string | null) {
   return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function getBillingStatus(expiresAt: string | null): 'active' | 'gracePeriod' | 'overdue' {
+  if (!expiresAt) return 'active';
+  const expiry = new Date(expiresAt).getTime();
+  if (Number.isNaN(expiry) || expiry > Date.now()) return 'active';
+  return Date.now() - expiry <= 7 * 24 * 60 * 60 * 1000 ? 'gracePeriod' : 'overdue';
+}
+
+function exportClientBillingCsv(clients: PartnerClientUsage[], partnerPrice: number, currency: string, t: (key: string) => string) {
+  const headers = [t('partner.clientName'), t('partner.plan'), t('partner.monthlyPlanValue'), t('partner.billingModel'), t('partner.billingStatus'), t('partner.nextRenewal'), t('partner.monthlyTransactions'), t('partner.wholesaleEstimate')];
+  const csvCell = (value: unknown) => {
+    let text = String(value ?? '');
+    if (/^[=+@-]/.test(text)) text = `'${text}`;
+    return `"${text.replace(/"/g, '""')}"`;
+  };
+  const rows = clients.map((client) => {
+    const tier = normalizePlanTier(client.plan_tier);
+    return [client.business_name, t(`partner.planTiers.${tier}`), PLANS[tier].priceMWK, t('partner.partnerInvoiced'), t(`partner.${getBillingStatus(client.plan_expires_at)}`), client.plan_expires_at?.slice(0, 10) ?? '', client.monthly_transaction_count, `${currency} ${partnerPrice}`];
+  });
+  const content = [headers, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
+  const url = URL.createObjectURL(new Blob([`\ufeff${content}`], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'partner-client-billing.csv';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 /**
  * Partner-level billing: Ledgr invoices the bank/MFI for the number of SME
  * clients on the platform. The SMEs themselves are never charged by Ledgr.
@@ -30,12 +64,19 @@ function formatDate(value: string | null) {
 export function PartnerBillingPage() {
   const { id = '' } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const { isPlatformAdmin } = usePartnerAdminAccess();
 
   const { data: partner } = useQuery({
     queryKey: ['partner', id],
     queryFn: () => PartnerRepository.getById(id),
+    enabled: Boolean(id),
+  });
+
+  const { data: clients = [], isLoading: clientsLoading } = useQuery({
+    queryKey: ['partner-usage', id],
+    queryFn: () => partnerPortalRepository.getPartnerClients(id),
     enabled: Boolean(id),
   });
 
@@ -53,6 +94,11 @@ export function PartnerBillingPage() {
 
   const currency = partner?.billing_currency ?? 'MWK';
   const monthly = (partner?.price_per_client ?? 0) * clientCount;
+  const estimatedPlanValue = clients.reduce((total, client) => total + PLANS[normalizePlanTier(client.plan_tier)].priceMWK, 0);
+  const monthlyTransactions = clients.reduce((total, client) => total + client.monthly_transaction_count, 0);
+  const planBreakdown = (Object.keys(PLANS) as (keyof typeof PLANS)[])
+    .map((tier) => ({ tier, count: clients.filter((client) => normalizePlanTier(client.plan_tier) === tier).length }))
+    .filter((entry) => entry.count > 0);
 
   // Bills the month that just closed — the same period the monthly
   // generate-partner-invoices cron uses, so a manual run and the automated
@@ -111,6 +157,76 @@ export function PartnerBillingPage() {
         <Stat label="Price per client" value={money(partner?.price_per_client ?? 0, currency)} />
         <Stat label="Current monthly total" value={money(monthly, currency)} />
       </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-900">{t('partner.clientBillingOverview')}</h2>
+            <p className="mt-1 max-w-3xl text-sm text-slate-500">{t('partner.billingEstimateDisclosure')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => exportClientBillingCsv(clients, partner?.price_per_client ?? 0, currency, t)}
+            disabled={clientsLoading || clients.length === 0}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            {t('partner.exportCsv')}
+          </button>
+        </div>
+
+        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+          <Stat label={t('partner.estimatedClientPlanValue')} value={money(estimatedPlanValue, 'MWK')} />
+          <Stat label={t('partner.monthlyTransactions')} value={monthlyTransactions.toLocaleString()} />
+          <Stat label={t('partner.estimatedPartnerInvoice')} value={money(monthly, currency)} />
+        </div>
+
+        <div className="mb-5 flex flex-wrap gap-2">
+          {planBreakdown.map(({ tier, count }) => (
+            <span key={tier} className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700">
+              {t(`partner.planTiers.${tier}`)}: {count}
+            </span>
+          ))}
+          {planBreakdown.length === 0 && <span className="text-sm text-slate-400">{t('partner.noClientBillingRows')}</span>}
+        </div>
+
+        {clientsLoading ? <p className="text-sm text-slate-400">{t('partner.loading')}</p> : clients.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">{t('partner.noClientBillingRows')}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th scope="col" className="py-2">{t('partner.clientName')}</th>
+                  <th scope="col" className="py-2">{t('partner.plan')}</th>
+                  <th scope="col" className="py-2">{t('partner.monthlyPlanValue')}</th>
+                  <th scope="col" className="py-2">{t('partner.billingModel')}</th>
+                  <th scope="col" className="py-2">{t('partner.billingStatus')}</th>
+                  <th scope="col" className="py-2">{t('partner.nextRenewal')}</th>
+                  <th scope="col" className="py-2">{t('partner.monthlyTransactions')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {clients.map((client) => {
+                  const tier = normalizePlanTier(client.plan_tier);
+                  const billingStatus = getBillingStatus(client.plan_expires_at);
+                  return (
+                    <tr key={client.business_id}>
+                      <td className="py-3 font-medium text-slate-900">{client.business_name}</td>
+                      <td className="py-3 text-slate-600">{t(`partner.planTiers.${tier}`)}</td>
+                      <td className="py-3 text-slate-600">{money(PLANS[tier].priceMWK, 'MWK')}</td>
+                      <td className="py-3 text-slate-600">{t('partner.partnerInvoiced')}</td>
+                      <td className="py-3"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${billingStatus === 'active' ? 'bg-emerald-100 text-emerald-700' : billingStatus === 'gracePeriod' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'}`}>{t(`partner.${billingStatus}`)}</span></td>
+                      <td className="py-3 text-slate-500">{formatDate(client.plan_expires_at)}</td>
+                      <td className="py-3 text-slate-600">{client.monthly_transaction_count.toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
-import type { PartnerStaff, PartnerClientActivity, PartnerClientUsage, PartnerFirm, UpdatePartnerDto } from '@/types/partners';
+import type { PartnerStaff, PartnerStaffAssignment, PartnerClientActivity, PartnerClientUsage, PartnerFirm, UpdatePartnerDto } from '@/types/partners';
+import type { Business } from '@/types';
 import type { Database } from '@/dal/types/database';
 import type { Row } from '@/dal/types/database';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -49,6 +50,8 @@ function mapClient(row: Row<'v_partner_client_usage'>): PartnerClientUsage {
     total_activity_count: Number(row.total_activity_count ?? 0),
     user_count: Number(row.user_count ?? 0),
     last_activity_at: row.last_activity_at ?? null,
+    plan_expires_at: row.plan_expires_at ?? null,
+    monthly_transaction_count: Number(row.monthly_transaction_count ?? 0),
   };
 }
 
@@ -118,6 +121,70 @@ export class PartnerPortalRepository {
       .update({ status })
       .eq('partner_id', partnerId)
       .eq('business_id', clientBusinessId);
+    if (error) throw new Error(error.message);
+  }
+
+  /** Fetch a client Business only after RLS confirms partner-admin or assignment access. */
+  async getClientBusiness(partnerId: string, businessId: string): Promise<Business> {
+    const { data: authorized, error: authorizationError } = await this.client.rpc('can_current_user_access_partner_client', {
+      p_partner_id: partnerId,
+      p_business_id: businessId,
+    });
+    if (authorizationError) throw new Error(authorizationError.message);
+    if (!authorized) throw new Error('Partner client assignment is required.');
+
+    const { data, error } = await this.client
+      .from('businesses')
+      .select('id, name, base_currency, plan_tier')
+      .eq('id', businessId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error('Client access was not found or has been revoked.');
+
+    // Check the explicit partner-client authorization too: business RLS and the
+    // partner link jointly gate context switching, never the local app state.
+    const { data: link, error: linkError } = await this.client
+      .from('partner_clients')
+      .select('business_id')
+      .eq('partner_id', partnerId)
+      .eq('business_id', businessId)
+      .maybeSingle();
+    if (linkError) throw new Error(linkError.message);
+    if (!link) throw new Error('Client access was not found or has been revoked.');
+
+    return {
+      id: data.id,
+      name: data.name,
+      base_currency: data.base_currency,
+      plan_tier: data.plan_tier,
+    };
+  }
+
+  async getCurrentStaffRole(partnerId: string, userId: string): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('partner_admins')
+      .select('role')
+      .eq('partner_id', partnerId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    return data?.role ?? null;
+  }
+
+  async getPartnerAssignments(partnerId: string): Promise<PartnerStaffAssignment[]> {
+    const { data, error } = await this.client
+      .from('partner_staff_assignments')
+      .select('partner_id, staff_user_id, business_id, assigned_by, created_at')
+      .eq('partner_id', partnerId);
+    if (error) throw new Error(error.message);
+    return (data ?? []) as PartnerStaffAssignment[];
+  }
+
+  async setClientAssignment(partnerId: string, businessId: string, staffUserId: string, assigned: boolean): Promise<void> {
+    const query = this.client.from('partner_staff_assignments');
+    const { error } = assigned
+      ? await query.insert({ partner_id: partnerId, business_id: businessId, staff_user_id: staffUserId })
+      : await query.delete().eq('partner_id', partnerId).eq('business_id', businessId).eq('staff_user_id', staffUserId);
     if (error) throw new Error(error.message);
   }
 
