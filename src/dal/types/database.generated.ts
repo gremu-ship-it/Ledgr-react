@@ -1406,6 +1406,56 @@ export type Database = {
           },
         ]
       }
+      ai_anomaly_logs: {
+        Row: {
+          business_id: string
+          category: string
+          created_at: string
+          description: string
+          id: string
+          is_resolved: boolean
+          metadata: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          source_id: string | null
+          source_table: string | null
+          title: string
+        }
+        Insert: {
+          business_id: string
+          category: string
+          created_at?: string
+          description: string
+          id?: string
+          is_resolved?: boolean
+          metadata?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          source_id?: string | null
+          source_table?: string | null
+          title: string
+        }
+        Update: {
+          business_id?: string
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_resolved?: boolean
+          metadata?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          source_id?: string | null
+          source_table?: string | null
+          title?: string
+        }
+        Relationships: [
+          { foreignKeyName: "ai_anomaly_logs_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+        ]
+      }
       businesses: {
         Row: {
           address_line1: string | null
@@ -14375,6 +14425,8 @@ export type Database = {
         }
       }
       business_partner_id: { Args: { bid: string }; Returns: string }
+      can_run_ai_anomaly_scan: { Args: { p_business_id: string }; Returns: boolean }
+      run_ai_anomaly_scan: { Args: { p_anomalies: Json; p_business_id: string }; Returns: number }
       can_access_branch: {
         Args: { p_branch_id: string; p_business_id: string }
         Returns: boolean

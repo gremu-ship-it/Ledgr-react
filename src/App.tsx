@@ -1063,7 +1063,7 @@ function App() {
 
                   {/* AI & Settings */}
                   <Route path="/ai" element={
-                    <PartnerPlanGate featureKey="ai_advisor" capability="ai_insights" featureName="AI Insights">
+                    <PartnerPlanGate featureKey="ai_advisor" featureName="AI Insights">
                       <AiInsightsPage />
                     </PartnerPlanGate>
                   } />
