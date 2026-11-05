@@ -179,6 +179,7 @@ const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/Partner
 const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
 const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
 const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
+const PartnerStaffPage = lazyPage(() => import('@/pages/partner-admin/PartnerStaffPage'), 'PartnerStaffPage');
 const CashDepositsPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositsPage');
 const NewCashDepositPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'NewCashDepositPage');
 const CashDepositDetailPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositDetailPage');
@@ -446,6 +447,7 @@ function App() {
                 <Route path="/partner-admin/partners/:id" element={<PartnerOverviewPage />} />
                 <Route path="/partner-admin/partners/:id/settings" element={<PartnerSettingsPage />} />
                 <Route path="/partner-admin/partners/:id/clients" element={<PartnerClientsPage />} />
+                <Route path="/partner-admin/partners/:id/staff" element={<PartnerStaffPage />} />
                 <Route path="/partner-admin/partners/:id/billing" element={<PartnerBillingPage />} />
               </Route>
             </Route>

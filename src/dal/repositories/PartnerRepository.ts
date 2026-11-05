@@ -186,6 +186,8 @@ export const PartnerRepository = {
       total_activity_count: Number(r.total_activity_count ?? 0),
       user_count: Number(r.user_count ?? 0),
       last_activity_at: r.last_activity_at ?? null,
+      plan_expires_at: r.plan_expires_at ?? null,
+      monthly_transaction_count: Number(r.monthly_transaction_count ?? 0),
     }));
   },
 

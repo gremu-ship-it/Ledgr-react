@@ -91,6 +91,16 @@ export interface PartnerClientUsage {
   total_activity_count: number;
   user_count: number;
   last_activity_at: string | null;
+  plan_expires_at: string | null;
+  monthly_transaction_count: number;
+}
+
+export interface PartnerStaffAssignment {
+  partner_id: string;
+  staff_user_id: string;
+  business_id: string;
+  assigned_by: string;
+  created_at: string;
 }
 
 export type PartnerFirm = Partner;
