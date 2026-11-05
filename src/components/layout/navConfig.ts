@@ -26,6 +26,8 @@ import {
   LifeBuoy,
   Building2,
   ShoppingBag,
+  Store,
+  Clock3,
   Factory,
   ClipboardList,
   MapPin,
@@ -87,7 +89,9 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
     labelKey: 'navigation.sections.overview',
     items: [
       { labelKey: 'navigation.items.dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag, requiresOrgCapability: 'pos', requiredOperatingModels: ['RETAIL'] },
+      { labelKey: 'navigation.items.pos', path: '/pos', icon: ShoppingBag, minPlan: 'starter', requiresOrgCapability: 'pos', requiredOperatingModels: ['RETAIL'] },
+      { labelKey: 'pos.registers', path: '/pos/registers', icon: Store, minPlan: 'starter', requiresOrgCapability: 'pos', requiredOperatingModels: ['RETAIL'] },
+      { labelKey: 'pos.shiftHistory', path: '/pos/shifts', icon: Clock3, minPlan: 'growth', requiresOrgCapability: 'pos', requiredOperatingModels: ['RETAIL'] },
     ],
   },
   {

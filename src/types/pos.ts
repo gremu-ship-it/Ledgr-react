@@ -119,13 +119,20 @@ export function hasPosPermission(
 }
 
 export interface PosRegister {
+  /** The R08 pos_terminals.id; shifts remain bound to this server-registered till. */
   id: string;
-  business_id?: string;
-  branch_id?: string | null;
+  business_id: string;
+  branch_id: string;
   name: string;
-  code?: string;
-  is_active?: boolean;
+  code: string;
+  preferred_location_id?: string | null;
+  default_cash_account_id?: string | null;
+  is_active: boolean;
   created_at?: string;
+  updated_at?: string;
+  branch?: { id: string; name: string } | null;
+  location?: { id: string; name: string } | null;
+  cash_account?: { id: string; name: string; code: string | null } | null;
 }
 
 export interface PosProduct {
@@ -160,6 +167,21 @@ export interface PosProduct {
   is_active?: boolean;
 }
 
+export type PosShiftStatus = 'open' | 'closed';
+
+export interface OpenShiftParams {
+  businessId: string;
+  terminalId?: string;
+  openingFloat: number;
+  notes?: string;
+}
+
+export interface CloseShiftParams {
+  closingCash: number;
+  varianceReason?: string | null;
+  notes?: string | null;
+}
+
 export interface PosShift {
   id: string;
   business_id: string;
@@ -187,7 +209,7 @@ export interface PosShift {
   refunds_amount: number;
   cash_in_amount: number;
   cash_out_amount: number;
-  status: 'open' | 'closed';
+  status: PosShiftStatus;
   notes: string | null;
   created_at?: string;
   updated_at?: string;
