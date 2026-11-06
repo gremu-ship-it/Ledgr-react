@@ -32,7 +32,8 @@ describe('manufacturing foundation migration contract', () => {
     // register/shift, return, and Phase 6E-3 workflows. Partner Portal Phase 6F-1
     // extends the partner health/activity model, Phase 6F-2 adds delegated
     // client context, Phase 6G-1 adds Enterprise diagnostics, and Phase 6G-2
-    // follows with financial summaries and cash-runway forecasting.
+    // follows with financial summaries and cash-runway forecasting. The payroll
+    // leave/reversal and public-grant hardening migrations are part of this branch.
     expect([
       '20261103000000',
       '20261104000000',
@@ -69,6 +70,7 @@ describe('manufacturing foundation migration contract', () => {
       '20261213000000',
       '20261214000000',
       '20261215000000',
+      '20261216000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);

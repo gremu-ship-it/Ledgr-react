@@ -332,6 +332,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/reconcile', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'nav.reports.cashForecast', path: '/cash-forecast', icon: TrendingUp, minPlan: 'growth' },
+      { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {
