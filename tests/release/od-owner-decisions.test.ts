@@ -8,7 +8,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, key, saleFixture } from './fixtures';
+import { seedFixture, identities, DAY, key, saleFixture, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('od-owner-decisions');
@@ -25,7 +25,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); } catch (e) { seedError = safeError(e); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs, 'growth'); } catch (e) { seedError = safeError(e); }
 }, 600000);
 afterAll(async () => { if (db) await db.cleanup(); });
 function ready() {
@@ -50,14 +51,17 @@ const as = async (c: C, uid: string | null, role = 'authenticated') => {
   await c.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role',$2,true)", [uid ?? '', role]);
   await c.query(`set local role ${role}`);
 };
-const su = (c: C) => c.query('reset role');
+const su = async (c: C) => {
+  await c.query('reset role');
+  await c.query("select set_config('request.jwt.claim.sub','',true), set_config('request.jwt.claim.role','service_role',true)");
+};
 /** Superuser transaction that is always rolled back. */
 async function rolledBack(fn: (c: C) => Promise<void>) {
   const c = db.client as unknown as C;
   await c.query('begin');
   try { await fn(c); } finally { await c.query('rollback'); }
 }
-const posSale = (c: C, p: unknown) => c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(p)]).then((r) => r.rows[0].r as Record<string, any>);
+const posSale = (c: C, p: unknown) => c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(p)]).then((r) => r.rows[0].r as Record<string, any>);
 const invoicesByKey = async (c: C, k: string) => (await c.query('select count(*)::int n from public.invoices where client_key::text=$1', [k])).rows[0].n as number;
 const qtyAt = async (c: C, location: string, org = 'A') =>
   Number((await c.query('select coalesce(sum(quantity_on_hand),0) q from public.inventory_balances where business_id=$1 and product_id=$2 and location_id=$3',
@@ -203,7 +207,7 @@ test(meta('OD.BRANCH.DEDUCTS-BRANCH-NOT-WAREHOUSE', 'With a business DEFAULT war
     await su(c);
     await c.query('update public.inventory_locations set is_default=false where id=$1', [orgs.A.location]);
     const wh = String((await c.query('insert into public.inventory_locations(business_id,name,is_default,branch_id) values($1,$2,true,null) returning id', [orgs.A.business, 'OD warehouse'])).rows[0].id);
-    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',current_date,40,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, wh]);
+    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id,reference) values($1,$2,$3,'adjustment_in',current_date,40,900,'manual',gen_random_uuid(),'Synthetic warehouse opening stock')", [orgs.A.business, orgs.A.product, wh]);
     const a1 = await qtyAt(c, orgs.A.location);
     await as(c, identities.A_cashier.id);
     const av = (await c.query('select public.pos_stock_availability($1,$2) r', [orgs.A.business, orgs.A.branch])).rows[0].r;

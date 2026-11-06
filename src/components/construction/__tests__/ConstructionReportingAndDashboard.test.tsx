@@ -26,6 +26,7 @@ globalThis.ResizeObserver =
 
 const mockState = vi.hoisted(() => ({
   hasConstructionCapability: true,
+  hasManufacturingCapability: false,
   projects: {
     list: vi.fn(),
     getById: vi.fn(),
@@ -50,8 +51,23 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock('@/hooks/useCapability', () => ({
-  useCapability: (cap: string) =>
-    cap === 'construction' ? mockState.hasConstructionCapability : false,
+  useCapability: (cap: string) => cap === 'construction'
+    ? mockState.hasConstructionCapability
+    : cap === 'manufacturing' ? mockState.hasManufacturingCapability : false,
+}));
+
+vi.mock('@/components/dashboard/ExecutiveHealthStrip', () => ({
+  ExecutiveHealthStrip: () => <div data-testid="executive-health-strip" />,
+}));
+vi.mock('@/components/dashboard/ActionableExceptions', () => ({
+  ActionableExceptions: () => null,
+}));
+vi.mock('@/pages/manufacturing/ManufacturingDashboardPage', () => ({
+  ManufacturingDashboardPage: () => <div data-testid="manufacturing-dashboard" />,
+}));
+
+vi.mock('@/hooks/usePermissions', () => ({
+  isPathAllowedForRole: () => false,
 }));
 
 vi.mock('@/lib/repositories', () => ({
@@ -64,6 +80,7 @@ vi.mock('@/lib/repositories', () => ({
 }));
 
 vi.mock('@/hooks/useDashboardData', () => ({
+  getDashboardPeriod: () => ({ from: '2026-11-01', to: '2026-11-30', formattedPeriodLabel: 'November 2026' }),
   useMonthlyIncome: () => ({ data: 10000, isLoading: false, isError: false }),
   useMonthlyExpenses: () => ({ data: 4000, isLoading: false, isError: false }),
   useMonthlyExpenseVat: () => ({ data: 0, isLoading: false }),
@@ -129,6 +146,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   vi.clearAllMocks();
   mockState.hasConstructionCapability = true;
+  mockState.hasManufacturingCapability = false;
 
   useAppStore.setState({
     currentUser: { id: 'u1', email: 'owner@buildco.mw' },
@@ -281,25 +299,29 @@ beforeEach(async () => {
 
 afterEach(() => cleanup());
 
-describe('DashboardPage conditional rendering', () => {
-  it('renders ConstructionDashboard when business has construction capability', async () => {
+describe('DashboardPage additive vertical rendering', () => {
+  it('keeps shared finance visible and adds the Construction Executive summary when enabled', async () => {
     mockState.hasConstructionCapability = true;
     renderWithProviders(<DashboardPage />);
 
-    await waitFor(() =>
-      expect(screen.getByTestId('construction-dashboard')).toBeTruthy(),
-    );
-    expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByTestId('generic-income-expense-chart')).toBeTruthy();
+      expect(screen.getByTestId('construction-executive-section')).toBeTruthy();
+    });
+    expect(screen.getByTestId('dashboard-vertical-modules')).toBeTruthy();
+    expect(screen.getByText('Operational procurement workspace')).toBeTruthy();
   });
 
-  it('renders GenericDashboard when business does not have construction capability', async () => {
+  it('shows shared finance but no Construction module when the capability is absent', async () => {
     mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = false;
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() =>
       expect(screen.getByTestId('generic-income-expense-chart')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('construction-dashboard')).toBeNull();
+    expect(screen.queryByTestId('construction-executive-section')).toBeNull();
+    expect(screen.queryByTestId('dashboard-vertical-modules')).toBeNull();
   });
 });
 

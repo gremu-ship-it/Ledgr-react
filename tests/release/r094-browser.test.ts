@@ -401,12 +401,12 @@ test(meta('R094.BROWSER.LEASE-CROSSTAB-EXCLUSIVE', 'REAL cross-tab lease exclusi
   const page2 = await newHarnessPage(ctx);
   const { localId, clientKey } = await enqueueAsUser(page1, 401);
   await stub.control({ action: 'resetAll' });
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey, status: 200, delayMs: 900, body: { id: 'r094-inv-1', number: 'R094-INV-401', journal_entry_id: null, idempotent: false } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey, status: 200, delayMs: 900, body: { id: 'r094-inv-1', number: 'R094-INV-401', journal_entry_id: null, idempotent: false } });
   const p1 = page1.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }).then(() => 'done'), USER_A);
   await new Promise((r) => setTimeout(r, 150)); // tab 1 claims deterministically before tab 2 attempts
   const p2 = page2.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }).then(() => 'done'), USER_A);
   await Promise.all([p1, p2]);
-  const calls = (await stubCalls()).filter((c) => c.fn === 'post_pos_sale' && c.clientKey === clientKey);
+  const calls = (await stubCalls()).filter((c) => c.fn === 'post_pos_sale_plan_gated' && c.clientKey === clientKey);
   const item = await ev(page1, (lid: number) => (window as any).r094.getItem(lid), localId);
   await ctx.close();
   must(
@@ -479,7 +479,7 @@ test(meta('R094.BROWSER.EXCEPTION-P0QLT', 'A P0QLT-shaped PostgREST refusal thro
   const page = await newHarnessPage(ctx);
   await stub.control({ action: 'resetAll' });
   const { localId, clientKey } = await go('enqueue', enqueueAsUser(page, 601));
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey, status: 400, body: { code: 'P0QLT', message: 'Invoice quota exhausted for your plan (limit 50); replay is pointless until resolved', details: null, hint: null } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey, status: 400, body: { code: 'P0QLT', message: 'Invoice quota exhausted for your plan (limit 50); replay is pointless until resolved', details: null, hint: null } });
   await go('first sync pass', page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A));
   const failedItem = await waitItem(page, localId, (i) => i.status === 'failed');
   await stub.control({ action: 'resetCalls' });
@@ -499,11 +499,11 @@ test(meta('R094.BROWSER.EXCEPTION-23514-TYPED', '23514 typing is by CONSTRAINT I
   const page = await newHarnessPage(ctx);
   await stub.control({ action: 'resetAll' });
   const a = await enqueueAsUser(page, 701);
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: a.clientKey, status: 400, body: { code: '23514', message: 'new row for relation "inventory_balances" violates check constraint "chk_inventory_balances_on_hand_nonneg"', details: 'Failing row contains (..., -1).', hint: null } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey: a.clientKey, status: 400, body: { code: '23514', message: 'new row for relation "inventory_balances" violates check constraint "chk_inventory_balances_on_hand_nonneg"', details: 'Failing row contains (..., -1).', hint: null } });
   await page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A);
   const typedItem = await waitItem(page, a.localId, (i) => i.status === 'failed');
   const b = await enqueueAsUser(page, 702);
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: b.clientKey, status: 400, body: { code: '23514', message: 'new row for relation "invoices" violates check constraint "chk_invoices_total_positive"', details: null, hint: null } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey: b.clientKey, status: 400, body: { code: '23514', message: 'new row for relation "invoices" violates check constraint "chk_invoices_total_positive"', details: null, hint: null } });
   await page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A);
   const plainItem = await waitItem(page, b.localId, (i) => i.status === 'failed');
   await ctx.close();
@@ -520,7 +520,7 @@ test(meta('R094.BROWSER.RECONCILE-CLIENTPATH', 'Manager-flagged exception takes 
   const page = await newHarnessPage(ctx);
   await stub.control({ action: 'resetAll' });
   const { localId, clientKey } = await enqueueAsUser(page, 801);
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey, status: 400, body: { code: 'P0QLT', message: 'Plan quota exhausted', details: null, hint: null } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey, status: 400, body: { code: 'P0QLT', message: 'Plan quota exhausted', details: null, hint: null } });
   await page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A);
   const failedItem = await waitItem(page, localId, (i) => i.status === 'failed');
   const canonicalBefore = await ev(page, (lid: number) => (window as any).r094.getItem(lid).then((i: any) => (window as any).r094.canonicalPayloadJson(i.payload)), localId);
@@ -645,7 +645,7 @@ test(meta('R094.BROWSER.OFFLINE-ONLINE', 'Real offline→online: a sale enqueued
     });
   }, [ORG_A, USER_A]);
   await ctx.setOffline(false);
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: pre.snap.clientKey, status: 200, body: { id: 'r094-inv-online-1', number: 'R094-INV-1001', journal_entry_id: null, idempotent: false } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey: pre.snap.clientKey, status: 200, body: { id: 'r094-inv-online-1', number: 'R094-INV-1001', journal_entry_id: null, idempotent: false } });
   await page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A);
   const synced = await waitItem(page, pre.localId, (i) => i.status === 'synced');
   const rpcFirst = (await stubCalls()).filter((c) => c.clientKey === pre.snap.clientKey).length;
@@ -686,8 +686,8 @@ test(meta('R094.BROWSER.STALE-VERSION-MEASURE', 'P7: payloadVersion 0 (stale) qu
     return id;
   }, ORG_A);
   // P7: stale/unknown now quarantine before network; scenarios unused but kept for harness compat
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: older.clientKey, status: 200, body: { id: 'r094-inv-stale-0', number: 'R094-INV-1101', journal_entry_id: null, idempotent: false } });
-  await stub.control({ action: 'setScenario', fn: 'post_pos_sale', clientKey: newer.clientKey, status: 200, body: { id: 'r094-inv-stale-9999', number: 'R094-INV-1102', journal_entry_id: null, idempotent: false } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey: older.clientKey, status: 200, body: { id: 'r094-inv-stale-0', number: 'R094-INV-1101', journal_entry_id: null, idempotent: false } });
+  await stub.control({ action: 'setScenario', fn: 'post_pos_sale_plan_gated', clientKey: newer.clientKey, status: 200, body: { id: 'r094-inv-stale-9999', number: 'R094-INV-1102', journal_entry_id: null, idempotent: false } });
   await page.evaluate((uid: string) => (window as any).r094.syncQueue(undefined, { currentUserId: uid }), USER_A);
   const staleItem = await waitItem(page, older.localId, (i) => i.status !== 'pending');
   const newerItem = await waitItem(page, newer.localId, (i) => i.status !== 'pending');
