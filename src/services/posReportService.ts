@@ -1,5 +1,50 @@
-import type { PosShift, PosSale } from '@/types/pos';
+import type { PosShift } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
+
+export interface PosShiftReportPayload {
+  shift_id: string;
+  business_id?: string;
+  branch_id?: string | null;
+  opened_at?: string | null;
+  closed_at?: string | null;
+  status?: string;
+  shift_number?: string | null;
+  cashier_name?: string | null;
+  opening_cash?: number | string | null;
+  cash_tenders?: number | string | null;
+  other_tenders?: number | string | null;
+  total_sales?: number | string | null;
+  sales_count?: number | string | null;
+  gross_sales?: number | string | null;
+  discount_total?: number | string | null;
+  net_sales?: number | string | null;
+  tax_total?: number | string | null;
+  tax_breakdown?: Record<string, { amount?: number | string; count?: number | string }> | null;
+  tender_breakdown?: Record<string, number | string> | null;
+  tender_counts?: Record<string, { count?: number | string; total?: number | string }> | null;
+  refund_total?: number | string | null;
+  refunds_gross_total?: number | string | null;
+  return_count?: number | string | null;
+  cash_in_total?: number | string | null;
+  cash_out_total?: number | string | null;
+  expected_cash?: number | string | null;
+  actual_cash?: number | string | null;
+  variance?: number | string | null;
+  cash_movements?: Array<{
+    movement_type: string;
+    amount: number | string;
+    reason: string;
+    created_at: string;
+  }>;
+  report_number?: string | null;
+  close?: {
+    report_number?: string | null;
+    closed_at?: string | null;
+    expected_cash?: number | string | null;
+    actual_cash?: number | string | null;
+    variance?: number | string | null;
+  } | null;
+}
 
 export interface PosZReportSummary {
   businessId: string;
@@ -8,124 +53,141 @@ export interface PosZReportSummary {
   reportNumber: string;
   generatedAt: string;
   shift: PosShift;
+  shiftNumber: string;
   cashierName: string;
-  grossSales: number;
-  discountsTotal: number;
-  netSales: number;
-  taxTotal: number;
-  refundsTotal: number;
-  openingFloat: number;
-  cashInTotal: number;
-  cashOutTotal: number;
-  expectedCashInDrawer: number;
-  actualCountedCash: number;
-  cashVariance: number;
-  varianceStatus: 'balanced' | 'surplus' | 'shortage';
-  paymentBreakdown: Record<string, { count: number; total: number }>;
-  transactionsCount: number;
+  grossSales: number | null;
+  discountsTotal: number | null;
+  netSales: number | null;
+  taxTotal: number | null;
+  taxBreakdown: NonNullable<PosShiftReportPayload['tax_breakdown']>;
+  refundsTotal: number | null;
+  returnCount: number | null;
+  openingFloat: number | null;
+  cashInTotal: number | null;
+  cashOutTotal: number | null;
+  expectedCashInDrawer: number | null;
+  actualCountedCash: number | null;
+  cashVariance: number | null;
+  varianceStatus: 'balanced' | 'surplus' | 'shortage' | 'unavailable';
+  paymentBreakdown: Record<string, { count: number | null; total: number | null }>;
+  cashMovements: NonNullable<PosShiftReportPayload['cash_movements']>;
+  transactionsCount: number | null;
 }
 
+function numericOrNull(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function firstNumber(...values: Array<number | string | null | undefined>): number | null {
+  for (const value of values) {
+    const number = numericOrNull(value);
+    if (number !== null) return number;
+  }
+  return null;
+}
+
+/**
+ * Formats only a report returned for this exact shift by get_pos_shift_report.
+ * No invoice/sales list is accepted here: all financial values remain
+ * server-authoritative and cannot include activity from another shift.
+ */
 export function generateZReportSummary(
   shift: PosShift,
-  sales: PosSale[] = [],
+  report: PosShiftReportPayload,
   businessName = 'Ledgr Store',
   branchName = 'Main Branch',
 ): PosZReportSummary {
-  const openingFloat = Number(shift.opening_cash ?? shift.opening_float ?? 0);
-  const actualCash = Number(shift.actual_cash ?? shift.closing_cash_actual ?? 0);
-  const expectedCash = Number(shift.expected_cash ?? shift.expectedCash ?? openingFloat);
-  const variance = Number(shift.cash_variance ?? (actualCash - expectedCash));
-
-  let grossSales = 0;
-  let discountsTotal = 0;
-  let netSales = 0;
-  let taxTotal = 0;
-  let refundsTotal = 0;
-
-  const paymentBreakdown: Record<string, { count: number; total: number }> = {
-    cash: { count: 0, total: Number(shift.cash_sales_amount || 0) },
-    airtel_money: { count: 0, total: 0 },
-    tnm_mpamba: { count: 0, total: 0 },
-    bank_transfer: { count: 0, total: 0 },
-    card: { count: 0, total: 0 },
-    credit_sale: { count: 0, total: 0 },
-  };
-
-  sales.forEach((s) => {
-    const gross = Number(s.gross_amount ?? s.grossAmount ?? s.total_amount ?? 0);
-    const disc = Number(s.discount_amount ?? s.discountAmount ?? 0);
-    const net = Number(s.net_amount ?? s.netAmount ?? (gross - disc));
-    const tax = Number(s.tax_amount ?? s.taxAmount ?? 0);
-
-    if (s.status === 'returned') {
-      refundsTotal += net;
-    } else if (s.status !== 'voided') {
-      grossSales += gross;
-      discountsTotal += disc;
-      netSales += net;
-      taxTotal += tax;
-    }
-  });
-
-  if (grossSales === 0 && Number(shift.total_sales_amount) > 0) {
-    grossSales = Number(shift.total_sales_amount);
-    netSales = Number(shift.total_sales_amount);
+  if (report.shift_id !== shift.id) {
+    throw new Error('Shift report payload does not match the requested shift.');
   }
 
-  const reportNumber = `Z-${new Date().getFullYear()}-${String(Date.now()).slice(-5)}`;
-  const varianceStatus = variance === 0 ? 'balanced' : variance > 0 ? 'surplus' : 'shortage';
+  const expectedCash = firstNumber(report.close?.expected_cash, report.expected_cash);
+  const actualCash = firstNumber(report.close?.actual_cash, report.actual_cash, shift.actual_cash, shift.closing_cash_actual);
+  const variance = firstNumber(
+    report.close?.variance,
+    report.variance,
+    shift.cash_variance,
+    shift.variance,
+  );
+  const varianceStatus = variance === null
+    ? 'unavailable'
+    : variance === 0
+      ? 'balanced'
+      : variance > 0
+        ? 'surplus'
+        : 'shortage';
+
+  const methodKeys = new Set([
+    ...Object.keys(report.tender_breakdown ?? {}),
+    ...Object.keys(report.tender_counts ?? {}),
+  ]);
+  const paymentBreakdown = Object.fromEntries(Array.from(methodKeys, (method) => {
+    const tender = report.tender_counts?.[method];
+    return [method, {
+      count: numericOrNull(tender?.count),
+      total: firstNumber(tender?.total, report.tender_breakdown?.[method]),
+    }];
+  }));
 
   return {
-    businessId: shift.business_id,
+    businessId: report.business_id ?? shift.business_id,
     businessName,
     branchName,
-    reportNumber,
-    generatedAt: new Date().toISOString(),
+    reportNumber: report.close?.report_number ?? report.report_number ?? '—',
+    generatedAt: report.close?.closed_at ?? report.closed_at ?? new Date().toISOString(),
     shift,
-    cashierName: shift.cashier_name || 'Cashier',
-    grossSales,
-    discountsTotal,
-    netSales,
-    taxTotal,
-    refundsTotal: refundsTotal || Number(shift.refunds_amount || 0),
-    openingFloat,
-    cashInTotal: Number(shift.cash_in_amount || 0),
-    cashOutTotal: Number(shift.cash_out_amount || 0),
+    shiftNumber: report.shift_number ?? shift.shift_number ?? shift.id,
+    cashierName: report.cashier_name ?? shift.cashier_name ?? '—',
+    grossSales: numericOrNull(report.gross_sales),
+    discountsTotal: numericOrNull(report.discount_total),
+    netSales: firstNumber(report.net_sales, report.total_sales),
+    taxTotal: numericOrNull(report.tax_total),
+    taxBreakdown: report.tax_breakdown ?? {},
+    refundsTotal: firstNumber(report.refunds_gross_total, report.refund_total),
+    returnCount: numericOrNull(report.return_count),
+    openingFloat: firstNumber(report.opening_cash, shift.opening_cash, shift.opening_float),
+    cashInTotal: numericOrNull(report.cash_in_total),
+    cashOutTotal: numericOrNull(report.cash_out_total),
     expectedCashInDrawer: expectedCash,
     actualCountedCash: actualCash,
     cashVariance: variance,
     varianceStatus,
     paymentBreakdown,
-    transactionsCount: sales.length,
+    cashMovements: report.cash_movements ?? [],
+    transactionsCount: numericOrNull(report.sales_count),
   };
 }
 
 export function formatZReportEmailBody(summary: PosZReportSummary): string {
+  const amount = (value: number | null) => value === null ? 'Not available' : formatMwkDetailed(value);
   return `
 END-OF-DAY POS Z-REPORT (${summary.reportNumber})
 ========================================
 Store: ${summary.businessName} (${summary.branchName})
+Shift: ${summary.shiftNumber}
 Cashier: ${summary.cashierName}
 Date: ${new Date(summary.generatedAt).toLocaleString()}
-Shift Duration: ${new Date(summary.shift.opened_at).toLocaleTimeString()} - ${summary.shift.closed_at ? new Date(summary.shift.closed_at).toLocaleTimeString() : 'Current'}
+Shift Duration: ${summary.shift.opened_at ? new Date(summary.shift.opened_at).toLocaleTimeString() : '—'} - ${summary.shift.closed_at ? new Date(summary.shift.closed_at).toLocaleTimeString() : 'Current'}
 
 FINANCIAL SUMMARY:
 ----------------------------------------
-Gross Sales:        ${formatMwkDetailed(summary.grossSales)}
-Discounts Total:    -${formatMwkDetailed(summary.discountsTotal)}
-Net Sales Revenue:  ${formatMwkDetailed(summary.netSales)}
-Tax / VAT (16.5%):  ${formatMwkDetailed(summary.taxTotal)}
-Refunds Processed:  -${formatMwkDetailed(summary.refundsTotal)}
+Gross Sales:        ${amount(summary.grossSales)}
+Discounts Total:    ${amount(summary.discountsTotal)}
+Net Sales Revenue:  ${amount(summary.netSales)}
+Tax / VAT:          ${amount(summary.taxTotal)}
+Refunds Processed:  ${amount(summary.refundsTotal)} (${summary.returnCount ?? '—'} returns)
 
 CASH DRAWER RECONCILIATION:
 ----------------------------------------
-Opening Float:      ${formatMwkDetailed(summary.openingFloat)}
-Cash In (Top-ups):  +${formatMwkDetailed(summary.cashInTotal)}
-Cash Out (Drops):   -${formatMwkDetailed(summary.cashOutTotal)}
-Expected in Drawer: ${formatMwkDetailed(summary.expectedCashInDrawer)}
-Actual Counted:     ${formatMwkDetailed(summary.actualCountedCash)}
-Variance:           ${summary.cashVariance >= 0 ? '+' : ''}${formatMwkDetailed(summary.cashVariance)} (${summary.varianceStatus.toUpperCase()})
+Opening Float:      ${amount(summary.openingFloat)}
+Cash In (Top-ups):  ${amount(summary.cashInTotal)}
+Cash Out (Drops):   ${amount(summary.cashOutTotal)}
+Expected in Drawer: ${amount(summary.expectedCashInDrawer)}
+Actual Counted:     ${amount(summary.actualCountedCash)}
+Variance:           ${summary.cashVariance === null ? 'Not available' : `${summary.cashVariance >= 0 ? '+' : ''}${amount(summary.cashVariance)} (${summary.varianceStatus.toUpperCase()})`}
 
-Generated securely by Ledgr POS.
+Generated from the server-authoritative Ledgr POS shift report.
   `.trim();
 }

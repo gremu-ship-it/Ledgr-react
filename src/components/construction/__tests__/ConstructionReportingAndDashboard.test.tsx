@@ -54,6 +54,10 @@ vi.mock('@/hooks/useCapability', () => ({
     cap === 'construction' ? mockState.hasConstructionCapability : false,
 }));
 
+vi.mock('@/hooks/usePermissions', () => ({
+  isPathAllowedForRole: () => false,
+}));
+
 vi.mock('@/lib/repositories', () => ({
   repos: {
     projects: mockState.projects,
@@ -282,25 +286,28 @@ beforeEach(async () => {
 
 afterEach(() => cleanup());
 
-describe('DashboardPage conditional rendering', () => {
-  it('renders ConstructionDashboard when business has construction capability', async () => {
+describe('DashboardPage additive vertical rendering', () => {
+  it('keeps shared finance visible and adds the Construction Executive summary when enabled', async () => {
     mockState.hasConstructionCapability = true;
     renderWithProviders(<DashboardPage />);
 
-    await waitFor(() =>
-      expect(screen.getByTestId('construction-dashboard')).toBeTruthy(),
-    );
-    expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByTestId('generic-income-expense-chart')).toBeTruthy();
+      expect(screen.getByTestId('construction-executive-section')).toBeTruthy();
+    });
+    expect(screen.getByTestId('dashboard-vertical-modules')).toBeTruthy();
+    expect(screen.getByText('Operational procurement workspace')).toBeTruthy();
   });
 
-  it('renders GenericDashboard when business does not have construction capability', async () => {
+  it('shows shared finance but no Construction module when the capability is absent', async () => {
     mockState.hasConstructionCapability = false;
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() =>
       expect(screen.getByTestId('generic-income-expense-chart')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('construction-dashboard')).toBeNull();
+    expect(screen.queryByTestId('construction-executive-section')).toBeNull();
+    expect(screen.queryByTestId('dashboard-vertical-modules')).toBeNull();
   });
 });
 

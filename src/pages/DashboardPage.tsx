@@ -17,7 +17,7 @@ import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { CashFlowIndicator } from '@/components/dashboard/CashFlowIndicator';
 import { TaxRemittancePanel } from '@/components/dashboard/TaxRemittancePanel';
 import { TaxReminderModal } from '@/components/dashboard/TaxReminderModal';
-import { formatMwk, formatMwkCompact } from '@/lib/formatters';
+import { formatCurrency, formatCurrencyCompact, formatDateRange } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { UsageMeter } from '@/components/billing/UsageMeter';
@@ -25,8 +25,8 @@ import { UpgradeModal } from '@/components/billing/UpgradeModal';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { useState } from 'react';
-import { useCapability } from '@/hooks/useCapability';
-import { ConstructionDashboard } from '@/components/construction/dashboard/ConstructionDashboard';
+import { DashboardVerticalModules } from '@/components/dashboard/DashboardVerticalModules';
+import { DashboardFreshnessToolbar } from '@/components/dashboard/DashboardFreshnessToolbar';
 
 interface KpiCardProps {
   label: string;
@@ -38,9 +38,10 @@ interface KpiCardProps {
   featured?: boolean;
   isLoading?: boolean;
   isError?: boolean;
+  metadata: string;
 }
 
-function KpiCard({ label, value, to, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
+function KpiCard({ label, value, to, valueTitle, sub, metadata, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
   const { t } = useTranslation();
 
   if (isLoading) {
@@ -77,6 +78,7 @@ function KpiCard({ label, value, to, valueTitle, sub, trendUp = true, featured =
       <p className={`mb-1 truncate font-extrabold leading-tight ${featured ? 'text-white' : 'text-gray-900'}`} style={{ fontSize: featured ? 'clamp(1.25rem, 2.5vw, 1.6rem)' : 'clamp(1.1rem, 2vw, 1.35rem)' }}>
         {value}
       </p>
+      <p className={`mb-2 text-[10px] font-medium ${featured ? 'text-white/75' : 'text-gray-500'}`}>{metadata}</p>
       {featured ? (
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'}`}>
@@ -124,8 +126,6 @@ function QuickActions() {
 }
 
 export function DashboardPage() {
-  const isConstruction = useCapability('construction');
-  if (isConstruction) return <ConstructionDashboard />;
   return <GenericDashboard />;
 }
 
@@ -135,8 +135,16 @@ export function GenericDashboard() {
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business.id;
   const businessName = currentBusiness?.business.name;
+  const currencyCode = currentBusiness?.business.base_currency || 'MWK';
   const isMobile = useIsMobile();
-  const formattedPeriodLabel = getDashboardPeriod(undefined, i18n.language).formattedPeriodLabel;
+  const dashboardPeriod = getDashboardPeriod(undefined, i18n.language);
+  const formattedPeriodLabel = dashboardPeriod.formattedPeriodLabel;
+  const periodMetadata = t('dashboard.metadata.period', { period: formatDateRange(dashboardPeriod.from, dashboardPeriod.to, i18n.language) });
+  const trendStart = new Date(`${dashboardPeriod.from}T00:00:00`);
+  trendStart.setMonth(trendStart.getMonth() - 5);
+  const trendPeriod = getDashboardPeriod(trendStart, i18n.language);
+  const trendMetadata = t('dashboard.metadata.period', { period: formatDateRange(trendPeriod.from, dashboardPeriod.to, i18n.language) });
+  const asOfMetadata = t('dashboard.metadata.asOf', { date: new Date().toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' }) });
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -185,29 +193,26 @@ export function GenericDashboard() {
   return (
     <div className="space-y-6">
       <TaxReminderModal />
-      <TaxRemittancePanel businessId={businessId} />
-      <UsageMeter />
 
-      {/* Onboarding progress checklist (spec #5) */}
-      <OnboardingChecklist />
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-900">{t('dashboard.financialOverview')}</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
-            {businessName ? t('dashboard.realtimeInsightsFor', { business: businessName }) : t('dashboard.realtimeInsights')} · MWK
-          </p>
+      <section aria-label={t('dashboard.financialOverview')} className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900">{t('dashboard.financialOverview')}</h1>
+            <p className="mt-0.5 text-sm text-gray-500">
+              {businessName ? t('dashboard.realtimeInsightsFor', { business: businessName }) : t('dashboard.realtimeInsights')} · {t('dashboard.baseCurrency', { currency: currencyCode })}
+            </p>
+          </div>
+          <DashboardFreshnessToolbar businessId={businessId} />
         </div>
-        <QuickActions />
-      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label={t('dashboard.netProfit')}
           to="/reports/profit-loss"
-          value={netProfit !== undefined ? formatMwkCompact(netProfit) : formatMwkCompact(0)}
-          valueTitle={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
+          value={netProfit !== undefined ? formatCurrencyCompact(netProfit, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={netProfit !== undefined ? formatCurrency(netProfit, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
           sub={t('dashboard.forPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp={netProfit === undefined || netProfit >= 0}
           featured
           isLoading={netIsLoading}
@@ -216,11 +221,12 @@ export function GenericDashboard() {
         <KpiCard
           label={t('dashboard.totalIncome')}
           to="/income"
-          value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)}
-          valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)}
+          value={totalIncomeValue !== undefined ? formatCurrencyCompact(totalIncomeValue, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={totalIncomeValue !== undefined ? formatCurrency(totalIncomeValue, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
           sub={income.data
-            ? t('dashboard.collectedForPeriod', { amount: formatMwk(income.data.amountPaid), period: formattedPeriodLabel })
+            ? t('dashboard.collectedForPeriod', { amount: formatCurrency(income.data.amountPaid, currencyCode, i18n.language), period: formattedPeriodLabel })
             : t('dashboard.forPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp
           isLoading={plReport.isLoading || income.isLoading}
           isError={plReport.isError || income.isError}
@@ -228,9 +234,10 @@ export function GenericDashboard() {
         <KpiCard
           label={t('dashboard.totalExpenses')}
           to="/expenses"
-          value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)}
-          valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)}
+          value={totalExpensesValue !== undefined ? formatCurrencyCompact(totalExpensesValue, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={totalExpensesValue !== undefined ? formatCurrency(totalExpensesValue, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
           sub={t('dashboard.forPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp={false}
           isLoading={plReport.isLoading}
           isError={plReport.isError}
@@ -238,9 +245,10 @@ export function GenericDashboard() {
         <KpiCard
           label={t('dashboard.accountsReceivable')}
           to="/invoices"
-          value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
-          valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
+          value={outstanding.data ? formatCurrencyCompact(outstanding.data.total, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={outstanding.data ? formatCurrency(outstanding.data.total, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
           sub={outstanding.data ? t('dashboard.unpaidInvoices', { count: outstanding.data.count }) : t('dashboard.invoices', { count: 0 })}
+          metadata={asOfMetadata}
           trendUp={false}
           isLoading={outstanding.isLoading}
           isError={outstanding.isError}
@@ -248,9 +256,10 @@ export function GenericDashboard() {
         <KpiCard
           label={t('dashboard.vatAccrued')}
           to="/reports/vat-return"
-          value={formatMwkCompact(Math.abs(netVat))}
-          valueTitle={formatMwk(Math.abs(netVat))}
+          value={formatCurrencyCompact(Math.abs(netVat), currencyCode, i18n.language)}
+          valueTitle={formatCurrency(Math.abs(netVat), currencyCode, i18n.language)}
           sub={t(netVat >= 0 ? 'dashboard.payableToMraForPeriod' : 'dashboard.refundableVatForPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp={netVat >= 0}
           isLoading={vatIsLoading}
           isError={vatIsError}
@@ -258,26 +267,26 @@ export function GenericDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <SectionErrorBoundary sectionName="Income/Expense Chart">
+        <SectionErrorBoundary sectionName={t('dashboard.incomeVsExpenses')}>
           <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-gray-900">{t('dashboard.incomeVsExpenses')}</h2>
-                <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')}</p>
+                <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')} · {trendMetadata}</p>
               </div>
             </div>
-            <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} />
+            <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} currencyCode={currencyCode} />
           </div>
         </SectionErrorBoundary>
 
-        <SectionErrorBoundary sectionName="Cash Flow Indicator">
+        <SectionErrorBoundary sectionName={t('dashboard.cashFlow')}>
           <div className="flex flex-col gap-4">
-            <CashFlowIndicator income={income.data?.totalAmount} expenses={expenses.data} isLoading={income.isLoading || expenses.isLoading} isError={income.isError || expenses.isError} />
+            <CashFlowIndicator income={income.data?.totalAmount} expenses={expenses.data} isLoading={income.isLoading || expenses.isLoading} isError={income.isError || expenses.isError} currencyCode={currencyCode} locale={i18n.language} metadata={periodMetadata} />
           </div>
         </SectionErrorBoundary>
       </div>
 
-      <SectionErrorBoundary sectionName="Recent Transactions">
+      <SectionErrorBoundary sectionName={t('dashboard.recentTransactions')}>
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -289,6 +298,23 @@ export function GenericDashboard() {
           <RecentTransactions entries={recentEntries.data} isLoading={recentEntries.isLoading} isError={recentEntries.isError} />
         </div>
       </SectionErrorBoundary>
+
+        <TaxRemittancePanel businessId={businessId} />
+      </section>
+
+      <DashboardVerticalModules />
+
+      <section className="space-y-4" aria-label={t('dashboard.bottomSection')}>
+        <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{t('dashboard.quickActions')}</h2>
+            <p className="text-xs text-gray-500">{t('dashboard.quickActionsDescription')}</p>
+          </div>
+          <QuickActions />
+        </div>
+        <UsageMeter />
+        <OnboardingChecklist />
+      </section>
 
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => { setShowUpgradeModal(false); navigate('/settings?tab=billing'); }} />
     </div>

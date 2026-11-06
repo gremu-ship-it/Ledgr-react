@@ -117,9 +117,14 @@ export async function refreshDashboardQueries(
 ): Promise<void> {
   if (!businessId) return;
   const queryKeys = getDashboardRefreshQueryKeys(businessId, 6, anchorDate);
-  await Promise.all(queryKeys.map((queryKey) =>
-    queryClient.invalidateQueries({ queryKey, refetchType: 'active' }),
-  ));
+  await Promise.all([
+    ...queryKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey, refetchType: 'active' })),
+    queryClient.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: ['journal', 'recent', businessId], refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: ['pos', 'owner-analytics', businessId], refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: ['vat', 'summary', businessId], refetchType: 'active' }),
+    queryClient.invalidateQueries({ queryKey: ['paye', 'summary', businessId], refetchType: 'active' }),
+  ]);
 }
 
 /** Draft and void expenses must not contribute to dashboard totals or trends. */

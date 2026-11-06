@@ -12,7 +12,7 @@ vi.mock('@/hooks/useTaxData', () => ({
   useVatSummary: () => taxMocks.vat,
   usePayeSummary: () => taxMocks.paye,
 }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }));
 
 import { TaxRemittancePanel } from '@/components/dashboard/TaxRemittancePanel';
 

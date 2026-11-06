@@ -36,6 +36,17 @@ const DEFAULT_SETTINGS: (businessId: string) => PosSettings = (businessId) => ({
   custom_role_permissions: DEFAULT_ROLE_PERMISSIONS,
 });
 
+export interface PosOwnerAnalyticsReport {
+  order_count: number;
+  gross_sales: number;
+  net_sales: number;
+  discount_total: number;
+  average_ticket: number;
+  return_count: number;
+  refunds_total: number;
+  payment_breakdown: Record<string, { count: number; total: number }>;
+}
+
 interface RawPosSettingsData {
   id?: string;
   business_id?: string;
@@ -162,6 +173,26 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
   }
 
   // ── Shifts ───────────────────────────────────────────────────────────────
+
+  async findDashboardActiveShift(businessId: string): Promise<PosShift | null> {
+    const { data, error } = await this.client
+      .from('pos_shifts')
+      .select('*')
+      .eq('business_id', businessId)
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw toRepositoryError('pos_shifts', error);
+    if (!data) return null;
+    return {
+      ...(data as unknown as PosShift),
+      opening_float: data.opening_cash,
+      start_time: data.opened_at,
+      expectedCash: data.expected_cash,
+      status: 'open',
+    };
+  }
 
   async findActiveShift(
     businessId: string,
@@ -542,14 +573,39 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
    */
   async getShiftReport(shiftId: string): Promise<Record<string, unknown> | null> {
     try {
-      const { data, error } = await this.client.rpc('get_pos_shift_report' as never, {
-        p_shift_id: shiftId,
-      } as never);
-      if (error) return null;
-      return (data ?? null) as Record<string, unknown> | null;
+      const [reportResult, detailsResult] = await Promise.all([
+        this.client.rpc('get_pos_shift_report', { p_shift_id: shiftId }),
+        this.client.rpc('get_pos_shift_report_details', { p_shift_id: shiftId }),
+      ]);
+      if (reportResult.error || detailsResult.error || !reportResult.data || !detailsResult.data) return null;
+
+      const report = reportResult.data as Record<string, unknown>;
+      const details = detailsResult.data as Record<string, unknown>;
+      if (report.shift_id !== shiftId || details.shift_id !== shiftId) return null;
+      return { ...report, ...details, close: report.close ?? null };
     } catch {
       return null;
     }
+  }
+
+  /** Server aggregates POS invoices, tenders, and returns for the chosen scope. */
+  async getOwnerAnalytics(
+    businessId: string,
+    branchId: string | null,
+    from: string | null,
+    to: string | null,
+  ): Promise<PosOwnerAnalyticsReport> {
+    const { data, error } = await this.client.rpc('get_pos_owner_analytics', {
+      p_business_id: businessId,
+      p_branch_id: branchId,
+      p_from: from,
+      p_to: to,
+    });
+    if (error) throw toRepositoryError('invoices', error);
+    if (!data || typeof data !== 'object') {
+      throw toRepositoryError('invoices', { message: 'POS analytics returned no server aggregate.' });
+    }
+    return data as unknown as PosOwnerAnalyticsReport;
   }
 
   async listCashMovements(businessId: string, shiftId?: string): Promise<PosCashMovement[]> {

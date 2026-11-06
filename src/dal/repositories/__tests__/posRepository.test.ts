@@ -197,17 +197,36 @@ describe('PosRepository', () => {
       expect(recorded.amount).toBe(20000);
     });
 
-    it('getShiftReport surfaces the R08.4 tender-derived read (null on old backends)', async () => {
-      mockClient.rpc.mockResolvedValueOnce({
-        data: { result: 'shift_report', cash_tenders: 1500, close: { report_number: 'Z-2026-9' } },
-        error: null,
-      });
+    it('merges the shift-scoped authoritative report with server report details', async () => {
+      mockClient.rpc
+        .mockResolvedValueOnce({
+          data: { result: 'shift_report', shift_id: 'shift-1', cash_tenders: 1500, close: { report_number: 'Z-2026-9' } },
+          error: null,
+        })
+        .mockResolvedValueOnce({ data: { shift_id: 'shift-1', gross_sales: 2000, tax_breakdown: {} }, error: null });
       const report = await repo.getShiftReport('shift-1');
-      expect((report as Record<string, unknown>).cash_tenders).toBe(1500);
-      expect(mockClient.rpc.mock.calls[0][0]).toBe('get_pos_shift_report');
+      expect(report).toMatchObject({ cash_tenders: 1500, gross_sales: 2000, shift_id: 'shift-1' });
+      expect(mockClient.rpc.mock.calls.map(([name]) => name)).toEqual([
+        'get_pos_shift_report',
+        'get_pos_shift_report_details',
+      ]);
 
       mockClient.rpc.mockResolvedValueOnce({ data: null, error: { message: 'function not found' } });
       await expect(repo.getShiftReport('shift-1')).resolves.toBeNull();
+    });
+
+    it('calls server POS analytics with business, branch, and date boundaries', async () => {
+      const analytics = { order_count: 2, gross_sales: 120, net_sales: 100, discount_total: 20, average_ticket: 50, return_count: 0, refunds_total: 0, payment_breakdown: {} };
+      mockClient.rpc.mockResolvedValueOnce({ data: analytics, error: null });
+
+      await expect(repo.getOwnerAnalytics('biz-1', 'branch-1', '2026-11-01T00:00:00Z', '2026-11-02T00:00:00Z'))
+        .resolves.toEqual(analytics);
+      expect(mockClient.rpc).toHaveBeenCalledWith('get_pos_owner_analytics', {
+        p_business_id: 'biz-1',
+        p_branch_id: 'branch-1',
+        p_from: '2026-11-01T00:00:00Z',
+        p_to: '2026-11-02T00:00:00Z',
+      });
     });
   });
 });

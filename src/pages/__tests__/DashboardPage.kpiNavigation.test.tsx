@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const dashboardMocks = vi.hoisted(() => ({
   useMonthlyIncome: vi.fn(),
@@ -81,10 +82,13 @@ beforeEach(() => {
 
 describe('GenericDashboard KPI navigation', () => {
   it('renders each loaded financial KPI as a semantic link to its detail route', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { container } = render(
-      <MemoryRouter>
-        <GenericDashboard />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <GenericDashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     const expectedRoutes = [

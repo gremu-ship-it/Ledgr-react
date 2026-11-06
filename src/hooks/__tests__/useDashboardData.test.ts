@@ -62,12 +62,17 @@ describe('dashboard period and query helpers', () => {
 
     await refreshDashboardQueries({ invalidateQueries } as never, 'business-1');
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(7);
+    expect(invalidateQueries).toHaveBeenCalledTimes(12);
     for (const [filters] of invalidateQueries.mock.calls) {
       expect(filters).toMatchObject({ refetchType: 'active' });
     }
-    expect(invalidateQueries.mock.calls.map(([filters]) => filters.queryKey)).toEqual(
-      getDashboardRefreshQueryKeys('business-1'),
-    );
+    expect(invalidateQueries.mock.calls.map(([filters]) => filters.queryKey)).toEqual([
+      ...getDashboardRefreshQueryKeys('business-1'),
+      ['dashboard'],
+      ['journal', 'recent', 'business-1'],
+      ['pos', 'owner-analytics', 'business-1'],
+      ['vat', 'summary', 'business-1'],
+      ['paye', 'summary', 'business-1'],
+    ]);
   });
 });

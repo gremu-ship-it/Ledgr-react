@@ -14441,6 +14441,11 @@ export type Database = {
         }[]
       }
       get_pos_shift_report: { Args: { p_shift_id: string }; Returns: Json }
+      get_pos_shift_report_details: { Args: { p_shift_id: string }; Returns: Json }
+      get_pos_owner_analytics: {
+        Args: { p_business_id: string; p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }
+        Returns: Json
+      }
       get_project_cost_summary: {
         Args: { p_project_id: string }
         Returns: {

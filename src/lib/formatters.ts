@@ -1,3 +1,35 @@
+export function formatCurrency(value: number, currencyCode = 'MWK', locale?: string): string {
+  const code = /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : 'MWK';
+  const numberLocale = locale || (code === 'MWK' ? 'en-MW' : 'en');
+  return new Intl.NumberFormat(numberLocale, {
+    style: 'currency',
+    currency: code,
+    currencyDisplay: 'code',
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+export function formatCurrencyCompact(value: number, currencyCode = 'MWK', locale?: string): string {
+  const code = /^[A-Z]{3}$/.test(currencyCode) ? currencyCode : 'MWK';
+  const numberLocale = locale || (code === 'MWK' ? 'en-MW' : 'en');
+  return new Intl.NumberFormat(numberLocale, {
+    style: 'currency',
+    currency: code,
+    currencyDisplay: 'code',
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
+export function formatDateRange(from: string, to: string, locale = 'en-MW'): string {
+  const parseLocal = (value: string) => {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+  return `${parseLocal(from).toLocaleDateString(locale, options)} – ${parseLocal(to).toLocaleDateString(locale, options)}`;
+}
+
 export function formatMwk(value: number): string {
   return new Intl.NumberFormat('en-MW', {
     style: 'currency',
