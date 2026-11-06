@@ -25,6 +25,11 @@ import { UpgradeModal } from '@/components/billing/UpgradeModal';
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { useState } from 'react';
+import { useCapability } from '@/hooks/useCapability';
+import { ConstructionDashboard } from '@/components/construction/dashboard/ConstructionDashboard';
+import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
+import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
+import { ManufacturingDashboardPage } from '@/pages/manufacturing/ManufacturingDashboardPage';
 import { DashboardVerticalModules } from '@/components/dashboard/DashboardVerticalModules';
 import { DashboardFreshnessToolbar } from '@/components/dashboard/DashboardFreshnessToolbar';
 
@@ -126,7 +131,56 @@ function QuickActions() {
 }
 
 export function DashboardPage() {
-  return <GenericDashboard />;
+  const isConstruction = useCapability('construction');
+  const hasManufacturingCapability = useCapability('manufacturing');
+  const inventoryEnabled = useCapability('inventory');
+  const operatingModels = useAppStore((state) => state.currentBusiness?.business?.operating_models);
+  const hasManufacturingOperatingModel = Array.isArray(operatingModels)
+    && operatingModels.some((model) => typeof model === 'string' && model.trim().toUpperCase() === 'MANUFACTURING');
+  const isManufacturing = hasManufacturingCapability || hasManufacturingOperatingModel;
+  const businessId = useAppStore((state) => state.currentBusiness?.business?.id);
+  const isMobile = useIsMobile();
+
+  // MobileDashboard owns the compact summaries for standard businesses. Keep
+  // the full manufacturing workspace responsive rather than replacing it.
+  if (!isConstruction && !isManufacturing && isMobile) return <MobileDashboard />;
+
+  const exceptions = (
+    <SectionErrorBoundary sectionName="Actionable Exceptions" fallbackHeight="220px">
+      <ActionableExceptions
+        construction={isConstruction}
+        manufacturing={isManufacturing}
+        inventoryEnabled={inventoryEnabled}
+      />
+    </SectionErrorBoundary>
+  );
+  const hasSpecializedDashboard = isConstruction || isManufacturing;
+
+  return (
+    <div className="space-y-6" data-testid="executive-hub-dashboard">
+      <SectionErrorBoundary sectionName="Executive Health Summary" fallbackHeight="150px">
+        <ExecutiveHealthStrip />
+      </SectionErrorBoundary>
+      {hasSpecializedDashboard && businessId && <DashboardFreshnessToolbar businessId={businessId} />}
+      {isConstruction && <ConstructionDashboard />}
+      {isManufacturing ? (
+        <>
+          {exceptions}
+          <SectionErrorBoundary sectionName="Manufacturing Executive Dashboard" fallbackHeight="560px">
+            <ManufacturingDashboardPage />
+          </SectionErrorBoundary>
+        </>
+      ) : (
+        <>
+          {!isConstruction && <GenericDashboard />}
+          {exceptions}
+        </>
+      )}
+      {/* The generic desktop dashboard includes these modules itself. Specialized
+          dashboards retain the same additive, role-gated summaries as well. */}
+      {hasSpecializedDashboard && <DashboardVerticalModules />}
+    </div>
+  );
 }
 
 export function GenericDashboard() {

@@ -30,14 +30,28 @@ export function DashboardFreshnessToolbar({ businessId, compact = false }: { bus
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    const refreshTimestamp = () => setUpdatedAt(latestSuccessfulDashboardUpdate(queryClient, businessId));
-    const unsubscribe = queryClient.getQueryCache().subscribe(refreshTimestamp);
+    let refreshTimer: number | undefined;
+    const scheduleTimestampRefresh = () => {
+      // Query-cache notifications can fire while sibling queries are being
+      // created during render. Defer the state update until after that render.
+      if (refreshTimer !== undefined) return;
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = undefined;
+        setUpdatedAt(latestSuccessfulDashboardUpdate(queryClient, businessId));
+      }, 0);
+    };
+    const unsubscribe = queryClient.getQueryCache().subscribe(scheduleTimestampRefresh);
     const initialSync = window.setTimeout(() => {
-      refreshTimestamp();
+      setUpdatedAt(latestSuccessfulDashboardUpdate(queryClient, businessId));
       setNow(Date.now());
     }, 0);
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
-    return () => { unsubscribe(); window.clearTimeout(initialSync); window.clearInterval(timer); };
+    return () => {
+      unsubscribe();
+      window.clearTimeout(initialSync);
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+      window.clearInterval(timer);
+    };
   }, [businessId, queryClient]);
 
   const onRefresh = useCallback(async () => {

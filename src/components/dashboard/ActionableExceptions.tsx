@@ -244,14 +244,36 @@ export function ActionableExceptions({
   const generalItems = [...overdueInvoices, ...lowStockItems];
   const constructionItems = [...constructionHoldItems, ...changeOrderItems, ...overBudgetItems];
   const manufacturingItems = [...stockoutItems, ...lowYieldItems];
-  const loading = invoicesQuery.isLoading || (inventoryEnabled && inventoryQuery.isLoading)
-    || (construction && (constructionHoldsQuery.isLoading || submittedChangeOrdersQuery.isLoading || overBudgetQuery.isLoading))
-    || (manufacturing && (manufacturingDashboardQuery.isLoading || workOrderStockoutsQuery.isLoading));
-  const failed = invoicesQuery.isError || (inventoryEnabled && inventoryQuery.isError)
-    || (construction && (constructionHoldsQuery.isError || submittedChangeOrdersQuery.isError || overBudgetQuery.isError))
-    || (manufacturing && (manufacturingDashboardQuery.isError || workOrderStockoutsQuery.isError));
+  const generalLoading = invoicesQuery.isLoading || invoicesQuery.isPending
+    || (inventoryEnabled && (inventoryQuery.isLoading || inventoryQuery.isPending));
+  const generalFailed = invoicesQuery.isError || (inventoryEnabled && inventoryQuery.isError);
+  const constructionLoading = constructionHoldsQuery.isLoading || constructionHoldsQuery.isPending
+    || submittedChangeOrdersQuery.isLoading || submittedChangeOrdersQuery.isPending
+    || overBudgetQuery.isLoading || overBudgetQuery.isPending;
+  const constructionFailed = constructionHoldsQuery.isError || submittedChangeOrdersQuery.isError || overBudgetQuery.isError;
+  const manufacturingLoading = manufacturingDashboardQuery.isLoading || manufacturingDashboardQuery.isPending
+    || workOrderStockoutsQuery.isLoading || workOrderStockoutsQuery.isPending;
+  const manufacturingFailed = manufacturingDashboardQuery.isError || workOrderStockoutsQuery.isError;
+  const loading = Boolean(businessId && (
+    generalLoading
+    || (construction && constructionLoading)
+    || (manufacturing && manufacturingLoading)
+  ));
+  const failed = generalFailed
+    || (construction && constructionFailed)
+    || (manufacturing && manufacturingFailed);
 
-  if (!businessId) return null;
+  if (!businessId) {
+    return (
+      <section className="rounded-2xl border border-gray-200 bg-white px-4 py-4 shadow-sm sm:px-5" aria-label={t('dashboard.actionableExceptions.title')} data-testid="actionable-exceptions">
+        <h2 className="flex items-center gap-2 text-base font-bold text-gray-900">
+          <AlertTriangle className="h-5 w-5 text-amber-700" aria-hidden="true" />
+          {t('dashboard.actionableExceptions.title')}
+        </h2>
+        <p className="mt-1 text-sm text-gray-600">{t('dashboard.actionableExceptions.selectBusiness')}</p>
+      </section>
+    );
+  }
 
   if (!loading && !failed && generalItems.length === 0 && constructionItems.length === 0 && manufacturingItems.length === 0) {
     return (
@@ -271,26 +293,26 @@ export function ActionableExceptions({
         <AlertTriangle className="h-5 w-5 text-amber-700" aria-hidden="true" />
         {t('dashboard.actionableExceptions.title')}
       </h2>
-      <ExceptionGroup
+      {generalLoading || generalFailed || generalItems.length > 0 ? <ExceptionGroup
         title={t('dashboard.actionableExceptions.general')}
         icon={ReceiptText}
         items={generalItems}
-        loading={invoicesQuery.isLoading || (inventoryEnabled && inventoryQuery.isLoading)}
-        failed={invoicesQuery.isError || (inventoryEnabled && inventoryQuery.isError)}
-      />
-      {construction ? <ExceptionGroup
+        loading={generalLoading}
+        failed={generalFailed}
+      /> : null}
+      {construction && (constructionLoading || constructionFailed || constructionItems.length > 0) ? <ExceptionGroup
         title={t('dashboard.actionableExceptions.construction')}
         icon={HardHat}
         items={constructionItems}
-        loading={constructionHoldsQuery.isLoading || submittedChangeOrdersQuery.isLoading || overBudgetQuery.isLoading}
-        failed={constructionHoldsQuery.isError || submittedChangeOrdersQuery.isError || overBudgetQuery.isError}
+        loading={constructionLoading}
+        failed={constructionFailed}
       /> : null}
-      {manufacturing ? <ExceptionGroup
+      {manufacturing && (manufacturingLoading || manufacturingFailed || manufacturingItems.length > 0) ? <ExceptionGroup
         title={t('dashboard.actionableExceptions.manufacturing')}
         icon={Factory}
         items={manufacturingItems}
-        loading={manufacturingDashboardQuery.isLoading || workOrderStockoutsQuery.isLoading}
-        failed={manufacturingDashboardQuery.isError || workOrderStockoutsQuery.isError}
+        loading={manufacturingLoading}
+        failed={manufacturingFailed}
       /> : null}
     </section>
   );

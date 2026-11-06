@@ -574,7 +574,7 @@
     "daysLeft": "{{count}}d left",
     "dueTodayBang": "Due today!",
     "executiveHealth": {
-      "title": "Executive health",
+      "title": "Executive Health & Financial Heartbeat",
       "cashBalance": "Cash balance (bank)",
       "accountsReceivable": "Accounts receivable",
       "accountsPayable": "Accounts payable",
@@ -587,7 +587,8 @@
       "cashAsOf": "As of {{date}}",
       "openInvoices": "{{count}} open invoice(s)",
       "unpaidExpenses": "{{count}} unpaid expense(s)",
-      "openMetric": "Open {{metric}}"
+      "openMetric": "Open {{metric}}",
+      "liveSummary": "Live Summary"
     },
     "actionableExceptions": {
       "title": "Actionable exceptions",
@@ -614,7 +615,8 @@
       "openChangeOrder": "Review change order",
       "openProject": "Review project budget",
       "openWorkOrder": "Review work order",
-      "openProduction": "Review production"
+      "openProduction": "Review production",
+      "selectBusiness": "Select a business to check for actionable exceptions."
     },
     "constructionWorkspace": "Construction workspace",
     "manufacturingWorkspace": "Manufacturing workspace"
@@ -688,7 +690,6 @@
     "dueDate": "Due Date",
     "vatRegistered": "VAT registered"
   },
-
   "reports": {
     "reports": "Reports",
     "statementOfFinancialPosition": "Statement of Financial Position",
@@ -3999,10 +4000,6 @@
     },
     "dashboard": {
       "title": "Manufacturing Dashboard",
-      "quickActions": "Quick actions",
-      "createWorkOrderAction": "Create Work Order",
-      "defineBillOfMaterialsAction": "Define Bill of Materials",
-      "viewInventoryStockAction": "View Inventory Stock",
       "summary": "Production summary metrics",
       "period": {
         "label": "Period",
@@ -4067,7 +4064,11 @@
         "good": "≥95%",
         "warning": "85–94%",
         "poor": "<85%"
-      }
+      },
+      "quickActions": "Quick actions",
+      "createWorkOrderAction": "Create Work Order",
+      "defineBillOfMaterialsAction": "Define Bill of Materials",
+      "viewInventoryStockAction": "View Inventory Stock"
     }
   },
   "approvals": {
@@ -4807,7 +4808,7 @@
     "adjustEmployeeFilters": "Adjust Employee Filters",
     "adjustPayRunFilters": "Adjust Pay Run Filters",
     "allRequests": "All requests",
-    "allStatuses": "All statuses",
+    "allStatuses": "All Statuses",
     "approve": "Approve",
     "approveFailed": "Could not approve the pay run. Please try again.",
     "approvePayRun": "Approve Pay Run",
@@ -4869,7 +4870,7 @@
     "employeeCount": "{{count}} employees",
     "employeeDateRangeInvalid": "The end date must be on or after the start date.",
     "employeeDetailTabs": "Employee details sections",
-    "employeeDirectoryDescription": "View and manage employee records, compensation, and employment status.",
+    "employeeDirectoryDescription": "Manage employee records, job details, and salary configurations.",
     "employeeDirectoryFilters": "Employee directory filters",
     "employeeEmailInvalid": "Enter a valid email address.",
     "employeeLoadFailed": "Could not load employees. Please try again.",
@@ -4901,13 +4902,13 @@
     "functionalCurrencyOnly": "Payroll is processed in the business’s functional currency.",
     "grossOnPage": "Total gross pay",
     "grossPay": "Gross pay",
-    "grossSalary": "Gross salary",
-    "hireDate": "Hire date",
+    "grossSalary": "Gross Salary",
+    "hireDate": "Hire Date",
     "included": "Included",
     "insufficientBalance": "The employee does not have enough leave days available.",
     "invalidLeaveDates": "Enter valid leave dates, with the end date on or after the start date.",
     "invalidPayPeriod": "Enter a valid payroll period.",
-    "jobTitle": "Job title",
+    "jobTitle": "Job Title",
     "journalEntryDate": "Journal entry date",
     "journalEntryDescription": "Journal entry description",
     "journalEntryDetails": "Journal Entry Details",
@@ -4916,7 +4917,7 @@
     "journalEntryNumber": "Journal entry number",
     "journalEntryStatus": "Journal entry status",
     "lastName": "Last name",
-    "leave": "Leave",
+    "leave": "Leave Management",
     "leaveAccrualComplete": "Leave accrual completed.",
     "leaveAccrualFailed": "Could not accrue leave. Please try again.",
     "leaveAccrualScope": "Accrue leave for eligible employees for the selected period.",
@@ -4942,7 +4943,7 @@
     "monthlyGross": "Monthly gross pay",
     "nationalId": "National ID",
     "netOnPage": "Total net pay",
-    "netPay": "Net pay",
+    "netPay": "Net Pay",
     "newEmployeeDescription": "Add an employee and set up their payroll and employment details.",
     "newLeaveRequestDescription": "Submit a leave request on behalf of an employee.",
     "newPayRun": "New Pay Run",
@@ -4952,9 +4953,9 @@
     "nextPage": "Next page",
     "noActiveEmployees": "There are no active employees available.",
     "noComponentDetails": "No component details are available for this pay run.",
-    "noEmployeesDescription": "Add an employee to get started with payroll.",
+    "noEmployeesDescription": "Add your first employee to begin managing payroll.",
     "noEmployeesIncludedWarning": "No employees are included in this pay run.",
-    "noEmployeesMatch": "No employees match your search or filters.",
+    "noEmployeesMatch": "No employees match these filters",
     "noEmployeesYet": "No employees yet",
     "noJobTitle": "No job title",
     "noLeaveBalances": "No leave balances",
@@ -4995,7 +4996,7 @@
     "payRunPosted": "Pay run posted",
     "payRunSteps": "Pay run steps",
     "payRunSummaries": "Pay run summaries",
-    "payRuns": "Pay runs",
+    "payRuns": "Pay Runs",
     "payRunsDescription": "Review payroll runs, their approval status, and the amounts due to employees.",
     "payRunsInResults": "Pay runs in results",
     "payRunsLoadFailed": "Could not load pay runs. Please try again.",
@@ -5051,7 +5052,7 @@
     "saveChanges": "Save changes",
     "saveEmployee": "Save Employee",
     "savingBands": "Saving tax bands…",
-    "searchEmployees": "Search employees",
+    "searchEmployees": "Search employees...",
     "selectEmployee": "Select an employee",
     "selectLeaveType": "Select a leave type",
     "selectPayPeriod": "Select pay period",
@@ -5065,7 +5066,7 @@
     "statusSuspended": "Suspended",
     "statusTerminated": "Terminated",
     "submitRequest": "Submit Request",
-    "taxConfig": "PAYE Tax Bands",
+    "taxConfig": "Tax Config",
     "taxConfigDescription": "Set up the PAYE tax bands used to calculate employee income tax.",
     "taxConfigLoadFailed": "Could not load PAYE tax bands.",
     "taxConfigSaveFailed": "Could not save PAYE tax bands. Please try again.",
@@ -5218,5 +5219,13 @@
       "saving": "Saving…",
       "saved": "Partner branding updated successfully."
     }
+  },
+  "PAYROLL": {
+    "TITLE": "Payroll",
+    "EMPLOYEE": "Employee",
+    "DEPARTMENT": "Department",
+    "JOBTITLE": "Job Title",
+    "HIREDATE": "Hire Date",
+    "GROSSSALARY": "Gross Salary"
   }
 }

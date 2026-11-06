@@ -27,4 +27,3 @@ export function ManufacturingSummarySection({ businessId, currencyCode }: { busi
     </ModuleMetrics>}
   </ModuleCard>;
 }
-

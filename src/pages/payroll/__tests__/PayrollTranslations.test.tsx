@@ -59,7 +59,7 @@ describe('payroll English translations', () => {
     expect(screen.getByRole('button', { name: 'Add Employee' })).toBeTruthy();
     expect(screen.getByPlaceholderText('Search employees...')).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Employee directory filters' })).toBeTruthy();
-    expect(screen.getByText('1 employee(s)')).toBeTruthy();
+    expect(screen.getByText('1 employee')).toBeTruthy();
     expect(screen.getAllByRole('columnheader').map((header) => header.textContent?.trim())).toEqual([
       'Employee', 'Department', 'Job Title', 'Hire Date', 'Gross Salary', 'Status',
     ]);
