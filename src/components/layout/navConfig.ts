@@ -33,7 +33,6 @@ import {
   MessageSquare,
   GitCompare,
   WalletCards,
-  Settings,
   CircleDollarSign,
   Calculator,
   Target,
@@ -326,6 +325,7 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.bankAccounts', path: '/bank-reconciliation/accounts', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankStatements', path: '/bank-reconciliation/statements', icon: Landmark, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
       { labelKey: 'navigation.items.bankReconciliationReconcile', path: '/bank-reconciliation/reconcile', icon: ArrowLeftRight, partnerFeature: 'bank_reconciliation', requiresCapability: 'bank_reconciliation', minPlan: 'growth' },
+      { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {
@@ -342,13 +342,6 @@ export const NAV_SECTIONS: NavSectionConfig[] = [
       { labelKey: 'navigation.items.branches', path: '/branches', icon: GitBranch, minPlan: 'growth', requiresCapability: 'accounting_organisation', hiddenWhenSitesReplaceBranches: true },
       { labelKey: 'navigation.items.locations', path: '/locations', icon: MapPin, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
       { labelKey: 'navigation.items.departments', path: '/departments', icon: Users2, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
-    ],
-  },
-  {
-    labelKey: 'navigation.sections.settings',
-    items: [
-      { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings },
-      { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, minPlan: 'growth', requiresCapability: 'accounting_organisation' },
     ],
   },
   {

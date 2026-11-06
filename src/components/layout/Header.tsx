@@ -346,7 +346,7 @@ export function Header() {
                 role="menuitem"
                 onClick={() => {
                   setUserMenuOpen(false);
-                  navigate('/settings');
+                  navigate('/settings?tab=profile');
                 }}
                 className={clsx(
                   'flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-left text-xs font-bold uppercase tracking-widest text-gray-600 transition-colors hover:bg-gray-50 hover:text-brand-700',
