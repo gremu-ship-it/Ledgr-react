@@ -15,6 +15,7 @@ import { OfflineQueueDrawer } from './OfflineQueueDrawer';
 import { announce } from '@/lib/a11y';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { exitDemoMode } from '@/lib/demo/session';
+import { clearPartnerClientContext } from '@/partner/partnerClientContext';
 
 function getInitials(name: string | null | undefined, email: string | null | undefined): string {
   if (name && name.trim()) {
@@ -107,6 +108,7 @@ export function Header() {
   }, [notificationsOpen, unreadCount]);
 
   async function handleSignOut() {
+    clearPartnerClientContext();
     // Leaving the demo is not a Supabase sign-out: there is no session to
     // revoke, only local sample data and the demo flag to clear.
     if (isDemo) {

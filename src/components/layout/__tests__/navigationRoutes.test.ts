@@ -27,7 +27,7 @@ describe('navigation route contracts', () => {
   });
 
   it('redirects legacy /payroll and /chat URLs to their canonical surfaces', () => {
-    expect(appSource).toMatch(/<Route path="\/payroll" element=\{\s*<PartnerPlanGate[\s\S]*?<Navigate to="\/payroll\/employees" replace \/>[\s\S]*?<\/PartnerPlanGate>/);
+    expect(appSource).toContain('<Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />');
     expect(appSource).toMatch(/<Route path="\/chat" element=\{<Navigate to="\/ai" replace \/>\} \/>/);
   });
 

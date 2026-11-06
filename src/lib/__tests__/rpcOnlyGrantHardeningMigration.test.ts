@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const repositoryRoot = path.resolve(fileURLToPath(new URL('../../../', import.meta.url)));
 const migration = readFileSync(
-  path.join(repositoryRoot, 'supabase/migrations/20261207000001_revoke_public_grants_from_rpc_only_tables.sql'),
+  path.join(repositoryRoot, 'supabase/migrations/20261216000000_revoke_public_grants_from_rpc_only_tables.sql'),
   'utf8',
 );
 

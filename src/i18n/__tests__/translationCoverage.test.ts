@@ -17,12 +17,18 @@ function sourceFiles(directory: string): string[] {
 }
 
 function hasTranslation(key: string): boolean {
-  let value: unknown = en;
-  for (const part of key.split('.')) {
-    if (!value || typeof value !== 'object' || !(part in value)) return false;
-    value = (value as Record<string, unknown>)[part];
-  }
-  return typeof value === 'string';
+  const lookup = (candidate: string): boolean => {
+    let value: unknown = en;
+    for (const part of candidate.split('.')) {
+      if (!value || typeof value !== 'object' || !(part in value)) return false;
+      value = (value as Record<string, unknown>)[part];
+    }
+    return typeof value === 'string';
+  };
+
+  // i18next's English plural forms are stored as suffixed keys even though
+  // components call t() with the unsuffixed key and pass a count.
+  return lookup(key) || ['_one', '_other', '_plural'].some((suffix) => lookup(`${key}${suffix}`));
 }
 
 describe('English translation coverage', () => {

@@ -119,13 +119,20 @@ export function hasPosPermission(
 }
 
 export interface PosRegister {
+  /** The R08 pos_terminals.id; shifts remain bound to this server-registered till. */
   id: string;
-  business_id?: string;
-  branch_id?: string | null;
+  business_id: string;
+  branch_id: string;
   name: string;
-  code?: string;
-  is_active?: boolean;
+  code: string;
+  preferred_location_id?: string | null;
+  default_cash_account_id?: string | null;
+  is_active: boolean;
   created_at?: string;
+  updated_at?: string;
+  branch?: { id: string; name: string } | null;
+  location?: { id: string; name: string } | null;
+  cash_account?: { id: string; name: string; code: string | null } | null;
 }
 
 export interface PosProduct {
@@ -160,6 +167,21 @@ export interface PosProduct {
   is_active?: boolean;
 }
 
+export type PosShiftStatus = 'open' | 'closed';
+
+export interface OpenShiftParams {
+  businessId: string;
+  terminalId?: string;
+  openingFloat: number;
+  notes?: string;
+}
+
+export interface CloseShiftParams {
+  closingCash: number;
+  varianceReason?: string | null;
+  notes?: string | null;
+}
+
 export interface PosShift {
   id: string;
   business_id: string;
@@ -187,7 +209,7 @@ export interface PosShift {
   refunds_amount: number;
   cash_in_amount: number;
   cash_out_amount: number;
-  status: 'open' | 'closed';
+  status: PosShiftStatus;
   notes: string | null;
   created_at?: string;
   updated_at?: string;
@@ -265,6 +287,8 @@ export interface PosCartItem {
   quantity: number;
   /** Server token authorising a non-catalogue price for this line (cashier path). */
   priceOverrideToken?: string | null;
+  /** Retained on held carts so the edit is re-authorized if another cashier resumes it. */
+  priceOverridden?: boolean;
   unit_price: number;
   unitPrice?: number;
   unit_cost?: number;
@@ -302,6 +326,32 @@ export interface PosPaymentSplit {
   note?: string;
 }
 
+/** One tender row persisted through the canonical invoice_payments write path. */
+export interface PosPaymentLine extends PosPaymentSplit {
+  id?: string;
+  invoice_id?: string;
+  shift_id?: string | null;
+  created_at?: string;
+}
+
+export type ManagerOverrideRequest =
+  | { kind: 'discount'; percent: number }
+  | { kind: 'price'; productId: string; unitPrice: number };
+
+export interface PosPendingPriceOverride {
+  id: string;
+  token: string;
+  kind: 'price' | 'discount';
+  product_id: string | null;
+  product_name: string | null;
+  unit_price: number | null;
+  max_discount_percent: number | null;
+  reason: string | null;
+  requested_by: string;
+  created_at: string;
+  expires_at: string;
+}
+
 export interface PosParkedOrder {
   id: string;
   reference: string;
@@ -316,6 +366,30 @@ export interface PosParkedOrder {
   cashier_id?: string;
 }
 
+export interface PosHeldOrder {
+  id: string;
+  business_id: string;
+  branch_id: string | null;
+  shift_id: string;
+  cashier_id: string;
+  cashier_name: string | null;
+  customer_id: string | null;
+  customer_snapshot: PosCustomer | null;
+  reference_note: string;
+  cart_items: PosCartItem[];
+  subtotal: number;
+  discount_amount: number;
+  total_amount: number;
+  order_discount: PosDiscount | null;
+  cart_notes: string | null;
+  status: 'held' | 'resumed' | 'expired';
+  resumed_at: string | null;
+  resumed_by: string | null;
+  expired_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PosSaleItem {
   id?: string;
   sale_id?: string;
@@ -325,6 +399,8 @@ export interface PosSaleItem {
   name?: string;
   sku?: string | null;
   quantity: number;
+  returnable_quantity?: number;
+  return_unit_price?: number;
   unit_price: number;
   unitPrice?: number;
   unit_cost?: number;
@@ -480,7 +556,13 @@ export interface PosSaleResult {
   dueDate?: string;
 }
 
+export type PosRefundMethod = 'cash' | 'original' | 'credit';
+
 export interface PosReturnItem {
+  invoiceLineId?: string;
+  invoice_line_id?: string;
+  reason?: string;
+  restock?: boolean;
   productId?: string;
   product_id?: string;
   productName?: string;
@@ -509,8 +591,8 @@ export interface PosReturnPayload {
   cashierName?: string;
   returned_by?: string;
   reason?: string;
-  refundMethod?: PosPaymentMethod;
-  refund_payment_method?: PosPaymentMethod;
+  refundMethod?: PosRefundMethod;
+  refund_payment_method?: PosRefundMethod;
   items: PosReturnItem[];
   totalRefund?: number;
   /**
