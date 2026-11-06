@@ -36,6 +36,24 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     return data ?? [];
   }
 
+  /** Fetch only the nearest approved future payroll commitment for dashboard summaries. */
+  async findNextApproved(
+    businessId: string,
+    fromDate: string,
+  ): Promise<Pick<Row<'payroll_runs'>, 'id' | 'pay_date' | 'total_net' | 'status'> | null> {
+    const { data, error } = await this.client
+      .from('payroll_runs')
+      .select('id, pay_date, total_net, status')
+      .eq('business_id', businessId)
+      .eq('status', 'approved')
+      .gte('pay_date', fromDate)
+      .order('pay_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw toRepositoryError('payroll_runs', error);
+    return data;
+  }
+
   async countEmployeesForRun(runId: string): Promise<number> {
     const { count, error } = await this.client
       .from('payroll_employee_lines')

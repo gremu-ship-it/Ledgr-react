@@ -7,7 +7,7 @@ import { useOutstandingInvoices } from '@/hooks/useDashboardData';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
 import { getManufacturingDashboard } from '@/dal/repositories/ManufacturingDashboardRepository';
-import { getDefaultManufacturingDashboardRange } from '@/pages/manufacturing/ManufacturingDashboardPage';
+import { getDefaultManufacturingDashboardRange } from '@/pages/manufacturing/manufacturingDashboardRange';
 
 const LOW_YIELD_THRESHOLD = 85;
 const MAX_EXCEPTIONS_PER_GROUP = 5;
