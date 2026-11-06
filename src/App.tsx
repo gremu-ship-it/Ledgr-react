@@ -17,6 +17,7 @@ import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useDefaultRoute } from './hooks/useDefaultRoute';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { PlanGate } from '@/components/billing/PlanGate';
+import { ManufacturingDashboardRedirect } from '@/routes/ManufacturingDashboardRedirect';
 import { TrialBalanceUpgradePrompt } from '@/components/reports/TrialBalanceUpgradePrompt';
 import { ProfitLossUpgradePrompt } from '@/components/reports/ProfitLossUpgradePrompt';
 import { BalanceSheetUpgradePrompt } from '@/components/reports/BalanceSheetUpgradePrompt';
@@ -812,15 +813,10 @@ function App() {
                       </PlanGate>
                     }
                   />
+                  {/* Compatibility alias: the canonical route applies the same plan and capability gates. */}
                   <Route
                     path="/manufacturing/dashboard"
-                    element={
-                      <PlanGate minPlan="enterprise" featureName={t('navigation.sections.manufacturing')}>
-                        <CapabilityGate capability="manufacturing">
-                          <ManufacturingDashboardPage />
-                        </CapabilityGate>
-                      </PlanGate>
-                    }
+                    element={<ManufacturingDashboardRedirect />}
                   />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={

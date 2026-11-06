@@ -241,7 +241,6 @@ describe('plan catalogue integration parity', () => {
       '/manufacturing/runs',
       '/manufacturing/routings',
       '/manufacturing/work-centres',
-      '/manufacturing/dashboard',
     ];
     for (const path of routePaths) {
       const start = app.indexOf(`path="${path}"`);
@@ -250,6 +249,12 @@ describe('plan catalogue integration parity', () => {
       expect(route).toContain('PlanGate minPlan="enterprise"');
       expect(route).toContain('CapabilityGate');
     }
+
+    const aliasStart = app.indexOf('path="/manufacturing/dashboard"');
+    expect(aliasStart, 'legacy dashboard alias exists').toBeGreaterThanOrEqual(0);
+    const aliasRoute = app.slice(aliasStart, app.indexOf('/>', aliasStart));
+    expect(aliasRoute).toContain('<ManufacturingDashboardRedirect');
+    expect(app).toContain("import { ManufacturingDashboardRedirect } from '@/routes/ManufacturingDashboardRedirect'");
 
     // The outer RoleRoute encloses both vertical route sets; PlanGate is also
     // inside each page component so direct component rendering stays protected.

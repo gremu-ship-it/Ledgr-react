@@ -168,13 +168,11 @@ export function PosPage() {
   const [discountOverrideToken, setDiscountOverrideToken] = useState<string | null>(null);
   const [isBarcodeModalOpen, setIsBarcodeModalOpen] = useState(false);
   const [isZReportModalOpen, setIsZReportModalOpen] = useState(false);
-  // R08.4/5: the Z-report number is minted by the signed close, never client-side.
-  const [zReportServerNumber, setZReportServerNumber] = useState<string | null>(null);
   const [approvalActionDescription, setApprovalActionDescription] = useState('');
   const [pendingApprovalCallback, setPendingApprovalCallback] = useState<((approvalToken?: string) => void) | null>(null);
 
   // Sales History List
-  const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
+  const [, setSalesHistory] = useState<PosSale[]>([]);
   const [returnSales, setReturnSales] = useState<PosSale[]>([]);
   const [isSearchingReturns, setIsSearchingReturns] = useState(false);
   const canSearchHistoricalReturns = planMeetsMin(planTier, 'growth');
@@ -787,11 +785,7 @@ export function PosPage() {
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
-      // Best-effort: surface the immutable Z-report number signed by the server.
-      const report = await repos.pos.getShiftReport(shift.id);
-      const closeBlock = (report?.close ?? null) as { report_number?: string } | null;
-      setZReportServerNumber(closeBlock?.report_number ?? null);
-      // Offer opening Z-Report
+      // The modal fetches and renders the server-authoritative shift report.
       setIsZReportModalOpen(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : t('common.unknown');
@@ -952,10 +946,9 @@ export function PosPage() {
       {viewMode === 'analytics' ? (
         <div className="flex-1 overflow-y-auto bg-gray-50">
           <PosOwnerAnalytics
-            sales={salesHistory}
-            shifts={currentShift ? [currentShift] : []}
-            currentBranchId={effectiveBranchId || undefined}
-            branches={[]}
+            businessId={businessId || undefined}
+            currentBranchId={branchId || undefined}
+            branches={branches}
           />
         </div>
       ) : (
@@ -1174,11 +1167,8 @@ export function PosPage() {
         open={isZReportModalOpen}
         onClose={() => setIsZReportModalOpen(false)}
         shift={currentShift}
-        sales={salesHistory}
-        businessName={branchName}
+        businessName={currentBusiness?.business?.name}
         branchName={branchName}
-        ownerEmail={currentUser?.email || undefined}
-        serverReportNumber={zReportServerNumber}
       />
     </div>
   );

@@ -1,15 +1,18 @@
 import { useTranslation } from 'react-i18next';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { formatMwk } from '@/lib/formatters';
+import { formatCurrency } from '@/lib/formatters';
 
 interface CashFlowIndicatorProps {
   income?: number;
   expenses?: number;
   isLoading?: boolean;
   isError?: boolean;
+  currencyCode?: string;
+  locale?: string;
+  metadata?: string;
 }
 
-export function CashFlowIndicator({ income, expenses, isLoading, isError }: CashFlowIndicatorProps) {
+export function CashFlowIndicator({ income, expenses, isLoading, isError, currencyCode = 'MWK', locale, metadata }: CashFlowIndicatorProps) {
   const { t } = useTranslation();
   const net = (income ?? 0) - (expenses ?? 0);
   const margin = (income ?? 0) > 0 ? Math.round((net / (income ?? 1)) * 100) : 0;
@@ -55,7 +58,8 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
 
       <div className="mb-5">
         <p className="mb-0.5 text-xs text-gray-600">{t('dashboard.netThisMonth')}</p>
-        <p className={`text-2xl font-extrabold ${config.color}`}>{formatMwk(Math.abs(net))}</p>
+        <p className={`text-2xl font-extrabold ${config.color}`}>{formatCurrency(Math.abs(net), currencyCode, locale)}</p>
+        {metadata && <p className="mt-1 text-[10px] font-medium text-gray-500">{metadata}</p>}
         {(income ?? 0) > 0 && (
           <p className="mt-0.5 text-xs text-gray-600">
             {Math.abs(margin)}% {status === 'profit' ? t('dashboard.profitMargin') : status === 'loss' ? t('dashboard.lossRate') : ''}
@@ -67,7 +71,7 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
         <div>
           <div className="mb-1 flex justify-between">
             <span className="text-xs text-gray-500">{t('dashboard.income')}</span>
-            <span className="text-xs font-semibold text-gray-700">{formatMwk(income ?? 0)}</span>
+            <span className="text-xs font-semibold text-gray-700">{formatCurrency(income ?? 0, currencyCode, locale)}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
             <div className="h-2 rounded-full transition-all duration-700" style={{ width: `${incomeW}%`, background: 'linear-gradient(90deg, #065c42, #14b886)' }} />
@@ -76,7 +80,7 @@ export function CashFlowIndicator({ income, expenses, isLoading, isError }: Cash
         <div>
           <div className="mb-1 flex justify-between">
             <span className="text-xs text-gray-500">{t('dashboard.expenses')}</span>
-            <span className="text-xs font-semibold text-gray-700">{formatMwk(expenses ?? 0)}</span>
+            <span className="text-xs font-semibold text-gray-700">{formatCurrency(expenses ?? 0, currencyCode, locale)}</span>
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
             <div className="h-2 rounded-full bg-red-400 transition-all duration-700" style={{ width: `${expensesW}%` }} />
