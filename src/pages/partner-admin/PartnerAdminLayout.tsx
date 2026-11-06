@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate, useParams } from 'react-router';
+import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Building2, CreditCard, LayoutGrid, LogOut, Settings, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '@/lib/supabase';
@@ -7,14 +8,20 @@ import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { isAdminPortalHost } from '@/lib/partnerDomain';
 import { getHomePathForRole } from '@/hooks/usePermissions';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PartnerClientContextBanner } from '@/partner/PartnerClientContextBanner';
+import { usePartnerClientContext } from '@/partner/usePartnerClientContext';
+import { clearPartnerClientContext } from '@/partner/partnerClientContext';
 
 /** Chrome for the partner admin portal (admin.ledgr.com). */
 export function PartnerAdminLayout() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { isPlatformAdmin } = usePartnerAdminAccess();
+  const { session: partnerClientSession, isRestoring: isRestoringPartnerContext, exitContext } = usePartnerClientContext();
 
   // On admin.ledgr.com the portal *is* the app, so there is nowhere to go
   // back to. When the portal is opened from the main app (via the user menu)
@@ -28,17 +35,20 @@ export function PartnerAdminLayout() {
         { to: `/partner-admin/partners/${id}`, label: 'Overview', icon: LayoutGrid, end: true },
         { to: `/partner-admin/partners/${id}/clients`, label: 'Clients', icon: Users },
         { to: `/partner-admin/partners/${id}/settings`, label: 'Branding & features', icon: Settings },
-        { to: `/partner-admin/partners/${id}/billing`, label: 'Billing', icon: CreditCard },
+        { to: `/partner-admin/partners/${id}/staff`, label: t('partner.staff'), icon: Users },
+        { to: `/partner-admin/partners/${id}/billing`, label: t('partner.billing'), icon: CreditCard },
       ]
     : [{ to: '/partner-admin', label: 'Partners', icon: Building2, end: true }];
 
   async function signOut() {
+    clearPartnerClientContext();
     await supabase.auth.signOut();
     navigate('/login', { replace: true });
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {partnerClientSession && <PartnerClientContextBanner session={partnerClientSession} onExit={exitContext} />}
       {/* Skip link for partner admin portal */}
       <a href="#partner-admin-main" className="skip-link">
         Skip to main content
@@ -110,7 +120,7 @@ export function PartnerAdminLayout() {
       </header>
 
       <main id="partner-admin-main" tabIndex={-1} aria-label="Partner admin content" className="mx-auto max-w-6xl px-6 py-8 outline-none">
-        <Outlet />
+        {isRestoringPartnerContext ? <LoadingSpinner label={t('partner.restoringClientContext')} className="py-16" /> : <Outlet />}
       </main>
     </div>
   );

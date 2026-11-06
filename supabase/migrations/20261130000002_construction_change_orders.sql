@@ -56,82 +56,106 @@ $$;
 revoke all on function public._construction_change_orders_entitled(uuid) from public, anon;
 grant execute on function public._construction_change_orders_entitled(uuid) to authenticated, service_role;
 
-create policy "construction_change_orders_select_member"
-  on public.construction_change_orders
-  for select to authenticated
-  using (public.is_business_member(business_id) and public._construction_change_orders_entitled(business_id));
+do $policy$
+begin
+  create policy "construction_change_orders_select_member"
+    on public.construction_change_orders
+    for select to authenticated
+    using (public.is_business_member(business_id) and public._construction_change_orders_entitled(business_id));
+exception
+  when duplicate_object then null;
+end;
+$policy$;
 
-create policy "construction_change_orders_insert_member"
-  on public.construction_change_orders
-  for insert to authenticated
-  with check (
-    public.is_business_member(business_id)
-    and public._construction_change_orders_entitled(business_id)
-    and created_by = (select auth.uid())
-    and status = 'draft'
-    and approved_by is null and approved_at is null
-    and submitted_by is null and submitted_at is null
-    and rejection_reason is null
-    and exists (
-      select 1 from public.construction_projects p
-      where p.id = project_id and p.business_id = construction_change_orders.business_id
-    )
-    and (site_id is null or exists (
-      select 1 from public.construction_procurement_sites s
-      where s.id = site_id and s.business_id = construction_change_orders.business_id
-        and (s.project_id is null or s.project_id = construction_change_orders.project_id)
-    ))
-    and (boq_section_id is null or exists (
-      select 1 from public.boq_sections bs
-      where bs.id = boq_section_id and bs.business_id = construction_change_orders.business_id
-    ))
-    and (subcontract_id is null or exists (
-      select 1 from public.subcontracts sc
-      where sc.id = subcontract_id and sc.business_id = construction_change_orders.business_id
-        and sc.project_id = construction_change_orders.project_id
-    ))
-  );
+do $policy$
+begin
+  create policy "construction_change_orders_insert_member"
+    on public.construction_change_orders
+    for insert to authenticated
+    with check (
+      public.is_business_member(business_id)
+      and public._construction_change_orders_entitled(business_id)
+      and created_by = (select auth.uid())
+      and status = 'draft'
+      and approved_by is null and approved_at is null
+      and submitted_by is null and submitted_at is null
+      and rejection_reason is null
+      and exists (
+        select 1 from public.construction_projects p
+        where p.id = project_id and p.business_id = construction_change_orders.business_id
+      )
+      and (site_id is null or exists (
+        select 1 from public.construction_procurement_sites s
+        where s.id = site_id and s.business_id = construction_change_orders.business_id
+          and (s.project_id is null or s.project_id = construction_change_orders.project_id)
+      ))
+      and (boq_section_id is null or exists (
+        select 1 from public.boq_sections bs
+        where bs.id = boq_section_id and bs.business_id = construction_change_orders.business_id
+      ))
+      and (subcontract_id is null or exists (
+        select 1 from public.subcontracts sc
+        where sc.id = subcontract_id and sc.business_id = construction_change_orders.business_id
+          and sc.project_id = construction_change_orders.project_id
+      ))
+    );
+exception
+  when duplicate_object then null;
+end;
+$policy$;
 
 -- Direct edits are drafts-only. Lifecycle changes go through the guarded RPC.
-create policy "construction_change_orders_update_draft_member"
-  on public.construction_change_orders
-  for update to authenticated
-  using (
-    public.is_business_member(business_id)
-    and public._construction_change_orders_entitled(business_id)
-    and status = 'draft'
-  )
-  with check (
-    public.is_business_member(business_id)
-    and public._construction_change_orders_entitled(business_id)
-    and status = 'draft'
-    and approved_by is null and approved_at is null
-    and submitted_by is null and submitted_at is null
-    and rejection_reason is null
-    and exists (
-      select 1 from public.construction_projects p
-      where p.id = project_id and p.business_id = construction_change_orders.business_id
+do $policy$
+begin
+  create policy "construction_change_orders_update_draft_member"
+    on public.construction_change_orders
+    for update to authenticated
+    using (
+      public.is_business_member(business_id)
+      and public._construction_change_orders_entitled(business_id)
+      and status = 'draft'
     )
-    and (site_id is null or exists (
-      select 1 from public.construction_procurement_sites s
-      where s.id = site_id and s.business_id = construction_change_orders.business_id
-        and (s.project_id is null or s.project_id = construction_change_orders.project_id)
-    ))
-    and (boq_section_id is null or exists (
-      select 1 from public.boq_sections bs
-      where bs.id = boq_section_id and bs.business_id = construction_change_orders.business_id
-    ))
-    and (subcontract_id is null or exists (
-      select 1 from public.subcontracts sc
-      where sc.id = subcontract_id and sc.business_id = construction_change_orders.business_id
-        and sc.project_id = construction_change_orders.project_id
-    ))
-  );
+    with check (
+      public.is_business_member(business_id)
+      and public._construction_change_orders_entitled(business_id)
+      and status = 'draft'
+      and approved_by is null and approved_at is null
+      and submitted_by is null and submitted_at is null
+      and rejection_reason is null
+      and exists (
+        select 1 from public.construction_projects p
+        where p.id = project_id and p.business_id = construction_change_orders.business_id
+      )
+      and (site_id is null or exists (
+        select 1 from public.construction_procurement_sites s
+        where s.id = site_id and s.business_id = construction_change_orders.business_id
+          and (s.project_id is null or s.project_id = construction_change_orders.project_id)
+      ))
+      and (boq_section_id is null or exists (
+        select 1 from public.boq_sections bs
+        where bs.id = boq_section_id and bs.business_id = construction_change_orders.business_id
+      ))
+      and (subcontract_id is null or exists (
+        select 1 from public.subcontracts sc
+        where sc.id = subcontract_id and sc.business_id = construction_change_orders.business_id
+          and sc.project_id = construction_change_orders.project_id
+      ))
+    );
+exception
+  when duplicate_object then null;
+end;
+$policy$;
 
-create policy "construction_change_orders_delete_draft_member"
-  on public.construction_change_orders
-  for delete to authenticated
-  using (public.is_business_member(business_id) and public._construction_change_orders_entitled(business_id) and status = 'draft');
+do $policy$
+begin
+  create policy "construction_change_orders_delete_draft_member"
+    on public.construction_change_orders
+    for delete to authenticated
+    using (public.is_business_member(business_id) and public._construction_change_orders_entitled(business_id) and status = 'draft');
+exception
+  when duplicate_object then null;
+end;
+$policy$;
 
 revoke all on public.construction_change_orders from public, anon, authenticated;
 grant select, delete on public.construction_change_orders to authenticated;
