@@ -19,8 +19,10 @@ const rpcOnlyTables = [
 describe('RPC-only table privilege hardening migration', () => {
   it('revokes TRUNCATE from client roles on existing and future public tables', () => {
     expect(migration).toMatch(/REVOKE TRUNCATE ON ALL TABLES IN SCHEMA public FROM PUBLIC, anon, authenticated/i);
-    expect(migration).toMatch(/ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM anon, authenticated/i);
-    expect(migration).toContain("rolname IN ('postgres', 'supabase_admin')");
+    expect(migration).toMatch(/EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM PUBLIC, anon, authenticated'/i);
+    expect(migration).toMatch(/EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM PUBLIC, anon, authenticated'/i);
+    expect(migration).toMatch(/EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM PUBLIC, anon, authenticated'/i);
+    expect(migration).toMatch(/WHEN insufficient_privilege/i);
   });
 
   it('removes all direct client grants from the verified no-policy RPC/service tables', () => {
