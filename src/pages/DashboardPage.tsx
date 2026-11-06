@@ -26,6 +26,9 @@ import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { useState } from 'react';
 import { useCapability } from '@/hooks/useCapability';
 import { ConstructionDashboard } from '@/components/construction/dashboard/ConstructionDashboard';
+import { ManufacturingDashboardPage } from '@/pages/manufacturing/ManufacturingDashboardPage';
+import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
+import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
 
 interface KpiCardProps {
   label: string;
@@ -142,9 +145,51 @@ function QuickActions() {
 }
 
 export function DashboardPage() {
+  const { t } = useTranslation();
   const isConstruction = useCapability('construction');
-  if (isConstruction) return <ConstructionDashboard />;
-  return <GenericDashboard />;
+  const isManufacturing = useCapability('manufacturing');
+  const isInventoryEnabled = useCapability('inventory');
+  const hasEnterpriseWorkspace = isConstruction || isManufacturing;
+
+  return (
+    <div className="space-y-6" data-testid="executive-hub-dashboard">
+      <SectionErrorBoundary sectionName={t('dashboard.executiveHealth.title')} fallbackHeight="96px">
+        <ExecutiveHealthStrip />
+      </SectionErrorBoundary>
+
+      {hasEnterpriseWorkspace ? (
+        <div className="space-y-6">
+          {isConstruction ? (
+            <SectionErrorBoundary sectionName={t('dashboard.constructionWorkspace')}>
+              <ConstructionDashboard />
+            </SectionErrorBoundary>
+          ) : null}
+          {isManufacturing ? (
+            <SectionErrorBoundary sectionName={t('dashboard.manufacturingWorkspace')}>
+              <section className={isConstruction ? 'space-y-4 border-t border-gray-200 pt-6' : 'space-y-4'}>
+                {isConstruction ? (
+                  <h2 className="text-lg font-bold text-gray-900">{t('dashboard.manufacturingWorkspace')}</h2>
+                ) : null}
+                <ManufacturingDashboardPage />
+              </section>
+            </SectionErrorBoundary>
+          ) : null}
+        </div>
+      ) : (
+        <SectionErrorBoundary sectionName={t('dashboard.financialOverview')}>
+          <GenericDashboard />
+        </SectionErrorBoundary>
+      )}
+
+      <SectionErrorBoundary sectionName={t('dashboard.actionableExceptions.title')} fallbackHeight="160px">
+        <ActionableExceptions
+          construction={isConstruction}
+          manufacturing={isManufacturing}
+          inventoryEnabled={isInventoryEnabled}
+        />
+      </SectionErrorBoundary>
+    </div>
+  );
 }
 
 export function GenericDashboard() {

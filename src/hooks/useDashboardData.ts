@@ -174,7 +174,7 @@ export function useOutstandingInvoices(businessId?: string) {
           : Number(r.functional_amount ?? r.total_amount) - (Number(r.amount_paid) * Number(r.exchange_rate || 1))),
         0,
       );
-      return { total, count: rows.length };
+      return { total, count: rows.length, rows };
     },
     enabled: Boolean(businessId),
     staleTime: 1000 * 60 * 5,
