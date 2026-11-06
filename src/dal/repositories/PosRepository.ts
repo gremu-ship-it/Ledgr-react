@@ -4,9 +4,17 @@ import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import type {
   PosShift,
+  PosShiftStatus,
+  PosRegister,
+  OpenShiftParams,
+  CloseShiftParams,
   PosCashMovement,
   PosSettings,
   PosPermission,
+  PosHeldOrder,
+  PosPendingPriceOverride,
+  PosCartItem,
+  PosDiscount,
 } from '@/types/pos';
 import { DEFAULT_ROLE_PERMISSIONS } from '@/types/pos';
 import { createLogger } from '@/lib/logger';
@@ -141,13 +149,20 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
   async updateSettings(businessId: string, settings: Partial<PosSettings>): Promise<PosSettings> {
     const existing = await this.getSettings(businessId);
-    const merged = { ...existing, ...settings, business_id: businessId, updated_at: new Date().toISOString() };
+    const merged = {
+      ...existing,
+      ...settings,
+      max_cashier_discount_percent: settings.max_cashier_discount_percent ?? settings.cashier_max_discount_percent ?? existing.max_cashier_discount_percent,
+      cashier_max_discount_percent: settings.cashier_max_discount_percent ?? settings.max_cashier_discount_percent ?? existing.cashier_max_discount_percent,
+      max_manager_discount_percent: settings.max_manager_discount_percent ?? settings.manager_max_discount_percent ?? existing.max_manager_discount_percent,
+      manager_max_discount_percent: settings.manager_max_discount_percent ?? settings.max_manager_discount_percent ?? existing.manager_max_discount_percent,
+      business_id: businessId,
+      updated_at: new Date().toISOString(),
+    };
 
     const updatePayload: InsertDto<'pos_settings'> = {
       business_id: businessId,
       enabled_payment_methods: merged.enabled_payment_methods as never,
-      cashier_max_discount_percent: merged.max_cashier_discount_percent,
-      manager_max_discount_percent: merged.max_manager_discount_percent,
       require_approval_for_void: merged.require_approval_for_void ?? true,
       require_approval_for_refund: merged.require_approval_for_refund ?? true,
       require_explanation_variance_threshold: merged.cash_variance_threshold,
@@ -157,6 +172,12 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       custom_role_permissions: (merged.custom_role_permissions || DEFAULT_ROLE_PERMISSIONS) as never,
       updated_at: new Date().toISOString(),
     };
+    if (settings.max_cashier_discount_percent !== undefined || settings.cashier_max_discount_percent !== undefined) {
+      updatePayload.cashier_max_discount_percent = merged.max_cashier_discount_percent;
+    }
+    if (settings.max_manager_discount_percent !== undefined || settings.manager_max_discount_percent !== undefined) {
+      updatePayload.manager_max_discount_percent = merged.max_manager_discount_percent;
+    }
 
     const { error } = await this.client
       .from('pos_settings')
@@ -165,11 +186,147 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       .single();
 
     if (error) {
-      log.warn('Failed to upsert pos_settings, returning in-memory settings', { error });
-      return merged;
+      throw toRepositoryError('pos_settings', error);
     }
 
     return merged;
+  }
+
+  async holdOrder(input: {
+    businessId: string;
+    commandKey?: string;
+    shiftId: string;
+    referenceNote: string;
+    cartItems: PosCartItem[];
+    customerId?: string | null;
+    customerSnapshot?: PosHeldOrder['customer_snapshot'];
+    subtotal: number;
+    discountAmount: number;
+    totalAmount: number;
+    orderDiscount?: PosDiscount | null;
+    cartNotes?: string | null;
+  }): Promise<PosHeldOrder> {
+    const payload = {
+      command_key: input.commandKey ?? globalThis.crypto.randomUUID(),
+      reference_note: input.referenceNote,
+      cart_items: input.cartItems,
+      customer_id: input.customerId ?? null,
+      customer_snapshot: input.customerSnapshot ?? null,
+      subtotal: input.subtotal,
+      discount_amount: input.discountAmount,
+      total_amount: input.totalAmount,
+      order_discount: input.orderDiscount ?? null,
+      cart_notes: input.cartNotes ?? null,
+    };
+    const { data, error } = await this.client.rpc('hold_pos_order_command', {
+      p_business_id: input.businessId,
+      p_shift_id: input.shiftId,
+      p_payload: payload as never,
+    });
+    if (error) throw toRepositoryError('pos_held_orders', error);
+    return data as unknown as PosHeldOrder;
+  }
+
+  async getHeldOrders(shiftId: string, includeHistory = false): Promise<PosHeldOrder[]> {
+    const { data, error } = await this.client.rpc('list_pos_held_orders', {
+      p_shift_id: shiftId,
+      p_include_history: includeHistory,
+    });
+    if (error) throw toRepositoryError('pos_held_orders', error);
+    if (!Array.isArray(data)) return [];
+    return data as unknown as PosHeldOrder[];
+  }
+
+  async resumeHeldOrder(heldOrderId: string, shiftId: string): Promise<PosHeldOrder> {
+    const { data, error } = await this.client.rpc('resume_pos_held_order_command', {
+      p_held_order_id: heldOrderId,
+      p_shift_id: shiftId,
+    });
+    if (error) throw toRepositoryError('pos_held_orders', error);
+    return data as unknown as PosHeldOrder;
+  }
+
+  async listPendingPriceOverrides(businessId: string): Promise<PosPendingPriceOverride[]> {
+    const { data, error } = await this.client.rpc('list_pos_price_override_requests', {
+      p_business_id: businessId,
+    });
+    if (error) throw toRepositoryError('pos_price_overrides', error);
+    return Array.isArray(data) ? data as unknown as PosPendingPriceOverride[] : [];
+  }
+
+  async authorizePriceOverride(token: string): Promise<void> {
+    const { error } = await this.client.rpc('authorize_pos_price_override', { p_token: token });
+    if (error) throw toRepositoryError('pos_price_overrides', error);
+  }
+
+  // ── Registers (R08 pos_terminals are the durable register identities) ─────
+
+  async getRegisters(businessId: string): Promise<PosRegister[]> {
+    const client = this.client as unknown as SupabaseClient;
+    const { data, error } = await client
+      .from('pos_terminals')
+      .select('*, branch:branches(id, name), location:inventory_locations(id, name), cash_account:accounts(id, name, code)')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: true });
+    if (error) throw toRepositoryError('pos_terminals', error);
+    return (data ?? []) as PosRegister[];
+  }
+
+  async createRegister(
+    input: Omit<PosRegister, 'id' | 'created_at' | 'updated_at' | 'branch' | 'location' | 'cash_account'>,
+  ): Promise<PosRegister> {
+    const client = this.client as unknown as SupabaseClient;
+    const { data, error } = await client
+      .from('pos_terminals')
+      .insert({
+        business_id: input.business_id,
+        name: input.name.trim(),
+        code: input.code.trim().toUpperCase(),
+        branch_id: input.branch_id,
+        preferred_location_id: input.preferred_location_id ?? null,
+        default_cash_account_id: input.default_cash_account_id ?? null,
+        is_active: input.is_active,
+      })
+      .select('*, branch:branches(id, name), location:inventory_locations(id, name), cash_account:accounts(id, name, code)')
+      .single();
+    if (error) throw toRepositoryError('pos_terminals', error);
+    return data as PosRegister;
+  }
+
+  async updateRegister(
+    businessId: string,
+    registerId: string,
+    input: Partial<Pick<PosRegister, 'name' | 'code' | 'branch_id' | 'preferred_location_id' | 'default_cash_account_id' | 'is_active'>>,
+  ): Promise<PosRegister> {
+    const client = this.client as unknown as SupabaseClient;
+    const patch = {
+      ...input,
+      ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      ...(input.code === undefined ? {} : { code: input.code.trim().toUpperCase() }),
+    };
+    const { data, error } = await client
+      .from('pos_terminals')
+      .update(patch)
+      .eq('business_id', businessId)
+      .eq('id', registerId)
+      .select('*, branch:branches(id, name), location:inventory_locations(id, name), cash_account:accounts(id, name, code)')
+      .single();
+    if (error) throw toRepositoryError('pos_terminals', error);
+    return data as PosRegister;
+  }
+
+  async getActiveShift(registerId: string): Promise<PosShift | null> {
+    const { data, error } = await this.client
+      .from('pos_shifts')
+      .select('*')
+      .eq('terminal_id', registerId)
+      .eq('status', 'open')
+      .maybeSingle();
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw toRepositoryError('pos_shifts', error);
+    }
+    return data ? this.toShift(data as unknown as Record<string, unknown>) : null;
   }
 
   // ── Shifts ───────────────────────────────────────────────────────────────
@@ -221,7 +378,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       opening_float: data.opening_cash,
       start_time: data.opened_at,
       expectedCash: data.expected_cash,
-      status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+      status: (data.status === 'open' ? 'open' : 'closed') as PosShiftStatus,
     };
   }
 
@@ -243,7 +400,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       opening_float: data.opening_cash,
       start_time: data.opened_at,
       expectedCash: data.expected_cash,
-      status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+      status: (data.status === 'open' ? 'open' : 'closed') as PosShiftStatus,
     };
   }
 
@@ -255,9 +412,9 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
 
   /**
    * R08.5 rewire: tills are server-registered (`pos_terminals`). The client
-   * never claims a branch — the till's branch is the only branch the server
-   * will stamp. Resolves the business's first active till; till assignment
-   * per device lands with the terminal-assignment surface (documented gap).
+   * may request the selected till, but never claims a branch or cashier; the
+   * canonical command validates the till and stamps its branch server-side.
+   * Callers using the legacy overload fall back to the first active till.
    */
   private async resolveActiveTerminalId(businessId: string): Promise<string | null> {
     // Generated row types predate the R08 `pos_terminals` table; query it
@@ -281,7 +438,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       opening_float: data.opening_cash as number,
       start_time: data.opened_at as string,
       expectedCash: data.expected_cash as number,
-      status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+      status: (data.status === 'open' ? 'open' : 'closed') as PosShiftStatus,
     } as PosShift;
   }
 
@@ -303,7 +460,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
    * contract. Rejection surfaces as an honest error (zero server mutation).
    */
   async openShift(
-    arg1: string | {
+    arg1: string | OpenShiftParams | {
       business_id?: string;
       businessId?: string;
       branch_id?: string | null;
@@ -323,15 +480,21 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       cashierName: string;
       openingCash?: number;
       opening_float?: number;
+      terminalId?: string;
       notes?: string;
     },
   ): Promise<PosShift> {
-    const businessId = typeof arg1 === 'string' ? arg1 : (arg1.business_id || arg1.businessId || 'biz-default');
+    const businessId = typeof arg1 === 'string'
+      ? arg1
+      : ('businessId' in arg1 ? arg1.businessId : undefined) || ('business_id' in arg1 ? arg1.business_id : undefined) || 'biz-default';
     const openingFloat = typeof arg1 === 'string'
       ? Number(arg2?.openingCash ?? arg2?.opening_float ?? 0)
-      : Number(arg1.opening_float ?? arg1.openingCash ?? 0);
+      : ('openingFloat' in arg1 ? Number(arg1.openingFloat) : Number(arg1.opening_float ?? arg1.openingCash ?? 0));
+    const requestedTerminalId = typeof arg1 === 'string'
+      ? arg2?.terminalId
+      : ('terminalId' in arg1 ? arg1.terminalId : ('terminal_id' in arg1 ? arg1.terminal_id : undefined));
 
-    const terminalId = await this.resolveActiveTerminalId(businessId);
+    const terminalId = requestedTerminalId || await this.resolveActiveTerminalId(businessId);
     if (!terminalId) {
       throw new Error('No active POS terminal is registered for this business. Ask an administrator to register a till before opening a shift.');
     }
@@ -360,7 +523,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
    */
   async closeShift(
     shiftId: string,
-    payload: {
+    payload: CloseShiftParams | {
       closingCashActual?: number;
       closing_cash_actual?: number;
       actualCash?: number;
@@ -372,8 +535,14 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
   ): Promise<PosShift> {
     const actualCash = typeof payload === 'number'
       ? payload
-      : Number(payload.closingCashActual ?? payload.closing_cash_actual ?? payload.actualCash ?? 0);
-    const varianceReason = typeof payload === 'number' ? null : (payload.varianceReason || payload.variance_reason || null);
+      : ('closingCash' in payload
+        ? Number(payload.closingCash)
+        : Number(payload.closingCashActual ?? payload.closing_cash_actual ?? payload.actualCash ?? 0));
+    const varianceReason = typeof payload === 'number' ? null : (
+      ('varianceReason' in payload && payload.varianceReason)
+      || ('variance_reason' in payload && payload.variance_reason)
+      || null
+    );
 
     const { error } = await this.client.rpc('close_pos_shift_command' as never, {
       p_payload: {
@@ -409,7 +578,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
         opening_float: data.opening_cash,
         start_time: data.opened_at,
         expectedCash: data.expected_cash,
-        status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+        status: (data.status === 'open' ? 'open' : 'closed') as PosShiftStatus,
       } as PosShift;
     } catch {
       return null;
@@ -437,7 +606,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       opening_float: d.opening_cash,
       start_time: d.opened_at,
       expectedCash: d.expected_cash,
-      status: (d.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+      status: (d.status === 'open' ? 'open' : 'closed') as PosShiftStatus,
     })) as PosShift[];
   }
 
@@ -495,7 +664,7 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
         opening_float: data.opening_cash,
         start_time: data.opened_at,
         expectedCash: data.expected_cash,
-        status: (data.status === 'open' ? 'open' : 'closed') as 'open' | 'closed',
+        status: (data.status === 'open' ? 'open' : 'closed') as PosShiftStatus,
       } as PosShift;
     } catch {
       return null;

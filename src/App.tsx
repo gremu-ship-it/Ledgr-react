@@ -122,10 +122,11 @@ const RoutingsPage = lazyPage(() => import('@/pages/manufacturing/RoutingsPage')
 const ProductionRunsPage = lazyPage(() => import('@/pages/manufacturing/ProductionRunsPage'), 'ProductionRunsPage');
 const MrpWorkbenchPage = lazyPage(() => import('@/pages/manufacturing/MrpWorkbenchPage'), 'MrpWorkbenchPage');
 const PosPage = lazyPage(() => import('@/pages/PosPage'), 'PosPage');
+const PosRegistersPage = lazyPage(() => import('@/pages/pos/PosRegistersPage'), 'PosRegistersPage');
+const PosShiftsPage = lazyPage(() => import('@/pages/pos/PosShiftsPage'), 'PosShiftsPage');
 const IncomePage = lazyPage(() => import('@/pages/IncomePage'), 'IncomePage');
 const ExpensesPage = lazyPage(() => import('@/pages/ExpensesPage'), 'ExpensesPage');
 const InvoicesPage = lazyPage(() => import('@/pages/InvoicesPage'), 'InvoicesPage');
-const PayrollPage = lazyPage(() => import('@/pages/PayrollPage'), 'PayrollPage');
 const TaxConfigPage = lazyPage(() => import('@/pages/payroll/TaxConfigPage'), 'TaxConfigPage');
 const EmployeeListPage = lazyPage(() => import('@/pages/payroll/EmployeeListPage'), 'EmployeeListPage');
 const EmployeeNewPage = lazyPage(() => import('@/pages/payroll/EmployeeNewPage'), 'EmployeeNewPage');
@@ -179,6 +180,7 @@ const PartnerOverviewPage = lazyPage(() => import('@/pages/partner-admin/Partner
 const PartnerSettingsPage = lazyPage(() => import('@/pages/partner-admin/PartnerSettingsPage'), 'PartnerSettingsPage');
 const PartnerClientsPage = lazyPage(() => import('@/pages/partner-admin/PartnerClientsPage'), 'PartnerClientsPage');
 const PartnerBillingPage = lazyPage(() => import('@/pages/partner-admin/PartnerBillingPage'), 'PartnerBillingPage');
+const PartnerStaffPage = lazyPage(() => import('@/pages/partner-admin/PartnerStaffPage'), 'PartnerStaffPage');
 const CashDepositsPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositsPage');
 const NewCashDepositPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'NewCashDepositPage');
 const CashDepositDetailPage = lazyPage(() => import('@/pages/cash-deposits/CashDepositsPages'), 'CashDepositDetailPage');
@@ -446,6 +448,7 @@ function App() {
                 <Route path="/partner-admin/partners/:id" element={<PartnerOverviewPage />} />
                 <Route path="/partner-admin/partners/:id/settings" element={<PartnerSettingsPage />} />
                 <Route path="/partner-admin/partners/:id/clients" element={<PartnerClientsPage />} />
+                <Route path="/partner-admin/partners/:id/staff" element={<PartnerStaffPage />} />
                 <Route path="/partner-admin/partners/:id/billing" element={<PartnerBillingPage />} />
               </Route>
             </Route>
@@ -818,9 +821,29 @@ function App() {
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/pos" element={
                     <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
-                      <CapabilityGate capability="pos">
-                        <PosPage />
-                      </CapabilityGate>
+                      <PlanGate minPlan="starter" featureNameKey="pos.pointOfSale">
+                        <CapabilityGate capability="pos">
+                          <PosPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    </OperatingModelGate>
+                  } />
+                  <Route path="/pos/registers" element={
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <PlanGate minPlan="starter" featureNameKey="pos.registers">
+                        <CapabilityGate capability="pos" rolePath="/pos/registers">
+                          <PosRegistersPage />
+                        </CapabilityGate>
+                      </PlanGate>
+                    </OperatingModelGate>
+                  } />
+                  <Route path="/pos/shifts" element={
+                    <OperatingModelGate requiredOperatingModels={['RETAIL']} redirectTo="/income">
+                      <PlanGate minPlan="growth" featureNameKey="pos.shiftHistory">
+                        <CapabilityGate capability="pos" rolePath="/pos/shifts">
+                          <PosShiftsPage />
+                        </CapabilityGate>
+                      </PlanGate>
                     </OperatingModelGate>
                   } />
 
@@ -863,11 +886,7 @@ function App() {
                       <LeaveRequestsPage />
                     </PartnerPlanGate>
                   } />
-                  <Route path="/payroll" element={
-                    <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>
-                      <PayrollPage />
-                    </PartnerPlanGate>
-                  } />
+                  <Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />
                   <Route path="/payroll/tax-config" element={
                     <PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.taxConfig')}>
                       <TaxConfigPage />
@@ -1040,7 +1059,7 @@ function App() {
 
                   {/* AI & Settings */}
                   <Route path="/ai" element={
-                    <PartnerPlanGate featureKey="ai_advisor" capability="ai_insights" featureName="AI Insights">
+                    <PartnerPlanGate featureKey="ai_advisor" featureName="AI Insights">
                       <AiInsightsPage />
                     </PartnerPlanGate>
                   } />

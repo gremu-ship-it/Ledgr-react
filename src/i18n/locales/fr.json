@@ -500,11 +500,23 @@
     "joinedAs": "Vous avez rejoint en tant que {{role}}. Redirection vers votre tableau de bord…",
     "theBusiness": "l’entreprise",
     "member": "membre"
-  }
-,
+  },
   "constructionSchedule": {
     "errors": {
       "invalidProgress": "La progression doit être un entier compris entre 0 et 100."
     }
+  },
+  "payroll": {
+    "legacyHistoryTitle": "Historique des paies précédentes",
+    "legacyHistoryDescription": "Les paies créées avant la mise à jour sont conservées ci-dessous. Elles sont en lecture seule ici.",
+    "legacyHistoryLoadFailed": "Impossible de charger l’historique des paies précédentes.",
+    "legacyHistoryRunNumber": "N° de paie",
+    "legacyHistoryPeriod": "Période de paie",
+    "legacyHistoryPayDate": "Date de paiement",
+    "legacyHistoryGross": "Total brut",
+    "legacyHistoryNet": "Total net",
+    "legacyHistoryStatus": "Statut",
+    "legacyHistoryReadOnly": "Les paies historiques sont conservées en lecture seule dans cette liste.",
+    "noNewRunsLegacyAvailable": "Aucune paie du nouveau cycle pour le moment. Les paies précédentes sont listées ci-dessous."
   }
 }

@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/useAppStore';
 import { usePosPermissions } from '@/hooks/usePosPermissions';
 import { useCapability } from '@/hooks/useCapability';
+import { useUsage } from '@/hooks/useUsage';
+import { planMeetsMin } from '@/lib/billing/plans';
 import {
   calculateCartTotals,
   createSale,
@@ -32,11 +36,12 @@ import type {
   PosSale,
   PosSaleResult,
   PosPaymentSplit,
-  PosRegister,
   PosProduct,
-  PosPaymentMethod,
   PosStockAvailability,
   PosStockStatus,
+  PosHeldOrder,
+  PosSettings,
+  PosPendingPriceOverride,
 } from '@/types/pos';
 
 // Components
@@ -53,12 +58,23 @@ import { PosManagerApprovalModal } from '@/components/pos/PosManagerApprovalModa
 import { PosOwnerAnalytics } from '@/components/pos/PosOwnerAnalytics';
 import { PosBarcodeLabelGenerator } from '@/components/pos/PosBarcodeLabelGenerator';
 import { PosZReportModal } from '@/components/pos/PosZReportModal';
+import { PosHeldOrdersModal, PosHoldOrderModal } from '@/components/pos/PosHeldOrdersModal';
+import { PosSettingsModal } from '@/components/pos/PosSettingsModal';
+import { PosManagerApprovalQueueModal } from '@/components/pos/PosManagerApprovalQueueModal';
 
 export function PosPage() {
+  const { t } = useTranslation();
   const currentUser = useAppStore((s) => s.currentUser);
   const currentBusiness = useAppStore((s) => s.currentBusiness);
+  const queryClient = useQueryClient();
+  const { planTier } = useUsage();
+  const canUseHeldOrders = true;
+  const canViewHeldOrderHistory = planMeetsMin(planTier, 'growth');
+  const maxTenders = canViewHeldOrderHistory ? null : planMeetsMin(planTier, 'starter') ? 2 : 1;
   const permissions = usePosPermissions();
+  const canAuthorizeOverrides = permissions.isOwnerOrAdmin || permissions.isManager;
   const servicesEnabled = useCapability('services', '/pos');
+  const canSwitchRegisters = planMeetsMin(planTier, 'growth');
 
   // Empty rather than a fabricated 'biz-default': a queued offline sale is
   // filed under this id, and inventing one puts the sale in a tenant that does
@@ -74,10 +90,6 @@ export function PosPage() {
   const [assignedBranchId, setAssignedBranchId] = useState<string | null>(null);
   const assignedBranchRef = useRef<string | null>(null);
   const branchTouched = useRef(false);
-  const branchName = branches.find((b) => b.id === branchId)?.name
-    || currentBusiness?.business?.name
-    || 'Shop';
-
   // Navigation / View state
   const [viewMode, setViewMode] = useState<'sales' | 'analytics' | 'history' | 'settings'>('sales');
 
@@ -89,12 +101,28 @@ export function PosPage() {
   const { pendingCount: pendingOfflineCount, failedCount: failedOfflineCount } = useOfflineQueue();
   const { isSyncing, syncNow } = useOfflineSync();
 
-  // Shifts & Register
-  const [activeRegister] = useState<PosRegister | null>({
-    id: 'reg-01',
-    name: 'POS Register 01',
+  // Registers use the R08 pos_terminals table, which is also the identity the
+  // protected shift-open RPC binds to. Never invent a client-only till id.
+  const registersQuery = useQuery({
+    queryKey: ['pos-registers', businessId],
+    enabled: Boolean(businessId),
+    queryFn: () => repos.pos.getRegisters(businessId),
   });
+  const registers = registersQuery.data ?? [];
+  const [selectedRegisterId, setSelectedRegisterId] = useState<string | null>(null);
   const [currentShift, setCurrentShift] = useState<PosShift | null>(null);
+  const targetBranchId = assignedBranchId ?? branchId;
+  const shiftRegister = currentShift?.terminal_id
+    ? registers.find((register) => register.id === currentShift.terminal_id) ?? null
+    : null;
+  const activeRegister = (currentShift?.status === 'open' ? shiftRegister : null)
+    ?? registers.find((register) => register.id === selectedRegisterId && register.is_active && (!targetBranchId || register.branch_id === targetBranchId))
+    ?? registers.find((register) => register.is_active && (!targetBranchId || register.branch_id === targetBranchId))
+    ?? null;
+  const effectiveBranchId = targetBranchId ?? activeRegister?.branch_id ?? null;
+  const branchName = branches.find((branch) => branch.id === effectiveBranchId)?.name
+    || currentBusiness?.business?.name
+    || 'Shop';
 
   // Products & Inventory
   const [products, setProducts] = useState<PosProduct[]>([]);
@@ -107,10 +135,23 @@ export function PosPage() {
 
   // Active Sale Cart
   const [cartItems, setCartItems] = useState<PosCartItem[]>([]);
+  const holdOrderCommandKeyRef = useRef<string | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<PosCustomer | null>(null);
   const [orderDiscount, setOrderDiscount] = useState<PosDiscount | undefined>(undefined);
   const [cartNotes, setCartNotes] = useState<string>('');
-  const [parkedOrders, setParkedOrders] = useState<Array<{ id: string; timestamp: Date; items: PosCartItem[]; customer: PosCustomer | null; discount?: PosDiscount }>>([]);
+  const [heldOrders, setHeldOrders] = useState<PosHeldOrder[]>([]);
+  const [isHeldOrdersLoading, setIsHeldOrdersLoading] = useState(false);
+  const [isHeldOrdersModalOpen, setIsHeldOrdersModalOpen] = useState(false);
+  const [isHoldOrderModalOpen, setIsHoldOrderModalOpen] = useState(false);
+  const [isHoldingOrder, setIsHoldingOrder] = useState(false);
+  const [isPosSettingsModalOpen, setIsPosSettingsModalOpen] = useState(false);
+  const [isOverrideQueueOpen, setIsOverrideQueueOpen] = useState(false);
+  const [pendingPriceOverrides, setPendingPriceOverrides] = useState<PosPendingPriceOverride[]>([]);
+  const [isLoadingPriceOverrides, setIsLoadingPriceOverrides] = useState(false);
+  const [authorizingPriceOverrideId, setAuthorizingPriceOverrideId] = useState<string | null>(null);
+  const [priceOverrideQueueError, setPriceOverrideQueueError] = useState<string | null>(null);
+  const [heldOrderError, setHeldOrderError] = useState<string | null>(null);
+  const [holdOrderError, setHoldOrderError] = useState<string | null>(null);
 
   // Modals state
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -131,7 +172,29 @@ export function PosPage() {
   const [pendingApprovalCallback, setPendingApprovalCallback] = useState<((approvalToken?: string) => void) | null>(null);
 
   // Sales History List
-  const [salesHistory, setSalesHistory] = useState<PosSale[]>([]);
+  const [, setSalesHistory] = useState<PosSale[]>([]);
+  const [returnSales, setReturnSales] = useState<PosSale[]>([]);
+  const [isSearchingReturns, setIsSearchingReturns] = useState(false);
+  const canSearchHistoricalReturns = planMeetsMin(planTier, 'growth');
+  const searchReturnSales = useCallback(async (term: string) => {
+    if (!businessId) return;
+    setIsSearchingReturns(true);
+    try {
+      const rows = await repos.invoice.findPosSalesForReturn(businessId, {
+        shiftId: currentShift?.id ?? null,
+        branchId: currentShift?.branch_id ?? null,
+        includeHistorical: canSearchHistoricalReturns,
+        search: term,
+        limit: 40,
+      });
+      setReturnSales(rows);
+    } catch (error) {
+      console.error('Failed to search POS return receipts:', error);
+      setReturnSales([]);
+    } finally {
+      setIsSearchingReturns(false);
+    }
+  }, [businessId, currentShift, canSearchHistoricalReturns]);
   const [isProcessingSale, setIsProcessingSale] = useState(false);
 
   // VAT. The till used to total every sale at 0%, whatever the business's VAT
@@ -169,6 +232,7 @@ export function PosPage() {
     setCartItems(clearCart());
     setSelectedCustomer(null);
     setOrderDiscount(undefined);
+    setCartNotes('');
     setDiscountOverrideToken(null);
   }, []);
 
@@ -184,27 +248,118 @@ export function PosPage() {
     setOrderDiscount(discount);
   }, []);
 
+  const loadHeldOrders = useCallback(async (includeHistory = false) => {
+    if (!currentShift?.id || !canUseHeldOrders) {
+      setHeldOrders([]);
+      return;
+    }
+    setIsHeldOrdersLoading(true);
+    setHeldOrderError(null);
+    try {
+      const data = await repos.pos.getHeldOrders(currentShift.id, includeHistory);
+      setHeldOrders(data);
+    } catch {
+      setHeldOrderError(t(includeHistory ? 'pos.hold.historyLoadFailed' : 'pos.hold.loadFailed'));
+    } finally {
+      setIsHeldOrdersLoading(false);
+    }
+  }, [currentShift, canUseHeldOrders, t]);
+
+  // Synchronize the held-order view with the active shift and plan.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadHeldOrders(false);
+  }, [loadHeldOrders]);
+
+  const loadPendingPriceOverrides = useCallback(async () => {
+    if (!businessId || !canAuthorizeOverrides) {
+      setPendingPriceOverrides([]);
+      return;
+    }
+    setIsLoadingPriceOverrides(true);
+    setPriceOverrideQueueError(null);
+    try {
+      setPendingPriceOverrides(await repos.pos.listPendingPriceOverrides(businessId));
+    } catch {
+      setPriceOverrideQueueError(t('pos.override.queueLoadFailed'));
+    } finally {
+      setIsLoadingPriceOverrides(false);
+    }
+  }, [businessId, canAuthorizeOverrides, t]);
+
+  // Load the server-owned approval queue when the authorized user/business changes.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadPendingPriceOverrides();
+  }, [loadPendingPriceOverrides]);
+
+  const handleAuthorizePriceOverride = useCallback(async (request: PosPendingPriceOverride) => {
+    setAuthorizingPriceOverrideId(request.id);
+    setPriceOverrideQueueError(null);
+    try {
+      await repos.pos.authorizePriceOverride(request.token);
+      setPendingPriceOverrides((previous) => previous.filter((item) => item.id !== request.id));
+    } catch {
+      setPriceOverrideQueueError(t('pos.override.authorizeFailed'));
+    } finally {
+      setAuthorizingPriceOverrideId(null);
+    }
+  }, [t]);
+
   const handleParkOrder = useCallback(() => {
     if (cartItems.length === 0) return;
-    const parked = {
-      id: 'PARK-' + Date.now().toString().slice(-4),
-      timestamp: new Date(),
-      items: cartItems,
-      customer: selectedCustomer,
-      discount: orderDiscount,
-    };
-    setParkedOrders((prev) => [parked, ...prev]);
-    handleClearCart();
-  }, [cartItems, selectedCustomer, orderDiscount, handleClearCart]);
+    if (!currentShift?.id || currentShift.status !== 'open') {
+      setHoldOrderError(t('pos.hold.openShiftRequired'));
+      return;
+    }
+    setHoldOrderError(null);
+    setIsHoldOrderModalOpen(true);
+  }, [cartItems.length, currentShift, t]);
 
-  const handleRestoreParkedOrder = useCallback((parkedId: string) => {
-    const found = parkedOrders.find((p) => p.id === parkedId);
-    if (!found) return;
-    setCartItems(found.items);
-    setSelectedCustomer(found.customer);
-    setOrderDiscount(found.discount);
-    setParkedOrders((prev) => prev.filter((p) => p.id !== parkedId));
-  }, [parkedOrders]);
+  const handleConfirmHoldOrder = useCallback(async (referenceNote: string) => {
+    if (!currentShift?.id || !businessId || cartItems.length === 0) return;
+    setIsHoldingOrder(true);
+    setHoldOrderError(null);
+    try {
+      holdOrderCommandKeyRef.current ??= globalThis.crypto.randomUUID();
+      await repos.pos.holdOrder({
+        businessId,
+        commandKey: holdOrderCommandKeyRef.current,
+        shiftId: currentShift.id,
+        referenceNote,
+        cartItems,
+        customerId: selectedCustomer?.id ?? null,
+        customerSnapshot: selectedCustomer,
+        subtotal: cartTotals.gross_total,
+        discountAmount: cartTotals.discount_total,
+        totalAmount: cartTotals.net_payable,
+        orderDiscount: orderDiscount ?? null,
+        cartNotes,
+      });
+      holdOrderCommandKeyRef.current = null;
+      handleClearCart();
+      setIsHoldOrderModalOpen(false);
+      await loadHeldOrders(false);
+    } catch {
+      setHoldOrderError(t('pos.hold.saveFailed'));
+    } finally {
+      setIsHoldingOrder(false);
+    }
+  }, [currentShift, businessId, cartItems, selectedCustomer, cartTotals, orderDiscount, cartNotes, handleClearCart, loadHeldOrders, t]);
+
+  const handleCloseHoldOrder = useCallback(() => {
+    if (isHoldingOrder) return;
+    holdOrderCommandKeyRef.current = null;
+    setIsHoldOrderModalOpen(false);
+    setHoldOrderError(null);
+    void loadHeldOrders(false);
+  }, [isHoldingOrder, loadHeldOrders]);
+
+  const handleSavePosSettings = useCallback(async (newSettings: Partial<PosSettings>) => {
+    if (!businessId) throw new Error(t('pos.override.settingsSaveFailed'));
+    await repos.pos.updateSettings(businessId, newSettings);
+    await queryClient.invalidateQueries({ queryKey: ['pos_settings', businessId] });
+  }, [businessId, queryClient, t]);
 
   // Keyboard Shortcuts (F4: Checkout, F8: Park)
   useEffect(() => {
@@ -227,6 +382,14 @@ export function PosPage() {
 
   // Fetch initial data: Products, Customers, Shifts, real shop stock
   const currentUserId = currentUser?.id;
+  const shiftOwnedByAnotherCashier = Boolean(
+    currentShift?.status === 'open'
+    && currentShift.cashier_id
+    && currentUserId
+    && currentShift.cashier_id !== currentUserId
+    && !permissions.isManager
+    && !permissions.isOwnerOrAdmin,
+  );
 
   useEffect(() => {
     let ignore = false;
@@ -291,7 +454,7 @@ export function PosPage() {
           const { data, error } = await (repos.inventory['client'] as unknown as {
             rpc: (fn: 'pos_stock_availability', args: { p_business_id: string; p_branch_id: string | null }) =>
               Promise<{ data: PosStockAvailability | null; error: { message?: string } | null }>;
-          }).rpc('pos_stock_availability', { p_business_id: businessId, p_branch_id: branchId ?? null });
+          }).rpc('pos_stock_availability', { p_business_id: businessId, p_branch_id: effectiveBranchId ?? null });
           if (error) throw new Error(error.message || 'Stock levels could not be loaded.');
           if (!data) throw new Error('Stock levels could not be loaded.');
           return data;
@@ -299,7 +462,11 @@ export function PosPage() {
         const [prods, custs, shift, recentInvoices, balanceRows, availability] = await Promise.all([
           repos.inventory.findAllProducts(businessId).catch(() => []),
           repos.contact.findByBusiness(businessId, 'customer').catch(() => []),
-          currentUserId ? repos.pos.findActiveShift(businessId, currentUserId, branchId).catch(() => null) : Promise.resolve(null),
+          activeRegister?.id
+            ? repos.pos.getActiveShift(activeRegister.id).catch(() => null)
+            : currentUserId
+              ? repos.pos.findActiveShift(businessId, currentUserId, effectiveBranchId).catch(() => null)
+              : Promise.resolve(null),
           repos.invoice.findByBusiness(businessId, undefined, 30).catch(() => []),
           loadBalances().catch(() => [] as Awaited<ReturnType<typeof loadBalances>>),
           loadAvailability().then(
@@ -385,9 +552,7 @@ export function PosPage() {
           );
         }
 
-        if (shift) {
-          setCurrentShift(shift);
-        }
+        setCurrentShift(shift);
 
         if (recentInvoices && recentInvoices.length > 0) {
           setSalesHistory(
@@ -426,7 +591,7 @@ export function PosPage() {
     return () => {
       ignore = true;
     };
-  }, [businessId, currentUserId, branchId, dataVersion, servicesEnabled]);
+  }, [businessId, currentUserId, effectiveBranchId, activeRegister?.id, dataVersion, servicesEnabled]);
 
   // Approval interceptor (R07): financial corrections route through a
   // server-minted approval (workflows call with a document context); the
@@ -449,13 +614,74 @@ export function PosPage() {
   }, []);
 
   const handleManagerApproved = useCallback((approvalToken?: string) => {
+    const callback = pendingApprovalCallback;
     setIsApprovalModalOpen(false);
-    if (pendingApprovalCallback) {
-      pendingApprovalCallback(approvalToken);
-      setPendingApprovalCallback(null);
-    }
+    setPendingApprovalCallback(null);
     setApprovalServerContext(null);
+    callback?.(approvalToken);
   }, [pendingApprovalCallback]);
+
+  const handleResumeHeldOrder = useCallback(async (order: PosHeldOrder) => {
+    if (!currentShift?.id || cartItems.length > 0) return;
+    setHeldOrderError(null);
+    try {
+      const restored = await repos.pos.resumeHeldOrder(order.id, currentShift.id);
+      setCartItems(restored.cart_items);
+      setSelectedCustomer(restored.customer_snapshot ?? null);
+      setOrderDiscount(restored.order_discount ?? undefined);
+      setCartNotes(restored.cart_notes ?? '');
+      setDiscountOverrideToken(null);
+      setIsHeldOrdersModalOpen(false);
+      await loadHeldOrders(false);
+
+      const requestPriceOverride = (index: number) => {
+        if (permissions.isManager || permissions.isOwnerOrAdmin) return;
+        const item = restored.cart_items.filter((cartItem) => cartItem.priceOverrideToken || cartItem.priceOverridden)[index];
+        if (!item) return;
+        const productId = item.product_id || item.productId || '';
+        const unitPrice = Number(item.unit_price ?? item.unitPrice ?? 0);
+        handleRequestManagerApproval(
+          t('pos.hold.reapprovePrice', { product: item.name }),
+          (token) => {
+            handleOverrideLinePrice(productId, unitPrice, token ?? null);
+            requestPriceOverride(index + 1);
+          },
+          { kind: 'price', productId, unitPrice },
+        );
+      };
+      const restoredGross = restored.cart_items.reduce(
+        (sum, item) => sum + (Number(item.quantity) || 0) * Number(item.unit_price ?? item.unitPrice ?? 0),
+        0,
+      );
+      const totalDiscountPercent = restoredGross > 0
+        ? calculateCartTotals(restored.cart_items, restored.order_discount ?? undefined).discount_total / restoredGross * 100
+        : 0;
+      const approvedDiscountPercent = Math.max(
+        totalDiscountPercent,
+        ...restored.cart_items.map((item) => {
+          const gross = (Number(item.quantity) || 0) * Number(item.unit_price ?? item.unitPrice ?? 0);
+          if (gross <= 0) return 0;
+          if (item.discount?.type === 'percent') return item.discount.value;
+          if (item.discount?.type === 'fixed') return Math.min(gross, item.discount.value) / gross * 100;
+          return Number(item.discountPercent) || 0;
+        }),
+      );
+      if (approvedDiscountPercent > permissions.maxDiscountPercent) {
+        handleRequestManagerApproval(
+          t('pos.hold.reapproveDiscount', { percent: approvedDiscountPercent }),
+          (token) => {
+            setDiscountOverrideToken(token ?? null);
+            requestPriceOverride(0);
+          },
+          { kind: 'discount', percent: approvedDiscountPercent },
+        );
+      } else {
+        requestPriceOverride(0);
+      }
+    } catch {
+      setHeldOrderError(t('pos.hold.resumeFailed'));
+    }
+  }, [currentShift, cartItems.length, loadHeldOrders, permissions.isManager, permissions.isOwnerOrAdmin, permissions.maxDiscountPercent, handleOverrideLinePrice, handleRequestManagerApproval, t]);
 
   // Checkout Execution
   const handleCompleteSale = async (
@@ -469,12 +695,19 @@ export function PosPage() {
     isCreditSale = false,
     dueDate?: string,
   ) => {
+    if (!currentShift || currentShift.status !== 'open' || shiftOwnedByAnotherCashier) {
+      setIsPaymentModalOpen(false);
+      alert(shiftOwnedByAnotherCashier
+        ? t('pos.shiftOwnedByAnother', { cashier: currentShift?.cashier_name || t('pos.unknownCashier') })
+        : t('pos.noActiveShift'));
+      return;
+    }
     try {
       setIsProcessingSale(true);
 
       const salePayload = {
         businessId,
-        branchId,
+        branchId: effectiveBranchId,
         shiftId: currentShift?.id,
         cashierId: currentUser?.id || 'cashier-1',
         cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
@@ -522,38 +755,41 @@ export function PosPage() {
   };
 
   // Shift Actions
-  const handleOpenShift = async (openingFloat: number, notes?: string) => {
+  const handleOpenShift = async (openingFloat: number) => {
+    if (!activeRegister) {
+      alert(t('pos.noActiveRegister'));
+      return;
+    }
     try {
       const shift = await repos.pos.openShift({
         businessId,
-        branchId,
+        terminalId: activeRegister.id,
+        branchId: effectiveBranchId,
         cashierId: currentUser?.id || 'cashier-1',
         cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
         opening_float: openingFloat,
-        notes,
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Could not open shift: ${message}`);
+      const message = err instanceof Error ? err.message : t('common.unknown');
+      alert(t('pos.openShiftFailed', { message }));
     }
   };
 
-  const handleCloseShift = async (closingCash: number, notes?: string) => {
+  const handleCloseShift = async (closingCash: number) => {
     if (!currentShift) return;
     try {
       const shift = await repos.pos.closeShift(currentShift.id, {
-        closingCashActual: closingCash,
-        notes,
+        closingCash: closingCash,
       });
       setCurrentShift(shift);
       setIsShiftModalOpen(false);
       // The modal fetches and renders the server-authoritative shift report.
       setIsZReportModalOpen(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Could not close shift: ${message}`);
+      const message = err instanceof Error ? err.message : t('common.unknown');
+      alert(t('pos.closeShiftFailed', { message }));
     }
   };
 
@@ -576,11 +812,13 @@ export function PosPage() {
       });
       setIsCashMovementModalOpen(false);
       // Reload shift details
-      const refreshed = await repos.pos.findActiveShift(businessId, currentUser?.id, branchId);
+      const refreshed = activeRegister
+        ? await repos.pos.getActiveShift(activeRegister.id)
+        : await repos.pos.findActiveShift(businessId, currentUser?.id, effectiveBranchId);
       setCurrentShift(refreshed);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Could not record cash movement: ${message}`);
+      const message = err instanceof Error ? err.message : t('common.unknown');
+      alert(t('pos.cashMovementFailed', { message }));
     }
   };
 
@@ -640,22 +878,42 @@ export function PosPage() {
       <PosHeader
         currentShift={currentShift}
         activeRegister={activeRegister}
+        registers={registers.filter((register) => register.is_active && (!assignedBranchId || register.branch_id === assignedBranchId))}
+        canSwitchRegisters={canSwitchRegisters}
+        onRegisterChange={(registerId) => {
+          const selected = registers.find((register) => register.id === registerId) ?? null;
+          setSelectedRegisterId(selected?.id ?? null);
+          if (selected?.branch_id && !assignedBranchId) setBranchId(selected.branch_id);
+        }}
         branchName={branchName}
-        branches={assignedBranchId ? [] : branches}
-        selectedBranchId={branchId}
+        branches={assignedBranchId ? branches.filter((branch) => branch.id === assignedBranchId) : branches}
+        selectedBranchId={effectiveBranchId}
         onBranchChange={assignedBranchId ? undefined : (id) => {
+          if (currentShift?.status === 'open') return;
           branchTouched.current = true;
-          setBranchId(id || null);
+          const selectedBranchId = id || null;
+          setBranchId(selectedBranchId);
+          setSelectedRegisterId(registers.find((register) => register.is_active && register.branch_id === selectedBranchId)?.id ?? null);
         }}
         isOnline={isOnline}
         pendingOfflineCount={pendingOfflineCount}
         failedOfflineCount={failedOfflineCount}
         isSyncing={isSyncing}
         canViewOwnerDashboard={permissions.canViewOwnerDashboard}
-        canManageRegisters={permissions.canManageRegisters}
+        canManageRegisters={permissions.canManageRegisters || permissions.isManager}
+        onOpenSettingsModal={() => setIsPosSettingsModalOpen(true)}
+        canManageCurrentShift={permissions.canOpenCloseShift && !shiftOwnedByAnotherCashier}
+        canRecordCurrentCashMovement={permissions.canCashDrawerMovement && !shiftOwnedByAnotherCashier}
         onOpenShiftModal={() => setIsShiftModalOpen(true)}
         onOpenCashMovementModal={() => setIsCashMovementModalOpen(true)}
         onOpenHistoryModal={() => setIsHistoryModalOpen(true)}
+        onOpenHeldOrders={() => { setHeldOrderError(null); setIsHeldOrdersModalOpen(true); }}
+        heldOrderCount={heldOrders.filter((order) => order.status === 'held').length}
+        canUseHeldOrders={canUseHeldOrders}
+        canViewHeldOrderHistory={canViewHeldOrderHistory}
+        canAuthorizeOverrides={canAuthorizeOverrides}
+        pendingOverrideCount={pendingPriceOverrides.length}
+        onOpenOverrideQueue={() => { setPriceOverrideQueueError(null); setIsOverrideQueueOpen(true); void loadPendingPriceOverrides(); }}
         onOpenOwnerAnalytics={() => setViewMode('analytics')}
         onOpenLabelGenerator={() => setIsBarcodeModalOpen(true)}
         onOpenZReport={() => setIsZReportModalOpen(true)}
@@ -663,6 +921,26 @@ export function PosPage() {
         viewMode={viewMode}
         onSelectViewMode={(m) => setViewMode(m)}
       />
+
+      {shiftOwnedByAnotherCashier && (
+        <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          {t('pos.shiftOwnedByAnother', { cashier: currentShift?.cashier_name || t('pos.unknownCashier') })}
+        </div>
+      )}
+
+      {(!shiftOwnedByAnotherCashier && (!currentShift || currentShift.status !== 'open')) && (
+        <div role="status" className="flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <span>{t('pos.noActiveShift')}</span>
+          <button
+            type="button"
+            onClick={() => setIsShiftModalOpen(true)}
+            disabled={!activeRegister}
+            className="shrink-0 rounded-lg bg-amber-700 px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t('pos.openShift')}
+          </button>
+        </div>
+      )}
 
       {/* ── Main POS Workspace ── */}
       {viewMode === 'analytics' ? (
@@ -690,25 +968,10 @@ export function PosPage() {
 
           {/* Right Column: Dynamic Cart & Quick Actions */}
           <div className="w-full md:w-96 lg:w-[420px] flex flex-col bg-white shrink-0 shadow-lg z-10">
-            {/* Parked orders pill if any */}
-            {parkedOrders.length > 0 && (
-              <div className="bg-amber-50 px-3 py-1.5 border-b border-amber-200 flex items-center justify-between text-xs">
-                <span className="font-bold text-amber-900">
-                  {parkedOrders.length} Parked Order(s)
-                </span>
-                <div className="flex gap-1.5">
-                  {parkedOrders.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => handleRestoreParkedOrder(p.id)}
-                      className="rounded bg-amber-200 px-1.5 py-0.5 text-[11px] font-bold text-amber-900 hover:bg-amber-300"
-                    >
-                      Restore {p.id}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            {holdOrderError && !isHoldOrderModalOpen && (
+              <button type="button" onClick={() => setHoldOrderError(null)} role="alert" className="border-b border-red-200 bg-red-50 px-3 py-2 text-left text-xs font-semibold text-red-800">
+                {holdOrderError} · {t('pos.hold.dismiss')}
+              </button>
             )}
 
             <PosCart
@@ -726,7 +989,8 @@ export function PosPage() {
               onUpdateQuantity={handleUpdateQuantity}
               onRemoveItem={handleRemoveItem}
               onClearCart={handleClearCart}
-              onParkOrder={handleParkOrder}
+              onHoldOrder={handleParkOrder}
+              canHoldOrder={canUseHeldOrders && currentShift?.status === 'open'}
               onUpdateLineDiscount={handleUpdateLineDiscount}
               onUpdateOrderDiscount={handleUpdateOrderDiscount}
               onSelectCustomer={setSelectedCustomer}
@@ -750,6 +1014,50 @@ export function PosPage() {
         onCompleteSale={handleCompleteSale}
         isProcessing={isProcessingSale}
         canSellOnCredit={permissions.canSellOnCredit}
+        maxTenders={maxTenders}
+      />
+
+      <PosHoldOrderModal
+        open={isHoldOrderModalOpen}
+        total={cartTotals.net_payable}
+        isSaving={isHoldingOrder}
+        error={holdOrderError}
+        onClose={handleCloseHoldOrder}
+        onConfirm={handleConfirmHoldOrder}
+      />
+
+      <PosHeldOrdersModal
+        key={`${currentShift?.id ?? 'no-shift'}:${currentShift?.status ?? 'none'}`}
+        open={isHeldOrdersModalOpen}
+        orders={heldOrders}
+        isLoading={isHeldOrdersLoading}
+        canViewHistory={canViewHeldOrderHistory}
+        initialIncludeHistory={canViewHeldOrderHistory && currentShift?.status !== 'open'}
+        currentCartIsEmpty={cartItems.length === 0}
+        error={heldOrderError}
+        onClose={() => { setIsHeldOrdersModalOpen(false); setHeldOrderError(null); }}
+        onLoadOrders={loadHeldOrders}
+        onResume={handleResumeHeldOrder}
+      />
+
+      <PosSettingsModal
+        open={isPosSettingsModalOpen}
+        onClose={() => setIsPosSettingsModalOpen(false)}
+        settings={permissions.settings}
+        onSaveSettings={handleSavePosSettings}
+        isOwnerOrManager={permissions.isOwnerOrAdmin || permissions.isManager}
+        canConfigureDiscountThresholds={canViewHeldOrderHistory}
+      />
+
+      <PosManagerApprovalQueueModal
+        open={isOverrideQueueOpen}
+        requests={pendingPriceOverrides}
+        isLoading={isLoadingPriceOverrides}
+        approvingId={authorizingPriceOverrideId}
+        error={priceOverrideQueueError}
+        onClose={() => setIsOverrideQueueOpen(false)}
+        onRefresh={() => void loadPendingPriceOverrides()}
+        onAuthorize={(request) => void handleAuthorizePriceOverride(request)}
       />
 
       <PosReceiptModal
@@ -778,27 +1086,44 @@ export function PosPage() {
       <PosSalesHistoryModal
         open={isHistoryModalOpen}
         onClose={() => setIsHistoryModalOpen(false)}
-        sales={salesHistory}
+        sales={returnSales}
+        currentShiftId={currentShift?.id ?? null}
+        isSearching={isSearchingReturns}
+        canSearchHistorical={canSearchHistoricalReturns}
+        canUseStoreCredit={canSearchHistoricalReturns}
         canProcessReturns={permissions.canProcessReturns}
         canVoidSales={permissions.canVoidSales}
-        onProcessReturn={async (saleId, items, refundMethod, approvalToken) => {
-          await processReturn({
+        onSearchSales={searchReturnSales}
+        onProcessReturn={async (saleId, items, refundMethod, reason, approvalToken) => {
+          const result = await processReturn({
             businessId,
             originalInvoiceId: saleId,
-            items: items.map((it) => ({
-              productId: it.product_id,
-              productName: 'Product',
-              quantity: it.quantity,
-              unitPrice: it.refund_amount / it.quantity,
-              refundAmount: it.refund_amount,
+            shiftId: currentShift?.id ?? null,
+            items: items.map((item) => ({
+              invoiceLineId: item.invoice_line_id,
+              productId: item.product_id || undefined,
+              productName: item.product_name,
+              quantity: item.quantity,
+              unitPrice: item.unit_price,
+              refundAmount: item.refund_amount,
+              reason: item.reason,
+              restock: item.restock,
             })),
-            refundMethod: refundMethod as PosPaymentMethod,
-            reason: 'Customer return',
+            refundMethod,
+            reason: reason || t('pos.returns.defaultReason'),
             cashierName: currentUser?.profile?.full_name || currentUser?.email || 'Cashier',
-            branchId,
+            branchId: effectiveBranchId,
             approvalToken: approvalToken ?? null,
           });
           setDataVersion((v) => v + 1);
+          await searchReturnSales('');
+          return {
+            returnId: result.returnId,
+            returnNumber: result.returnNumber,
+            amount: result.amount,
+            refundMethod: result.refundMethod,
+            lines: result.lines,
+          };
         }}
         onVoidSale={async (saleId, reason, approvalToken) => {
           await processVoid({
