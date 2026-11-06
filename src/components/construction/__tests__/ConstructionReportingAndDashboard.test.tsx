@@ -56,6 +56,10 @@ vi.mock('@/hooks/useCapability', () => ({
     : cap === 'manufacturing' ? mockState.hasManufacturingCapability : false,
 }));
 
+vi.mock('@/hooks/usePermissions', () => ({
+  isPathAllowedForRole: () => false,
+}));
+
 vi.mock('@/components/dashboard/ExecutiveHealthStrip', () => ({
   ExecutiveHealthStrip: () => <div data-testid="executive-health-strip" />,
 }));
@@ -76,6 +80,7 @@ vi.mock('@/lib/repositories', () => ({
 }));
 
 vi.mock('@/hooks/useDashboardData', () => ({
+  getDashboardPeriod: () => ({ from: '2026-11-01', to: '2026-11-30', formattedPeriodLabel: 'November 2026' }),
   useMonthlyIncome: () => ({ data: 10000, isLoading: false, isError: false }),
   useMonthlyExpenses: () => ({ data: 4000, isLoading: false, isError: false }),
   useMonthlyExpenseVat: () => ({ data: 0, isLoading: false }),
@@ -305,6 +310,7 @@ describe('DashboardPage conditional rendering', () => {
     expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
     expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
     expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-vertical-modules')).toBeTruthy();
   });
 
   it('renders GenericDashboard when business does not have construction capability', async () => {

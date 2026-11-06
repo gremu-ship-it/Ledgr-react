@@ -6,7 +6,7 @@
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
-import { copyFileSync, mkdirSync, existsSync } from 'node:fs';
+import { copyFileSync, mkdirSync, existsSync, statSync } from 'node:fs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..', '..');
@@ -23,7 +23,7 @@ const MOCK_MAP = {
 
 const resolveWithExtensions = (base) => {
   for (const cand of [base, `${base}.ts`, `${base}.tsx`, `${base}.mts`, `${base}.js`, `${base}.jsx`, join(base, 'index.ts'), join(base, 'index.tsx')]) {
-    if (existsSync(cand)) return cand;
+    if (existsSync(cand) && statSync(cand).isFile()) return cand;
   }
   return null;
 };

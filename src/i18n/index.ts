@@ -7,6 +7,7 @@ import fr from './locales/fr.json';
 import pt from './locales/pt.json';
 import { DEFAULT_LANGUAGE, LANGUAGE_STORAGE_KEY } from './types';
 import { getTextDirection, normalizeLanguage } from './locale';
+import { formatMissingTranslationKey } from './missingTranslation';
 
 function getInitialLanguage() {
   if (typeof window === 'undefined') return DEFAULT_LANGUAGE;
@@ -34,6 +35,10 @@ void i18n
       escapeValue: false,
     },
     returnNull: false,
+    // Never expose an untranslated dotted key in the UI. The English catalog
+    // remains authoritative; this readable fallback only covers unexpected or
+    // dynamically generated misses until the key can be added to a locale.
+    parseMissingKeyHandler: (key) => formatMissingTranslationKey(key),
   });
 
 function applyDocumentLocale(language: string) {

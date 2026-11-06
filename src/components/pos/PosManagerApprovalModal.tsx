@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ShieldCheck, X, AlertCircle, Clock } from 'lucide-react';
 
 /**
@@ -43,6 +44,7 @@ export function PosManagerApprovalModal({
   onRequestServerApproval,
   onApprove,
 }: PosManagerApprovalModalProps) {
+  const { t } = useTranslation();
   const [step, setStep] = useState<'request' | 'pending'>('request');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -75,7 +77,7 @@ export function PosManagerApprovalModal({
       setToken(minted);
       setStep('pending');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not request approval.');
+      setError(e instanceof Error ? e.message : t('pos.override.requestFailed'));
     } finally {
       setBusy(false);
     }
@@ -89,12 +91,13 @@ export function PosManagerApprovalModal({
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-amber-600" />
             <h2 className="text-sm font-black text-gray-900">
-              {serverMode ? 'Manager Approval Required' : 'Supervisor Confirmation'}
+              {serverMode ? t('pos.override.approvalRequired') : t('pos.override.supervisorConfirmation')}
             </h2>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label={t('pos.override.close')}
             className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100"
           >
             <X className="h-5 w-5" />
@@ -110,9 +113,7 @@ export function PosManagerApprovalModal({
           step === 'request' ? (
             <div className="space-y-3">
               <p className="text-xs text-gray-600 leading-relaxed">
-                This operation needs approval bound to this specific document. The approval is
-                recorded and authorized on the server by an owner, admin or manager using their
-                own verified sign-in — it cannot be typed in here.
+                {t('pos.override.requestInstructions')}
               </p>
               {error && (
                 <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
@@ -126,40 +127,35 @@ export function PosManagerApprovalModal({
                 onClick={() => void handleRequest()}
                 className="w-full rounded-2xl bg-amber-600 py-3 text-sm font-bold text-white hover:bg-amber-700 disabled:opacity-50"
               >
-                {busy ? 'Requesting…' : 'Request approval'}
+                {busy ? t('pos.override.requesting') : t('pos.override.requestApproval')}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
                 <Clock className="h-4 w-4 mt-0.5 shrink-0" />
-                <span>
-                  Approval requested and recorded on the server (token {token?.slice(0, 8)}…).
-                  The request stays valid for 15 minutes. Once an owner, admin or manager has
-                  approved it, press continue — the server verifies the approval itself.
-                </span>
+                <span>{t('pos.override.pendingApproval', { token: token?.slice(0, 8) })}</span>
               </div>
               <button
                 type="button"
                 onClick={() => token && onApprove(token)}
                 className="w-full rounded-2xl bg-brand-600 py-3 text-sm font-bold text-white hover:bg-brand-700"
               >
-                Continue with this approval
+                {t('pos.override.continueWithApproval')}
               </button>
               <button
                 type="button"
                 onClick={onClose}
                 className="w-full rounded-2xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
               >
-                Try again later
+                {t('pos.override.tryAgainLater')}
               </button>
             </div>
           )
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-gray-600 leading-relaxed">
-              Confirm that a supervisor has seen this on the till. This records a note only —
-              it does not authorize any financial correction.
+              {t('pos.override.displayInstructions')}
             </p>
             <div className="flex gap-2">
               <button
@@ -167,14 +163,14 @@ export function PosManagerApprovalModal({
                 onClick={onClose}
                 className="flex-1 rounded-2xl border border-gray-200 py-2.5 text-xs font-bold text-gray-600 hover:bg-gray-50"
               >
-                Cancel
+                {t('pos.override.cancel')}
               </button>
               <button
                 type="button"
                 onClick={() => onApprove(undefined)}
                 className="flex-1 rounded-2xl bg-amber-600 py-2.5 text-xs font-bold text-white hover:bg-amber-700"
               >
-                Confirm on the till
+                {t('pos.override.confirmOnTill')}
               </button>
             </div>
           </div>

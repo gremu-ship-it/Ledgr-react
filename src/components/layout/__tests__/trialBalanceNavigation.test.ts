@@ -3,21 +3,32 @@ import { isItemLocked, navItemForPath, NAV_SECTIONS } from '../navConfig';
 import { isPathAllowedForRole } from '@/hooks/usePermissions';
 
 describe('Reports navigation', () => {
-  it('lists the seven P4 reports and the standalone cash forecast in the Reports section', () => {
+  it('keeps the seven historical statements and analytic reports in Reports', () => {
     const section = NAV_SECTIONS.find((candidate) => candidate.labelKey === 'navigation.sections.reports');
     expect(section?.items.map((item) => item.path)).toEqual([
       '/reports/trial-balance',
       '/reports/profit-loss',
       '/reports/balance-sheet',
       '/reports/cash-flow',
-      '/cash-forecast',
-      '/reports/budgets',
-      '/reports/depreciation',
       '/reports/revenue-breakdown',
       '/reports/changes-in-equity',
       '/reports/branch-performance',
-      '/reports/fx-revaluation',
     ]);
+  });
+
+  it('places planning, depreciation, FX revaluation, and cash forecast in their workflow sections', () => {
+    const sectionFor = (path: string) => NAV_SECTIONS.find((section) => section.items.some((item) => item.path === path));
+    expect(sectionFor('/reports/budgets')?.labelKey).toBe('navigation.sections.planning');
+    expect(sectionFor('/reports/depreciation')?.labelKey).toBe('navigation.sections.assetsCapital');
+    expect(sectionFor('/reports/fx-revaluation')?.labelKey).toBe('navigation.sections.accounting');
+    expect(sectionFor('/cash-forecast')?.labelKey).toBe('navigation.sections.banking');
+    expect(sectionFor('/reports/depreciation')?.items.find((item) => item.path === '/reports/depreciation')?.path).toBe('/reports/depreciation');
+  });
+
+  it('keeps Settings out of the main navigation while preserving canonical Taxation access', () => {
+    expect(NAV_SECTIONS.some((section) => section.labelKey === 'navigation.sections.settings')).toBe(false);
+    expect(navItemForPath('/settings')).toBeUndefined();
+    expect(navItemForPath('/tax')?.labelKey).toBe('navigation.items.taxConfiguration');
   });
 
   it('is visible across verticals and gated to Growth+', () => {

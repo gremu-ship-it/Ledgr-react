@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { isDemoMode } from '@/lib/demo/mode';
 import { isMissingFunctionError } from '@/services/quickSaveService';
 import type { PosSaleQueuePayload } from '@/offline/payloads';
 import { deriveClientKey } from '@/lib/clientKeys';
@@ -9,11 +10,10 @@ const log = createLogger('PosSaleRpc');
 /**
  * posSaleRpc — server-side POS sale posting.
  *
- * Calls `post_pos_sale` (supabase/migrations/20260923000000_post_pos_sale_rpc.sql),
- * which writes the invoice, its lines, the tender rows, the ledger entries and
- * the stock release in ONE transaction, or nothing at all. Stage 2 of
- * docs/database/pos-sale-posting-rpc.md; stage 3 narrows the POS roles'
- * policies and is only safe once this path is deployed everywhere.
+ * Calls the Phase 6E-3 plan-gated wrapper, which checks retail entitlement
+ * and exact tender settlement before delegating to canonical `post_pos_sale`
+ * (R08). That function writes the invoice, its lines, tender rows, ledger
+ * entries and stock release in ONE transaction, or nothing at all.
  *
  * Why the till needs it beyond speed: with the posting server-side, a cashier
  * never holds INSERT on invoices / invoice_lines / invoice_payments /
@@ -23,19 +23,11 @@ const log = createLogger('PosSaleRpc');
  * server-side?", so it returns null for the two ways the answer is no, and
  * throws for everything else:
  *
- *   null  -> the caller falls back to the client-side path. Two cases:
- *            (a) the function is not in the schema cache (PGRST202 — migration
- *                not applied yet in this environment);
- *            (b) the backend answered without a sale document. The demo client
- *                answers `null` for any function it does not emulate, by
- *                design, so callers fall back instead of erroring at a
- *                visitor. `post_pos_sale` never returns null itself, so a null
- *                answer cannot be a committed sale.
- *   throw -> a real failure. The RPC is atomic, so nothing was written;
- *            `processSale` then either queues the sale (network failure) or
- *            surfaces it. Falling back here would quietly resurrect a second,
- *            weaker write path for exactly the errors stage 3 exists to
- *            prevent.
+ *   null  -> only the explicitly selected demo client answered without a
+ *            committed document, so the demo uses its local materializer.
+ *   throw -> every real backend failure, including a missing plan-gated RPC.
+ *            The RPC is atomic, so nothing was written; falling back to client
+ *            writes could bypass subscription gates and is never permitted.
  *
  * Falling back is safe against double-posting in every case: both paths are
  * idempotent on the same client key, and the fallback's own repository calls
@@ -137,24 +129,33 @@ export async function postPosSaleViaRpc(
   let lastErr: unknown;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const { data, error } = await client.rpc('post_pos_sale', args);
+      const { data, error } = await client.rpc('post_pos_sale_plan_gated', args);
       if (error) throw error;
 
       const result = data as PosSaleRpcResult | null;
       if (!result || typeof result.id !== 'string' || typeof result.number !== 'string') {
-        // No sale document came back: this backend does not implement the
-        // function (the demo client answers null for anything it does not
-        // emulate). The caller falls back — see the failure policy above.
-        log.info('post_pos_sale is not available on this backend — using the client-side sale path', {
-          businessId,
-          receiptNumber: payload.receiptNumber,
-        });
-        return null;
+        if (isDemoMode()) {
+          log.info('Demo backend does not emulate the POS sale RPC — using its local sale path', {
+            businessId,
+            receiptNumber: payload.receiptNumber,
+          });
+          return null;
+        }
+        throw new Error('The server did not confirm this POS sale. No client-side fallback was attempted.');
       }
       return result;
     } catch (err) {
       lastErr = err;
-      if (isMissingFunctionError(err)) return null;
+      if (isMissingFunctionError(err)) {
+        if (isDemoMode()) {
+          log.info('Demo backend does not expose the POS sale RPC — using its local sale path', {
+            businessId,
+            receiptNumber: payload.receiptNumber,
+          });
+          return null;
+        }
+        throw new Error('POS checkout security controls are not deployed on this server. Apply the POS Phase 6E-3 migration before accepting sales.', { cause: err });
+      }
       if (attempt === 0 && isRetriableTransient(err)) {
         log.warn('POS sale RPC failed transiently — retrying once with the same client key', {
           businessId,

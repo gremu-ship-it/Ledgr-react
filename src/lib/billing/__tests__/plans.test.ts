@@ -37,16 +37,15 @@ describe('Starter pricing and access', () => {
 
   it('leaves Finance unlocked for Free and locks all other business-module navigation', () => {
     for (const section of NAV_SECTIONS) {
-      // Construction moved into the Supply Chain (inventory) section and is now an
-      // Enterprise module. General settings remains available on Free, while the
-      // FX tools are explicitly Growth-gated.
+      // Construction is an Enterprise module. Overview, Finance, and Support
+      // remain available on Free; operational modules (including Planning and FX)
+      // retain their existing plan gates.
       const available = ['overview', 'finance', 'support'].some((name) => section.labelKey.endsWith(`.${name}`));
       for (const item of section.items) {
-        const expectedLocked = item.path === '/settings'
-          ? false
-          : item.path === '/settings/exchange-rates' || item.path === '/reports/fx-revaluation'
-            ? true
-            : !available;
+        const expectedLocked = item.path === '/reports/fx-revaluation'
+          || (item.minPlan != null && item.minPlan !== 'free')
+          ? true
+          : !available;
         expect(isItemLocked(item, 'free'), item.path).toBe(expectedLocked);
       }
     }
@@ -83,7 +82,7 @@ describe('Starter pricing and access', () => {
     },
   );
 
-  it.each(['/journals', '/periods', '/audit', '/bank-reconciliation/accounts', '/bank-reconciliation/statements', '/contacts', '/branches', '/departments', '/ai', '/settings/exchange-rates'])(
+  it.each(['/journals', '/periods', '/audit', '/bank-reconciliation/accounts', '/bank-reconciliation/statements', '/contacts', '/branches', '/departments', '/ai'])(
     'keeps %s on its existing higher tier', (path) => {
       expect(isItemLocked(navItemForPath(path)!, 'starter')).toBe(true);
     },
@@ -191,7 +190,7 @@ describe('plan catalogue integration parity', () => {
     for (const name of ['Journals', 'Period Management', 'Audit Log', 'Contacts', 'Branches', 'Departments']) {
       expect(app).toContain(`capability="accounting_organisation" featureName="${name}"`);
     }
-    expect(app).toContain(`<PartnerPlanGate featureKey="payroll" capability="core_accounting" featureName={t('payroll.title')}>`);
+    expect(app).toContain('<Route path="/payroll" element={<Navigate to="/payroll/employees" replace />} />');
     expect(app).toContain('<Route path="/payroll/tax-config" element={');
     const payrollPage = source('src/pages/PayrollPage.tsx');
     expect(payrollPage).toContain("hasCapability(planTier, 'accounting_organisation')");
@@ -242,7 +241,6 @@ describe('plan catalogue integration parity', () => {
       '/manufacturing/runs',
       '/manufacturing/routings',
       '/manufacturing/work-centres',
-      '/manufacturing/dashboard',
     ];
     for (const path of routePaths) {
       const start = app.indexOf(`path="${path}"`);
@@ -251,6 +249,12 @@ describe('plan catalogue integration parity', () => {
       expect(route).toContain('PlanGate minPlan="enterprise"');
       expect(route).toContain('CapabilityGate');
     }
+
+    const aliasStart = app.indexOf('path="/manufacturing/dashboard"');
+    expect(aliasStart, 'legacy dashboard alias exists').toBeGreaterThanOrEqual(0);
+    const aliasRoute = app.slice(aliasStart, app.indexOf('/>', aliasStart));
+    expect(aliasRoute).toContain('<ManufacturingDashboardRedirect');
+    expect(app).toContain("import { ManufacturingDashboardRedirect } from '@/routes/ManufacturingDashboardRedirect'");
 
     // The outer RoleRoute encloses both vertical route sets; PlanGate is also
     // inside each page component so direct component rendering stays protected.

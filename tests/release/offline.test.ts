@@ -17,7 +17,7 @@ import { buildPosSaleQueuePayload } from '@/services/posService';
 import { realSupabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, key, expected } from './fixtures';
+import { seedFixture, identities, DAY, key, expected, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test=evidenceSuite('offline-indexeddb-postgres');
@@ -27,7 +27,7 @@ let orgs:Awaited<ReturnType<typeof seedFixture>>;
 let setupError='';
 let simulateFailure=false;
 beforeAll(async()=>{
-  try { db=await createDatabaseFixture(); orgs=await seedFixture(db.client); }
+  try { db=await createDatabaseFixture(); orgs=await seedFixture(db.client); await enableRetailModel(db.client, orgs); }
   catch(e){setupError=safeError(e);}
 });
 beforeEach(async()=>{
@@ -47,9 +47,9 @@ beforeEach(async()=>{
     if(!db||!orgs) throw new Error('R13 fixture unavailable');
     rpcCalls.push(name);
     if(simulateFailure) return {data:null,error:{code:'42501',message:'R13 synthetic denied operation'}};
-    if(name!=='post_pos_sale') throw new Error('Unexpected RPC; no network fallback permitted');
+    if(name!=='post_pos_sale_plan_gated') throw new Error('Unexpected RPC; no network fallback permitted');
     try {
-      const result=await db.commitAsRole('authenticated',identities.A_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify(args.p_payload)]);
+      const result=await db.commitAsRole('authenticated',identities.A_cashier.id,'select public.post_pos_sale_plan_gated($1::jsonb) data',[JSON.stringify(args.p_payload)]);
       return {data:result.rows[0].data,error:null};
     } catch(e) {return {data:null,error:{code:(e as {code?:string}).code,message:'R13 database operation rejected'}};}
   }) as never);
@@ -262,7 +262,7 @@ test(queueMeta('R09.QUEUE.ACTOR-BINDING.SAME-USER','Case A: provenance matching 
   expect(result.completed).toBe(1);expect(result.failed).toBe(0);
   const row=(await offlineDB.queue.get(id))!;
   expect(row.status).toBe('synced');expect(row.clientKey).toBe(before.clientKey);
-  expect(rpcCalls).toContain('post_pos_sale');
+  expect(rpcCalls).toContain('post_pos_sale_plan_gated');
   const inv=await db.client.query('select client_key from public.invoices where business_id=$1 and id=$2',[orgs.A.business,row.resolvedServerId]);
   expect(inv.rows[0].client_key).toBe(before.clientKey);
 });
@@ -278,7 +278,7 @@ test(queueMeta('R09.QUEUE.ACTOR-BINDING.MISMATCH','Case B: a queue item captured
   expect(item.originUserId).toBe(identities.A_cashier.id);
   expect(item.payload).toEqual(captured.payload); // complete financial payload preserved
   expect(item.clientKey).toBe(captured.clientKey);
-  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  expect(rpcCalls.filter(n=>n==='post_pos_sale_plan_gated')).toHaveLength(0);
   const inv=await db.client.query('select count(*)::int n from public.invoices where client_key=$1',[captured.clientKey]);
   expect(inv.rows[0].n).toBe(0);
 });
@@ -291,12 +291,12 @@ test(queueMeta('R09.QUEUE.ACTOR-BINDING.FORGED','A forged origin_user_id cannot 
   expect(result.completed).toBe(0);
   const item=(await offlineDB.queue.get(id))!;
   expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('actor-mismatch');
-  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  expect(rpcCalls.filter(n=>n==='post_pos_sale_plan_gated')).toHaveLength(0);
   // Server-authoritative proof: the forged payload itself supplies no actor;
   // calling post_pos_sale as org-B (not a member of org A) is denied.
   const {buildPosSaleQueuePayload}=await import('@/services/posService');
   void buildPosSaleQueuePayload;
-  const argued=await db.commitAsRole('authenticated',identities.B_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify((await offlineDB.queue.get(id))!.payload)]).then(r=>({ok:true,r})).catch((e)=>({ok:false,code:(e as {code?:string}).code}));
+  const argued=await db.commitAsRole('authenticated',identities.B_cashier.id,'select public.post_pos_sale_plan_gated($1::jsonb) data',[JSON.stringify((await offlineDB.queue.get(id))!.payload)]).then(r=>({ok:true,r})).catch((e)=>({ok:false,code:(e as {code?:string}).code}));
   if((argued as {ok:boolean}).ok){
     // If B succeeded, it could only be because B CAN see nothing of org A —
     // a real insert would violate tenant isolation; treat as failure signal.
@@ -312,7 +312,7 @@ test(queueMeta('R09.QUEUE.ACTOR-BINDING.MISSING','Case C: a v1-shape item (no pr
   expect(result.completed).toBe(0);
   const item=(await offlineDB.queue.get(id))!;
   expect(item.status).toBe('quarantined');expect(item.quarantineReason).toBe('missing-provenance');
-  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  expect(rpcCalls.filter(n=>n==='post_pos_sale_plan_gated')).toHaveLength(0);
 });
 
 test(queueMeta('R09.QUEUE.QUARANTINE.DENY-RETRY-DURABLE','A quarantined item is never automatically retried and survives reload intact'),async()=>{
@@ -322,7 +322,7 @@ test(queueMeta('R09.QUEUE.QUARANTINE.DENY-RETRY-DURABLE','A quarantined item is 
   expect(((await offlineDB.queue.get(id))!).status).toBe('quarantined');
   rpcCalls.length=0;
   await syncQueue(undefined,{currentUserId:identities.A_cashier.id}); // even as the original actor: no silent revival
-  expect(rpcCalls.filter(n=>n==='post_pos_sale')).toHaveLength(0);
+  expect(rpcCalls.filter(n=>n==='post_pos_sale_plan_gated')).toHaveLength(0);
   const before=(await offlineDB.queue.get(id))!;
   offlineDB.close();await offlineDB.open();
   const after=(await offlineDB.queue.get(id))!;
@@ -427,7 +427,7 @@ test(queueMeta('R09.QUEUE.REGRESSION.REPLAY-CONTRACT','R09.2 does not alter the 
   const clientKey=(await offlineDB.queue.get(id))!.clientKey;
   const r=await db.client.query('select count(*)::int n from public.invoices where business_id=$1 and client_key=$2',[orgs.A.business,clientKey]);
   expect(r.rows[0].n).toBe(1); // exactly once despite two acceptances
-  expect(rpcCalls.filter(n=>n==='post_pos_sale').length).toBe(2);
+  expect(rpcCalls.filter(n=>n==='post_pos_sale_plan_gated').length).toBe(2);
   // R08/R06 denial classes still surface through the SAME failure path: the
   // item fails, carries no exception classification, and leaves zero financial
   // mutation. Preservation of payload/key/timestamps for the denied item is
@@ -469,7 +469,7 @@ test(quotaMeta('R10.QUOTA.SERVER-POS','Quota denial from post_pos_sale carries d
   ready();await seedUsageToLimit();
   const {buildPosSaleRpcPayload}=await import('@/services/posSaleRpc');
   const rpcPayload=buildPosSaleRpcPayload(payload(301),orgs.A.business,key(8301));
-  const err=await quotaErrorOf(db.commitAsRole('authenticated',identities.A_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify(rpcPayload)]));
+  const err=await quotaErrorOf(db.commitAsRole('authenticated',identities.A_cashier.id,'select public.post_pos_sale_plan_gated($1::jsonb) data',[JSON.stringify(rpcPayload)]));
   expect(err.code).toBe('P0QLT');
   expect(err.message).toMatch(/^Monthly transaction limit reached \(50\)/);
 });
@@ -508,7 +508,7 @@ test(quotaMeta('R10.QUOTA.SERVER-DISTINCT','Unrelated application P0001 raises a
   expect(malformed.code).toBe('P0001');
   // R08 shift authority denial: org-B cashier has no access to org-A shift (42501).
   const {buildPosSaleRpcPayload}=await import('@/services/posSaleRpc');
-  const denied=await quotaErrorOf(db.commitAsRole('authenticated',identities.B_cashier.id,'select public.post_pos_sale($1::jsonb) data',[JSON.stringify(buildPosSaleRpcPayload(payload(305),orgs.A.business,key(8305)))]));
+  const denied=await quotaErrorOf(db.commitAsRole('authenticated',identities.B_cashier.id,'select public.post_pos_sale_plan_gated($1::jsonb) data',[JSON.stringify(buildPosSaleRpcPayload(payload(305),orgs.A.business,key(8305)))]));
   expect(denied.code).toBe('42501');
   expect(denied.code).not.toBe('P0QLT');
 });

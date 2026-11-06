@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Plus, DollarSign, Receipt, Users, FileText } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -10,13 +10,14 @@ import {
   useIncomeExpenseTrend,
   useRecentJournalEntries,
   useMonthlyProfitLossReport,
+  getDashboardPeriod,
 } from '@/hooks/useDashboardData';
 import { IncomeExpenseChart } from '@/components/dashboard/IncomeExpenseChart';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
 import { CashFlowIndicator } from '@/components/dashboard/CashFlowIndicator';
 import { TaxRemittancePanel } from '@/components/dashboard/TaxRemittancePanel';
 import { TaxReminderModal } from '@/components/dashboard/TaxReminderModal';
-import { formatMwk, formatMwkCompact } from '@/lib/formatters';
+import { formatCurrency, formatCurrencyCompact, formatDateRange } from '@/lib/formatters';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { UsageMeter } from '@/components/billing/UsageMeter';
@@ -29,21 +30,24 @@ import { ConstructionDashboard } from '@/components/construction/dashboard/Const
 import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
 import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
 import { ManufacturingDashboardPage } from '@/pages/manufacturing/ManufacturingDashboardPage';
+import { DashboardVerticalModules } from '@/components/dashboard/DashboardVerticalModules';
+import { DashboardFreshnessToolbar } from '@/components/dashboard/DashboardFreshnessToolbar';
 
 interface KpiCardProps {
   label: string;
   value: string;
+  to: string;
   valueTitle?: string;
   sub?: string;
   trendUp?: boolean;
   featured?: boolean;
   isLoading?: boolean;
   isError?: boolean;
+  metadata: string;
 }
 
-function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
+function KpiCard({ label, value, to, valueTitle, sub, metadata, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
 
   if (isLoading) {
     return (
@@ -64,49 +68,31 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
   }
 
   const full = valueTitle ?? value;
-  const handleCopy = () => {
-    navigator.clipboard?.writeText(full).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  };
+  const className = featured
+    ? 'group relative block w-full overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 active:scale-[0.98]'
+    : 'group block w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 active:scale-[0.98]';
 
-  if (featured) {
-    return (
-      <button
-        onClick={handleCopy}
-        title={full}
-        className="group relative w-full overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
-        style={{ background: 'linear-gradient(135deg, #065c42, #0a7c5a)' }}
-      >
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
-        <p className="mb-2 truncate font-extrabold text-white" style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.6rem)' }}>
-          {value}
-        </p>
+  return (
+    <Link
+      to={to}
+      title={full}
+      className={className}
+      style={featured ? { background: 'linear-gradient(135deg, #065c42, #0a7c5a)' } : undefined}
+    >
+      <p className={`mb-2 text-xs font-bold uppercase tracking-wider ${featured ? 'text-white/70' : 'text-gray-400'}`}>{label}</p>
+      <p className={`mb-1 truncate font-extrabold leading-tight ${featured ? 'text-white' : 'text-gray-900'}`} style={{ fontSize: featured ? 'clamp(1.25rem, 2.5vw, 1.6rem)' : 'clamp(1.1rem, 2vw, 1.35rem)' }}>
+        {value}
+      </p>
+      <p className={`mb-2 text-[10px] font-medium ${featured ? 'text-white/75' : 'text-gray-500'}`}>{metadata}</p>
+      {featured ? (
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'}`}>
             {trendUp ? '▲' : '▼'} {trendUp ? t('dashboard.profitable') : t('dashboard.loss')}
           </span>
           {sub && <span className="text-xs text-white/80">{sub}</span>}
         </div>
-        {copied && <span className="absolute right-3 top-3 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white">Copied!</span>}
-      </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      title={full}
-      className="group w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
-    >
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mb-1 font-extrabold leading-tight text-gray-900" style={{ fontSize: 'clamp(1.1rem, 2vw, 1.35rem)' }}>
-        {value}
-      </p>
-      {sub && <p className="line-clamp-2 text-xs text-gray-600">{sub}</p>}
-      {copied && <p className="mt-2 text-[10px] font-bold text-brand-600">Copied!</p>}
-    </button>
+      ) : sub ? <p className="line-clamp-2 text-xs text-gray-600">{sub}</p> : null}
+    </Link>
   );
 }
 
@@ -152,10 +138,11 @@ export function DashboardPage() {
   const hasManufacturingOperatingModel = Array.isArray(operatingModels)
     && operatingModels.some((model) => typeof model === 'string' && model.trim().toUpperCase() === 'MANUFACTURING');
   const isManufacturing = hasManufacturingCapability || hasManufacturingOperatingModel;
+  const businessId = useAppStore((state) => state.currentBusiness?.business?.id);
   const isMobile = useIsMobile();
 
-  // The mobile dashboard owns its own summary modules, except manufacturing
-  // tenants who need the full responsive manufacturing executive workspace.
+  // MobileDashboard owns the compact summaries for standard businesses. Keep
+  // the full manufacturing workspace responsive rather than replacing it.
   if (!isConstruction && !isManufacturing && isMobile) return <MobileDashboard />;
 
   const exceptions = (
@@ -167,13 +154,15 @@ export function DashboardPage() {
       />
     </SectionErrorBoundary>
   );
+  const hasSpecializedDashboard = isConstruction || isManufacturing;
 
   return (
     <div className="space-y-6" data-testid="executive-hub-dashboard">
       <SectionErrorBoundary sectionName="Executive Health Summary" fallbackHeight="150px">
         <ExecutiveHealthStrip />
       </SectionErrorBoundary>
-      {isConstruction ? <ConstructionDashboard /> : null}
+      {hasSpecializedDashboard && businessId && <DashboardFreshnessToolbar businessId={businessId} />}
+      {isConstruction && <ConstructionDashboard />}
       {isManufacturing ? (
         <>
           {exceptions}
@@ -183,21 +172,33 @@ export function DashboardPage() {
         </>
       ) : (
         <>
-          {!isConstruction ? <GenericDashboard /> : null}
+          {!isConstruction && <GenericDashboard />}
           {exceptions}
         </>
       )}
+      {/* The generic desktop dashboard includes these modules itself. Specialized
+          dashboards retain the same additive, role-gated summaries as well. */}
+      {hasSpecializedDashboard && <DashboardVerticalModules />}
     </div>
   );
 }
 
 export function GenericDashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business.id;
   const businessName = currentBusiness?.business.name;
+  const currencyCode = currentBusiness?.business.base_currency || 'MWK';
   const isMobile = useIsMobile();
+  const dashboardPeriod = getDashboardPeriod(undefined, i18n.language);
+  const formattedPeriodLabel = dashboardPeriod.formattedPeriodLabel;
+  const periodMetadata = t('dashboard.metadata.period', { period: formatDateRange(dashboardPeriod.from, dashboardPeriod.to, i18n.language) });
+  const trendStart = new Date(`${dashboardPeriod.from}T00:00:00`);
+  trendStart.setMonth(trendStart.getMonth() - 5);
+  const trendPeriod = getDashboardPeriod(trendStart, i18n.language);
+  const trendMetadata = t('dashboard.metadata.period', { period: formatDateRange(trendPeriod.from, dashboardPeriod.to, i18n.language) });
+  const asOfMetadata = t('dashboard.metadata.asOf', { date: new Date().toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' }) });
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -246,28 +247,26 @@ export function GenericDashboard() {
   return (
     <div className="space-y-6">
       <TaxReminderModal />
-      <TaxRemittancePanel businessId={businessId} />
-      <UsageMeter />
 
-      {/* Onboarding progress checklist (spec #5) */}
-      <OnboardingChecklist />
-
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-900">{t('dashboard.financialOverview')}</h1>
-          <p className="mt-0.5 text-sm text-gray-500">
-            {businessName ? t('dashboard.realtimeInsightsFor', { business: businessName }) : t('dashboard.realtimeInsights')} · MWK
-          </p>
+      <section aria-label={t('dashboard.financialOverview')} className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold text-gray-900">{t('dashboard.financialOverview')}</h1>
+            <p className="mt-0.5 text-sm text-gray-500">
+              {businessName ? t('dashboard.realtimeInsightsFor', { business: businessName }) : t('dashboard.realtimeInsights')} · {t('dashboard.baseCurrency', { currency: currencyCode })}
+            </p>
+          </div>
+          <DashboardFreshnessToolbar businessId={businessId} />
         </div>
-        <QuickActions />
-      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label={t('dashboard.netProfit')}
-          value={netProfit !== undefined ? formatMwkCompact(netProfit) : formatMwkCompact(0)}
-          valueTitle={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
-          sub={t('dashboard.thisMonth')}
+          to="/reports/profit-loss"
+          value={netProfit !== undefined ? formatCurrencyCompact(netProfit, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={netProfit !== undefined ? formatCurrency(netProfit, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
+          sub={t('dashboard.forPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp={netProfit === undefined || netProfit >= 0}
           featured
           isLoading={netIsLoading}
@@ -275,36 +274,46 @@ export function GenericDashboard() {
         />
         <KpiCard
           label={t('dashboard.totalIncome')}
-          value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)}
-          valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)}
-          sub={income.data ? t('dashboard.collected', { amount: formatMwk(income.data.amountPaid) }) : undefined}
+          to="/income"
+          value={totalIncomeValue !== undefined ? formatCurrencyCompact(totalIncomeValue, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={totalIncomeValue !== undefined ? formatCurrency(totalIncomeValue, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
+          sub={income.data
+            ? t('dashboard.collectedForPeriod', { amount: formatCurrency(income.data.amountPaid, currencyCode, i18n.language), period: formattedPeriodLabel })
+            : t('dashboard.forPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp
           isLoading={plReport.isLoading || income.isLoading}
           isError={plReport.isError || income.isError}
         />
         <KpiCard
           label={t('dashboard.totalExpenses')}
-          value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)}
-          valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)}
-          sub={t('dashboard.thisMonth')}
+          to="/expenses"
+          value={totalExpensesValue !== undefined ? formatCurrencyCompact(totalExpensesValue, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={totalExpensesValue !== undefined ? formatCurrency(totalExpensesValue, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
+          sub={t('dashboard.forPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp={false}
           isLoading={plReport.isLoading}
           isError={plReport.isError}
         />
         <KpiCard
           label={t('dashboard.accountsReceivable')}
-          value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
-          valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
+          to="/invoices"
+          value={outstanding.data ? formatCurrencyCompact(outstanding.data.total, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)}
+          valueTitle={outstanding.data ? formatCurrency(outstanding.data.total, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)}
           sub={outstanding.data ? t('dashboard.unpaidInvoices', { count: outstanding.data.count }) : t('dashboard.invoices', { count: 0 })}
+          metadata={asOfMetadata}
           trendUp={false}
           isLoading={outstanding.isLoading}
           isError={outstanding.isError}
         />
         <KpiCard
           label={t('dashboard.vatAccrued')}
-          value={formatMwkCompact(Math.abs(netVat))}
-          valueTitle={formatMwk(Math.abs(netVat))}
-          sub={netVat >= 0 ? t('dashboard.payableToMra') : t('dashboard.refundableVat')}
+          to="/reports/vat-return"
+          value={formatCurrencyCompact(Math.abs(netVat), currencyCode, i18n.language)}
+          valueTitle={formatCurrency(Math.abs(netVat), currencyCode, i18n.language)}
+          sub={t(netVat >= 0 ? 'dashboard.payableToMraForPeriod' : 'dashboard.refundableVatForPeriod', { period: formattedPeriodLabel })}
+          metadata={periodMetadata}
           trendUp={netVat >= 0}
           isLoading={vatIsLoading}
           isError={vatIsError}
@@ -312,26 +321,26 @@ export function GenericDashboard() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <SectionErrorBoundary sectionName="Income/Expense Chart">
+        <SectionErrorBoundary sectionName={t('dashboard.incomeVsExpenses')}>
           <div className="lg:col-span-2 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-base font-bold text-gray-900">{t('dashboard.incomeVsExpenses')}</h2>
-                <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')}</p>
+                <p className="text-xs text-gray-600">{t('dashboard.monthlyCashFlow')} · {trendMetadata}</p>
               </div>
             </div>
-            <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} />
+            <IncomeExpenseChart data={trend.data} isLoading={trend.isLoading} isError={trend.isError} currencyCode={currencyCode} />
           </div>
         </SectionErrorBoundary>
 
-        <SectionErrorBoundary sectionName="Cash Flow Indicator">
+        <SectionErrorBoundary sectionName={t('dashboard.cashFlow')}>
           <div className="flex flex-col gap-4">
-            <CashFlowIndicator income={income.data?.totalAmount} expenses={expenses.data} isLoading={income.isLoading || expenses.isLoading} isError={income.isError || expenses.isError} />
+            <CashFlowIndicator income={income.data?.totalAmount} expenses={expenses.data} isLoading={income.isLoading || expenses.isLoading} isError={income.isError || expenses.isError} currencyCode={currencyCode} locale={i18n.language} metadata={periodMetadata} />
           </div>
         </SectionErrorBoundary>
       </div>
 
-      <SectionErrorBoundary sectionName="Recent Transactions">
+      <SectionErrorBoundary sectionName={t('dashboard.recentTransactions')}>
         <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -343,6 +352,23 @@ export function GenericDashboard() {
           <RecentTransactions entries={recentEntries.data} isLoading={recentEntries.isLoading} isError={recentEntries.isError} />
         </div>
       </SectionErrorBoundary>
+
+        <TaxRemittancePanel businessId={businessId} />
+      </section>
+
+      <DashboardVerticalModules />
+
+      <section className="space-y-4" aria-label={t('dashboard.bottomSection')}>
+        <div className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{t('dashboard.quickActions')}</h2>
+            <p className="text-xs text-gray-500">{t('dashboard.quickActionsDescription')}</p>
+          </div>
+          <QuickActions />
+        </div>
+        <UsageMeter />
+        <OnboardingChecklist />
+      </section>
 
       <UpgradeModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgrade={() => { setShowUpgradeModal(false); navigate('/settings?tab=billing'); }} />
     </div>

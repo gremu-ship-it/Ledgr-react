@@ -77,6 +77,7 @@ function ExceptionGroup({
   failed: boolean;
 }) {
   const { t } = useTranslation();
+  if (!loading && !failed && items.length === 0) return null;
   return (
     <section className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
       <h3 className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-900">
