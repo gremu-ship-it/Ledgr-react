@@ -108,6 +108,9 @@ describe('ManufacturingDashboardPage', () => {
     expect(screen.getAllByText(en.manufacturing.dashboard.emptyVariance).length).toBe(2);
     expect(screen.getByText(en.manufacturing.dashboard.emptyThroughput)).toBeTruthy();
     expect(screen.getByText(en.manufacturing.dashboard.emptyYield)).toBeTruthy();
+    expect(screen.getByRole('link', { name: en.manufacturing.dashboard.createWorkOrderAction }).getAttribute('href')).toBe('/manufacturing/production/new');
+    expect(screen.getByRole('link', { name: en.manufacturing.dashboard.defineBillOfMaterialsAction }).getAttribute('href')).toBe('/manufacturing/bom/new');
+    expect(screen.getByRole('link', { name: en.manufacturing.dashboard.viewInventoryStockAction }).getAttribute('href')).toBe('/warehouse');
   });
 
   it('re-fetches for the selected period and uses weekly aggregation for a quarter', async () => {

@@ -45,6 +45,9 @@ import { isItemLocked, visibleSectionsFor } from '@/components/layout/navConfig'
 import { usePartner } from '@/partner/PartnerContext';
 import { useUsage } from '@/hooks/useUsage';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
+import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 
 // ── Stat Card ────────────────────────────────────────────────────────────
 
@@ -167,6 +170,8 @@ export function MobileDashboard() {
   const { planTier } = useUsage();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const inventoryCapabilityEnabled = isOrgCapabilityEnabled('inventory');
+  const constructionCapabilityEnabled = isOrgCapabilityEnabled('construction');
+  const manufacturingCapabilityEnabled = isOrgCapabilityEnabled('manufacturing');
   const currentUser = useAppStore((s) => s.currentUser);
   const orientationLock = useAppStore((s) => s.orientationLock);
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
@@ -240,6 +245,19 @@ export function MobileDashboard() {
   return (
     <div ref={containerRef} className="relative flex w-full min-w-0 max-w-full flex-col gap-5 overflow-x-clip pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+
+      <div className="space-y-4 px-1" data-testid="mobile-dashboard-executive-summary">
+        <SectionErrorBoundary sectionName="Executive Health Summary" fallbackHeight="150px">
+          <ExecutiveHealthStrip />
+        </SectionErrorBoundary>
+        <SectionErrorBoundary sectionName="Actionable Exceptions" fallbackHeight="220px">
+          <ActionableExceptions
+            construction={constructionCapabilityEnabled}
+            manufacturing={manufacturingCapabilityEnabled}
+            inventoryEnabled={inventoryCapabilityEnabled}
+          />
+        </SectionErrorBoundary>
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between px-1 pt-1">

@@ -3999,6 +3999,10 @@
     },
     "dashboard": {
       "title": "Manufacturing Dashboard",
+      "quickActions": "Quick actions",
+      "createWorkOrderAction": "Create Work Order",
+      "defineBillOfMaterialsAction": "Define Bill of Materials",
+      "viewInventoryStockAction": "View Inventory Stock",
       "summary": "Production summary metrics",
       "period": {
         "label": "Period",
