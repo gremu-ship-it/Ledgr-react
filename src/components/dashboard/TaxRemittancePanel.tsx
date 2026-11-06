@@ -63,7 +63,14 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
             {t('dashboard.vatPositionLastMonth')}
           </p>
-          {vat.isLoading ? (
+          {vat.isError ? (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p>{t('dashboard.vatSummaryLoadError')}</p>
+              <button type="button" onClick={() => void vat.refetch()} className="mt-2 font-semibold underline">
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : vat.isLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="h-4 animate-pulse rounded bg-gray-100" />
@@ -97,7 +104,14 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
             {t('dashboard.payeDueLastMonth')}
           </p>
-          {paye.isLoading ? (
+          {paye.isError ? (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p>{t('dashboard.payeSummaryLoadError')}</p>
+              <button type="button" onClick={() => void paye.refetch()} className="mt-2 font-semibold underline">
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : paye.isLoading ? (
             <div className="h-4 animate-pulse rounded bg-gray-100" />
           ) : (
             <div className="space-y-1.5 text-sm">

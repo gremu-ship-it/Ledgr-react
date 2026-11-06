@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { AlertCircle, Plus, DollarSign, Receipt, Users, FileText } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
@@ -10,6 +10,7 @@ import {
   useIncomeExpenseTrend,
   useRecentJournalEntries,
   useMonthlyProfitLossReport,
+  getDashboardPeriod,
 } from '@/hooks/useDashboardData';
 import { IncomeExpenseChart } from '@/components/dashboard/IncomeExpenseChart';
 import { RecentTransactions } from '@/components/dashboard/RecentTransactions';
@@ -30,6 +31,7 @@ import { ConstructionDashboard } from '@/components/construction/dashboard/Const
 interface KpiCardProps {
   label: string;
   value: string;
+  to: string;
   valueTitle?: string;
   sub?: string;
   trendUp?: boolean;
@@ -38,9 +40,8 @@ interface KpiCardProps {
   isError?: boolean;
 }
 
-function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
+function KpiCard({ label, value, to, valueTitle, sub, trendUp = true, featured = false, isLoading, isError }: KpiCardProps) {
   const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
 
   if (isLoading) {
     return (
@@ -61,49 +62,30 @@ function KpiCard({ label, value, valueTitle, sub, trendUp = true, featured = fal
   }
 
   const full = valueTitle ?? value;
-  const handleCopy = () => {
-    navigator.clipboard?.writeText(full).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }).catch(() => {});
-  };
+  const className = featured
+    ? 'group relative block w-full overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 active:scale-[0.98]'
+    : 'group block w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 active:scale-[0.98]';
 
-  if (featured) {
-    return (
-      <button
-        onClick={handleCopy}
-        title={full}
-        className="group relative w-full overflow-hidden rounded-2xl p-5 text-left transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
-        style={{ background: 'linear-gradient(135deg, #065c42, #0a7c5a)' }}
-      >
-        <p className="mb-2 text-xs font-bold uppercase tracking-wider text-white/70">{label}</p>
-        <p className="mb-2 truncate font-extrabold text-white" style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.6rem)' }}>
-          {value}
-        </p>
+  return (
+    <Link
+      to={to}
+      title={full}
+      className={className}
+      style={featured ? { background: 'linear-gradient(135deg, #065c42, #0a7c5a)' } : undefined}
+    >
+      <p className={`mb-2 text-xs font-bold uppercase tracking-wider ${featured ? 'text-white/70' : 'text-gray-400'}`}>{label}</p>
+      <p className={`mb-1 truncate font-extrabold leading-tight ${featured ? 'text-white' : 'text-gray-900'}`} style={{ fontSize: featured ? 'clamp(1.25rem, 2.5vw, 1.6rem)' : 'clamp(1.1rem, 2vw, 1.35rem)' }}>
+        {value}
+      </p>
+      {featured ? (
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-bold ${trendUp ? 'bg-white/20 text-white' : 'bg-red-400/30 text-white'}`}>
             {trendUp ? '▲' : '▼'} {trendUp ? t('dashboard.profitable') : t('dashboard.loss')}
           </span>
           {sub && <span className="text-xs text-white/80">{sub}</span>}
         </div>
-        {copied && <span className="absolute right-3 top-3 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white">Copied!</span>}
-      </button>
-    );
-  }
-
-  return (
-    <button
-      onClick={handleCopy}
-      title={full}
-      className="group w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98]"
-    >
-      <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-400">{label}</p>
-      <p className="mb-1 font-extrabold leading-tight text-gray-900" style={{ fontSize: 'clamp(1.1rem, 2vw, 1.35rem)' }}>
-        {value}
-      </p>
-      {sub && <p className="line-clamp-2 text-xs text-gray-600">{sub}</p>}
-      {copied && <p className="mt-2 text-[10px] font-bold text-brand-600">Copied!</p>}
-    </button>
+      ) : sub ? <p className="line-clamp-2 text-xs text-gray-600">{sub}</p> : null}
+    </Link>
   );
 }
 
@@ -148,12 +130,13 @@ export function DashboardPage() {
 }
 
 export function GenericDashboard() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const businessId = currentBusiness?.business.id;
   const businessName = currentBusiness?.business.name;
   const isMobile = useIsMobile();
+  const formattedPeriodLabel = getDashboardPeriod(undefined, i18n.language).formattedPeriodLabel;
 
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
@@ -221,9 +204,10 @@ export function GenericDashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <KpiCard
           label={t('dashboard.netProfit')}
+          to="/reports/profit-loss"
           value={netProfit !== undefined ? formatMwkCompact(netProfit) : formatMwkCompact(0)}
           valueTitle={netProfit !== undefined ? formatMwk(netProfit) : formatMwk(0)}
-          sub={t('dashboard.thisMonth')}
+          sub={t('dashboard.forPeriod', { period: formattedPeriodLabel })}
           trendUp={netProfit === undefined || netProfit >= 0}
           featured
           isLoading={netIsLoading}
@@ -231,24 +215,29 @@ export function GenericDashboard() {
         />
         <KpiCard
           label={t('dashboard.totalIncome')}
+          to="/income"
           value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)}
           valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)}
-          sub={income.data ? t('dashboard.collected', { amount: formatMwk(income.data.amountPaid) }) : undefined}
+          sub={income.data
+            ? t('dashboard.collectedForPeriod', { amount: formatMwk(income.data.amountPaid), period: formattedPeriodLabel })
+            : t('dashboard.forPeriod', { period: formattedPeriodLabel })}
           trendUp
           isLoading={plReport.isLoading || income.isLoading}
           isError={plReport.isError || income.isError}
         />
         <KpiCard
           label={t('dashboard.totalExpenses')}
+          to="/expenses"
           value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)}
           valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)}
-          sub={t('dashboard.thisMonth')}
+          sub={t('dashboard.forPeriod', { period: formattedPeriodLabel })}
           trendUp={false}
           isLoading={plReport.isLoading}
           isError={plReport.isError}
         />
         <KpiCard
           label={t('dashboard.accountsReceivable')}
+          to="/invoices"
           value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)}
           valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)}
           sub={outstanding.data ? t('dashboard.unpaidInvoices', { count: outstanding.data.count }) : t('dashboard.invoices', { count: 0 })}
@@ -258,9 +247,10 @@ export function GenericDashboard() {
         />
         <KpiCard
           label={t('dashboard.vatAccrued')}
+          to="/reports/vat-return"
           value={formatMwkCompact(Math.abs(netVat))}
           valueTitle={formatMwk(Math.abs(netVat))}
-          sub={netVat >= 0 ? t('dashboard.payableToMra') : t('dashboard.refundableVat')}
+          sub={t(netVat >= 0 ? 'dashboard.payableToMraForPeriod' : 'dashboard.refundableVatForPeriod', { period: formattedPeriodLabel })}
           trendUp={netVat >= 0}
           isLoading={vatIsLoading}
           isError={vatIsError}

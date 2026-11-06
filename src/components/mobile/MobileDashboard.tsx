@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  LoaderCircle,
   Search,
   type LucideIcon,
 } from 'lucide-react';
@@ -29,6 +30,8 @@ import {
   useOutstandingInvoices,
   useMonthlyExpenseVat,
   useMonthlyProfitLossReport,
+  getDashboardPeriod,
+  refreshDashboardQueries,
 } from '@/hooks/useDashboardData';
 import { formatMwk, formatMwkCompact } from '@/lib/formatters';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
@@ -53,6 +56,7 @@ function StatCard({
   tone = 'neutral',
   icon,
   isLoading,
+  isRefreshing,
   onClick,
 }: {
   label: string;
@@ -62,8 +66,10 @@ function StatCard({
   tone?: IconTone;
   icon: LucideIcon;
   isLoading?: boolean;
+  isRefreshing?: boolean;
   onClick?: () => void;
 }) {
+  const { t } = useTranslation();
   const valueColor = {
     brand: 'text-brand-700',
     negative: 'text-red-600',
@@ -92,6 +98,7 @@ function StatCard({
   const content = <>
     <div className="mb-3 flex items-center justify-between">
       <IconBadge icon={icon} tone={tone} size="sm" interactive={Boolean(onClick)} />
+      {isRefreshing && <LoaderCircle className="h-4 w-4 animate-spin text-brand-600" aria-label={t('dashboard.refreshing')} />}
     </div>
     <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
     <p className={`truncate text-lg font-black tracking-tight ${valueColor}`} title={valueTitle ?? value}>
@@ -150,7 +157,7 @@ function getMobilePreferences(): { quickActionIds: MobileActionId[]; pinnedPaths
 
 export function MobileDashboard() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { isFeatureEnabled } = usePartner();
@@ -162,6 +169,7 @@ export function MobileDashboard() {
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
+  const formattedPeriodLabel = getDashboardPeriod(undefined, i18n.language).formattedPeriodLabel;
   const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled, planTier, currentBusiness?.business?.operating_models ?? null)
     .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
@@ -177,14 +185,10 @@ export function MobileDashboard() {
     localStorage.setItem('ledgr-mobile-dashboard-preferences', JSON.stringify({ quickActionIds, pinnedPaths }));
   }, [quickActionIds, pinnedPaths]);
 
-  const onRefresh = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['monthly_income'] }),
-      queryClient.invalidateQueries({ queryKey: ['monthly_expenses'] }),
-      queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
-      queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
-    ]);
-  }, [queryClient]);
+  const onRefresh = useCallback(
+    () => refreshDashboardQueries(queryClient, businessId),
+    [businessId, queryClient],
+  );
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
 
@@ -320,8 +324,9 @@ export function MobileDashboard() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Net Profit (this month)</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">{t('dashboard.netProfitPeriod', { period: formattedPeriodLabel })}</p>
+                {plReport.isFetching && !plReport.isLoading && <LoaderCircle className="h-4 w-4 animate-spin text-white" aria-label={t('dashboard.refreshing')} />}
                 <button
                   type="button"
                   onClick={() => setBalanceVisible((visible) => !visible)}
@@ -369,10 +374,10 @@ export function MobileDashboard() {
       <MobileOnboardingChecklist />
 
       <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Income" value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)} valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={plReport.isLoading || income.isLoading} onClick={() => navigate('/income')} />
-        <StatCard label="Expenses" value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)} valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={plReport.isLoading} onClick={() => navigate('/expenses')} />
-        <StatCard label="Outstanding" value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)} valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} tone="info" icon={FileText} isLoading={outstanding.isLoading} onClick={() => navigate('/invoices')} />
-        <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={netVat >= 0 ? 'Payable to MRA' : 'Refundable'} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} onClick={() => navigate('/tax')} />
+        <StatCard label="Income" value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)} valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)} subtext={income.data ? t('dashboard.collectedForPeriod', { amount: formatMwk(income.data.amountPaid), period: formattedPeriodLabel }) : t('dashboard.forPeriod', { period: formattedPeriodLabel })} tone="brand" icon={TrendingUp} isLoading={plReport.isLoading || income.isLoading} isRefreshing={plReport.isFetching || income.isFetching} onClick={() => navigate('/income')} />
+        <StatCard label="Expenses" value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)} valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)} subtext={t('dashboard.forPeriod', { period: formattedPeriodLabel })} tone="negative" icon={Receipt} isLoading={plReport.isLoading} isRefreshing={plReport.isFetching} onClick={() => navigate('/expenses')} />
+        <StatCard label="Outstanding" value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)} valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} tone="info" icon={FileText} isLoading={outstanding.isLoading} isRefreshing={outstanding.isFetching} onClick={() => navigate('/invoices')} />
+        <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={t(netVat >= 0 ? 'dashboard.payableToMraForPeriod' : 'dashboard.refundableVatForPeriod', { period: formattedPeriodLabel })} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} isRefreshing={expenseVat.isFetching || income.isFetching} onClick={() => navigate('/tax')} />
       </div>
 
       {/* Personal quick actions */}
@@ -413,6 +418,7 @@ export function MobileDashboard() {
                   <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Stock Management</p>
                 </div>
               </div>
+              {lowStock.isFetching && <LoaderCircle className="h-4 w-4 animate-spin text-brand-600" aria-label={t('dashboard.refreshing')} />}
               <ChevronRight className="h-5 w-5 text-gray-300" />
             </div>
 
