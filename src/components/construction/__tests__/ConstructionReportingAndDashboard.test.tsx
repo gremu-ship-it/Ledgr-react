@@ -319,6 +319,34 @@ describe('DashboardPage conditional rendering', () => {
     expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
     expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
   });
+
+  it('renders the manufacturing executive dashboard from an operating model even without the capability flag', () => {
+    mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = false;
+    useAppStore.setState({
+      currentBusiness: {
+        role: 'owner',
+        business: { id: 'b1', name: 'BuildCo MW', base_currency: 'MWK', operating_models: ['manufacturing'] },
+      } as never,
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
+    expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
+    expect(screen.getByTestId('manufacturing-dashboard')).toBeTruthy();
+    expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+  });
+
+  it('renders the manufacturing executive dashboard from the capability flag', () => {
+    mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = true;
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(screen.getByTestId('manufacturing-dashboard')).toBeTruthy();
+    expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+  });
 });
 
 describe('ConstructionDashboard', () => {

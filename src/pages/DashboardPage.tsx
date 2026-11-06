@@ -28,6 +28,7 @@ import { useCapability } from '@/hooks/useCapability';
 import { ConstructionDashboard } from '@/components/construction/dashboard/ConstructionDashboard';
 import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
 import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
+import { ManufacturingDashboardPage } from '@/pages/manufacturing/ManufacturingDashboardPage';
 
 interface KpiCardProps {
   label: string;
@@ -145,27 +146,47 @@ function QuickActions() {
 
 export function DashboardPage() {
   const isConstruction = useCapability('construction');
-  const isManufacturing = useCapability('manufacturing');
+  const hasManufacturingCapability = useCapability('manufacturing');
   const inventoryEnabled = useCapability('inventory');
+  const operatingModels = useAppStore((state) => state.currentBusiness?.business?.operating_models);
+  const hasManufacturingOperatingModel = Array.isArray(operatingModels)
+    && operatingModels.some((model) => typeof model === 'string' && model.trim().toUpperCase() === 'MANUFACTURING');
+  const isManufacturing = hasManufacturingCapability || hasManufacturingOperatingModel;
   const isMobile = useIsMobile();
 
-  // The mobile dashboard owns its own summary modules so they remain visible
-  // when GenericDashboard hands off at small breakpoints.
-  if (!isConstruction && isMobile) return <MobileDashboard />;
+  // The mobile dashboard owns its own summary modules, except manufacturing
+  // tenants who need the full responsive manufacturing executive workspace.
+  if (!isConstruction && !isManufacturing && isMobile) return <MobileDashboard />;
+
+  const exceptions = (
+    <SectionErrorBoundary sectionName="Actionable Exceptions" fallbackHeight="220px">
+      <ActionableExceptions
+        construction={isConstruction}
+        manufacturing={isManufacturing}
+        inventoryEnabled={inventoryEnabled}
+      />
+    </SectionErrorBoundary>
+  );
 
   return (
     <div className="space-y-6" data-testid="executive-hub-dashboard">
       <SectionErrorBoundary sectionName="Executive Health Summary" fallbackHeight="150px">
         <ExecutiveHealthStrip />
       </SectionErrorBoundary>
-      {isConstruction ? <ConstructionDashboard /> : <GenericDashboard />}
-      <SectionErrorBoundary sectionName="Actionable Exceptions" fallbackHeight="220px">
-        <ActionableExceptions
-          construction={isConstruction}
-          manufacturing={isManufacturing}
-          inventoryEnabled={inventoryEnabled}
-        />
-      </SectionErrorBoundary>
+      {isConstruction ? <ConstructionDashboard /> : null}
+      {isManufacturing ? (
+        <>
+          {exceptions}
+          <SectionErrorBoundary sectionName="Manufacturing Executive Dashboard" fallbackHeight="560px">
+            <ManufacturingDashboardPage />
+          </SectionErrorBoundary>
+        </>
+      ) : (
+        <>
+          {!isConstruction ? <GenericDashboard /> : null}
+          {exceptions}
+        </>
+      )}
     </div>
   );
 }
