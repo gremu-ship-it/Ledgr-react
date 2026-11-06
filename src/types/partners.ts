@@ -82,11 +82,54 @@ export interface PartnerClientUsage {
   business_name: string;
   plan_tier: string | null;
   is_active: boolean | null;
+  status: 'active' | 'onboarding' | 'suspended' | 'archived';
+  notes: string | null;
   onboarded_at: string;
   journal_entry_count: number;
   invoice_count: number;
+  pay_run_count: number;
+  total_activity_count: number;
   user_count: number;
   last_activity_at: string | null;
+  plan_expires_at: string | null;
+  monthly_transaction_count: number;
+}
+
+export interface PartnerStaffAssignment {
+  partner_id: string;
+  staff_user_id: string;
+  business_id: string;
+  assigned_by: string;
+  created_at: string;
+}
+
+export type PartnerFirm = Partner;
+export type PartnerClient = PartnerClientUsage;
+
+export interface PartnerStaff {
+  user_id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'viewer';
+  created_at: string;
+}
+
+export interface PartnerClientHealthSummary {
+  total_clients: number;
+  active_subscriptions: number;
+  pending_onboardings: number;
+  staff_count: number;
+}
+
+export interface PartnerClientActivity {
+  partner_id: string;
+  business_id: string;
+  business_name: string;
+  event_id: string;
+  event_type: 'journal_entry' | 'invoice' | 'pay_run' | 'payroll_run';
+  title: string;
+  event_at: string;
+  status: string;
 }
 
 export interface PartnerInvoice {

@@ -19,7 +19,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, saleFixture } from './fixtures';
+import { seedFixture, identities, saleFixture, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r07-approvals');
@@ -36,7 +36,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -60,7 +61,7 @@ async function deniedInTx(c: C, run: () => Promise<unknown>, codes: string[], me
 const setActor = (c: C, uid: string) =>
   c.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role','authenticated',true)", [uid]);
 const postSale = (c: C, n: number) =>
-  c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(saleFixture(orgs.A, n))]).then((r) => r.rows[0].r as { id: string });
+  c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(saleFixture(orgs.A, n))]).then((r) => r.rows[0].r as { id: string });
 const refund = (c: C, invoice: string, key: string, lines: unknown[], approval?: string | null) =>
   c.query('select public.refund_pos_sale_command($1::jsonb) r', [JSON.stringify({
     business_id: orgs.A.business, invoice_id: invoice, command_key: key,

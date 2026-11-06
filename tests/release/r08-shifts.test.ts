@@ -20,7 +20,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, saleFixture, key } from './fixtures';
+import { seedFixture, identities, saleFixture, key, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r08-shifts');
@@ -37,7 +37,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs, 'growth'); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -96,7 +97,7 @@ test(meta('R08.SHIFT.SINGLE-OPEN', 'One open shift per (business,terminal) and p
     // A *different* cashier may still open on a *different* terminal.
     await setActor(c, identities.A_branch_manager.id);
     await c.query('reset role');
-    const terminal2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till 2',(select branch_id from public.pos_terminals where id=$2)) returning id", [orgs.A.business, orgs.A.terminal])).rows[0].id);
+    const terminal2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,'R13 Till 2',(select branch_id from public.pos_terminals where id=$2),'R13-TILL-2') returning id", [orgs.A.business, orgs.A.terminal])).rows[0].id);
     await c.query('set local role authenticated');
     const second = await openShift(c, { key: 'r13-r08-open-4', terminal: terminal2 });
     expect(second.idempotent).toBe(false);
@@ -260,9 +261,9 @@ test(meta('R08.SALE.SHIFT-LINK', "Terminal-posted sale: server binds the caller'
     const payload = saleFixture(orgs.A, 101) as Record<string, unknown>;
     payload.terminal_id = orgs.A.terminal;
     delete payload.shift_id; // terminal context is enough; the server resolves the shift
-    const sale = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const sale = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
     expect(sale.id).toBeTruthy();
-    const replay = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const replay = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
     expect(replay.idempotent).toBe(true);
     expect(replay.id).toBe(sale.id);
     await c.query('reset role');
@@ -287,27 +288,27 @@ test(meta('R08.SALE.TERMINAL-SCOPE', "Steering matrix: conflicting branch → 22
     };
     const countInvoices = async () => (await c.query('reset role').then(() => c.query("select count(*)::int n from public.invoices where business_id=$1", [orgs.A.business]))).rows[0].n;
     // Foreign terminal (org B's till).
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(payloadFor((p) => { p.terminal_id = orgs.B.terminal; }))]), ['22023'], /foreign terminal/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(payloadFor((p) => { p.terminal_id = orgs.B.terminal; }))]), ['22023'], /foreign terminal/);
     // Terminal branch conflict: claim A2 branch on the A1-bound till.
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(payloadFor((p) => {
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(payloadFor((p) => {
       p.terminal_id = orgs.A.terminal; (p.invoice as Record<string, unknown>).branch_id = orgs.A.branch2;
     }))]), ['22023'], /conflicts with the authorised terminal branch/);
     // Deactivated terminal.
     await c.query('reset role');
-    await c.query("insert into public.pos_terminals(business_id,name,branch_id,is_active) values($1,'R13 Dead Till',$2,false)", [orgs.A.business, orgs.A.branch]);
+    await c.query("insert into public.pos_terminals(business_id,name,branch_id,code,is_active) values($1,'R13 Dead Till',$2,'R13-DEAD-TILL',false)", [orgs.A.business, orgs.A.branch]);
     const dead = (await c.query("select id from public.pos_terminals where business_id=$1 and name='R13 Dead Till'", [orgs.A.business])).rows[0].id;
     await c.query('set local role authenticated');
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(payloadFor((p) => { p.terminal_id = dead; }))]), ['22023'], /deactivated/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(payloadFor((p) => { p.terminal_id = dead; }))]), ['22023'], /deactivated/);
     // Unknown shift.
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(payloadFor((p) => { p.shift_id = 'f0000000-0000-4000-8000-000000000099'; }))]), ['22023'], /foreign shift/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(payloadFor((p) => { p.shift_id = 'f0000000-0000-4000-8000-000000000099'; }))]), ['22023'], /foreign shift/);
     // Another user's open shift (non-manager caller).
     await setActor(c, identities.A_branch_manager.id);
     await c.query('reset role');
-    const term2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till Scope2',(select branch_id from public.pos_terminals where id=$2)) returning id", [orgs.A.business, orgs.A.terminal])).rows[0].id);
+    const term2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,'R13 Till Scope2',(select branch_id from public.pos_terminals where id=$2),'R13-TILL-SCOPE2') returning id", [orgs.A.business, orgs.A.terminal])).rows[0].id);
     await c.query('set local role authenticated');
     const bmOpened = await openShift(c, { key: 'r13-r08-scope-2', terminal: term2 });
     await setActor(c, identities.A_cashier.id);
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(payloadFor((p) => {
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(payloadFor((p) => {
       p.terminal_id = term2; p.shift_id = bmOpened.shift_id;
     }))]), ['42501'], /own shift/);
     // Nothing was mutated by any denial above (this tx is rolled back anyway).
@@ -331,10 +332,10 @@ test(meta('R08.SALE.LATE-ARRIVAL-BOUND', 'DEC-08 full binding: a sale claiming a
     const payload = saleFixture(orgs.A, 121) as Record<string, unknown>;
     payload.terminal_id = orgs.A.terminal;
     payload.shift_id = shiftId;
-    const sale = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const sale = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
     expect(sale.id).toBeTruthy();
     // Replay of the same deferred sale adds no second adjustment.
-    const replay = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const replay = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
     expect(replay.idempotent).toBe(true);
     await c.query('reset role');
     const adj = (await c.query('select amount, command_key, invoice_id from public.pos_shift_late_adjustments where business_id=$1 and shift_id=$2', [orgs.A.business, shiftId])).rows;
@@ -361,21 +362,21 @@ test(meta('R08.SALE.BRANCH-SUBSTITUTION', 'DEC-03 at posting: an assigned-scope 
     await c.query('set local role authenticated');
     await setActor(c, identities.A_branch_manager.id);
     const asA1 = () => { const p = saleFixture(orgs.A, 131) as Record<string, unknown>; return p; };
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(asA1())]), ['42501'], /no access to the requested branch|has no access/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(asA1())]), ['42501'], /no access to the requested branch|has no access/);
     // Same caller with their OWN branch and an own open shift on an A2 till: passes.
     await c.query('reset role');
-    const termA2 = String((await c.query('insert into public.pos_terminals(business_id,name,branch_id) values($1,$2,$3) returning id', [orgs.A.business, 'R13 Till A2', orgs.A.branch2])).rows[0].id);
+    const termA2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,$2,$3,'R13-TILL-A2') returning id", [orgs.A.business, 'R13 Till A2', orgs.A.branch2])).rows[0].id);
     // Owner decision 2026-09-26: POS deducts from BRANCH stock (no warehouse fallback), so A2 needs its
     // own location holding the item (rolled back with this probe). Access semantics under test are unchanged.
     const locA2 = String((await c.query('insert into public.inventory_locations(business_id,name,is_default,branch_id) values($1,$2,false,$3) returning id', [orgs.A.business, 'R13 stock A2', orgs.A.branch2])).rows[0].id);
-    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id) values($1,$2,$3,'adjustment_in',current_date,10,900,'manual',gen_random_uuid())", [orgs.A.business, orgs.A.product, locA2]);
+    await c.query("insert into public.stock_movements(business_id,product_id,location_id,movement_type,movement_date,quantity,unit_cost,source_type,source_id,reference) values($1,$2,$3,'adjustment_in',current_date,10,900,'manual',gen_random_uuid(),'Synthetic R08 branch opening stock')", [orgs.A.business, orgs.A.product, locA2]);
     await c.query('set local role authenticated');
     const opened = await openShift(c, { key: 'r13-r08-bsub-1', terminal: termA2 });
     const okPayload = asA1();
     okPayload.terminal_id = termA2;
     delete okPayload.shift_id; // server auto-binds the caller's own open shift on that till
     (okPayload.invoice as Record<string, unknown>).branch_id = orgs.A.branch2;
-    const sale = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(okPayload)])).rows[0].r as Record<string, unknown>;
+    const sale = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(okPayload)])).rows[0].r as Record<string, unknown>;
     expect(sale.id).toBeTruthy();
     await c.query('reset role');
     const inv = (await c.query('select branch_id, pos_shift_id from public.invoices where id=$1', [sale.id])).rows[0];
@@ -393,7 +394,7 @@ test(meta('R08.ZREPORT.RECONCILES-TENDERS', 'Tender-derived reporting: the signe
     const sale1Payload = saleFixture(orgs.A, 201) as Record<string, unknown>;
     sale1Payload.terminal_id = orgs.A.terminal;
     delete sale1Payload.shift_id;
-    const sale1 = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(sale1Payload)])).rows[0].r as Record<string, unknown>;
+    const sale1 = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(sale1Payload)])).rows[0].r as Record<string, unknown>;
     // Sale 2: split tenders card 1000 + airtel_money 500 with GARBAGE caller-claimed drawer numbers.
     const sale2Payload = saleFixture(orgs.A, 202) as Record<string, unknown>;
     sale2Payload.terminal_id = orgs.A.terminal;
@@ -404,7 +405,7 @@ test(meta('R08.ZREPORT.RECONCILES-TENDERS', 'Tender-derived reporting: the signe
       { amount: 1000, payment_method: 'card', currency: 'MWK', exchange_rate: 1, functional_amount: 1000, payment_date: '2026-01-01', client_key: key(1202) },
       { amount: 500, payment_method: 'airtel_money', currency: 'MWK', exchange_rate: 1, functional_amount: 500, payment_date: '2026-01-01', client_key: key(1203) },
     ];
-    const sale2 = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(sale2Payload)])).rows[0].r as Record<string, unknown>;
+    const sale2 = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(sale2Payload)])).rows[0].r as Record<string, unknown>;
     expect(sale2.id).toBeTruthy();
     // R07 refund of 700 against sale1, posted by admin (direct tier): R07 command surface byte-untouched.
     await setActor(c, identities.A_admin.id);
@@ -441,7 +442,7 @@ test(meta('R08.ZREPORT.RECONCILES-TENDERS', 'Tender-derived reporting: the signe
     const n1 = Number(String(closed.report_number).split('-').pop());
     // Sequential numbering: a second close on a fresh till gets exactly n+1.
     await c.query('reset role');
-    const termZ2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till Z2',(select branch_id from public.pos_terminals where id=$2)) returning id", [orgs.A.business, orgs.A.terminal])).rows[0].id);
+    const termZ2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,'R13 Till Z2',(select branch_id from public.pos_terminals where id=$2),'R13-TILL-Z2') returning id", [orgs.A.business, orgs.A.terminal])).rows[0].id);
     await c.query('set local role authenticated');
     const opened2 = await openShift(c, { key: 'r13-r08-z-2', terminal: termZ2, opening: 0 });
     const closed2 = await closeShift(c, String(opened2.shift_id), 'r13-r08-z-close-2', 0);
@@ -497,8 +498,8 @@ test(meta('R08.HISTORY.POS-CHANNEL', 'POS-posted sale history carries only serve
     const payload = saleFixture(orgs.A, 301) as Record<string, unknown>;
     payload.terminal_id = orgs.A.terminal;
     delete payload.shift_id;
-    const sale = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
-    const replay = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const sale = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const replay = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
     expect(replay.idempotent).toBe(true);
     await c.query('reset role');
     const inv = (await c.query('select pos_shift_id, branch_id from public.invoices where id=$1', [sale.id])).rows[0];
@@ -523,7 +524,7 @@ test(meta('R08.HISTORY.COMPLETE-PROJECTION', 'History projection is complete and
       const p = saleFixture(orgs.A, n) as Record<string, unknown>;
       p.terminal_id = orgs.A.terminal;
       delete p.shift_id;
-      return (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(p)])).rows[0].r as Record<string, unknown>;
+      return (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(p)])).rows[0].r as Record<string, unknown>;
     };
     const sale1 = await post(311);
     const sale2 = await post(312);
@@ -576,7 +577,7 @@ test(meta('R08.REFUND.DRAWER-EFFECT', 'R07 refund reconciles into R08 drawer rep
       p.terminal_id = orgs.A.terminal;
       delete p.shift_id;
       if (mut) mut(p);
-      return (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(p)])).rows[0].r as Record<string, unknown>;
+      return (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(p)])).rows[0].r as Record<string, unknown>;
     };
     const refund = (k: string, invoice: unknown, lines: Record<string, unknown>[], extra?: Record<string, unknown>) =>
       setActor(c, identities.A_admin.id)
@@ -691,7 +692,7 @@ test(meta('R08.REFUND.SCOPE-ATTACK', "§15 attack matrix on the refund seam: for
     const payload = saleFixture(orgs.A, 411) as Record<string, unknown>;
     payload.terminal_id = orgs.A.terminal;
     delete payload.shift_id;
-    const sale = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
+    const sale = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as Record<string, unknown>;
 
     const snapshot = async () => {
       await c.query('reset role');
@@ -766,7 +767,7 @@ test(meta('R08.SHIFT.CROSS-BRANCH-DENIED', "§5: a caller durable-assigned to br
     await c.query('reset role');
     await c.query('update public.business_users set branch_id=$1 where business_id=$2 and user_id=$3', [orgs.A.branch, orgs.A.business, identities.A_cashier.id]);
     // A fully-formed Branch-A2 till lane: terminal + a canonical open shift + a closed shift with a signed close.
-    const terminalA2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till A2',$2) returning id", [orgs.A.business, orgs.A.branch2])).rows[0].id);
+    const terminalA2 = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,'R13 Till A2',$2,'R13-TILL-A2') returning id", [orgs.A.business, orgs.A.branch2])).rows[0].id);
     const shiftA2open = String((await c.query("insert into public.pos_shifts(business_id,branch_id,terminal_id,cashier_id,cashier_name,opened_at,opening_cash,expected_cash,status,open_command_key) values($1,$2,$3,$4,'R13 admin',now(),0,0,'open','r13-r08-xb-open-a2') returning id", [orgs.A.business, orgs.A.branch2, terminalA2, identities.A_admin.id])).rows[0].id);
     const shiftA2closed = String((await c.query("insert into public.pos_shifts(business_id,branch_id,terminal_id,cashier_id,cashier_name,opened_at,opening_cash,expected_cash,status,closed_at,open_command_key) values($1,$2,$3,$4,'R13 admin',now(),100000,100000,'closed',now(),'r13-r08-xb-closed-a2') returning id", [orgs.A.business, orgs.A.branch2, terminalA2, identities.A_admin.id])).rows[0].id);
     const closeA2 = String((await c.query("insert into public.pos_shift_closes(business_id,shift_id,command_key,report_number,closed_by,cashier_id,terminal_id,branch_id,opened_at,closed_at,opening_cash,cash_tenders,other_tenders,refund_total,cash_in_total,cash_out_total,sales_count,expected_cash,actual_cash,variance,payload) values($1,$2,'r13-r08-xb-close-a2','Z-XB-A2',$3,$4,$5,$6,now(),now(),100000,0,0,0,0,0,0,100000,100000,0,'{}'::jsonb) returning id", [orgs.A.business, shiftA2closed, identities.A_admin.id, identities.A_admin.id, terminalA2, orgs.A.branch2])).rows[0].id);
@@ -796,12 +797,12 @@ test(meta('R08.SHIFT.CROSS-BRANCH-DENIED', "§5: a caller durable-assigned to br
     const saleOnA2terminal = saleFixture(orgs.A, 501) as Record<string, unknown>;
     delete saleOnA2terminal.shift_id;
     saleOnA2terminal.terminal_id = terminalA2;
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(saleOnA2terminal)]), ['42501'], /no access to the terminal's branch/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(saleOnA2terminal)]), ['42501'], /no access to the terminal's branch/);
     // ── Branch-A2 shift-steered document posting ──
     const saleOnA2shift = saleFixture(orgs.A, 502) as Record<string, unknown>;
     delete saleOnA2shift.terminal_id;
     saleOnA2shift.shift_id = shiftA2open;
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(saleOnA2shift)]), ['42501'], /no access to the shift's branch/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(saleOnA2shift)]), ['42501'], /no access to the shift's branch/);
     // ── Foreign-org objects are NONEXISTENT for the caller (established 22023 contract; not a branch check) ──
     await deniedInTx(c, () => openShift(c, { key: 'r13-r08-xb-4', terminal: orgs.B.terminal }), ['22023'], /foreign terminal/);
     await deniedInTx(c, () => c.query('select public.get_pos_shift_report($1)', [orgs.B.shift]), ['42501']);
@@ -879,7 +880,7 @@ test(meta('R08.BRANCH.SERVER-SCOPE', "§6: DEC-03 matrix proven AT THE SERVER �
     // Seeded A_cashier is now assigned to A1 per fixture; use dedicated NULL cashier U(805) for negative test
     await setActor(c, U(805));
     await c.query('reset role');
-    const terminalA2b = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id) values($1,'R13 Till A2 SS',$2) returning id", [orgs.A.business, orgs.A.branch2])).rows[0].id);
+    const terminalA2b = String((await c.query("insert into public.pos_terminals(business_id,name,branch_id,code) values($1,'R13 Till A2 SS',$2,'R13-TILL-A2-SS') returning id", [orgs.A.business, orgs.A.branch2])).rows[0].id);
     await c.query('set local role authenticated');
     await deniedInTx(c, () => openShift(c, { key: 'r13-r08-ss-4', terminal: terminalA2b }), ['42501'], /no access.*branch/i);
     // Positive control: A2-assigned branch_manager (U804) can open at A2
@@ -900,18 +901,18 @@ test(meta('R08.BRANCH.SERVER-SCOPE', "§6: DEC-03 matrix proven AT THE SERVER �
     delete conflicting.shift_id;
     conflicting.terminal_id = orgs.A.terminal;
     (conflicting.invoice as Record<string, unknown>).branch_id = orgs.A.branch2; // branch is a property of the invoice document (p_payload.invoice), not a top-level steer
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(conflicting)]), ['22023'], /branch conflicts/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(conflicting)]), ['22023'], /branch conflicts/);
     // Bare substitution: A2 claimed with no terminal/shift truth ⇒ 42501 branch denial.
     const bareSubstitute = saleFixture(orgs.A, 512) as Record<string, unknown>;
     delete bareSubstitute.shift_id;
     delete bareSubstitute.terminal_id;
     (bareSubstitute.invoice as Record<string, unknown>).branch_id = orgs.A.branch2;
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(bareSubstitute)]), ['42501'], /no access to the requested branch/);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(bareSubstitute)]), ['42501'], /no access to the requested branch/);
     // Positive control: consistent A1 context posts (assigned caller still has their own branch).
     const ownSale = saleFixture(orgs.A, 513) as Record<string, unknown>;
     delete ownSale.shift_id;
     ownSale.terminal_id = orgs.A.terminal;
-    const postedOwn = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(ownSale)])).rows[0].r;
+    const postedOwn = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(ownSale)])).rows[0].r;
     expect((postedOwn as Record<string, unknown>).id).toBeTruthy();
 
     // ── (e) Cross-organisation combination attacks: zero leakage, zero mutation ──
@@ -932,7 +933,7 @@ test(meta('R08.BRANCH.SERVER-SCOPE', "§6: DEC-03 matrix proven AT THE SERVER �
     await deniedInTx(c, () => c.query('select public.get_pos_shift_report($1)', [orgs.A.shift]), ['42501']);
     const aSalePayload = saleFixture(orgs.A, 514) as Record<string, unknown>;
     delete aSalePayload.shift_id;
-    await deniedInTx(c, () => c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(aSalePayload)]), ['42501', '22023']);
+    await deniedInTx(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(aSalePayload)]), ['42501', '22023']);
     // Zero leakage: the member invoices/invoice_lines grants now exist (P-D4
     // 20261003000000, house member_read tier) — foreign-business rows are not
     // denied by grant but resolve to zero rows via RLS, while branch/member-
