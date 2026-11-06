@@ -26,6 +26,7 @@ globalThis.ResizeObserver =
 
 const mockState = vi.hoisted(() => ({
   hasConstructionCapability: true,
+  hasManufacturingCapability: false,
   projects: {
     list: vi.fn(),
     getById: vi.fn(),
@@ -50,8 +51,19 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock('@/hooks/useCapability', () => ({
-  useCapability: (cap: string) =>
-    cap === 'construction' ? mockState.hasConstructionCapability : false,
+  useCapability: (cap: string) => cap === 'construction'
+    ? mockState.hasConstructionCapability
+    : cap === 'manufacturing' ? mockState.hasManufacturingCapability : false,
+}));
+
+vi.mock('@/components/dashboard/ExecutiveHealthStrip', () => ({
+  ExecutiveHealthStrip: () => <div data-testid="executive-health-strip" />,
+}));
+vi.mock('@/components/dashboard/ActionableExceptions', () => ({
+  ActionableExceptions: () => null,
+}));
+vi.mock('@/pages/manufacturing/ManufacturingDashboardPage', () => ({
+  ManufacturingDashboardPage: () => <div data-testid="manufacturing-dashboard" />,
 }));
 
 vi.mock('@/lib/repositories', () => ({
@@ -129,6 +141,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   vi.clearAllMocks();
   mockState.hasConstructionCapability = true;
+  mockState.hasManufacturingCapability = false;
 
   useAppStore.setState({
     currentUser: { id: 'u1', email: 'owner@buildco.mw' },
@@ -294,6 +307,7 @@ describe('DashboardPage conditional rendering', () => {
 
   it('renders GenericDashboard when business does not have construction capability', async () => {
     mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = false;
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() =>

@@ -4,6 +4,18 @@ import { fetchAllRows } from '@/lib/paginateQuery';
 import { BaseRepository } from './BaseRepository';
 import { UnsupportedOperationError, ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
+export interface DashboardStockBalance {
+  id: string;
+  quantity_on_hand: number;
+  quantity_reserved: number;
+  quantity_available: number | null;
+  products: {
+    name: string;
+    sku: string | null;
+    reorder_level: number | null;
+  } | null;
+}
+
 export interface BalanceWithProduct {
   id: string;
   businessid: string;
@@ -107,6 +119,18 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       .eq('location_id', locationId);
     if (error) throw toRepositoryError('inventory_balances', error);
     return data ?? [];
+  }
+
+  /** Small, fully paginated projection for the dashboard's low-stock check. */
+  async findDashboardStockBalances(businessId: string): Promise<DashboardStockBalance[]> {
+    const query = this.client.from('inventory_balances')
+      .select('id,quantity_on_hand,quantity_reserved,quantity_available,products(name,sku,reorder_level)')
+      .eq('business_id', businessId);
+    try {
+      return await fetchAllRows<DashboardStockBalance>(query);
+    } catch (error) {
+      throw toRepositoryError('inventory_balances', error);
+    }
   }
 
   /**

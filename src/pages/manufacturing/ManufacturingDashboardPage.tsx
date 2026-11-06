@@ -76,6 +76,11 @@ function periodRange(period: Period, customStart: string, customEnd: string, now
   };
 }
 
+export function getDefaultManufacturingDashboardRange(now = new Date()): DashboardRange {
+  const today = dateKey(now);
+  return periodRange('thisMonth', `${today.slice(0, 7)}-01`, today, now);
+}
+
 function formatQuantity(value: number | null | undefined): string {
   return Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
