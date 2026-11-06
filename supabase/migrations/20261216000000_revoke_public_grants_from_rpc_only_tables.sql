@@ -4,24 +4,40 @@
 -- to TRUNCATE. Remove that privilege globally; application repositories use
 -- row-level INSERT/UPDATE/DELETE and no client workflow needs table truncation.
 --
--- The default is created by both postgres and supabase_admin in the live
--- project. Remove only TRUNCATE from future table ACLs for those owners too;
--- keep their other Supabase defaults intact. The role guard keeps local replay
--- environments without supabase_admin compatible.
+-- Safe revocation of default TRUNCATE privileges in public schema. A managed
+-- Supabase migration role may not be permitted to alter another role's default
+-- privileges, so skip only those default-ACL changes while continuing with the
+-- explicit revocation from existing tables below.
 DO $$
-DECLARE
-  v_owner text;
 BEGIN
-  FOR v_owner IN
-    SELECT rolname FROM pg_roles WHERE rolname IN ('postgres', 'supabase_admin')
-  LOOP
-    EXECUTE format(
-      'ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM anon, authenticated',
-      v_owner
-    );
-  END LOOP;
-END
-$$;
+  -- Attempt default privilege revocation for current executing role.
+  EXECUTE 'ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM PUBLIC, anon, authenticated';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping ALTER DEFAULT PRIVILEGES for current role due to insufficient_privilege (42501)';
+END $$;
+
+-- Attempt default privilege revocation for postgres role if applicable.
+DO $$
+BEGIN
+  EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM PUBLIC, anon, authenticated';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping ALTER DEFAULT PRIVILEGES FOR ROLE postgres due to insufficient_privilege (42501)';
+  WHEN undefined_object OR invalid_parameter_value THEN
+    RAISE NOTICE 'Role postgres does not exist or is not applicable';
+END $$;
+
+-- Attempt default privilege revocation for supabase_admin role if applicable.
+DO $$
+BEGIN
+  EXECUTE 'ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public REVOKE TRUNCATE ON TABLES FROM PUBLIC, anon, authenticated';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'Skipping ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin due to insufficient_privilege (42501)';
+  WHEN undefined_object OR invalid_parameter_value THEN
+    RAISE NOTICE 'Role supabase_admin does not exist or is not applicable';
+END $$;
 
 REVOKE TRUNCATE ON ALL TABLES IN SCHEMA public FROM PUBLIC, anon, authenticated;
 
