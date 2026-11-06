@@ -60,7 +60,7 @@ vi.mock('@/components/dashboard/ExecutiveHealthStrip', () => ({
   ExecutiveHealthStrip: () => <div data-testid="executive-health-strip" />,
 }));
 vi.mock('@/components/dashboard/ActionableExceptions', () => ({
-  ActionableExceptions: () => null,
+  ActionableExceptions: () => <div data-testid="actionable-exceptions" />,
 }));
 vi.mock('@/pages/manufacturing/ManufacturingDashboardPage', () => ({
   ManufacturingDashboardPage: () => <div data-testid="manufacturing-dashboard" />,
@@ -303,6 +303,8 @@ describe('DashboardPage conditional rendering', () => {
       expect(screen.getByTestId('construction-dashboard')).toBeTruthy(),
     );
     expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+    expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
+    expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
   });
 
   it('renders GenericDashboard when business does not have construction capability', async () => {
@@ -314,6 +316,8 @@ describe('DashboardPage conditional rendering', () => {
       expect(screen.getByTestId('generic-income-expense-chart')).toBeTruthy(),
     );
     expect(screen.queryByTestId('construction-dashboard')).toBeNull();
+    expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
+    expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
   });
 });
 

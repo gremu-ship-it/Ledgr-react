@@ -26,6 +26,8 @@ import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { useState } from 'react';
 import { useCapability } from '@/hooks/useCapability';
 import { ConstructionDashboard } from '@/components/construction/dashboard/ConstructionDashboard';
+import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
+import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
 
 interface KpiCardProps {
   label: string;
@@ -143,8 +145,29 @@ function QuickActions() {
 
 export function DashboardPage() {
   const isConstruction = useCapability('construction');
-  if (isConstruction) return <ConstructionDashboard />;
-  return <GenericDashboard />;
+  const isManufacturing = useCapability('manufacturing');
+  const inventoryEnabled = useCapability('inventory');
+  const isMobile = useIsMobile();
+
+  // The mobile dashboard owns its own summary modules so they remain visible
+  // when GenericDashboard hands off at small breakpoints.
+  if (!isConstruction && isMobile) return <MobileDashboard />;
+
+  return (
+    <div className="space-y-6" data-testid="executive-hub-dashboard">
+      <SectionErrorBoundary sectionName="Executive Health Summary" fallbackHeight="150px">
+        <ExecutiveHealthStrip />
+      </SectionErrorBoundary>
+      {isConstruction ? <ConstructionDashboard /> : <GenericDashboard />}
+      <SectionErrorBoundary sectionName="Actionable Exceptions" fallbackHeight="220px">
+        <ActionableExceptions
+          construction={isConstruction}
+          manufacturing={isManufacturing}
+          inventoryEnabled={inventoryEnabled}
+        />
+      </SectionErrorBoundary>
+    </div>
+  );
 }
 
 export function GenericDashboard() {
