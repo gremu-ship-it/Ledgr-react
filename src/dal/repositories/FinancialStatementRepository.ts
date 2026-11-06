@@ -1018,6 +1018,14 @@ export class FinancialStatementRepository extends BaseRepository<'accounts'> {
     return this.getCashAndEquivalentsBalance(businessId, asOfDate);
   }
 
+  /** Posted-ledger balance for bank-designated accounts only. */
+  async getBankCashPosition(businessId: string, asOfDate: string): Promise<number> {
+    const balances = await this.computeBalances(businessId, { asOfDate, includeOpeningBalances: true });
+    return balances
+      .filter((balance) => balance.account.account_type === 'asset' && balance.account.is_bank_account)
+      .reduce((sum, balance) => sum + balance.balance, 0);
+  }
+
   /**
    * Computes the change in non-cash working capital between period start
    * and period end: the balance-sheet-driven adjustment to Net Profit that

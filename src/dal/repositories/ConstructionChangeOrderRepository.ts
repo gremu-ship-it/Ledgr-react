@@ -79,6 +79,21 @@ export class ConstructionChangeOrderRepository {
     return data ?? [];
   }
 
+  /** Small dashboard projection for change orders awaiting approval. */
+  async listSubmittedForApproval(
+    businessId: string,
+    limit = 5,
+  ): Promise<Pick<ConstructionChangeOrderRow, 'id' | 'co_number' | 'title'>[]> {
+    const { data, error } = await this.client.from('construction_change_orders')
+      .select('id, co_number, title')
+      .eq('business_id', businessId)
+      .eq('status', 'submitted')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) throw toRepositoryError(RESOURCE, error);
+    return data ?? [];
+  }
+
   async getById(businessId: string, coId: string): Promise<ConstructionChangeOrderRow> {
     const { data, error } = await this.client.from('construction_change_orders')
       .select('*')
