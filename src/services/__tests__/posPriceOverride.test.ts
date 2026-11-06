@@ -32,7 +32,7 @@ describe('applyItemPriceOverride', () => {
     expect(line.priceOverrideToken).toBe('tok-1');
   });
   it('supervisor path carries no token', () => {
-    expect(applyItemPriceOverride([item()], 'p-1', 1400)[0].priceOverrideToken).toBeNull();
+    expect(applyItemPriceOverride([item()], 'p-1', 1400)[0]).toMatchObject({ priceOverrideToken: null, priceOverridden: true });
   });
   it('leaves other lines untouched', () => {
     const other = item({ product_id: 'p-2', productId: 'p-2' });

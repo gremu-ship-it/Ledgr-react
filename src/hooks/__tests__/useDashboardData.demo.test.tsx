@@ -24,6 +24,7 @@ import {
   useOutstandingInvoices,
   useIncomeExpenseTrend,
   useRecentJournalEntries,
+  getDashboardPeriod,
 } from '@/hooks/useDashboardData';
 import { enterDemoMode, exitDemoMode } from '@/lib/demo/session';
 import { clearDemoData } from '@/lib/demo/store';
@@ -55,8 +56,6 @@ function useDashboardQueries() {
     useRecentJournalEntries: useRecentJournalEntries(DEMO_BUSINESS_ID),
   };
 }
-
-const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
 
 beforeAll(async () => {
   await enterDemoMode();
@@ -90,7 +89,7 @@ describe('dashboard data in demo mode', () => {
     expect(failures).toEqual([]);
   });
 
-  it('anchors the reporting month to the newest record, not the oldest', async () => {
+  it('anchors monthly figures to the current calendar month by default', async () => {
     const { result } = renderHook(useDashboardQueries, { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.useMonthlyProfitLossReport.isSuccess).toBe(true), {
       timeout: 20_000,
@@ -98,14 +97,8 @@ describe('dashboard data in demo mode', () => {
 
     const pl = result.current.useMonthlyProfitLossReport.data;
     expect(pl, 'P&L report missing').toBeDefined();
-
-    // fetchLatestRecordDate() reads rows[0] and trusts the repository's
-    // DESC ordering. If the demo client dropped the .order(), the anchor would
-    // resolve to the seeded books' first month (January) and every KPI on the
-    // dashboard would quietly report a period from most of a year ago.
-    const age = Date.now() - new Date(pl!.periodStart).getTime();
-    expect(age, `periodStart ${pl!.periodStart} is too old — anchor resolved to the wrong end`).toBeLessThan(SIXTY_DAYS);
-    expect(age).toBeGreaterThan(-SIXTY_DAYS);
+    expect(pl!.periodStart).toBe(getDashboardPeriod().from);
+    expect(pl!.periodEnd).toBe(getDashboardPeriod().to);
   });
 
   it('reports the seeded trading figures, not zeros', async () => {

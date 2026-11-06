@@ -1107,15 +1107,18 @@ test(
         "select * from public.transition_project_status($1,'active','Start Alpha')",
         [p1.id],
       );
+      const portfolioDates = (
+        await c.query("select (current_date - interval '11 months')::date as valuation_date, (current_date - interval '12 months')::date as period_start")
+      ).rows[0];
       const v1 = (
         await rpc(
           c,
           'select public.create_valuation($1,$2,$3,$4,$5::jsonb,$6) r',
           [
             p1.id,
-            '2025-11-01',
-            '2025-10-01',
-            '2025-11-01',
+            portfolioDates.valuation_date,
+            portfolioDates.period_start,
+            portfolioDates.valuation_date,
             JSON.stringify([
               { boq_line_id: boq1.id, cumulative_pct: 50, notes: null },
             ]),

@@ -4,6 +4,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useIsPlatformAdmin } from '@/hooks/useIsPlatformAdmin';
 import { useDefaultRoute } from '@/hooks/useDefaultRoute';
 import { NoBusinessAccess } from '@/routes/NoBusinessAccess';
+import { readPartnerClientContext } from '@/partner/partnerClientContext';
 
 export function ProtectedRoute() {
   const currentUser        = useAppStore((s) => s.currentUser);
@@ -11,6 +12,7 @@ export function ProtectedRoute() {
   const businesses         = useAppStore((s) => s.businesses);
   const isBusinessesLoading = useAppStore((s) => s.isBusinessesLoading);
   const location           = useLocation();
+  const hasPartnerContextRequest = Boolean(readPartnerClientContext());
 
   // Wait for both auth and businesses to finish loading
   if (isAuthLoading || isBusinessesLoading) {
@@ -27,6 +29,7 @@ export function ProtectedRoute() {
   // "ask your admin" paths. See NoBusinessAccess for the full rationale.
   if (
     businesses.length === 0 &&
+    !hasPartnerContextRequest &&
     location.pathname !== '/create-business'
   ) {
     return <NoBusinessAccess />;

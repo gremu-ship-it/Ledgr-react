@@ -1,7 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { PartnerRepository } from '@/dal/repositories/PartnerRepository';
+import { partnerPortalRepository } from '@/dal/repositories/PartnerPortalRepository';
 import { PartnerAdminRepository, type PartnerAdminMember } from '@/dal/repositories/PartnerAdminRepository';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { PLATFORM_ROOT_DOMAIN, slugify } from '@/lib/partnerDomain';
@@ -19,11 +21,12 @@ const inputCls =
 export function PartnerSettingsPage() {
   const { id = '' } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const { isPlatformAdmin } = usePartnerAdminAccess();
 
   const { data: partner, isLoading } = useQuery({
     queryKey: ['partner', id],
-    queryFn: () => PartnerRepository.getById(id),
+    queryFn: () => partnerPortalRepository.getPartnerProfile(id),
     enabled: Boolean(id),
   });
 
@@ -95,11 +98,25 @@ export function PartnerSettingsPage() {
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: async () => {
-      await PartnerRepository.update(id, updatePayload);
+      if (isPlatformAdmin) {
+        await PartnerRepository.update(id, updatePayload);
+      } else {
+        await partnerPortalRepository.updatePartnerBranding(id, {
+          name: form.name ?? '',
+          app_name: form.app_name ?? '',
+          logo_url: form.logo_url ?? null,
+          primary_colour: form.primary_colour,
+          support_email: form.support_email ?? null,
+          support_phone: form.support_phone ?? null,
+          onboarding_title: form.onboarding_title ?? null,
+          onboarding_subtitle: form.onboarding_subtitle ?? null,
+          allow_client_visibility: form.allow_client_visibility,
+        });
+      }
       await PartnerRepository.setFeatureFlags(id, flags);
     },
     onSuccess: () => {
-      setMessage('Saved.');
+      setMessage(t('partner.settings.saved'));
       setEdits({});
       setFlagEdits({});
       void queryClient.invalidateQueries({ queryKey: ['partner', id] });
@@ -146,9 +163,9 @@ export function PartnerSettingsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Branding & features</h1>
+          <h1 className="text-2xl font-bold text-slate-900">{t('partner.settings.title')}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Controls how {partner.name} clients experience the app.
+            {t('partner.settings.identityDescription')}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -158,24 +175,24 @@ export function PartnerSettingsPage() {
             disabled={isPending}
             className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
           >
-            {isPending ? 'Saving…' : 'Save changes'}
+            {isPending ? t('partner.settings.saving') : t('partner.settings.saveChanges')}
           </button>
         </div>
       </div>
 
       {/* ── Identity ─────────────────────────────────────────────────── */}
-      <Section title="Identity" description="Logo, colour and name shown to the partner's clients.">
+      <Section title={t('partner.settings.identity')} description={t('partner.settings.identityDescription')}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Partner name">
+          <Field label={t('partner.firmName')}>
             <input className={inputCls} value={form.name ?? ''} onChange={(e) => set('name', e.target.value)} />
           </Field>
-          <Field label="App name" hint="Replaces “Ledgr” throughout the UI">
+          <Field label={t('partner.settings.appName')} hint="Replaces “Ledgr” throughout the UI">
             <input className={inputCls} value={form.app_name ?? ''} onChange={(e) => set('app_name', e.target.value)} />
           </Field>
-          <Field label="Logo URL">
+          <Field label={t('partner.logoUrl')}>
             <input className={inputCls} value={form.logo_url ?? ''} onChange={(e) => set('logo_url', e.target.value)} />
           </Field>
-          <Field label="Primary colour">
+          <Field label={t('partner.primaryColor')}>
             <div className="flex items-center gap-2">
               <input
                 type="color"
@@ -190,14 +207,14 @@ export function PartnerSettingsPage() {
               />
             </div>
           </Field>
-          <Field label="Support email">
+          <Field label={t('partner.settings.supportEmail')}>
             <input
               className={inputCls}
               value={form.support_email ?? ''}
               onChange={(e) => set('support_email', e.target.value)}
             />
           </Field>
-          <Field label="Support phone">
+          <Field label={t('partner.settings.supportPhone')}>
             <input
               className={inputCls}
               value={form.support_phone ?? ''}
@@ -206,7 +223,8 @@ export function PartnerSettingsPage() {
           </Field>
         </div>
 
-        <div className="mt-5 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <p className="mt-5 text-sm font-medium text-slate-700">{t('partner.settings.preview')}</p>
+        <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
           {form.logo_url ? (
             <img src={form.logo_url} alt="" className="h-10 w-10 rounded-lg object-contain" />
           ) : (

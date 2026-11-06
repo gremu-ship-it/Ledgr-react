@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 interface SectionErrorBoundaryProps {
@@ -16,6 +17,7 @@ export function SectionErrorBoundary({
   sectionName,
   fallbackHeight = '300px',
 }: SectionErrorBoundaryProps) {
+  const { t } = useTranslation();
   return (
     <ErrorBoundary
       name={sectionName}
@@ -26,16 +28,16 @@ export function SectionErrorBoundary({
         >
           <div className="text-center">
             <h3 className="text-sm font-medium text-gray-900">
-              {sectionName} failed to load
+              {t('dashboard.sectionFailedToLoad', { section: sectionName })}
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              {error instanceof Error ? error.message : 'An unexpected error occurred'}
+              {error instanceof Error ? error.message : t('dashboard.unexpectedSectionError')}
             </p>
             <button
               onClick={reset}
               className="mt-4 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
-              Try again
+              {t('common.retry')}
             </button>
           </div>
         </div>

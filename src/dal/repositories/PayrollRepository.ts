@@ -54,6 +54,15 @@ export class PayrollRepository extends BaseRepository<'payroll_runs'> {
     return data;
   }
 
+  async countEmployeesForRun(runId: string): Promise<number> {
+    const { count, error } = await this.client
+      .from('payroll_employee_lines')
+      .select('id', { count: 'exact', head: true })
+      .eq('payroll_run_id', runId);
+    if (error) throw toRepositoryError('payroll_employee_lines', error);
+    return count ?? 0;
+  }
+
   async findWithLines(runId: string): Promise<PayrollRunWithLines> {
     const { data, error } = await this.client
       .from('payroll_runs')
