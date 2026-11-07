@@ -31,7 +31,10 @@ async function deleteDb(name: string): Promise<void> {
 }
 
 async function seedRQEntry(): Promise<void> {
-  const persister = createIDBPersister();
+  const persister = createIDBPersister({
+    getIdentity: () => ({ userId: 'r13-user', businessId: 'r13-business' }),
+    getSessionUserId: async () => 'r13-user',
+  });
   await persister.persistClient({
     timestamp: Date.now(),
     buster: 'r13-test',

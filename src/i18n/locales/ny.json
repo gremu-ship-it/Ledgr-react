@@ -546,11 +546,23 @@
         "body": "Chinthu ichi chimagwira ntchito ndi akaunti yeniyeni ya Ledgr. Pangani akaunti yaulere kuti mugwiritse ntchito ndi mabuku anu."
       }
     }
-  }
-,
+  },
   "constructionSchedule": {
     "errors": {
       "invalidProgress": "Kukula kwa ntchito kuyenera kukhala nambala yonse kuyambira 0 mpaka 100."
     }
+  },
+  "payroll": {
+    "legacyHistoryTitle": "Mbiri ya malipiro akale",
+    "legacyHistoryDescription": "Malipiro omwe anapangidwa pulogalamu isanasinthidwe asungidwa pansipa. Apa mungowaona kokha.",
+    "legacyHistoryLoadFailed": "Mbiri ya malipiro akale sinathe kutsegulidwa.",
+    "legacyHistoryRunNumber": "Nambala ya malipiro",
+    "legacyHistoryPeriod": "Nthawi ya malipiro",
+    "legacyHistoryPayDate": "Tsiku lolipira",
+    "legacyHistoryGross": "Malipiro onse asanachotsedwe",
+    "legacyHistoryNet": "Malipiro onse atachotsedwa",
+    "legacyHistoryStatus": "Mkhalidwe",
+    "legacyHistoryReadOnly": "Malipiro akale asungidwa ndipo apa mungowaona kokha.",
+    "noNewRunsLegacyAvailable": "Palibe malipiro atsopano pano. Malipiro akale ali pansipa."
   }
 }

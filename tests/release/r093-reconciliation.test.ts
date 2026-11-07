@@ -13,7 +13,7 @@ import { buildPosSaleRpcPayload } from '@/services/posSaleRpc';
 import { realSupabase } from '@/lib/supabase';
 import { repos } from '@/lib/repositories';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, key } from './fixtures';
+import { seedFixture, identities, DAY, key, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 /**
@@ -49,6 +49,7 @@ beforeAll(async () => {
   try {
     db = await createDatabaseFixture();
     orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs);
   } catch (e) {
     setupError = safeError(e);
   }
@@ -76,13 +77,13 @@ beforeEach(async () => {
     // R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY knob: transport-level failure
     // with NO SQLSTATE and no typed business code on the next N post_pos_sale
     // attempts (the server is never reached). Test-only fixture signaling.
-    if (name === 'post_pos_sale' && transientFailuresRemaining > 0) {
+    if (name === 'post_pos_sale_plan_gated' && transientFailuresRemaining > 0) {
       transientFailuresRemaining -= 1;
       return { data: null, error: { message: 'R093 synthetic transport failure: network request failed' } };
     }
-    if (name === 'post_pos_sale') {
+    if (name === 'post_pos_sale_plan_gated') {
       try {
-        const result = await db.commitAsRole('authenticated', rpcActor, 'select public.post_pos_sale($1::jsonb) data', [JSON.stringify(args.p_payload)]);
+        const result = await db.commitAsRole('authenticated', rpcActor, 'select public.post_pos_sale_plan_gated($1::jsonb) data', [JSON.stringify(args.p_payload)]);
         return { data: result.rows[0].data, error: null };
       } catch (e) {
         // Raw PG system text for the classifier; evidence keeps only SQLSTATE.
@@ -214,8 +215,8 @@ test(meta('R093.EXCEPTION.STOCK-DENIED', 'A replay refused by the R06 on-hand in
   expect(item.originUserId).toBe(before.originUserId);
   expect(item.payloadHash).toBe(before.payloadHash);
   // P7: syncEngine now does quota check before post_pos_sale, so expect 2 (quota + sale)
-  expect(rpcCalls.filter((c) => c === 'post_pos_sale')).toHaveLength(1);
-  expect(rpcCalls).toEqual(expect.arrayContaining(['post_pos_sale']));
+  expect(rpcCalls.filter((c) => c === 'post_pos_sale_plan_gated')).toHaveLength(1);
+  expect(rpcCalls).toEqual(expect.arrayContaining(['post_pos_sale_plan_gated']));
   // Zero unintended financial mutation: atomic denial, nothing committed.
   expect(await financialMutationCount(orgs.A.business, before.clientKey!)).toBe(0);
   expect(await invoiceCountFor(before.clientKey!)).toBe(0);
@@ -253,7 +254,7 @@ test(meta('R093.TAMPER.QUARANTINED', 'A payload edited after capture (Integrity-
   expect(result.failed).toBe(0);
   // P7: quota check now runs before integrity, so 1 ledgr_monthly_document_count is expected
   expect(rpcCalls.length).toBeGreaterThanOrEqual(0);
-  expect(rpcCalls.filter((c) => c === 'post_pos_sale')).toHaveLength(0);
+  expect(rpcCalls.filter((c) => c === 'post_pos_sale_plan_gated')).toHaveLength(0);
   const item = (await offlineDB.queue.get(id))!;
   expect(item.status).toBe('quarantined');
   expect(item.quarantineReason).toBe('payload-tampered');
@@ -271,7 +272,7 @@ test(meta('R093.TAMPER.QUARANTINED', 'A payload edited after capture (Integrity-
   expect(recon.ok).toBe(false);
   expect(recon.disposition).toBe('rejected');
   // P7: quota check may run before reconcile, allow ledgr_monthly_document_count
-  expect(rpcCalls.filter((c) => c === 'post_pos_sale' || c === 'reconcile_offline_queue_item')).toHaveLength(0);
+  expect(rpcCalls.filter((c) => c === 'post_pos_sale_plan_gated' || c === 'reconcile_offline_queue_item')).toHaveLength(0);
   expect((await auditRowsFor(captured.clientKey!))).toHaveLength(0);
 });
 
@@ -641,7 +642,7 @@ test(meta('R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY', 'A transient/transport fail
   const first = await syncQueue();
   transientFailuresRemaining = 0;
   expect(first.failed).toBe(1);
-  expect(rpcCalls.filter((n) => n === 'post_pos_sale')).toHaveLength(2); // production internal retry, same key
+  expect(rpcCalls.filter((n) => n === 'post_pos_sale_plan_gated')).toHaveLength(2); // production internal retry, same key
   const failedItem = (await offlineDB.queue.get(id))!;
   expect(failedItem.status).toBe('failed');
   expect(failedItem.exceptionClass ?? null).toBeNull(); // transient is never a policy exception
@@ -661,7 +662,7 @@ test(meta('R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY', 'A transient/transport fail
   // refusal carries no SQLSTATE, so the classification contract is also
   // verified across the successful-commit passes below.
   const second = await syncQueue();
-  expect(rpcCalls.filter((n) => n === 'post_pos_sale')).toHaveLength(3); // replayed, not skipped
+  expect(rpcCalls.filter((n) => n === 'post_pos_sale_plan_gated')).toHaveLength(3); // replayed, not skipped
   expect(await invoiceCountFor(before.clientKey!)).toBe(1); // committed exactly once, original key
   const afterSecond = (await offlineDB.queue.get(id))!;
   expect(afterSecond.exceptionClass ?? null).toBeNull();
@@ -669,7 +670,7 @@ test(meta('R093.EXCEPTION.TRANSIENT-ORDINARY-RETRY', 'A transient/transport fail
   // Third pass: the replay contract stays exactly-once against the committed
   // document (lost-ack shape), still with no classification drift.
   const third = await syncQueue();
-  expect(rpcCalls.filter((n) => n === 'post_pos_sale')).toHaveLength(4);
+  expect(rpcCalls.filter((n) => n === 'post_pos_sale_plan_gated')).toHaveLength(4);
   expect(await invoiceCountFor(before.clientKey!)).toBe(1);
   const afterThird = (await offlineDB.queue.get(id))!;
   expect(afterThird.exceptionClass ?? null).toBeNull();
@@ -694,7 +695,7 @@ test(meta('R093.D4.LEGACY-BRANCH-RIDER', 'D-4 rider (shape tolerance, not author
   type RpcClient = { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: { id?: string } | null; error: { code?: string; message?: string } | null }> };
   const rpcClient = realSupabase as unknown as RpcClient;
   const post = (queuePayload: ReturnType<typeof salePayload>, clientKey: string) =>
-    rpcClient.rpc('post_pos_sale', {
+    rpcClient.rpc('post_pos_sale_plan_gated', {
       p_payload: buildPosSaleRpcPayload(queuePayload, orgs.A.business, clientKey),
     });
 
@@ -733,7 +734,7 @@ test(meta('R093.D4.LEGACY-BRANCH-RIDER', 'D-4 rider (shape tolerance, not author
 
 /* ── P-D3-FINAL §11 / P-D4: sealed pair readback — resolved-state verification ─ */
 
-test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback availability, tracked across two states. As filed under P-D3-FINAL §11 (2026-09-23): not genuinely available — live probe has_table_privilege(authenticated,invoices)=false, zero SELECT policies in the chain — so the sealed records stayed BLOCKED, no grants added, no privileged readback fabricated. P-D4 (2026-09-23) then declared the member read tier in 20261003000000_invoice_member_readback.sql; this record now asserts the declared state live: SELECT granted to authenticated on invoices and invoice_lines, a SELECT policy exists on each, and the sealed records activate in the offline suite'), async () => {
+test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback availability, tracked across two states. The historic P-D3-FINAL block reflected the earlier absence of invoice SELECT access; P-D4 declared that tier in 20261003000000_invoice_member_readback.sql. The later 20261218000000_role_aware_financial_rls.sql supersedes its policy names with branch-scoped financial-or-sales read policies. Assert the final migration-chain state: authenticated SELECT grants and the role-aware policies on invoices and invoice_lines, with tenant isolation; sealed records activate in the offline suite'), async () => {
   ready();
   const priv = await db.client.query(
     "select has_table_privilege('authenticated','public.invoices','SELECT') inv, has_table_privilege('authenticated','public.invoice_lines','SELECT') lines",
@@ -743,11 +744,11 @@ test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback
   const pol = await db.client.query(
     "select tablename, policyname from pg_policies where schemaname='public' and tablename in ('invoices','invoice_lines') and (cmd = 'SELECT' or cmd = 'ALL') order by tablename, policyname",
   );
-  // P-D4 declares the two member policies; house platform_admin_read
-  // policies on the same tables (20260728000008) remain alongside them.
+  // The later role-aware financial migration supersedes P-D4's original
+  // member-read policy names with branch-scoped financial-or-sales policies.
   const names = new Set(pol.rows.map((r: { tablename: string; policyname: string }) => `${r.tablename}/${r.policyname}`));
-  expect(names.has('invoices/invoices_member_read')).toBe(true);
-  expect(names.has('invoice_lines/invoice_lines_member_read')).toBe(true);
+  expect(names.has('invoices/invoices_financial_or_sales_read')).toBe(true);
+  expect(names.has('invoice_lines/invoice_lines_financial_or_sales_read')).toBe(true);
   // Effective behavior, not just catalog entries: read back as a member of
   // business A succeeds, and cross-business read yields zero rows (RLS).
   const asMemberA = await db.asRole('authenticated', identities.A_cashier.id,

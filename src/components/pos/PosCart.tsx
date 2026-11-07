@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Trash2,
   Plus,
@@ -12,7 +13,7 @@ import {
   Check,
   ShieldAlert,
 } from 'lucide-react';
-import type { PosCartItem, PosCustomer, PosDiscount, PosCartTotals } from '@/types/pos';
+import type { PosCartItem, PosCustomer, PosDiscount, PosCartTotals, ManagerOverrideRequest } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
 
 interface PosCartProps {
@@ -33,7 +34,8 @@ interface PosCartProps {
   onUpdateQuantity: (productId: string, quantity: number) => void;
   onRemoveItem: (productId: string) => void;
   onClearCart: () => void;
-  onParkOrder: (notes?: string) => void;
+  onHoldOrder: () => void;
+  canHoldOrder?: boolean;
   onUpdateLineDiscount?: (productId: string, discount?: PosDiscount) => void;
   onUpdateItemDiscount?: (productId: string, discountPercent: number) => void;
   onUpdateOrderDiscount?: (discount?: PosDiscount) => void;
@@ -60,9 +62,7 @@ interface PosCartProps {
   onOverrideLinePrice?: (productId: string, unitPrice: number, token?: string | null) => void;
 }
 
-export type PosOverrideServerRequest =
-  | { kind: 'discount'; percent: number }
-  | { kind: 'price'; productId: string; unitPrice: number };
+export type PosOverrideServerRequest = ManagerOverrideRequest;
 
 export function PosCart({
   items,
@@ -80,7 +80,8 @@ export function PosCart({
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
-  onParkOrder,
+  onHoldOrder,
+  canHoldOrder = true,
   onUpdateLineDiscount,
   onUpdateItemDiscount,
   onUpdateOrderDiscount,
@@ -94,6 +95,7 @@ export function PosCart({
   canOverridePriceDirectly = false,
   onOverrideLinePrice,
 }: PosCartProps) {
+  const { t } = useTranslation();
   const [editingPriceItem, setEditingPriceItem] = useState<PosCartItem | null>(null);
   const [linePriceValue, setLinePriceValue] = useState<number>(0);
   // Modal / Dropdown states
@@ -327,12 +329,12 @@ export function PosCart({
         {/* Park & Clear Buttons */}
         <button
           type="button"
-          disabled={items.length === 0}
-          onClick={() => onParkOrder()}
-          title="Park / Hold Order (F8)"
+          disabled={items.length === 0 || !canHoldOrder}
+          onClick={onHoldOrder}
+          title={t('pos.hold.holdCartShortcut')}
           className="flex items-center gap-1.5 px-3 py-2 rounded-2xl border border-gray-200 bg-white hover:bg-amber-50 text-amber-700 text-xs font-bold transition-colors disabled:opacity-40"
         >
-          <PauseCircle className="h-4 w-4" /> Park
+          <PauseCircle className="h-4 w-4" /> {t('pos.hold.holdCart')}
         </button>
 
         <button
@@ -548,7 +550,7 @@ export function PosCart({
                 />
                 {lineDiscountValue > maxCashierDiscountPercent && (
                   <p className="text-[11px] font-bold text-amber-600 mt-1 flex items-center gap-1">
-                    <ShieldAlert className="h-3.5 w-3.5" /> Requires Manager PIN override (&gt;{maxCashierDiscountPercent}%)
+                    <ShieldAlert className="h-3.5 w-3.5" /> {t('pos.override.requiresManagerApproval', { percent: maxCashierDiscountPercent })}
                   </p>
                 )}
               </div>
@@ -593,7 +595,7 @@ export function PosCart({
                 />
                 {orderDiscountInput > maxCashierDiscountPercent && (
                   <p className="text-[11px] font-bold text-amber-600 mt-1 flex items-center gap-1">
-                    <ShieldAlert className="h-3.5 w-3.5" /> Requires Manager PIN override (&gt;{maxCashierDiscountPercent}%)
+                    <ShieldAlert className="h-3.5 w-3.5" /> {t('pos.override.requiresManagerApproval', { percent: maxCashierDiscountPercent })}
                   </p>
                 )}
               </div>
