@@ -15,7 +15,7 @@ import {
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
 import { queryClient } from '@/lib/queryClient';
-import { persistOptions, setActivePersistedCacheIdentity } from '@/lib/queryPersister';
+import { persistOptions } from '@/lib/queryPersister';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useDefaultRoute } from './hooks/useDefaultRoute';
@@ -387,20 +387,11 @@ function App() {
   useAuthListener();
   const isAuthLoading = useAppStore((state) => state.isAuthLoading);
   const isBusinessesLoading = useAppStore((state) => state.isBusinessesLoading);
-  const userId = useAppStore((state) => state.currentUser?.id ?? null);
-  const businessId = useAppStore((state) => state.currentBusiness?.business.id ?? null);
-  const [cacheIdentityReady, setCacheIdentityReady] = useState(false);
-
-  useEffect(() => {
-    if (isAuthLoading || isBusinessesLoading) {
-      setCacheIdentityReady(false);
-      return;
-    }
-    // The persister provider is not mounted until auth and tenant resolution
-    // finish. A null identity (signed out or no active business) restores empty.
-    setActivePersistedCacheIdentity(userId, businessId);
-    setCacheIdentityReady(true);
-  }, [isAuthLoading, isBusinessesLoading, userId, businessId]);
+  // Store identity setters update the query-persister namespace synchronously
+  // before the auth and tenant loading flags are cleared. Keep the provider
+  // unmounted until both resolutions finish so persisted data cannot restore
+  // under an anonymous or stale tenant identity.
+  const cacheIdentityReady = !isAuthLoading && !isBusinessesLoading;
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
