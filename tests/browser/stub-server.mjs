@@ -105,7 +105,7 @@ export async function createStubServer({ distDir, pagesDir, tlsCertDir = null })
       calls.push({ fn, clientKey, body, at: new Date().toISOString() });
       if (entry?.delayMs) await new Promise((r) => setTimeout(r, entry.delayMs));
       if (!entry) { json(res, 404, { code: 'PGRST202', message: `R09.4 stub: no scenario for fn=${fn} clientKey=${clientKey}` }); return; }
-      if (entry.status === 200 && fn === 'post_pos_sale' && entry.body && typeof entry.body.id === 'string') {
+      if (entry.status === 200 && fn === 'post_pos_sale_plan_gated' && entry.body && typeof entry.body.id === 'string') {
         shadows.invoices.set(entry.body.id, {
           id: entry.body.id,
           business_id: body?.p_payload?.business_id ?? null,

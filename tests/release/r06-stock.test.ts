@@ -19,7 +19,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, saleFixture, key } from './fixtures';
+import { seedFixture, identities, DAY, saleFixture, key, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r06-stock');
@@ -40,7 +40,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -61,7 +62,7 @@ interface Payload {
 }
 
 const postSale = async (uid: string, payload: Payload): Promise<SaleResult> =>
-  (await db.commitAsRole('authenticated', uid, 'select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as SaleResult;
+  (await db.commitAsRole('authenticated', uid, 'select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as SaleResult;
 
 /** Exact-SQLSTATE denial capture: anything reaching the caller without the expected code fails the record. */
 const deniedSale = async (uid: string, payload: Payload, code: string, messageRx: RegExp) => {
@@ -200,7 +201,7 @@ test(meta('R06.POS.STOCK.REPLAY', 'Command replay (identical payload + client ke
 test(meta('R06.POS.STOCK.CROSS-TENANT', 'A caller of business B cannot invoke the POS sale command against business A: denied with SQLSTATE 42501 by the command authorization gate (can_operate_pos), with zero mutation on either tenant', M_BIND), async () => {
   ready();
   const before = await snapshot();
-  await deniedSale(identities.B_cashier.id, sizedSale(3106, 1), '42501', /permission/i);
+  await deniedSale(identities.B_cashier.id, sizedSale(3106, 1), '42501', /(permission|POS access)/i);
   expect(await clientKeyCount(3106)).toEqual({ invoice: 0, payment: 0 });
   expect(await onHand('A')).toBe(0);
   expect(await onHand('B')).toBe(100);

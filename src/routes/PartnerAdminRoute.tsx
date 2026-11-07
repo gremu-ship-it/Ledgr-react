@@ -11,7 +11,7 @@ import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 export function PartnerAdminRoute() {
   const currentUser = useAppStore((s) => s.currentUser);
   const isAuthLoading = useAppStore((s) => s.isAuthLoading);
-  const { canAccessPortal, loading } = usePartnerAdminAccess();
+  const { canAccessPortal, loading, canManage } = usePartnerAdminAccess();
   const location = useLocation();
 
   if (isAuthLoading || loading) {
@@ -24,6 +24,11 @@ export function PartnerAdminRoute() {
 
   if (!canAccessPortal) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  const partnerRouteId = location.pathname.match(/^\/partner-admin\/partners\/([^/]+)/)?.[1];
+  if (partnerRouteId && !canManage(partnerRouteId)) {
+    return <Navigate to="/partner-admin" replace />;
   }
 
   return <Outlet />;

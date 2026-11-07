@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   X,
   CreditCard,
@@ -34,17 +35,19 @@ interface PosPaymentModalProps {
   onCompleteSale: (payload: PaymentCompletionPayload, isCreditSale?: boolean, dueDate?: string) => Promise<void>;
   isProcessing?: boolean;
   canSellOnCredit?: boolean;
+  /** null means unlimited; 1 disables split tender; 2 is the Starter limit. */
+  maxTenders?: number | null;
 }
 
 const METHOD_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  cash: { label: 'Cash (MWK)', icon: Banknote, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  airtel_money: { label: 'Airtel Money', icon: Smartphone, color: 'text-red-700 bg-red-50 border-red-200' },
-  tnm_mpamba: { label: 'TNM Mpamba', icon: Smartphone, color: 'text-green-700 bg-green-50 border-green-200' },
-  bank_transfer: { label: 'Bank Transfer', icon: Building2, color: 'text-blue-700 bg-blue-50 border-blue-200' },
-  card: { label: 'Card / POS', icon: CreditCard, color: 'text-purple-700 bg-purple-50 border-purple-200' },
-  credit: { label: 'Credit Sale', icon: Calendar, color: 'text-amber-700 bg-amber-50 border-amber-200' },
-  credit_sale: { label: 'Credit Sale', icon: Calendar, color: 'text-amber-700 bg-amber-50 border-amber-200' },
-  other: { label: 'Other', icon: Coins, color: 'text-gray-700 bg-gray-50 border-gray-200' },
+  cash: { label: 'pos.checkout.methods.cash', icon: Banknote, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  airtel_money: { label: 'pos.checkout.methods.airtelMoney', icon: Smartphone, color: 'text-red-700 bg-red-50 border-red-200' },
+  tnm_mpamba: { label: 'pos.checkout.methods.tnmMpamba', icon: Smartphone, color: 'text-green-700 bg-green-50 border-green-200' },
+  bank_transfer: { label: 'pos.checkout.methods.bankTransfer', icon: Building2, color: 'text-blue-700 bg-blue-50 border-blue-200' },
+  card: { label: 'pos.checkout.methods.card', icon: CreditCard, color: 'text-purple-700 bg-purple-50 border-purple-200' },
+  credit: { label: 'pos.checkout.methods.creditSale', icon: Calendar, color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  credit_sale: { label: 'pos.checkout.methods.creditSale', icon: Calendar, color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  other: { label: 'pos.checkout.methods.other', icon: Coins, color: 'text-gray-700 bg-gray-50 border-gray-200' },
 };
 
 const COMMON_MWK_TENDERS = [1000, 2000, 5000, 10000, 20000, 50000];
@@ -60,7 +63,9 @@ export function PosPaymentModal({
   onCompleteSale,
   isProcessing = false,
   canSellOnCredit = true,
+  maxTenders = 2,
 }: PosPaymentModalProps) {
+  const { t } = useTranslation();
   const payable = netPayable !== undefined ? netPayable : (propGrandTotal || 0);
 
   const availableMethods = useMemo(() => {
@@ -85,29 +90,51 @@ export function PosPaymentModal({
   });
   const [creditNotes, setCreditNotes] = useState('');
 
+  const [lastPaymentReset, setLastPaymentReset] = useState({ open: false, payable });
+  if (open && (!lastPaymentReset.open || lastPaymentReset.payable !== payable)) {
+    setIsSplitMode(false);
+    setSingleMethod('cash');
+    setCashTendered(payable);
+    setReference('');
+    setSplitRows([{ payment_method: 'cash', amount: payable, tendered: payable }]);
+    setIsCreditSale(false);
+    setCreditNotes('');
+    setLastPaymentReset({ open: true, payable });
+  } else if (!open && lastPaymentReset.open) {
+    setLastPaymentReset({ open: false, payable });
+  }
+
   const totalTendered = useMemo(() => {
     if (isCreditSale) return 0;
     if (!isSplitMode) {
-      return singleMethod === 'cash' ? cashTendered : payable;
+      return singleMethod === 'cash'
+        ? Math.round((Number(cashTendered) || 0) * 100) / 100
+        : Math.round((Number(payable) || 0) * 100) / 100;
     }
-    return splitRows.reduce((sum, r) => sum + (r.tendered || r.amount || 0), 0);
+    return splitRows.reduce((sum, r) => sum + Math.round((Number(r.tendered ?? r.amount) || 0) * 100), 0) / 100;
   }, [isCreditSale, isSplitMode, singleMethod, cashTendered, payable, splitRows]);
-
-  const totalAssigned = useMemo(() => {
-    if (!isSplitMode) return payable;
-    return splitRows.reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
-  }, [isSplitMode, payable, splitRows]);
 
   const changeDue = useMemo(() => {
     if (isCreditSale) return 0;
-    return Math.max(0, totalTendered - payable);
+    return Math.round(Math.max(0, totalTendered - payable) * 100) / 100;
   }, [isCreditSale, totalTendered, payable]);
 
-  const remainingToAssign = Math.max(0, payable - totalAssigned);
+  const payableCents = Math.round((Number(payable) || 0) * 100);
+  const totalAssignedCents = splitRows.reduce(
+    (sum, row) => sum + Math.round((Number(row.amount) || 0) * 100),
+    0,
+  );
+  const totalAssigned = isSplitMode ? totalAssignedCents / 100 : payable;
+  const remainingToAssign = (payableCents - totalAssignedCents) / 100;
+  const splitIsBalanced = totalAssignedCents === payableCents;
+  const canSplit = maxTenders === null || maxTenders >= 2;
+  const canAddTender = maxTenders === null || splitRows.length < maxTenders;
+  const singleCashIsValid = singleMethod !== 'cash' || Math.round((Number(cashTendered) || 0) * 100) >= payableCents;
 
   if (!open) return null;
 
   const handleAddSplitRow = () => {
+    if (!canAddTender) return;
     setSplitRows([
       ...splitRows,
       { payment_method: 'airtel_money', amount: remainingToAssign, reference: '' },
@@ -128,7 +155,7 @@ export function PosPaymentModal({
 
     if (isCreditSale) {
       if (!selectedCustomer) {
-        alert('Credit sales require an active customer to be selected.');
+        alert(t('pos.checkout.creditRequiresCustomer'));
         return;
       }
       await onCompleteSale({
@@ -142,19 +169,26 @@ export function PosPaymentModal({
     }
 
     if (isSplitMode) {
-      if (Math.abs(totalAssigned - payable) > 0.05) {
-        alert(`Split total (${formatMwkDetailed(totalAssigned)}) must equal sale total (${formatMwkDetailed(payable)})`);
+      if (!canSplit || !splitIsBalanced || splitRows.length < 2 || splitRows.some((row) => Math.round((Number(row.amount) || 0) * 100) <= 0) || (maxTenders !== null && splitRows.length > maxTenders)) {
+        alert(t('pos.checkout.splitMustMatch', {
+          assigned: formatMwkDetailed(totalAssigned),
+          total: formatMwkDetailed(payable),
+        }));
         return;
       }
       await onCompleteSale({
-        payments: splitRows,
+        payments: splitRows.map((row) => ({
+          ...row,
+          amount: Math.round((Number(row.amount) || 0) * 100) / 100,
+          tendered: Math.round((Number(row.tendered ?? row.amount) || 0) * 100) / 100,
+        })),
         totalPaid: totalTendered,
         changeGiven: changeDue,
         notes: reference,
       }, false);
     } else {
-      if (singleMethod === 'cash' && cashTendered < payable) {
-        alert('Cash tendered cannot be less than the net payable amount.');
+      if (!singleCashIsValid) {
+        alert(t('pos.checkout.cashTenderedTooLow'));
         return;
       }
       await onCompleteSale({
@@ -180,11 +214,12 @@ export function PosPaymentModal({
         <div className="flex items-center justify-between border-b border-gray-100 pb-3">
           <div className="flex items-center gap-2">
             <CreditCard className="h-5 w-5 text-brand-600" />
-            <h2 className="text-base font-black text-gray-900">Payment Checkout</h2>
+            <h2 className="text-base font-black text-gray-900">{t('pos.checkout.title')}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
+            aria-label={t('pos.checkout.close')}
             className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
             <X className="h-5 w-5" />
@@ -194,12 +229,12 @@ export function PosPaymentModal({
         {/* Total Banner */}
         <div className="my-3 rounded-2xl bg-brand-600 p-4 text-white flex items-center justify-between shadow-md">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-brand-100">Total Payable</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-brand-100">{t('pos.checkout.totalPayable')}</p>
             <p className="text-2xl font-black">{formatMwkDetailed(payable)}</p>
           </div>
           {selectedCustomer && (
             <div className="text-right">
-              <p className="text-xs text-brand-200">Customer</p>
+              <p className="text-xs text-brand-200">{t('pos.checkout.customer')}</p>
               <p className="text-xs font-bold truncate max-w-[150px]">{selectedCustomer.name}</p>
             </div>
           )}
@@ -219,19 +254,22 @@ export function PosPaymentModal({
                 !isCreditSale && !isSplitMode ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
               }`}
             >
-              Single Payment
+              {t('pos.checkout.singlePayment')}
             </button>
             <button
               type="button"
+              disabled={!canSplit}
+              title={!canSplit ? t('pos.checkout.splitRequiresStarter') : undefined}
               onClick={() => {
+                if (!canSplit) return;
                 setIsCreditSale(false);
                 setIsSplitMode(true);
               }}
-              className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all ${
+              className={`flex-1 rounded-lg py-1.5 text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${
                 !isCreditSale && isSplitMode ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
               }`}
             >
-              Split Payment
+              {t('pos.checkout.splitPayment')}
             </button>
             {canSellOnCredit && (
               <button
@@ -241,7 +279,7 @@ export function PosPaymentModal({
                   isCreditSale ? 'bg-white text-amber-900 shadow-xs' : 'text-gray-500'
                 }`}
               >
-                Store Credit
+                {t('pos.checkout.storeCredit')}
               </button>
             )}
           </div>
@@ -251,18 +289,18 @@ export function PosPaymentModal({
             <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
               <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
                 <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
-                <span>Credit Sale will create an open invoice under customer ledger.</span>
+                <span>{t('pos.checkout.creditInfo')}</span>
               </div>
 
               {!selectedCustomer && (
                 <div className="rounded-xl bg-red-100 p-2.5 text-xs font-bold text-red-700">
-                  ⚠️ Please close this modal and select/create a customer first.
+                  {t('pos.checkout.selectCustomerForCredit')}
                 </div>
               )}
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Payment Due Date
+                  {t('pos.checkout.paymentDueDate')}
                 </label>
                 <input
                   type="date"
@@ -274,11 +312,11 @@ export function PosPaymentModal({
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Credit Terms / Notes
+                  {t('pos.checkout.creditTerms')}
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 30 Days Net, Approved by Store Manager"
+                  placeholder={t('pos.checkout.creditTermsPlaceholder')}
                   value={creditNotes}
                   onChange={(e) => setCreditNotes(e.target.value)}
                   className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-xs focus:border-brand-500 focus:outline-none"
@@ -309,7 +347,7 @@ export function PosPaymentModal({
                       }`}
                     >
                       <Icon className="h-5 w-5" />
-                      <span className="text-xs font-black">{conf.label}</span>
+                      <span className="text-xs font-black">{t(conf.label)}</span>
                     </button>
                   );
                 })}
@@ -320,7 +358,7 @@ export function PosPaymentModal({
                 <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4">
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                      Cash Tendered (MWK)
+                      {t('pos.checkout.cashTendered')}
                     </label>
                     <input
                       type="number"
@@ -349,13 +387,13 @@ export function PosPaymentModal({
                       onClick={() => setCashTendered(payable)}
                       className="rounded-xl border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100 shadow-xs"
                     >
-                      Exact (K{payable.toLocaleString()})
+                      {t('pos.checkout.exactAmount', { amount: payable.toLocaleString() })}
                     </button>
                   </div>
 
                   {/* Change Breakdown */}
                   <div className="pt-2 flex items-center justify-between border-t border-gray-200 text-sm">
-                    <span className="font-bold text-gray-600">Change Due:</span>
+                    <span className="font-bold text-gray-600">{t('pos.checkout.changeDue')}:</span>
                     <span
                       className={`text-base font-black ${
                         changeDue > 0 ? 'text-emerald-600' : 'text-gray-900'
@@ -371,11 +409,11 @@ export function PosPaymentModal({
               {singleMethod !== 'cash' && (
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                    Transaction Reference / Approval Code
+                    {t('pos.checkout.transactionReference')}
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. TXN-894729"
+                    placeholder={t('pos.checkout.referencePlaceholder')}
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs focus:border-brand-500 focus:outline-none"
@@ -388,16 +426,21 @@ export function PosPaymentModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-gray-600">
-                  Split Payment Breakdown
+                  {t('pos.checkout.splitBreakdown')}
                 </span>
                 <button
                   type="button"
                   onClick={handleAddSplitRow}
-                  className="flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100"
+                  disabled={!canAddTender}
+                  title={!canAddTender && maxTenders !== null ? t('pos.checkout.tenderLimit', { count: maxTenders }) : undefined}
+                  className="flex items-center gap-1 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-bold text-brand-700 hover:bg-brand-100 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add Payment
+                  <Plus className="h-3.5 w-3.5" /> {t('pos.checkout.addTender')}
                 </button>
               </div>
+              {maxTenders !== null && (
+                <p className="text-[11px] text-gray-500">{t('pos.checkout.tenderLimit', { count: maxTenders })}</p>
+              )}
 
               <div className="space-y-2">
                 {splitRows.map((row, idx) => (
@@ -412,7 +455,7 @@ export function PosPaymentModal({
                     >
                       {availableMethods.map((m) => (
                         <option key={m} value={m}>
-                          {METHOD_LABELS[m]?.label || m}
+                          {t(METHOD_LABELS[m]?.label || m)}
                         </option>
                       ))}
                     </select>
@@ -420,6 +463,8 @@ export function PosPaymentModal({
                     <input
                       type="number"
                       min={0}
+                      step="0.01"
+                      aria-label={t('pos.checkout.tenderAmount', { index: idx + 1 })}
                       value={row.amount || ''}
                       onChange={(e) =>
                         handleUpdateSplitRow(idx, {
@@ -427,7 +472,7 @@ export function PosPaymentModal({
                           tendered: Number(e.target.value),
                         })
                       }
-                      placeholder="Amount"
+                      placeholder={t('pos.checkout.amount')}
                       className="w-28 rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold focus:border-brand-500 focus:outline-none"
                     />
 
@@ -435,7 +480,7 @@ export function PosPaymentModal({
                       type="text"
                       value={row.reference || ''}
                       onChange={(e) => handleUpdateSplitRow(idx, { reference: e.target.value })}
-                      placeholder="Ref / Note"
+                      placeholder={t('pos.checkout.referenceNote')}
                       className="flex-1 rounded-xl border border-gray-200 bg-white px-2.5 py-1.5 text-xs focus:border-brand-500 focus:outline-none"
                     />
 
@@ -455,12 +500,12 @@ export function PosPaymentModal({
               {/* Split Balance Summary */}
               <div className="rounded-2xl border border-gray-200 bg-white p-3 space-y-1.5 text-xs font-semibold">
                 <div className="flex justify-between">
-                  <span>Assigned Total:</span>
+                  <span>{t('pos.checkout.assignedTotal')}</span>
                   <span>{formatMwkDetailed(totalAssigned)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Remaining to tender:</span>
-                  <span className={remainingToAssign > 0 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold'}>
+                  <span>{t('pos.checkout.remainingToTender')}</span>
+                  <span className={remainingToAssign !== 0 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold'}>
                     {formatMwkDetailed(remainingToAssign)}
                   </span>
                 </div>
@@ -472,15 +517,20 @@ export function PosPaymentModal({
           <div className="pt-2">
             <button
               type="submit"
-              disabled={isProcessing || (isCreditSale && !selectedCustomer)}
+              disabled={
+                isProcessing ||
+                (isCreditSale && !selectedCustomer) ||
+                (isSplitMode && (!canSplit || !splitIsBalanced || splitRows.length < 2 || splitRows.some((row) => Math.round((Number(row.amount) || 0) * 100) <= 0) || (maxTenders !== null && splitRows.length > maxTenders))) ||
+                (!isCreditSale && !isSplitMode && !singleCashIsValid)
+              }
               className="w-full flex items-center justify-center gap-2 rounded-2xl bg-brand-600 hover:bg-brand-700 text-white py-3.5 font-black text-sm shadow-md disabled:opacity-50 active:scale-95 transition-all"
             >
               <CheckCircle2 className="h-5 w-5" />
               {isProcessing
-                ? 'Processing Sale...'
+                ? t('pos.checkout.processing')
                 : isCreditSale
-                ? `Complete Credit Sale (${formatMwkDetailed(payable)})`
-                : `Complete Sale (${formatMwkDetailed(payable)})`}
+                ? t('pos.checkout.completeCreditSale', { total: formatMwkDetailed(payable) })
+                : t('pos.checkout.completeSale', { total: formatMwkDetailed(payable) })}
             </button>
           </div>
         </form>

@@ -24,7 +24,7 @@ import { readFileSync, readdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, PAST, key, saleFixture, incomeFixture } from './fixtures';
+import { seedFixture, identities, DAY, PAST, key, saleFixture, incomeFixture, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 import { loadEdge, mockClient } from './edge-loader.mjs';
 
@@ -50,6 +50,7 @@ beforeAll(async () => {
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
   try {
     orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs);
   } catch (e) { seedError = safeError(e); }
 }, 600000);
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -263,7 +264,7 @@ test(meta('IC.POS.DISPLAY-EQUALS-DEDUCTION', 'The POS display location for the c
     expect(before.is_fallback).toBe(false);
     const row = (b: any) => b.balances.find((x: any) => x.product_id === orgs.A.product);
     expect(Number(row(before).quantity_on_hand)).toBe(100);
-    await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(saleFixture(orgs.A, 401))]);
+    await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(saleFixture(orgs.A, 401))]);
     const after = await avail(c, orgs.A.business, orgs.A.branch);
     expect(after.location.id).toBe(before.location.id);
     expect(Number(row(after).quantity_on_hand)).toBe(99);
@@ -311,7 +312,7 @@ test(meta('IC.POS.CONSTRAINTS-INTACT', 'chk_inventory_balances_on_hand_nonneg is
     f.lines[0].quantity = 101; f.lines[0].line_total = t;
     Object.assign(f.invoice, { original_amount: t, functional_amount: t, subtotal: t, taxable_amount: t, total_amount: t });
     f.cash_sales = t; f.payments[0].amount = t; f.payments[0].functional_amount = t;
-    await failsWith(c, () => c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(f)]), ['23514', 'P0001']);
+    await failsWith(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(f)]), ['23514', 'P0001']);
     await su(c); expect(await onHand(c)).toBe(100);
   });
 });
@@ -325,7 +326,7 @@ test(meta('IC.COGS.POS-FAILURE-ROLLS-BACK', 'When COGS posting fails (COGS accou
     const jBefore = (await c.query('select count(*)::int n from public.journal_entries where business_id=$1', [orgs.A.business])).rows[0].n;
     await c.query("update public.accounts set is_active=false where business_id=$1 and code='5100'", [orgs.A.business]);
     await as(c, identities.A_cashier.id);
-    const e = await failsWith(c, () => c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)]), ['P0001']);
+    const e = await failsWith(c, () => c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)]), ['P0001']);
     expect(e.message).toMatch(/COGS posting failed/);
     await su(c);
     expect((await c.query('select count(*)::int n from public.invoices where business_id=$1 and client_key=$2', [orgs.A.business, payload.client_key])).rows[0].n).toBe(0);
@@ -333,7 +334,7 @@ test(meta('IC.COGS.POS-FAILURE-ROLLS-BACK', 'When COGS posting fails (COGS accou
     expect(await onHand(c)).toBe(100);
     await c.query("update public.accounts set is_active=true where business_id=$1 and code='5100'", [orgs.A.business]);
     await as(c, identities.A_cashier.id);
-    const ok = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as { id: string };
+    const ok = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(payload)])).rows[0].r as { id: string };
     await su(c);
     expect((await c.query('select count(*)::int n from public.journal_entries where business_id=$1 and posting_key=$2', [orgs.A.business, `invoice:${ok.id}:cogs`])).rows[0].n).toBe(1);
     expect(await onHand(c)).toBe(99);
@@ -769,7 +770,7 @@ test(hmeta('H01.BACKFILL.VALID-STATUSES-BACKFILL', 'Legitimate sales still backf
 });
 
 // ── H-2 server-authoritative POS arithmetic ──
-const posSale = (c: C, p: unknown) => c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(p)]).then((r) => r.rows[0].r as Record<string, any>);
+const posSale = (c: C, p: unknown) => c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(p)]).then((r) => r.rows[0].r as Record<string, any>);
 const invoicesByKey = async (c: C, k: string) => (await c.query('select count(*)::int n from public.invoices where client_key::text=$1', [k])).rows[0].n as number;
 /** Consistent discounted sale: 2 × 1500 gross 3000, line discount 100, order discount 150 → total 2750. */
 const discountedSale = (n: number) => {

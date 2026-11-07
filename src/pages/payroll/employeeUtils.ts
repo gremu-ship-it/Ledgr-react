@@ -12,6 +12,20 @@ export function text(value: unknown, fallback = ''): string {
   return value == null || value === '' ? fallback : String(value);
 }
 
+export function databaseErrorCode(error: unknown): string | null {
+  const seen = new Set<object>();
+  let current = error;
+  while (current && typeof current === 'object' && !seen.has(current)) {
+    seen.add(current);
+    const candidate = current as { code?: unknown; cause?: unknown };
+    if (typeof candidate.code === 'string' && (/^[0-9A-Z]{5}$/.test(candidate.code) || /^PGRST\d{3}$/.test(candidate.code))) {
+      return candidate.code;
+    }
+    current = candidate.cause;
+  }
+  return null;
+}
+
 export function numeric(value: unknown): number {
   const result = Number(value ?? 0);
   return Number.isFinite(result) ? result : 0;

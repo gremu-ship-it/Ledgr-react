@@ -8087,6 +8087,16 @@ export type Database = {
           },
         ]
       }
+      v_partner_peer_businesses: {
+        Row: {
+          brand_color: string | null
+          id: string
+          logo_url: string | null
+          name: string | null
+          trading_name: string | null
+        }
+        Relationships: []
+      }
       v_reorder_alerts: {
         Row: {
           average_cost: number | null

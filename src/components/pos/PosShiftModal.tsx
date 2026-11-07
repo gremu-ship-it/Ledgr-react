@@ -1,14 +1,16 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Lock, Unlock, Coins } from 'lucide-react';
 import type { PosShift } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
+import { calculateShiftVariance } from '@/lib/pos/shiftReconciliation';
 
 interface PosShiftModalProps {
   open: boolean;
   onClose: () => void;
   currentShift: PosShift | null;
-  onOpenShift: (openingFloat: number, notes?: string) => Promise<void>;
-  onCloseShift: (closingCash: number, notes?: string) => Promise<void>;
+  onOpenShift: (openingFloat: number) => Promise<void>;
+  onCloseShift: (closingCash: number) => Promise<void>;
   isProcessing?: boolean;
 }
 
@@ -20,21 +22,22 @@ export function PosShiftModal({
   onCloseShift,
   isProcessing = false,
 }: PosShiftModalProps) {
+  const { t } = useTranslation();
   const isOpenShift = !currentShift || currentShift.status === 'closed';
-  const [amount, setAmount] = useState<number>(0);
-  const [notes, setNotes] = useState<string>('');
+  const [amount, setAmount] = useState('');
 
   const expectedCash = currentShift ? Number(currentShift.expected_cash ?? currentShift.expectedCash ?? 0) : 0;
-  const variance = !isOpenShift ? amount - expectedCash : 0;
+  const enteredAmount = Number(amount || 0);
+  const variance = !isOpenShift ? calculateShiftVariance(enteredAmount, expectedCash) : 0;
 
   if (!open) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isOpenShift) {
-      await onOpenShift(amount, notes);
+      await onOpenShift(enteredAmount);
     } else {
-      await onCloseShift(amount, notes);
+      await onCloseShift(enteredAmount);
     }
   };
 
@@ -50,11 +53,12 @@ export function PosShiftModal({
               <Lock className="h-5 w-5 text-amber-600" />
             )}
             <h2 className="text-base font-black text-gray-900">
-              {isOpenShift ? 'Open New Register Shift' : 'Close Active Register Shift'}
+              {isOpenShift ? t('pos.openShiftTitle') : t('pos.closeShiftTitle')}
             </h2>
           </div>
           <button
             type="button"
+            aria-label={t('common.close')}
             onClick={onClose}
             className="rounded-xl p-1.5 text-gray-400 hover:bg-gray-100"
           >
@@ -66,12 +70,10 @@ export function PosShiftModal({
           {isOpenShift ? (
             /* ── OPEN SHIFT ── */
             <div className="space-y-3">
-              <p className="text-xs text-gray-600">
-                Count the physical cash in the drawer to establish your opening cash float before starting sales.
-              </p>
+              <p className="text-xs text-gray-600">{t('pos.openingFloatDescription')}</p>
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Opening Cash Float (MWK) *
+                  {t('pos.openingFloat')} (MWK) *
                 </label>
                 <div className="relative">
                   <Coins className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -80,9 +82,9 @@ export function PosShiftModal({
                     min={0}
                     step="any"
                     required
-                    value={amount || ''}
-                    onChange={(e) => setAmount(Number(e.target.value))}
-                    placeholder="e.g. 20000"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder={t('pos.openingFloatPlaceholder')}
                     className="w-full rounded-xl border border-gray-300 pl-9 pr-3 py-2.5 text-base font-black text-gray-900 focus:border-brand-500 focus:outline-none"
                   />
                 </div>
@@ -93,26 +95,26 @@ export function PosShiftModal({
             <div className="space-y-3">
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-3 space-y-1 text-xs">
                 <div className="flex justify-between text-gray-600">
-                  <span>Shift Opened:</span>
+                  <span>{t('pos.shiftOpenedAt')}</span>
                   <span className="font-semibold">
                     {new Date(currentShift.opened_at || currentShift.start_time || '').toLocaleTimeString()}
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-600">
-                  <span>Opening Float:</span>
+                  <span>{t('pos.openingFloat')}</span>
                   <span className="font-semibold">
                     {formatMwkDetailed(Number(currentShift.opening_float || currentShift.opening_cash || 0))}
                   </span>
                 </div>
                 <div className="flex justify-between text-gray-900 font-bold pt-1 border-t border-gray-200">
-                  <span>Expected Drawer Cash:</span>
+                  <span>{t('pos.expectedCash')}</span>
                   <span>{formatMwkDetailed(expectedCash)}</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Actual Counted Cash in Drawer (MWK) *
+                  {t('pos.actualCash')} (MWK) *
                 </label>
                 <div className="relative">
                   <Coins className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -121,9 +123,9 @@ export function PosShiftModal({
                     min={0}
                     step="any"
                     required
-                    value={amount || ''}
-                    onChange={(e) => setAmount(Number(e.target.value))}
-                    placeholder="e.g. 150000"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder={t('pos.actualCashPlaceholder')}
                     className="w-full rounded-xl border border-gray-300 pl-9 pr-3 py-2.5 text-base font-black text-gray-900 focus:border-brand-500 focus:outline-none"
                   />
                 </div>
@@ -139,13 +141,13 @@ export function PosShiftModal({
                     : 'bg-red-50 text-red-800 border border-red-200'
                 }`}
               >
-                <span>Reconciliation Variance:</span>
+                <span>{t('pos.variance')}</span>
                 <span>
                   {variance > 0 ? '+' : ''}
                   {formatMwkDetailed(variance)}
                   {variance !== 0 && (
                     <span className="ml-1 text-[10px] font-normal">
-                      ({variance > 0 ? 'Surplus / Overage' : 'Shortage / Deficit'})
+                      ({variance > 0 ? t('pos.cashSurplus') : t('pos.cashShortage')})
                     </span>
                   )}
                 </span>
@@ -153,26 +155,13 @@ export function PosShiftModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-              Notes / Handover Remarks
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Verified by shift supervisor"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full rounded-xl border border-gray-300 px-3 py-2 text-xs focus:border-brand-500 focus:outline-none"
-            />
-          </div>
-
           <div className="pt-2 flex gap-2">
             <button
               type="button"
               onClick={onClose}
               className="flex-1 rounded-2xl border border-gray-200 py-3 text-xs font-bold text-gray-700 hover:bg-gray-50"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
@@ -182,10 +171,10 @@ export function PosShiftModal({
               }`}
             >
               {isProcessing
-                ? 'Processing...'
+                ? t('pos.processing')
                 : isOpenShift
-                ? 'Open Shift & Register'
-                : 'Close & Reconcile Shift'}
+                ? t('pos.openShiftAction')
+                : t('pos.closeShiftAction')}
             </button>
           </div>
         </form>

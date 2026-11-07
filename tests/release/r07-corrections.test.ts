@@ -83,10 +83,13 @@ test(meta('R07.APPROVAL.SERVER-COMMAND-SURFACE', 'The correction surface is serv
   // Construction procurement also has one separate receipt-policy command;
   // neither additive surface is part of the POS correction/token namespace.
   const constructionPolicy = ['approve_construction_receipt_posting_policy'];
+  // Explicit Phase 6 RPC exceptions; any other approval/correction-shaped function still fails.
+  const phase6Allowlist = ['approve_leave_request', 'reverse_pay_run', 'void_cash_deposit'];
   expect(hits.sort()).toEqual([
     '_ledgr_consume_pos_approval','_ledgr_correction_preflight','authorize_pos_approval',
     'refund_pos_sale_command','request_pos_approval','void_pos_sale_command',
-    ...invoiceApproval, ...constructionPolicy, ...p4cWorkflows,
+    ...invoiceApproval, ...constructionPolicy, ...p4cWorkflows, ...phase6Allowlist,
+
   ].sort());
 });
 
