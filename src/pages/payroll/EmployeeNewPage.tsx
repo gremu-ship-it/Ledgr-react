@@ -6,7 +6,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
-import { text, todayDate } from './employeeUtils';
+import { databaseErrorCode, text, todayDate } from './employeeUtils';
 
 interface EmployeeForm {
   first_name: string;
@@ -110,6 +110,14 @@ export function EmployeeNewPage() {
       else navigate('/payroll/employees', { replace: true });
     },
   });
+  const saveErrorCode = databaseErrorCode(createMutation.error);
+  const saveErrorKey = saveErrorCode === '42501'
+    ? 'payroll.employeeSavePermissionDenied'
+    : saveErrorCode === '23505'
+      ? 'payroll.employeeSaveDuplicate'
+      : saveErrorCode === '23502' || saveErrorCode === '23514' || saveErrorCode === '22P02'
+        ? 'payroll.employeeSaveInvalidData'
+        : 'payroll.employeeSaveFailedWithCode';
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -144,7 +152,9 @@ export function EmployeeNewPage() {
 
       {(validationError || createMutation.isError) && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
-          {validationError || t('payroll.employeeSaveFailed')}
+          {validationError || (saveErrorCode
+            ? t(saveErrorKey, { code: saveErrorCode })
+            : t('payroll.employeeSaveFailed'))}
         </p>
       )}
 

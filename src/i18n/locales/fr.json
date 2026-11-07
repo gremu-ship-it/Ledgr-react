@@ -517,6 +517,11 @@
     "legacyHistoryNet": "Total net",
     "legacyHistoryStatus": "Statut",
     "legacyHistoryReadOnly": "Les paies historiques sont conservées en lecture seule dans cette liste.",
-    "noNewRunsLegacyAvailable": "Aucune paie du nouveau cycle pour le moment. Les paies précédentes sont listées ci-dessous."
+    "noNewRunsLegacyAvailable": "Aucune paie du nouveau cycle pour le moment. Les paies précédentes sont listées ci-dessous.",
+    "employeeSaveFailed": "Impossible d’enregistrer l’employé. Veuillez réessayer.",
+    "employeeSaveFailedWithCode": "Impossible d’enregistrer l’employé. Code de référence : {{code}}.",
+    "employeeSavePermissionDenied": "Votre compte ne peut pas ajouter d’employés à la paie. Demandez à un administrateur de vérifier votre rôle. Code : {{code}}.",
+    "employeeSaveDuplicate": "Un employé portant ce numéro existe déjà. Réessayez ; si le problème persiste, contactez l’assistance. Code : {{code}}.",
+    "employeeSaveInvalidData": "Une valeur de paie n’est pas acceptée. Vérifiez la fréquence, les dates et le salaire, puis réessayez. Code : {{code}}."
   }
 }

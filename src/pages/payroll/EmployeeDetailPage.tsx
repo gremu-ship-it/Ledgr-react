@@ -56,7 +56,7 @@ function EditEmployeeForm({ employee, onCancel, onSave, isSaving, t }: EditEmplo
     gross_salary: text(employee.gross_salary, '0'),
     contract_effective_from: todayDate(),
     employment_type: text(employee.employment_type, 'permanent'),
-    pay_frequency: text(employee.pay_frequency, 'monthly'),
+    pay_frequency: text(employee.pay_frequency, 'monthly') === 'bi_weekly' ? 'biweekly' : text(employee.pay_frequency, 'monthly'),
     status: text(employee.status, 'active'),
     termination_date: text(employee.termination_date ?? employee.end_date),
     bank_name: text(employee.bank_name),
@@ -224,7 +224,8 @@ function OverviewTab({ employee, currency, locale, t }: { employee: Row; currenc
   const currentContract = contracts.find((contract) => activeOnDate(contract, today)) ?? contracts[0];
   const status = text(employee.status, 'active');
   const salary = currentContract?.gross_salary ?? employee.gross_salary;
-  const payFrequency = text(currentContract?.pay_frequency ?? employee.pay_frequency, 'monthly');
+  const rawPayFrequency = text(currentContract?.pay_frequency ?? employee.pay_frequency, 'monthly');
+  const payFrequency = rawPayFrequency === 'bi_weekly' ? 'biweekly' : rawPayFrequency;
   const employmentType = text(currentContract?.contract_type ?? employee.employment_type, 'permanent');
   return (
     <div className="grid gap-5 lg:grid-cols-2">

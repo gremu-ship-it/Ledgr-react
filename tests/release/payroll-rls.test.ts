@@ -67,7 +67,7 @@ test(meta(
       `insert into public.employees
          (business_id,employee_number,first_name,last_name,employment_type,pay_frequency,
           gross_salary,currency,payment_method,tax_exempt,start_date,hire_date,status,is_active,created_by)
-       values($1,'R13-PAYROLL-001','R13','Payroll','permanent','monthly',250000,'MWK',
+       values($1,'R13-PAYROLL-001','R13','Payroll','permanent','biweekly',250000,'MWK',
               'bank_transfer',false,current_date,current_date,'active',true,$2)
        returning id`,
       [orgs!.A.business, payrollManagerId],
@@ -76,7 +76,7 @@ test(meta(
     await client.query(
       `insert into public.employee_contracts
          (business_id,employee_id,effective_from,pay_frequency,gross_salary,currency,contract_type)
-       values($1,$2,current_date,'monthly',250000,'MWK','permanent')`,
+       values($1,$2,current_date,'biweekly',250000,'MWK','permanent')`,
       [orgs!.A.business, id],
     );
     return id;
@@ -85,10 +85,10 @@ test(meta(
   expect(employeeId).toMatch(/^[0-9a-f-]{36}$/i);
   const readback = await db!.asRole(
     'authenticated', payrollManagerId,
-    'select employee_number,gross_salary from public.employees where business_id=$1 and id=$2',
+    'select employee_number,pay_frequency,gross_salary from public.employees where business_id=$1 and id=$2',
     [orgs!.A.business, employeeId],
   );
-  expect(readback.rows).toEqual([{ employee_number: 'R13-PAYROLL-001', gross_salary: '250000' }]);
+  expect(readback.rows).toEqual([{ employee_number: 'R13-PAYROLL-001', pay_frequency: 'biweekly', gross_salary: '250000' }]);
 });
 
 test(meta(

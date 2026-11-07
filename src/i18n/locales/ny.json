@@ -563,6 +563,11 @@
     "legacyHistoryNet": "Malipiro onse atachotsedwa",
     "legacyHistoryStatus": "Mkhalidwe",
     "legacyHistoryReadOnly": "Malipiro akale asungidwa ndipo apa mungowaona kokha.",
-    "noNewRunsLegacyAvailable": "Palibe malipiro atsopano pano. Malipiro akale ali pansipa."
+    "noNewRunsLegacyAvailable": "Palibe malipiro atsopano pano. Malipiro akale ali pansipa.",
+    "employeeSaveFailed": "Talephera kusunga wantchito. Chonde yesaninso.",
+    "employeeSaveFailedWithCode": "Talephera kusunga wantchito. Nambala yachidziwitso: {{code}}.",
+    "employeeSavePermissionDenied": "Akaunti yanu ilibe chilolezo chowonjezera antchito a malipiro. Funsani woyang’anira bizinesi kuti awone udindo wanu. Khodi: {{code}}.",
+    "employeeSaveDuplicate": "Nambala ya wantchito imeneyi ilipo kale. Yesaninso; ikapitiriza, funsani thandizo. Khodi: {{code}}.",
+    "employeeSaveInvalidData": "Mtengo wina wa malipiro sunavomerezedwe. Onani nthawi yolipira, madeti, ndi malipiro, kenako yesaninso. Khodi: {{code}}."
   }
 }
