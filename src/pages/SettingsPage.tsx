@@ -364,8 +364,16 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       await queryClient.invalidateQueries();
       setAlert({ type: 'success', message: t('settings.demoSeeder.success') });
     },
-    onError: () => {
-      setAlert({ type: 'error', message: t('settings.demoSeeder.error') });
+    onError: (error: unknown) => {
+      console.error('[DemoSeeder] Seeding Demo company Ltd failed.', error);
+      const detail = error instanceof Error ? error.message : String(error);
+      const localizedDetail = detail === 'DEMO_SEEDER_ADMIN_REQUIRED'
+        ? t('settings.demoSeeder.adminRequired')
+        : detail.slice(0, 400);
+      setAlert({
+        type: 'error',
+        message: `${t('settings.demoSeeder.error')} ${t('settings.demoSeeder.errorDetails', { details: localizedDetail })}`,
+      });
     },
   });
 

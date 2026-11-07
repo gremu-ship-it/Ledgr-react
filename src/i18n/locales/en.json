@@ -332,7 +332,9 @@
       "loading": "Seeding demo data…",
       "confirm": "Seed the Demo company Ltd test dataset now? Existing demo records will be reused where possible.",
       "success": "Demo company test data was seeded successfully.",
-      "error": "Demo data could not be seeded. Confirm you have business owner or admin access, then try again."
+      "error": "Demo data could not be seeded.",
+      "errorDetails": "Details: {{details}}",
+      "adminRequired": "The signed-in account must be an active Demo company owner or admin."
     }
   },
   "auth": {
