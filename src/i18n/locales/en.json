@@ -308,6 +308,15 @@
     },
     "approvals": {
       "tabTitle": "Approvals"
+    },
+    "demoSeeder": {
+      "title": "Developer demo data",
+      "description": "Create connected accounting, payroll, inventory, POS, manufacturing, and construction sample data for Demo company Ltd, including its DEMO-* products and POS till. Requires business owner or admin access.",
+      "action": "Seed demo data",
+      "loading": "Seeding demo data…",
+      "confirm": "Seed the Demo company Ltd test dataset now? Existing demo records will be reused where possible.",
+      "success": "Demo company test data was seeded successfully.",
+      "error": "Demo data could not be seeded. Confirm you have business owner or admin access, then try again."
     }
   },
   "auth": {

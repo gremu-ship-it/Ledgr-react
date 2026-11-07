@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, InsertDto } from '../types/database';
+import type { Database, InsertDto, Row } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
 import type {
@@ -66,6 +66,34 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
   }
 
   // ── Settings ─────────────────────────────────────────────────────────────
+
+  /**
+   * Ensure one named demo till exists. The write still goes through RLS, whose
+   * pos_terminals policy requires business-admin authority (owner/admin).
+   */
+  async ensureDemoTerminal(
+    input: Omit<InsertDto<'pos_terminals'>, 'id' | 'created_at'>,
+  ): Promise<Row<'pos_terminals'>> {
+    if (!input.name.startsWith('DEMO-')) {
+      throw new Error('Demo POS terminal names must use the DEMO- prefix.');
+    }
+    const { data: existing, error: readError } = await this.client.from('pos_terminals')
+      .select('*').eq('business_id', input.business_id).eq('name', input.name).maybeSingle();
+    if (readError) throw toRepositoryError('pos_terminals', readError);
+
+    if (existing) {
+      const { data, error } = await this.client.from('pos_terminals')
+        .update({ ...input, is_active: true }).eq('business_id', input.business_id).eq('id', existing.id)
+        .select('*').single();
+      if (error) throw toRepositoryError('pos_terminals', error);
+      return data;
+    }
+
+    const { data, error } = await this.client.from('pos_terminals')
+      .insert({ ...input, is_active: true }).select('*').single();
+    if (error) throw toRepositoryError('pos_terminals', error);
+    return data;
+  }
 
   async getSettings(businessId: string): Promise<PosSettings> {
     try {
@@ -228,20 +256,17 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
    * will stamp. Resolves the business's first active till; till assignment
    * per device lands with the terminal-assignment surface (documented gap).
    */
-  private async resolveActiveTerminalId(businessId: string): Promise<string | null> {
-    // Generated row types predate the R08 `pos_terminals` table; query it
-    // through an untyped handle (row contract: { id } only).
-    const untyped = this.client as unknown as SupabaseClient;
-    const { data, error } = await untyped
-      .from('pos_terminals')
-      .select('id')
-      .eq('business_id', businessId)
-      .eq('is_active', true)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
+  private async resolveActiveTerminalId(businessId: string, preferredTerminalId?: string): Promise<string | null> {
+    // Terminal assignment is server-owned. An explicit preferred terminal is
+    // only a selector among active rows in this same business, never an
+    // authority claim about the branch.
+    let query = this.client.from('pos_terminals').select('id')
+      .eq('business_id', businessId).eq('is_active', true);
+    if (preferredTerminalId) query = query.eq('id', preferredTerminalId);
+    else query = query.order('created_at', { ascending: true }).limit(1);
+    const { data, error } = await query.maybeSingle();
     if (error || !data) return null;
-    return (data as { id: string }).id;
+    return data.id;
   }
 
   private toShift(data: Record<string, unknown>): PosShift {
@@ -300,7 +325,8 @@ export class PosRepository extends BaseRepository<'pos_shifts'> {
       ? Number(arg2?.openingCash ?? arg2?.opening_float ?? 0)
       : Number(arg1.opening_float ?? arg1.openingCash ?? 0);
 
-    const terminalId = await this.resolveActiveTerminalId(businessId);
+    const requestedTerminalId = typeof arg1 === 'string' ? undefined : arg1.terminal_id;
+    const terminalId = await this.resolveActiveTerminalId(businessId, requestedTerminalId);
     if (!terminalId) {
       throw new Error('No active POS terminal is registered for this business. Ask an administrator to register a till before opening a shift.');
     }

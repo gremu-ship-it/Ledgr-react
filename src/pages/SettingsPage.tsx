@@ -25,6 +25,7 @@ import {
   Key,
   ClipboardCheck,
   LogOut,
+  Database,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import { repos } from '@/lib/repositories';
@@ -48,6 +49,7 @@ import {
 } from '@/lib/capabilities/profile';
 import { handleError } from '@/lib/errorHandler';
 import { describeFunctionFailure } from '@/lib/edgeFunctionErrors';
+import { seedDemoCompanyData, TARGET_DEMO_BUSINESS_ID } from '@/services/demoSeederService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -356,6 +358,23 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
     onError: (err: Error) => setAlert({ type: 'error', message: err.message }),
   });
 
+  const demoSeederMutation = useMutation({
+    mutationFn: () => seedDemoCompanyData(business.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries();
+      setAlert({ type: 'success', message: t('settings.demoSeeder.success') });
+    },
+    onError: () => {
+      setAlert({ type: 'error', message: t('settings.demoSeeder.error') });
+    },
+  });
+
+  function handleDemoSeed() {
+    if (!window.confirm(t('settings.demoSeeder.confirm'))) return;
+    setAlert(null);
+    demoSeederMutation.mutate();
+  }
+
   function set(field: string, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
   }
@@ -649,6 +668,28 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
       <div className="flex justify-end border-t border-gray-100 pt-4">
         <button onClick={() => mutation.mutate()} disabled={mutation.isPending} className="rounded-lg bg-brand-500 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60 transition-colors">{mutation.isPending ? 'Saving…' : 'Save Changes'}</button>
       </div>
+
+      {business.id === TARGET_DEMO_BUSINESS_ID && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4" aria-labelledby="demo-seeder-heading">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 id="demo-seeder-heading" className="flex items-center gap-2 text-sm font-semibold text-amber-950">
+                <Database className="h-4 w-4" aria-hidden="true" />
+                {t('settings.demoSeeder.title')}
+              </h3>
+              <p className="mt-1 text-xs text-amber-900">{t('settings.demoSeeder.description')}</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDemoSeed}
+              disabled={demoSeederMutation.isPending}
+              className="shrink-0 rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60"
+            >
+              {demoSeederMutation.isPending ? t('settings.demoSeeder.loading') : t('settings.demoSeeder.action')}
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

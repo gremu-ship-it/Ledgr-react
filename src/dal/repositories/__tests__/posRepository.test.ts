@@ -140,6 +140,28 @@ describe('PosRepository', () => {
       expect(mockClient.rpc).not.toHaveBeenCalled();
     });
 
+    it('uses the requested active terminal for a shift without trusting a caller-supplied branch', async () => {
+      const terminalEq = vi.fn().mockReturnThis();
+      mockClient.from.mockImplementation((table: string) => table === 'pos_terminals'
+        ? {
+            select: vi.fn().mockReturnThis(),
+            eq: terminalEq,
+            maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'demo-till' }, error: null }),
+          }
+        : shiftReadChain());
+      mockClient.rpc.mockResolvedValue({ data: { result: 'open', shift_id: 'shift-1' }, error: null });
+
+      await repo.openShift({
+        business_id: 'biz-001', terminal_id: 'demo-till', branch_id: 'untrusted-branch', opening_float: 50000,
+      });
+
+      expect(terminalEq).toHaveBeenCalledWith('id', 'demo-till');
+      const [, args] = mockClient.rpc.mock.calls[0];
+      const payload = (args as { p_payload: Record<string, unknown> }).p_payload;
+      expect(payload.terminal_id).toBe('demo-till');
+      expect(payload).not.toHaveProperty('branch_id');
+    });
+
     it('closes via close_pos_shift_command and re-reads the server-signed row', async () => {
       wireTables();
       mockClient.rpc.mockResolvedValue({ data: { result: 'close', report_number: 'Z-2026-7' }, error: null });
