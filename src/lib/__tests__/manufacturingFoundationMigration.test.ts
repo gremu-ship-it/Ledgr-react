@@ -32,7 +32,8 @@ describe('manufacturing foundation migration contract', () => {
     // 7B adds the current POS server-reporting migration. Later migrations add
     // POS register/shift, return, and Phase 6E-3 workflows; Partner Portal 6F-1/6F-2;
     // AI diagnostics and financial summaries; payroll leave/reversal; and public
-    // grant hardening. Keep the migration head list below aligned with both lines.
+    // grant hardening, followed by the employee-audit resource-id type fix.
+    // Keep the migration head list below aligned with both lines.
     expect([
       '20261103000000',
       '20261104000000',
@@ -75,6 +76,7 @@ describe('manufacturing foundation migration contract', () => {
       '20261219000000',
       '20261220000000',
       '20261221000000',
+      '20261222000000',
     ]).toContain(latest);
     expect(versions.filter((v) => v === '20261103000000')).toHaveLength(1);
     expect(versions.filter((v) => v === '20261104000000')).toHaveLength(1);
