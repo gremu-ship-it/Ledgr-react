@@ -79,6 +79,38 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
     return data ?? [];
   }
 
+  /**
+   * Idempotently create/update a DEMO-prefixed product through the inventory
+   * DAL. Restricting the helper to the seeder namespace prevents it becoming
+   * an alternate general product-edit path.
+   */
+  async upsertDemoProduct(
+    product: Omit<InsertDto<'products'>, 'id' | 'created_at'>,
+  ): Promise<Row<'products'>> {
+    const businessId = product.business_id;
+    const sku = product.sku?.trim();
+    if (!businessId || !sku?.startsWith('DEMO-')) {
+      throw new ValidationError('products', 'Demo product SKUs must use the DEMO- prefix.');
+    }
+
+    const { data: existing, error: readError } = await this.client.from('products')
+      .select('*').eq('business_id', businessId).eq('sku', sku).limit(1).maybeSingle();
+    if (readError) throw toRepositoryError('products', readError);
+
+    if (existing) {
+      const { data, error } = await this.client.from('products')
+        .update(product as never).eq('business_id', businessId).eq('id', existing.id)
+        .select('*').single();
+      if (error) throw toRepositoryError('products', error);
+      return data as Row<'products'>;
+    }
+
+    const { data, error } = await this.client.from('products')
+      .insert(product as never).select('*').single();
+    if (error) throw toRepositoryError('products', error);
+    return data as Row<'products'>;
+  }
+
   async findBalance(
     businessId: string,
     productId: string,
