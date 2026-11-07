@@ -47,5 +47,6 @@ export const suites = {
   'manufacturing-provisioning.test.ts': 'manufacturing-provisioning.json',
   'manufacturing-work-orders.test.ts': 'manufacturing-work-orders.json',
   'manufacturing-dashboard.test.ts': 'manufacturing-dashboard.json',
+  'payroll-rls.test.ts': 'payroll-rls.json',
   'trial-balance-report.test.ts': 'trial-balance-report.json',
 };
