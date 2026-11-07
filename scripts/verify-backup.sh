@@ -77,10 +77,22 @@ source_pg_dump \
 
 echo "==> Preparing throwaway restore database"
 # Make sure extensions the schema relies on exist in the clean target.
-psql --no-password -X "$RESTORE_DB_URL" -v ON_ERROR_STOP=0 <<'SQL'
+psql --no-password -X "$RESTORE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS citext;
+
+-- A public-only dump can still contain foreign keys and RLS policies that
+-- reference Supabase Auth. Do not copy auth users (or any Auth PII) into the
+-- disposable restore. These minimal stubs satisfy schema-time dependencies;
+-- this verifier never authenticates as an app user, and the restore connection
+-- is the throwaway Postgres superuser used only for row counts.
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
+CREATE OR REPLACE FUNCTION auth.uid()
+RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+CREATE OR REPLACE FUNCTION auth.role()
+RETURNS text LANGUAGE sql STABLE AS $$ SELECT 'anon'::text $$;
 SQL
 
 echo "==> Restoring dump into throwaway database"
@@ -115,7 +127,7 @@ for table in "${TABLE_ARR[@]}"; do
   # Skip tables the source schema does not define. The comparison only makes
   # sense for tables that exist in the dump, so a missing source table (env
   # drift, renamed/legacy table) is a warning rather than a backup failure.
-  present=$(source_psql -tAc "SELECT to_regclass('public.\"$table\"') IS NOT NULL;" 2>/dev/null || echo "ERR")
+  present=$(source_psql -tAc "SELECT to_regclass('public.\"$table\"') IS NOT NULL;" || echo "ERR")
   if [[ "$present" == "ERR" ]]; then
     echo "::error::Could not check existence of $table in the source database"
     FAIL=1
@@ -126,8 +138,8 @@ for table in "${TABLE_ARR[@]}"; do
     continue
   fi
 
-  src=$(source_psql -tAc "SELECT count(*) FROM public.\"$table\";" 2>/dev/null || echo "ERR")
-  rst=$(psql --no-password -X "$RESTORE_DB_URL" -tAc "SELECT count(*) FROM public.\"$table\";" 2>/dev/null || echo "ERR")
+  src=$(source_psql -tAc "SELECT count(*) FROM public.\"$table\";" || echo "ERR")
+  rst=$(psql --no-password -X "$RESTORE_DB_URL" -tAc "SELECT count(*) FROM public.\"$table\";" || echo "ERR")
 
   if [[ "$src" == "ERR" || "$rst" == "ERR" ]]; then
     echo "::error::Could not read counts for $table (src=$src rst=$rst)"
