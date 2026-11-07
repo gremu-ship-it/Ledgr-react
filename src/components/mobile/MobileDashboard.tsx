@@ -228,7 +228,7 @@ export function MobileDashboard() {
     income: { label: 'Income', icon: DollarSign, tone: 'brand', run: () => setShowIncome(true) },
     expense: { label: 'Expense', icon: Receipt, tone: 'negative', run: () => setShowExpense(true) },
     invoice: { label: 'Invoice', icon: FileText, tone: 'info', run: () => navigate('/income?action=invoice') },
-    payroll: { label: 'Payroll', icon: Users, tone: 'neutral', run: () => navigate('/payroll?action=run') },
+    payroll: { label: 'Payroll', icon: Users, tone: 'neutral', run: () => navigate('/payroll/employees') },
     stock: { label: 'Stock', icon: Package, tone: 'brand', run: () => navigate('/warehouse') },
     contacts: { label: 'Contacts', icon: Users, tone: 'info', run: () => navigate('/contacts') },
   };

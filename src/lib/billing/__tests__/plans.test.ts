@@ -213,7 +213,7 @@ describe('plan catalogue integration parity', () => {
 
   it('requires Enterprise for every current vertical nav item, route, and page', () => {
     const app = source('src/App.tsx');
-    const construction = NAV_SECTIONS.find((section) => section.labelKey === 'navigation.sections.construction')!;
+    const construction = NAV_SECTIONS.find((section) => section.labelKey === 'nav.construction.title')!;
     const manufacturing = NAV_SECTIONS.find((section) => section.labelKey === 'navigation.sections.manufacturing')!;
     const verticalSections = [construction, manufacturing];
 

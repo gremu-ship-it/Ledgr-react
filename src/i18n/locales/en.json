@@ -182,6 +182,20 @@
       "cashForecast": "Cash Forecast",
       "vatReturn": "VAT Return",
       "whtSchedule": "WHT Schedule"
+    },
+    "construction": {
+      "title": "Construction",
+      "workspace": "Workspace",
+      "subcontractors": "Subcontractors",
+      "paymentCertificates": "Payment Certificates",
+      "rfis": "RFIs",
+      "changeOrders": "Change Orders",
+      "itps": "Inspection Test Plans",
+      "ncrs": "Non-Conformance Reports",
+      "hseIncidents": "HSE Incidents",
+      "toolboxTalks": "Toolbox Talks",
+      "schedule": "Project Schedule",
+      "retentionRegister": "Retention Register"
     }
   },
   "pages": {

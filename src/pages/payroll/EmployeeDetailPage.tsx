@@ -323,7 +323,7 @@ export function EmployeeDetailPage() {
   });
 
   const employee = asRow(employeeQuery.data);
-  const componentRows = componentsQuery.data ?? [];
+  const componentRows = Array.isArray(componentsQuery.data) ? componentsQuery.data : [];
   const overridableComponents = componentRows.filter((component) => text(component.calculation_basis) !== 'tax_table');
   const overrides = asRows(employee.components);
   const overridesByComponent = new Map<string, Row[]>();
@@ -490,11 +490,11 @@ export function EmployeeDetailPage() {
               </Button>
             </div>
             {leaveQuery.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{t('payroll.leaveBalanceLoadFailed')}</p>}
-            {leaveQuery.isPending ? <PageSkeleton /> : (leaveQuery.data?.length ?? 0) === 0 ? (
+            {leaveQuery.isPending ? <PageSkeleton /> : (Array.isArray(leaveQuery.data) ? leaveQuery.data.length : 0) === 0 ? (
               <EmptyState title={t('payroll.noLeaveBalances')} description={t('payroll.noLeaveBalancesDescription')} variant="finance" />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {leaveQuery.data?.map((balance) => {
+                {(Array.isArray(leaveQuery.data) ? leaveQuery.data : []).map((balance) => {
                   const leaveType = asRow(balance.leave_type);
                   const entitled = numeric(balance.entitled_days);
                   const used = numeric(balance.used_days);

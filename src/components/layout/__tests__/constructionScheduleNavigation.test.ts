@@ -8,24 +8,25 @@ function visibleConstructionItems(operatingModels: string[], constructionEnabled
     (capability) => capability === 'construction' && constructionEnabled,
     'enterprise',
     operatingModels,
-  ).find((section) => section.labelKey === 'navigation.sections.construction')?.items ?? [];
+  ).find((section) => section.labelKey === 'nav.construction.title')?.items ?? [];
 }
 
 describe('construction schedule navigation', () => {
-  it('shows the enterprise project-based schedule after Toolbox Talks', () => {
+  it('shows the enterprise construction schedule after Toolbox Talks', () => {
     const items = visibleConstructionItems(['PROJECT_BASED']);
-    const toolboxIndex = items.findIndex((item) => item.labelKey === 'navigation.items.toolboxTalks');
-    const scheduleIndex = items.findIndex((item) => item.labelKey === 'scheduling.title');
+    const toolboxIndex = items.findIndex((item) => item.labelKey === 'nav.construction.toolboxTalks');
+    const scheduleIndex = items.findIndex((item) => item.labelKey === 'nav.construction.schedule');
 
     expect(scheduleIndex).toBeGreaterThan(toolboxIndex);
     expect(items[scheduleIndex]).toMatchObject({
       path: '/construction/schedule',
       minPlan: 'enterprise',
-      requiredOperatingModels: ['PROJECT_BASED'],
+      requiredOperatingModels: ['CONSTRUCTION', 'PROJECT_BASED'],
     });
   });
 
-  it('hides scheduling outside PROJECT_BASED construction businesses', () => {
+  it('shows scheduling for CONSTRUCTION and PROJECT_BASED businesses but hides it without capability', () => {
+    expect(visibleConstructionItems(['CONSTRUCTION']).some((item) => item.path === '/construction/schedule')).toBe(true);
     expect(visibleConstructionItems(['RETAIL']).some((item) => item.path === '/construction/schedule')).toBe(false);
     expect(visibleConstructionItems(['PROJECT_BASED'], false).some((item) => item.path === '/construction/schedule')).toBe(false);
   });

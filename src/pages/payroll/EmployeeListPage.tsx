@@ -41,7 +41,7 @@ export function EmployeeListPage() {
     }),
   });
 
-  const rows = employeesQuery.data?.rows ?? [];
+  const rows = Array.isArray(employeesQuery.data?.rows) ? employeesQuery.data.rows : [];
   const totalPages = Math.max(1, Math.ceil((employeesQuery.data?.count ?? 0) / PAGE_SIZE));
   const openEmployee = (id: unknown) => navigate(`/payroll/employees/${encodeURIComponent(String(id))}`);
 
