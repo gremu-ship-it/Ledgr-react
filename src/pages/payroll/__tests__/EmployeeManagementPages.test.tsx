@@ -10,7 +10,10 @@ import { repos } from '@/lib/repositories';
 import { useAppStore } from '@/store/useAppStore';
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
+  useTranslation: () => ({
+    t: (key: string, values?: Record<string, unknown>) => values?.code ? `${key}:${values.code}` : key,
+    i18n: { language: 'en' },
+  }),
 }));
 
 const business = {
@@ -96,11 +99,25 @@ describe('employee management pages', () => {
     await waitFor(() => expect(screen.getByTestId('current-location').textContent).toBe('/payroll/employees/employee-new'));
   });
 
+  it('shows a localized safe reference code when employee creation fails', async () => {
+    const failure = new Error('database failure') as Error & { cause?: unknown };
+    failure.cause = { code: '22023' };
+    vi.spyOn(repos.payrollFullCycle, 'createEmployee').mockRejectedValue(failure);
+    renderPage(<EmployeeNewPage />, '/payroll/employees/new');
+
+    fireEvent.change(screen.getByLabelText(/payroll.firstName/), { target: { value: 'Grace' } });
+    fireEvent.change(screen.getByLabelText(/payroll.lastName/), { target: { value: 'Moyo' } });
+    fireEvent.change(screen.getByLabelText(/payroll.grossSalary/), { target: { value: '250000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'payroll.saveEmployee' }));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('payroll.employeeSaveFailedWithCode:22023');
+  });
+
   it('shows employee overview, pay-component overrides, leave balances, and accrual action', async () => {
     const getEmployee = vi.spyOn(repos.payrollFullCycle, 'getEmployee').mockResolvedValue({
       id: 'employee-1', first_name: 'Ada', last_name: 'Lovelace', employee_number: 'EMP-001', status: 'active',
       department: 'Engineering', job_title: 'Analyst', hire_date: '2024-03-01', gross_salary: 300000,
-      contracts: [], components: [],
+      pay_frequency: 'bi_weekly', contracts: [], components: [],
     });
     vi.spyOn(repos.payrollFullCycle, 'getPayComponents').mockResolvedValue([
       { id: 'component-1', name: 'Housing allowance', component_type: 'earning', calculation_basis: 'fixed', default_amount: 25000, default_rate: 0 },
@@ -112,6 +129,7 @@ describe('employee management pages', () => {
 
     renderDetailPage();
     expect(await screen.findByRole('heading', { name: 'Ada Lovelace' })).toBeTruthy();
+    expect(screen.getByText('payroll.frequencyBiweekly')).toBeTruthy();
     expect(getEmployee).toHaveBeenCalledWith('business-1', 'employee-1');
 
     fireEvent.click(screen.getByRole('tab', { name: 'payroll.payComponentsTab' }));
