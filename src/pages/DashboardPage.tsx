@@ -104,7 +104,7 @@ function QuickActions() {
     { label: t('dashboard.newInvoice'), icon: Plus, onClick: () => navigate('/income?action=invoice'), variant: 'primary' as const },
     { label: t('dashboard.recordIncome'), icon: DollarSign, onClick: () => navigate('/income?action=record'), variant: 'secondary' as const },
     { label: t('dashboard.recordExpense'), icon: Receipt, onClick: () => navigate('/expenses?action=record'), variant: 'secondary' as const },
-    { label: t('dashboard.runPayroll'), icon: Users, onClick: () => navigate('/payroll?action=run'), variant: 'secondary' as const },
+    { label: t('payroll.title'), icon: Users, onClick: () => navigate('/payroll/employees'), variant: 'secondary' as const },
   ];
 
   return (

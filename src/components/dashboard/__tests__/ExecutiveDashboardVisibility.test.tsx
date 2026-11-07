@@ -67,6 +67,8 @@ describe('executive dashboard visibility', () => {
     const strip = screen.getByTestId('executive-health-strip');
     expect(within(strip).getByText('Live Summary')).toBeTruthy();
     expect(within(strip).getAllByRole('link')).toHaveLength(4);
+    expect(within(strip).getByRole('link', { name: 'Open Next payroll commitment' }).getAttribute('href'))
+      .toBe('/payroll/employees');
     expect(within(strip).getAllByText(/0\.00/)).toHaveLength(4);
     expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
     expect(screen.getByText('Select a business to check for actionable exceptions.')).toBeTruthy();

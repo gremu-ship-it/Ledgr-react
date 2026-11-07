@@ -44,8 +44,8 @@ export function PayRunListPage() {
     queryFn: () => repos.payroll.findByBusiness(businessId),
   });
 
-  const rows = runsQuery.data?.rows ?? [];
-  const historyRows = historyQuery.data ?? [];
+  const rows = Array.isArray(runsQuery.data?.rows) ? runsQuery.data.rows : [];
+  const historyRows = Array.isArray(historyQuery.data) ? historyQuery.data : [];
   const totalPages = Math.max(1, Math.ceil((runsQuery.data?.count ?? 0) / PAGE_SIZE));
   const summaryGross = rows.reduce((sum, row) => sum + numeric(row.total_gross), 0);
   const summaryNet = rows.reduce((sum, row) => sum + numeric(row.total_net), 0);

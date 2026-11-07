@@ -171,7 +171,7 @@ export function ExecutiveHealthStrip() {
             detail={nextPayroll
               ? t('dashboard.executiveHealth.payDate', { date: dateLabel(nextPayroll.pay_date, locale) })
               : t('dashboard.executiveHealth.noUpcomingPayroll')}
-            href="/payroll"
+            href="/payroll/employees"
             icon={Users}
           />
         </div>

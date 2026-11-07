@@ -119,7 +119,7 @@ export function LeaveRequestsPage() {
     onError: (error) => setFeedback({ kind: 'error', key: leaveErrorKey(error) }),
   });
 
-  const rows = requestsQuery.data?.rows ?? [];
+  const rows = Array.isArray(requestsQuery.data?.rows) ? requestsQuery.data.rows : [];
   const totalPages = Math.max(1, Math.ceil((requestsQuery.data?.count ?? 0) / PAGE_SIZE));
   const businessDays = countBusinessDays(startDate, endDate);
 
@@ -267,18 +267,18 @@ export function LeaveRequestsPage() {
                 <span className="text-sm font-medium text-gray-700">{t('payroll.selectEmployee')}</span>
                 <select required value={employeeId} onChange={(event) => setEmployeeId(event.target.value)} disabled={employeesQuery.isPending} className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
                   <option value="">{employeesQuery.isPending ? t('payroll.loadingEmployees') : t('payroll.selectEmployee')}</option>
-                  {(employeesQuery.data?.rows ?? []).map((employee) => (
+                  {(Array.isArray(employeesQuery.data?.rows) ? employeesQuery.data.rows : []).map((employee) => (
                     <option key={text(employee.id)} value={text(employee.id)}>{employeeDisplayName(employee) || text(employee.employee_number, t('payroll.employee'))}</option>
                   ))}
                 </select>
-                {!employeesQuery.isPending && (employeesQuery.data?.rows.length ?? 0) === 0 && <span className="block text-xs text-gray-500">{t('payroll.noActiveEmployees')}</span>}
+                {!employeesQuery.isPending && (Array.isArray(employeesQuery.data?.rows) ? employeesQuery.data.rows.length : 0) === 0 && <span className="block text-xs text-gray-500">{t('payroll.noActiveEmployees')}</span>}
               </label>
 
               <label className="block space-y-1.5">
                 <span className="text-sm font-medium text-gray-700">{t('payroll.selectLeaveType')}</span>
                 <select required value={leaveTypeId} onChange={(event) => setLeaveTypeId(event.target.value)} disabled={leaveTypesQuery.isPending} className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
                   <option value="">{leaveTypesQuery.isPending ? t('payroll.loadingLeaveTypes') : t('payroll.selectLeaveType')}</option>
-                  {(leaveTypesQuery.data ?? []).map((leaveType) => (
+                  {(Array.isArray(leaveTypesQuery.data) ? leaveTypesQuery.data : []).map((leaveType) => (
                     <option key={text(leaveType.id)} value={text(leaveType.id)}>{text(leaveType.name, text(leaveType.code))}</option>
                   ))}
                 </select>

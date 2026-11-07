@@ -25,6 +25,10 @@ function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function safeArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 /**
  * TPR pension: 10% employer / 5% employee, applied to gross monthly salary.
  * Rates come from tax_configurations (tax_code='tpr_pension'), not hard-coded,
@@ -92,18 +96,18 @@ function AddEmployeeModal({ businessId, onClose, onSuccess }: { businessId: stri
 
   const { data: postingAccounts = [] } = useQuery({
     queryKey: ['posting_accounts', businessId],
-    queryFn: () => repos.account.findPostingAccounts(businessId),
+    queryFn: async () => safeArray(await repos.account.findPostingAccounts(businessId)),
   });
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
-    queryFn: () => repos.branch.findActive(businessId),
+    queryFn: async () => safeArray(await repos.branch.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', businessId],
-    queryFn: () => repos.department.findActive(businessId),
+    queryFn: async () => safeArray(await repos.department.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
@@ -334,13 +338,13 @@ function RunPayrollModal({ businessId, onClose, onSuccess }: { businessId: strin
 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees', businessId],
-    queryFn: () => repos.payroll.findEmployees(businessId),
+    queryFn: async () => safeArray(await repos.payroll.findEmployees(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: payeBands = [] } = useQuery({
     queryKey: ['paye_bands', businessId],
-    queryFn: () => repos.payroll.findPayeBands(businessId, currentFiscalYear()),
+    queryFn: async () => safeArray(await repos.payroll.findPayeBands(businessId, currentFiscalYear())),
     enabled: Boolean(businessId),
   });
 
@@ -570,7 +574,7 @@ function ApprovePayrollModal({
 
   const { data: bankAccounts = [] } = useQuery({
     queryKey: ['payroll_payment_accounts', businessId],
-    queryFn: () => repos.account.findPayrollPaymentAccounts(businessId),
+    queryFn: async () => safeArray(await repos.account.findPayrollPaymentAccounts(businessId)),
     enabled: Boolean(businessId),
   });
 
@@ -582,7 +586,7 @@ function ApprovePayrollModal({
 
   const { data: postingAccounts = [] } = useQuery({
     queryKey: ['posting_accounts', businessId],
-    queryFn: () => repos.account.findPostingAccounts(businessId),
+    queryFn: async () => safeArray(await repos.account.findPostingAccounts(businessId)),
     enabled: Boolean(businessId),
   });
 
@@ -725,7 +729,7 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
 
   const { data: runs = [], isLoading, isError } = useQuery({
     queryKey: ['payroll_runs', businessId],
-    queryFn: () => repos.payroll.findByBusiness(businessId),
+    queryFn: async () => safeArray(await repos.payroll.findByBusiness(businessId)),
     enabled: Boolean(businessId),
   });
 
@@ -737,19 +741,19 @@ function PayrollRunsTab({ businessId, onRunPayroll, canApprove }: { businessId: 
 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees', businessId],
-    queryFn: () => repos.payroll.findEmployees(businessId),
+    queryFn: async () => safeArray(await repos.payroll.findEmployees(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
-    queryFn: () => repos.branch.findActive(businessId),
+    queryFn: async () => safeArray(await repos.branch.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', businessId],
-    queryFn: () => repos.department.findActive(businessId),
+    queryFn: async () => safeArray(await repos.department.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
@@ -1363,25 +1367,25 @@ function EmployeesTab({
 
   const { data: employees = [], isLoading, isError } = useQuery({
     queryKey: ['employees', businessId],
-    queryFn: () => repos.payroll.findEmployees(businessId),
+    queryFn: async () => safeArray(await repos.payroll.findEmployees(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
-    queryFn: () => repos.branch.findActive(businessId),
+    queryFn: async () => safeArray(await repos.branch.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', businessId],
-    queryFn: () => repos.department.findActive(businessId),
+    queryFn: async () => safeArray(await repos.department.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: payeBands = [] } = useQuery({
     queryKey: ['paye_bands', businessId, currentFiscalYear()],
-    queryFn: () => repos.payroll.findPayeBands(businessId, currentFiscalYear()),
+    queryFn: async () => safeArray(await repos.payroll.findPayeBands(businessId, currentFiscalYear())),
     enabled: Boolean(businessId),
   });
 
@@ -1660,31 +1664,31 @@ function CostCentersTab({ businessId }: { businessId: string }) {
 
   const { data: runs = [], isLoading: runsLoading } = useQuery({
     queryKey: ['payroll_runs', businessId],
-    queryFn: () => repos.payroll.findByBusiness(businessId),
+    queryFn: async () => safeArray(await repos.payroll.findByBusiness(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: employees = [], isLoading: empLoading } = useQuery({
     queryKey: ['employees', businessId],
-    queryFn: () => repos.payroll.findEmployees(businessId),
+    queryFn: async () => safeArray(await repos.payroll.findEmployees(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: branches = [] } = useQuery({
     queryKey: ['branches', businessId],
-    queryFn: () => repos.branch.findActive(businessId),
+    queryFn: async () => safeArray(await repos.branch.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments', businessId],
-    queryFn: () => repos.department.findActive(businessId),
+    queryFn: async () => safeArray(await repos.department.findActive(businessId)),
     enabled: Boolean(businessId),
   });
 
   const { data: payeBands = [] } = useQuery({
     queryKey: ['paye_bands', businessId, currentFiscalYear()],
-    queryFn: () => repos.payroll.findPayeBands(businessId, currentFiscalYear()),
+    queryFn: async () => safeArray(await repos.payroll.findPayeBands(businessId, currentFiscalYear())),
     enabled: Boolean(businessId),
   });
 
