@@ -769,6 +769,10 @@ export async function seedDemoCompanyData(businessId: string): Promise<void> {
   const actorId = required(auth.user?.id, 'Sign in to seed the Demo company test dataset.');
   const business = await repos.business.findById(businessId);
   if (business.id !== TARGET_DEMO_BUSINESS_ID) throw new Error('Seeding is strictly prohibited on non-demo accounts.');
+  const membership = await repos.business.findWithRole(businessId, actorId);
+  if (!membership || !['owner', 'admin'].includes(membership.role)) {
+    throw new Error('DEMO_SEEDER_ADMIN_REQUIRED');
+  }
   const existingModels = (business as Row<'businesses'> & { operating_models?: string[] | null }).operating_models ?? [];
   const models = [...new Set([...existingModels, ...REQUIRED_OPERATING_MODELS])];
   if (models.some((model) => !existingModels.includes(model))) {
