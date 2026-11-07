@@ -185,6 +185,20 @@ export const PartnerRepository = {
     }));
   },
 
+  /**
+   * Read the peer-safe business identity projection. The exclusion is required
+   * so callers do not render the signed-in user's own business as a peer.
+   */
+  async getPeerBusinessProjection(excludeBusinessId: string) {
+    const { data, error } = await supabase
+      .from('v_partner_peer_businesses')
+      .select('id, name, trading_name, logo_url, brand_color')
+      .neq('id', excludeBusinessId)
+      .order('name');
+    if (error) throw new Error(error.message);
+    return data ?? [];
+  },
+
   async getClientCount(partnerId: string): Promise<number> {
     const { count } = await supabase
       .from('partner_clients')

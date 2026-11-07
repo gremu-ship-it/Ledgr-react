@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
@@ -12,6 +13,8 @@ import {
 } from '@/offline/registerServiceWorker';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
+import { queryClient } from '@/lib/queryClient';
+import { persistOptions, setActivePersistedCacheIdentity } from '@/lib/queryPersister';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useDefaultRoute } from './hooks/useDefaultRoute';
@@ -378,6 +381,22 @@ export function SmartRedirect() {
 function App() {
   const { t } = useTranslation();
   useAuthListener();
+  const isAuthLoading = useAppStore((state) => state.isAuthLoading);
+  const isBusinessesLoading = useAppStore((state) => state.isBusinessesLoading);
+  const userId = useAppStore((state) => state.currentUser?.id ?? null);
+  const businessId = useAppStore((state) => state.currentBusiness?.business.id ?? null);
+  const [cacheIdentityReady, setCacheIdentityReady] = useState(false);
+
+  useEffect(() => {
+    if (isAuthLoading || isBusinessesLoading) {
+      setCacheIdentityReady(false);
+      return;
+    }
+    // The persister provider is not mounted until auth and tenant resolution
+    // finish. A null identity (signed out or no active business) restores empty.
+    setActivePersistedCacheIdentity(userId, businessId);
+    setCacheIdentityReady(true);
+  }, [isAuthLoading, isBusinessesLoading, userId, businessId]);
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -393,9 +412,13 @@ function App() {
   if (!isSupabaseConfigured && !onPublicDemo && !isDemoMode()) {
     return <ConfigError />;
   }
+  if (!cacheIdentityReady) {
+    return <LoadingSpinner fullScreen label={t('common.loading')} />;
+  }
 
   return (
-    <ErrorBoundary name="App">
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <ErrorBoundary name="App">
       <UpdateAvailableBanner />
       <PartnerProvider>
         <BrowserRouter>
@@ -1082,7 +1105,8 @@ function App() {
           <CookieConsentBanner />
         </BrowserRouter>
       </PartnerProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </PersistQueryClientProvider>
   );
 }
 

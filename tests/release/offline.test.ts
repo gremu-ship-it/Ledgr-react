@@ -136,7 +136,7 @@ test(meta('OFFLINE.RETRY','Failed synthetic sale retries with same key and exact
 
 const wipeMeta=(id:string,expectation:string)=>({id,expected:expectation,source:'src/lib/cacheWipe.ts + public/sw-events.js + main.tsx/useAuthListener.ts hooks',remediation:'R09.1',layer:'fake IndexedDB + in-memory CacheStorage stub + jsdom web storage; verified-emptiness loop, no arbitrary timeout',productionVerificationRequired:false});
 const countRQEntries=async()=>{const d=new Dexie(RQ_PERSIST_DB_NAME);await d.open();const n=d.tables.length===0?0:await d.table('cache').count();d.close();return n;};
-const seedRQEntry=async()=>{const persister=createIDBPersister();await persister.persistClient({timestamp:Date.now(),buster:'r13-test',clientState:{mutations:[],queries:[{queryKey:['invoices','r13-business'],queryHash:'["invoices","r13-business"]',state:{status:'success',data:[{id:'r13-invoice',total:1500}]}}]}} as never);};
+const seedRQEntry=async()=>{const persister=createIDBPersister({getIdentity:()=>({userId:'r13-cache-user',businessId:'r13-business'}),getSessionUserId:async()=>'r13-cache-user'});await persister.persistClient({timestamp:Date.now(),buster:'r13-test',clientState:{mutations:[],queries:[{queryKey:['invoices','r13-business'],queryHash:'["invoices","r13-business"]',state:{status:'success',data:[{id:'r13-invoice',total:1500}]}}]}} as never);};
 
 test(wipeMeta('R09.CACHE.WIPE-VERIFIED-EMPTY','Logout wipe removes persisted RQ DB contents and Workbox API cache; verified empty by read-back, not assumed'),async()=>{
   const stub=new MemoryCacheStorage().install(globalThis as unknown as Record<string,unknown>);
