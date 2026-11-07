@@ -56,7 +56,7 @@ export function TaxConfigPage() {
     queryFn: () => repos.payrollFullCycle.getTaxBands(businessId, fiscalYear),
   });
 
-  const queriedBands = useMemo(() => mapTaxBands(bandsQuery.data ?? [], currency), [bandsQuery.data, currency]);
+  const queriedBands = useMemo(() => mapTaxBands(Array.isArray(bandsQuery.data) ? bandsQuery.data : [], currency), [bandsQuery.data, currency]);
   const bands = editedBands ?? queriedBands;
 
   const saveMutation = useMutation({

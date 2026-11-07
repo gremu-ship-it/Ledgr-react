@@ -2,6 +2,21 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Row, InsertDto } from '../types/database';
 import { BaseRepository } from './BaseRepository';
 import { toRepositoryError } from '../errors/RepositoryError';
+import { fetchAllRows } from '@/lib/paginateQuery';
+
+export type OutstandingExpense = Pick<
+  Row<'expenses'>,
+  | 'id'
+  | 'expense_number'
+  | 'status'
+  | 'due_date'
+  | 'expense_date'
+  | 'total_amount'
+  | 'amount_paid'
+  | 'functional_amount'
+  | 'functional_currency'
+  | 'exchange_rate'
+>;
 
 export interface ExpenseWithLines {
   expense: Row<'expenses'>;
@@ -119,6 +134,27 @@ export class ExpenseRepository extends BaseRepository<'expenses'> {
       .limit(cap);
     if (error) throw toRepositoryError('expenses', error);
     return (data ?? []) as unknown as Row<'expenses'>[];
+  }
+
+  /**
+   * Fetch unpaid, non-void expenses for the dashboard AP summary. Use a
+   * column-trimmed projection and page past PostgREST's default row cap so the
+   * total is not silently truncated for larger businesses.
+   */
+  async findOutstanding(businessId: string): Promise<OutstandingExpense[]> {
+    const query = this.client
+      .from('expenses')
+      .select('id, expense_number, status, due_date, expense_date, total_amount, amount_paid, functional_amount, functional_currency, exchange_rate')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .not('status', 'in', '(draft,void,rejected,cancelled,paid)');
+
+    try {
+      const rows = await fetchAllRows<OutstandingExpense>(query);
+      return rows.filter((row) => Number(row.total_amount) > Number(row.amount_paid));
+    } catch (error) {
+      throw toRepositoryError('expenses', error);
+    }
   }
 
   /**

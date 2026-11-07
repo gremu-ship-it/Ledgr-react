@@ -1,42 +1,17 @@
 import Dexie, { type EntityTable } from 'dexie';
 import type { PersistedClient, Persister } from '@tanstack/react-query-persist-client';
 import { isDemoMode } from '@/lib/demo/mode';
+import { supabase } from '@/lib/supabase';
 
 /**
- * IndexedDB persister for the React Query cache.
+ * IndexedDB persister for the React Query cache. Every saved client is bound to
+ * one authenticated principal and one business tenant; a cache is restored only
+ * after both identities have been resolved and verified against Supabase Auth.
  *
- * SECURITY & PRIVACY NOTES — read before adding new key prefixes here:
- *
- *  1. TENANT ISOLATION: the cache key includes the businessId for every
- *     business-scoped query, so cached rows for business A cannot be read
- *     after the user switches to business B. The persister does NOT try
- *     to merge or share entries across businesses.
- *
- *  2. NO SECRETS: never persist keys that contain authentication material
- *     (the Supabase session is stored separately by supabase-js in its own
- *     localStorage bucket with its own security model). If a secret-bearing
- *     query is ever added it must be excluded via shouldDehydrateMutation /
- *     shouldDehydrateQuery in the persistOptions below.
- *
- *  3. BOUNDED SIZE: maxEntries caps the IndexedDB table so a long-running
- *     business cannot fill the device's storage with infinite pages. The
- *     dehydrated state is also trimmed — inactive queries beyond gcTime are
- *     removed before serialization.
- *
- *  4. BOUNDED AGE: maxAge 24h ensures stale data is thrown away on reload
- *     even if the user hasn't opened the app in days.
- *
- *  5. CLIENT-SIDE ONLY: this storage never leaves the browser. It is not
- *     synced to the server, not included in error reports, and not read by
- *     any third-party script.
+ * The database is deliberately separate from `ledgr-offline`: accepted offline
+ * financial evidence is not cache and must never be removed by this persister.
  */
 
-// Key prefixes that are safe to persist.
-// - Lists, reference data, financial statements, dashboard widgets: pure
-//   business data that was already returned from RLS-scoped queries.
-// - Excluded: anything auth/session/user-related, the offline sync queue
-//   (which has its own Dexie schema with dependency tracking), and live
-//   mutating state.
 const PERSISTED_KEY_PREFIXES = [
   'expenses',
   'invoices',
@@ -63,16 +38,22 @@ const PERSISTED_KEY_PREFIXES = [
   'usage',
   'brand',
   'business',
-  'invoice', // detail views (lines, payments) keyed by invoice id
-  'contact', // contact detail
+  'invoice',
+  'contact',
   'recent_totals',
 ] as const;
 
+export interface PersistedCacheIdentity {
+  userId: string;
+  businessId: string;
+}
+
 type PersistedEntry = {
   id: string;
-  client: string; // JSON-stringified PersistedClient
+  client: string;
   updatedAt: number;
-  businessId?: string;
+  userId: string;
+  businessId: string;
 };
 
 class RQCacheDB extends Dexie {
@@ -81,93 +62,159 @@ class RQCacheDB extends Dexie {
   constructor() {
     super('ledgr-rq-cache');
     this.version(1).stores({
-      // Index by businessId so we can evict a single tenant's entries on
-      // logout without wiping other cached businesses.
       cache: 'id, updatedAt, businessId',
+    });
+    this.version(2).stores({
+      cache: 'id, updatedAt, businessId, userId',
     });
   }
 }
 
 const db = new RQCacheDB();
 const MAX_ENTRIES = 300;
+let activeIdentity: PersistedCacheIdentity | null = null;
 
-/**
- * Best-effort size cap: if the cache table has grown past MAX_ENTRIES,
- * delete the oldest entries. Swallowed errors so corruption or a full
- * disk cannot break app boot.
- */
+/** The persisted database key is an explicit principal + tenant namespace. */
+export function getPersistedCacheKey(userId: string, businessId: string): string {
+  return `rq-state-${userId}-${businessId}`;
+}
+
+/** Set only after auth and the active business have been resolved. */
+export function setActivePersistedCacheIdentity(
+  userId: string | null | undefined,
+  businessId: string | null | undefined,
+): void {
+  activeIdentity = userId && businessId ? { userId, businessId } : null;
+}
+
+async function currentSessionUserId(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) return null;
+  return data.session?.user.id ?? null;
+}
+
 async function trimCache(): Promise<void> {
   try {
     const count = await db.cache.count();
     if (count <= MAX_ENTRIES) return;
-    const oldest = await db.cache
-      .orderBy('updatedAt')
-      .limit(count - MAX_ENTRIES)
-      .primaryKeys();
+    const oldest = await db.cache.orderBy('updatedAt').limit(count - MAX_ENTRIES).primaryKeys();
     await db.cache.bulkDelete(oldest);
   } catch {
-    // Storage may be disabled (private browsing) or full. Not fatal —
-    // persist will fail softly and the app boots with an empty cache.
+    // Storage may be disabled or full. Persistence is best-effort only.
   }
 }
 
-/**
- * Extract the leading key of a React Query queryKey so we can check it
- * against the allow-list. Query keys are arrays like ['invoices', 'list',
- * businessId, ...]; we look at index 0 which is the namespace.
- */
-function keyNamespace(queryKey: unknown): string | null {
-  if (!Array.isArray(queryKey) || queryKey.length === 0) return null;
-  const first = queryKey[0];
-  return typeof first === 'string' ? first : null;
+async function discardOtherNamespaces(keepId?: string): Promise<void> {
+  const rows = await db.cache.toArray();
+  const staleIds = rows
+    .filter((row) => row.id === 'rq-state' || row.id.startsWith('rq-state-'))
+    .filter((row) => row.id !== keepId)
+    .map((row) => row.id);
+  if (staleIds.length) await db.cache.bulkDelete(staleIds);
 }
 
-function isPersistableKey(queryKey: unknown): boolean {
-  const ns = keyNamespace(queryKey);
-  if (!ns) return false;
-  return PERSISTED_KEY_PREFIXES.includes(ns as (typeof PERSISTED_KEY_PREFIXES)[number]);
+function sameIdentity(
+  left: PersistedCacheIdentity | null,
+  right: PersistedCacheIdentity | null,
+): boolean {
+  return Boolean(
+    left && right && left.userId === right.userId && left.businessId === right.businessId,
+  );
+}
+
+export interface IDBPersisterOptions {
+  /** Injectable identity/session readers keep persistence verifiable in tests. */
+  getIdentity?: () => PersistedCacheIdentity | null;
+  getSessionUserId?: () => Promise<string | null>;
 }
 
 /** Create the Dexie-backed persister for react-query. */
-export function createIDBPersister(): Persister {
+export function createIDBPersister(options: IDBPersisterOptions = {}): Persister {
+  const getIdentity = options.getIdentity ?? (() => activeIdentity);
+  const getSessionUserId = options.getSessionUserId ?? currentSessionUserId;
+
   return {
     persistClient: async (client: PersistedClient): Promise<void> => {
-      // Demo data must never reach IndexedDB: the persisted blob is restored
-      // on the next app boot, and a visitor who later signs in for real would
-      // then be handed demo rows before their own data loads.
       if (isDemoMode()) return;
+      const identity = getIdentity();
+      if (!identity) return;
+
       try {
+        const sessionUserId = await getSessionUserId();
+        if (sessionUserId !== identity.userId || !sameIdentity(identity, getIdentity())) return;
+
         const serialized = JSON.stringify(client);
-        // Single-row store; we use a fixed id ('rq-state') because React
-        // Query's persist plugin dehydrates/hydrates the entire cache as
-        // one blob. The businessId index is retained for future multi-
-        // tenant eviction but the current blob is a single document.
         await db.cache.put({
-          id: 'rq-state',
+          id: getPersistedCacheKey(identity.userId, identity.businessId),
           client: serialized,
           updatedAt: Date.now(),
+          userId: identity.userId,
+          businessId: identity.businessId,
         });
         await trimCache();
       } catch {
-        // Storage failures must be silent — falling back to a network
-        // fetch is always a correct (slower) behaviour.
+        // Storage failures must be silent — a network fetch is always correct.
       }
     },
+
     restoreClient: async (): Promise<PersistedClient | undefined> => {
-      // Symmetric with persistClient: a demo session starts from an empty
-      // cache and reads everything from the seeded in-memory tables.
-      if (isDemoMode()) return undefined;
       try {
-        const row = await db.cache.get('rq-state');
-        if (!row) return undefined;
-        return JSON.parse(row.client) as PersistedClient;
+        const identity = getIdentity();
+        if (isDemoMode() || !identity) {
+          await discardOtherNamespaces();
+          return undefined;
+        }
+
+        const sessionUserId = await getSessionUserId();
+        if (
+          sessionUserId !== identity.userId ||
+          !sameIdentity(identity, getIdentity())
+        ) {
+          await discardOtherNamespaces();
+          return undefined;
+        }
+
+        const key = getPersistedCacheKey(identity.userId, identity.businessId);
+        const row = await db.cache.get(key);
+        // Delete every other principal/tenant namespace before returning any
+        // bytes, including the legacy fixed `rq-state` row from older builds.
+        await discardOtherNamespaces(key);
+        if (
+          !row ||
+          row.userId !== identity.userId ||
+          row.businessId !== identity.businessId ||
+          !sameIdentity(identity, getIdentity())
+        ) {
+          if (row) await db.cache.delete(key);
+          return undefined;
+        }
+
+        try {
+          return JSON.parse(row.client) as PersistedClient;
+        } catch {
+          await db.cache.delete(key);
+          return undefined;
+        }
       } catch {
+        // If auth or storage cannot be verified, fail closed and discard RQ
+        // cache entries. The offline financial queue is in another database.
+        try {
+          await discardOtherNamespaces();
+        } catch {
+          // ignore storage failures
+        }
         return undefined;
       }
     },
+
     removeClient: async (): Promise<void> => {
       try {
-        await db.cache.delete('rq-state');
+        const identity = getIdentity();
+        if (identity) {
+          await db.cache.delete(getPersistedCacheKey(identity.userId, identity.businessId));
+        } else {
+          await discardOtherNamespaces();
+        }
       } catch {
         // ignore
       }
@@ -175,42 +222,43 @@ export function createIDBPersister(): Persister {
   };
 }
 
-/**
- * Filter for dehydrated queries: only persist queries whose key namespace
- * is in the allow-list. Mutations are never persisted (they hold in-flight
- * promise state that cannot survive a page reload safely).
- */
 export const persistOptions = {
   persister: createIDBPersister(),
-  maxAge: 24 * 60 * 60 * 1000, // 24 hours
-  buster: 'v1', // bump to force a full cache invalidation after schema changes
+  maxAge: 24 * 60 * 60 * 1000,
+  buster: 'v2-principal-business',
   dehydrateOptions: {
     shouldDehydrateQuery: (query: { queryKey: unknown; state?: { status?: string; fetchStatus?: string } }) => {
-      // Never persist loading/error queries (they'd just cause an immediate
-      // retry storm on reload) or mutations.
-      if (!isPersistableKey(query.queryKey)) return false;
+      const ns = Array.isArray(query.queryKey) ? query.queryKey[0] : null;
+      if (typeof ns !== 'string' || !PERSISTED_KEY_PREFIXES.includes(ns as (typeof PERSISTED_KEY_PREFIXES)[number])) {
+        return false;
+      }
       const status = query.state?.status;
-      if (status === 'loading' || status === 'error') return false;
-      return true;
+      return status !== 'loading' && status !== 'error';
     },
     shouldDehydrateMutation: (): boolean => false,
   },
 };
 
-/**
- * Wipe the persisted RQ cache. Called on explicit logout so the next user
- * cannot read cached rows belonging to the previous account (even though
- * Supabase RLS would block server fetches, defense-in-depth says we don't
- * leave other people's financial data on a shared device).
- */
+/** Clear persisted React Query state only; offline evidence lives elsewhere. */
 export async function clearPersistedCache(businessId?: string): Promise<void> {
   try {
     if (businessId) {
-      // Selective wipe (per-business on switch): currently we keep one
-      // blob so this clears everything. Future: split by businessId key.
       await db.cache.where('businessId').equals(businessId).delete();
+    } else {
+      await db.cache.clear();
     }
-    await db.cache.clear();
+  } catch {
+    // ignore
+  }
+}
+
+/** Remove the exact outgoing user/business namespace on a tenant switch. */
+export async function clearPersistedCacheForIdentity(
+  userId: string,
+  businessId: string,
+): Promise<void> {
+  try {
+    await db.cache.delete(getPersistedCacheKey(userId, businessId));
   } catch {
     // ignore
   }

@@ -177,12 +177,32 @@ export const PartnerRepository = {
       business_name: r.business_name ?? '',
       plan_tier: r.plan_tier ?? null,
       is_active: r.is_active ?? null,
+      status: r.status === 'onboarding' || r.status === 'suspended' || r.status === 'archived' ? r.status : 'active',
+      notes: r.notes ?? null,
       onboarded_at: r.onboarded_at ?? '',
       journal_entry_count: Number(r.journal_entry_count ?? 0),
       invoice_count: Number(r.invoice_count ?? 0),
+      pay_run_count: Number(r.pay_run_count ?? 0),
+      total_activity_count: Number(r.total_activity_count ?? 0),
       user_count: Number(r.user_count ?? 0),
       last_activity_at: r.last_activity_at ?? null,
+      plan_expires_at: r.plan_expires_at ?? null,
+      monthly_transaction_count: Number(r.monthly_transaction_count ?? 0),
     }));
+  },
+
+  /**
+   * Read the peer-safe business identity projection. The exclusion is required
+   * so callers do not render the signed-in user's own business as a peer.
+   */
+  async getPeerBusinessProjection(excludeBusinessId: string) {
+    const { data, error } = await supabase
+      .from('v_partner_peer_businesses')
+      .select('id, name, trading_name, logo_url, brand_color')
+      .neq('id', excludeBusinessId)
+      .order('name');
+    if (error) throw new Error(error.message);
+    return data ?? [];
   },
 
   async getClientCount(partnerId: string): Promise<number> {

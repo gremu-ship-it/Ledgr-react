@@ -18,7 +18,6 @@ import {
   Landmark,
   BookUser,
   Sparkles,
-  Settings,
   Lock,
   LogOut,
   Warehouse,
@@ -89,7 +88,6 @@ const ALL_MORE_MENU_ITEMS: {
   { labelKey: 'navigation.items.warehouse', path: '/warehouse', icon: Warehouse, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.items.transfers', path: '/transfers', icon: ArrowLeftRight, tone: 'brand', partnerFeature: 'inventory' },
   { labelKey: 'navigation.sections.ai', path: '/ai', icon: Sparkles, tone: 'brand', partnerFeature: 'ai_advisor' },
-  { labelKey: 'navigation.items.settings', path: '/settings', icon: Settings, tone: 'neutral' },
   { labelKey: 'navigation.items.exchangeRates', path: '/settings/exchange-rates', icon: Coins, tone: 'brand' },
   { labelKey: 'navigation.items.tools', path: '/tools', icon: BarChart2, tone: 'brand' },
 ];
