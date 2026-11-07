@@ -1,230 +1,166 @@
-import { useState, useMemo } from 'react';
+import { useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  TrendingUp,
+  AlertCircle,
   DollarSign,
-  ShoppingBag,
-  Users,
+  LoaderCircle,
   RotateCcw,
+  ShoppingBag,
+  TrendingUp,
 } from 'lucide-react';
-import type { PosSale, PosShift } from '@/types/pos';
 import { formatMwkDetailed } from '@/lib/formatters';
+import { usePosOwnerAnalytics, type PosAnalyticsRange } from '@/hooks/usePosOwnerAnalytics';
 
 interface PosOwnerAnalyticsProps {
-  sales: PosSale[];
-  shifts?: PosShift[];
+  businessId?: string;
   currentBranchId?: string;
   branches?: Array<{ id: string; name: string }>;
 }
 
-export function PosOwnerAnalytics({
-  sales = [],
-  currentBranchId,
-  branches = [],
-}: PosOwnerAnalyticsProps) {
-  const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('today');
+function LoadingCards({ label }: { label: string }) {
+  return (
+    <div aria-label={label} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {Array.from({ length: 4 }, (_, index) => (
+        <div key={index} className="h-32 animate-pulse rounded-3xl border border-gray-200 bg-white p-5">
+          <div className="mb-5 h-3 w-2/3 rounded bg-gray-100" />
+          <div className="h-7 w-4/5 rounded bg-gray-100" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function PosOwnerAnalytics({ businessId, currentBranchId, branches = [] }: PosOwnerAnalyticsProps) {
+  const { t } = useTranslation();
+  const [dateRange, setDateRange] = useState<PosAnalyticsRange>('today');
   const [selectedBranch, setSelectedBranch] = useState<string>(currentBranchId || 'all');
-
-  // Filter sales based on date range & branch
-  const filteredSales = useMemo(() => {
-    const now = new Date();
-    return sales.filter((s) => {
-      const branchMatch = !s.branch_id && !s.branchId
-        ? true
-        : s.branch_id === selectedBranch || s.branchId === selectedBranch;
-
-      if (selectedBranch !== 'all' && !branchMatch) {
-        return false;
-      }
-      if (s.status === 'voided') return false;
-
-      const dateStr = s.created_at || s.createdAt || '';
-      const saleDate = new Date(dateStr);
-      if (dateRange === 'today') {
-        return saleDate.toDateString() === now.toDateString();
-      }
-      if (dateRange === '7d') {
-        const d7 = new Date();
-        d7.setDate(now.getDate() - 7);
-        return saleDate >= d7;
-      }
-      if (dateRange === '30d') {
-        const d30 = new Date();
-        d30.setDate(now.getDate() - 30);
-        return saleDate >= d30;
-      }
-      return true;
-    });
-  }, [sales, dateRange, selectedBranch]);
-
-  // Aggregate metrics
-  const totalRevenue = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.net_amount ?? s.netAmount ?? s.total_amount ?? 0), 0);
-  }, [filteredSales]);
-
-  const totalDiscount = useMemo(() => {
-    return filteredSales.reduce((acc, s) => acc + (s.discount_amount ?? s.discountAmount ?? 0), 0);
-  }, [filteredSales]);
-
-  const totalReturns = useMemo(() => {
-    return filteredSales.filter((s) => s.status === 'returned').length;
-  }, [filteredSales]);
-
-  const completedSalesCount = filteredSales.length;
-  const averageOrderValue = completedSalesCount > 0 ? totalRevenue / completedSalesCount : 0;
-
-  // Breakdown by Cashier / Staff
-  const salesByCashier = useMemo(() => {
-    const map = new Map<string, { count: number; revenue: number; name: string }>();
-    filteredSales.forEach((s) => {
-      const cId = s.cashier_id || s.cashierId || 'Unknown';
-      const cName = s.cashierName || s.cashier_name || 'Cashier ' + cId.slice(0, 4);
-      const curr = map.get(cId) || { count: 0, revenue: 0, name: cName };
-      curr.count += 1;
-      curr.revenue += (s.net_amount ?? s.netAmount ?? 0);
-      map.set(cId, curr);
-    });
-    return Array.from(map.values()).sort((a, b) => b.revenue - a.revenue);
-  }, [filteredSales]);
+  const query = usePosOwnerAnalytics(businessId, selectedBranch === 'all' ? null : selectedBranch, dateRange);
+  const analytics = query.data;
+  const paymentBreakdown = Object.entries(analytics?.payment_breakdown ?? {})
+    .sort(([, left], [, right]) => right.total - left.total);
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      {/* Top Bar Filter */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
+    <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <div className="flex flex-col items-start justify-between gap-4 border-b border-gray-200 pb-4 sm:flex-row sm:items-center">
         <div>
-          <h2 className="text-xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+          <h2 className="flex items-center gap-2 text-xl font-black tracking-tight text-gray-900">
             <TrendingUp className="h-6 w-6 text-brand-600" />
-            Executive POS Sales Analytics
+            {t('pos.analytics.title')}
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Real-time multi-branch point of sale performance, cash flow, and cashier productivity.
-          </p>
+          <p className="mt-0.5 text-xs text-gray-500">{t('pos.analytics.description')}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Branch selector */}
+          {branches.length > 0 && (
+            <label className="sr-only" htmlFor="pos-analytics-branch">{t('pos.analytics.branchFilter')}</label>
+          )}
           {branches.length > 0 && (
             <select
+              id="pos-analytics-branch"
+              aria-label={t('pos.analytics.branchFilter')}
               value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
+              onChange={(event) => setSelectedBranch(event.target.value)}
               className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-2xs focus:border-brand-500 focus:outline-none"
             >
-              <option value="all">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
+              <option value="all">{t('pos.analytics.allBranches')}</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
             </select>
           )}
 
-          {/* Date range filter */}
-          <div className="flex rounded-xl bg-gray-100 p-1">
-            {(['today', '7d', '30d', 'all'] as const).map((r) => (
+          <div aria-label={t('pos.analytics.dateRange')} className="flex rounded-xl bg-gray-100 p-1">
+            {(['today', '7d', '30d', 'all_time'] as const).map((range) => (
               <button
-                key={r}
+                key={range}
                 type="button"
-                onClick={() => setDateRange(r)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                  dateRange === r ? 'bg-white text-gray-900 shadow-2xs' : 'text-gray-500 hover:text-gray-900'
-                }`}
+                aria-pressed={dateRange === range}
+                onClick={() => setDateRange(range)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${dateRange === range ? 'bg-white text-gray-900 shadow-2xs' : 'text-gray-500 hover:text-gray-900'}`}
               >
-                {r === 'today' ? 'Today' : r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : 'All Time'}
+                {t(`pos.analytics.ranges.${range}`)}
               </button>
             ))}
           </div>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-gray-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Gross Sales Revenue</span>
-            <div className="rounded-xl bg-brand-50 p-2 text-brand-600">
-              <DollarSign className="h-4 w-4" />
+      {query.isLoading ? (
+        <LoadingCards label={t('pos.analytics.loading')} />
+      ) : query.isError ? (
+        <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-800">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-bold">{t('pos.analytics.loadError')}</p>
+              <button
+                type="button"
+                onClick={() => void query.refetch()}
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-bold hover:bg-red-50"
+              >
+                {query.isFetching && <LoaderCircle className="h-3.5 w-3.5 animate-spin" />}
+                {t('common.retry')}
+              </button>
             </div>
           </div>
-          <p className="text-2xl font-black text-gray-900">{formatMwkDetailed(totalRevenue)}</p>
-          <div className="text-[11px] text-gray-500 flex items-center gap-1 font-semibold">
-            <span>From {completedSalesCount} completed sales</span>
-          </div>
         </div>
+      ) : !analytics || analytics.order_count === 0 ? (
+        <div role="status" className="rounded-2xl border border-gray-200 bg-white px-6 py-12 text-center text-sm font-semibold text-gray-500">
+          {t('pos.analytics.empty')}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard title={t('pos.analytics.grossSales')} value={formatMwkDetailed(analytics.gross_sales)} icon={<DollarSign className="h-4 w-4" />} />
+            <MetricCard title={t('pos.analytics.netSales')} value={formatMwkDetailed(analytics.net_sales)} icon={<TrendingUp className="h-4 w-4" />} />
+            <MetricCard title={t('pos.analytics.averageTicket')} value={formatMwkDetailed(analytics.average_ticket)} icon={<ShoppingBag className="h-4 w-4" />} />
+            <MetricCard title={t('pos.analytics.discounts')} value={formatMwkDetailed(analytics.discount_total)} icon={<RotateCcw className="h-4 w-4" />} />
+            <MetricCard title={t('pos.analytics.orders')} value={t('pos.analytics.orderCount', { count: analytics.order_count })} icon={<ShoppingBag className="h-4 w-4" />} />
+            <MetricCard title={t('pos.analytics.returns')} value={t('pos.analytics.returnCount', { count: analytics.return_count })} detail={formatMwkDetailed(analytics.refunds_total)} icon={<RotateCcw className="h-4 w-4" />} />
+          </div>
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-gray-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Average Ticket Value</span>
-            <div className="rounded-xl bg-blue-50 p-2 text-blue-600">
-              <ShoppingBag className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-gray-900">{formatMwkDetailed(averageOrderValue)}</p>
-          <div className="text-[11px] text-gray-500 flex items-center gap-1 font-semibold">
-            <span>Per customer basket</span>
-          </div>
-        </div>
+          <section className="rounded-3xl border border-gray-200 bg-white p-6 shadow-2xs">
+            <h3 className="mb-4 text-sm font-black uppercase tracking-wider text-gray-900">
+              {t('pos.analytics.paymentBreakdown')}
+            </h3>
+            {paymentBreakdown.length === 0 ? (
+              <p className="py-3 text-center text-xs text-gray-500">{t('pos.analytics.noPayments')}</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="border-b border-gray-100 text-[10px] font-bold uppercase text-gray-400">
+                    <tr>
+                      <th className="px-3 py-2.5">{t('pos.analytics.paymentMethod')}</th>
+                      <th className="px-3 py-2.5">{t('pos.analytics.paymentCount')}</th>
+                      <th className="px-3 py-2.5">{t('pos.analytics.paymentTotal')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50 font-semibold text-gray-800">
+                    {paymentBreakdown.map(([method, values]) => (
+                      <tr key={method}>
+                        <td className="px-3 py-3 font-bold">{t(`pos.paymentMethods.${method}`, { defaultValue: method })}</td>
+                        <td className="px-3 py-3">{values.count}</td>
+                        <td className="px-3 py-3 font-black text-brand-700">{formatMwkDetailed(values.total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
 
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-gray-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Discounts Given</span>
-            <div className="rounded-xl bg-amber-50 p-2 text-amber-600">
-              <RotateCcw className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-amber-900">{formatMwkDetailed(totalDiscount)}</p>
-          <div className="text-[11px] text-gray-500 font-semibold">
-            <span>Total promotions applied</span>
-          </div>
-        </div>
-
-        <div className="rounded-3xl border border-gray-200 bg-white p-5 shadow-2xs space-y-2">
-          <div className="flex items-center justify-between text-gray-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Refunds & Returns</span>
-            <div className="rounded-xl bg-red-50 p-2 text-red-600">
-              <RotateCcw className="h-4 w-4" />
-            </div>
-          </div>
-          <p className="text-2xl font-black text-gray-900">{totalReturns} Orders</p>
-          <div className="text-[11px] text-gray-500 font-semibold">
-            <span>Processed customer returns</span>
-          </div>
-        </div>
+function MetricCard({ title, value, detail, icon }: { title: string; value: string; detail?: string; icon: ReactNode }) {
+  return (
+    <div className="space-y-2 rounded-3xl border border-gray-200 bg-white p-5 shadow-2xs">
+      <div className="flex items-center justify-between text-gray-500">
+        <span className="text-xs font-bold uppercase tracking-wider">{title}</span>
+        <div className="rounded-xl bg-brand-50 p-2 text-brand-600">{icon}</div>
       </div>
-
-      {/* Staff / Cashier Performance Table */}
-      <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-2xs space-y-4">
-        <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider flex items-center gap-2">
-          <Users className="h-4 w-4 text-brand-600" />
-          Cashier & Register Sales Leaderboard
-        </h3>
-        {salesByCashier.length === 0 ? (
-          <p className="text-xs text-gray-400 py-4 text-center">No sales recorded for the selected period.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-gray-100 text-gray-400 uppercase font-bold text-[10px]">
-                <tr>
-                  <th className="py-2.5 px-3">Cashier Name</th>
-                  <th className="py-2.5 px-3">Sales Count</th>
-                  <th className="py-2.5 px-3">Total Volume</th>
-                  <th className="py-2.5 px-3">Avg Ticket</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 font-semibold text-gray-800">
-                {salesByCashier.map((c, i) => (
-                  <tr key={i} className="hover:bg-gray-50/70">
-                    <td className="py-3 px-3 font-bold text-gray-900">{c.name}</td>
-                    <td className="py-3 px-3">{c.count} orders</td>
-                    <td className="py-3 px-3 font-black text-brand-700">{formatMwkDetailed(c.revenue)}</td>
-                    <td className="py-3 px-3 text-gray-600">
-                      {formatMwkDetailed(c.count > 0 ? c.revenue / c.count : 0)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <p className="text-2xl font-black text-gray-900">{value}</p>
+      {detail && <p className="text-[11px] font-semibold text-gray-500">{detail}</p>}
     </div>
   );
 }

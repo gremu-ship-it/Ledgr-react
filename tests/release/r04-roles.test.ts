@@ -13,7 +13,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, roles, saleFixture } from './fixtures';
+import { seedFixture, identities, roles, saleFixture, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r04-roles');
@@ -39,7 +39,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -84,7 +85,7 @@ test(meta('R04.CONTACTS.WRITER-MATRIX', 'Seeded-role contacts INSERT matrix: cas
 test(meta('R04.CONTACTS.POS-SALE-PATH-PRESERVED', 'Cashier retains the authorised contact path: post_pos_sale resolves/creates the walk-in contact inside the SECURITY DEFINER command'), async () => {
   ready();
   const r = await db.asRole('authenticated', identities.A_cashier.id,
-    'select public.post_pos_sale($1::jsonb) data', [JSON.stringify(saleFixture(orgs.A, 201))]);
+    'select public.post_pos_sale_plan_gated($1::jsonb) data', [JSON.stringify(saleFixture(orgs.A, 201))]);
   // The definer command posts a real document: id, server invoice number, and
   // balanced COGS/journal entries — the cashier's authorised contact path.
   const data = r.rows[0].data as Record<string, unknown>;
@@ -122,7 +123,7 @@ test(meta('R04.CONTACTS.POLICY-END-STATE', 'Contacts policy set is exactly the k
   )).rows as Array<{ policyname: string; cmd: string; qual: string; chk: string }>;
   expect(rows.map((r) => r.policyname).sort()).toEqual([
     'contacts_admin_delete', 'contacts_member_read', 'contacts_platform_admin_read',
-    'contacts_writer_insert', 'contacts_writer_update',
+    'contacts_writer_insert', 'contacts_writer_update', 'partner_client_accounting_read',
   ].sort());
   const insert = rows.find((r) => r.policyname === 'contacts_writer_insert')!;
   const update = rows.find((r) => r.policyname === 'contacts_writer_update')!;

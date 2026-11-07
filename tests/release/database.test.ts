@@ -2,7 +2,7 @@ import { readdirSync } from 'node:fs';
 import { getTransactionLimit, hasCapability, type PlanTier } from '@/lib/billing/plans';
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, roles, saleFixture, expenseFixture, incomeFixture, correctionFixtures, key, expected, subscriptionStates } from './fixtures';
+import { seedFixture, identities, roles, saleFixture, expenseFixture, incomeFixture, correctionFixtures, key, expected, subscriptionStates, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError, ObservedFailure } from './evidence';
 
 const test = evidenceSuite('database');
@@ -13,7 +13,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -87,9 +88,9 @@ for (const [own, foreign] of [['A','B'], ['B','A']]) {
   });
   test(meta(`TENANT.${own}.pos`, 'Foreign business sale RPC denied', 'R06', 'supabase/migrations/20260923000000_post_pos_sale_rpc.sql'), async () => {
     ready();
-    const positive=await db.asRole('authenticated', identities[`${own}_cashier`].id, 'select public.post_pos_sale($1::jsonb) data', [JSON.stringify(saleFixture(orgs[own]))]);
+    const positive=await db.asRole('authenticated', identities[`${own}_cashier`].id, 'select public.post_pos_sale_plan_gated($1::jsonb) data', [JSON.stringify(saleFixture(orgs[own]))]);
     expect(positive.rows[0].data.id).toBeTruthy();
-    await denied(() => db.asRole('authenticated', identities[`${own}_cashier`].id, 'select public.post_pos_sale($1::jsonb)', [JSON.stringify(saleFixture(orgs[foreign]))]));
+    await denied(() => db.asRole('authenticated', identities[`${own}_cashier`].id, 'select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(saleFixture(orgs[foreign]))]));
   });
 }
 for (const role of roles) test(meta(`ROLE.${role}.write`, `${role}: permitted/denied contact creation at database boundary`), async () => {
@@ -141,8 +142,8 @@ test(meta('POS.SALE', 'Cashier sale posts invoice/payment/balanced ledger and st
   ready();
   await db.asRole('authenticated', identities.A_cashier.id, async (c: typeof db.client) => {
     const payload = JSON.stringify(saleFixture(orgs.A));
-    const first = (await c.query('select public.post_pos_sale($1::jsonb) data', [payload])).rows[0].data;
-    const second = (await c.query('select public.post_pos_sale($1::jsonb) data', [payload])).rows[0].data;
+    const first = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) data', [payload])).rows[0].data;
+    const second = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) data', [payload])).rows[0].data;
     expect(first.id).toBeTruthy(); expect(second.id).toBe(first.id);
     // Privileged observer of effects only; the sale itself ran as cashier above.
     await c.query('reset role');
@@ -155,14 +156,21 @@ test(meta('POS.SALE', 'Cashier sale posts invoice/payment/balanced ledger and st
 test(meta('POS.STOCK', 'Sale reduces actual balance 100 → 99 (not merely movement insertion)', 'R06', 'supabase/migrations/20260923000000_post_pos_sale_rpc.sql'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_cashier.id, async (c: typeof db.client) => {
-    await c.query('select public.post_pos_sale($1::jsonb)', [JSON.stringify(saleFixture(orgs.A,2))]);
+    await c.query('select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(saleFixture(orgs.A,2))]);
     await c.query('reset role');
     const row = (await c.query('select quantity_on_hand from public.inventory_balances where product_id=$1 and location_id=$2', [orgs.A.product,orgs.A.location])).rows[0];
     expect(Number(row.quantity_on_hand)).toBe(expected.stockAfterSale);
   });
 });
-for (const role of ['viewer','stock_clerk']) test(meta(`POS.DENY.${role}`, `${role} cannot invoke sale directly`, 'R06'), async () => {
-  ready(); await denied(() => db.asRole('authenticated', identities[`A_${role}`].id, 'select public.post_pos_sale($1::jsonb)', [JSON.stringify(saleFixture(orgs.A))]));
+for (const role of ['viewer','stock_clerk']) test(meta(`POS.DENY.${role}`, `${role} cannot invoke the gated sale command`, 'R06'), async () => {
+  ready(); await denied(() => db.asRole('authenticated', identities[`A_${role}`].id, 'select public.post_pos_sale_plan_gated($1::jsonb)', [JSON.stringify(saleFixture(orgs.A))]));
+});
+test(meta('POS.SALE.DIRECT-API-REVOKED', 'Authenticated users cannot execute the internal post_pos_sale RPC; all application sales use the retail/plan-gated command', 'POS Phase 6E-3', 'supabase/migrations/20261211000000_pos_phase_6e3.sql'), async () => {
+  ready();
+  const acl = await db.client.query("select has_function_privilege('authenticated','public.post_pos_sale(jsonb)','EXECUTE') permitted");
+  expect(acl.rows[0].permitted).toBe(false);
+  await denied(() => db.asRole('authenticated', identities.A_cashier.id,
+    'select public.post_pos_sale($1::jsonb)', [JSON.stringify(saleFixture(orgs.A))]));
 });
 test(meta('FINANCE.ORACLE', 'Deterministic fixture: 1500 sale − 900 COGS − 200 expense = 400 profit; cash 1300', 'R05', 'tests/release/fixtures.ts'), () => {
   const correction=correctionFixtures({business:key(1),customer:key(2),product:key(3),branch:key(4),shift:key(5)},key(6));
@@ -188,7 +196,7 @@ test(meta('BILLING.ACTIVATION', 'Authenticated user cannot call service-only sub
 test(meta('POS.VOID','Authorized void has exactly-once reversal effects','R07','supabase/migrations/20260928000002_r07_correction_commands.sql'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_admin.id, async(c:typeof db.client)=>{
-    const posted = (await c.query('select public.post_pos_sale($1::jsonb) r',[JSON.stringify(saleFixture(orgs.A,21))])).rows[0].r;
+    const posted = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r',[JSON.stringify(saleFixture(orgs.A,21))])).rows[0].r;
     const v1 = (await c.query('select public.void_pos_sale_command($1::jsonb) r',[JSON.stringify({business_id: orgs.A.business, invoice_id: posted.id, command_key: 'r13-r07-void-21', reason: 'R13 synthetic void'})])).rows[0].r;
     expect(v1.idempotent).toBe(false);
     expect(v1.journal_entries.length).toBeGreaterThan(0);
@@ -223,7 +231,7 @@ test(meta('POS.VOID','Authorized void has exactly-once reversal effects','R07','
 test(meta('POS.REFUND','Authorized refund has correct original-cost and tender reversal','R07','supabase/migrations/20260928000002_r07_correction_commands.sql'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_admin.id, async(c:typeof db.client)=>{
-    const posted = (await c.query('select public.post_pos_sale($1::jsonb) r',[JSON.stringify(saleFixture(orgs.A,22))])).rows[0].r;
+    const posted = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r',[JSON.stringify(saleFixture(orgs.A,22))])).rows[0].r;
     const r1 = (await c.query('select public.refund_pos_sale_command($1::jsonb) r',[JSON.stringify({
       business_id: orgs.A.business, invoice_id: posted.id, command_key: 'r13-r07-refund-22',
       reason: 'R13 synthetic partial refund',
@@ -266,7 +274,7 @@ test(meta('FINANCE.REVERSAL','Approved immutable correction/reversal preserves h
   await db.asRole('authenticated', identities.A_cashier.id, async(c:typeof db.client)=>{
     const setActor = async (uid: string) => c.query("select set_config('request.jwt.claim.sub',$1,true), set_config('request.jwt.claim.role','authenticated',true)",[uid]);
     await setActor(identities.A_cashier.id);
-    const posted = (await c.query('select public.post_pos_sale($1::jsonb) r',[JSON.stringify(saleFixture(orgs.A,23))])).rows[0].r;
+    const posted = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r',[JSON.stringify(saleFixture(orgs.A,23))])).rows[0].r;
     const req = (await c.query('select public.request_pos_approval($1,$2,$3) r',[orgs.A.business,'void_sale',posted.id])).rows[0].r;
     const token = req.token;
     // Authorization executes under the approver's own verified session identity.
@@ -315,7 +323,7 @@ test(meta('FINANCE.POSTING-TOTALS', 'Sale 1500, COGS 900 and expense 200 yield l
   const account=(await db.client.query("select id from public.accounts where business_id=$1 and account_type='expense' and code='6110'",[orgs.A.business])).rows[0];
   if(!account) throw new Blocked('Seeded operating expense account 6110 absent; no product chart change made.');
   await db.asRole('authenticated',identities.A_owner.id,async(c:typeof db.client)=>{
-    await c.query('select public.post_pos_sale($1::jsonb)',[JSON.stringify(saleFixture(orgs.A,101))]);
+    await c.query('select public.post_pos_sale_plan_gated($1::jsonb)',[JSON.stringify(saleFixture(orgs.A,101))]);
     const expense=(await c.query('select public.save_quick_expense($1::jsonb) data',[JSON.stringify(expenseFixture(orgs.A,account.id,102))])).rows[0].data;
     expect(expense.id).toBeTruthy();
     await c.query('reset role'); // Observer only; commands above ran as owner.

@@ -1406,6 +1406,97 @@ export type Database = {
           },
         ]
       }
+      ai_anomaly_logs: {
+        Row: {
+          business_id: string
+          category: string
+          created_at: string
+          description: string
+          id: string
+          is_resolved: boolean
+          metadata: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          source_id: string | null
+          source_table: string | null
+          title: string
+        }
+        Insert: {
+          business_id: string
+          category: string
+          created_at?: string
+          description: string
+          id?: string
+          is_resolved?: boolean
+          metadata?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity: string
+          source_id?: string | null
+          source_table?: string | null
+          title: string
+        }
+        Update: {
+          business_id?: string
+          category?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_resolved?: boolean
+          metadata?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          source_id?: string | null
+          source_table?: string | null
+          title?: string
+        }
+        Relationships: [
+          { foreignKeyName: "ai_anomaly_logs_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+        ]
+      }
+      ai_financial_summaries: {
+        Row: {
+          business_id: string
+          created_at: string
+          executive_summary: string
+          health_score: number
+          id: string
+          key_risks: Json
+          metrics: Json
+          period_end: string
+          period_start: string
+          recommendations: Json
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          executive_summary: string
+          health_score: number
+          id?: string
+          key_risks?: Json
+          metrics?: Json
+          period_end: string
+          period_start: string
+          recommendations?: Json
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          executive_summary?: string
+          health_score?: number
+          id?: string
+          key_risks?: Json
+          metrics?: Json
+          period_end?: string
+          period_start?: string
+          recommendations?: Json
+        }
+        Relationships: [
+          { foreignKeyName: "ai_financial_summaries_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+        ]
+      }
       businesses: {
         Row: {
           address_line1: string | null
@@ -8748,18 +8839,27 @@ export type Database = {
         Row: {
           business_id: string
           created_at: string | null
+          notes: string | null
+          onboarded_at: string
           partner_id: string
+          status: string
         }
         ComputedFields: never
         Insert: {
           business_id: string
           created_at?: string | null
+          notes?: string | null
+          onboarded_at?: string
           partner_id: string
+          status?: string
         }
         Update: {
           business_id?: string
           created_at?: string | null
+          notes?: string | null
+          onboarded_at?: string
           partner_id?: string
+          status?: string
         }
         Relationships: [
           {
@@ -8790,6 +8890,36 @@ export type Database = {
             referencedRelation: "partners"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      partner_staff_assignments: {
+        Row: {
+          assigned_by: string
+          business_id: string
+          created_at: string
+          id: string
+          partner_id: string
+          staff_user_id: string
+        }
+        Insert: {
+          assigned_by?: string
+          business_id: string
+          created_at?: string
+          id?: string
+          partner_id: string
+          staff_user_id: string
+        }
+        Update: {
+          assigned_by?: string
+          business_id?: string
+          created_at?: string
+          id?: string
+          partner_id?: string
+          staff_user_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "partner_staff_assignments_staff_fk"; columns: ["partner_id", "staff_user_id"]; isOneToOne: false; referencedRelation: "partner_admins"; referencedColumns: ["partner_id", "user_id"] },
+          { foreignKeyName: "partner_staff_assignments_client_fk"; columns: ["partner_id", "business_id"]; isOneToOne: false; referencedRelation: "partner_clients"; referencedColumns: ["partner_id", "business_id"] },
         ]
       }
       partner_feature_flags: {
@@ -9742,6 +9872,203 @@ export type Database = {
             referencedRelation: "v_partner_client_usage"
             referencedColumns: ["business_id"]
           },
+        ]
+      }
+      pos_held_orders: {
+        Row: {
+          branch_id: string | null
+          business_id: string
+          cart_items: Json
+          cart_notes: string | null
+          cashier_id: string
+          cashier_name: string | null
+          created_at: string
+          customer_id: string | null
+          customer_snapshot: Json | null
+          discount_amount: number
+          expired_at: string | null
+          id: string
+          idempotency_key: string
+          order_discount: Json | null
+          reference_note: string
+          resumed_at: string | null
+          resumed_by: string | null
+          shift_id: string
+          status: string
+          subtotal: number
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          business_id: string
+          cart_items: Json
+          cart_notes?: string | null
+          cashier_id: string
+          cashier_name?: string | null
+          created_at?: string
+          customer_id?: string | null
+          customer_snapshot?: Json | null
+          discount_amount: number
+          expired_at?: string | null
+          id?: string
+          idempotency_key: string
+          order_discount?: Json | null
+          reference_note: string
+          resumed_at?: string | null
+          resumed_by?: string | null
+          shift_id: string
+          status?: string
+          subtotal: number
+          total_amount: number
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          business_id?: string
+          cart_items?: Json
+          cart_notes?: string | null
+          cashier_id?: string
+          cashier_name?: string | null
+          created_at?: string
+          customer_id?: string | null
+          customer_snapshot?: Json | null
+          discount_amount?: number
+          expired_at?: string | null
+          id?: string
+          idempotency_key?: string
+          order_discount?: Json | null
+          reference_note?: string
+          resumed_at?: string | null
+          resumed_by?: string | null
+          shift_id?: string
+          status?: string
+          subtotal?: number
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pos_held_orders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_held_orders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pos_held_orders_shift_id_fkey"
+            columns: ["shift_id"]
+            isOneToOne: false
+            referencedRelation: "pos_shifts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pos_returns: {
+        Row: {
+          amount: number
+          business_id: string
+          command_key: string
+          correction_id: string | null
+          created_at: string
+          created_by: string
+          currency: string
+          id: string
+          invoice_id: string
+          reason: string
+          refund_method: string
+          return_number: string
+          shift_id: string
+        }
+        Insert: {
+          amount: number
+          business_id: string
+          command_key: string
+          correction_id?: string | null
+          created_at?: string
+          created_by: string
+          currency: string
+          id?: string
+          invoice_id: string
+          reason: string
+          refund_method: string
+          return_number: string
+          shift_id: string
+        }
+        Update: {
+          amount?: number
+          business_id?: string
+          command_key?: string
+          correction_id?: string | null
+          created_at?: string
+          created_by?: string
+          currency?: string
+          id?: string
+          invoice_id?: string
+          reason?: string
+          refund_method?: string
+          return_number?: string
+          shift_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "pos_returns_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_returns_correction_id_fkey"; columns: ["correction_id"]; isOneToOne: false; referencedRelation: "pos_corrections"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_returns_invoice_id_fkey"; columns: ["invoice_id"]; isOneToOne: false; referencedRelation: "invoices"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_returns_shift_id_fkey"; columns: ["shift_id"]; isOneToOne: false; referencedRelation: "pos_shifts"; referencedColumns: ["id"] },
+        ]
+      }
+      pos_return_lines: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          invoice_line_id: string
+          product_id: string | null
+          product_name: string
+          quantity: number
+          reason: string
+          refund_amount: number
+          restock: boolean
+          return_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          invoice_line_id: string
+          product_id?: string | null
+          product_name: string
+          quantity: number
+          reason: string
+          refund_amount: number
+          restock?: boolean
+          return_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          invoice_line_id?: string
+          product_id?: string | null
+          product_name?: string
+          quantity?: number
+          reason?: string
+          refund_amount?: number
+          restock?: boolean
+          return_id?: string
+        }
+        Relationships: [
+          { foreignKeyName: "pos_return_lines_business_id_fkey"; columns: ["business_id"]; isOneToOne: false; referencedRelation: "businesses"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_return_lines_invoice_line_id_fkey"; columns: ["invoice_line_id"]; isOneToOne: false; referencedRelation: "invoice_lines"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_return_lines_product_id_fkey"; columns: ["product_id"]; isOneToOne: false; referencedRelation: "products"; referencedColumns: ["id"] },
+          { foreignKeyName: "pos_return_lines_return_id_fkey"; columns: ["return_id"]; isOneToOne: false; referencedRelation: "pos_returns"; referencedColumns: ["id"] },
         ]
       }
       pos_shift_closes: {
@@ -13392,9 +13719,15 @@ export type Database = {
           is_active: boolean
           journal_entry_count: number | null
           last_activity_at: string | null
+          notes: string | null
           onboarded_at: string | null
           partner_id: string
+          pay_run_count: number | null
           plan_tier: string
+          status: string
+          total_activity_count: number | null
+          monthly_transaction_count: number | null
+          plan_expires_at: string | null
           user_count: number | null
         }
         ComputedFields: never
@@ -13407,6 +13740,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_partner_client_activity: {
+        Row: {
+          business_id: string
+          business_name: string
+          event_at: string
+          event_id: string
+          event_type: string
+          partner_id: string
+          status: string
+          title: string
+        }
+        ComputedFields: never
+        Relationships: []
       }
       v_partner_peer_businesses: {
         Row: {
@@ -14130,6 +14477,9 @@ export type Database = {
         }
       }
       business_partner_id: { Args: { bid: string }; Returns: string }
+      can_access_ai_financial_summaries: { Args: { p_business_id: string }; Returns: boolean }
+      can_run_ai_anomaly_scan: { Args: { p_business_id: string }; Returns: boolean }
+      run_ai_anomaly_scan: { Args: { p_anomalies: Json; p_business_id: string }; Returns: number }
       can_access_branch: {
         Args: { p_branch_id: string; p_business_id: string }
         Returns: boolean
@@ -14146,6 +14496,18 @@ export type Database = {
       can_read_audit: { Args: { p_business_id: string }; Returns: boolean }
       can_read_partner_client: {
         Args: { bid: string; pid: string }
+        Returns: boolean
+      }
+      can_access_partner_client: {
+        Args: { p_business_id: string; p_partner_id: string; p_uid: string }
+        Returns: boolean
+      }
+      can_current_user_access_partner_client: {
+        Args: { p_business_id: string; p_partner_id: string }
+        Returns: boolean
+      }
+      can_manage_partner_assignment: {
+        Args: { p_business_id: string; p_partner_id: string; p_uid: string }
         Returns: boolean
       }
       can_read_partner_peer_business: {
@@ -14452,6 +14814,11 @@ export type Database = {
         }[]
       }
       get_pos_shift_report: { Args: { p_shift_id: string }; Returns: Json }
+      get_pos_shift_report_details: { Args: { p_shift_id: string }; Returns: Json }
+      get_pos_owner_analytics: {
+        Args: { p_business_id: string; p_branch_id?: string | null; p_from?: string | null; p_to?: string | null }
+        Returns: Json
+      }
       get_project_cost_summary: {
         Args: { p_project_id: string }
         Returns: {
@@ -14571,6 +14938,7 @@ export type Database = {
       }
       is_business_member: { Args: { p_business_id: string }; Returns: boolean }
       is_partner_admin: { Args: { pid: string; uid: string }; Returns: boolean }
+      is_partner_manager: { Args: { p_partner_id: string; p_uid: string }; Returns: boolean }
       is_partner_business_admin: { Args: { bid: string }; Returns: boolean }
       is_platform_admin: { Args: { uid: string }; Returns: boolean }
       issue_payment_certificate: {
@@ -14899,6 +15267,23 @@ export type Database = {
       }
       open_pos_shift_command: { Args: { p_payload: Json }; Returns: Json }
       plan_tier_rank: { Args: { tier: string }; Returns: number }
+      hold_pos_order_command: {
+        Args: { p_business_id: string; p_payload: Json; p_shift_id: string }
+        Returns: Json
+      }
+      list_pos_held_orders: {
+        Args: { p_include_history?: boolean; p_shift_id: string }
+        Returns: Json
+      }
+      list_pos_price_override_requests: {
+        Args: { p_business_id: string }
+        Returns: Json
+      }
+      resume_pos_held_order_command: {
+        Args: { p_held_order_id: string; p_shift_id: string }
+        Returns: Json
+      }
+      post_pos_sale_plan_gated: { Args: { p_payload: Json }; Returns: Json }
       pos_stock_availability: {
         Args: { p_branch_id?: string; p_business_id: string }
         Returns: Json
@@ -14924,6 +15309,7 @@ export type Database = {
         Args: { p_grn_id: string }
         Returns: Json
       }
+      process_pos_return_command: { Args: { p_payload: Json }; Returns: Json }
       post_pos_sale: { Args: { p_payload: Json }; Returns: Json }
       provision_construction_coa_accounts: {
         Args: { p_business_id: string }

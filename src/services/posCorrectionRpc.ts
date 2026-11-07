@@ -129,6 +129,73 @@ export async function voidPosSaleViaRpc(options: {
 }
 
 /** Executes the canonical refund command — cumulative-refund-safe, restocking, settling. */
+export interface ProcessPosReturnResult {
+  returnId: string;
+  returnNumber: string;
+  amount: number;
+  refundMethod: 'cash' | 'original' | 'credit';
+  idempotent: boolean;
+  lines: Array<{ invoiceLineId: string; quantity: number; refundAmount: number; reason: string; restock: boolean }>;
+}
+
+/**
+ * R08/6E-2 return orchestration. The database command validates plan, retail
+ * scope, active shift, per-line remaining quantities, and return audit data,
+ * then delegates the actual correction to refund_pos_sale_command.
+ */
+export async function processPosReturnViaRpc(options: {
+  businessId: string;
+  invoiceId: string;
+  shiftId: string;
+  commandKey?: string;
+  reason: string;
+  refundMethod: 'cash' | 'original' | 'credit';
+  approvalToken?: string | null;
+  lines: Array<{
+    invoice_line_id: string;
+    quantity: number;
+    reason: string;
+    restock: boolean;
+  }>;
+}): Promise<ProcessPosReturnResult> {
+  const payload = {
+    business_id: options.businessId,
+    invoice_id: options.invoiceId,
+    shift_id: options.shiftId,
+    command_key: options.commandKey ?? newSaveClientKey(),
+    reason: options.reason,
+    refund_method: options.refundMethod,
+    approval_token: options.approvalToken ?? null,
+    lines: options.lines,
+  };
+  const { data, error } = await rpcClient.rpc('process_pos_return_command', { p_payload: payload });
+  versionCheck(error as { code?: string } | null);
+  if (error) throw classifyApprovalError(error);
+  const result = data as {
+    return_id?: string;
+    return_number?: string;
+    amount?: number;
+    refund_method?: 'cash' | 'original' | 'credit';
+    idempotent?: boolean;
+    lines?: Array<{ invoice_line_id?: string; quantity?: number; amount?: number; reason?: string; restock?: boolean }>;
+  } | null;
+  if (!result?.return_id || !result.return_number) throw new PosCorrectionUnavailableError();
+  return {
+    returnId: result.return_id,
+    returnNumber: result.return_number,
+    amount: Number(result.amount ?? 0),
+    refundMethod: result.refund_method ?? options.refundMethod,
+    idempotent: !!result.idempotent,
+    lines: (result.lines ?? []).map((line) => ({
+      invoiceLineId: line.invoice_line_id ?? '',
+      quantity: Number(line.quantity ?? 0),
+      refundAmount: Number(line.amount ?? 0),
+      reason: line.reason ?? '',
+      restock: line.restock !== false,
+    })),
+  };
+}
+
 export async function refundPosSaleViaRpc(options: {
   businessId: string;
   invoiceId: string;

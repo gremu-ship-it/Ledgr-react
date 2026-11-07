@@ -4,6 +4,18 @@ import { fetchAllRows } from '@/lib/paginateQuery';
 import { BaseRepository } from './BaseRepository';
 import { UnsupportedOperationError, ValidationError, toRepositoryError } from '../errors/RepositoryError';
 
+export interface DashboardStockBalance {
+  id: string;
+  quantity_on_hand: number;
+  quantity_reserved: number;
+  quantity_available: number | null;
+  products: {
+    name: string;
+    sku: string | null;
+    reorder_level: number | null;
+  } | null;
+}
+
 export interface BalanceWithProduct {
   id: string;
   businessid: string;
@@ -107,6 +119,18 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       .eq('location_id', locationId);
     if (error) throw toRepositoryError('inventory_balances', error);
     return data ?? [];
+  }
+
+  /** Small, fully paginated projection for the dashboard's low-stock check. */
+  async findDashboardStockBalances(businessId: string): Promise<DashboardStockBalance[]> {
+    const query = this.client.from('inventory_balances')
+      .select('id,quantity_on_hand,quantity_reserved,quantity_available,products(name,sku,reorder_level)')
+      .eq('business_id', businessId);
+    try {
+      return await fetchAllRows<DashboardStockBalance>(query);
+    } catch (error) {
+      throw toRepositoryError('inventory_balances', error);
+    }
   }
 
   /**
@@ -669,6 +693,37 @@ export class InventoryRepository extends BaseRepository<'inventory_balances'> {
       .eq('business_id', businessId);
     if (error) throw toRepositoryError('v_reorder_alerts', error);
     return data ?? [];
+  }
+
+  /** Complete organisation-wide dashboard stock summary. Pagination avoids PostgREST's row cap. */
+  async getDashboardSummary(businessId: string): Promise<{
+    stockValue: number;
+    lowStockCount: number;
+    stockoutCount: number;
+    trackedBalanceCount: number;
+  }> {
+    type BalanceSummaryRow = {
+      id: string;
+      quantity_on_hand: number;
+      quantity_reserved: number;
+      average_cost: number;
+      products: { reorder_level: number | null; track_inventory: boolean; is_active: boolean; deleted_at: string | null } | null;
+    };
+    const rows = await fetchAllRows<BalanceSummaryRow>(
+      this.client.from('inventory_balances')
+        .select('id, quantity_on_hand, quantity_reserved, average_cost, products!inner(reorder_level, track_inventory, is_active, deleted_at)')
+        .eq('business_id', businessId),
+    );
+    const tracked = rows.filter((row) => row.products?.track_inventory && row.products.is_active && !row.products.deleted_at);
+    return tracked.reduce((summary, row) => {
+      const available = Number(row.quantity_on_hand ?? 0) - Number(row.quantity_reserved ?? 0);
+      const reorderLevel = row.products?.reorder_level;
+      summary.stockValue += Number(row.quantity_on_hand ?? 0) * Number(row.average_cost ?? 0);
+      summary.trackedBalanceCount += 1;
+      if (reorderLevel !== null && reorderLevel !== undefined && available <= Number(reorderLevel)) summary.lowStockCount += 1;
+      if (available <= 0) summary.stockoutCount += 1;
+      return summary;
+    }, { stockValue: 0, lowStockCount: 0, stockoutCount: 0, trackedBalanceCount: 0 });
   }
 
   /**
