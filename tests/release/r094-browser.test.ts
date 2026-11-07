@@ -295,7 +295,7 @@ test(meta('R094.BROWSER.PERSIST-RESTART', 'A queued sale with full provenance (o
     const localId = await api.enqueuePosSale(org.business, api.queuePayloadFor(101, org));
     const item = await api.getItem(localId);
     api.setLegacyQueueMarker([{ saleId: 'legacy-sentinel' }]);
-    await api.warmRqPersist(org.business, 'restart-marker');
+    await api.warmRqPersist(uid, org.business, 'restart-marker');
     return {
       localId,
       snap: {
@@ -338,7 +338,7 @@ test(meta('R094.BROWSER.WIPE-LOGOUT-BOUNDARY', 'Signed-out wipe empties the busi
     const api = (window as any).r094;
     api.setCurrentUser(uid); api.setCurrentBusiness(org.business);
     const localId = await api.enqueuePosSale(org.business, api.queuePayloadFor(201, org));
-    await api.warmRqPersist(org.business, 'wipe-a');
+    await api.warmRqPersist(uid, org.business, 'wipe-a');
     await api.warmApiCache('wipe-a');
     await api.setSessionMarker('ledgr_draft_r094', JSON.stringify({ marker: 'wipe-a' })); // product session-cache family key
     api.setLegacyQueueMarker([{ id: 'legacy-kept' }]);
@@ -371,22 +371,22 @@ test(meta('R094.BROWSER.WIPE-LOGOUT-BOUNDARY', 'Signed-out wipe empties the busi
 test(meta('R094.BROWSER.WIPE-USER-SWITCH', 'Identity-switch boundary: after A→wipe→B the persisted cache contains ONLY business B entries (zero A markers) while business A\u2019s offline queue row survives untouched — the documented queue-preservation contract'), async () => {
   const ctx = await browser.newContext();
   const page = await newHarnessPage(ctx);
-  const res = await ev(page, async ([orgA, bizB, uidA]: any) => {
+  const res = await ev(page, async ([orgA, bizB, uidA, uidB]: any) => {
     const api = (window as any).r094;
     api.setCurrentUser(uidA); api.setCurrentBusiness(orgA.business);
     const localId = await api.enqueuePosSale(orgA.business, api.queuePayloadFor(301, orgA));
-    await api.warmRqPersist(orgA.business, 'switch-a-marker');
+    await api.warmRqPersist(uidA, orgA.business, 'switch-a-marker');
     const before = await api.rqCacheEntries();
     const aBefore = before.blobFound && before.queries.some((q: any) => q.dataJson.includes('switch-a-marker'));
     await api.wipeIdentityTransitionCaches('user-switch');
-    api.setCurrentBusiness(bizB);
-    await api.warmRqPersist(bizB, 'switch-b-marker');
+    api.setCurrentUser(uidB); api.setCurrentBusiness(bizB);
+    await api.warmRqPersist(uidB, bizB, 'switch-b-marker');
     const after = await api.rqCacheEntries();
     const aRemaining = after.queries.filter((q: any) => q.dataJson.includes('switch-a-marker') || q.dataJson.includes(orgA.business) || JSON.stringify(q.queryKey ?? []).includes(orgA.business)).length;
     const bPresent = after.queries.filter((q: any) => q.dataJson.includes('switch-b-marker') && JSON.stringify(q.queryKey ?? []).includes(bizB)).length;
     const queueItem = await api.getItem(localId);
     return { aBefore, aRemaining, bPresent, bOnly: after.queries.every((q: any) => JSON.stringify(q.queryKey ?? []).includes(bizB)), queueStatus: queueItem?.status ?? null, queueBusiness: queueItem?.businessId ?? null };
-  }, [ORG_A, BIZ_B, USER_A]);
+  }, [ORG_A, BIZ_B, USER_A, USER_B]);
   await ctx.close();
   must(
     res.aBefore === true && res.aRemaining === 0 && res.bPresent >= 1 && res.bOnly === true

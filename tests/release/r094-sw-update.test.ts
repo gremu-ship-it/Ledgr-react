@@ -58,6 +58,7 @@ const DIST_B = join(CACHE_DIR, 'distB');
 const BIZ_A = 'r094-biz-a';
 const BIZ_B = 'r094-biz-b';
 const USER_A = 'r094-user-a-000000000001';
+const USER_B = 'r094-user-b-000000000002';
 const ORG_A = { business: BIZ_A, branch: `${BIZ_A}-branch`, product: `${BIZ_A}-product`, shift: `${BIZ_A}-shift`, terminal: `${BIZ_A}-terminal` };
 
 let stub: any;
@@ -630,9 +631,9 @@ test(meta('R094.BROWSER.SW.IDENTITY-CONFIDENTIALITY', 'Identity transition aroun
   const page = await newAppPage(ctx);
   await waitActiveDigest(page, digestSwA);
   const seeded = await enqueueAsUser(harness, 2301);
-  await go('warm A caches', ev(harness, async (org: any) => {
+  await go('warm A caches', ev(harness, async ([org, uidA]: any) => {
     const api = (window as any).r094;
-    await api.warmRqPersist(org.business, 'upd-a-marker');
+    await api.warmRqPersist(uidA, org.business, 'upd-a-marker');
     const r = await fetch('https://r094.invalid/rest/v1/products?select=id&r094id=1');
     let entries = 0;
     for (let i = 0; i < 30; i++) {
@@ -641,21 +642,21 @@ test(meta('R094.BROWSER.SW.IDENTITY-CONFIDENTIALITY', 'Identity transition aroun
       await new Promise((x) => setTimeout(x, 150));
     }
     return { status: r.status, entries };
-  }, ORG_A));
+  }, [ORG_A, USER_A]));
   await performUpdate(page);
   // Identity transition ON the Version-B-controlled runtime.
-  const res = await go('wipe on vB runtime', ev(harness, async (bizB: string) => {
+  const res = await go('wipe on vB runtime', ev(harness, async ([bizB, uidB]: [string, string]) => {
     const api = (window as any).r094;
     await api.wipeIdentityTransitionCaches('user-switch');
     const emptiness = await api.verifyBusinessCacheEmptiness();
-    api.setCurrentBusiness(bizB);
-    await api.warmRqPersist(bizB, 'upd-b-marker');
+    api.setCurrentUser(uidB); api.setCurrentBusiness(bizB);
+    await api.warmRqPersist(uidB, bizB, 'upd-b-marker');
     const rq = await api.rqCacheEntries();
     const aRemaining = rq.queries.filter((q: any) => q.dataJson.includes('upd-a-marker') || JSON.stringify(q.queryKey ?? []).includes('r094-biz-a')).length;
     const bPresent = rq.queries.filter((q: any) => q.dataJson.includes('upd-b-marker') && JSON.stringify(q.queryKey ?? []).includes(bizB)).length;
     const apiEntries = (await (await caches.open(api.WORKBOX_API_CACHE_NAME)).keys()).length;
     return { aRemaining, bPresent, apiEntries, emptiness: !!emptiness };
-  }, BIZ_B));
+  }, [BIZ_B, USER_B]));
   const queueState = await rereadQueueState(harness, seeded.localId);
   await ctx.close();
   must(

@@ -113,16 +113,23 @@ async function rqCacheEntries(): Promise<{ blobFound: boolean; queries: Array<{ 
 }
 
 /** Warm the real persisted React-Query cache via the app's own persister shape. */
-async function warmRqPersist(businessId: string, marker: string): Promise<void> {
+async function warmRqPersist(userId: string, businessId: string, marker: string): Promise<void> {
   const { persistQueryClientSave } = await import('@tanstack/react-query-persist-client');
   const { QueryClient } = await import('@tanstack/react-query');
-  const { createIDBPersister } = await import('@/lib/queryPersister');
+  const { createIDBPersister, setActivePersistedCacheIdentity } = await import('@/lib/queryPersister');
+  setActivePersistedCacheIdentity(userId, businessId);
   const qc = new QueryClient();
   qc.setQueryData(['products', businessId], [{ id: marker, name: `R09.4 marker ${marker}` }]);
   qc.setQueryData(['invoices', businessId], [{ id: marker }]);
   await persistQueryClientSave({
     queryClient: qc,
-    persister: createIDBPersister(),
+    // The harness has no live Supabase session; provide its synthetic actor via
+    // the persister's supported identity/session seams so the real persistence
+    // implementation writes the same principal+business namespace as the app.
+    persister: createIDBPersister({
+      getIdentity: () => ({ userId, businessId }),
+      getSessionUserId: async () => userId,
+    }),
     buster: `r094-${marker}`,
     dehydrateOptions: { shouldDehydrateQuery: () => true },
   });

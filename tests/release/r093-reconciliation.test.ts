@@ -734,7 +734,7 @@ test(meta('R093.D4.LEGACY-BRANCH-RIDER', 'D-4 rider (shape tolerance, not author
 
 /* ── P-D3-FINAL §11 / P-D4: sealed pair readback — resolved-state verification ─ */
 
-test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback availability, tracked across two states. As filed under P-D3-FINAL §11 (2026-09-23): not genuinely available — live probe has_table_privilege(authenticated,invoices)=false, zero SELECT policies in the chain — so the sealed records stayed BLOCKED, no grants added, no privileged readback fabricated. P-D4 (2026-09-23) then declared the member read tier in 20261003000000_invoice_member_readback.sql; this record now asserts the declared state live: SELECT granted to authenticated on invoices and invoice_lines, a SELECT policy exists on each, and the sealed records activate in the offline suite'), async () => {
+test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback availability, tracked across two states. The historic P-D3-FINAL block reflected the earlier absence of invoice SELECT access; P-D4 declared that tier in 20261003000000_invoice_member_readback.sql. The later 20261218000000_role_aware_financial_rls.sql supersedes its policy names with branch-scoped financial-or-sales read policies. Assert the final migration-chain state: authenticated SELECT grants and the role-aware policies on invoices and invoice_lines, with tenant isolation; sealed records activate in the offline suite'), async () => {
   ready();
   const priv = await db.client.query(
     "select has_table_privilege('authenticated','public.invoices','SELECT') inv, has_table_privilege('authenticated','public.invoice_lines','SELECT') lines",
@@ -744,11 +744,11 @@ test(meta('R093.SEALED-PAIR.READBACK-INVESTIGATION', 'Sealed R09.2 pair readback
   const pol = await db.client.query(
     "select tablename, policyname from pg_policies where schemaname='public' and tablename in ('invoices','invoice_lines') and (cmd = 'SELECT' or cmd = 'ALL') order by tablename, policyname",
   );
-  // P-D4 declares the two member policies; house platform_admin_read
-  // policies on the same tables (20260728000008) remain alongside them.
+  // The later role-aware financial migration supersedes P-D4's original
+  // member-read policy names with branch-scoped financial-or-sales policies.
   const names = new Set(pol.rows.map((r: { tablename: string; policyname: string }) => `${r.tablename}/${r.policyname}`));
-  expect(names.has('invoices/invoices_member_read')).toBe(true);
-  expect(names.has('invoice_lines/invoice_lines_member_read')).toBe(true);
+  expect(names.has('invoices/invoices_financial_or_sales_read')).toBe(true);
+  expect(names.has('invoice_lines/invoice_lines_financial_or_sales_read')).toBe(true);
   // Effective behavior, not just catalog entries: read back as a member of
   // business A succeeds, and cross-business read yields zero rows (RLS).
   const asMemberA = await db.asRole('authenticated', identities.A_cashier.id,
