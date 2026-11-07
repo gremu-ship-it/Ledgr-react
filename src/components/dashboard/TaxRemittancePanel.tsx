@@ -1,4 +1,5 @@
-import { formatMwkDetailed } from '@/lib/formatters';
+import { formatCurrency } from '@/lib/formatters';
+import { useAppStore } from '@/store/useAppStore';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, CheckCircle, Clock, Calendar } from 'lucide-react';
 import { getMraDueDates, useVatSummary, usePayeSummary } from '@/hooks/useTaxData';
@@ -9,7 +10,8 @@ interface TaxRemittancePanelProps {
 }
 
 export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currencyCode = useAppStore((state) => state.currentBusiness?.business.base_currency || 'MWK');
   const dueDates = getMraDueDates();
   const vat = useVatSummary(businessId);
   const paye = usePayeSummary(businessId);
@@ -63,7 +65,14 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
             {t('dashboard.vatPositionLastMonth')}
           </p>
-          {vat.isLoading ? (
+          {vat.isError ? (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p>{t('dashboard.vatSummaryLoadError')}</p>
+              <button type="button" onClick={() => void vat.refetch()} className="mt-2 font-semibold underline">
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : vat.isLoading ? (
             <div className="space-y-2">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="h-4 animate-pulse rounded bg-gray-100" />
@@ -73,19 +82,19 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>{t('dashboard.outputVatSales')}</span>
-                <span className="font-medium">{formatMwkDetailed(vat.data?.outputVat ?? 0)}</span>
+                <span className="font-medium">{formatCurrency(vat.data?.outputVat ?? 0, currencyCode, i18n.language)}</span>
               </div>
               <div className="flex justify-between text-gray-600">
                 <span>{t('dashboard.inputVatExpenses')}</span>
                 <span className="font-medium text-brand-600">
-                  − {formatMwkDetailed(vat.data?.inputVat ?? 0)}
+                  − {formatCurrency(vat.data?.inputVat ?? 0, currencyCode, i18n.language)}
                 </span>
               </div>
               <div className={`flex justify-between border-t border-gray-100 pt-1.5 font-semibold ${
                 (vat.data?.vatPayable ?? 0) > 0 ? 'text-red-600' : 'text-brand-600'
               }`}>
                 <span>{t('dashboard.vatPayableToMra')}</span>
-                <span>{formatMwkDetailed(vat.data?.vatPayable ?? 0)}</span>
+                <span>{formatCurrency(vat.data?.vatPayable ?? 0, currencyCode, i18n.language)}</span>
               </div>
               <p className="text-xs text-gray-600">{t('dashboard.period', { period: vat.data?.period ?? '—' })}</p>
             </div>
@@ -97,13 +106,20 @@ export function TaxRemittancePanel({ businessId }: TaxRemittancePanelProps) {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
             {t('dashboard.payeDueLastMonth')}
           </p>
-          {paye.isLoading ? (
+          {paye.isError ? (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              <p>{t('dashboard.payeSummaryLoadError')}</p>
+              <button type="button" onClick={() => void paye.refetch()} className="mt-2 font-semibold underline">
+                {t('common.retry')}
+              </button>
+            </div>
+          ) : paye.isLoading ? (
             <div className="h-4 animate-pulse rounded bg-gray-100" />
           ) : (
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between font-semibold text-red-600">
                 <span>{t('dashboard.totalPayeToRemit')}</span>
-                <span>{formatMwkDetailed(paye.data?.totalPaye ?? 0)}</span>
+                <span>{formatCurrency(paye.data?.totalPaye ?? 0, currencyCode, i18n.language)}</span>
               </div>
               <p className="text-xs text-gray-600">{t('dashboard.period', { period: paye.data?.period ?? '—' })}</p>
               <p className="text-xs text-gray-600">

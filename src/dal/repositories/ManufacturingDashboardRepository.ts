@@ -99,6 +99,15 @@ const metricsFor = (businessId: string, startDate: string, endDate: string) =>
     p_end_date: endDate,
   });
 
+/** Lightweight metrics-only read for compact dashboard cards. */
+export function getManufacturingDashboardMetrics(
+  businessId: string,
+  startDate: string,
+  endDate: string,
+): Promise<ManufacturingDashboardMetrics> {
+  return metricsFor(businessId, startDate, endDate);
+}
+
 /** Fetch all dashboard views together. React Query caches this by business and range. */
 export async function getManufacturingDashboard(
   businessId: string,

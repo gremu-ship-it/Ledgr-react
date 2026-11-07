@@ -17,7 +17,7 @@ export function PayRunJournalEntryModal({ entryId, onClose }: { entryId: string;
     queryFn: () => repos.journal.findByIdWithLines(entryId),
   });
   const entry = entryQuery.data?.entry;
-  const lines = entryQuery.data?.lines ?? [];
+  const lines = Array.isArray(entryQuery.data?.lines) ? entryQuery.data.lines : [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-4" role="presentation">

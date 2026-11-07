@@ -22,7 +22,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, DAY, saleFixture } from './fixtures';
+import { seedFixture, identities, DAY, saleFixture, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r06-pos');
@@ -40,7 +40,8 @@ let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); }
   catch (e) { seedError = safeError(e); }
 });
 afterAll(async () => { if (db) await db.cleanup(); });
@@ -116,8 +117,8 @@ test(meta('R06.POS.REPLAY-EXACTLY-ONCE', 'post_pos_sale command replay (same cli
   ready();
   const payload = JSON.stringify(saleFixture(orgs.A, 11));
   await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
-    const first = (await c.query('select public.post_pos_sale($1::jsonb) r', [payload])).rows[0].r as { id: string };
-    const second = (await c.query('select public.post_pos_sale($1::jsonb) r', [payload])).rows[0].r as { id: string; idempotent: boolean };
+    const first = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [payload])).rows[0].r as { id: string };
+    const second = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [payload])).rows[0].r as { id: string; idempotent: boolean };
     expect(second.id).toBe(first.id);
     await c.query('reset role');
     expect(Number((await balanceOf(c)).quantity_on_hand)).toBe(99);
@@ -134,7 +135,7 @@ test(meta('R06.POS.SERVICE-NO-STOCK', 'Non-stock (track_inventory=false) product
     const svc = (await c.query("insert into public.products(business_id,name,sku,sale_price,purchase_price,currency,product_type,track_inventory,sales_tax_code,purchase_tax_code) values($1,'R13 service','SVC-R06',1500,0,'MWK','service',false,'none','none') returning id", [orgs.A.business])).rows[0].id as string;
     const fixture = saleFixture(orgs.A, 12) as Record<string, unknown> & { lines: Array<Record<string, unknown>> };
     fixture.lines = [{ ...fixture.lines[0], description: 'R13 synthetic service line', product_id: svc }];
-    const posted = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(fixture)])).rows[0].r as { id: string };
+    const posted = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(fixture)])).rows[0].r as { id: string };
     const moves = (await c.query("select count(*)::int n from public.stock_movements where business_id=$1 and source_type='invoice' and source_id=$2",
       [orgs.A.business, posted.id])).rows[0].n;
     expect(moves).toBe(0);

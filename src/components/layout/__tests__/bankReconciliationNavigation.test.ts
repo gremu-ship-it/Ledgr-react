@@ -10,6 +10,8 @@ describe('bank reconciliation routes and navigation', () => {
       '/bank-reconciliation/accounts',
       '/bank-reconciliation/statements',
       '/bank-reconciliation/reconcile',
+      '/cash-forecast',
+      '/settings/exchange-rates',
     ]);
   });
 

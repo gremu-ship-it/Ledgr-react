@@ -21,9 +21,9 @@ export function QuickActions() {
       onClick: () => navigate('/expenses?action=record'),
     },
     {
-      label: 'Run Payroll',
+      label: 'Payroll',
       icon: Users,
-      onClick: () => navigate('/payroll?action=run'),
+      onClick: () => navigate('/payroll/employees'),
     },
   ];
 

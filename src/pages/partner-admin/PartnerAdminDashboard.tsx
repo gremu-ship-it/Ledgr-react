@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { PartnerRepository } from '@/dal/repositories/PartnerRepository';
+import { PartnerAdminRepository } from '@/dal/repositories/PartnerAdminRepository';
+import { partnerPortalRepository } from '@/dal/repositories/PartnerPortalRepository';
 import { usePartnerAdminAccess } from '@/hooks/usePartnerAdminAccess';
 import { PLATFORM_ROOT_DOMAIN, slugify } from '@/lib/partnerDomain';
 import {
@@ -14,6 +17,7 @@ import {
 export function PartnerAdminDashboard() {
   const { isPlatformAdmin, partners: myPartners, loading: accessLoading } = usePartnerAdminAccess();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: allPartners = [], isLoading } = useQuery({
@@ -28,6 +32,38 @@ export function PartnerAdminDashboard() {
   });
 
   const partners = isPlatformAdmin ? allPartners : myPartners;
+
+  const { data: portfolio = { clients: [], staffCount: 0 } } = useQuery({
+    queryKey: ['partner-portfolio-summary', partners.map((partner) => partner.id)],
+    queryFn: async () => {
+      const results = await Promise.all(partners.map(async (partner) => {
+        const [clients, staff] = await Promise.all([
+          partnerPortalRepository.getPartnerClients(partner.id),
+          PartnerAdminRepository.list(partner.id),
+        ]);
+        return { clients, staffCount: staff.length };
+      }));
+      return {
+        clients: results.flatMap((result) => result.clients),
+        staffCount: results.reduce((total, result) => total + result.staffCount, 0),
+      };
+    },
+    enabled: !isPlatformAdmin && partners.length > 0,
+  });
+
+  const { data: activity = [] } = useQuery({
+    queryKey: ['partner-activity', partners.map((partner) => partner.id)],
+    queryFn: async () => {
+      const lists = await Promise.all(partners.map((partner) => partnerPortalRepository.getClientActivity(partner.id, 10)));
+      return lists.flat().sort((a, b) => Date.parse(b.event_at) - Date.parse(a.event_at)).slice(0, 10);
+    },
+    enabled: !isPlatformAdmin && partners.length > 0,
+  });
+
+  const portfolioTotals = useMemo(() => ({
+    subscriptions: portfolio.clients.filter((client) => client.is_active !== false && (client.plan_tier ?? 'free').toLowerCase() !== 'free').length,
+    onboardings: portfolio.clients.filter((client) => client.status === 'onboarding').length,
+  }), [portfolio.clients]);
 
   const totals = useMemo(
     () => ({
@@ -46,9 +82,9 @@ export function PartnerAdminDashboard() {
     <div>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Partners</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{isPlatformAdmin ? 'Partners' : t('partner.title')}</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Banks and MFIs offering Ledgr to their SME clients under their own brand.
+            {isPlatformAdmin ? 'Banks and MFIs offering Ledgr to their SME clients under their own brand.' : t('partner.clientsDescription')}
           </p>
         </div>
         {isPlatformAdmin && (
@@ -62,11 +98,45 @@ export function PartnerAdminDashboard() {
         )}
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Partners" value={totals.partners} />
-        <StatCard label="Clients onboarded" value={totals.clients} />
-        <StatCard label="Total client capacity" value={totals.capacity} />
-      </div>
+      {isPlatformAdmin && (
+        <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <StatCard label="Partners" value={totals.partners} />
+          <StatCard label="Clients onboarded" value={totals.clients} />
+          <StatCard label="Total client capacity" value={totals.capacity} />
+        </div>
+      )}
+
+      {!isPlatformAdmin && partners.length > 0 && (
+        <section className="mb-8 space-y-5" aria-labelledby="partner-portfolio-heading">
+          <h2 id="partner-portfolio-heading" className="text-lg font-semibold text-slate-900">{t('partner.overview')}</h2>
+          <div className="grid gap-4 sm:grid-cols-4">
+            <StatCard label={t('partner.clients')} value={portfolio.clients.length} />
+            <StatCard label={t('partner.activeSubscriptions')} value={portfolioTotals.subscriptions} />
+            <StatCard label={t('partner.pendingOnboardings')} value={portfolioTotals.onboardings} />
+            <StatCard label={t('partner.staffCount')} value={portfolio.staffCount} />
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="font-semibold text-slate-900">{t('partner.clientActivity')}</h3>
+            {activity.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">{t('partner.noActivity')}</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-slate-100">
+                {activity.map((event) => (
+                  <li key={`${event.business_id}-${event.event_type}-${event.event_id}`} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                    <div className="min-w-0">
+                      <span className="font-medium text-slate-900">{event.business_name}</span>
+                      <span className="mx-2 text-slate-300" aria-hidden="true">·</span>
+                      <span className="text-slate-600">{event.title || t(`partner.activityTypes.${event.event_type}`)}</span>
+                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{t(`partner.activityTypes.${event.event_type}`)}</span>
+                    </div>
+                    <time dateTime={event.event_at} className="text-xs text-slate-500">{new Date(event.event_at).toLocaleString()}</time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      )}
 
       {partners.length === 0 ? (
         <EmptyState onCreate={isPlatformAdmin ? () => setShowCreate(true) : undefined} />
