@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router';
 import { useAuthListener } from '@/hooks/useAuthListener';
 import { ProtectedRoute, PublicOnlyRoute, PlatformAdminRoute } from '@/routes/ProtectedRoute';
@@ -13,6 +14,8 @@ import {
 } from '@/offline/registerServiceWorker';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { useAppStore } from '@/store/useAppStore';
+import { queryClient } from '@/lib/queryClient';
+import { persistOptions } from '@/lib/queryPersister';
 import { isPathAllowedForRole, getHomePathForRole } from '@/hooks/usePermissions';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
 import { useDefaultRoute } from './hooks/useDefaultRoute';
@@ -382,6 +385,13 @@ export function SmartRedirect() {
 function App() {
   const { t } = useTranslation();
   useAuthListener();
+  const isAuthLoading = useAppStore((state) => state.isAuthLoading);
+  const isBusinessesLoading = useAppStore((state) => state.isBusinessesLoading);
+  // Store identity setters update the query-persister namespace synchronously
+  // before the auth and tenant loading flags are cleared. Keep the provider
+  // unmounted until both resolutions finish so persisted data cannot restore
+  // under an anonymous or stale tenant identity.
+  const cacheIdentityReady = !isAuthLoading && !isBusinessesLoading;
 
   // Defense-in-depth for audit A-01: if the Supabase env vars were missing at
   // build time, supabase.ts now falls back to a placeholder client instead of
@@ -397,9 +407,13 @@ function App() {
   if (!isSupabaseConfigured && !onPublicDemo && !isDemoMode()) {
     return <ConfigError />;
   }
+  if (!cacheIdentityReady) {
+    return <LoadingSpinner fullScreen label={t('common.loading')} />;
+  }
 
   return (
-    <ErrorBoundary name="App">
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+      <ErrorBoundary name="App">
       <UpdateAvailableBanner />
       <PartnerProvider>
         <BrowserRouter>
@@ -1099,7 +1113,8 @@ function App() {
           <CookieConsentBanner />
         </BrowserRouter>
       </PartnerProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+    </PersistQueryClientProvider>
   );
 }
 

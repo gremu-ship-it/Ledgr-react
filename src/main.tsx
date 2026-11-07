@@ -1,14 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import * as Sentry from '@sentry/react';
 import { supabase } from '@/lib/supabase';
 import { attemptChunkRecovery, clearChunkRecovery } from '@/lib/chunkRecovery';
 import { initErrorCapture } from '@/lib/errorCapture';
-import { queryClient } from '@/lib/queryClient';
-import { persistOptions } from '@/lib/queryPersister';
 import { wipeIdentityTransitionCaches } from '@/lib/cacheWipe';
 import './index.css';
 import './i18n';
@@ -67,12 +64,10 @@ if (SENTRY_DSN) {
 function startApp() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
-        <App />
-        {/* Vercel Web Analytics + Speed Insights (Core Web Vitals) */}
-        <Analytics />
-        <SpeedInsights />
-      </PersistQueryClientProvider>
+      <App />
+      {/* Vercel Web Analytics + Speed Insights (Core Web Vitals) */}
+      <Analytics />
+      <SpeedInsights />
     </StrictMode>,
   );
 

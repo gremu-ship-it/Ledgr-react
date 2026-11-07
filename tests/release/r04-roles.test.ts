@@ -1,17 +1,15 @@
 /**
  * R04 — Tenant/role enforcement verification suite.
  *
- * Scope: the release suite's ROLE.cashier.write expectation (fixed intent)
- * requires cashiers to be denied direct INSERT into public.contacts at the
- * database boundary. The authorised cashier path is the SECURITY DEFINER
- * post_pos_sale command (which resolves/creates the billed contact itself),
- * so narrowing contacts writer policies breaks no legitimate flow.
+ * Scope: cashier and stock_clerk may not read or directly mutate the general
+ * ledger, budgets or bank statements through PostgREST. Cashier sales remain
+ * available through the scoped sales-invoice path and SECURITY DEFINER
+ * post_pos_sale command. Existing contacts writer controls remain covered.
  *
- * Coverage: the full seeded-role write matrix (denials assert 42501 AND that
- * zero rows were returned), cross-organisation and anonymous variants, the
- * preserved POS sale path, the policy/ACL end state, no-over-narrowing
- * read controls, and fixture-data immutability. Every probe transaction is
- * rolled back by the harness; allowed-case state assertions run after.
+ * Coverage: seeded-role write matrix, cross-organisation and anonymous
+ * variants, preserved POS sale path, financial table read/write denial,
+ * policy/ACL end state, no-over-narrowing read controls, and fixture-data
+ * immutability. Every probe is isolated in the database harness.
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
@@ -20,6 +18,7 @@ import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('r04-roles');
 const MIGRATION = 'supabase/migrations/20260927000001_r04_contacts_writer_scope.sql';
+const FINANCIAL_MIGRATION = 'supabase/migrations/20261218000000_role_aware_financial_rls.sql';
 const DB_LAYER = 'real PostgreSQL17 roles/RLS; synthetic identities; full migration replay';
 const meta = (id: string, expected: string, source = MIGRATION, layer = DB_LAYER) => ({
   id, expected, remediation: 'R04', source, layer,
@@ -165,6 +164,161 @@ test(meta('R04.CONTACTS.READ-UNCHANGED', 'Narrowing writes does not over-narrow 
   // Foreign org rows remain invisible to members of the other tenant.
   expect((await db.asRole('authenticated', identities.A_viewer.id,
     'select count(*)::int n from public.contacts where business_id=$1', [orgs.B.business])).rows[0].n).toBe(0);
+});
+
+test(meta('R04.FINANCIAL.OPERATIONAL-ROLES-DENIED', 'Cashier and stock_clerk cannot read seeded ledger/bank-statement rows or directly insert journal entries/lines/statements; reporting views honor caller RLS', FINANCIAL_MIGRATION), async () => {
+  ready();
+
+  const viewOptions = (await db.client.query(`
+    select relname, reloptions from pg_class
+    where oid in ('public.v_trial_balance'::regclass, 'public.v_ar_ageing'::regclass)
+    order by relname
+  `)).rows as Array<{ relname: string; reloptions: string[] }>;
+  expect(viewOptions).toEqual([
+    { relname: 'v_ar_ageing', reloptions: ['security_invoker=true'] },
+    { relname: 'v_trial_balance', reloptions: ['security_invoker=true'] },
+  ]);
+
+  const account = await db.client.query(
+    'select id from public.accounts where business_id=$1 order by code limit 1',
+    [orgs.A.business],
+  );
+  expect(account.rows).toHaveLength(1);
+  const accountId = account.rows[0].id as string;
+
+  const journal = await db.client.query(
+    `insert into public.journal_entries(
+       business_id, currency, description, entry_date, entry_number, exchange_rate, status
+     ) values($1,'MWK','R04 financial-role seed',current_date,'R04-FINANCIAL-ROLE-SEED',1,'draft')
+     returning id`,
+    [orgs.A.business],
+  );
+  const journalId = journal.rows[0].id as string;
+  await db.client.query(
+    `insert into public.journal_lines(
+       business_id, journal_entry_id, account_id, line_number, is_debit,
+       amount, amount_base, currency, exchange_rate, rate_is_stale, reconciled, tax_amount
+     ) values($1,$2,$3,1,true,1,1,'MWK',1,false,false,0)`,
+    [orgs.A.business, journalId, accountId],
+  );
+
+  const statement = await db.client.query(
+    `insert into public.bank_statements(
+       business_id, account_id, opening_balance, closing_balance, statement_date, source
+     ) values($1,$2,0,1,current_date,'R04 financial-role seed') returning id`,
+    [orgs.A.business, accountId],
+  );
+  const statementId = statement.rows[0].id as string;
+  await db.client.query(
+    `insert into public.bank_statement_lines(
+       business_id, statement_id, transaction_date, description,
+       debit_amount, credit_amount, is_reconciled
+     ) values($1,$2,current_date,'R04 financial-role seed',1,0,false)`,
+    [orgs.A.business, statementId],
+  );
+
+  const budget = await db.client.query(
+    `insert into public.budgets(business_id, fiscal_year, name, period_start, period_end)
+     values($1,'2026','R04 financial-role seed',current_date,current_date) returning id`,
+    [orgs.A.business],
+  );
+  const budgetId = budget.rows[0].id as string;
+  const expense = await db.client.query(
+    `insert into public.expenses(
+       business_id, amount_paid, currency, exchange_rate, expense_date,
+       expense_number, expense_type, rate_is_stale, status, subtotal,
+       total_amount, vat_amount, wht_amount
+     ) values($1,0,'MWK',1,current_date,'R04-EXPENSE-ROLE-SEED','expense',false,
+              'draft',1,1,0,0) returning id`,
+    [orgs.A.business],
+  );
+  const expenseId = expense.rows[0].id as string;
+
+  // Positive control: an accounting role sees all seeded financial records.
+  for (const [table, id] of [
+    ['journal_entries', journalId],
+    ['bank_statements', statementId],
+    ['budgets', budgetId],
+    ['expenses', expenseId],
+  ] as const) {
+    expect((await db.asRole('authenticated', identities.A_accountant.id,
+      `select count(*)::int n from public.${table} where id=$1`, [id])).rows[0].n).toBe(1);
+  }
+
+  for (const role of ['cashier', 'stock_clerk'] as const) {
+    const uid = identities[`A_${role}`].id;
+    for (const [table, id] of [
+      ['journal_entries', journalId],
+      ['journal_lines', journalId],
+      ['bank_statements', statementId],
+      ['bank_statement_lines', statementId],
+      ['budgets', budgetId],
+      ['expenses', expenseId],
+    ] as const) {
+      const key = table === 'journal_lines' ? 'journal_entry_id'
+        : table === 'bank_statement_lines' ? 'statement_id' : 'id';
+      const visible = await db.asRole('authenticated', uid,
+        `select count(*)::int n from public.${table} where ${key}=$1`, [id]);
+      expect(visible.rows[0].n, `${role} must not read ${table}`).toBe(0);
+    }
+
+    await denied42501(() => db.asRole('authenticated', uid,
+      `insert into public.journal_entries(
+         business_id, currency, description, entry_date, entry_number, exchange_rate, status
+       ) values($1,'MWK','R04 direct journal probe',current_date,$2,1,'draft')`,
+      [orgs.A.business, `R04-DENIED-${role.toUpperCase()}`]));
+
+    await denied42501(() => db.asRole('authenticated', uid,
+      `insert into public.journal_lines(
+         business_id, journal_entry_id, account_id, line_number, is_debit,
+         amount, amount_base, currency, exchange_rate, rate_is_stale, reconciled, tax_amount
+       ) values($1,$2,$3,2,false,1,1,'MWK',1,false,false,0)`,
+      [orgs.A.business, journalId, accountId]));
+
+    await denied42501(() => db.asRole('authenticated', uid,
+      `insert into public.bank_statements(
+         business_id, account_id, opening_balance, closing_balance, statement_date
+       ) values($1,$2,0,1,current_date)`,
+      [orgs.A.business, accountId]));
+
+    await denied42501(() => db.asRole('authenticated', uid,
+      `insert into public.budgets(business_id,fiscal_year,name,period_start,period_end)
+       values($1,'2026','R04 direct budget probe',current_date,current_date)`,
+      [orgs.A.business]));
+
+    await denied42501(() => db.asRole('authenticated', uid,
+      `insert into public.expenses(
+         business_id, amount_paid, currency, exchange_rate, expense_date,
+         expense_number, expense_type, rate_is_stale, status, subtotal,
+         total_amount, vat_amount, wht_amount
+       ) values($1,0,'MWK',1,current_date,$2,'expense',false,'draft',1,1,0,0)`,
+      [orgs.A.business, `R04-EXPENSE-DENIED-${role.toUpperCase()}`]));
+
+    for (const [table, id] of [['budgets', budgetId], ['expenses', expenseId]] as const) {
+      const updated = await db.asRole('authenticated', uid,
+        `update public.${table} set updated_at=now() where id=$1 returning id`, [id]);
+      expect(updated.rows, `${role} must not mutate ${table}`).toHaveLength(0);
+    }
+  }
+});
+
+test(meta('R04.FINANCIAL.CASHIER-SALES-INVOICE-PRESERVED', 'Cashier retains direct scoped sales-invoice creation without gaining general-ledger access', FINANCIAL_MIGRATION), async () => {
+  ready();
+  const contact = await db.client.query(
+    "select id from public.contacts where business_id=$1 and contact_type='customer' order by id limit 1",
+    [orgs.A.business],
+  );
+  expect(contact.rows).toHaveLength(1);
+  const inserted = await db.asRole('authenticated', identities.A_cashier.id,
+    `insert into public.invoices(
+       business_id, contact_id, branch_id, currency, discount_amount, discount_percent,
+       exchange_rate, invoice_number, invoice_type, issue_date, rate_is_stale,
+       status, subtotal, taxable_amount, total_amount, vat_amount, wht_amount, amount_paid
+     ) values($1,$2,$3,'MWK',0,0,1,'R04-CASHIER-SALES-PATH','invoice',current_date,
+              false,'draft',1,1,1,0,0,0) returning id`,
+    [orgs.A.business, contact.rows[0].id, orgs.A.branch],
+  );
+  expect(inserted.rows).toHaveLength(1);
 });
 
 test(meta('R04.CONTACTS.DATA-UNCHANGED', 'Migration and probes alter no existing fixture data: contacts, memberships and branches stay stable'), async () => {

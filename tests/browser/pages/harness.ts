@@ -85,25 +85,28 @@ async function idbSnapshot(dbName: string): Promise<Record<string, number>> {
 }
 
 /**
- * Enumerate the persisted React-Query cache blob (single-row 'rq-state'):
+ * Enumerate principal/business-namespaced persisted React-Query cache rows:
  * returns each dehydrated query's key and a compact data-marker string so
  * confidentiality records can assert which business markers survive.
  */
 async function rqCacheEntries(): Promise<{ blobFound: boolean; queries: Array<{ queryKey: unknown; dataJson: string }> }> {
   const db = await new Promise<IDBDatabase | null>((res) => { const r = indexedDB.open(RQ_PERSIST_DB_NAME); r.onsuccess = () => res(r.result); r.onerror = () => res(null); }).catch(() => null);
   if (!db || !db.objectStoreNames.contains('cache')) return { blobFound: false, queries: [] };
-  const row: any = await new Promise((res) => {
-    const g = db.transaction('cache', 'readonly').objectStore('cache').get('rq-state');
-    g.onsuccess = () => res(g.result ?? null); g.onerror = () => res(null);
+  const rows: any[] = await new Promise((res) => {
+    const g = db.transaction('cache', 'readonly').objectStore('cache').getAll();
+    g.onsuccess = () => res((g.result ?? []).filter((row: any) => String(row?.id ?? '').startsWith('rq-state-')));
+    g.onerror = () => res([]);
   });
-  if (!row?.client) return { blobFound: false, queries: [] };
+  if (!rows.length) return { blobFound: false, queries: [] };
   try {
-    const parsed = JSON.parse(row.client as string);
-    const queries: any[] = parsed?.clientState?.queries ?? [];
-    return {
-      blobFound: true,
-      queries: queries.map((q: any) => ({ queryKey: q?.queryKey, dataJson: JSON.stringify(q?.state?.data ?? null) })),
-    };
+    const queries = rows.flatMap((row) => {
+      const parsed = JSON.parse(row.client as string);
+      return (parsed?.clientState?.queries ?? []).map((q: any) => ({
+        queryKey: q?.queryKey,
+        dataJson: JSON.stringify(q?.state?.data ?? null),
+      }));
+    });
+    return { blobFound: true, queries };
   } catch {
     return { blobFound: true, queries: [{ queryKey: null, dataJson: '<unparseable>' }] };
   }

@@ -13755,6 +13755,17 @@ export type Database = {
         ComputedFields: never
         Relationships: []
       }
+      v_partner_peer_businesses: {
+        Row: {
+          brand_color: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          trading_name: string | null
+        }
+        ComputedFields: never
+        Relationships: []
+      }
       v_reorder_alerts: {
         Row: {
           average_cost: number
