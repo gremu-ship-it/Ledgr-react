@@ -10,24 +10,33 @@ const test = evidenceSuite('construction-project-existing-chain');
 const root = 'supabase/migrations/';
 const head = '20261027000000';
 // The fixture starts from a fully replayed database, then marks an older
-// migration head in synthetic history. Replay migrations relevant to this
-// construction upgrade probe; P4B's foundation is one-shot and unrelated.
-// The work-orders install and execution-evolution migrations are excluded from
-// this construction-only replay. The execution migration intentionally replaces
-// manufacturing_run_output_positive with evolved constraints, so replaying the
-// old install migration trips its historical verifier; replaying the evolution
-// migration then attempts to add its already-present constraints. The multilevel
-// BOQ migration also performs a one-time import before creating its guard trigger;
-// replaying it against the latest schema routes that import through the later
-// trigger. Those features have dedicated release suites and are excluded here so
-// this probe tests construction-project lifecycle/namespace compatibility only.
-const pending = readdirSync(root).filter(name => name.endsWith('.sql') && name.slice(0, 14) > head
-  && !name.includes('_p4b1_bank_reconciliation_')
-  && !name.includes('_p4b2_bank_reconciliation_')
-  && !name.includes('_p4c_approval_workflows')
-  && name !== '20261105000001_manufacturing_work_orders.sql'
-  && name !== '20261121000000_manufacturing_execution_routings_and_runs.sql'
-  && name !== '20261122000000_construction_multilevel_boq.sql').sort();
+// migration head in synthetic history. Replay only the applicable construction
+// project graph migrations: this compatibility probe is not a full application
+// migration replay, because its baseline intentionally already contains the
+// unrelated domains (payroll, cash deposits, FX, manufacturing, etc.) and the
+// standalone construction modules (change orders, quality/HSE, scheduling).
+// Those have their own release suites; replaying them over their already-installed
+// schema creates policy collisions without testing project namespace compatibility.
+// Keep this list explicit so additions to another domain do not silently change
+// the replay surface.
+const constructionReplay = new Set([
+  '20261028000000_construction_projects.sql',
+  '20261028000001_construction_projects_namespace.sql',
+  '20261029000000_business_operating_models_audit_resource_id.sql',
+  '20261030000000_construction_project_boq.sql',
+  '20261030115023_construction_rfis_5b4a.sql',
+  '20261031000000_construction_retention_receivable_subtype.sql',
+  '20261031000001_construction_progress_valuations.sql',
+  '20261101000000_construction_project_reporting.sql',
+  '20261107000000_construction_client_linkage.sql',
+  '20261108000000_construction_site_lifecycle.sql',
+  '20261117000000_subcontractor_profiles_and_subcontracts.sql',
+  '20261123000000_project_purchase_order_boq_links.sql',
+  '20261125000000_payment_certificates.sql',
+  '20261127000000_reconcile_construction_tables.sql',
+  '20261129000000_extend_construction_rfis.sql',
+]);
+const pending = readdirSync(root).filter(name => constructionReplay.has(name)).sort();
 const phaseA = readFileSync(root + '20261028000000_construction_projects.sql', 'utf8');
 const namespace = readFileSync(root + '20261028000001_construction_projects_namespace.sql', 'utf8');
 const boq = readFileSync(root + '20261030000000_construction_project_boq.sql', 'utf8');
@@ -272,12 +281,12 @@ test(meta('FULL-PENDING-CHAIN', 'Applicable pending files apply to the populated
     await expectClientLinkAdditions(identitiesBefore, await identitySnapshot(), 2);
     expect((await db.client.query(`select relkind,reloptions from pg_class
       where oid='public.projects'::regclass`)).rows[0]).toEqual({ relkind: 'v', reloptions: ['security_invoker=true'] });
-    // Later BOQ guard functions intentionally use the public.projects
-    // compatibility view, so limit this stale-reference check to the legacy
-    // functions governed by the project-namespace migration.
+    // Later BOQ guards and cash-flow forecasting intentionally use the
+    // public.projects compatibility view, so limit this stale-reference check
+    // to legacy functions governed by the project-namespace migration.
     const stale = await db.client.query(`select p.proname from pg_proc p
       join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f'
-      and p.proname not in ('_boq_item_guard','_boq_version_guard','_boq_section_guard')
+      and p.proname not in ('_boq_item_guard','_boq_version_guard','_boq_section_guard','generate_cash_forecast')
       and (position('public.projects' in p.prosrc)>0 or position('lifecycle_state' in p.prosrc)>0)`);
     expect(stale.rows).toEqual([]);
     for (const sql of [phaseA, namespace, boq, valuations]) await db.client.query(sql);

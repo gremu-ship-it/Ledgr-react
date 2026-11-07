@@ -16,6 +16,7 @@ import { realSupabase } from '@/lib/supabase';
 import type { PosCartItem, PosSalePayload } from '@/types/pos';
 import { missingPostPosSale } from '@/services/__tests__/helpers/postPosSaleStub';
 import { useAppStore } from '@/store/useAppStore';
+import { setDemoMode } from '@/lib/demo/mode';
 
 /**
  * R09.2 test identity: replay requires provenance matching the current
@@ -82,9 +83,9 @@ describe('a POS sale queued offline', () => {
   beforeEach(async () => {
     await offlineDB.queue.clear();
     vi.restoreAllMocks();
-    // The client-side path is the fallback: it runs when post_pos_sale is not
-    // applied yet (stage 2 of docs/database/pos-sale-posting-rpc.md). This suite
-    // covers the client-side write, so the RPC is stubbed as missing.
+    setDemoMode(true);
+    // This suite exercises the explicit demo materializer; production replay
+    // remains plan-gated and fails closed until the migration is deployed.
     vi.spyOn(realSupabase, 'rpc').mockImplementation(
       missingPostPosSale(() => ({ data: null, error: null })) as never,
     );

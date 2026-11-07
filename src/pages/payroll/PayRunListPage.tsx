@@ -34,8 +34,18 @@ export function PayRunListPage() {
       pageSize: PAGE_SIZE,
     }),
   });
+  // The full-cycle payroll update introduced `pay_runs` alongside the legacy
+  // `payroll_runs` table. Keep pre-update records visible here; the migration
+  // intentionally preserved them in their original table rather than moving
+  // or rewriting financial history.
+  const historyQuery = useQuery({
+    queryKey: ['payroll_runs', businessId],
+    enabled: Boolean(businessId),
+    queryFn: () => repos.payroll.findByBusiness(businessId),
+  });
 
   const rows = Array.isArray(runsQuery.data?.rows) ? runsQuery.data.rows : [];
+  const historyRows = Array.isArray(historyQuery.data) ? historyQuery.data : [];
   const totalPages = Math.max(1, Math.ceil((runsQuery.data?.count ?? 0) / PAGE_SIZE));
   const summaryGross = rows.reduce((sum, row) => sum + numeric(row.total_gross), 0);
   const summaryNet = rows.reduce((sum, row) => sum + numeric(row.total_net), 0);
@@ -89,13 +99,17 @@ export function PayRunListPage() {
       {runsQuery.isError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{t('payroll.payRunsLoadFailed')}</p>}
 
       {runsQuery.isPending ? <TableSkeleton rows={6} /> : rows.length === 0 ? (
-        <EmptyState
-          title={status ? t('payroll.noPayRunsMatch') : t('payroll.noPayRunsYet')}
-          description={status ? t('payroll.adjustPayRunFilters') : t('payroll.noPayRunsDescription')}
-          actionLabel={!status ? t('payroll.newPayRun') : undefined}
-          onAction={!status ? () => navigate('/payroll/pay-runs/new') : undefined}
-          variant={status ? 'search' : 'finance'}
-        />
+        historyQuery.isPending ? <TableSkeleton rows={3} /> : !status && historyRows.length > 0 ? (
+          <p className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">{t('payroll.noNewRunsLegacyAvailable')}</p>
+        ) : (
+          <EmptyState
+            title={status ? t('payroll.noPayRunsMatch') : t('payroll.noPayRunsYet')}
+            description={status ? t('payroll.adjustPayRunFilters') : t('payroll.noPayRunsDescription')}
+            actionLabel={!status ? t('payroll.newPayRun') : undefined}
+            onAction={!status ? () => navigate('/payroll/pay-runs/new') : undefined}
+            variant={status ? 'search' : 'finance'}
+          />
+        )
       ) : (
         <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
@@ -153,6 +167,51 @@ export function PayRunListPage() {
             </div>
           )}
         </section>
+      )}
+
+      {(historyQuery.isPending || historyQuery.isError || historyRows.length > 0) && (
+      <section className="space-y-3" aria-labelledby="payroll-history-heading">
+        <div>
+          <h2 id="payroll-history-heading" className="text-lg font-semibold text-gray-900">{t('payroll.legacyHistoryTitle')}</h2>
+          <p className="mt-1 text-sm text-gray-600">{t('payroll.legacyHistoryDescription')}</p>
+        </div>
+        {historyQuery.isPending ? <TableSkeleton rows={3} /> : historyQuery.isError ? (
+          <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{t('payroll.legacyHistoryLoadFailed')}</p>
+        ) : historyRows.length === 0 ? null : (
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 text-sm">
+                <thead className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th scope="col" className="px-4 py-3">{t('payroll.legacyHistoryRunNumber')}</th>
+                    <th scope="col" className="px-4 py-3">{t('payroll.legacyHistoryPeriod')}</th>
+                    <th scope="col" className="px-4 py-3">{t('payroll.legacyHistoryPayDate')}</th>
+                    <th scope="col" className="px-4 py-3">{t('payroll.legacyHistoryGross')}</th>
+                    <th scope="col" className="px-4 py-3">{t('payroll.legacyHistoryNet')}</th>
+                    <th scope="col" className="px-4 py-3">{t('payroll.legacyHistoryStatus')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {historyRows.map((run) => (
+                    <tr key={run.id}>
+                      <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900">{text(run.run_number, '—')}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-gray-700">
+                        {text(run.payroll_period, formatPayPeriod(run.period_start, i18n.language))}
+                        <span className="ml-2 text-xs text-gray-500">{formatDate(run.period_start, i18n.language)} – {formatDate(run.period_end, i18n.language)}</span>
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-gray-700">{formatDate(run.pay_date, i18n.language)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 tabular-nums text-gray-700">{formatPayRunMoney(run.total_gross, currency, i18n.language)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-gray-900">{formatPayRunMoney(run.total_net, currency, i18n.language)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 capitalize text-gray-700">{text(run.status, '—')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="border-t border-gray-100 px-4 py-3 text-xs text-gray-500">{t('payroll.legacyHistoryReadOnly')}</p>
+          </div>
+        )}
+      </section>
       )}
     </main>
   );

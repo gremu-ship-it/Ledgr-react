@@ -21,6 +21,10 @@ import { Assistant } from '@/components/ai/Assistant';
 import { CommandPalette } from './CommandPalette';
 import { DemoBanner } from '@/components/demo/DemoBanner';
 import { useDemoMode } from '@/hooks/useDemoMode';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
+import { PartnerClientContextBanner } from '@/partner/PartnerClientContextBanner';
+import { usePartnerClientContext } from '@/partner/usePartnerClientContext';
+import { clearPartnerClientContext } from '@/partner/partnerClientContext';
 
 export function AppLayout() {
   const { t } = useTranslation();
@@ -29,6 +33,7 @@ export function AppLayout() {
   const isMobile = useIsMobile();
   const location = useLocation();
   const isDemo = useDemoMode();
+  const { session: partnerClientSession, isRestoring: isRestoringPartnerContext, exitContext } = usePartnerClientContext();
 
   useBrandTheme();
   usePartnerTheme();
@@ -49,6 +54,7 @@ export function AppLayout() {
         <div id="ledgr-live-region" aria-live="polite" aria-atomic="true" className="sr-only" />
 
         <div className="sticky top-0 z-40">
+          {partnerClientSession && <PartnerClientContextBanner session={partnerClientSession} onExit={exitContext} />}
           {/* Demo visitors always see which account they are in and how to
               leave — the sample books must never be mistaken for real data. */}
           {isDemo && <DemoBanner />}
@@ -80,7 +86,7 @@ export function AppLayout() {
             )}
           >
             <ErrorBoundary name="PageContent">
-              <Outlet />
+              {isRestoringPartnerContext ? <LoadingSpinner label={t('partner.restoringClientContext')} className="py-16" /> : <Outlet />}
             </ErrorBoundary>
           </main>
         </div>
@@ -98,6 +104,7 @@ export function AppLayout() {
             secondsRemaining={secondsRemaining}
             onExtend={extendSession}
             onLogoutNow={() => {
+              clearPartnerClientContext();
               window.location.href = '/login';
             }}
           />

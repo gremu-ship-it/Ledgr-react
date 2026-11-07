@@ -6,7 +6,7 @@
  */
 import { beforeAll, afterAll, expect } from 'vitest';
 import { createDatabaseFixture } from './database.mjs';
-import { seedFixture, identities, PAST, key, saleFixture } from './fixtures';
+import { seedFixture, identities, PAST, key, saleFixture, enableRetailModel } from './fixtures';
 import { evidenceSuite, Blocked, safeError } from './evidence';
 
 const test = evidenceSuite('pl-period-approval');
@@ -21,7 +21,8 @@ let replayError = ''; let seedError = '';
 beforeAll(async () => {
   try { db = await createDatabaseFixture(); }
   catch (e) { replayError = String((e as Error).message).startsWith('Migration ') ? (e as Error).message : safeError(e); return; }
-  try { orgs = await seedFixture(db.client); } catch (e) { seedError = safeError(e); }
+  try { orgs = await seedFixture(db.client);
+    await enableRetailModel(db.client, orgs); } catch (e) { seedError = safeError(e); }
 }, 600000);
 afterAll(async () => { if (db) await db.cleanup(); });
 function ready() {
@@ -244,7 +245,7 @@ test(meta('PL.APPROVAL.EDIT-REVOKES-AND-NO-FORGERY', 'Editing an approved draft 
 test(meta('PL.APPROVAL.POS-EXEMPT-AND-DEFAULTS', 'With NO policy row the default applies (sales_clerk, data_entry, cashier): till sales by a cashier through post_pos_sale are exempt and post normally; owners/admins/accountants issue invoices without approval; only owner/admin may change the policy (accountant → 42501)'), async () => {
   ready();
   await db.asRole('authenticated', identities.A_cashier.id, async (c: C) => {
-    const r = (await c.query('select public.post_pos_sale($1::jsonb) r', [JSON.stringify(saleFixture(orgs.A, 1461))])).rows[0].r;
+    const r = (await c.query('select public.post_pos_sale_plan_gated($1::jsonb) r', [JSON.stringify(saleFixture(orgs.A, 1461))])).rows[0].r;
     expect(r.id).toBeTruthy();
     await as(c, identities.A_owner.id); expect((await createInvoice(c, key(1462))).id).toBeTruthy();
     await as(c, identities.A_accountant.id); expect((await createInvoice(c, key(1463))).id).toBeTruthy();

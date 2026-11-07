@@ -1,36 +1,39 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import {
   TrendingUp,
   TrendingDown,
-  ChevronRight,
   Receipt,
   DollarSign,
   FileText,
   Users,
   Percent,
-  AlertTriangle,
   Lock,
   Package,
   Settings,
   ChevronDown,
   Eye,
   EyeOff,
+  LoaderCircle,
   Search,
   type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useAppStore } from '@/store/useAppStore';
-import { repos } from '@/lib/repositories';
+import { DashboardVerticalModules } from '@/components/dashboard/DashboardVerticalModules';
+import { UsageMeter } from '@/components/billing/UsageMeter';
 import {
   useMonthlyIncome,
   useOutstandingInvoices,
   useMonthlyExpenseVat,
   useMonthlyProfitLossReport,
+  getDashboardPeriod,
+  refreshDashboardQueries,
 } from '@/hooks/useDashboardData';
-import { formatMwk, formatMwkCompact } from '@/lib/formatters';
+import { formatCurrency, formatCurrencyCompact, formatDateRange } from '@/lib/formatters';
+import { DashboardFreshnessToolbar } from '@/components/dashboard/DashboardFreshnessToolbar';
 import { useBrandTheme } from '@/hooks/useBrandTheme';
 import { QuickExpenseMobile } from './QuickExpenseMobile';
 import { QuickIncomeMobile } from './QuickIncomeMobile';
@@ -42,6 +45,9 @@ import { isItemLocked, visibleSectionsFor } from '@/components/layout/navConfig'
 import { usePartner } from '@/partner/PartnerContext';
 import { useUsage } from '@/hooks/useUsage';
 import { useOrganisationCapabilityVisibility } from '@/hooks/useCapability';
+import { ExecutiveHealthStrip } from '@/components/dashboard/ExecutiveHealthStrip';
+import { ActionableExceptions } from '@/components/dashboard/ActionableExceptions';
+import { SectionErrorBoundary } from '@/components/SectionErrorBoundary';
 
 // ── Stat Card ────────────────────────────────────────────────────────────
 
@@ -50,20 +56,25 @@ function StatCard({
   value,
   valueTitle,
   subtext,
+  metadata,
   tone = 'neutral',
   icon,
   isLoading,
+  isRefreshing,
   onClick,
 }: {
   label: string;
   value: string;
   valueTitle?: string;
   subtext?: string;
+  metadata?: string;
   tone?: IconTone;
   icon: LucideIcon;
   isLoading?: boolean;
+  isRefreshing?: boolean;
   onClick?: () => void;
 }) {
+  const { t } = useTranslation();
   const valueColor = {
     brand: 'text-brand-700',
     negative: 'text-red-600',
@@ -86,17 +97,19 @@ function StatCard({
   }
 
   const className = clsx(
-    'group w-full rounded-2xl border border-white bg-white/80 p-4 text-left shadow-sm backdrop-blur-sm transition-all touch-manipulation',
+    'group min-h-[88px] w-full rounded-2xl border border-white bg-white/80 p-4 text-left shadow-sm backdrop-blur-sm transition-all touch-manipulation',
     onClick && 'active:scale-[0.97] active:bg-white',
   );
   const content = <>
     <div className="mb-3 flex items-center justify-between">
       <IconBadge icon={icon} tone={tone} size="sm" interactive={Boolean(onClick)} />
+      {isRefreshing && <LoaderCircle className="h-4 w-4 animate-spin text-brand-600" aria-label={t('dashboard.refreshing')} />}
     </div>
     <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">{label}</p>
     <p className={`truncate text-lg font-black tracking-tight ${valueColor}`} title={valueTitle ?? value}>
       {value}
     </p>
+    {metadata && <p className="mt-1 truncate text-[10px] font-medium text-gray-500">{metadata}</p>}
     {subtext && <p className="mt-1 truncate text-[10px] font-medium uppercase text-gray-500">{subtext}</p>}
   </>;
 
@@ -150,18 +163,25 @@ function getMobilePreferences(): { quickActionIds: MobileActionId[]; pinnedPaths
 
 export function MobileDashboard() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
   const currentBusiness = useAppStore((s) => s.currentBusiness);
   const { isFeatureEnabled } = usePartner();
   const { planTier } = useUsage();
   const isOrgCapabilityEnabled = useOrganisationCapabilityVisibility();
   const inventoryCapabilityEnabled = isOrgCapabilityEnabled('inventory');
+  const constructionCapabilityEnabled = isOrgCapabilityEnabled('construction');
+  const manufacturingCapabilityEnabled = isOrgCapabilityEnabled('manufacturing');
   const currentUser = useAppStore((s) => s.currentUser);
   const orientationLock = useAppStore((s) => s.orientationLock);
   const setOrientationLock = useAppStore((s) => s.setOrientationLock);
   const businessId = currentBusiness?.business?.id;
   const businessName = currentBusiness?.business?.name;
+  const currencyCode = currentBusiness?.business?.base_currency || 'MWK';
+  const dashboardPeriod = getDashboardPeriod(undefined, i18n.language);
+  const formattedPeriodLabel = dashboardPeriod.formattedPeriodLabel;
+  const periodMetadata = t('dashboard.metadata.period', { period: formatDateRange(dashboardPeriod.from, dashboardPeriod.to, i18n.language) });
+  const asOfMetadata = t('dashboard.metadata.asOf', { date: new Date().toLocaleDateString(i18n.language, { day: 'numeric', month: 'short', year: 'numeric' }) });
   const workspaceSections = visibleSectionsFor(isFeatureEnabled, currentBusiness?.role, isOrgCapabilityEnabled, planTier, currentBusiness?.business?.operating_models ?? null)
     .filter((section) => section.labelKey !== 'navigation.sections.overview');
 
@@ -177,26 +197,15 @@ export function MobileDashboard() {
     localStorage.setItem('ledgr-mobile-dashboard-preferences', JSON.stringify({ quickActionIds, pinnedPaths }));
   }, [quickActionIds, pinnedPaths]);
 
-  const onRefresh = useCallback(async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['monthly_income'] }),
-      queryClient.invalidateQueries({ queryKey: ['monthly_expenses'] }),
-      queryClient.invalidateQueries({ queryKey: ['outstanding_invoices'] }),
-      queryClient.invalidateQueries({ queryKey: ['reorder_alerts'] }),
-    ]);
-  }, [queryClient]);
+  const onRefresh = useCallback(
+    () => refreshDashboardQueries(queryClient, businessId),
+    [businessId, queryClient],
+  );
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({ onRefresh, threshold: 70 });
 
   const income = useMonthlyIncome(businessId);
   const outstanding = useOutstandingInvoices(businessId);
-
-  const lowStock = useQuery({
-    queryKey: ['reorder_alerts', businessId],
-    queryFn: () => repos.inventory.findReorderAlerts(businessId!),
-    enabled: Boolean(businessId) && inventoryCapabilityEnabled,
-    staleTime: 1000 * 60 * 5,
-  });
 
   const plReport = useMonthlyProfitLossReport(businessId);
   const netProfit = plReport.data?.netProfit;
@@ -234,8 +243,21 @@ export function MobileDashboard() {
   };
 
   return (
-    <div ref={containerRef} className="relative flex flex-col gap-5 pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
+    <div ref={containerRef} className="relative flex w-full min-w-0 max-w-full flex-col gap-5 overflow-x-clip pb-[calc(6rem+env(safe-area-inset-bottom))] bg-[radial-gradient(120%_60%_at_0%_0%,rgba(14,124,90,0.06),transparent),radial-gradient(80%_50%_at_100%_20%,rgba(99,102,241,0.06),transparent)]">
       <PullToRefreshIndicator pullDistance={pullDistance} isRefreshing={isRefreshing} progress={progress} />
+
+      <div className="space-y-4 px-1" data-testid="mobile-dashboard-executive-summary">
+        <SectionErrorBoundary sectionName="Executive Health Summary" fallbackHeight="150px">
+          <ExecutiveHealthStrip />
+        </SectionErrorBoundary>
+        <SectionErrorBoundary sectionName="Actionable Exceptions" fallbackHeight="220px">
+          <ActionableExceptions
+            construction={constructionCapabilityEnabled}
+            manufacturing={manufacturingCapabilityEnabled}
+            inventoryEnabled={inventoryCapabilityEnabled}
+          />
+        </SectionErrorBoundary>
+      </div>
 
       {/* Header */}
       <div className="flex items-center justify-between px-1 pt-1">
@@ -263,19 +285,21 @@ export function MobileDashboard() {
             type="button"
             onClick={() => window.dispatchEvent(new Event('ledgr:open-command-palette'))}
             aria-label="Search Ledgr"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
           >
             <Search className="h-5 w-5 text-gray-600" />
           </button>
           <button
           onClick={() => navigate('/settings?tab=appearance')}
           aria-label="Settings"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform active:scale-90 touch-manipulation"
         >
           <Settings className="h-5 w-5 text-gray-600" />
           </button>
         </div>
       </div>
+
+      {businessId && <DashboardFreshnessToolbar businessId={businessId} compact />}
 
       {/* Orientation toggle card */}
       <div className="mx-2 mt-2 rounded-2xl bg-white/80 p-3 shadow-sm ring-1 ring-white/20 backdrop-blur-md">
@@ -320,8 +344,9 @@ export function MobileDashboard() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">Net Profit (this month)</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/80">{t('dashboard.netProfitPeriod', { period: formattedPeriodLabel })}</p>
+                {plReport.isFetching && !plReport.isLoading && <LoaderCircle className="h-4 w-4 animate-spin text-white" aria-label={t('dashboard.refreshing')} />}
                 <button
                   type="button"
                   onClick={() => setBalanceVisible((visible) => !visible)}
@@ -339,11 +364,12 @@ export function MobileDashboard() {
               <div className="mt-3">
                 <p className="text-white tracking-tighter font-black leading-none" style={{ fontSize: 'clamp(1.75rem, 8vw, 2.5rem)' }}>
                   {netProfit !== undefined ? (isProfitPositive ? '+' : '-') : ''}
-                  {balanceVisible ? formatMwkCompact(netProfit !== undefined ? Math.abs(netProfit) : 0) : '••••••'}
+                  {balanceVisible ? formatCurrencyCompact(netProfit !== undefined ? Math.abs(netProfit) : 0, currencyCode, i18n.language) : '••••••'}
                 </p>
                 <p className="mt-1 text-xs font-medium text-white/75">
-                  {balanceVisible ? (netProfit !== undefined ? (isProfitPositive ? formatMwk(netProfit) : `-${formatMwk(Math.abs(netProfit))}`) : formatMwk(0)) : 'Balance hidden'}
+                  {balanceVisible ? (netProfit !== undefined ? (isProfitPositive ? formatCurrency(netProfit, currencyCode, i18n.language) : `-${formatCurrency(Math.abs(netProfit), currencyCode, i18n.language)}`) : formatCurrency(0, currencyCode, i18n.language)) : 'Balance hidden'}
                 </p>
+                <p className="mt-1 text-[10px] font-medium text-white/70">{periodMetadata}</p>
               </div>
 
               <div className="mt-5 flex items-center justify-between border-t border-white/15 pt-3">
@@ -365,15 +391,14 @@ export function MobileDashboard() {
         </div>
       </div>
 
-      {/* Onboarding checklist (mobile compact) */}
-      <MobileOnboardingChecklist />
-
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Income" value={totalIncomeValue !== undefined ? formatMwkCompact(totalIncomeValue) : formatMwkCompact(0)} valueTitle={totalIncomeValue !== undefined ? formatMwk(totalIncomeValue) : formatMwk(0)} subtext={income.data ? `${formatMwk(income.data.amountPaid)} collected` : undefined} tone="brand" icon={TrendingUp} isLoading={plReport.isLoading || income.isLoading} onClick={() => navigate('/income')} />
-        <StatCard label="Expenses" value={totalExpensesValue !== undefined ? formatMwkCompact(totalExpensesValue) : formatMwkCompact(0)} valueTitle={totalExpensesValue !== undefined ? formatMwk(totalExpensesValue) : formatMwk(0)} tone="negative" icon={Receipt} isLoading={plReport.isLoading} onClick={() => navigate('/expenses')} />
-        <StatCard label="Outstanding" value={outstanding.data ? formatMwkCompact(outstanding.data.total) : formatMwkCompact(0)} valueTitle={outstanding.data ? formatMwk(outstanding.data.total) : formatMwk(0)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} tone="info" icon={FileText} isLoading={outstanding.isLoading} onClick={() => navigate('/invoices')} />
-        <StatCard label="VAT" value={formatMwkCompact(Math.abs(netVat))} valueTitle={formatMwk(Math.abs(netVat))} subtext={netVat >= 0 ? 'Payable to MRA' : 'Refundable'} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} onClick={() => navigate('/tax')} />
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
+        <StatCard label="Income" value={totalIncomeValue !== undefined ? formatCurrencyCompact(totalIncomeValue, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)} valueTitle={totalIncomeValue !== undefined ? formatCurrency(totalIncomeValue, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)} subtext={income.data ? t('dashboard.collectedForPeriod', { amount: formatCurrency(income.data.amountPaid, currencyCode, i18n.language), period: formattedPeriodLabel }) : t('dashboard.forPeriod', { period: formattedPeriodLabel })} metadata={periodMetadata} tone="brand" icon={TrendingUp} isLoading={plReport.isLoading || income.isLoading} isRefreshing={plReport.isFetching || income.isFetching} onClick={() => navigate('/income')} />
+        <StatCard label="Expenses" value={totalExpensesValue !== undefined ? formatCurrencyCompact(totalExpensesValue, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)} valueTitle={totalExpensesValue !== undefined ? formatCurrency(totalExpensesValue, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)} subtext={t('dashboard.forPeriod', { period: formattedPeriodLabel })} metadata={periodMetadata} tone="negative" icon={Receipt} isLoading={plReport.isLoading} isRefreshing={plReport.isFetching} onClick={() => navigate('/expenses')} />
+        <StatCard label="Outstanding" value={outstanding.data ? formatCurrencyCompact(outstanding.data.total, currencyCode, i18n.language) : formatCurrencyCompact(0, currencyCode, i18n.language)} valueTitle={outstanding.data ? formatCurrency(outstanding.data.total, currencyCode, i18n.language) : formatCurrency(0, currencyCode, i18n.language)} subtext={outstanding.data ? `${outstanding.data.count} invoices` : undefined} metadata={asOfMetadata} tone="info" icon={FileText} isLoading={outstanding.isLoading} isRefreshing={outstanding.isFetching} onClick={() => navigate('/invoices')} />
+        <StatCard label="VAT" value={formatCurrencyCompact(Math.abs(netVat), currencyCode, i18n.language)} valueTitle={formatCurrency(Math.abs(netVat), currencyCode, i18n.language)} subtext={t(netVat >= 0 ? 'dashboard.payableToMraForPeriod' : 'dashboard.refundableVatForPeriod', { period: formattedPeriodLabel })} metadata={periodMetadata} tone="warning" icon={Percent} isLoading={expenseVat.isLoading || income.isLoading} isRefreshing={expenseVat.isFetching || income.isFetching} onClick={() => navigate('/tax')} />
       </div>
+
+      <DashboardVerticalModules mobile />
 
       {/* Personal quick actions */}
       <section className="px-1" aria-labelledby="quick-actions-title">
@@ -401,46 +426,8 @@ export function MobileDashboard() {
         </div>
       </section>
 
-      {/* Inventory */}
-      {inventoryCapabilityEnabled && (
-        <div className="grid grid-cols-1 gap-3">
-          <button onClick={() => navigate('/warehouse')} className="w-full rounded-2xl border border-white bg-white/70 p-4 text-left shadow-sm backdrop-blur-sm active:scale-[0.98] touch-manipulation">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <IconBadge icon={Package} tone={lowStock.data && lowStock.data.length > 0 ? 'warning' : 'brand'} size="sm" interactive />
-                <div>
-                  <span className="text-xs font-black uppercase tracking-widest text-gray-900">Inventory</span>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">Stock Management</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-gray-300" />
-            </div>
-
-            {lowStock.isLoading ? (
-              <div className="h-12 animate-pulse rounded-xl bg-gray-100/50" />
-            ) : lowStock.data && lowStock.data.length > 0 ? (
-              <div className="rounded-xl bg-amber-50/80 p-3 ring-1 ring-amber-100">
-                <div className="mb-2 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <p className="text-[11px] font-bold text-amber-800 uppercase">{lowStock.data.length} low stock alerts</p>
-                </div>
-                <div className="space-y-1.5">
-                  {lowStock.data.slice(0, 2).map((alert) => (
-                    <div key={`${alert.product_id}-${alert.location_name}`} className="flex items-center justify-between">
-                      <span className="truncate text-xs font-medium text-gray-700 max-w-[60%]">{alert.product_name}</span>
-                      <span className="shrink-0 text-xs font-black text-gray-900">{Number(alert.quantity_available)} left</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl bg-brand-50/60 p-3 ring-1 ring-brand-100">
-                <p className="text-[11px] font-bold text-brand-700 uppercase text-center">Stock levels OK</p>
-              </div>
-            )}
-          </button>
-        </div>
-      )}
+      <UsageMeter />
+      <MobileOnboardingChecklist />
 
       {/* All desktop workspaces stay reachable on mobile without crowding the home screen. */}
       <section className="px-1" aria-labelledby="mobile-workspaces">

@@ -23,6 +23,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PosManagerApprovalModal } from '../PosManagerApprovalModal';
+import '@/i18n';
 
 afterEach(cleanup);
 
@@ -45,7 +46,7 @@ describe('R07 approval boundary — contained state', () => {
     expect(screen.queryByPlaceholderText('••••')).toBeNull();
     expect(screen.queryByText(/PIN/i)).toBeNull();
     fireEvent.click(screen.getByText('Request approval'));
-    await waitFor(() => screen.getByText(/Approval requested and recorded on the server/));
+    await waitFor(() => screen.getByText(/Approval request recorded on the server/));
     expect(requestFn).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText('Continue with this approval'));
     expect(onApprove).toHaveBeenCalledWith('11111111-2222-3333-4444-555555555555');
@@ -94,7 +95,7 @@ describe('R07 approval boundary — contained state', () => {
   it('ATTACK GUARD: the service layer has exactly one correction path — the canonical commands; raw-DML bodies are demo-only', () => {
     const src = read('src/services/posService.ts');
     expect(src).toContain('voidPosSaleViaRpc(');
-    expect(src).toContain('refundPosSaleViaRpc(');
+    expect(src).toContain('processPosReturnViaRpc(');
     // The legacy raw-DML materializers are private and gated behind isDemoMode().
     expect(src).toMatch(/async function processVoidLocal\(/);
     expect(src).toMatch(/async function processReturnLocal\(/);
@@ -102,6 +103,10 @@ describe('R07 approval boundary — contained state', () => {
     expect(routerBlock).toContain('isDemoMode()');
     expect(routerBlock).toContain('voidPosSaleViaRpc({');
     expect(routerBlock).not.toContain('repos.invoice.update');
+    const returnBlock = src.match(/export async function processReturn\(([^]*?)\n}\n/)?.[0] ?? '';
+    expect(returnBlock).toContain('isDemoMode()');
+    expect(returnBlock).toContain('processPosReturnViaRpc({');
+    expect(returnBlock).not.toContain('refundPosSaleViaRpc(');
     // The correction payloads carry no approver identity anywhere.
     const types = read('src/types/pos.ts');
     const returnPayload = types.match(/export interface PosReturnPayload \{([^]*?)\n\}/)?.[1] ?? '';

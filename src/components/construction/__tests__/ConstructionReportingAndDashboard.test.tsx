@@ -26,6 +26,7 @@ globalThis.ResizeObserver =
 
 const mockState = vi.hoisted(() => ({
   hasConstructionCapability: true,
+  hasManufacturingCapability: false,
   projects: {
     list: vi.fn(),
     getById: vi.fn(),
@@ -50,8 +51,23 @@ const mockState = vi.hoisted(() => ({
 }));
 
 vi.mock('@/hooks/useCapability', () => ({
-  useCapability: (cap: string) =>
-    cap === 'construction' ? mockState.hasConstructionCapability : false,
+  useCapability: (cap: string) => cap === 'construction'
+    ? mockState.hasConstructionCapability
+    : cap === 'manufacturing' ? mockState.hasManufacturingCapability : false,
+}));
+
+vi.mock('@/hooks/usePermissions', () => ({
+  isPathAllowedForRole: () => false,
+}));
+
+vi.mock('@/components/dashboard/ExecutiveHealthStrip', () => ({
+  ExecutiveHealthStrip: () => <div data-testid="executive-health-strip" />,
+}));
+vi.mock('@/components/dashboard/ActionableExceptions', () => ({
+  ActionableExceptions: () => <div data-testid="actionable-exceptions" />,
+}));
+vi.mock('@/pages/manufacturing/ManufacturingDashboardPage', () => ({
+  ManufacturingDashboardPage: () => <div data-testid="manufacturing-dashboard" />,
 }));
 
 vi.mock('@/lib/repositories', () => ({
@@ -64,6 +80,7 @@ vi.mock('@/lib/repositories', () => ({
 }));
 
 vi.mock('@/hooks/useDashboardData', () => ({
+  getDashboardPeriod: () => ({ from: '2026-11-01', to: '2026-11-30', formattedPeriodLabel: 'November 2026' }),
   useMonthlyIncome: () => ({ data: 10000, isLoading: false, isError: false }),
   useMonthlyExpenses: () => ({ data: 4000, isLoading: false, isError: false }),
   useMonthlyExpenseVat: () => ({ data: 0, isLoading: false }),
@@ -129,6 +146,7 @@ beforeEach(async () => {
   await i18n.changeLanguage('en');
   vi.clearAllMocks();
   mockState.hasConstructionCapability = true;
+  mockState.hasManufacturingCapability = false;
 
   useAppStore.setState({
     currentUser: { id: 'u1', email: 'owner@buildco.mw' },
@@ -290,16 +308,50 @@ describe('DashboardPage conditional rendering', () => {
       expect(screen.getByTestId('construction-dashboard')).toBeTruthy(),
     );
     expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+    expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
+    expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
+    expect(screen.getByTestId('dashboard-vertical-modules')).toBeTruthy();
   });
 
   it('renders GenericDashboard when business does not have construction capability', async () => {
     mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = false;
     renderWithProviders(<DashboardPage />);
 
     await waitFor(() =>
       expect(screen.getByTestId('generic-income-expense-chart')).toBeTruthy(),
     );
     expect(screen.queryByTestId('construction-dashboard')).toBeNull();
+    expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
+    expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
+  });
+
+  it('renders the manufacturing executive dashboard from an operating model even without the capability flag', () => {
+    mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = false;
+    useAppStore.setState({
+      currentBusiness: {
+        role: 'owner',
+        business: { id: 'b1', name: 'BuildCo MW', base_currency: 'MWK', operating_models: ['manufacturing'] },
+      } as never,
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(screen.getByTestId('executive-health-strip')).toBeTruthy();
+    expect(screen.getByTestId('actionable-exceptions')).toBeTruthy();
+    expect(screen.getByTestId('manufacturing-dashboard')).toBeTruthy();
+    expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
+  });
+
+  it('renders the manufacturing executive dashboard from the capability flag', () => {
+    mockState.hasConstructionCapability = false;
+    mockState.hasManufacturingCapability = true;
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(screen.getByTestId('manufacturing-dashboard')).toBeTruthy();
+    expect(screen.queryByTestId('generic-income-expense-chart')).toBeNull();
   });
 });
 
