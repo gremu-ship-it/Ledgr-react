@@ -52,7 +52,7 @@ describe('demo seeder DAL commands', () => {
 
   it('registers the named demo terminal through the POS repository', async () => {
     const terminal = {
-      id: 'terminal-1', business_id: 'demo-business', name: 'DEMO-TILL-01', branch_id: 'branch-1',
+      id: 'terminal-1', business_id: 'demo-business', name: 'DEMO-TILL-01', code: 'DEMO-REG-01', branch_id: 'branch-1',
       preferred_location_id: 'location-1', is_active: true,
     };
     const query = {
@@ -65,12 +65,14 @@ describe('demo seeder DAL commands', () => {
     client.from.mockReturnValue(query);
 
     const result = await pos.ensureDemoTerminal({
-      business_id: 'demo-business', name: 'DEMO-TILL-01', branch_id: 'branch-1',
+      business_id: 'demo-business', name: 'DEMO-TILL-01', code: 'DEMO-REG-01', branch_id: 'branch-1',
       preferred_location_id: 'location-1', is_active: true,
     } as never);
 
     expect(client.from).toHaveBeenCalledWith('pos_terminals');
-    expect(query.insert).toHaveBeenCalledWith(expect.objectContaining({ name: 'DEMO-TILL-01', is_active: true }));
+    expect(query.insert).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'DEMO-TILL-01', code: 'DEMO-REG-01', is_active: true,
+    }));
     expect(result.id).toBe('terminal-1');
   });
 });

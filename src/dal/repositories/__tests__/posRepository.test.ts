@@ -71,6 +71,52 @@ describe('PosRepository', () => {
   });
 
   describe('registers (canonical pos_terminals)', () => {
+    it('creates the demo register through the repository with its required stable code', async () => {
+      const terminal = {
+        id: 'demo-terminal',
+        business_id: 'biz-demo',
+        name: 'DEMO-TILL-01',
+        code: 'DEMO-REG-01',
+        branch_id: 'branch-demo',
+        preferred_location_id: 'location-demo',
+        default_cash_account_id: null,
+        is_active: true,
+        created_at: '2026-11-01T00:00:00Z',
+        updated_at: '2026-11-01T00:00:00Z',
+      };
+      const readChain = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      const insertChain = {
+        insert: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        single: vi.fn().mockResolvedValue({ data: terminal, error: null }),
+      };
+      mockClient.from
+        .mockReturnValueOnce(readChain)
+        .mockReturnValueOnce(insertChain);
+
+      const created = await repo.ensureDemoTerminal({
+        business_id: 'biz-demo',
+        name: 'DEMO-TILL-01',
+        code: 'DEMO-REG-01',
+        branch_id: 'branch-demo',
+        preferred_location_id: 'location-demo',
+        is_active: true,
+      });
+
+      expect(mockClient.from).toHaveBeenNthCalledWith(1, 'pos_terminals');
+      expect(mockClient.from).toHaveBeenNthCalledWith(2, 'pos_terminals');
+      expect(insertChain.insert).toHaveBeenCalledWith(expect.objectContaining({
+        business_id: 'biz-demo',
+        name: 'DEMO-TILL-01',
+        code: 'DEMO-REG-01',
+      }));
+      expect(created).toMatchObject({ id: 'demo-terminal', code: 'DEMO-REG-01' });
+    });
+
     it('lists terminals scoped to the business, including their branch and defaults', async () => {
       const row = {
         id: 'register-1', business_id: 'biz-001', name: 'Front till', code: 'REG-01',
