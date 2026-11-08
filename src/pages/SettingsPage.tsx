@@ -47,7 +47,7 @@ import {
   OPERATING_MODEL_LABELS,
   type OperatingModel,
 } from '@/lib/capabilities/profile';
-import { handleError } from '@/lib/errorHandler';
+import { getErrorMessage, handleError } from '@/lib/errorHandler';
 import { describeFunctionFailure } from '@/lib/edgeFunctionErrors';
 import { seedDemoCompanyData, TARGET_DEMO_BUSINESS_ID } from '@/services/demoSeederService';
 
@@ -366,7 +366,7 @@ function BusinessProfileTab({ business }: { business: Row<'businesses'> }) {
     },
     onError: (error: unknown) => {
       console.error('[DemoSeeder] Seeding Demo company Ltd failed.', error);
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = getErrorMessage(error);
       const localizedDetail = detail === 'DEMO_SEEDER_ADMIN_REQUIRED'
         ? t('settings.demoSeeder.adminRequired')
         : detail.slice(0, 400);
