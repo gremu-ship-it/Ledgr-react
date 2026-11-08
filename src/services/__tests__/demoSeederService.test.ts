@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { seedDemoCompanyData, TARGET_DEMO_BUSINESS_ID } from '../demoSeederService';
+
+const source = readFileSync('src/services/demoSeederService.ts', 'utf8');
 
 vi.mock('@/lib/repositories', () => ({
   repos: new Proxy({}, {
@@ -17,5 +20,11 @@ describe('seedDemoCompanyData tenant guard', () => {
 
   it('exports the dedicated Demo company Ltd business ID', () => {
     expect(TARGET_DEMO_BUSINESS_ID).toBe('d38e4ce8-324b-4d27-b42d-74c25c5288a7');
+  });
+
+  it('derives UUID client keys for stock movements but keeps the readable demo reference', () => {
+    const ensureStock = source.slice(source.indexOf('async function ensureStock('), source.indexOf('async function seedInvoices('));
+    expect(ensureStock).toContain('reference: clientKey,');
+    expect(ensureStock).toContain('deriveClientKey(clientKey)');
   });
 });
