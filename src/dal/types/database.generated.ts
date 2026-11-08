@@ -10411,30 +10411,39 @@ export type Database = {
         Row: {
           branch_id: string
           business_id: string
+          code: string
           created_at: string
+          default_cash_account_id: string | null
           id: string
           is_active: boolean
           name: string
           preferred_location_id: string | null
+          updated_at: string
         }
         ComputedFields: never
         Insert: {
           branch_id: string
           business_id: string
+          code: string
           created_at?: string
+          default_cash_account_id?: string | null
           id?: string
           is_active?: boolean
           name: string
           preferred_location_id?: string | null
+          updated_at?: string
         }
         Update: {
           branch_id?: string
           business_id?: string
+          code?: string
           created_at?: string
+          default_cash_account_id?: string | null
           id?: string
           is_active?: boolean
           name?: string
           preferred_location_id?: string | null
+          updated_at?: string
         }
         Relationships: [
           {

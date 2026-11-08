@@ -812,6 +812,7 @@ export async function seedDemoCompanyData(businessId: string): Promise<void> {
   const terminal = await repos.pos.ensureDemoTerminal({
     business_id: businessId,
     name: 'DEMO-TILL-01',
+    code: 'DEMO-REG-01',
     branch_id: branchId,
     preferred_location_id: central.id,
     is_active: true,
